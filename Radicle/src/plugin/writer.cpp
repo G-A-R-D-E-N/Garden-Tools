@@ -5,14 +5,17 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <zlib.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <limits>
 #include <span>
 #include <stdexcept>
+#include <string>
 
 namespace fo4 {
 namespace {
@@ -240,7 +243,9 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
   bool masters_written = false;
   auto write_masters = [&] {
     for (const auto& master : masters) {
-      next.push_back(zstring_subrecord(sig_mast, master.key.filename()));
+      const auto name = text::utf8_to_windows1252(master.key.filename());
+      if (!name) throw std::runtime_error("master name is not representable in Windows-1252: " + std::string(master.key.filename()));
+      next.push_back(zstring_subrecord(sig_mast, *name));
       next.push_back(data_size_subrecord(master.data_size));
     }
     masters_written = true;
@@ -397,6 +402,63 @@ Plugin remap_plugin_masters(Plugin plugin, std::vector<PluginKey> new_masters) {
     descriptors.push_back(MasterDescriptor{std::move(key), kind});
   }
   return remap_plugin_masters(std::move(plugin), std::move(descriptors));
+}
+
+Plugin sort_plugin_masters(Plugin plugin, std::span<const PluginKey> load_order) {
+  std::vector<std::pair<std::size_t, MasterDescriptor>> ranked;
+  ranked.reserve(plugin.header.masters.size());
+  for (const auto& master : plugin.header.masters) {
+    const auto it = std::find(load_order.begin(), load_order.end(), master.key);
+    if (it == load_order.end()) {
+      throw FormIdError("master " + std::string(master.key.filename()) + " is not in the load order");
+    }
+    ranked.push_back({static_cast<std::size_t>(it - load_order.begin()), {master.key, master.kind}});
+  }
+  if (std::is_sorted(ranked.begin(), ranked.end(),
+                     [](const auto& a, const auto& b) { return a.first < b.first; })) {
+    return plugin;
+  }
+  std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+  std::vector<MasterDescriptor> masters;
+  masters.reserve(ranked.size());
+  for (auto& [rank, master] : ranked) masters.push_back(std::move(master));
+  return remap_plugin_masters(std::move(plugin), std::move(masters));
+}
+
+Plugin make_empty_plugin(std::string_view filename) {
+  std::string lower(filename);
+  std::transform(lower.begin(), lower.end(), lower.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const auto ends_with = [&](std::string_view suffix) {
+    return lower.size() >= suffix.size() && lower.compare(lower.size() - suffix.size(), suffix.size(), suffix) == 0;
+  };
+  std::uint32_t bits = 0;
+  if (ends_with(".esm")) bits |= RecordFlags::master;
+  if (ends_with(".esl")) bits |= RecordFlags::master | RecordFlags::small_file;
+  const RecordFlags flags{bits};
+
+  Plugin plugin;
+  plugin.key = PluginKey::from_filename(filename);
+  plugin.header.version = 1.0f;
+  plugin.header.next_form_id = 0x800u;
+  plugin.header.tes4_flags = flags;
+  plugin.header.form_version = 131;
+  plugin.tes4.header.signature = sig_tes4;
+  plugin.tes4.header.flags = flags;
+  plugin.tes4.header.form_id = RawFormId{0};
+  plugin.tes4.header.form_version = 131;
+
+  Subrecord hedr;
+  hedr.signature = sig_hedr;
+  hedr.data.resize(12);
+  const float version = 1.0f;
+  const std::uint32_t record_count = 0;
+  const std::uint32_t next_form_id = 0x800u;
+  std::memcpy(hedr.data.data(), &version, 4);
+  std::memcpy(hedr.data.data() + 4, &record_count, 4);
+  std::memcpy(hedr.data.data() + 8, &next_form_id, 4);
+  plugin.tes4.subrecords.push_back(std::move(hedr));
+  return plugin;
 }
 
 }  // namespace fo4

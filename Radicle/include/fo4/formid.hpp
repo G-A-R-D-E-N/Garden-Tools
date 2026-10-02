@@ -99,6 +99,7 @@ public:
 };
 
 FormKey resolve_plugin_form_id(RawFormId raw, const PluginFormIdContext& context);
+FormKey resolve_plugin_link(RawFormId raw, const PluginFormIdContext& context);
 RawFormId encode_plugin_form_id(const FormKey& key, const PluginFormIdContext& dest);
 
 FormKey resolve_runtime_form_id(RawFormId raw, const RuntimeFormIdContext& context);

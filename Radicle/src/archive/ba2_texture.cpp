@@ -1,6 +1,7 @@
 #include "fo4/archive/ba2_texture.hpp"
 
 #include "fo4/archive/ba2.hpp"
+#include "ba2_file.hpp"
 #include "fo4/archive/ba2_hash.hpp"
 #include "fo4/binary/cursor.hpp"
 #include "fo4/io/atomic_write.hpp"
@@ -172,26 +173,7 @@ std::size_t checked_size(std::uint64_t value, std::string_view what) {
   return static_cast<std::size_t>(value);
 }
 
-std::vector<std::byte> read_file_bytes(const std::filesystem::path& path) {
-  std::ifstream stream(path, std::ios::binary | std::ios::ate);
-  if (!stream) {
-    throw Ba2Error("could not open BA2: " + path.string());
-  }
-  const auto end = stream.tellg();
-  if (end < 0) {
-    throw Ba2Error("could not determine BA2 size: " + path.string());
-  }
-  const auto size = static_cast<std::size_t>(end);
-  std::vector<std::byte> bytes(size);
-  stream.seekg(0, std::ios::beg);
-  if (size != 0) {
-    stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
-    if (!stream) {
-      throw Ba2Error("could not read BA2: " + path.string());
-    }
-  }
-  return bytes;
-}
+using detail::read_file_bytes;
 
 Ba2TextureArchive read_ba2_texture_impl(std::span<const std::byte> data) {
   if (data.size() < k_header_size) {
@@ -312,7 +294,7 @@ Ba2TextureArchive read_ba2_texture_impl(std::span<const std::byte> data) {
     for (auto& entry : archive.entries) {
       const auto length = strings.read_u16();
       const auto bytes = strings.read_bytes(length);
-      entry.path.assign(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+      entry.path = text::windows1252_to_utf8(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
     }
   }
 
@@ -445,14 +427,16 @@ std::vector<std::byte> write_ba2_texture(const Ba2TextureArchive& archive) {
     throw Ba2Error("BA2 has too many entries for the 32-bit file count");
   }
 
+  const auto stored = detail::stored_ba2_paths(archive.entries, archive.has_string_table);
   std::uint64_t table_size = 0;
   std::uint64_t data_size = 0;
   std::size_t total_chunks = 0;
-  for (const auto& entry : archive.entries) {
+  for (std::size_t index = 0; index < archive.entries.size(); ++index) {
+    const auto& entry = archive.entries[index];
     if (entry.chunks.size() > std::numeric_limits<std::uint8_t>::max()) {
       throw Ba2Error("BA2 DX10 entry has more than 255 chunks: " + entry.path);
     }
-    if (archive.has_string_table && entry.path.size() > std::numeric_limits<std::uint16_t>::max()) {
+    if (archive.has_string_table && stored[index].size() > std::numeric_limits<std::uint16_t>::max()) {
       throw Ba2Error("BA2 entry path exceeds u16 string-table length: " + entry.path);
     }
     table_size += k_entry_size +
@@ -484,9 +468,7 @@ std::vector<std::byte> write_ba2_texture(const Ba2TextureArchive& archive) {
 
   std::uint64_t string_table_size = 0;
   if (archive.has_string_table) {
-    for (const auto& entry : archive.entries) {
-      string_table_size += 2u + entry.path.size();
-    }
+    for (const auto& path : stored) string_table_size += 2u + path.size();
   }
 
   const auto total_size64 = data_start + data_size + string_table_size;
@@ -533,10 +515,10 @@ std::vector<std::byte> write_ba2_texture(const Ba2TextureArchive& archive) {
   }
 
   if (archive.has_string_table) {
-    for (const auto& entry : archive.entries) {
-      append_u16(out, static_cast<std::uint16_t>(entry.path.size()));
-      const auto* begin = reinterpret_cast<const std::byte*>(entry.path.data());
-      append_bytes(out, std::span<const std::byte>(begin, entry.path.size()));
+    for (const auto& path : stored) {
+      append_u16(out, static_cast<std::uint16_t>(path.size()));
+      const auto* begin = reinterpret_cast<const std::byte*>(path.data());
+      append_bytes(out, std::span<const std::byte>(begin, path.size()));
     }
   }
 

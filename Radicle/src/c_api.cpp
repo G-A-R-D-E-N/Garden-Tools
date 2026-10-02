@@ -1,5 +1,6 @@
 #include "fo4/c_api.h"
 
+#include "c_api_internal.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
@@ -15,11 +16,8 @@
 #include <utility>
 #include <vector>
 
-struct radicle_plugin {
-  fo4::Plugin value;
-};
 
-namespace {
+namespace radicle_c_detail {
 
 thread_local std::string g_last_error;
 
@@ -62,16 +60,6 @@ std::filesystem::path utf8_path(std::string_view value) {
   return std::filesystem::path(utf8);
 }
 
-fo4::PluginKind to_plugin_kind(radicle_plugin_kind kind) {
-  switch (kind) {
-    case RADICLE_PLUGIN_FULL:
-      return fo4::PluginKind::full;
-    case RADICLE_PLUGIN_LIGHT:
-      return fo4::PluginKind::light;
-  }
-  throw std::invalid_argument("invalid Radicle plugin kind");
-}
-
 radicle_status copy_strings(const std::vector<std::string>& values,
                             char*** out_strings,
                             size_t* out_count) {
@@ -100,6 +88,23 @@ radicle_status copy_strings(const std::vector<std::string>& values,
   *out_count = values.size();
   return RADICLE_STATUS_OK;
 }
+
+}  // namespace radicle_c_detail
+
+namespace {
+
+using namespace radicle_c_detail;
+
+fo4::PluginKind to_plugin_kind(radicle_plugin_kind kind) {
+  switch (kind) {
+    case RADICLE_PLUGIN_FULL:
+      return fo4::PluginKind::full;
+    case RADICLE_PLUGIN_LIGHT:
+      return fo4::PluginKind::light;
+  }
+  throw std::invalid_argument("invalid Radicle plugin kind");
+}
+
 
 }  // namespace
 

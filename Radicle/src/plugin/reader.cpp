@@ -1,6 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 
 #include "fo4/binary/cursor.hpp"
+#include "fo4/io/path_text.hpp"
 #include "fo4/plugin/visit.hpp"
 
 #include <zlib.h>
@@ -138,10 +139,8 @@ Record read_record(binary::Cursor& cursor, const std::vector<std::byte>* owner) 
   binary::Cursor payload_cursor{payload, start_abs + k_record_header_size};
   record.uncompressed_size = payload_cursor.read_u32();
   const auto compressed = payload_cursor.read_bytes(payload.size() - 4);
-  record.decompressed_payload =
-      inflate_record_payload(compressed, record.uncompressed_size, start_abs);
-  record.subrecords =
-      parse_subrecords(record.decompressed_payload, start_abs + k_record_header_size);
+  const auto inflated = inflate_record_payload(compressed, record.uncompressed_size, start_abs);
+  record.subrecords = parse_subrecords(inflated, start_abs + k_record_header_size);
   return record;
 }
 
@@ -218,7 +217,7 @@ Plugin read_plugin_from_owned_bytes(
   plugin.original_data = std::move(original_data);
   plugin.original_range = OriginalByteRange{&bytes, 0, bytes.size()};
   if (!plugin.path.empty()) {
-    plugin.key = PluginKey::from_filename(plugin.path.filename().string());
+    plugin.key = PluginKey::from_filename(io::utf8(plugin.path.filename()));
   }
   binary::Cursor cursor{bytes};
   plugin.tes4 = read_record(cursor, &bytes);
@@ -262,7 +261,7 @@ std::span<const std::byte> original_bytes_for_range(
 Plugin read_plugin_file(const std::filesystem::path& path) {
   std::ifstream in{path, std::ios::binary};
   if (!in) {
-    throw parse_error(0, "unable to open " + path.string());
+    throw parse_error(0, "unable to open " + io::utf8(path));
   }
   in.seekg(0, std::ios::end);
   const auto size = static_cast<std::size_t>(in.tellg());
@@ -271,7 +270,7 @@ Plugin read_plugin_file(const std::filesystem::path& path) {
   if (size > 0) {
     in.read(reinterpret_cast<char*>(bytes->data()), static_cast<std::streamsize>(size));
     if (!in) {
-      throw parse_error(0, "unable to read " + path.string());
+      throw parse_error(0, "unable to read " + io::utf8(path));
     }
   }
   return read_plugin_from_owned_bytes(std::move(bytes), path);

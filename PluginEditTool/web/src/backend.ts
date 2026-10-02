@@ -26,8 +26,8 @@ export interface Backend {
   DeleteRecord(plugin: string, id: string): Promise<string>;
 
 
-  CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
-  CopyAsOverrideMany(itemsJson: string, patchPlugin: string, overwrite: boolean): Promise<string>;
+  CopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean, allowLosing?: boolean): Promise<string>;
+  CopyAsOverrideMany(itemsJson: string, patchPlugin: string, overwrite: boolean, allowLosing?: boolean): Promise<string>;
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
@@ -56,7 +56,7 @@ export interface Backend {
   RenumberPluginFormIds(plugin: string, start: string, apply: boolean): Promise<string>;
   CreateSeqFile(plugin: string, outputDir: string): Promise<string>;
   CheckCircularLeveledLists(plugin: string): Promise<string>;
-  DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean, overwrite: boolean): Promise<string>;
+  DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean, overwrite: boolean, maxRecords?: number, allowLosing?: boolean): Promise<string>;
   ChangeReferencingRecords(from: string, to: string, patchPlugin: string, apply: boolean): Promise<string>;
 
 
@@ -71,10 +71,11 @@ export interface Backend {
   GetRecordPluginMatrix(formKey: string): Promise<string>;
   GetDependencies(formKey: string): Promise<string>;
   GetHistory(formKey: string): Promise<string>;
+  GetPluginWorklist(plugin: string, filter?: string, type?: string, limit?: number, offset?: number): Promise<string>;
   GetLoadOrderSummary(): Promise<string>;
 
 
-  ResolveConflict(formKey: string, winner: string, patch: string): Promise<string>;
+  ResolveConflict(formKey: string, winner: string, patch: string, allowLosing?: boolean): Promise<string>;
   SavePatch(patch: string): Promise<string>;
   SavePlugin(plugin: string, path: string): Promise<string>;
 }

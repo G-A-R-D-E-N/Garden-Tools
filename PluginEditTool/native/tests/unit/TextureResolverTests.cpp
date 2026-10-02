@@ -296,7 +296,7 @@ TEST_CASE("Texture resolver resolves loose NIFs and NIFs inside BA2s") {
 
     const auto loose = resolver.resolveNif("weapons/loose.nif");
     REQUIRE(loose.has_value());
-    CHECK(loose->filename() == "Loose.nif");
+    CHECK(std::filesystem::equivalent(*loose, root / "Meshes" / "Weapons" / "Loose.nif"));
 
     // "meshes\\" prefixed relative paths strip the prefix under roots.
     const auto prefixed = resolver.resolveNif("meshes\\weapons\\loose.nif");
@@ -321,4 +321,76 @@ TEST_CASE("Texture resolver follows a BGSM material to its diffuse texture") {
     const auto nifPath = (root / "Meshes" / "Armor" / "Suit.nif").string();
     const auto url = resolver.getTexturePngDataUrl(nifPath, "Materials\\Armor\\Suit.bgsm", "");
     CHECK(url.starts_with("data:image/png;base64,"));
+}
+
+TEST_CASE("Texture resolver does not scan archives above a NIF that has no Data ancestor") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBa2TextureArchive(root / "elsewhere" / "textures.ba2", {
+        textureEntry("Textures\\Stray.dds", rgba8Dds())
+    });
+    writeFile(root / "loose" / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    const auto nifPath = (root / "loose" / "meshes" / "thing.nif").string();
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\stray.dds", "").empty());
+}
+
+TEST_CASE("Texture resolver still finds archives in the Data folder above a NIF") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBa2TextureArchive(root / "Game" / "Data" / "textures.ba2", {
+        textureEntry("Textures\\InData.dds", rgba8Dds())
+    });
+    writeFile(root / "Game" / "Data" / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    const auto nifPath = (root / "Game" / "Data" / "meshes" / "thing.nif").string();
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\indata.dds", "")
+              .starts_with("data:image/png;base64,"));
+}
+
+TEST_CASE("Texture resolver scans an explicit texture root that has no Data ancestor") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBa2TextureArchive(root / "Unpacked" / "textures.ba2", {
+        textureEntry("Textures\\Chosen.dds", rgba8Dds())
+    });
+    writeFile(root / "loose" / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    const auto nifPath = (root / "loose" / "meshes" / "thing.nif").string();
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\chosen.dds", (root / "Unpacked").string())
+              .starts_with("data:image/png;base64,"));
+}
+
+TEST_CASE("Texture resolver scans an explicit texture root without a Data ancestor only at its top level") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBa2TextureArchive(root / "Unpacked" / "nested" / "textures.ba2", {
+        textureEntry("Textures\\Nested.dds", rgba8Dds())
+    });
+    writeFile(root / "loose" / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    const auto nifPath = (root / "loose" / "meshes" / "thing.nif").string();
+    CHECK(resolver.getTexturePngDataUrl(nifPath, "textures\\nested.dds", (root / "Unpacked").string())
+              .empty());
+}
+
+TEST_CASE("Texture resolver still scans a folder recursively after a shallow scan of it") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Game" / "Data";
+    writeBa2TextureArchive(data / "nested" / "textures.ba2", {
+        textureEntry("Textures\\Deep.dds", rgba8Dds())
+    });
+    writeFile(root / "loose" / "thing.nif", {'n', 'i', 'f'});
+    writeFile(data / "meshes" / "thing.nif", {'n', 'i', 'f'});
+
+    fo4ide::assets::TextureResolver resolver(root / "cache");
+    CHECK(resolver.getTexturePngDataUrl((root / "loose" / "thing.nif").string(), "textures\\deep.dds",
+                                        data.string() + " ").empty());
+    CHECK(resolver.getTexturePngDataUrl((data / "meshes" / "thing.nif").string(), "textures\\deep.dds", "")
+              .starts_with("data:image/png;base64,"));
 }

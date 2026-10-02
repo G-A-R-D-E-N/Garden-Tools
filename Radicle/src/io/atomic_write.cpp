@@ -1,4 +1,5 @@
 #include "fo4/io/atomic_write.hpp"
+#include "fo4/io/path_text.hpp"
 
 #include <atomic>
 #include <cerrno>
@@ -29,22 +30,20 @@ namespace fo4::io {
 namespace {
 
 std::filesystem::path temp_sibling(const std::filesystem::path& path) {
-  const auto parent = path.parent_path();
-  const auto name = path.filename().string();
   static std::atomic<std::uint64_t> counter{0};
   const auto unique = static_cast<std::uint64_t>(
                           std::chrono::steady_clock::now().time_since_epoch().count()) ^
                       (counter.fetch_add(1, std::memory_order_relaxed) << 32u);
   for (int attempt = 0; attempt < 8; ++attempt) {
-    const auto candidate =
-        parent / (name + ".radicle-tmp-" + std::to_string(unique) + "-" +
-                  std::to_string(attempt));
+    auto candidate = path;
+    candidate += ".radicle-tmp-" + std::to_string(unique) + "-" + std::to_string(attempt);
     std::error_code ec;
     if (!std::filesystem::exists(candidate, ec)) {
       return candidate;
     }
   }
-  return parent / (name + ".radicle-tmp");
+  auto fallback = path;
+  return fallback += ".radicle-tmp";
 }
 
 [[noreturn]] void discard_and_throw(const std::filesystem::path& temp,
@@ -63,28 +62,28 @@ std::vector<std::byte> read_existing_regular_file(
   if (handle == INVALID_HANDLE_VALUE) {
     throw std::runtime_error(
         "unable to open dependency for rollback without following reparse points: " +
-        path.string() + " (error " + std::to_string(::GetLastError()) + ")");
+        utf8(path) + " (error " + std::to_string(::GetLastError()) + ")");
   }
 
   try {
     BY_HANDLE_FILE_INFORMATION info{};
     if (!::GetFileInformationByHandle(handle, &info)) {
       throw std::runtime_error(
-          "unable to inspect dependency for rollback: " + path.string() +
+          "unable to inspect dependency for rollback: " + utf8(path) +
           " (error " + std::to_string(::GetLastError()) + ")");
     }
     if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
         (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
       throw std::runtime_error(
           "dependency must exist as a regular, non-reparse-point file: " +
-          path.string());
+          utf8(path));
     }
 
     LARGE_INTEGER size{};
     if (!::GetFileSizeEx(handle, &size) || size.QuadPart < 0 ||
         static_cast<std::uint64_t>(size.QuadPart) >
             static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-      throw std::runtime_error("unable to determine dependency size: " + path.string());
+      throw std::runtime_error("unable to determine dependency size: " + utf8(path));
     }
 
     std::vector<std::byte> bytes(static_cast<std::size_t>(size.QuadPart));
@@ -96,7 +95,7 @@ std::vector<std::byte> read_existing_regular_file(
       DWORD read = 0;
       if (!::ReadFile(handle, data, chunk, &read, nullptr) || read == 0) {
         throw std::runtime_error(
-            "unable to read dependency for rollback: " + path.string() +
+            "unable to read dependency for rollback: " + utf8(path) +
             " (error " + std::to_string(::GetLastError()) + ")");
       }
       data += read;
@@ -114,7 +113,7 @@ std::vector<std::byte> read_existing_regular_file(
   if (fd < 0) {
     throw std::runtime_error(
         "unable to open dependency for rollback without following symlinks: " +
-        path.string() + ": " + std::strerror(errno));
+        utf8(path) + ": " + std::strerror(errno));
   }
 
   try {
@@ -124,7 +123,7 @@ std::vector<std::byte> read_existing_regular_file(
             static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max())) {
       throw std::runtime_error(
           "dependency must exist as a readable regular, non-symlink file: " +
-          path.string());
+          utf8(path));
     }
 
     std::vector<std::byte> bytes(static_cast<std::size_t>(status.st_size));
@@ -135,7 +134,7 @@ std::vector<std::byte> read_existing_regular_file(
       if (read < 0 && errno == EINTR) continue;
       if (read <= 0) {
         throw std::runtime_error(
-            "unable to read dependency for rollback: " + path.string() +
+            "unable to read dependency for rollback: " + utf8(path) +
             (read < 0 ? ": " + std::string(std::strerror(errno)) : ": unexpected EOF"));
       }
       data += read;
@@ -188,7 +187,7 @@ StagedFile::StagedFile(StagedFile&& other) noexcept
 StagedFile& StagedFile::operator=(StagedFile&& other) {
   if (this != &other) {
     if (!discard()) {
-      throw std::runtime_error("unable to discard staged file " + path_.string());
+      throw std::runtime_error("unable to discard staged file " + utf8(path_));
     }
     path_ = std::move(other.path_);
     destination_ = std::move(other.destination_);
@@ -222,7 +221,7 @@ StagedFile StagedFile::create(const std::filesystem::path& destination) {
     // losing a collision race must never make RAII cleanup delete the file
     // that another process created at this path.
     throw std::runtime_error("unable to create exclusive staging file " +
-                             candidate.string());
+                             utf8(candidate));
   }
   try {
     staged.path_ = candidate;
@@ -242,7 +241,7 @@ StagedFile StagedFile::create(const std::filesystem::path& destination) {
     // losing a collision race must never make RAII cleanup delete the file
     // that another process created at this path.
     throw std::runtime_error("unable to create exclusive staging file " +
-                             candidate.string());
+                             utf8(candidate));
   }
   try {
     staged.path_ = candidate;
@@ -273,7 +272,7 @@ void StagedFile::write(const std::span<const std::byte> bytes) {
       const auto error = ::GetLastError();
       close();
       discard_and_throw(path_,
-                        "unable to write staged file " + path_.string() +
+                        "unable to write staged file " + utf8(path_) +
                             " (error " + std::to_string(error) + ")");
     }
     data += written;
@@ -289,11 +288,11 @@ void StagedFile::write(const std::span<const std::byte> bytes) {
         const int saved = errno;
         close();
         discard_and_throw(path_,
-                          "unable to write staged file " + path_.string() +
+                          "unable to write staged file " + utf8(path_) +
                               ": " + std::strerror(saved));
       }
       close();
-      discard_and_throw(path_, "short write to staged file " + path_.string());
+      discard_and_throw(path_, "short write to staged file " + utf8(path_));
     }
     data += written;
     remaining -= static_cast<std::size_t>(written);
@@ -318,11 +317,11 @@ void StagedFile::verify(const std::size_t expectedSize) const {
   std::error_code ec;
   const auto status = std::filesystem::symlink_status(path_, ec);
   if (ec || !std::filesystem::is_regular_file(status)) {
-    throw std::runtime_error("staged output is not a regular file: " + path_.string());
+    throw std::runtime_error("staged output is not a regular file: " + utf8(path_));
   }
   const auto size = std::filesystem::file_size(path_, ec);
   if (ec || size != expectedSize) {
-    throw std::runtime_error("staged output size mismatch: " + path_.string());
+    throw std::runtime_error("staged output size mismatch: " + utf8(path_));
   }
 }
 
@@ -355,7 +354,7 @@ void StagedFile::commit() && {
 #if defined(_WIN32)
     const auto error = ::GetLastError();
 #endif
-    const auto destination = destination_.string();
+    const auto destination = utf8(destination_);
     std::error_code remove_ec;
     std::filesystem::remove(path_, remove_ec);
     if (!remove_ec) {
@@ -416,7 +415,7 @@ void write_file_atomic(const std::filesystem::path& path,
     std::filesystem::create_directories(path.parent_path(), ec);
     if (ec) {
       throw std::runtime_error("unable to create output directory " +
-                               path.parent_path().string() + ": " + ec.message());
+                               utf8(path.parent_path()) + ": " + ec.message());
     }
   }
 

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -14,6 +15,10 @@
 #include "plugin_bytes.hpp"
 
 namespace {
+
+bool symlinkNotPermitted(const std::error_code& ec) {
+    return ec.category() == std::system_category() && ec.value() == 1314;  // ERROR_PRIVILEGE_NOT_HELD
+}
 
 std::filesystem::path tempRoot() {
     const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -324,6 +329,7 @@ TEST_CASE("Save As does not follow a trusted root after it becomes a symlink") {
     std::filesystem::rename(trustedRoot, originalRoot);
     std::error_code symlinkEc;
     std::filesystem::create_directory_symlink(relocatedRoot, trustedRoot, symlinkEc);
+    if (symlinkNotPermitted(symlinkEc)) SKIP("creating symlinks is not permitted here");
     REQUIRE_FALSE(symlinkEc);
 
     const auto saved = backend.invokeBackend(
@@ -345,6 +351,7 @@ TEST_CASE("Save As writes the checked canonical destination") {
     std::filesystem::create_directories(actualOutputDir);
     std::error_code symlinkEc;
     std::filesystem::create_directory_symlink(actualOutputDir, outputAlias, symlinkEc);
+    if (symlinkNotPermitted(symlinkEc)) SKIP("creating symlinks is not permitted here");
     REQUIRE_FALSE(symlinkEc);
 
     fo4ide::plugin::RadiclePluginBackend backend;
