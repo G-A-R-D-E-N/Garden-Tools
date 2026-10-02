@@ -31,6 +31,11 @@ export interface Backend {
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
+  CleanUnusedMasters(plugin: string): Promise<string>;
+  CheckForErrors(plugin: string, limit: number): Promise<string>;
+  LootCleaningReport(plugin: string): Promise<string>;
+  CopyAsDisabledOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
+  ComparePluginTo(plugin: string, otherPath: string): Promise<string>;
   CheckEslEligibility(plugin: string): Promise<string>;
   CleanPlugin(plugin: string): Promise<string>;
   RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;

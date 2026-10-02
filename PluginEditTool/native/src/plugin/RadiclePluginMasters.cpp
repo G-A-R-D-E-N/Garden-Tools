@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/plugin/master_usage.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 
@@ -100,6 +101,54 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
             "Reordered masters in " + name + ". SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"MasterReorderFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
+        });
+    }
+
+    try {
+        const auto usage = fo4::scan_master_usage(loaded->plugin);
+        if (!usage.complete()) {
+            return std::unexpected(Error{
+                "MasterUsageIncomplete",
+                std::to_string(usage.records_with_incomplete_vmad) +
+                    " record(s) carry VMAD data Radicle cannot fully scan; no masters were removed"
+            });
+        }
+        auto kept = fo4::used_masters(loaded->plugin, usage);
+        std::vector<std::string> removed;
+        for (const auto& master : loaded->plugin.header.masters) {
+            const bool keep = std::any_of(kept.begin(), kept.end(),
+                                          [&](const auto& item) { return item.key == master.key; });
+            if (!keep) removed.emplace_back(master.key.filename());
+        }
+        if (removed.empty()) {
+            return nlohmann::json("No unused masters in " + name + ".");
+        }
+        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(kept));
+        stagePluginMutationLocked(*loaded, std::move(remapped));
+        std::string list;
+        for (const auto& item : removed) list += (list.empty() ? "" : ", ") + item;
+        return nlohmann::json(
+            "Removed unused master(s) from " + name + ": " + list + ". SavePlugin to persist.");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"CleanMastersFailed", error.what()});
     }
 }
 

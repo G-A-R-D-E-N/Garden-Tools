@@ -545,7 +545,7 @@ public unsafe struct MaterialSwap
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 2u;
+    public const uint CompiledAbiVersion = 3u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -615,6 +615,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_record_array")]
     public static extern void FreeRecordArray(IntPtr* records);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_check_errors")]
+    public static extern Status EnvCheckErrors(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_get_info")]
     public static extern Status RecordGetInfo(IntPtr env, IntPtr record, RecordInfo* out_info);

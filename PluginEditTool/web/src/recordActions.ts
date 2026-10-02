@@ -25,6 +25,25 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     if (picked) await copyInto(col, picked.target);
   };
 
+  const copyAsDisabledOverrideInto = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const picked = await askForTarget({
+      title: 'Copy as disabled override into',
+      description: `Copies ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[col]} as an override and marks the copy Initially Disabled.`,
+      confirmLabel: 'Copy', defaultTarget: editablePlugins[0] ?? '',
+    });
+    if (!picked) return;
+    setStatus('Copying…');
+    try {
+      const msg = await b.CopyAsDisabledOverride(matrix.Plugins[col], matrix.FormKey, picked.target, false);
+      setStatus(msg.startsWith('LOSES:') || msg.startsWith('EXISTS:')
+        ? `Not copied -- ${msg.slice(msg.indexOf(':') + 1).trim()}` : msg);
+      await onReload();
+    } catch (e) { setStatus('Copy failed: ' + errorText(e)); }
+  };
+
   const copyInto = async (col: number, target: string) => {
     closeMenu();
     const b = back();
@@ -112,6 +131,17 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     setStatus('Compacting…');
     try { setStatus(await b.CompactToEsl(matrix.Plugins[col])); await onReload(); }
     catch (e) { setStatus('Compact failed: ' + errorText(e)); }
+  };
+
+  const cleanMasters = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    if (!await askConfirm({ title: 'Clean Masters', confirmLabel: 'Remove unused',
+      message: `Remove every master ${matrix.Plugins[col]} does not reference?\n\nMasters are kept when the plugin has script data that cannot be fully scanned.` })) return;
+    setStatus('Cleaning masters…');
+    try { setStatus(await b.CleanUnusedMasters(matrix.Plugins[col])); await onReload(); }
+    catch (e) { setStatus('Clean masters failed: ' + errorText(e)); }
   };
 
   const cleanPlugin = async (col: number) => {
@@ -296,6 +326,55 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     catch (e) { setStatus('Create SEQ failed: ' + errorText(e)); }
   };
 
+  const compareTo = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    const path = await askPrompt({
+      title: 'Compare to...',
+      description: `Diffs ${plug} against another copy of it. The other file is only read.`,
+      label: 'Path to the other .esp/.esm/.esl', placeholder: 'C:\\Backups\\MyMod.esp',
+      validate: v => v.trim().length > 0 ? null : 'Enter a file path.',
+    });
+    if (!path) return;
+    try {
+      const rows: { FormKey: string; Change: string; Subrecords: string[] }[] =
+        JSON.parse(await b.ComparePluginTo(plug, path.trim()));
+      const count = (c: string) => rows.filter(r => r.Change === c).length;
+      const sample = rows.slice(0, 20).map(r =>
+        `${r.Change} ${r.FormKey}${r.Subrecords.length ? ' [' + r.Subrecords.join(', ') + ']' : ''}`);
+      setStatus(rows.length === 0 ? `${plug} matches ${path.trim()}.`
+        : `${count('changed')} changed, ${count('added')} added, ${count('removed')} removed vs ${path.trim()}:\n`
+          + sample.join('\n') + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
+    } catch (e) { setStatus('Compare failed: ' + errorText(e)); }
+  };
+
+  const checkForErrors = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    setStatus(`Checking ${plug} for errors…`);
+    try {
+      const rows: { Code: string; Severity: string; FormKey: string; Message: string }[] =
+        JSON.parse(await b.CheckForErrors(plug, 500));
+      const errors = rows.filter(r => r.Severity === 'error').length;
+      setStatus(rows.length === 0 ? `No errors found in ${plug}.`
+        : `${errors} error(s), ${rows.length - errors} warning(s) in ${plug}:\n`
+          + rows.slice(0, 20).map(r => `${r.Severity} ${r.Code} ${r.FormKey}: ${r.Message}`).join('\n')
+          + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
+    } catch (e) { setStatus('Check failed: ' + errorText(e)); }
+  };
+
+  const lootReport = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    try { setStatus(await b.LootCleaningReport(matrix.Plugins[col])); }
+    catch (e) { setStatus('LOOT report failed: ' + errorText(e)); }
+  };
+
   const checkCircularLeveled = async (col: number) => {
     closeMenu();
     const b = back();
@@ -354,6 +433,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     deleteRecord,
     renumberFormId,
     compactEsl,
+    cleanMasters,
     cleanPlugin,
     copyAsNewRecord,
     deepCopyAsOverride,
@@ -363,6 +443,10 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     renumberPlugin,
     createSeq,
     checkCircularLeveled,
+    compareTo,
+    checkForErrors,
+    lootReport,
+    copyAsDisabledOverrideInto,
     copyText,
     elementAction,
     askImpact,

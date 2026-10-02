@@ -18,9 +18,9 @@ export default function RecordContextMenu({
   onShowTab: (tab: 'conflicts' | 'references') => void;
 }) {
   const {
-    copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanPlugin, copyAsNewRecord,
+    copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
     deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq,
-    checkCircularLeveled, copyText, elementAction, askImpact,
+    checkCircularLeveled, checkForErrors, lootReport, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
   } = actions;
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
@@ -70,6 +70,7 @@ export default function RecordContextMenu({
       <div className="rv-context-sep" />
       { }
       <button onClick={() => copyAsOverrideInto(menu.col)}><Copy size={13} /> Copy as override into...</button>
+      <button onClick={() => copyAsDisabledOverrideInto(menu.col)}><Copy size={13} /> Copy as disabled override into...</button>
       <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into...</button>
       <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into...</button>
       <div className="rv-context-sep" />
@@ -97,9 +98,13 @@ export default function RecordContextMenu({
       <button onClick={() => cleanPlugin(menu.col)}><Eraser size={13} /> Clean (UDR)</button>
       <button onClick={() => removeItm(menu.col)}><Eraser size={13} /> Remove identical to master...</button>
       <button onClick={() => addMasters(menu.col)}><Plus size={13} /> Add masters...</button>
+      <button onClick={() => cleanMasters(menu.col)}><Eraser size={13} /> Clean masters</button>
       <button onClick={() => renumberPlugin(menu.col)}><Hash size={13} /> Renumber all FormIDs...</button>
       <button onClick={() => createSeq(menu.col)}><FilePlus2 size={13} /> Create SEQ file</button>
       <button onClick={() => checkCircularLeveled(menu.col)}><ListFilter size={13} /> Check circular leveled lists</button>
+      <button onClick={() => checkForErrors(menu.col)}><ListFilter size={13} /> Check for errors</button>
+      <button onClick={() => lootReport(menu.col)}><ListFilter size={13} /> LOOT cleaning report</button>
+      <button onClick={() => compareTo(menu.col)}><ListFilter size={13} /> Compare to...</button>
       <div className="rv-context-sep" />
       <button onClick={askImpact}><Brain size={13} /> Ask AI: what breaks?</button>
     </div>

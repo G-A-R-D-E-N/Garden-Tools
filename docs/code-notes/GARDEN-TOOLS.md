@@ -1289,3 +1289,27 @@ The material swap entry points in `include/fo4/c_api_materials.h` (`radicle_mate
 Any added, removed or changed export or public struct bumps `RADICLE_ABI_VERSION`; this one is ABI 2. After the bump the same #333 library is refused with `reports Radicle ABI 1, but Radicle.Interop was generated for ABI 2`.
 
 Proof: `Radicle/bindings/csharp/Radicle.Interop.Tests/AbiGuardTests.cs:ALibraryFromBeforeTheMaterialSwapExportsIsRejected` loads `radicle_abi_stub_v1` (`bindings/csharp/tests/abi_stub.cpp` built by `Radicle/CMakeLists.txt` with `RADICLE_ABI_STUB_VERSION=1u`). With `RADICLE_ABI_VERSION` set back to 1 and the bindings regenerated, that test fails because the stub is accepted; at 2 it passes.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp:RadiclePluginBackend::cleanUnusedMasters
+
+xEdit "Clean Masters" (#361). Uses Radicle `scan_master_usage` / `used_masters` and removes masters through `fo4::remap_plugin_masters`, which re-encodes every FormLink and record header for the shorter MAST table and, after #365, leaves misclassified non-form-ID slots byte-identical. It refuses (`MasterUsageIncomplete`) instead of removing anything when VMAD could not be fully scanned. It is dispatched through `IPluginBackend::cleanUnusedMasters` from `PluginBackendTarget.cpp` (`backend.CleanUnusedMasters`) because `RadiclePluginBackend.cpp` is over the 750-line limit and cannot take another `invoke` entry. `listMasters` in that file still computes its own "used" flag with the same rule and should switch to `scan_master_usage` when the file is split.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCompare.cpp:RadiclePluginBackend::comparePluginTo
+
+Reads the comparison file read-only and never adds it to `plugins_`, so it cannot be edited or saved and does not join the load order. It is parsed under the loaded plugin's filename because `fo4::diff_plugins` matches by FormKey. Only `.esp/.esm/.esl` paths are accepted. Dispatched as `backend.ComparePluginTo` through `PluginBackendTarget.cpp` (see the `cleanUnusedMasters` note on the over-limit dispatcher). The web action (`web/src/recordActions.ts:compareTo`) shows a counted summary and the first 20 rows in the status bar; a side-by-side view through the conflict matrix is still open on #363.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RemoveIdenticalToMaster
+
+ITM detection now calls `Radicle/src/plugin/maintenance.cpp:fo4::find_identical_to_master` (#360). The old `previousVersionNormalizesEqual` copied the whole plugin and rescanned every link of the earlier plugin (`copy_record_as_override`) for each candidate record. The Radicle version remaps only the earlier record into the current plugin's master context and compares flags and subrecords in order, with the same verdicts. The "checked" count still counts top-level records with an owner.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::checkForErrors
+
+Whole-plugin "Check for Errors" (#359) over every loaded plugin in load order, through `fo4::check_load_order`. Rows are capped at 500 by default and 100000 at most. `GetProblems` (`RadiclePluginAnalysis.cpp`) stays the per-record view.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::lootCleaningReport
+
+Produces a LOOT masterlist entry (`dirty:` or `clean:` cleaning data: `crc`, `util`, `itm`, `udr`, `nav`; keys per loot-api.readthedocs.io "Cleaning Data"). The CRC is zlib `crc32` of the file on disk, so the operation refuses while the plugin has pending changes. `itm` comes from `fo4::find_identical_to_master`, `udr` is deleted placed references (`fo4::is_placed_reference_signature`) and `nav` is deleted NAVM records, all from `fo4::count_deleted_records`. Run it before cleaning, since it reports the dirty state of the current file.
+
+## PluginEditTool/native/src/plugin/RadiclePluginDisabledOverride.cpp:RadiclePluginBackend::copyAsDisabledOverride
+
+xEdit "Copy as disabled override" is copy-as-override plus Initially Disabled (record flag `0x800`) on the copy only. Evidence is in `PluginEditTool/docs/xedit-copy-workflows.md`. The `LOSES:`/`EXISTS:` prompt results from `copyAsOverride` are returned unchanged, so an override that already existed in the target is never flagged.

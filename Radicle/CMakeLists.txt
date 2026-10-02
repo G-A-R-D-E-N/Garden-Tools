@@ -129,6 +129,8 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/master_usage.cpp
+  src/plugin/maintenance.cpp
   src/plugin/onam.cpp
   src/plugin/writer.cpp
   src/schema/condition_scopes.cpp
@@ -144,6 +146,8 @@ add_library(fo4
   src/schema/scalar.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
+  src/graph/check_errors.cpp
+  src/graph/plugin_diff.cpp
   src/environment/environment.cpp
   src/environment/world.cpp
   src/environment/placed.cpp
@@ -178,7 +182,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -343,7 +347,11 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_conflict_graph.cpp
+    tests/test_check_errors.cpp
     tests/test_remap_non_formid_slots.cpp
+    tests/test_master_usage.cpp
+    tests/test_plugin_diff.cpp
+    tests/test_maintenance.cpp
     tests/test_ba2.cpp
     tests/test_ba2_hardening.cpp
     tests/test_ba2_texture.cpp

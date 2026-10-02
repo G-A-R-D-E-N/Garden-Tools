@@ -1,0 +1,98 @@
+#include "fo4/plugin/maintenance.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "plugin_bytes.hpp"
+
+#include <gtest/gtest.h>
+
+#include <cstdint>
+#include <initializer_list>
+#include <string_view>
+#include <vector>
+
+namespace {
+
+struct RecordSpec {
+  std::string_view signature;
+  std::uint32_t form_id;
+  std::string_view editor_id;
+  std::uint32_t keyword{0};
+  std::uint32_t flags{0};
+};
+
+fo4::Plugin make_plugin(std::string_view name,
+                        std::initializer_list<std::string_view> masters,
+                        std::initializer_list<RecordSpec> records) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(static_cast<std::uint32_t>(records.size()));
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  for (const auto master : masters) {
+    std::vector<std::byte> bytes;
+    for (const char ch : master) bytes.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+    bytes.push_back(std::byte{0});
+    fo4::test::write_subrecord(out, "MAST", bytes);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+  }
+  fo4::test::end_record(out, tes4);
+  for (const auto& spec : records) {
+    const auto group = fo4::test::begin_group(out, spec.signature, 0);
+    const auto record = fo4::test::begin_record(out, spec.signature, spec.flags, spec.form_id);
+    fo4::test::write_subrecord(out, "EDID", spec.editor_id);
+    if (spec.keyword != 0) {
+      fo4::test::ByteWriter ksiz;
+      ksiz.u32(1);
+      fo4::test::write_subrecord(out, "KSIZ", ksiz.bytes);
+      fo4::test::ByteWriter kwda;
+      kwda.u32(spec.keyword);
+      fo4::test::write_subrecord(out, "KWDA", kwda.bytes);
+    }
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+  }
+  return fo4::read_plugin(out.bytes, std::string(name));
+}
+
+}  // namespace
+
+TEST(Maintenance, FindsIdenticalOverrideAndIgnoresChangedOne) {
+  const auto base = make_plugin("Base.esm", {}, {{"KYWD", 0x000800, std::string_view{"Kw\0", 3}},
+                                                 {"KYWD", 0x000801, std::string_view{"Other\0", 6}}});
+  const auto patch = make_plugin("Patch.esp", {"Base.esm"},
+                                 {{"KYWD", 0x00000800, std::string_view{"Kw\0", 3}},
+                                  {"KYWD", 0x00000801, std::string_view{"Changed\0", 8}}});
+  const std::vector<const fo4::Plugin*> load_order{&base, &patch};
+  const auto itm = fo4::find_identical_to_master(load_order, 1);
+  ASSERT_EQ(itm.size(), 1u);
+  EXPECT_EQ(itm[0].key, fo4::FormKey::parse("000800:Base.esm"));
+  EXPECT_EQ(itm[0].previous.filename(), "Base.esm");
+}
+
+TEST(Maintenance, IdenticalAcrossDifferentMasterOrder) {
+  const auto base = make_plugin("Base.esm", {}, {{"KYWD", 0x000800, std::string_view{"Kw\0", 3}}});
+  const auto mod = make_plugin("Mod.esp", {"Base.esm"},
+                               {{"MISC", 0x01000900, std::string_view{"Item\0", 5}, 0x00000800}});
+  const auto patch = make_plugin("Patch.esp", {"Mod.esp", "Base.esm"},
+                                 {{"MISC", 0x00000900, std::string_view{"Item\0", 5}, 0x01000800}});
+  const std::vector<const fo4::Plugin*> load_order{&base, &mod, &patch};
+  const auto itm = fo4::find_identical_to_master(load_order, 2);
+  ASSERT_EQ(itm.size(), 1u);
+  EXPECT_EQ(itm[0].key, fo4::FormKey::parse("000900:Mod.esp"));
+  EXPECT_EQ(itm[0].previous.filename(), "Mod.esp");
+}
+
+TEST(Maintenance, CountsDeletedRecordsAndNavmeshes) {
+  const auto plugin = make_plugin(
+      "Dirty.esp", {}, {{"REFR", 0x000800, std::string_view{"A\0", 2}, 0, fo4::RecordFlags::deleted},
+                        {"NAVM", 0x000801, std::string_view{"B\0", 2}, 0, fo4::RecordFlags::deleted},
+                        {"MISC", 0x000802, std::string_view{"C\0", 2}}});
+  const auto counts = fo4::count_deleted_records(plugin);
+  EXPECT_EQ(counts.records, 2u);
+  EXPECT_EQ(counts.references, 1u);
+  EXPECT_EQ(counts.navmeshes, 1u);
+}
