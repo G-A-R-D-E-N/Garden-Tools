@@ -141,6 +141,7 @@ add_library(fo4
   src/schema/nested_formlink_lists.cpp
   src/schema/nested_formlink_list_null.cpp
   src/schema/preflight.cpp
+  src/schema/non_formid_slots.cpp
   src/schema/scalar.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
@@ -343,6 +344,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_conflict_graph.cpp
+    tests/test_remap_non_formid_slots.cpp
     tests/test_ba2.cpp
     tests/test_ba2_hardening.cpp
     tests/test_ba2_texture.cpp
