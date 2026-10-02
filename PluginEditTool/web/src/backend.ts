@@ -36,7 +36,7 @@ export interface Backend {
   LootCleaningReport(plugin: string): Promise<string>;
   UpdateOnam(plugin: string): Promise<string>;
   CopyAsDisabledOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
-  ComparePluginTo(plugin: string, otherPath: string): Promise<string>;
+  ComparePluginTo(plugin: string, otherPath: string, formKey?: string): Promise<string>;
   CheckEslEligibility(plugin: string): Promise<string>;
   CleanPlugin(plugin: string): Promise<string>;
   RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;
