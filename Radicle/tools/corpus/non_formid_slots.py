@@ -12,7 +12,8 @@ import sys
 
 OFFICIAL = re.compile(r"^(Fallout4\.esm|DLC[A-Za-z0-9]+\.esm|cc[A-Z]{3}FO4\d{3}-[A-Za-z0-9_]+\.esl)$")
 SCALAR_TYPES = {"wbFloat", "wbInteger", "wbString", "wbLString", "wbRGBA", "wbByteRGBA", "wbFloatRGBA", "wbByteArray",
-                "wbByteColors", "wbByteABGR", "wbFloatColors"}
+                "wbByteColors", "wbByteABGR", "wbFloatColors", "wbLStringKC", "wbStringKC",
+                "wbLenString", "wbStringForward"}
 
 
 def inspect(tool, command, path):
