@@ -622,9 +622,8 @@ export default function MainShell() {
       let allowLosing = false;
       let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
       if (res.requiresOverwrite) {
-        const existing = Array.isArray(res.existing) ? res.existing : [];
-        const sample = existing.slice(0, 5)
-          .map((x: any) => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
+        const existing: { formKey: string; editorId?: string }[] = Array.isArray(res.existing) ? res.existing : [];
+        const sample = existing.slice(0, 5).map(x => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
         const more = existing.length > 5 ? `\n...and ${existing.length - 5} more.` : '';
         const proceed = await askConfirm({
           title: 'Overwrite existing overrides?',

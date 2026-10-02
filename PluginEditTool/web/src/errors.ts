@@ -6,3 +6,5 @@ export function errorMessage(error: unknown): string | undefined {
   const { message } = error as { message: unknown };
   return message ? String(message) : undefined;
 }
+
+export const errorText = (error: unknown): string => errorMessage(error) ?? String(error);

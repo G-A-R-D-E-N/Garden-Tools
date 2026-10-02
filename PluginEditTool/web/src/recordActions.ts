@@ -1,7 +1,6 @@
 import type { ConflictFieldRow, ConflictMatrix } from './backend';
 import { useDialogs } from './dialogs';
-
-const errorText = (e: unknown) => (e as { message?: string } | null)?.message || String(e);
+import { errorText } from './errors';
 
 export const back = () => window.chrome?.webview?.hostObjects?.backend;
 
