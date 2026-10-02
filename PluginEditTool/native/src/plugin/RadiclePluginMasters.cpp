@@ -107,6 +107,10 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
 Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::json& arguments) {
     const auto name = stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    bool apply = true;
+    if (arguments.is_array() && arguments.size() > 1 && !boolArgument(arguments, 1, apply)) {
+        return std::unexpected(Error{"InvalidApplyFlag", "Apply flag must be boolean"});
+    }
 
     std::scoped_lock lock(mutex_);
     auto* loaded = findPlugin(name);
@@ -141,10 +145,13 @@ Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::
         if (removed.empty()) {
             return nlohmann::json("No unused masters in " + name + ".");
         }
-        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(kept));
-        stagePluginMutationLocked(*loaded, std::move(remapped));
         std::string list;
         for (const auto& item : removed) list += (list.empty() ? "" : ", ") + item;
+        if (!apply) {
+            return nlohmann::json("DRY RUN: would remove unused master(s) from " + name + ": " + list + ".");
+        }
+        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(kept));
+        stagePluginMutationLocked(*loaded, std::move(remapped));
         return nlohmann::json(
             "Removed unused master(s) from " + name + ": " + list + ". SavePlugin to persist.");
     } catch (const std::exception& error) {

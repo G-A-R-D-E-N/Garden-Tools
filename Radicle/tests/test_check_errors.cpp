@@ -221,3 +221,25 @@ TEST(CheckErrors, HardcodedEngineFormsAreNotUnresolved) {
   ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000900:Game.esm"));
 }
+
+TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_misc_with_keywords(out, 0x000801, {0x000901});
+  const auto group = fo4::test::begin_group(out, "INNR", 0);
+  const auto record = fo4::test::begin_record(out, "INNR", 0, 0x000802);
+  fo4::test::ByteWriter wnam;
+  wnam.u32(0x000900);
+  fo4::test::write_subrecord(out, "WNAM", wnam.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 2u);
+  for (const auto& finding : unresolved) {
+    EXPECT_EQ(finding.severity, finding.subrecord.to_string() == "KWDA" ? fo4::CheckSeverity::error
+                                                                          : fo4::CheckSeverity::warning)
+        << finding.message;
+  }
+}

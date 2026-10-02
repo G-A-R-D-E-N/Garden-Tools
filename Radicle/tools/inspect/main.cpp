@@ -1,4 +1,5 @@
 #include "fo4/fo4.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -307,6 +308,20 @@ void print_itm(const std::vector<std::string>& paths) {
   std::cout << "  ]\n}\n";
 }
 
+void print_udr(const fo4::Plugin& plugin) {
+  const auto counts = fo4::count_deleted_records(plugin);
+  std::cout << "{\n  \"deleted_records\": " << counts.records
+            << ",\n  \"deleted_navmeshes\": " << counts.navmeshes << ",\n  \"deleted_references\": [\n";
+  bool first = true;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (!record.header.flags.is_deleted() || !fo4::is_placed_reference_signature(record.header.signature)) return;
+    std::cout << (first ? "" : ",\n") << "    {\"record\": " << json_string(record.form_key.to_string())
+              << ", \"signature\": " << json_string(record.header.signature.to_string()) << "}";
+    first = false;
+  });
+  std::cout << (first ? "" : "\n") << "  ]\n}\n";
+}
+
 void print_master_usage(const fo4::Plugin& plugin) {
   const auto usage = fo4::scan_master_usage(plugin);
   std::cout << "{\n  \"complete\": " << (usage.complete() ? "true" : "false")
@@ -354,6 +369,9 @@ void print_diff(const std::string& before_path, const std::string& after_path) {
 void usage() {
   std::cerr << "usage: fo4inspect [header|groups|records|record|masters|raw|summary|write|"
                "formlinks] plugin.esp [formid|out.esp]\n";
+  std::cerr << "       fo4inspect [udr|unused-masters] plugin.esp\n"
+               "       fo4inspect [check|itm] master.esm ... plugin.esp\n"
+               "       fo4inspect diff before.esp after.esp\n";
 }
 
 }  // namespace
@@ -416,6 +434,8 @@ int main(int argc, char** argv) {
       print_summary(plugin);
     } else if (command == "formlinks") {
       print_formlinks(plugin);
+    } else if (command == "udr") {
+      print_udr(plugin);
     } else if (command == "unused-masters") {
       print_master_usage(plugin);
     } else if (command == "write") {

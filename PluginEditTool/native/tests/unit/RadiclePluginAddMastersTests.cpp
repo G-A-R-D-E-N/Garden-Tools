@@ -268,8 +268,14 @@ TEST_CASE("Native CleanUnusedMasters removes an unreferenced master and keeps lo
         "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
     REQUIRE(fo4::read_plugin_file(targetPath).header.masters.size() == 1);
 
+    const auto preview = textResult(
+        backend.cleanUnusedMasters(nlohmann::json::array({"Target.esp", false})));
+    CHECK(preview == "DRY RUN: would remove unused master(s) from Target.esp: Master.esm.");
+    CHECK(backend.invoke("masters.List", nlohmann::json::array({"Target.esp"}))->get<std::string>()
+              .find("Master.esm") != std::string::npos);
+
     const auto message = textResult(
-        backend.cleanUnusedMasters(nlohmann::json::array({"Target.esp"})));
+        backend.cleanUnusedMasters(nlohmann::json::array({"Target.esp", true})));
     CHECK(message.find("Removed unused master(s) from Target.esp: Master.esm") == 0);
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());

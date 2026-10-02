@@ -473,6 +473,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         }
         return backend_.invokeLegacyBackend(method, args);
     }
+    if (targetNamespace_ == "masters" && method == "CleanUnused") return backend_.cleanUnusedMasters(args);
     if (targetNamespace_ == "cell") {
         if (method == "SearchCells") return legacySearchRecordType(backend_, args, "CELL", 25);
         if (method == "SearchWorldspaces") return legacySearchRecordType(backend_, args, "WRLD", 100);

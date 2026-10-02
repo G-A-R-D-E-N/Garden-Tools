@@ -26,8 +26,6 @@ std::vector<IdenticalToMaster> find_identical_to_master(std::span<const Plugin* 
                                                         std::size_t plugin_index,
                                                         std::size_t limit = 0);
 
-const Group* owned_child_group(const Group& parent, std::size_t record_index);
-
 std::size_t remove_records(Plugin& plugin, std::span<const FormKey> keys);
 
 DeletedRecordCounts count_deleted_records(const Plugin& plugin);

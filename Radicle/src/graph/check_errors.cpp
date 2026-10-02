@@ -111,6 +111,10 @@ void check_links(const Plugin& plugin,
       continue;
     }
 
+    const auto owner = record_signatures.find(hit.record);
+    const auto slot = owner == record_signatures.end()
+                          ? std::nullopt
+                          : slot_targets(owner->second, hit.subrecord, hit.offset);
     const auto target = winners.find(hit.key);
     if (target == winners.end() && hit.key.owner() == game_master &&
         hit.key.local().value() < k_first_non_hardcoded_id) {
@@ -118,9 +122,10 @@ void check_links(const Plugin& plugin,
     }
     if (target == winners.end()) {
       finding.code = CheckCode::unresolved_link;
-      finding.severity = CheckSeverity::error;
+      finding.severity = slot ? CheckSeverity::error : CheckSeverity::warning;
       finding.message = hit.subrecord.to_string() + " target " + hit.key.to_string() +
-                        " is not in any loaded plugin";
+                        " is not in any loaded plugin" +
+                        (slot ? "" : " (slot not proven by the schema; it may not be a form ID)");
       sink.add(std::move(finding));
       continue;
     }
@@ -133,9 +138,6 @@ void check_links(const Plugin& plugin,
       sink.add(finding);
     }
 
-    const auto owner = record_signatures.find(hit.record);
-    if (owner == record_signatures.end()) continue;
-    const auto slot = slot_targets(owner->second, hit.subrecord, hit.offset);
     if (!slot || slot->wildcard || slot->targets.empty()) continue;
     if (std::find(slot->targets.begin(), slot->targets.end(), target->second.signature) !=
         slot->targets.end()) {
