@@ -459,3 +459,66 @@ TEST_CASE("Native LootCleaningReport counts an identical-to-master override") {
     CHECK(yaml.find("      itm: 1\n") != std::string::npos);
     CHECK(yaml.find("      udr: 0\n") != std::string::npos);
 }
+
+TEST_CASE("Native UpdateOnam stages a missing ONAM for a master-flagged plugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto patchPath = root / "Patch.esm";
+    const auto writeDial = [](fo4::test::ByteWriter& out, std::uint32_t id) {
+        const auto group = fo4::test::begin_group(out, "DIAL", 0);
+        const auto record = fo4::test::begin_record(out, "DIAL", 0, id);
+        fo4::test::write_subrecord(out, "EDID", std::string_view{"Topic\0", 6});
+        fo4::test::end_record(out, record);
+        fo4::test::end_group(out, group);
+    };
+    const auto header = [](fo4::test::ByteWriter& out, bool withMaster) {
+        const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+        fo4::test::ByteWriter hedr;
+        hedr.f32(1.0f);
+        hedr.u32(1);
+        hedr.u32(0x801);
+        fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+        if (withMaster) {
+            fo4::test::ByteWriter data;
+            data.u32(0);
+            data.u32(0);
+            fo4::test::write_subrecord(out, "MAST", std::string_view{"Master.esm\0", 11});
+            fo4::test::write_subrecord(out, "DATA", data.bytes);
+        }
+        fo4::test::end_record(out, tes4);
+    };
+    fo4::test::ByteWriter master;
+    header(master, false);
+    writeDial(master, 0x00000800);
+    writeBytes(masterPath, master.bytes);
+    fo4::test::ByteWriter patch;
+    header(patch, true);
+    writeDial(patch, 0x00000800);
+    writeBytes(patchPath, patch.bytes);
+    writeBytes(root / "Target.esp", makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Master.esm", masterPath),
+            pluginEntry("Patch.esm", patchPath),
+            pluginEntry("Target.esp", root / "Target.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto notMaster = textResult(backend.updateOnam(nlohmann::json::array({"Target.esp"})));
+    CHECK(notMaster == "Target.esp is not master-flagged; the game ignores ONAM there.");
+
+    const auto staged = textResult(backend.updateOnam(nlohmann::json::array({"Patch.esm"})));
+    CHECK(staged == "Rebuilt ONAM in Patch.esm (1 override(s)). SavePlugin to persist.");
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esm"})).has_value());
+    const auto saved = fo4::read_plugin_file(patchPath);
+    REQUIRE(saved.header.overrides.size() == 1);
+    CHECK(saved.header.overrides[0].value() == 0x00000800u);
+
+    const auto again = textResult(backend.updateOnam(nlohmann::json::array({"Patch.esm"})));
+    CHECK(again == "ONAM in Patch.esm is already up to date.");
+}

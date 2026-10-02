@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <fo4/plugin/master_usage.hpp>
+#include <fo4/plugin/onam.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 
@@ -149,6 +150,35 @@ Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::
             "Removed unused master(s) from " + name + ": " + list + ". SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CleanMastersFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::updateOnam(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    if (!loaded->plugin.header.tes4_flags.is_master()) {
+        return nlohmann::json(name + " is not master-flagged; the game ignores ONAM there.");
+    }
+
+    try {
+        auto rebuilt = loaded->plugin;
+        fo4::rebuild_tes4_onam(rebuilt);
+        if (rebuilt.header.overrides == loaded->plugin.header.overrides) {
+            return nlohmann::json("ONAM in " + name + " is already up to date.");
+        }
+        const auto count = rebuilt.header.overrides.size();
+        stagePluginMutationLocked(*loaded, std::move(rebuilt));
+        return nlohmann::json("Rebuilt ONAM in " + name + " (" + std::to_string(count) +
+                              " override(s)). SavePlugin to persist.");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"UpdateOnamFailed", error.what()});
     }
 }
 
