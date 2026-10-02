@@ -127,6 +127,7 @@ std::uint32_t nthRawInGroup(const fo4::Record& record,
     const auto terminator = fo4::Signature::from_string("SRAF");
     std::size_t currentGroup = 0;
     std::size_t ordinal = 0;
+    const fo4::Subrecord* found = nullptr;
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature == terminator) {
             if (currentGroup == group) break;
@@ -136,13 +137,14 @@ std::uint32_t nthRawInGroup(const fo4::Record& record,
         }
         if (currentGroup != group || subrecord.signature != sig) continue;
         if (ordinal++ != wanted) continue;
-        REQUIRE(subrecord.data.size() == 4u);
-        std::uint32_t raw = 0;
-        std::memcpy(&raw, subrecord.data.data(), sizeof(raw));
-        return raw;
+        found = &subrecord;
+        break;
     }
-    FAIL("missing requested nested subrecord ordinal");
-    return 0;
+    if (found == nullptr) FAIL("missing requested nested subrecord ordinal");
+    REQUIRE(found->data.size() == 4u);
+    std::uint32_t raw = 0;
+    std::memcpy(&raw, found->data.data(), sizeof(raw));
+    return raw;
 }
 
 std::size_t countInGroup(const fo4::Record& record,

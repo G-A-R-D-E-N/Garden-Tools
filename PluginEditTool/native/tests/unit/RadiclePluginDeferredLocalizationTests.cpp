@@ -127,15 +127,17 @@ std::uint32_t healthValue(const std::filesystem::path& path) {
     const auto* record = fo4::find_record(
         plugin, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(record != nullptr);
+    const fo4::Subrecord* found = nullptr;
     for (const auto& subrecord : record->subrecords) {
         if (subrecord.signature.to_string() != "XHLT") continue;
-        REQUIRE(subrecord.data.size() == 4u);
-        std::uint32_t value = 0;
-        std::memcpy(&value, subrecord.data.data(), sizeof(value));
-        return value;
+        found = &subrecord;
+        break;
     }
-    FAIL("XHLT missing");
-    return 0;
+    if (found == nullptr) FAIL("XHLT missing");
+    REQUIRE(found->data.size() == 4u);
+    std::uint32_t value = 0;
+    std::memcpy(&value, found->data.data(), sizeof(value));
+    return value;
 }
 
 }
