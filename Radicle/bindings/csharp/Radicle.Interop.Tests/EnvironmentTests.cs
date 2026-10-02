@@ -81,6 +81,9 @@ public class EnvironmentTests : IClassFixture<WorldFixture>
     }
 
     [Fact]
+    public void DefaultFormKeyCanBeHashed() => Assert.Single(new HashSet<FormKey> { default, default });
+
+    [Fact]
     public void LoadsPluginsAndResolvesVersions()
     {
         using var env = RadicleEnvironment.Load(new[] { _world.Master, _world.Patch });

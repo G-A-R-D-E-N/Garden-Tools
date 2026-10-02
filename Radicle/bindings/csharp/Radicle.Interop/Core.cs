@@ -84,7 +84,7 @@ public readonly record struct FormKey(string Plugin, uint LocalId)
     public bool Equals(FormKey other) =>
         LocalId == other.LocalId && string.Equals(Plugin, other.Plugin, StringComparison.OrdinalIgnoreCase);
 
-    public override int GetHashCode() => HashCode.Combine(LocalId, StringComparer.OrdinalIgnoreCase.GetHashCode(Plugin));
+    public override int GetHashCode() => HashCode.Combine(LocalId, Plugin is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(Plugin));
 
     public override string ToString() => $"{LocalId:X6}:{Plugin}";
 }
