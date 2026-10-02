@@ -251,3 +251,49 @@ TEST(RemapNonFormIdSlots, LocalizedStringIdsSurviveMasterReorder) {
   ASSERT_NE(term, nullptr);
   EXPECT_EQ(sub_u32(*term, "WNAM"), 0x0000ABCDu);
 }
+
+TEST(RemapNonFormIdSlots, NoneSentinelAndUndecodedSlotsSurviveMasterReorder) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"DLC01.esm\0", 10});
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto u32 = [](std::uint32_t v) {
+    fo4::test::ByteWriter w;
+    w.u32(v);
+    return w.bytes;
+  };
+  const auto one = [&](std::string_view signature, std::uint32_t id, std::string_view sub, std::uint32_t value) {
+    const auto group = fo4::test::begin_group(out, signature, 0);
+    const auto record = fo4::test::begin_record(out, signature, 0, id);
+    fo4::test::write_subrecord(out, sub, u32(value));
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+  };
+  one("EQUP", 0x00012350, "ANAM", 0xFFFFFFFFu);
+  one("WRLD", 0x00012351, "NAM4", 0x43E10000u);
+  one("TACT", 0x00012352, "PNAM", 0x00000123u);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin),
+                                     {fo4::PluginKey::from_filename("DLC01.esm"),
+                                      fo4::PluginKey::from_filename("Fallout4.esm")});
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto value = [&](std::string_view key, std::string_view sub) {
+    const auto* record = fo4::find_record(reread, fo4::FormKey::parse(key));
+    return record == nullptr ? 0u : sub_u32(*record, sub);
+  };
+  EXPECT_EQ(value("012350:Fallout4.esm", "ANAM"), 0xFFFFFFFFu);
+  EXPECT_EQ(value("012351:Fallout4.esm", "NAM4"), 0x43E10000u);
+  EXPECT_EQ(value("012352:Fallout4.esm", "PNAM"), 0x00000123u);
+}

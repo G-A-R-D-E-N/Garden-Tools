@@ -631,7 +631,7 @@ void remap_raw(std::span<std::byte> data, std::size_t offset,
     return;
   }
   const auto raw = RawFormId{read_u32(data, offset)};
-  if (raw.is_null()) {
+  if (raw.is_null() || raw.is_none()) {
     return;
   }
   const auto key = resolve_plugin_link(raw, old_context);
@@ -680,7 +680,7 @@ void rekey_form_links(Plugin& plugin,
       visit_link_offsets(record, sub, true, &plugin, &context, [&](std::size_t offset) {
         if (offset + 4 > bytes.size()) return;
         const auto raw = RawFormId{read_u32(bytes, offset)};
-        if (raw.is_null()) return;
+        if (raw.is_null() || raw.is_none()) return;
         if (resolve_plugin_link(raw, context) != old_key) return;
         const auto replacement = encode_plugin_form_id(new_key, context);
         if (replacement == raw) return;
