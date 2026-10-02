@@ -121,3 +121,35 @@ TEST(PluginDiff, SingleChangeKeepsPreciseSignature) {
   ASSERT_EQ(diff[0].changed_subrecords.size(), 1u);
   EXPECT_EQ(diff[0].changed_subrecords[0].to_string(), "EDID");
 }
+
+TEST(PluginDiff, ReferenceMovedBetweenCellsIsChanged) {
+  const auto cell_plugin = [](std::uint32_t parent) {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(3);
+    hedr.u32(0x900);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    const auto top = fo4::test::begin_group(out, "CELL", 0);
+    for (const std::uint32_t id : {0x800u, 0x802u}) {
+      const auto cell = fo4::test::begin_record(out, "CELL", 0, id);
+      fo4::test::end_record(out, cell);
+      if (id != parent) continue;
+      const auto children = fo4::test::begin_group(out, "CELL", 6);
+      out.patch_u32(children + 8, id);
+      const auto refr = fo4::test::begin_record(out, "REFR", 0, 0x801);
+      fo4::test::write_subrecord(out, "EDID", std::string_view{"Same\0", 5});
+      fo4::test::end_record(out, refr);
+      fo4::test::end_group(out, children);
+    }
+    fo4::test::end_group(out, top);
+    return fo4::read_plugin(out.bytes, "Mod.esp");
+  };
+  const auto diff = fo4::diff_plugins(cell_plugin(0x800), cell_plugin(0x802));
+  ASSERT_EQ(diff.size(), 1u);
+  EXPECT_EQ(diff[0].key, fo4::FormKey::parse("000801:Mod.esp"));
+  EXPECT_EQ(diff[0].change, fo4::RecordChange::changed);
+  EXPECT_TRUE(diff[0].placement_changed);
+}
