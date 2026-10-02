@@ -22,7 +22,7 @@ The main wrapper types:
 
 ## ABI check
 
-`RadicleNative.CompiledAbiVersion` is `RADICLE_ABI_VERSION` from `fo4/c_api.h`, written by the generator. The first call into any wrapper loads the native library through `RadicleLibrary`, which calls the library's `radicle_abi_version` and throws `RadicleAbiMismatchException` naming both numbers when they differ, or when the library does not export that function at all. The check covers a path set with `RadicleLibrary.SetPath`, `RADICLE_NATIVE_PATH`, and the default library search.
+`RadicleNative.CompiledAbiVersion` is `RADICLE_ABI_VERSION` from `fo4/c_api.h`, written by the generator. The first call into any wrapper loads the native library through `RadicleLibrary`, which calls the library's `radicle_abi_version` and throws `RadicleAbiMismatchException` naming both numbers when they differ, or when the library does not export that function at all. The check covers a path set with `RadicleLibrary.SetPath`, `RADICLE_NATIVE_PATH`, and the default library search. It does not cover a library that the default search misses and an `AssemblyLoadContext` then supplies (`LoadUnmanagedDll` or `ResolvingUnmanagedDll`); hosts that load native libraries that way should call `RadicleLibrary.SetPath`.
 
 ## Regenerating
 

@@ -28,6 +28,25 @@ std::optional<Signature> primary_model_field(const RecordRef& ref, char field) {
   return slot == '0' ? Signature{'M', 'O', 'D', field} : Signature{'M', 'O', slot, field};
 }
 
+std::optional<float> armor_color_remapping_index(const Environment& env, const RecordRef& ref) {
+  const auto path = primary_model_path(ref);
+  if (!path) return std::nullopt;
+  const Reader reader(env, ref);
+  const Subrecord* found = nullptr;
+  bool in_model = false;
+  for (const auto& sub : ref.record->subrecords) {
+    if (sub.signature == sig("MOD2") || sub.signature == sig("MOD4")) {
+      in_model = path->data() == reinterpret_cast<const char*>(sub.data.data());
+    } else if (in_model && sub.signature == sig("MODC")) {
+      if (found != nullptr) reader.fail(sub.signature, "appears more than once in a model");
+      found = &sub;
+    }
+  }
+  if (found == nullptr) return std::nullopt;
+  if (found->data.size() != 4) reader.fail(found->signature, "must be 4 bytes");
+  return Reader::f32(*found, 0);
+}
+
 }  // namespace
 
 std::vector<MaterialSubstitution> decode_material_swap(const Environment& env, const RecordRef& ref) {
@@ -70,6 +89,7 @@ std::optional<FormKey> primary_model_material_swap(const Environment& env, const
 }
 
 std::optional<float> primary_model_color_remapping_index(const Environment& env, const RecordRef& ref) {
+  if (ref.record->header.signature == sig("ARMO")) return armor_color_remapping_index(env, ref);
   const auto field = primary_model_field(ref, 'C');
   return field ? Reader(env, ref).f32(*field) : std::nullopt;
 }

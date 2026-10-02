@@ -78,8 +78,10 @@ std::vector<Rec> fixture() {
       {"ARMO", 0x820, {{"MOD2", zstring("Male.nif")}, {"MO2S", word(0x800)},
                        {"MOD4", zstring("Female.nif")}, {"MO4S", word(0x801)}}},
       {"ARMO", 0x821, {{"MOD4", zstring("Female.nif")}, {"MO4S", word(0x801)}}},
-      {"ARMO", 0x822, {{"MOD2", zstring("Male.nif")}, {"MO2C", real(0.75f)},
-                       {"MOD4", zstring("Female.nif")}, {"MO4C", real(0.125f)}}},
+      {"ARMO", 0x822, {{"MOD2", zstring("Male.nif")}, {"MODC", real(0.75f)},
+                       {"MOD4", zstring("Female.nif")}, {"MODC", real(0.125f)}}},
+      {"ARMO", 0x823, {{"MOD2", zstring("Male.nif")}, {"MOD4", zstring("Female.nif")}, {"MODC", real(0.125f)}}},
+      {"ARMO", 0x824, {{"MOD4", zstring("Female.nif")}, {"MODC", real(0.125f)}}},
       {"STAT", 0x813, {{"MODL", zstring("Props\\Box.nif")}, {"MODC", real(0.25f)}, {"MODS", word(0x800)}}},
       {"STAT", 0x814, {{"MODL", zstring("Props\\Box.nif")}, {"MODC", {std::byte{0}, std::byte{0}}}}},
       {"STAT", 0x815, {{"MODC", real(0.5f)}}},
@@ -158,6 +160,8 @@ TEST_F(MaterialSwapTest, ReadsThePrimaryModelColorRemappingIndex) {
   EXPECT_FALSE(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x815))).has_value());
   EXPECT_EQ(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x822))), std::optional<float>{0.75f});
   EXPECT_FALSE(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x821))).has_value());
+  EXPECT_FALSE(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x823))).has_value());
+  EXPECT_EQ(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x824))), std::optional<float>{0.125f});
   EXPECT_THROW(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x814))), fo4::env::WorldDecodeError);
   EXPECT_EQ(fo4::env::primary_model_material_swap(env, *env.winner(key(0x816))), key(0x800));
   EXPECT_EQ(fo4::env::primary_model_color_remapping_index(env, *env.winner(key(0x816))), std::optional<float>{0.375f});
