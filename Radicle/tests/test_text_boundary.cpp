@@ -81,7 +81,9 @@ protected:
     paths_ = {
         write(k_cafe_esm, make_plugin(0x81, {},
                                       {{"STAT", 0x800, {{"EDID", zstring("Caf\xE9")}, {"MODL", zstring("Meshes\\Caf\xE9.nif")}}},
-                                       {"LIGH", 0x801, {{"DATA", light_data}, {"NAM0", zstring("Textures\\Caf\xE9.dds")}}}})),
+                                       {"LIGH", 0x801, {{"DATA", light_data}, {"NAM0", zstring("Textures\\Caf\xE9.dds")}}},
+                                       {"TXST", 0x802, {{"TX00", zstring("Textures\\Caf\xE9_d.dds")}}},
+                                       {"LTEX", 0x803, {{"TNAM", {std::byte{0x02}, std::byte{0x08}, std::byte{0}, std::byte{0}}}}}})),
         write("Patch.esp", make_plugin(0, {"Caf\xE9.esm"}, {{"STAT", 0x800, {{"EDID", zstring("Caf\xE9")}}}})),
     };
   }
@@ -120,6 +122,8 @@ protected:
 TEST(TextBoundary, PluginKeysIgnoreNonAsciiCase) {
   EXPECT_EQ(fo4::PluginKey::from_filename("\xC3\x89gout.esp"), fo4::PluginKey::from_filename("\xC3\xA9gout.esp"));
   EXPECT_FALSE(fo4::PluginKey::from_filename("\xC3\x89gout.esp") < fo4::PluginKey::from_filename("\xC3\xA9gout.esp"));
+  EXPECT_EQ(fo4::hash_value(fo4::PluginKey::from_filename("\xC3\x89gout.esp")),
+            fo4::hash_value(fo4::PluginKey::from_filename("\xC3\xA9gout.esp")));
 }
 
 TEST(TextBoundary, FoldMatchesDotnetOrdinalIgnoreCase) {
@@ -128,6 +132,10 @@ TEST(TextBoundary, FoldMatchesDotnetOrdinalIgnoreCase) {
   EXPECT_TRUE(fo4::text::equals_folded("\xE1\xBE\x80", "\xE1\xBE\x88"));
   EXPECT_TRUE(fo4::text::equals_folded("\xF0\x90\x90\x80", "\xF0\x90\x90\xA8"));
   EXPECT_EQ(fo4::text::hash_folded("\xF0\x90\x90\x80"), fo4::text::hash_folded("\xF0\x90\x90\xA8"));
+  const auto plain = fo4::PluginKey::from_filename("s.esp");
+  const auto long_s = fo4::PluginKey::from_filename("\xC5\xBF.esp");
+  EXPECT_FALSE(plain == long_s);
+  EXPECT_NE(plain < long_s, long_s < plain);
 }
 
 TEST(TextBoundary, MasterNamesAreWrittenAsWindows1252) {
@@ -168,7 +176,14 @@ TEST_F(TextBoundaryTest, CApiTextIsUtf8) {
   ASSERT_EQ(count, 2u);
   ASSERT_EQ(radicle_record_get_info(env, versions[0], &record), RADICLE_STATUS_OK);
   EXPECT_STREQ(record.model_path, "Meshes\\Caf\xC3\xA9.nif");
+  const char* primary = nullptr;
+  ASSERT_EQ(radicle_record_primary_model_path(env, versions[0], &primary), RADICLE_STATUS_OK);
+  EXPECT_STREQ(primary, "Meshes\\Caf\xC3\xA9.nif");
   radicle_free_record_array(versions);
+
+  const char* diffuse = nullptr;
+  ASSERT_EQ(radicle_env_landscape_texture_diffuse(env, {k_cafe_esm.c_str(), 0x803}, &diffuse), RADICLE_STATUS_OK);
+  EXPECT_STREQ(diffuse, "Textures\\Caf\xC3\xA9_d.dds");
 
   const radicle_record* found = nullptr;
   ASSERT_EQ(radicle_env_find_editor_id(env, "CAF\xC3\x89", nullptr, &found), RADICLE_STATUS_OK);

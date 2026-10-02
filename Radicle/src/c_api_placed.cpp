@@ -295,7 +295,7 @@ radicle_status radicle_record_primary_model_path(const radicle_env* env,
   *out_path = nullptr;
   const auto path = fo4::env::primary_model_path(*to_ref(record));
   if (!path) return fail(RADICLE_STATUS_NOT_FOUND, "record has no model path");
-  *out_path = path->data();
+  *out_path = stored_text(*env, *path);
   return RADICLE_STATUS_OK;
 }
 

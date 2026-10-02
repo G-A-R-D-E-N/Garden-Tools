@@ -125,7 +125,7 @@ radicle_status radicle_env_landscape_texture_diffuse(const radicle_env* env,
     if (!key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "invalid FormKey");
     const auto path = fo4::env::landscape_texture_diffuse(env->value, *key);
     if (!path) return fail(RADICLE_STATUS_NOT_FOUND, "landscape texture has no diffuse path");
-    *out_path = path->data();
+    *out_path = stored_text(*env, *path);
     return RADICLE_STATUS_OK;
   });
 }
