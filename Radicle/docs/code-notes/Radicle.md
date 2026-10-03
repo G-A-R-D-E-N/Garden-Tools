@@ -1,5 +1,36 @@
 # Radicle code notes
 
+## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
+
+TopicChildren returns the ordered physical INFO records in the topic-children
+group immediately following the selected DIAL version. It does not substitute
+winning INFO overrides or collect responses from other plugins or sibling topics.
+The hierarchy source is include/fo4/plugin/container.hpp:Group and
+src/plugin/maintenance.cpp:owned_child_group; the consumer behavior is verified in
+GardenEngine's vendored Mutagen.Bethesda.Fallout4/Records/Major Records/DialogTopic.cs:
+DialogTopicBinaryOverlay.CustomEnd. The group label must resolve to that DIAL in
+the selected plugin's master context. Missing, empty or differently typed following
+groups have no responses; mismatched labels, nested children and non-INFO children
+fail closed. Recursive lookup supports DIAL records nested beneath quest groups.
+
+The returned array uses radicle_free_record_array; record handles remain borrowed from
+the supplied environment. Managed TopicChildren copies only the handle array via
+the existing Records helper. Keep the environment alive while reading the children
+and their payloads. No C struct layouts or ABI version change. Consumers require a
+native library containing the new export. TopicReadTests.cs covers selected and
+overridden versions, physical order, sibling separation, nested topics, master/self
+keys, empty results, invalid owners/types and disposed-environment access. This
+does not validate scene decoding, voice playback or menu fidelity.
+
+The source-linked installed-data comparison passed 92,861 checks across Fallout4,
+Robot, workshop01, Coast, workshop02, workshop03 and NukaWorld: exact physical
+DIAL keysets, ordered child FormKeys and selected-plugin INFO versions matched
+the independent Mutagen overlay for 46,427 topics and 102,462 responses. The
+31-test binding suite passed against the candidate native library, including ABI
+layout and mismatch tests; generated declaration/probe drift checks passed.
+These counts establish hierarchy projection only. Lookup currently walks the
+selected plugin hierarchy per request; no voice loading performance claim is made.
+
 ## src/c_api_records.cpp / bindings/csharp/Radicle.Interop/RecordReads.cs:ReadPayload, ResolveFormId
 
 The Garden UI importer needs the existing parsed record's ordered subrecords and

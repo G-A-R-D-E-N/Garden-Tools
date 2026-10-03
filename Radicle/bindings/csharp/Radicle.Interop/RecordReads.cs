@@ -10,6 +10,14 @@ public sealed record RecordPayload(ushort FormVersion, IReadOnlyList<Subrecord> 
 
 public sealed unsafe partial class RadicleEnvironment
 {
+    public IReadOnlyList<Record> TopicChildren(Record record)
+    {
+        IntPtr* items;
+        nuint count;
+        Call.Check(RadicleNative.RecordTopicChildren(Handle, record.Handle, &items, &count));
+        return Records(items, count);
+    }
+
     public RecordPayload ReadPayload(Record record)
     {
         ushort version;

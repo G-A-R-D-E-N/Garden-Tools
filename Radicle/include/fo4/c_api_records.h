@@ -16,6 +16,9 @@ RADICLE_API radicle_status radicle_record_copy_subrecord(
 RADICLE_API radicle_status radicle_record_resolve_form_id(
     const radicle_env* env, const radicle_record* record, uint32_t raw_form_id,
     radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_record_topic_children(
+    const radicle_env* env, const radicle_record* record,
+    const radicle_record*** out_records, size_t* out_count);
 
 #ifdef __cplusplus
 }

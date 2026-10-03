@@ -850,4 +850,7 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_resolve_form_id")]
     public static extern Status RecordResolveFormId(IntPtr env, IntPtr record, uint raw_form_id, FormKey* out_key);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_topic_children")]
+    public static extern Status RecordTopicChildren(IntPtr env, IntPtr record, IntPtr** out_records, nuint* out_count);
+
 }

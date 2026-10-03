@@ -3,7 +3,70 @@
 
 using namespace radicle_c_env_detail;
 
+namespace {
+
+bool find_topic_group(const fo4::Group& group, const fo4::Record* record,
+                      const fo4::Group*& out) {
+  for (size_t i = 0; i < group.children.size(); ++i) {
+    if (const auto* child = std::get_if<fo4::Group>(&group.children[i])) {
+      if (find_topic_group(*child, record, out)) return true;
+    } else if (std::get_if<fo4::Record>(&group.children[i]) == record) {
+      if (i + 1 < group.children.size()) {
+        const auto* next = std::get_if<fo4::Group>(&group.children[i + 1]);
+        if (next != nullptr && next->header.group_type == static_cast<int32_t>(fo4::GroupType::topic_children)) out = next;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+}
+
 extern "C" {
+
+radicle_status radicle_record_topic_children(
+    const radicle_env* env, const radicle_record* record,
+    const radicle_record*** out_records, size_t* out_count) {
+  clear_error();
+  if (out_records != nullptr) *out_records = nullptr;
+  if (out_count != nullptr) *out_count = 0;
+  if (env == nullptr || record == nullptr || out_records == nullptr || out_count == nullptr)
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and outputs are required");
+  return guarded("unknown exception while reading topic children", [&] {
+    const auto& ref = *to_ref(record);
+    if (ref.record->header.signature != fo4::Signature::from_string("DIAL"))
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record must be a DIAL");
+    const auto versions = env->value.versions(ref.record->form_key);
+    if (std::none_of(versions.begin(), versions.end(), [&](const auto& candidate) { return &candidate == &ref; }))
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+    const fo4::Group* children = nullptr;
+    bool found = false;
+    for (const auto& group : env->value.plugin(ref.plugin).groups) {
+      if (find_topic_group(group, ref.record, children)) { found = true; break; }
+    }
+    if (!found) return fail(RADICLE_STATUS_NOT_FOUND, "topic record is absent from its plugin hierarchy");
+    if (children == nullptr) return RADICLE_STATUS_OK;
+    const fo4::RawFormId raw{children->header.label_as_u32()};
+    if (raw.is_none() || raw.is_created() || raw.index_byte() > env->value.plugins().at(ref.plugin).masters.size() ||
+        env->value.resolve_link(ref, raw) != ref.record->form_key)
+      return fail(RADICLE_STATUS_PARSE_ERROR, "topic child group owner does not match the selected DIAL");
+    std::vector<const fo4::env::RecordRef*> refs;
+    refs.reserve(children->children.size());
+    for (const auto& child : children->children) {
+      const auto* info = std::get_if<fo4::Record>(&child);
+      if (info == nullptr || info->header.signature != fo4::Signature::from_string("INFO"))
+        return fail(RADICLE_STATUS_PARSE_ERROR, "topic child group must contain direct INFO records");
+      const auto info_versions = env->value.versions(info->form_key);
+      const auto selected = std::find_if(info_versions.begin(), info_versions.end(), [&](const auto& version) {
+        return version.plugin == ref.plugin && version.record == info;
+      });
+      if (selected == info_versions.end()) return fail(RADICLE_STATUS_NOT_FOUND, "topic child is not indexed");
+      refs.push_back(&*selected);
+    }
+    return copy_records(refs, out_records, out_count);
+  });
+}
 
 radicle_status radicle_record_payload_info(
     const radicle_env* env, const radicle_record* record,
