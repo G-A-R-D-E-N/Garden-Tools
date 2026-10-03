@@ -1,5 +1,34 @@
 # Radicle code notes
 
+## src/c_api_records.cpp / bindings/csharp/Radicle.Interop/RecordReads.cs:ReadPayload, ResolveFormId
+
+The Garden UI importer needs the existing parsed record's ordered subrecords and
+the native load order's FormID resolution. These reads copy opaque payload bytes,
+including duplicate/unknown fields and extended-size markers, without guessing
+their meaning or changing the environment. ReadPayload returns managed-owned
+bytes that survive environment disposal. ResolveFormId uses the selected record
+version's plugin context, including master and self indices.
+
+Verified against source:include/fo4/formid.hpp:RawFormId and
+source:src/formid.cpp:resolve_plugin_link, ResolveFormId rejects an index beyond the source plugin's master table and
+created/save IDs; null and the explicit none sentinel return no key. The existing
+environment link helper otherwise coerces oversized indices to the source plugin,
+so this new strict read validates before invoking it. Existing decoders are unchanged.
+Unknown four-byte signatures use reversible Latin1 in managed snapshots.
+
+The C caller supplies four writable signature bytes. Copied payload buffers use
+radicle_free_bytes; resolved plugin strings are borrowed until environment disposal.
+As with existing record readers, keep the environment alive throughout a call;
+Garden's environment read lease must cover a snapshot and its link resolutions.
+No existing C layout changes. Consumers need a library containing these new exports.
+The C# declarations are generated from c_api_records.h by the existing generator
+and its drift check. UI field codecs, localization,
+condition/script gates and original-payload parity remain separate integration work.
+
+bindings/csharp/Radicle.Interop.Tests/RecordReadTests.cs verifies override choice,
+duplicate unknown bytes, empty payloads, master/self/null/invalid FormIDs and
+managed byte ownership after disposal. This is not a decoded UI-content claim.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.

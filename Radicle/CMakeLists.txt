@@ -195,6 +195,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
