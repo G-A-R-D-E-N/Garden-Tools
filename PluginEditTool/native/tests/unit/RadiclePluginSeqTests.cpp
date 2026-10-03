@@ -186,6 +186,6 @@ TEST_CASE("Native CreateSeqFile reports a plugin folder with non-ANSI characters
 
     const auto result = backend.createSeqFile(nlohmann::json::array({"Patch.esp", ""}));
     REQUIRE(result.has_value());
-    CHECK(result->get<std::string>().find(utf8(root)) != std::string::npos);
+    CHECK(result->get<std::string>().find(utf8(std::filesystem::weakly_canonical(root))) != std::string::npos);
     CHECK(std::filesystem::file_size(root / "Seq" / "Patch.seq") == 4);
 }
