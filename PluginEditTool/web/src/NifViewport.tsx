@@ -47,6 +47,10 @@ export interface NifGeo { fo4: boolean; shapes: NifShapeGeo[]; }
 
 type ShapeMat = THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
 
+function setWireframe(mats: ShapeMat[], on: boolean) {
+  for (const m of mats) m.wireframe = on;
+}
+
 
 export default function NifViewport(
   { data, wireframe, textured, loadTexture }: {
@@ -234,7 +238,7 @@ export default function NifViewport(
 
 
   useEffect(() => {
-    for (const m of matsRef.current) m.wireframe = wireframe;
+    setWireframe(matsRef.current, wireframe);
   }, [wireframe]);
 
   return <div ref={mountRef} className="nif-viewport" />;

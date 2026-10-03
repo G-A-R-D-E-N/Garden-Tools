@@ -7,7 +7,7 @@ import type {
 } from './backend';
 import RecordPicker from './RecordPicker';
 import ConditionsEditor from './ConditionsEditor';
-import { useDialogs } from './dialogs';
+import { useDialogs } from './useDialogs';
 import WorkspaceHeader from './Workspace/WorkspaceHeader';
 import { buildActions } from './Workspace/actions';
 import ConflictsView, { type ConflictLayout } from './Workspace/ConflictsView';

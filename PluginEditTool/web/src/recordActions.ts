@@ -1,5 +1,5 @@
 import type { ConflictFieldRow, ConflictMatrix } from './backend';
-import { useDialogs } from './dialogs';
+import { useDialogs } from './useDialogs';
 import type { CompareRow } from './PluginCompareDialog';
 import { errorText } from './errors';
 
