@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Link2, AlertTriangle, Crown, Clock, Network, HelpCircle,
 } from 'lucide-react';
@@ -18,7 +18,7 @@ import {
   SEV_ORDER,
 } from './recordStatus';
 import './RecordView.css';
-import { errorMessage } from './errors';
+import { errorText } from './errors';
 
 export type RecordTab = 'grid' | 'fields' | 'conflicts' | 'references' | 'history' | 'dependencies';
 
@@ -39,14 +39,14 @@ function TabBtn({ id, current, set, children, count }: {
 
 export default function RecordView(
   { matrix, plugin, onReload, onOpenRecord, activeTab: externalTab, onTabChange, highlightField,
-    onPluginsChanged }: {
+    highlightSeq, onPluginsChanged }: {
     matrix: ConflictMatrix; plugin: string;
     onReload: () => Promise<void>;
     onOpenRecord?: (formKey: string, plugin: string) => void;
     activeTab?: RecordTab;
     onTabChange?: (t: RecordTab) => void;
     highlightField?: string;
-
+    highlightSeq?: number;
     onPluginsChanged?: () => void;
   }
 ) {
@@ -61,6 +61,7 @@ export default function RecordView(
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<Menu | null>(null);
+  const openMenu = (m: Menu) => { setMenu(m); setElementActions(null); };
   const [edit, setEdit] = useState<Edit | null>(null);
   const [editVal, setEditVal] = useState('');
   const [picker, setPicker] = useState<{ row: ConflictFieldRow; col: number } | null>(null);
@@ -81,8 +82,11 @@ export default function RecordView(
     localStorage.setItem('rvColumnWidthMode', m);
   };
 
-  const [flashedField, setFlashedField] = useState('');
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashing = (r: ConflictFieldRow) => !!highlightField && r.Field === highlightField;
+  const [flashKey, setFlashKey] = useState({ field: highlightField, seq: highlightSeq });
+  if (highlightField && highlightSeq !== flashKey.seq) setFlashKey({ field: highlightField, seq: highlightSeq });
+  const rowKey = (r: ConflictFieldRow, ri: number) => r.Field === flashKey.field ? `${ri}:${flashKey.seq}` : ri;
+  const [prevFormKey, setPrevFormKey] = useState(matrix.FormKey);
 
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [refBy, setRefBy] = useState<RefByEntry[] | null>(null);
@@ -118,12 +122,16 @@ export default function RecordView(
     return () => { window.removeEventListener('click', close); window.removeEventListener('scroll', close, true); };
   }, []);
 
-  useEffect(() => {
-    const b = back();
-    if (!b) return;
+  if (prevFormKey !== matrix.FormKey) {
+    setPrevFormKey(matrix.FormKey);
     setRefBy(null); setProblems(null); setCollapsedGroups({});
     setDeps(null); setHistory(null); setAnchors(null);
     setScanErrors({});
+  }
+
+  useEffect(() => {
+    const b = back();
+    if (!b) return;
     (async () => {
 
       const fail = (k: string, e: unknown) =>
@@ -138,15 +146,6 @@ export default function RecordView(
       catch (e) { setHistory([]); fail('history', e); }
     })();
   }, [matrix.FormKey]);
-
-  useEffect(() => {
-    if (!highlightField) return;
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    setFlashedField(highlightField);
-    setRecordTab('grid');
-    flashTimerRef.current = setTimeout(() => setFlashedField(''), 1800);
-
-  }, [highlightField]);
 
   const winnerIdx = useMemo(() => {
     const i = matrix.Plugins.lastIndexOf(matrix.Winner);
@@ -234,14 +233,13 @@ export default function RecordView(
     try {
       setStatus(await b.SetField(matrix.Plugins[col], matrix.FormKey, r.Field, value));
       await onReload();
-    } catch (e) { setStatus('Edit failed: ' + (errorMessage(e) ?? String(e))); }
+    } catch (e) { setStatus('Edit failed: ' + errorText(e)); }
   };
 
   useEffect(() => {
     if (!menu) return;
     const b = back();
     if (!b) return;
-    setElementActions(null);
     (async () => {
       try { setEditablePlugins(JSON.parse(await b.GetEditablePlugins())); } catch { setEditablePlugins([]); }
       try {
@@ -326,11 +324,11 @@ export default function RecordView(
         {gridRows.length === 0 ? (
           <tr><td className="rv-empty" colSpan={visibleCols.length + 1}>No fields match.</td></tr>
         ) : gridRows.map((r, ri) => (
-          <tr key={ri} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
+          <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
             <td
               className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
               onDoubleClick={() => r.HasChildren && toggle(r)}
-              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
+              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
             >
               <span className="rv-prop-inner" style={{ paddingLeft: r.Level * 14 }}>
                 {r.HasChildren ? (
@@ -349,7 +347,7 @@ export default function RecordView(
                   key={ci}
                   className={`rv-cell rv-c-${st}`}
                   onDoubleClick={() => !r.HasChildren && startEdit(r, ci)}
-                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
+                  onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                 >
                   {st === 'win' && <Crown size={10} className="rv-win-icon" />}
                   {editing ? renderEditor(r, ci) : r.Values[ci]}
@@ -512,10 +510,10 @@ export default function RecordView(
                             </td>
                           </tr>
                           {!collapsed && g.rows.map((r, ri) => (
-                            <tr key={ri} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashedField && r.Field === flashedField ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
+                            <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
                               <td
                                 className="rv-prop-col rv-sticky"
-                                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
+                                onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
                               >
                                 <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
                               </td>
@@ -526,7 +524,7 @@ export default function RecordView(
                                     key={ci}
                                     className={`rv-cell rv-c-${st}`}
                                     onDoubleClick={() => startEdit(r, ci)}
-                                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
+                                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                                   >
                                     {st === 'win' && <Crown size={10} className="rv-win-icon" />}
                                     {r.Values[ci]}

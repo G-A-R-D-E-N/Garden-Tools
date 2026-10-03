@@ -3,7 +3,7 @@ import { X, Plus, Trash2, ArrowUp, ArrowDown, Search } from 'lucide-react';
 import type { ConditionDto } from './backend';
 import RecordPicker from './RecordPicker';
 import './ConditionsEditor.css';
-import { errorMessage } from './errors';
+import { errorText } from './errors';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
 
@@ -22,26 +22,26 @@ export default function ConditionsEditor(
   { plugin: string; record: string; path: string; label: string;
     onClose: () => void; onSaved: (msg: string) => void }
 ) {
-  const [rows, setRows] = useState<ConditionDto[] | null>(null);
+  const [rows, setRows] = useState<ConditionDto[] | null>(() => (back() ? null : []));
   const [functions, setFunctions] = useState<string[]>([]);
   const [runOns, setRunOns] = useState<string[]>([]);
   const [paramTable, setParamTable] = useState<ParamTable>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => (back() ? '' : 'No backend bridge.'));
   const [saving, setSaving] = useState(false);
   const [pick, setPick] = useState<PickTarget | null>(null);
   const [fnFilter, setFnFilter] = useState('');
 
   useEffect(() => {
     const b = back();
-    if (!b) { setError('No backend bridge.'); setRows([]); return; }
+    if (!b) return;
     (async () => {
       try {
         const raw = await b.GetConditionsAt(plugin, record, path);
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) setRows(parsed);
         else { setError(String(raw)); setRows([]); }
-      } catch (e) { setError('Could not read conditions: ' + (errorMessage(e) ?? String(e))); setRows([]); }
+      } catch (e) { setError('Could not read conditions: ' + errorText(e)); setRows([]); }
       try { setFunctions(JSON.parse(await b.GetConditionFunctions())); } catch { setFunctions([]); }
       try { setRunOns(JSON.parse(await b.GetConditionRunOnTypes())); } catch { setRunOns(['Subject']); }
       try { setParamTable(JSON.parse(await b.GetConditionFunctionParams())); } catch { setParamTable({}); }
@@ -108,7 +108,7 @@ export default function ConditionsEditor(
       onSaved(await b.SetConditionsAt(plugin, record, path, JSON.stringify(rows)));
       onClose();
     } catch (e) {
-      setError('Save failed: ' + (errorMessage(e) ?? String(e)));
+      setError('Save failed: ' + errorText(e));
       setSaving(false);
     }
   };
