@@ -18,6 +18,7 @@ import {
   SEV_ORDER,
 } from './recordStatus';
 import './RecordView.css';
+import { errorMessage } from './errors';
 
 export type RecordTab = 'grid' | 'fields' | 'conflicts' | 'references' | 'history' | 'dependencies';
 
@@ -233,7 +234,7 @@ export default function RecordView(
     try {
       setStatus(await b.SetField(matrix.Plugins[col], matrix.FormKey, r.Field, value));
       await onReload();
-    } catch (e: any) { setStatus('Edit failed: ' + (e?.message || e)); }
+    } catch (e) { setStatus('Edit failed: ' + (errorMessage(e) ?? String(e))); }
   };
 
   useEffect(() => {

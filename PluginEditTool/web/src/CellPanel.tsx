@@ -315,7 +315,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         try {
           const raw = await cell.GetGeometryBatchProgress();
           setGeoProgress(JSON.parse(raw) as { done: number; total: number });
-        } catch {  }
+        } catch { /* progress polling is best-effort; the batch call reports real failures */ }
       }, 200);
       let geoRaw: string;
       try {
