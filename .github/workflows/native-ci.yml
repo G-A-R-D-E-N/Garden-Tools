@@ -8,97 +8,112 @@ name: native-ci
 # pull_request trigger only; work-branch push runs are intentionally omitted so
 # one PR commit does not consume two self-hosted CI slots.
 
-# BGS/ is a self-contained C#/.NET tool with no bearing on the native C++ jobs
-# below, so changes confined to it skip this workflow. paths-ignore (not an
-# explicit paths allowlist) is deliberate: a commit touching BGS/ *and* anything
-# else still runs the full build.
+# Paths that no native target or test reads skip this workflow: the C#/.NET
+# tools (BGS/, the FO4RecordEditor projects, Mutagen), the web frontend
+# (the native app only points at web/dist at runtime), F4LODGEN, and docs.
+# paths-ignore (not an explicit paths allowlist) is deliberate: a commit that
+# also touches anything else still runs the full build.
 on:
   push:
     branches:
       - main
     paths-ignore:
       - "BGS/**"
+      - "F4LODGEN/**"
+      - "PluginEditTool/web/**"
+      - "PluginEditTool/FO4RecordEditor*/**"
+      - "PluginEditTool/Mutagen/**"
+      - "PluginEditTool/docs/**"
+      - "PluginEditTool/images/**"
+      - "docs/**"
+      - "**/*.md"
   pull_request:
     paths-ignore:
       - "BGS/**"
+      - "F4LODGEN/**"
+      - "PluginEditTool/web/**"
+      - "PluginEditTool/FO4RecordEditor*/**"
+      - "PluginEditTool/Mutagen/**"
+      - "PluginEditTool/docs/**"
+      - "PluginEditTool/images/**"
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
 
 concurrency:
   group: native-ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job builds in its own fresh workspace, so compiles go through ccache
+# (installed on the runner hosts) to avoid rebuilding unchanged sources.
+# base_dir and nohashdir let hits carry across the per-job workspace paths.
+# A runner without ccache still builds, just without the cache.
+env:
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  CCACHE_NOHASHDIR: "1"
+
 jobs:
-  radicle-linux:
-    name: Radicle (Linux, Debug)
+  # PluginEditTool/native builds Radicle as a subproject, so one build covers
+  # both: Radicle's own tests, tools and warnings-as-errors are switched on here
+  # instead of compiling Radicle a second time in a separate job.
+  native-linux:
+    name: Native (Linux, Debug)
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
+
+      - name: Find ccache
+        run: |
+          for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              echo "CCACHE=$c" >> "$GITHUB_ENV"
+              "$c" --zero-stats > /dev/null
+              echo "Using $c"
+              exit 0
+            fi
+          done
+          echo "ccache not found; building without a compiler cache"
 
       - name: Configure
         run: >
-          cmake -S Radicle -B build/radicle -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DBUILD_TESTING=ON
-          -DRADICLE_BUILD_TESTS=ON
-
-      - name: Build
-        run: cmake --build build/radicle
-
-      - name: Test
-        run: ctest --test-dir build/radicle --output-on-failure
-
-      - name: Upload logs and binaries on failure
-        if: failure()
-        continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
-        with:
-          name: radicle-linux-failure
-          path: |
-            build/radicle/Testing/**
-            build/radicle/**/*.log
-            build/radicle/bin/**
-          if-no-files-found: ignore
-          retention-days: 7
-
-  plugineditool-native-linux:
-    name: PluginEditTool native (Linux, Debug)
-    runs-on: [self-hosted, Linux, X64, garden]
-    steps:
-      - name: Checkout (with submodules)
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Configure
-        run: >
-          cmake -S PluginEditTool/native -B build/fo4ide -G Ninja
+          cmake -S PluginEditTool/native -B build/native -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
           -DFO4IDE_BUILD_TESTS=ON
+          -DRADICLE_BUILD_TESTS=ON
+          -DRADICLE_BUILD_TOOLS=ON
+          -DRADICLE_WARNINGS_AS_ERRORS=ON
+          ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
 
       - name: Build
-        run: cmake --build build/fo4ide
+        run: cmake --build build/native
+
+      - name: ccache statistics
+        if: always()
+        run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
       - name: Test
-        run: ctest --test-dir build/fo4ide --output-on-failure
+        run: ctest --test-dir build/native --output-on-failure
 
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
         uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
-          name: fo4ide-native-linux-failure
+          name: native-linux-failure
           path: |
-            build/fo4ide/Testing/**
-            build/fo4ide/**/*.log
-            build/fo4ide/bin/**
+            build/native/Testing/**
+            build/native/**/*.log
+            build/native/bin/**
           if-no-files-found: ignore
           retention-days: 7
 
+  # The two Windows cross-compile lanes only prove the code compiles and links
+  # with clang-cl/xwin. native-windows-tests already builds and tests the same
+  # code with MSVC on every pull request, so these run on main only.
   radicle-windows-cross:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
+    if: github.event_name != 'pull_request'
     runs-on: [self-hosted, Linux, X64, garden]
     # Cross-compiles the Windows x64 build from Linux with clang-cl + the xwin
     # CRT/SDK (GHRUNNER#17) -- the same method used elsewhere on this host. Wine
@@ -157,6 +172,7 @@ jobs:
 
   plugineditool-native-windows-cross:
     name: PluginEditTool native (Windows cross, clang-cl/xwin)
+    if: github.event_name != 'pull_request'
     runs-on: [self-hosted, Linux, X64, garden]
     # The native host now fetches the pinned WebView2 SDK itself. This lane also
     # forces the pinned zlib fallback used by package.ps1, so the build matches
@@ -194,12 +210,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # Builds in the job's own workspace with Ninja + ccache, so concurrent jobs
+  # never share a build directory.
   native-windows-tests:
     name: Native tests (Windows, MSVC)
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
-    env:
-      ZLIB_COMMIT: 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
     defaults:
       run:
         shell: cmd
@@ -207,68 +223,62 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Find MSVC and CMake
+      - name: Set up MSVC, Ninja and ccache
         shell: powershell
         run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (-not (Test-Path $vswhere)) { throw "Visual Studio is not installed on this runner" }
-          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          if (-not (Test-Path "$installer\vswhere.exe")) { throw "Visual Studio is not installed on this runner" }
+          $vs = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (-not $vs) { throw "No Visual Studio install with the C++ x64 tools on this runner" }
-          $bin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
-          if (-not (Test-Path "$bin\cmake.exe")) { throw "Visual Studio at $vs has no C++ CMake tools component" }
-          [IO.File]::AppendAllText($env:GITHUB_PATH, "$bin`n")
-          $cache = Join-Path $env:USERPROFILE ".cache\garden-ci"
-          [IO.File]::AppendAllText($env:GITHUB_ENV, "CI_SRC=$cache\src`nCI_BUILD=$cache\build`n")
+          $cmakeBin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $ninjaBin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja"
+          foreach ($tool in "$cmakeBin\cmake.exe", "$ninjaBin\ninja.exe") {
+            if (-not (Test-Path $tool)) { throw "Visual Studio at $vs has no C++ CMake tools component ($tool)" }
+          }
 
-      - name: Stop builds left running by a cancelled run
-        shell: powershell
+          # Ninja calls cl.exe directly, so later steps need the vcvars64 environment.
+          $env:Path = "$installer;$env:Path"
+          $before = @{}
+          Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+          $vcvars = cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw "vcvars64.bat failed" }
+          $newPaths = @($cmakeBin, $ninjaBin)
+          foreach ($line in $vcvars) {
+            if ($line -notmatch '^([^=]+)=(.*)$') { continue }
+            $name = $Matches[1]; $value = $Matches[2]
+            if ($name -ieq 'Path') {
+              $old = $env:Path -split ';'
+              $newPaths += @($value -split ';' | Where-Object { $_ -and $old -notcontains $_ })
+            } elseif ($before[$name] -ne $value) {
+              [IO.File]::AppendAllText($env:GITHUB_ENV, "$name=$value`n")
+            }
+          }
+          # Each GITHUB_PATH line is prepended, so write in reverse to keep vcvars order.
+          [array]::Reverse($newPaths)
+          [IO.File]::AppendAllText($env:GITHUB_PATH, (($newPaths | Select-Object -Unique) -join "`n") + "`n")
+
+          $ccache = (Get-Command ccache -ErrorAction SilentlyContinue).Source
+          if (-not $ccache -and (Test-Path 'C:\tools\ccache\ccache.exe')) { $ccache = 'C:\tools\ccache\ccache.exe' }
+          if ($ccache) {
+            [IO.File]::AppendAllText($env:GITHUB_ENV, "CCACHE=$ccache`n")
+            & $ccache --zero-stats | Out-Null
+            "Using $ccache"
+          } else {
+            "ccache not found; building without a compiler cache"
+          }
+
+      - name: Configure
         run: |
-          $all = Get-CimInstance Win32_Process
-          $kill = @($all | Where-Object { $_.Name -in 'cmake.exe', 'ctest.exe', 'git.exe' -and $_.CommandLine -like '*\.cache\garden-ci\*' } | ForEach-Object ProcessId)
-          for ($i = 0; $i -lt $kill.Count; $i++) { $kill += @($all | Where-Object ParentProcessId -eq $kill[$i] | ForEach-Object ProcessId) }
-          $kill | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
-          "Stopped $($kill.Count) leftover process(es)"
+          set "LAUNCHER="
+          if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
+          cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
 
-      - name: Update the persistent build checkout
-        run: |
-          if not exist "%CI_SRC%\.git" git init -q "%CI_SRC%" || exit /b 1
-          if exist "%CI_SRC%\.git\*.lock" del /q "%CI_SRC%\.git\*.lock"
-          git -C "%CI_SRC%" fetch -q --no-tags --depth=1 "%GITHUB_WORKSPACE%" HEAD || exit /b 1
-          git -C "%CI_SRC%" checkout -q --force --detach FETCH_HEAD || exit /b 1
-          git -C "%CI_SRC%" clean -q -ffdx || exit /b 1
+      - name: Build
+        run: cmake --build build\native --parallel
 
-      - name: Build Windows static zlib dependency
-        run: |
-          set "ZLIB_DIR=%CI_BUILD%\zlib-%ZLIB_COMMIT%"
-          if exist "%ZLIB_DIR%\zlib.h" exit /b 0
-          if exist "%ZLIB_DIR%-src" rmdir /s /q "%ZLIB_DIR%-src"
-          git clone -q --filter=blob:none https://github.com/madler/zlib.git "%ZLIB_DIR%-src" || exit /b 1
-          git -C "%ZLIB_DIR%-src" checkout -q %ZLIB_COMMIT% || exit /b 1
-          cmake -S "%ZLIB_DIR%-src" -B "%ZLIB_DIR%" -DZLIB_BUILD_EXAMPLES=OFF || exit /b 1
-          cmake --build "%ZLIB_DIR%" --config Release --target zlibstatic || exit /b 1
-          cmake -E copy "%ZLIB_DIR%-src\zlib.h" "%ZLIB_DIR%\zlib.h" || exit /b 1
+      - name: ccache statistics
+        if: always()
+        run: if defined CCACHE "%CCACHE%" --show-stats
 
-      - name: Configure Radicle
-        run: >-
-          cmake -S "%CI_SRC%\Radicle" -B "%CI_BUILD%\radicle-msvc"
-          -DZLIB_INCLUDE_DIR="%CI_BUILD%\zlib-%ZLIB_COMMIT%"
-          -DZLIB_LIBRARY="%CI_BUILD%\zlib-%ZLIB_COMMIT%\Release\zlibstatic.lib"
-
-      - name: Build Radicle
-        run: cmake --build "%CI_BUILD%\radicle-msvc" --config Release --parallel
-
-      - name: Test Radicle
-        run: ctest --test-dir "%CI_BUILD%\radicle-msvc" -C Release --output-on-failure
-
-      - name: Configure PluginEditTool native
-        run: >-
-          cmake -S "%CI_SRC%\PluginEditTool\native" -B "%CI_BUILD%\fo4ide-msvc"
-          -DFO4IDE_BUILD_TESTS=ON
-          -DFO4IDE_BUILD_HTTP=ON
-          -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
-
-      - name: Build PluginEditTool native
-        run: cmake --build "%CI_BUILD%\fo4ide-msvc" --config Release --parallel
-
-      - name: Test PluginEditTool native
-        run: ctest --test-dir "%CI_BUILD%\fo4ide-msvc" -C Release --output-on-failure
+      - name: Test
+        run: ctest --test-dir build\native --output-on-failure
