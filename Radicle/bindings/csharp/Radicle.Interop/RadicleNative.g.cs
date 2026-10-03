@@ -545,7 +545,7 @@ public unsafe struct MaterialSwap
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 2u;
+    public const uint CompiledAbiVersion = 3u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -615,6 +615,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_record_array")]
     public static extern void FreeRecordArray(IntPtr* records);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_check_errors")]
+    public static extern Status EnvCheckErrors(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_get_info")]
     public static extern Status RecordGetInfo(IntPtr env, IntPtr record, RecordInfo* out_info);
@@ -825,5 +828,17 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_primary_model_color_remapping_index")]
     public static extern Status RecordPrimaryModelColorRemappingIndex(IntPtr env, IntPtr record, float* out_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_identical_to_master")]
+    public static extern Status EnvIdenticalToMaster(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_deleted_counts")]
+    public static extern Status EnvDeletedCounts(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_records, nuint* out_references, nuint* out_navmeshes);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_unused_masters")]
+    public static extern Status EnvUnusedMasters(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, IntPtr** out_strings, nuint* out_count, int* out_complete);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
+    public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
 
 }

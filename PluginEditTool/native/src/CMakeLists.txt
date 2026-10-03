@@ -29,6 +29,9 @@ add_library(
     plugin/RadiclePluginOverridePatch.cpp
     plugin/RadiclePluginLeveled.cpp
     plugin/RadiclePluginSeq.cpp
+    plugin/RadiclePluginCompare.cpp
+    plugin/RadiclePluginDisabledOverride.cpp
+    plugin/RadiclePluginCheck.cpp
     plugin/RadiclePluginBatchMutation.cpp
     plugin/RadiclePluginMasterMutation.cpp
     plugin/RadiclePluginReadApi.cpp
@@ -37,7 +40,7 @@ add_library(
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )
-target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4)
+target_link_libraries(fo4ide_plugin PUBLIC fo4ide_plugin_api fo4 PRIVATE ZLIB::ZLIB)
 fo4ide_enable_warnings(fo4ide_plugin)
 fo4ide_enable_sanitizers(fo4ide_plugin)
 if(FO4IDE_BUILD_TESTS)

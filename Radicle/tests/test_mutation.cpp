@@ -83,19 +83,28 @@ std::vector<std::byte> make_target_plugin() {
 }
 
 std::vector<std::byte> make_lifecycle_plugin(std::uint32_t next_form_id = 0x900,
-                                             bool light = false) {
+                                             bool light = false,
+                                             bool with_master = false,
+                                             float version = 1.0f) {
   fo4::test::ByteWriter out;
   const auto flags = light ? fo4::RecordFlags::small_file : 0u;
   const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
   fo4::test::ByteWriter hedr;
-  hedr.f32(1.0f);
+  hedr.f32(version);
   hedr.u32(2);  // one top-level GRUP + one MISC record
   hedr.u32(next_form_id);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  if (with_master) {
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+  }
   fo4::test::end_record(out, tes4);
 
   const auto group = fo4::test::begin_group(out, "MISC", 0);
-  const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000800);
+  const auto record = fo4::test::begin_record(out, "MISC", 0, (with_master ? 0x01000000u : 0u) | 0x800u);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Existing\0", 9});
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
@@ -317,7 +326,7 @@ TEST(Mutation, CreateLocalRecordAllocatesInALightPlugin) {
 }
 
 TEST(Mutation, LightPluginRangeStartsAtOneAndStopsAtTwelveBits) {
-  auto light = fo4::read_plugin(make_lifecycle_plugin(0x900, true), "Lifecycle.esl");
+  auto light = fo4::read_plugin(make_lifecycle_plugin(0x900, true, true), "Lifecycle.esl");
   const auto [llo, lhi] = fo4::local_form_id_range(light);
   EXPECT_EQ(llo, 0x001u);
   EXPECT_EQ(lhi, 0xFFFu);
@@ -328,10 +337,25 @@ TEST(Mutation, LightPluginRangeStartsAtOneAndStopsAtTwelveBits) {
   EXPECT_EQ(fhi, 0xFFFFFFu);
 }
 
+TEST(Mutation, LightPluginKeepsTheFullFloorWithoutHedrOneAndAMaster) {
+  const auto masterless = fo4::read_plugin(make_lifecycle_plugin(0x900, true), "Lifecycle.esl");
+  EXPECT_FALSE(fo4::allows_hardcoded_range(masterless));
+  EXPECT_EQ(fo4::local_form_id_range(masterless), (std::pair<std::uint32_t, std::uint32_t>{0x800u, 0xFFFu}));
+
+  const auto old_header = fo4::read_plugin(make_lifecycle_plugin(0x900, true, true, 0.95f), "Lifecycle.esl");
+  EXPECT_FALSE(fo4::allows_hardcoded_range(old_header));
+  EXPECT_EQ(fo4::local_form_id_range(old_header), (std::pair<std::uint32_t, std::uint32_t>{0x800u, 0xFFFu}));
+
+  EXPECT_TRUE(fo4::allows_hardcoded_range(fo4::read_plugin(make_lifecycle_plugin(0x900, true, true), "Lifecycle.esl")));
+
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x001, true), "Lifecycle.esl");
+  EXPECT_EQ(fo4::create_local_record(plugin, fo4::Signature::from_string("EYES")).local().value(), 0x801u);
+}
+
 // A light plugin whose HEDR nextFormID sits below the full-plugin floor must
 // allocate from its own floor, not be rejected.
 TEST(Mutation, LightPluginAllocatesBelowTheFullPluginFloor) {
-  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x001, true), "Lifecycle.esl");
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x001, true, true), "Lifecycle.esl");
   const auto key = fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"));
   EXPECT_EQ(key.local().value(), 0x001u);
   EXPECT_LT(key.local().value(), 0x800u);

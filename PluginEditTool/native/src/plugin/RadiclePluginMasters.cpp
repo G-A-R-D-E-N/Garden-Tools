@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/plugin/master_usage.hpp>
+#include <fo4/plugin/onam.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 
@@ -100,6 +102,90 @@ Result<nlohmann::json> RadiclePluginBackend::reorderMasters(const nlohmann::json
             "Reordered masters in " + name + ". SavePlugin to persist.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"MasterReorderFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    bool apply = true;
+    if (arguments.is_array() && arguments.size() > 1 && !boolArgument(arguments, 1, apply)) {
+        return std::unexpected(Error{"InvalidApplyFlag", "Apply flag must be boolean"});
+    }
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    if (!fileUnchangedSinceLoad(*loaded)) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            "Plugin was modified on disk after it was loaded; reload it before writing: " +
+                loaded->path.string()
+        });
+    }
+
+    try {
+        const auto usage = fo4::scan_master_usage(loaded->plugin);
+        if (!usage.complete()) {
+            return std::unexpected(Error{
+                "MasterUsageIncomplete",
+                std::to_string(usage.records_with_incomplete_vmad) +
+                    " record(s) carry VMAD data Radicle cannot fully scan; no masters were removed"
+            });
+        }
+        auto kept = fo4::used_masters(loaded->plugin, usage);
+        std::vector<std::string> removed;
+        for (const auto& master : loaded->plugin.header.masters) {
+            const bool keep = std::any_of(kept.begin(), kept.end(),
+                                          [&](const auto& item) { return item.key == master.key; });
+            if (!keep) removed.emplace_back(master.key.filename());
+        }
+        if (removed.empty()) {
+            return nlohmann::json("No unused masters in " + name + ".");
+        }
+        std::string list;
+        for (const auto& item : removed) list += (list.empty() ? "" : ", ") + item;
+        if (!apply) {
+            return nlohmann::json("DRY RUN: would remove unused master(s) from " + name + ": " + list + ".");
+        }
+        auto remapped = fo4::remap_plugin_masters(loaded->plugin, std::move(kept));
+        stagePluginMutationLocked(*loaded, std::move(remapped));
+        return nlohmann::json(
+            "Removed unused master(s) from " + name + ": " + list + ". SavePlugin to persist.");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"CleanMastersFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::updateOnam(const nlohmann::json& arguments) {
+    const auto name = stringArgument(arguments, 0);
+    if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+
+    std::scoped_lock lock(mutex_);
+    auto* loaded = findPlugin(name);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
+    }
+    if (!isEditable(*loaded)) return readOnlyError(loaded->name);
+    if (!loaded->plugin.header.tes4_flags.is_master()) {
+        return nlohmann::json(name + " is not master-flagged; the game ignores ONAM there.");
+    }
+
+    try {
+        auto rebuilt = loaded->plugin;
+        fo4::rebuild_tes4_onam(rebuilt);
+        if (rebuilt.header.overrides == loaded->plugin.header.overrides) {
+            return nlohmann::json("ONAM in " + name + " is already up to date.");
+        }
+        const auto count = rebuilt.header.overrides.size();
+        stagePluginMutationLocked(*loaded, std::move(rebuilt));
+        return nlohmann::json("Rebuilt ONAM in " + name + " (" + std::to_string(count) +
+                              " override(s)). SavePlugin to persist.");
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"UpdateOnamFailed", error.what()});
     }
 }
 

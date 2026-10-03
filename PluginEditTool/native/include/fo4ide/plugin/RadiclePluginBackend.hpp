@@ -39,6 +39,9 @@ public:
     Result<nlohmann::json> createPlugin(const nlohmann::json& arguments) override;
     Result<void> discardCreatedPlugin(std::string_view name) override;
     Result<nlohmann::json> setFieldValue(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> updateOnam(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> copyAsDisabledOverride(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
@@ -47,6 +50,10 @@ public:
     Result<nlohmann::json> createMergedPatch(const nlohmann::json& arguments) override;
     Result<nlohmann::json> checkCircularLeveledLists(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> createSeqFile(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> comparePluginTo(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> checkForErrors(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> findUnreachable(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> lootCleaningReport(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
