@@ -4,8 +4,8 @@ import { DialogProvider } from './dialogs';
 import MainShell from './MainShell';
 
 const pickPlugin = vi.hoisted(() => vi.fn());
-vi.mock('./dialogs', async importOriginal => {
-  const original = await importOriginal<typeof import('./dialogs')>();
+vi.mock('./useDialogs', async importOriginal => {
+  const original = await importOriginal<typeof import('./useDialogs')>();
   return { ...original, useDialogs: () => ({ ...original.useDialogs(), pickPlugin }) };
 });
 
