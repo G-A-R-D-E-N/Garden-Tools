@@ -63,7 +63,7 @@ TEST(QuestRuntime, AggregatesStartGameFlagScriptsFragmentsAndAliases) {
   EXPECT_TRUE(data.start_game_enabled);
   ASSERT_EQ(data.scripts.size(), 1u);
   EXPECT_EQ(data.scripts[0].name, "QuestScript");
-  ASSERT_EQ(data.scripts[0].properties.size(), 1u);
+  ASSERT_EQ(data.scripts[0].properties.size(), 5u);
   EXPECT_EQ(data.scripts[0].properties[0].name, "Count");
   EXPECT_EQ(data.fragment_script, "QF_TestQuest");
   ASSERT_EQ(data.fragment_properties.size(), 1u);
@@ -94,6 +94,37 @@ TEST(QuestRuntime, MissingQuestIsReportedNotGuessed) {
   EXPECT_TRUE(data.fragments.empty());
   EXPECT_TRUE(data.alias_scripts.empty());
   EXPECT_FALSE(data.start_game_enabled);
+}
+
+TEST(QuestRuntime, KeepsThePropertyValuesTheCAbiHasToCarry) {
+  const auto seven = fo4::quest::quest_runtime_data(
+      fo4::read_plugin(fo4::test::make_quest_plugin(1, 7), "Quests.esp"), fo4::test::quest_key());
+  const auto ninety_nine = fo4::quest::quest_runtime_data(
+      fo4::read_plugin(fo4::test::make_quest_plugin(1, 99), "Quests.esp"), fo4::test::quest_key());
+
+  ASSERT_EQ(seven.scripts.size(), 1u);
+  ASSERT_EQ(seven.scripts[0].properties.size(), 5u);
+  const auto& count = seven.scripts[0].properties[0];
+  ASSERT_TRUE(count.integer.has_value());
+  EXPECT_EQ(*count.integer, 7);
+  const auto& ratio = seven.scripts[0].properties[1];
+  EXPECT_EQ(ratio.flags, 1);
+  ASSERT_TRUE(ratio.real.has_value());
+  EXPECT_FLOAT_EQ(*ratio.real, 1.5f);
+  const auto& enabled = seven.scripts[0].properties[2];
+  ASSERT_TRUE(enabled.boolean.has_value());
+  EXPECT_TRUE(*enabled.boolean);
+  const auto& label = seven.scripts[0].properties[3];
+  ASSERT_TRUE(label.text.has_value());
+  EXPECT_EQ(*label.text, std::string("Garden\tPatch"));
+  const auto& stages = seven.scripts[0].properties[4];
+  ASSERT_TRUE(stages.element_count.has_value());
+  EXPECT_EQ(*stages.element_count, 3u);
+
+  ASSERT_EQ(ninety_nine.scripts.size(), 1u);
+  ASSERT_EQ(ninety_nine.scripts[0].properties.size(), 5u);
+  ASSERT_TRUE(ninety_nine.scripts[0].properties[0].integer.has_value());
+  EXPECT_EQ(*ninety_nine.scripts[0].properties[0].integer, 99);
 }
 
 TEST(QuestRuntimeReal, EveryShippedQuestDecodesOrReportsUnsupported) {
