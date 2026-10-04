@@ -22,33 +22,23 @@ std::vector<std::byte> inflate_record_payload(std::span<const std::byte> compres
     return {};
   }
 
-  auto try_inflate = [&](int window_bits) -> std::optional<std::vector<std::byte>> {
-    z_stream stream{};
-    if (inflateInit2(&stream, window_bits) != Z_OK) {
-      return std::nullopt;
-    }
-    std::vector<std::byte> out(uncompressed_size);
-    stream.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(compressed.data()));
-    stream.avail_in = static_cast<uInt>(compressed.size());
-    stream.next_out = reinterpret_cast<Bytef*>(out.data());
-    stream.avail_out = static_cast<uInt>(out.size());
-    const int rc = inflate(&stream, Z_FINISH);
-    const auto produced = stream.total_out;
-    inflateEnd(&stream);
-    if (rc != Z_STREAM_END) {
-      return std::nullopt;
-    }
-    out.resize(produced);
-    return out;
-  };
-
-  if (auto out = try_inflate(MAX_WBITS)) {
-    return *out;
+  z_stream stream{};
+  if (inflateInit2(&stream, MAX_WBITS) != Z_OK) {
+    throw parse_error(offset, "zlib initialization failed for compressed record");
   }
-  if (auto out = try_inflate(-MAX_WBITS)) {
-    return *out;
+  std::vector<std::byte> out(uncompressed_size);
+  stream.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(compressed.data()));
+  stream.avail_in = static_cast<uInt>(compressed.size());
+  stream.next_out = reinterpret_cast<Bytef*>(out.data());
+  stream.avail_out = static_cast<uInt>(out.size());
+  const int rc = inflate(&stream, Z_FINISH);
+  const auto produced = stream.total_out;
+  inflateEnd(&stream);
+  if (rc != Z_STREAM_END) {
+    throw parse_error(offset, "zlib inflate failed for compressed record");
   }
-  throw parse_error(offset, "zlib inflate failed for compressed record");
+  out.resize(produced);
+  return out;
 }
 
 RecordHeader read_record_header(binary::Cursor& cursor) {

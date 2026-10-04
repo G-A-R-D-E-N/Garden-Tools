@@ -1,5 +1,13 @@
 # Radicle code notes
 
+## src/plugin/reader.cpp:inflate_record_payload
+
+The raw-deflate fallback is removed after the verified OG inflater record in `build/RE-Work/decompress-current-form-391.md` established zlib framing. `docs/COMPRESSION_EVIDENCE.md` states the source and remaining version/length limits. `tests/test_compression.cpp:RejectsValidRawDeflateAndGzipFraming` and `RejectsBadZlibChecksum` cover framing refusal. The existing zero-size early return and produced-length behavior remain outside this change.
+
+## tests/test_compression.cpp:CompressedExtendedSubrecordPreservesPhysicalMarker
+
+The test preserves the physical `XXXX` marker and the expanded payload, while the verified runtime header reader presents only the next logical chunk. `OfficialMastersUseZlibAndPreserveBytes` reads the seven named masters and reconstructs the unmodified plugin from original record/group ranges; it skips when `FO4_DATA_DIR` is unset. Evidence: `build/RE-Work/decompress-current-form-391.md` and `docs/COMPRESSION_EVIDENCE.md`.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.

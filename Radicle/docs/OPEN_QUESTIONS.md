@@ -35,8 +35,8 @@ Speculative answers must not be hardcoded as facts.
 
 ## Compression / XXXX
 
-9. Do vanilla FO4 compressed records use zlib wrappers or raw deflate? CK strings say zlib. Reader still tries both until `DecompressCurrentForm` is decompiled.
-10. Does `TESFile::GetChunkData` hide `XXXX` from `Load()` callers (they only see `actualChunkSize`), or do some Load() implementations see the `XXXX` chunk?
+9. **Partial answer:** the verified OG 1.10.163 inflater uses zlib framing and checksum validation, with no raw-deflate fallback. The reader now follows that framing. See `COMPRESSION_EVIDENCE.md`; AE wrapper, zero-size handling, other gates and malformed-record live behavior remain in #391.
+10. **Answered for the inspected OG path:** the chunk-header reader consumes `XXXX`, replaces the type with the next header, and applies its extended size before higher-level reads. Radicle retains the physical marker to preserve file bytes. See `COMPRESSION_EVIDENCE.md`; AE is a partial structural cross-check.
 10b. Engine `GetChunkData` truncates oversize chunks (`data truncated`). Should the native reader match that or fail hard? Currently fail hard.
 
 ## Groups
