@@ -57,12 +57,12 @@ radicle_status radicle_seq_read_file(const char* path, radicle_seq** out_seq) {
   }
 
   *out_seq = nullptr;
-  std::ifstream stream(radicle_c_detail::utf8_path(path), std::ios::binary);
-  if (!stream) {
-    return fail(RADICLE_STATUS_IO_ERROR, "failed to open the .seq file");
-  }
-
   try {
+    std::ifstream stream(radicle_c_detail::utf8_path(path), std::ios::binary);
+    if (!stream) {
+      return fail(RADICLE_STATUS_IO_ERROR, "failed to open the .seq file");
+    }
+
     const std::vector<char> raw((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     if (stream.bad()) {
       return fail(RADICLE_STATUS_IO_ERROR, "failed to read the .seq file");

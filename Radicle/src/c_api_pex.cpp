@@ -92,12 +92,12 @@ radicle_status radicle_pex_read_file(const char* path, radicle_pex** out_pex) {
   }
 
   *out_pex = nullptr;
-  std::ifstream stream(utf8_path(path), std::ios::binary);
-  if (!stream) {
-    return fail(RADICLE_STATUS_IO_ERROR, "failed to open the .pex file");
-  }
-
   try {
+    std::ifstream stream(utf8_path(path), std::ios::binary);
+    if (!stream) {
+      return fail(RADICLE_STATUS_IO_ERROR, "failed to open the .pex file");
+    }
+
     const std::vector<char> raw((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     if (stream.bad()) {
       return fail(RADICLE_STATUS_IO_ERROR, "failed to read the .pex file");
