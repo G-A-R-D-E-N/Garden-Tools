@@ -1,6 +1,7 @@
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/app/WikiService.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <regex>

@@ -1,5 +1,6 @@
 #include <fo4ide/papyrus/Pex.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <functional>

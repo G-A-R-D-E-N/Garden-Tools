@@ -53,11 +53,43 @@ env:
   CCACHE_NOHASHDIR: "1"
 
 jobs:
+  # paths-ignore compares the whole pull request, so a docs-only follow-up push
+  # to a code PR still starts the full build. This job compares only the new push
+  # and skips the heavy jobs when it touched nothing but ignored paths. Any doubt
+  # (no before-sha, fetch failure) leaves run=true.
+  gate:
+    name: Gate (skip docs-only pushes)
+    runs-on: [self-hosted, Linux, X64, garden]
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          run=true
+          if [ "$EVENT" = pull_request ] && [ -n "$BEFORE" ] \
+             && git fetch --depth=1 origin "$BEFORE" 2>/dev/null; then
+            if ! git diff --name-only "$BEFORE" HEAD \
+               | grep -qvE '^(BGS|F4LODGEN|docs)/|^PluginEditTool/(web|FO4RecordEditor[^/]*|Mutagen|docs|images)/|\.md$'; then
+              run=false
+            fi
+          fi
+          echo "gate run=$run (before=${BEFORE:-none})"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   # PluginEditTool/native builds Radicle as a subproject, so one build covers
   # both: Radicle's own tests, tools and warnings-as-errors are switched on here
   # instead of compiling Radicle a second time in a separate job.
   native-linux:
     name: Native (Linux, Debug)
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: [self-hosted, Linux, X64, garden]
     steps:
       - name: Checkout
@@ -214,6 +246,8 @@ jobs:
   # never share a build directory.
   native-windows-tests:
     name: Native tests (Windows, MSVC)
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     defaults:
@@ -282,3 +316,15 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build\native --output-on-failure
+
+      - name: Configure (Debug)
+        run: |
+          set "LAUNCHER="
+          if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
+          cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+
+      - name: Build (Debug)
+        run: cmake --build build\native-debug --parallel
+
+      - name: Test (Debug)
+        run: ctest --test-dir build\native-debug --output-on-failure
