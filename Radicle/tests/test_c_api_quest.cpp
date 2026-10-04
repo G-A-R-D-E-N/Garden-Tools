@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -46,6 +47,38 @@ bool hasRow(char** rows, size_t count, const std::string& expected) {
   return false;
 }
 
+const radicle_quest_property* findProperty(const radicle_quest_property* properties, size_t count,
+                                           const std::string& name) {
+  for (size_t index = 0; index < count; ++index) {
+    if (properties[index].name != nullptr && name == properties[index].name) {
+      return &properties[index];
+    }
+  }
+  return nullptr;
+}
+
+std::vector<std::string> questRows(std::int32_t count) {
+  const TempPlugin file(fo4::test::make_quest_plugin(1, count));
+
+  radicle_plugin* plugin = nullptr;
+  EXPECT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  char** rows = nullptr;
+  size_t row_count = 0;
+  EXPECT_EQ(radicle_quest_runtime_rows(plugin, "000800:Quests.esp", &rows, &row_count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  std::vector<std::string> result;
+  for (size_t index = 0; index < row_count; ++index) {
+    result.emplace_back(rows[index]);
+  }
+  radicle_free_string_array(rows, row_count);
+  radicle_plugin_destroy(plugin);
+  return result;
+}
+
 }  // namespace
 
 TEST(CApiQuest, ReportsQuestRuntimeRows) {
@@ -60,19 +93,160 @@ TEST(CApiQuest, ReportsQuestRuntimeRows) {
   ASSERT_EQ(radicle_quest_runtime_rows(plugin, "000800:Quests.esp", &rows, &count), RADICLE_STATUS_OK)
       << radicle_last_error();
   ASSERT_NE(rows, nullptr);
-  EXPECT_EQ(count, 9u);
+  EXPECT_EQ(count, 6u);
 
   EXPECT_TRUE(hasRow(rows, count, "quest\t000800:Quests.esp\t1"));
   EXPECT_TRUE(hasRow(rows, count, "script\tQuestScript"));
-  EXPECT_TRUE(hasRow(rows, count, "script-property\tQuestScript\tCount\t3"));
   EXPECT_TRUE(hasRow(rows, count, "fragment-script\tQF_TestQuest"));
-  EXPECT_TRUE(hasRow(rows, count, "fragment-property\tStage\t3"));
   EXPECT_TRUE(hasRow(rows, count, "fragment\t10\t0\tQF_TestQuest\tFragment_Stage_0010"));
   EXPECT_TRUE(hasRow(rows, count, "alias\t5"));
   EXPECT_TRUE(hasRow(rows, count, "alias-script\t5\tAliasScript"));
-  EXPECT_TRUE(hasRow(rows, count, "alias-script-property\t5\tAliasScript\tTarget\t1"));
+
+  for (size_t index = 0; index < count; ++index) {
+    EXPECT_EQ(std::string(rows[index]).find("property"), std::string::npos);
+  }
 
   radicle_free_string_array(rows, count);
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, RowsCarryNoPropertyFacts) {
+  const auto seven = questRows(7);
+  const auto ninety_nine = questRows(99);
+
+  EXPECT_EQ(seven, ninety_nine);
+}
+
+TEST(CApiQuest, ReportsEveryPropertyValue) {
+  const TempPlugin file(fo4::test::make_quest_plugin(1, 7));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(properties, nullptr);
+  ASSERT_EQ(count, 7u);
+
+  const auto* integer = findProperty(properties, count, "Count");
+  ASSERT_NE(integer, nullptr);
+  EXPECT_EQ(integer->owner, RADICLE_QUEST_PROPERTY_SCRIPT);
+  EXPECT_EQ(integer->alias, -1);
+  ASSERT_NE(integer->script, nullptr);
+  EXPECT_STREQ(integer->script, "QuestScript");
+  EXPECT_EQ(integer->type, 3);
+  EXPECT_EQ(integer->has_integer, 1);
+  EXPECT_EQ(integer->integer, 7);
+
+  const auto* real = findProperty(properties, count, "Ratio");
+  ASSERT_NE(real, nullptr);
+  EXPECT_EQ(real->flags, 1);
+  EXPECT_EQ(real->has_real, 1);
+  EXPECT_FLOAT_EQ(real->real, 1.5f);
+
+  const auto* boolean = findProperty(properties, count, "Enabled");
+  ASSERT_NE(boolean, nullptr);
+  EXPECT_EQ(boolean->has_boolean, 1);
+  EXPECT_EQ(boolean->boolean, 1);
+
+  const auto* text = findProperty(properties, count, "Label");
+  ASSERT_NE(text, nullptr);
+  ASSERT_NE(text->text, nullptr);
+  EXPECT_EQ(std::string(text->text), std::string("Garden\tPatch"));
+
+  const auto* elements = findProperty(properties, count, "Stages");
+  ASSERT_NE(elements, nullptr);
+  EXPECT_EQ(elements->has_element_count, 1);
+  EXPECT_EQ(elements->element_count, 3u);
+
+  const auto* fragment = findProperty(properties, count, "Stage");
+  ASSERT_NE(fragment, nullptr);
+  EXPECT_EQ(fragment->owner, RADICLE_QUEST_PROPERTY_FRAGMENT);
+  EXPECT_EQ(fragment->alias, -1);
+  ASSERT_NE(fragment->script, nullptr);
+  EXPECT_STREQ(fragment->script, "QF_TestQuest");
+  EXPECT_EQ(fragment->has_integer, 1);
+  EXPECT_EQ(fragment->integer, 10);
+
+  const auto* object = findProperty(properties, count, "Target");
+  ASSERT_NE(object, nullptr);
+  EXPECT_EQ(object->owner, RADICLE_QUEST_PROPERTY_ALIAS_SCRIPT);
+  EXPECT_EQ(object->alias, 5);
+  ASSERT_NE(object->script, nullptr);
+  EXPECT_STREQ(object->script, "AliasScript");
+  EXPECT_EQ(object->has_object, 1);
+  EXPECT_EQ(object->object_form_id, 0x00012345u);
+  EXPECT_EQ(object->has_property_alias, 1);
+  EXPECT_EQ(object->property_alias, 5);
+
+  radicle_free_quest_properties(properties, count);
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, IntegerPropertyValuesStayDistinct) {
+  for (const std::int32_t expected : {7, 99}) {
+    const TempPlugin file(fo4::test::make_quest_plugin(1, expected));
+
+    radicle_plugin* plugin = nullptr;
+    ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK);
+
+    radicle_quest_property* properties = nullptr;
+    size_t count = 0;
+    ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+              RADICLE_STATUS_OK)
+        << radicle_last_error();
+
+    const auto* integer = findProperty(properties, count, "Count");
+    ASSERT_NE(integer, nullptr);
+    EXPECT_EQ(integer->has_integer, 1);
+    EXPECT_EQ(integer->integer, expected);
+
+    radicle_free_quest_properties(properties, count);
+    radicle_plugin_destroy(plugin);
+  }
+}
+
+TEST(CApiQuest, MissingQuestHasNoProperties) {
+  const TempPlugin file(fo4::test::make_quest_plugin(1));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK);
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  EXPECT_EQ(radicle_quest_runtime_properties(plugin, "000900:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(properties, nullptr);
+  EXPECT_EQ(count, 0u);
+
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, PropertyArgumentsAreRequired) {
+  const TempPlugin file(fo4::test::make_quest_plugin(1));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK);
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  EXPECT_EQ(radicle_quest_runtime_properties(nullptr, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_quest_runtime_properties(plugin, nullptr, &properties, &count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", nullptr, &count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, nullptr),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_quest_runtime_properties(plugin, "not-a-form-key", &properties, &count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(properties, nullptr);
+  EXPECT_EQ(count, 0u);
+
   radicle_plugin_destroy(plugin);
 }
 
