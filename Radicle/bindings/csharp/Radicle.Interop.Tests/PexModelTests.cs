@@ -1,0 +1,196 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using Radicle.Interop.Native;
+using Xunit;
+
+namespace Radicle.Interop.Tests;
+
+public class PexModelTests
+{
+    private static readonly byte[] HighBytes = { 0x80, 0xA9, 0xFE, 0xFF };
+
+    // A minimal but complete Fallout 4 .pex built byte by byte, so the fixture is project-authored
+    // and needs no corpus. One object with one variable, and one state with one empty function.
+    private static byte[] SyntheticPex()
+    {
+        var bytes = new List<byte>();
+        void U8(byte value) => bytes.Add(value);
+        void U16(ushort value)
+        {
+            U8((byte)(value & 0xFF));
+            U8((byte)(value >> 8));
+        }
+        void U32(uint value)
+        {
+            U16((ushort)(value & 0xFFFF));
+            U16((ushort)(value >> 16));
+        }
+        void I64(long value)
+        {
+            U32((uint)((ulong)value & 0xFFFFFFFF));
+            U32((uint)((ulong)value >> 32));
+        }
+        void Text(string text)
+        {
+            U16((ushort)text.Length);
+            foreach (var character in text) U8((byte)character);
+        }
+
+        U32(0xFA57C0DEu);
+        U8(3);
+        U8(9);
+        U16(2);
+        I64(0x0102030405060708L);
+
+        Text(string.Empty);
+        Text(string.Empty);
+        Text(string.Empty);
+
+        U16(5);
+        Text(string.Empty);
+        Text("SyntheticObject");
+        Text("ObjectReference");
+        Text("Int");
+        U16((ushort)HighBytes.Length);
+        foreach (var value in HighBytes) U8(value);
+
+        U8(0);
+        U16(0);
+        U16(1);
+
+        U16(1);
+        var declaredSize = bytes.Count;
+        U32(0);
+
+        var bodyStart = bytes.Count;
+        U16(2);
+        U16(0);
+        U8(0);
+        U32(0);
+        U16(0);
+
+        U16(0);
+
+        U16(1);
+        U16(0);
+        U16(3);
+        U32(0);
+        U8(3);
+        U32(42);
+        U8(0);
+
+        U16(0);
+
+        U16(1);
+        U16(0);
+        U16(1);
+        U16(0);
+        U16(0);
+        U16(0);
+        U32(0);
+        U8(0);
+        U16(0);
+        U16(0);
+        U16(0);
+
+        var body = bytes.Count - bodyStart;
+        var size = (uint)(body + sizeof(uint));
+        bytes[declaredSize] = (byte)(size & 0xFF);
+        bytes[declaredSize + 1] = (byte)((size >> 8) & 0xFF);
+        bytes[declaredSize + 2] = (byte)((size >> 16) & 0xFF);
+        bytes[declaredSize + 3] = (byte)((size >> 24) & 0xFF);
+        return bytes.ToArray();
+    }
+
+    [Fact]
+    public void ParsesTheSyntheticFixture()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex());
+
+        Assert.Equal(3, pex.Header.MajorVersion);
+        Assert.Equal(9, pex.Header.MinorVersion);
+        Assert.Equal(2, pex.Header.GameId);
+        Assert.Equal(0x0102030405060708L, pex.Header.CompilationTime);
+        Assert.Equal(5, pex.Header.StringCount);
+        Assert.Equal(1, pex.Header.ObjectCount);
+        Assert.Single(pex.Objects);
+    }
+
+    [Fact]
+    public void ReportsObjectNamesAndCounts()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex());
+        var info = pex.Objects[0];
+
+        Assert.Equal("SyntheticObject", Encoding.Latin1.GetString(info.Name));
+        Assert.Equal("ObjectReference", Encoding.Latin1.GetString(info.ParentClassName));
+        Assert.Equal(new PexObjectCounts(0, 1, 0, 1, 1), info.Counts);
+    }
+
+    [Fact]
+    public void StringTableEntriesAreReturnedVerbatim()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex());
+
+        Assert.Equal(5, pex.StringTable.Count);
+        Assert.Equal(HighBytes, pex.StringTable[4]);
+        Assert.Empty(pex.StringTable[0]);
+    }
+
+    [Fact]
+    public void RoundTripsThroughToBytes()
+    {
+        var bytes = SyntheticPex();
+        using var pex = PexFile.FromBytes(bytes);
+
+        Assert.Equal(bytes, pex.ToBytes());
+    }
+
+    [Fact]
+    public void ReadsFromAFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "radicle_interop_pex_test.pex");
+        try
+        {
+            File.WriteAllBytes(path, SyntheticPex());
+            using var pex = PexFile.FromFile(path);
+            Assert.Equal(1, pex.Header.ObjectCount);
+            Assert.Equal(SyntheticPex(), pex.ToBytes());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void TheSnapshotSurvivesDispose()
+    {
+        var pex = PexFile.FromBytes(SyntheticPex());
+        var name = pex.Objects[0].Name;
+        var table = pex.StringTable[4];
+        pex.Dispose();
+
+        Assert.Equal("SyntheticObject", Encoding.Latin1.GetString(name));
+        Assert.Equal(HighBytes, table);
+        Assert.Throws<ObjectDisposedException>(() => pex.ToBytes());
+    }
+
+    [Fact]
+    public void MalformedBytesThrowAParseError()
+    {
+        var error = Assert.Throws<RadicleException>(() => PexFile.FromBytes(new byte[] { 0x00, 0x01, 0x02, 0x03 }));
+        Assert.Equal(Status.ParseError, error.Status);
+        Assert.False(string.IsNullOrEmpty(error.Message));
+    }
+
+    [Fact]
+    public void MissingFileThrowsAnIoError()
+    {
+        var error = Assert.Throws<RadicleException>(() =>
+            PexFile.FromFile(Path.Combine(Path.GetTempPath(), "radicle_no_such_directory", "no_such_file.pex")));
+        Assert.Equal(Status.IoError, error.Status);
+    }
+}
