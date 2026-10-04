@@ -1,0 +1,61 @@
+using System.Collections.Generic;
+using System.Linq;
+using Radicle.Interop.Native;
+
+namespace Radicle.Interop;
+
+public sealed record NavmeshParent(uint Crc, FormKey? World, FormKey? Cell, short GridY, short GridX);
+public sealed record NavmeshVertex(float X, float Y, float Z);
+public sealed record NavmeshTriangle(ushort[] Vertices, short[] Edges, float Height, byte Unknown, ushort Flags, ushort CoverFlags);
+public sealed record NavmeshEdgeLink(uint Type, FormKey? Navmesh, short Triangle, byte Edge);
+public sealed record NavmeshDoorLink(short Triangle, uint Crc, FormKey? Door);
+public sealed record NaviDoorLink(uint Crc, FormKey? Door);
+public sealed record NavmeshGeometry(uint Version, NavmeshParent Parent, IReadOnlyList<NavmeshVertex> Vertices,
+    IReadOnlyList<NavmeshTriangle> Triangles, IReadOnlyList<NavmeshEdgeLink> Edges, IReadOnlyList<NavmeshDoorLink> Doors, byte[] OpaqueTail);
+public sealed record NavmeshInfo(FormKey? Navmesh, uint Flags, NavmeshVertex Location, float Preferred,
+    IReadOnlyList<FormKey?> Edges, IReadOnlyList<FormKey?> PreferredEdges, IReadOnlyList<NaviDoorLink> Doors,
+    bool HasIsland, byte[] Island, NavmeshParent Parent);
+
+public sealed unsafe partial class RadicleEnvironment
+{
+    private static NavmeshParent NavParent(Native.NavmeshParent p) =>
+        new(p.Crc, FormKey.FromNative(p.World), FormKey.FromNative(p.Cell), p.GridY, p.GridX);
+
+    public NavmeshGeometry? Navmesh(Record record)
+    {
+        Native.Navmesh* n;
+        Call.Check(RadicleNative.NavmeshDecode(Handle, record.Handle, &n));
+        try
+        {
+            if (n->HasGeometry == 0) return null;
+            var triangles = new List<NavmeshTriangle>();
+            foreach (var t in Call.Copy<Native.NavmeshTriangle>(n->Triangles, n->TriangleCount))
+                triangles.Add(new(new[] { t.Vertices[0], t.Vertices[1], t.Vertices[2] },
+                    new[] { t.Edges[0], t.Edges[1], t.Edges[2] }, t.Height, t.Unknown, t.Flags, t.CoverFlags));
+            return new(n->Version, NavParent(n->Parent),
+                Call.Copy<Native.NavmeshVertex>(n->Vertices, n->VertexCount).Select(p => new NavmeshVertex(p.X, p.Y, p.Z)).ToArray(),
+                triangles, Call.Copy<Native.NavmeshEdgeLink>(n->Edges, n->EdgeCount)
+                    .Select(e => new NavmeshEdgeLink(e.Type, FormKey.FromNative(e.Navmesh), e.Triangle, e.Edge)).ToArray(),
+                Call.Copy<Native.NavmeshDoorLink>(n->Doors, n->DoorCount)
+                    .Select(d => new NavmeshDoorLink(d.Triangle, d.Crc, FormKey.FromNative(d.Door))).ToArray(),
+                Call.Copy<byte>(n->OpaqueTail, n->OpaqueTailSize));
+        }
+        finally { RadicleNative.NavmeshFree(n); }
+    }
+
+    public IReadOnlyList<NavmeshInfo> NavmeshInfos(Record record)
+    {
+        Native.Navi* n;
+        Call.Check(RadicleNative.NaviDecode(Handle, record.Handle, &n));
+        try
+        {
+            return Call.Copy<Native.NavmeshInfo>(n->Infos, n->InfoCount).Select(i => new NavmeshInfo(
+                FormKey.FromNative(i.Navmesh), i.Flags, new(i.Location.X, i.Location.Y, i.Location.Z), i.Preferred,
+                Call.Copy<Native.FormKey>(i.Edges, i.EdgeCount).Select(FormKey.FromNative).ToArray(),
+                Call.Copy<Native.FormKey>(i.PreferredEdges, i.PreferredEdgeCount).Select(FormKey.FromNative).ToArray(),
+                Call.Copy<Native.NaviDoorLink>(i.Doors, i.DoorCount).Select(d => new NaviDoorLink(d.Crc, FormKey.FromNative(d.Door))).ToArray(),
+                i.HasIsland != 0, Call.Copy<byte>(i.Island, i.IslandSize), NavParent(i.Parent))).ToArray();
+        }
+        finally { RadicleNative.NaviFree(n); }
+    }
+}

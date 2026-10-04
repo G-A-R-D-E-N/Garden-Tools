@@ -104,6 +104,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up .NET for Radicle binding tests
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
       - name: Find ccache
         run: |
           for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
@@ -125,6 +130,7 @@ jobs:
           -DRADICLE_BUILD_TESTS=ON
           -DRADICLE_BUILD_TOOLS=ON
           -DRADICLE_WARNINGS_AS_ERRORS=ON
+          -DRADICLE_CSHARP_TESTS=ON
           ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
 
       - name: Build
@@ -306,6 +312,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up .NET for Radicle binding tests
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
       - name: Set up MSVC, Ninja and ccache
         shell: powershell
         run: |
@@ -355,7 +366,7 @@ jobs:
         run: |
           set "LAUNCHER="
           if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
-          cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+          cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON -DRADICLE_CSHARP_TESTS=ON %LAUNCHER% || exit /b 1
 
       - name: Build
         run: cmake --build build\native

@@ -1,5 +1,25 @@
 # Radicle code notes
 
+## src/environment/navmesh.cpp:decode_navmesh and decode_navmesh_info
+
+`docs/NAVM_NAVI.md` records the measured version-15 disk grammar and the
+unresolved CK reader discrepancy. Both decoders reuse the existing full
+payload validator before reading counted data. Geometry, adjacency values
+and links are stored reads; flag meanings and runtime pathfinding remain
+unverified. Cover/grid and optional island bytes stay opaque and borrowed
+from the immutable environment. No writer behavior changes.
+
+`src/c_api_navmesh.cpp:radicle_navmesh_decode` and `radicle_navi_decode`
+own their array views until the paired free call; strings and opaque bytes
+remain borrowed from the environment. `bindings/csharp/Radicle.Interop/Navmesh.cs`
+copies every array before freeing. ABI 10 avoids main 4, PR #383's 5/6/7,
+PR #398's 8 and PR #400's 9. Reconcile those independent branches before merge.
+
+`CMakeLists.txt:RADICLE_CSHARP_TESTS` is enabled in the two native jobs of
+`.github/workflows/native-ci.yml` so the new getters and their ownership are
+validated in CI. The existing test supplies the branch's native library,
+layout probe and ABI stubs; the workflow supplies the .NET 8 SDK.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.

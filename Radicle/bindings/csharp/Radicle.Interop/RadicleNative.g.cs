@@ -616,10 +616,109 @@ public unsafe struct MaterialSwap
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NavmeshVertex
+{
+    public float X;
+    public float Y;
+    public float Z;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NavmeshParent
+{
+    public uint Crc;
+    public FormKey World;
+    public FormKey Cell;
+    public short GridY;
+    public short GridX;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NavmeshTriangle
+{
+    public fixed ushort Vertices[3];
+    public fixed short Edges[3];
+    public float Height;
+    public byte Unknown;
+    public ushort Flags;
+    public ushort CoverFlags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NavmeshEdgeLink
+{
+    public uint Type;
+    public FormKey Navmesh;
+    public short Triangle;
+    public byte Edge;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NavmeshDoorLink
+{
+    public short Triangle;
+    public uint Crc;
+    public FormKey Door;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct Navmesh
+{
+    public int HasGeometry;
+    public uint Version;
+    public NavmeshParent Parent;
+    public IntPtr Vertices;
+    public nuint VertexCount;
+    public IntPtr Triangles;
+    public nuint TriangleCount;
+    public IntPtr Edges;
+    public nuint EdgeCount;
+    public IntPtr Doors;
+    public nuint DoorCount;
+    public IntPtr OpaqueTail;
+    public nuint OpaqueTailSize;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NaviDoorLink
+{
+    public uint Crc;
+    public FormKey Door;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NavmeshInfo
+{
+    public FormKey Navmesh;
+    public uint Flags;
+    public NavmeshVertex Location;
+    public float Preferred;
+    public IntPtr Edges;
+    public nuint EdgeCount;
+    public IntPtr PreferredEdges;
+    public nuint PreferredEdgeCount;
+    public IntPtr Doors;
+    public nuint DoorCount;
+    public int HasIsland;
+    public IntPtr Island;
+    public nuint IslandSize;
+    public NavmeshParent Parent;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct Navi
+{
+    public IntPtr Infos;
+    public nuint InfoCount;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 4u;
+    public const uint CompiledAbiVersion = 10u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -923,5 +1022,17 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
     public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navmesh_decode")]
+    public static extern Status NavmeshDecode(IntPtr env, IntPtr record, Navmesh** out_navmesh);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navmesh_free")]
+    public static extern void NavmeshFree(Navmesh* navmesh);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_decode")]
+    public static extern Status NaviDecode(IntPtr env, IntPtr record, Navi** out_navi);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_free")]
+    public static extern void NaviFree(Navi* navi);
 
 }
