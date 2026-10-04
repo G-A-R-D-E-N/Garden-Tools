@@ -113,7 +113,7 @@ Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::
         return std::unexpected(Error{"InvalidApplyFlag", "Apply flag must be boolean"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
@@ -164,7 +164,7 @@ Result<nlohmann::json> RadiclePluginBackend::updateOnam(const nlohmann::json& ar
     const auto name = stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
