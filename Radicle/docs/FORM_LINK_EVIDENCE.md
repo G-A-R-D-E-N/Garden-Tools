@@ -126,7 +126,7 @@ This support intentionally does not infer FormIDs from NAVM vertex indexes, tria
 
 Oracle: xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsCommon.pas`.
 
-xEdit identifies VMAD property type `16` as `Array of Variable (FO76, Not Implemented)`. Type `6` is the corresponding dynamically typed Variable property. Neither has a fixed value layout that Radicle can safely walk without a nested type discriminator definition.
+xEdit identifies VMAD property type `16` as `Array of Variable (FO76, Not Implemented)`. Type `6` is the corresponding dynamically typed Variable property. The verified OG value reader has no type-6 case, so it does not provide a nested discriminator layout. The official survey found no examples of either type. See `VMAD_VARIABLE_EVIDENCE.md` for the build scope and remaining questions.
 
 Radicle therefore treats property types 6 and 16 differently depending on the operation:
 

@@ -1,5 +1,9 @@
 # Radicle code notes
 
+## tests/test_vmad_unsupported.cpp:make_plugin
+
+The unsupported property follows a known object reference so a tolerant scan must discard that earlier hit. Optional struct nesting checks the same refusal recursively. Type 16 carries an explicit count; count zero remains unsupported until #388 verifies it. FormID-looking bytes after the unsupported header are opaque. The tests compare unchanged serialization before and after a refused remap. Verified record: `E:/GardenEngine/git/garden-tools/git/radicle-15-20261004/build/RE-Work/vmad-variable-types-388.md`; see `docs/VMAD_VARIABLE_EVIDENCE.md` for its limited corpus scope.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.

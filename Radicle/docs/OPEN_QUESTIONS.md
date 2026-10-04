@@ -56,7 +56,7 @@ Speculative answers must not be hardcoded as facts.
 
 ## Complex chunks (deferred)
 
-17. VMAD fragment layouts for PACK/INFO/SCEN phase extras are walked from xEdit counters; Variable property payloads (type 6/16) are skipped as empty/count-only. Encoding of VMAD strings is UTF-8 per xEdit `wbEncodingVMAD`.
+17. VMAD fragment layouts for PACK/INFO/SCEN phase extras are walked from xEdit counters. Variable properties (type 6/16) stop structural decoding; read-only collection clears partial VMAD discoveries and master remapping refuses. The verified OG value reader rejects type 6 and nonempty type 16; zero-count type 16 and third-party fixtures remain unresolved in [#388](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/388). See `VMAD_VARIABLE_EVIDENCE.md`. Encoding of VMAD strings is UTF-8 per xEdit `wbEncodingVMAD`.
 18. CTDA CIS1/CIS2 string params. Use Global comparison FormID remap is implemented (type bit 2). ESP flagged light can be stamped via `apply_master_kinds` / `remap_plugin_masters(MasterDescriptor)`; the library still cannot read SmallFile off a master that is only a MAST name.
 19. PERK Add Activate Choice
 20. NAVM / NAVI
