@@ -105,3 +105,8 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 - CELL `XCWT`: the cell's water type.
 
 `c_api_env.h` was at the file-size limit, so the typed record decoders moved to `include/fo4/c_api_records.h`, which includes the environment header for the shared types; `generate_interop.py` reads it, and the generated bindings and layout probe are regenerated from the headers, so `radicle_csharp_interop_up_to_date` still holds. Tests: `Radicle.Interop.Tests/HlodFieldTests.cs` builds a plugin with these subrecords and checks every field, including a STAT without `MNAM` and the four-slot ceiling.
+# Dialogue and scene read slice
+
+`src/environment/dialogue.cpp:decode_dialogue_topic`, `decode_dialogue_info` and `decode_scene` use the pinned disk layouts and measured marker grammar in `docs/DIALOGUE_SCENES.md`. Scope readers keep repeated scene and response tags separate. Scene action payloads retain ordered opaque subrecord views. Conditions reuse `schema/ctda.cpp:read_ctda_conditions_in` without executing them; reset values and flags retain their encoded values. Unknown data is preserved, and malformed known fields fail closed.
+
+`src/c_api_dialogue.cpp:radicle_dialogue_info_decode` and `radicle_scene_decode` own all returned arrays and copied condition strings until the matching free call; record-backed strings, keys and opaque bytes require the environment to remain alive. `bindings/csharp/Radicle.Interop/Dialogue.cs` copies every returned array, key, string and opaque payload before releasing the holder. `StringTables.ResolveDialogueText` uses the existing source-selection and lookup contract rather than guessing text from IDs. Runtime semantics remain tracked by RE #405 and TES4 bit 7 by #29.
