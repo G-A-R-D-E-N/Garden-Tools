@@ -64,7 +64,7 @@ export default function ConditionsEditor(
       try {
         const got = JSON.parse(await b.ResolveFormKeyLabels(missing.join(',')));
         setLabels(prev => ({ ...prev, ...got }));
-      } catch { /* labels are cosmetic; rows keep their raw FormKeys */ }
+      } catch {  }
     })();
   }, [rows]);
 
