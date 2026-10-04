@@ -107,7 +107,8 @@ TEST_F(SoundTest, RepeatOptionalTailAndFootstepCategoriesPreservePresenceAndOrde
            {{"XCNT", words({1, 2, 0, 1, 1})}, {"DATA", words({0x815, 0x814, 0x812, 0x813, 0x811})}}}});
     const auto env = load(); const auto m = fo4::env::decode_sound_marker(env, record(env, 0x800));
     ASSERT_TRUE(m.repeat); EXPECT_EQ(m.repeat->min_time, 2.5f); EXPECT_EQ(m.repeat->max_time, 8.0f);
-    EXPECT_EQ(m.repeat->stackable.has_value(), tail); if (tail) EXPECT_EQ(*m.repeat->stackable, 0x80);
+    EXPECT_EQ(m.repeat->stackable.has_value(), tail);
+    if (tail) { EXPECT_EQ(*m.repeat->stackable, 0x80); }
     const auto f = fo4::env::decode_footstep_set(env, record(env, 0x801));
     EXPECT_EQ(f.categories[0][0].local().value(), 0x811u); ASSERT_EQ(f.categories[1].size(), 2);
     EXPECT_EQ(f.categories[1][1].local().value(), 0x813u); EXPECT_TRUE(f.categories[2].empty());

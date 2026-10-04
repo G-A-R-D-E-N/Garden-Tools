@@ -51,7 +51,7 @@ TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesByte
       EXPECT_EQ(radicle_footstep_set_decode(abi, records[i], &f), RADICLE_STATUS_OK); radicle_footstep_set_free(f);
     }
   }
-  radicle_free_record_array(records); radicle_env_free(abi);
+  radicle_free_record_array(records); radicle_env_destroy(abi);
   for (const auto& [type, total] : totals) RecordProperty(type, total);
   const auto& plugin = env.plugin(0); const auto bytes = fo4::write_plugin(plugin); const auto original = fo4::plugin_original_bytes(plugin);
   ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);

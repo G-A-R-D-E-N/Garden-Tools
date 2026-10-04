@@ -7,25 +7,25 @@ The authenticated private runtime evidence index at commit
 `f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a`, section a-340, confirms CK tag
 inventories but explicitly lacks the SNDR component-hook byte grammar.
 
-- SNDR lines 9069–9113: CNAM selects Standard `1EEF540A`, Compound
+- SNDR lines 9406–9450: CNAM selects Standard `1EEF540A`, Compound
   `54651A43`, or AutoWeapon `ED157AE3`. GNAM category, SNAM alternate,
   ONAM output model and repeated DNAM descriptor links are four bytes.
-  Repeated ANAM file paths use the shared helper at Common lines 8628–8631.
+  Repeated ANAM file paths use the shared helper at Common lines 9200–9203.
   Standard BNAM is six bytes: signed frequency shift/variance, unsigned
   priority/dB variance, and attenuation hundredths as u16. AutoWeapon BNAM
-  is a four-byte base-descriptor link; the decider is FO4 lines 1495–1514.
+  is a four-byte base-descriptor link; the decider is FO4 lines 1556–1576.
   LNAM has four stored bytes; the loop byte is exposed raw, as are the
   remaining control bytes. ITMC and the ITMS/INTV/FNAM/ITME rate blocks
   describe auto-weapon file alternatives.
-- SOUN lines 11548–11557: SDSC is its SNDR link; REPT stores two floats
+- SOUN lines 11961–11970: SDSC is its SNDR link; REPT stores two floats
   and an optional stackable byte (`SetOptionalFrom(2)`): accept eight or nine
   bytes without inventing the missing byte's default.
-- MUSC lines 8353–8372: FNAM u32 flags, PNAM priority/ducking as two u16,
+- MUSC lines 8665–8684: FNAM u32 flags, PNAM priority/ducking as two u16,
   WNAM float fade duration, TNAM packed four-byte MUST links.
-- FSTP lines 8373–8377: DATA is an IPDS link, ANAM a string tag.
-- FSTS lines 8378–8404: XCNT has five u32 counts (walking through swimming),
+- FSTP lines 8686–8690: DATA is an IPDS link, ANAM a string tag.
+- FSTS lines 8692–8718: XCNT has five u32 counts (walking through swimming),
   while DATA stores matching packed FSTP links in reverse category order.
-- ACTI lines 5406–5407: SNAM/VNAM are looping/activation SNDR links.
+- ACTI lines 5648–5649: SNAM/VNAM are looping/activation SNDR links.
 
 The 2026-10-04 independent installed-data survey measured 7,427 SNDR,
 339 SOUN, 134 MUSC, 175 FSTP and 42 FSTS versions across all seven masters.
