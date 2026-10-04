@@ -12,8 +12,11 @@ vi.mock('./useDialogs', async importOriginal => {
 const getPlugins = vi.fn<() => Promise<string>>();
 const loadEnvironment = vi.fn<(discard?: boolean) => Promise<string>>();
 const copyMany = vi.fn<() => Promise<string>>();
+const searchRecords = vi.fn<(q: string) => Promise<string>>();
 
 const pluginRow = { Key: 'PluginA.esp', Name: 'PluginA.esp', Kind: 'plugin', FilePath: '', HasChildren: false, IsRecordNode: false };
+const weaponHit = { Plugin: 'Master.esm', FormKey: '000800:Master.esm', EditorID: 'WeaponOne', Type: 'WEAP' };
+const armorHit = { Plugin: 'Master.esm', FormKey: '000900:Master.esm', EditorID: 'ArmorOne', Type: 'ARMO' };
 const conflictRow = {
   FormKey: '000800:Master.esm', EditorID: 'TestWeapon', Type: 'WEAP', Winner: 'Later.esp',
   Plugins: ['Master.esm', 'Later.esp'], Rows: [], Level: 'conflict', Count: 2,
@@ -31,6 +34,7 @@ function stubBridge() {
           GetLoadOrderSummary: vi.fn(async () => JSON.stringify({ Plugins: [] })),
           GetConflicts: vi.fn(async () => JSON.stringify([conflictRow])),
           CopyAsOverrideMany: copyMany,
+          SearchRecords: searchRecords,
         },
       },
     },
@@ -50,6 +54,7 @@ beforeEach(() => {
   getPlugins.mockResolvedValue('[]');
   loadEnvironment.mockResolvedValue('ok');
   copyMany.mockResolvedValue(JSON.stringify({ total: 0, ok: 0, failed: 0 }));
+  searchRecords.mockResolvedValue('[]');
   pickPlugin.mockResolvedValue({ target: 'Patch.esp', extra: '' });
   stubBridge();
 });
@@ -123,5 +128,28 @@ describe('batch copy failure display', () => {
     copyMany.mockRejectedValue(failure);
     await openBatchCopy();
     await screen.findByText(expected);
+  });
+});
+
+describe('sidebar record search', () => {
+  it('drops the earlier query results when the query falls below two characters', async () => {
+    searchRecords.mockImplementation(async (q: string) =>
+      JSON.stringify(q === 'weapon' ? [weaponHit] : [armorHit]));
+    getPlugins.mockResolvedValue(JSON.stringify([pluginRow]));
+    render(<DialogProvider><MainShell /></DialogProvider>);
+
+    const input = await screen.findByPlaceholderText('Search plugins & records…');
+    fireEvent.change(input, { target: { value: 'weapon' } });
+    await screen.findByText('WeaponOne');
+
+    fireEvent.change(input, { target: { value: 'w' } });
+    expect(screen.queryByText('WeaponOne')).toBeNull();
+
+    fireEvent.change(input, { target: { value: 'armor' } });
+    expect(screen.queryByText('WeaponOne')).toBeNull();
+    expect(screen.getByText('Searching…')).not.toBeNull();
+
+    await screen.findByText('ArmorOne');
+    expect(screen.queryByText('WeaponOne')).toBeNull();
   });
 });

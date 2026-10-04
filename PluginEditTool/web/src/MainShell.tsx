@@ -500,7 +500,6 @@ export default function MainShell() {
     }
   };
 
-
   useEffect(() => {
     const q = search.trim();
     if (q.length < 2) return;
@@ -512,7 +511,7 @@ export default function MainShell() {
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
-
+  const changeSearch = (v: string) => { setSearch(v); if (v.trim().length < 2) setSearchResults(null); };
 
   const [conflicts, setConflicts] = useState<ConflictEntry[] | null>(null);
   const [conflictSel, setConflictSel] = useState<Record<string, boolean>>({});
@@ -785,10 +784,10 @@ export default function MainShell() {
           <Search size={13} />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => changeSearch(e.target.value)}
             placeholder="Search plugins & records…"
           />
-          {search && <button className="sidebar-search-clear" onClick={() => setSearch('')} title="Clear"><X size={13} /></button>}
+          {search && <button className="sidebar-search-clear" onClick={() => changeSearch('')} title="Clear"><X size={13} /></button>}
         </div>
         )}
 
@@ -1011,7 +1010,7 @@ export default function MainShell() {
           onOpenConflictsTab={() => { setRecordTab('conflicts'); setShellTab('record'); }}
           onOpenRecord={openByFormKey}
           onAddToFilter={needle => {
-            setSearch(needle);
+            changeSearch(needle);
             setActiveTab('explorer');
             setTreeMode('files');
           }}
