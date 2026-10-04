@@ -441,7 +441,7 @@ td.rv-section {
 
 
 .rv-row-flash td {
-  animation: rv-flash 1.8s ease-out forwards;
+  animation: rv-flash 1.8s ease-out;
 }
 @keyframes rv-flash {
   0%   { background: rgba(63, 185, 80, 0.35); box-shadow: inset 0 0 0 1px rgba(63, 185, 80, 0.6); }
@@ -449,7 +449,7 @@ td.rv-section {
   100% { background: transparent; box-shadow: none; }
 }
 [data-theme="light"] .rv-row-flash td {
-  animation: rv-flash-light 1.8s ease-out forwards;
+  animation: rv-flash-light 1.8s ease-out;
 }
 @keyframes rv-flash-light {
   0%   { background: rgba(26, 127, 55, 0.18); box-shadow: inset 0 0 0 1px rgba(26, 127, 55, 0.4); }

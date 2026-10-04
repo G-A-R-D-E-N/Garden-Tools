@@ -95,11 +95,79 @@ struct StaticCollectionPart {
   std::vector<StaticPlacement> placements;
 };
 
+// STAT MNAM: up to four 260-byte slots, each a NUL-terminated mesh path followed by unused bytes (xEdit wbDefinitionsFO4.pas).
+inline constexpr std::size_t k_distant_lod_levels = 4;
+
+struct StaticDistantLod {
+  std::size_t levels{0};
+  std::array<std::optional<std::string_view>, k_distant_lod_levels> meshes{};
+};
+
+struct WaterNoiseLayer {
+  float wind_direction{0.0f};
+  float wind_speed{0.0f};
+  float amplitude_scale{0.0f};
+  float uv_scale{0.0f};
+  float noise_falloff{0.0f};
+};
+
+// WATR DNAM through Interior Specular Power and the noise layers; the silt and reflection tail is optional.
+struct WaterVisual {
+  float fog_depth_amount{0.0f};
+  ByteColor fog_shallow_color;
+  ByteColor fog_deep_color;
+  float fog_color_shallow_range{0.0f};
+  float fog_color_deep_range{0.0f};
+  float fog_shallow_alpha{0.0f};
+  float fog_deep_alpha{0.0f};
+  float fog_alpha_shallow_range{0.0f};
+  float fog_alpha_deep_range{0.0f};
+  ByteColor fog_underwater_color;
+  float fog_underwater_amount{0.0f};
+  float fog_underwater_near{0.0f};
+  float fog_underwater_far{0.0f};
+  float normal_magnitude{0.0f};
+  float shallow_normal_falloff{0.0f};
+  float deep_normal_falloff{0.0f};
+  float reflectivity_amount{0.0f};
+  float fresnel_amount{0.0f};
+  float surface_effect_falloff{0.0f};
+  float displacement_force{0.0f};
+  float displacement_velocity{0.0f};
+  float displacement_falloff{0.0f};
+  float displacement_dampener{0.0f};
+  float displacement_starting_size{0.0f};
+  ByteColor reflection_color;
+  float sun_specular_power{0.0f};
+  float sun_specular_magnitude{0.0f};
+  float sun_sparkle_power{0.0f};
+  float sun_sparkle_magnitude{0.0f};
+  float interior_specular_radius{0.0f};
+  float interior_specular_brightness{0.0f};
+  float interior_specular_power{0.0f};
+  std::array<WaterNoiseLayer, 3> noise{};
+  std::optional<float> silt_amount;
+  std::optional<ByteColor> silt_light_color;
+  std::optional<ByteColor> silt_dark_color;
+  std::optional<bool> screen_space_reflections;
+};
+
+struct WaterData {
+  std::optional<std::uint8_t> flags;
+  std::optional<WaterVisual> visual;
+  std::array<std::optional<std::string_view>, 3> noise_textures{};
+  std::optional<std::array<float, 3>> linear_velocity;
+  std::optional<std::array<float, 3>> angular_velocity;
+};
+
 LightRecordData decode_light(const Environment& env, const RecordRef& ref);
 BendableSplineData decode_bendable_spline(const Environment& env, const RecordRef& ref);
 std::optional<FormKey> decode_layer_parent(const Environment& env, const RecordRef& ref);
 ClimateData decode_climate(const Environment& env, const RecordRef& ref);
 WeatherData decode_weather(const Environment& env, const RecordRef& ref);
 std::vector<StaticCollectionPart> decode_static_collection(const Environment& env, const RecordRef& ref);
+StaticDistantLod decode_static_distant_lod(const Environment& env, const RecordRef& ref);
+std::optional<FormKey> decode_activator_water_type(const Environment& env, const RecordRef& ref);
+WaterData decode_water(const Environment& env, const RecordRef& ref);
 
 }  // namespace fo4::env

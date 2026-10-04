@@ -65,6 +65,8 @@ radicle_status radicle_worldspace_get_info(const radicle_env* env,
       info.bounds_max[1] = (*data.bounds_max)[1];
     }
     set_optional(data.flags, info.has_flags, info.flags);
+    info.lod_water = to_c_key(*env, data.lod_water);
+    set_optional(data.lod_water_height, info.has_lod_water_height, info.lod_water_height);
     *out_info = info;
     return RADICLE_STATUS_OK;
   });
@@ -97,6 +99,7 @@ radicle_status radicle_cell_get_info(const radicle_env* env,
     info.encounter_zone = to_c_key(*env, data.encounter_zone);
     info.location = to_c_key(*env, data.location);
     info.worldspace = to_c_key(*env, data.worldspace);
+    info.water = to_c_key(*env, data.water);
     *out_info = info;
     return RADICLE_STATUS_OK;
   });

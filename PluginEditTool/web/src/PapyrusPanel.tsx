@@ -650,6 +650,6 @@ function tokenizePsc(line: string) {
     }
     else out.push(<span key={k++}>{m[3] || m[4]}</span>);
   }
-  if (comment) out.push(<span key={k++} className="tk-comment">{comment}</span>);
+  if (comment) out.push(<span key={k} className="tk-comment">{comment}</span>);
   return out.length ? out : ' ';
 }

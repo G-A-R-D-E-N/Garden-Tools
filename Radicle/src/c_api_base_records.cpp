@@ -236,4 +236,107 @@ void radicle_static_collection_free(radicle_static_collection* collection) {
   if (collection != nullptr) delete static_cast<CollectionHolder*>(collection->internal);
 }
 
+radicle_status radicle_static_get_distant_lod(const radicle_env* env,
+                                              const radicle_record* record,
+                                              radicle_static_distant_lod* out_lod) {
+  clear_error();
+  if (const auto status = require(env, record, out_lod); status != RADICLE_STATUS_OK) return status;
+  return guarded("unknown exception while decoding STAT MNAM", [&] {
+    const auto data = fo4::env::decode_static_distant_lod(env->value, *to_ref(record));
+    radicle_static_distant_lod lod{};
+    lod.level_count = data.levels;
+    for (std::size_t i = 0; i < data.meshes.size(); ++i) lod.meshes[i] = stored_text(*env, data.meshes[i]);
+    *out_lod = lod;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_activator_get_water_type(const radicle_env* env,
+                                                const radicle_record* record,
+                                                radicle_form_key* out_water) {
+  clear_error();
+  if (const auto status = require(env, record, out_water); status != RADICLE_STATUS_OK) return status;
+  return guarded("unknown exception while decoding ACTI", [&] {
+    *out_water = to_c_key(*env, fo4::env::decode_activator_water_type(env->value, *to_ref(record)));
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_water_get_info(const radicle_env* env, const radicle_record* record, radicle_water_info* out_info) {
+  clear_error();
+  if (const auto status = require(env, record, out_info); status != RADICLE_STATUS_OK) return status;
+  return guarded("unknown exception while decoding WATR", [&] {
+    const auto data = fo4::env::decode_water(env->value, *to_ref(record));
+    radicle_water_info info{};
+    set_optional(data.flags, info.has_flags, info.flags);
+    if (data.visual) {
+      const auto& v = *data.visual;
+      info.has_visual = 1;
+      info.fog_depth_amount = v.fog_depth_amount;
+      info.fog_shallow_color = to_c_color(v.fog_shallow_color);
+      info.fog_deep_color = to_c_color(v.fog_deep_color);
+      info.fog_color_shallow_range = v.fog_color_shallow_range;
+      info.fog_color_deep_range = v.fog_color_deep_range;
+      info.fog_shallow_alpha = v.fog_shallow_alpha;
+      info.fog_deep_alpha = v.fog_deep_alpha;
+      info.fog_alpha_shallow_range = v.fog_alpha_shallow_range;
+      info.fog_alpha_deep_range = v.fog_alpha_deep_range;
+      info.fog_underwater_color = to_c_color(v.fog_underwater_color);
+      info.fog_underwater_amount = v.fog_underwater_amount;
+      info.fog_underwater_near = v.fog_underwater_near;
+      info.fog_underwater_far = v.fog_underwater_far;
+      info.normal_magnitude = v.normal_magnitude;
+      info.shallow_normal_falloff = v.shallow_normal_falloff;
+      info.deep_normal_falloff = v.deep_normal_falloff;
+      info.reflectivity_amount = v.reflectivity_amount;
+      info.fresnel_amount = v.fresnel_amount;
+      info.surface_effect_falloff = v.surface_effect_falloff;
+      info.displacement_force = v.displacement_force;
+      info.displacement_velocity = v.displacement_velocity;
+      info.displacement_falloff = v.displacement_falloff;
+      info.displacement_dampener = v.displacement_dampener;
+      info.displacement_starting_size = v.displacement_starting_size;
+      info.reflection_color = to_c_color(v.reflection_color);
+      info.sun_specular_power = v.sun_specular_power;
+      info.sun_specular_magnitude = v.sun_specular_magnitude;
+      info.sun_sparkle_power = v.sun_sparkle_power;
+      info.sun_sparkle_magnitude = v.sun_sparkle_magnitude;
+      info.interior_specular_radius = v.interior_specular_radius;
+      info.interior_specular_brightness = v.interior_specular_brightness;
+      info.interior_specular_power = v.interior_specular_power;
+      for (std::size_t i = 0; i < 3; ++i) {
+        info.noise_wind_direction[i] = v.noise[i].wind_direction;
+        info.noise_wind_speed[i] = v.noise[i].wind_speed;
+        info.noise_amplitude_scale[i] = v.noise[i].amplitude_scale;
+        info.noise_uv_scale[i] = v.noise[i].uv_scale;
+        info.noise_falloff[i] = v.noise[i].noise_falloff;
+      }
+      set_optional(v.silt_amount, info.has_silt_amount, info.silt_amount);
+      if (v.silt_light_color) {
+        info.has_silt_light_color = 1;
+        info.silt_light_color = to_c_color(*v.silt_light_color);
+      }
+      if (v.silt_dark_color) {
+        info.has_silt_dark_color = 1;
+        info.silt_dark_color = to_c_color(*v.silt_dark_color);
+      }
+      if (v.screen_space_reflections) {
+        info.has_screen_space_reflections = 1;
+        info.screen_space_reflections = *v.screen_space_reflections ? 1 : 0;
+      }
+    }
+    for (std::size_t i = 0; i < 3; ++i) info.noise_textures[i] = stored_text(*env, data.noise_textures[i]);
+    if (data.linear_velocity) {
+      info.has_linear_velocity = 1;
+      for (std::size_t i = 0; i < 3; ++i) info.linear_velocity[i] = (*data.linear_velocity)[i];
+    }
+    if (data.angular_velocity) {
+      info.has_angular_velocity = 1;
+      for (std::size_t i = 0; i < 3; ++i) info.angular_velocity[i] = (*data.angular_velocity)[i];
+    }
+    *out_info = info;
+    return RADICLE_STATUS_OK;
+  });
+}
+
 }  // extern "C"
