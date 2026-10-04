@@ -71,7 +71,6 @@ void writeMisc(fo4::test::ByteWriter& out, std::uint32_t formId, std::string_vie
     fo4::test::end_record(out, record);
 }
 
-// Two local MISC records, 000800 and 000801.
 std::vector<std::byte> makeLocalPlugin() {
     fo4::test::ByteWriter out;
     writeHeader(out, false);
@@ -82,7 +81,6 @@ std::vector<std::byte> makeLocalPlugin() {
     return out.bytes;
 }
 
-// One override of a Master.esm MISC record.
 std::vector<std::byte> makeOverridePlugin(std::uint32_t formId, std::string_view editorId) {
     fo4::test::ByteWriter out;
     writeHeader(out, true);
@@ -131,7 +129,6 @@ std::string recordEditorId(fo4ide::plugin::RadiclePluginBackend& backend,
     FAIL("EDID row missing for " << formKey);
 }
 
-// Runs on the writer thread while it holds its op's lifecycle, owner and state locks.
 struct HookGate {
     std::mutex mutex;
     std::condition_variable changed;
@@ -238,7 +235,6 @@ TEST_CASE("Writers to unrelated plugins run concurrently") {
     });
     REQUIRE(waitForEntered(1));
 
-    // Alpha is parked inside its write op; Beta must still enter its own.
     auto beta = std::async(std::launch::async, [&] {
         return setEditorId(backend, "Beta.esp", "000800:Beta.esp", "BetaEdited");
     });
