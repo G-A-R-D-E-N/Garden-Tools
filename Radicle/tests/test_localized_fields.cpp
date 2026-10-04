@@ -78,6 +78,35 @@ TEST(LocalizedFields, NonLocalizedPluginYieldsInlineText) {
   EXPECT_EQ(fo4::schema::write_localized_string(value), text("hello"));
 }
 
+TEST(LocalizedFields, BitSevenSelectsRepresentationForTheSameFourBytes) {
+  const auto payload = make(k_full, text("abc"));
+  const auto inline_plugin = plugin_with_flags(0);
+  const auto external_plugin = plugin_with_flags(0x80);
+  const auto inline_value =
+      fo4::schema::read_localized_string(inline_plugin, k_race, k_full, payload);
+  const auto external_value =
+      fo4::schema::read_localized_string(external_plugin, k_race, k_full, payload);
+  EXPECT_EQ(inline_value.inline_text(), "abc");
+  EXPECT_FALSE(inline_value.localized());
+  ASSERT_TRUE(external_value.localized());
+  EXPECT_EQ(*external_value.id, 0x00636261u);
+  EXPECT_FALSE(external_value.text.has_value());
+  EXPECT_EQ(fo4::schema::write_localized_string(inline_value), payload.data);
+  EXPECT_EQ(fo4::schema::write_localized_string(external_value), payload.data);
+  EXPECT_EQ(inline_plugin.header.tes4_flags.value(), 0u);
+  EXPECT_EQ(external_plugin.header.tes4_flags.value(), 0x80u);
+}
+
+TEST(LocalizedFields, ZeroExternalIdIsPreservedWithoutTextLookup) {
+  const auto plugin = plugin_with_flags(0x80);
+  const auto value =
+      fo4::schema::read_localized_string(plugin, k_race, k_desc, make(k_desc, id(0)));
+  ASSERT_TRUE(value.localized());
+  EXPECT_EQ(*value.id, 0u);
+  EXPECT_FALSE(value.text.has_value());
+  EXPECT_EQ(fo4::schema::write_localized_string(value), id(0));
+}
+
 // A non-lstring field stays inline even in a localized plugin.
 TEST(LocalizedFields, NonLocalizedFieldStaysInlineInALocalizedPlugin) {
   const auto plugin = plugin_with_flags(0x80);

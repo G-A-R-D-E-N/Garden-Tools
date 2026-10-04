@@ -30,7 +30,7 @@ Speculative answers must not be hardcoded as facts.
 
 ## TES4 flags
 
-7. Is bit 7 (`0x80`) "localized" (Mutagen/xEdit) or "delocalized" (CommonLib `kDelocalized`)? Official ESL `0x281` has it set.
+7. **Partial answer:** OG 1.10.163 bit `0x80` set selects external string IDs; clear selects inline text. Both "Localized" and CK/CommonLib "Delocalized" describe the set-bit state in their respective naming conventions. This does not establish a naming error. See `TES4_LOCALIZATION_EVIDENCE.md`; CK flag transitions and NG/AE verification remain in #390.
 8. Are TES4 record flags and `TESFile::flags` the same bit layout? CommonLib treats them as the same enum.
 
 ## Compression / XXXX
@@ -52,7 +52,7 @@ Speculative answers must not be hardcoded as facts.
 ## Localization
 
 15. `.STRINGS` / `.DLSTRINGS` / `.ILSTRINGS` layout for FO4, including next-gen changes.
-16. How `TESFile::SetDelocalized` interacts with `FULL`/`DESC` storage.
+16. How `TESFile::SetDelocalized` and `MasterfileDelocalizer` change the bit and rewrite `FULL`/`DESC` storage. Still unverified; the OG read direction is documented separately in `TES4_LOCALIZATION_EVIDENCE.md` (#390).
 
 ## Complex chunks (deferred)
 

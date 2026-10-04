@@ -1,5 +1,9 @@
 # Radicle code notes
 
+## src/schema/localized_fields.cpp:read_localized_string
+
+The existing flag-and-schema classification matches the verified OG read direction in `build/RE-Work/tes4-localized-flag-390.md`, summarized by `docs/TES4_LOCALIZATION_EVIDENCE.md`. `tests/test_localized_fields.cpp:BitSevenSelectsRepresentationForTheSameFourBytes` distinguishes identical bytes by plugin state and preserves both representations. `ZeroExternalIdIsPreservedWithoutTextLookup` preserves the empty-ID representation without inventing a sidecar lookup. No production decoder or semantic API rename is required for this evidence slice.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
