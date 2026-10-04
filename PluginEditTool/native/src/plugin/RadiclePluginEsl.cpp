@@ -1,10 +1,12 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <string_view>
 
 #include <fo4/plugin/maintenance.hpp>
+#include <fo4/plugin/mutation.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -30,15 +32,27 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
     }
 
     const auto esl = fo4::esl_eligibility(loaded->plugin);
-    constexpr std::size_t capacity = 0x1000u - 0x800u;
+    fo4::Plugin targetPolicy;
+    targetPolicy.header = loaded->plugin.header;
+    targetPolicy.header.tes4_flags = fo4::RecordFlags{
+        targetPolicy.header.tes4_flags.value() | fo4::RecordFlags::small_file};
+    const auto [first, last] = fo4::local_form_id_range(targetPolicy);
+    const std::size_t capacity = last - first + 1u;
+    const std::string range = first == 1u ? "0x001-0xFFF" : "0x800-0xFFF";
     const auto nativeCount = esl.native_records;
-    const auto outOfRange = esl.out_of_range;
+    const auto records = fo4::collect_records(loaded->plugin);
+    const auto outOfRange = esl.out_of_range + static_cast<std::size_t>(std::count_if(
+        records.begin(), records.end(), [&](const auto* record) {
+            return record->header.signature != fo4::sig_tes4 &&
+                   record->form_key.owner() == loaded->plugin.key &&
+                   record->form_key.local().value() < first;
+        }));
 
-    if (esl.ids_fit_light_range()) {
+    if (outOfRange == 0) {
         return nlohmann::json(
             "'" + name + "' is already ESL-compatible: all " +
             std::to_string(nativeCount) +
-            " native record(s) use 12-bit object IDs (<= 0xFFF). "
+            " native record(s) use object IDs within " + range + ". "
             "Native compact_to_esl would be a no-op.");
     }
 
@@ -47,14 +61,14 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
             "'" + name + "' CANNOT fit the ESL compacted range: " +
             std::to_string(nativeCount) + " native record(s) exceed the " +
             std::to_string(capacity) +
-            "-slot 0x800-0xFFF capacity. Native compact_to_esl must refuse this plugin.");
+            "-slot " + range + " capacity. Native compact_to_esl must refuse this plugin.");
     }
 
     return nlohmann::json(
         "'" + name + "' can fit the ESL compacted range by remapping " +
         std::to_string(outOfRange) + " of " + std::to_string(nativeCount) +
-        " native record(s) into 0x800-0xFFF. This check is read-only; native "
-        "compact_to_esl remains disabled until record re-keying and external-reference safeguards are complete.");
+        " native record(s) into " + range + ". This check is read-only; external "
+        "references must be updated separately after compact_to_esl.");
 }
 
 }

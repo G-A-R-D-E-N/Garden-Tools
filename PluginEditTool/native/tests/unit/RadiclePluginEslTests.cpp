@@ -1,13 +1,17 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -36,7 +40,8 @@ void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>&
     REQUIRE(stream.good());
 }
 
-std::vector<std::byte> makePlugin(const std::vector<std::uint32_t>& objectIds) {
+std::vector<std::byte> makePlugin(const std::vector<std::uint32_t>& objectIds,
+                                  bool hasMaster = false) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
     fo4::test::ByteWriter hedr;
@@ -44,11 +49,19 @@ std::vector<std::byte> makePlugin(const std::vector<std::uint32_t>& objectIds) {
     hedr.u32(static_cast<std::uint32_t>(objectIds.size()));
     hedr.u32(0x800);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    if (hasMaster) {
+        fo4::test::write_subrecord(out, "MAST", std::string_view{"Base.esm\0", 9});
+        fo4::test::ByteWriter data;
+        data.u32(0);
+        data.u32(0);
+        fo4::test::write_subrecord(out, "DATA", data.bytes);
+    }
     fo4::test::end_record(out, tes4);
 
     const auto group = fo4::test::begin_group(out, "MISC", 0);
     for (std::size_t index = 0; index < objectIds.size(); ++index) {
-        const auto record = fo4::test::begin_record(out, "MISC", 0, objectIds[index]);
+        const auto record = fo4::test::begin_record(
+            out, "MISC", 0, objectIds[index] | (hasMaster ? 0x01000000u : 0u));
         const auto editor = "Record" + std::to_string(index);
         std::vector<std::byte> editorBytes;
         editorBytes.reserve(editor.size() + 1);
@@ -136,4 +149,67 @@ TEST_CASE("Native ESL eligibility refuses plugins larger than the compacted rang
     CHECK(report.find("CANNOT fit") != std::string::npos);
     CHECK(report.find("2049 native record") != std::string::npos);
     CHECK(report.find("2048-slot") != std::string::npos);
+}
+
+TEST_CASE("Native ESL compaction uses the target light range boundaries") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin({0x000u, 0x001u, 0x7FFu, 0x800u, 0xFFFu, 0x1000u}, true));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    const auto result = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find("remapped 2 record") != std::string::npos);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK_FALSE(disk.header.tes4_flags.is_small_file());
+    for (const auto local : {0x001u, 0x002u, 0x003u, 0x7FFu, 0x800u, 0xFFFu}) {
+        CHECK(fo4::find_record(disk, fo4::FormKey{disk.key, fo4::LocalFormId{local}}) != nullptr);
+    }
+    CHECK(fo4::find_record(disk, fo4::FormKey{disk.key, fo4::LocalFormId{0u}}) == nullptr);
+    CHECK(fo4::find_record(disk, fo4::FormKey{disk.key, fo4::LocalFormId{0x1000u}}) == nullptr);
+}
+
+TEST_CASE("Native ESL compaction can fill all 4095 target slots") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    std::vector<std::uint32_t> ids;
+    for (std::uint32_t local = 1; local < 0xFFFu; ++local) ids.push_back(local);
+    ids.push_back(0x1000u);
+    writeBytes(path, makePlugin(ids, true));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    CHECK(eligibility(backend).find("can fit") != std::string::npos);
+    const auto result = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(result->get<std::string>().find("remapped 1 record") != std::string::npos);
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(fo4::find_record(disk, fo4::FormKey{disk.key, fo4::LocalFormId{0xFFFu}}) != nullptr);
+    CHECK(fo4::find_record(disk, fo4::FormKey{disk.key, fo4::LocalFormId{0x1000u}}) == nullptr);
+}
+
+TEST_CASE("Native ESL compaction refuses 4096 own records without staging changes") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    std::vector<std::uint32_t> ids;
+    for (std::uint32_t local = 1; local <= 0x1000u; ++local) ids.push_back(local);
+    const auto original = makePlugin(ids, true);
+    writeBytes(path, original);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    const auto result = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "EslCapacityExceeded");
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    std::ifstream stream(path, std::ios::binary);
+    const std::vector<char> actual{std::istreambuf_iterator<char>{stream}, {}};
+    REQUIRE(actual.size() == original.size());
+    CHECK(std::memcmp(actual.data(), original.data(), original.size()) == 0);
 }

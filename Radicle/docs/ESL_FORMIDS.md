@@ -7,28 +7,35 @@ ESL authoring.
 ## Where it comes from
 
 `TESFile::AdjustFormIDFileIndex(TESFile* this, uint* id)` — Fallout4.exe
-1.10.163 (unpacked), RVA **`0x131f90`**, 55 bytes. Rebuilds an on-disk FormID
+1.10.163 (unpacked, PE timestamp `0x5ddc40fa`), RVA **`0x131fa0`**, 55 bytes. Rebuilds an on-disk FormID
 into a runtime one:
 
 ```asm
-140131f90:  mov   byte [rdx+3], 0          ; drop the on-disk master-index byte
-140131f94:  mov   eax, [rcx+0x334]         ; TESFile flags
-140131f9a:  shr   eax, 9
-140131f9d:  test  al, 1                    ; bit 9 = SmallFile
-140131f9f:  je    full
+140131fa0:  mov   byte [rdx+3], 0          ; drop the on-disk master-index byte
+140131fa4:  mov   eax, [rcx+0x334]         ; TESFile flags
+140131faa:  shr   eax, 9
+140131fad:  test  al, 1                    ; bit 9 = SmallFile
+140131faf:  je    full
             ; --- light ---
-140131fa1:  and   dword [rdx], 0xFFF       ; keep 12 bits, discard 12..23
-140131fa7:  or    dword [rdx], 0xFE000000
-140131fad:  movzx eax, word [rcx+0x372]    ; smallFileCompileIndex (u16)
-140131fb4:  shl   eax, 12
-140131fb7:  or    dword [rdx], eax
-140131fb9:  ret
+140131fb1:  and   dword [rdx], 0xFFF       ; keep 12 bits, discard 12..23
+140131fb7:  or    dword [rdx], 0xFE000000
+140131fbd:  movzx eax, word [rcx+0x372]    ; smallFileCompileIndex (u16)
+140131fc4:  shl   eax, 12
+140131fc7:  or    dword [rdx], eax
+140131fc9:  ret
 full:
-140131fba:  movzx eax, byte [rcx+0x370]    ; compileIndex (u8)
-140131fc1:  shl   eax, 24
-140131fc4:  or    dword [rdx], eax
-140131fc6:  ret
+140131fca:  movzx eax, byte [rcx+0x370]    ; compileIndex (u8)
+140131fd1:  shl   eax, 24
+140131fd4:  or    dword [rdx], eax
+140131fd6:  ret
 ```
+
+Verified records: `E:/GardenEngine/git/garden-tools/git/gt-stack/git/commonlib_NonVR/RE-Work/Runtime/03-FINDINGS.md`,
+"Exact runtime FormID stamping" (`0x131fa0`), and
+`E:/GardenEngine/git/garden-tools/git/gt-stack/git/commonlib_NonVR/RE-Work/docs/26-RE-TARGETS.md`, "The +/-0x10 drift explained".
+Both were inspected read-only in the local reference checkout. The timestamp
+`0x5dac778e` image has the same routine at `0x131f90`; mixing builds caused
+the earlier apparent symbol-table shift.
 
 Two things fall straight out:
 
@@ -98,10 +105,9 @@ while #26 was open.
   rules it out; it is left unavailable rather than guessed at.
 - `smallFileCompileIndex` is a `u16` read from `TESFile+0x372`, versus the
   full-plugin `u8` at `+0x370`. How 1.11.x assigns it is still open.
-- This is the *runtime* rule. `TESFile::CheckValidIDForSmallFile` is listed in
-  the symbol dumps at RVA `0x130560` with `sizeof=10`, but that address holds a
-  different, much larger function in the unpacked binary, and no 10-byte leaf
-  matching a 12-bit range check was found. The symbol table is demonstrably
-  off by `0x10` for `AdjustFormIDFileIndex` too (listed `0x131fa0`, actually
-  `0x131f90`), so those RVAs need re-basing before that function can be read.
-  It would only corroborate the rule above, not change it.
+- `TESFile::CheckValidIDForSmallFile` is recovered: `(id & 0x00FFF000) == 0`,
+  a 10-byte predicate at `0x130560` in the timestamp `0x5ddc40fa` image
+  (`0x130550` in the timestamp `0x5dac778e` image). See `OPEN_QUESTIONS.md` Q2
+  and the verified `26-RE-TARGETS.md` record above. It corroborates the
+  12-bit ceiling; zero remains excluded by Radicle's allocation policy.
+- The next-gen cross-check remains [#28](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/28).

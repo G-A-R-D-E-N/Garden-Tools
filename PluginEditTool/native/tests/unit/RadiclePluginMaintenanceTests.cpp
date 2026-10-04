@@ -229,20 +229,22 @@ std::vector<std::byte> copySourceBytes() {
     return out.bytes;
 }
 
-std::vector<std::byte> compactSourceBytes() {
+std::vector<std::byte> compactSourceBytes(bool hasMaster) {
     fo4::test::ByteWriter out;
-    writeHeader(out, 0x1001);
+    writeHeader(out, 0x1001, hasMaster ? std::initializer_list<std::string_view>{"Base.esm"}
+                                     : std::initializer_list<std::string_view>{});
+    const auto ownerIndex = hasMaster ? 0x01000000u : 0u;
 
     const auto colors = fo4::test::begin_group(out, "CLFM", 0);
-    const auto color = fo4::test::begin_record(out, "CLFM", 0, 0x00001000u, 131);
+    const auto color = fo4::test::begin_record(out, "CLFM", 0, ownerIndex | 0x1000u, 131);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"HighColor\0", 10});
     fo4::test::end_record(out, color);
     fo4::test::end_group(out, colors);
 
     const auto races = fo4::test::begin_group(out, "RACE", 0);
-    const auto race = fo4::test::begin_record(out, "RACE", 0, 0x00000800u, 131);
+    const auto race = fo4::test::begin_record(out, "RACE", 0, ownerIndex | 0x800u, 131);
     fo4::test::ByteWriter link;
-    link.u32(0x00001000u);
+    link.u32(ownerIndex | 0x1000u);
     fo4::test::write_subrecord(out, "AHCM", link.bytes);
     fo4::test::end_record(out, race);
     fo4::test::end_group(out, races);
@@ -418,10 +420,16 @@ TEST_CASE("Native CopyAsNewRecord allocates a local record and remaps source For
 }
 
 TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin references") {
+    bool hasMaster = false;
+    SECTION("Masterless plugins keep the full plugin floor") {}
+    SECTION("Plugins with HEDR 1.0 and a master allocate below the full plugin floor") {
+        hasMaster = true;
+    }
+    const auto target = fo4::FormKey::parse(hasMaster ? "000001:Patch.esp" : "000801:Patch.esp");
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
-    writeBytes(path, compactSourceBytes());
+    writeBytes(path, compactSourceBytes(hasMaster));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, nlohmann::json::array({pluginEntry("Patch.esp", path)}));
@@ -434,23 +442,22 @@ TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin refe
     const auto beforeSave = fo4::read_plugin_file(path);
     CHECK(fo4::find_record(
         beforeSave, fo4::FormKey::parse("001000:Patch.esp")) != nullptr);
-    CHECK(fo4::find_record(
-        beforeSave, fo4::FormKey::parse("000801:Patch.esp")) == nullptr);
+    CHECK(fo4::find_record(beforeSave, target) == nullptr);
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto disk = fo4::read_plugin_file(path);
     CHECK(fo4::find_record(
         disk, fo4::FormKey::parse("001000:Patch.esp")) == nullptr);
-    const auto* color = fo4::find_record(
-        disk, fo4::FormKey::parse("000801:Patch.esp"));
+    const auto* color = fo4::find_record(disk, target);
     REQUIRE(color != nullptr);
     CHECK(editorId(*color) == "HighColor");
 
     const auto* race = fo4::find_record(
         disk, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(race != nullptr);
-    CHECK(rawSubrecord(*race, "AHCM") == 0x00000801u);
+    CHECK(rawSubrecord(*race, "AHCM") == (hasMaster ? 0x01000001u : 0x00000801u));
+    CHECK_FALSE(disk.header.tes4_flags.is_small_file());
 }
 
 TEST_CASE("Native CopyAsNewRecord duplicates a contained REFR into an existing target CELL") {

@@ -94,6 +94,25 @@ A record's placement is its parent record (resolved from the label of the enclos
 
 The record families come from xEdit `Core/wbDefinitionsFO4.pas` (`dev-4.1.6`), TES4 `ONAM` "Overridden Forms": ACHR, DIAL, DLBR, INFO, LAND, NAVM, PARW, PBAR, PBEA, PCON, PFLA, PGRE, PHZD, PMIS, REFR, SCEN. `PARW` (arrow projectile, commonlib_NonVR `ENUM_FORM_ID::kPARW`) was missing and `ACRE` (no Fallout 4 form type) was listed instead, so rebuilding ONAM dropped valid PARW overrides (`Onam.Fo4ParticipantsIncludeParwAndNotAcre`, `Native UpdateOnam stages a missing ONAM for a master-flagged plugin`). The writer calls the same rebuild for every dirty master-flagged plugin, so this affected ordinary saves as well as Update ONAM.
 
+## PluginEditTool/native/src/plugin/RadiclePluginCompact.cpp:RadiclePluginBackend::compactToEsl
+
+The target allocation range comes from `fo4::local_form_id_range` with the
+SmallFile policy enabled, including Radicle's existing HEDR/master restriction.
+The temporary transaction uses that policy while calling
+`src/plugin/mutation.cpp:renumber_local_record`, then restores the original
+header flags before staging. Compaction does not set the serialized ESL flag.
+Existing low IDs remain occupied; values below the target floor and above its
+ceiling are rekeyed. Nested out-of-range records still fail closed before any
+changes are staged because parent GRUP label rewriting remains unsupported.
+
+`PluginEditTool/native/src/plugin/RadiclePluginEsl.cpp:checkEslEligibility`
+reports the same allocation capacity. This supersedes the backend-only 2048
+limit described in the earlier `src/plugin/maintenance.cpp:esl_eligibility`
+note; Radicle's separate xEdit eligibility-script limit remains unchanged.
+`PluginEditTool/native/tests/unit/RadiclePluginEslTests.cpp` covers zero,
+`0x001`, `0x7FF`, `0x800`, `0xFFF`, `0x1000`, all 4095 target slots, and
+transactional rejection of 4096 records.
+
 ## src/environment/base_records.cpp: the HLOD and water record fields
 
 GardenEngine's object HLOD and water layers read five things Radicle did not decode, so porting them off the removed record library could not compile. They are decoded here rather than in a second record stack, and the exports moved `RADICLE_ABI_VERSION` to 4.

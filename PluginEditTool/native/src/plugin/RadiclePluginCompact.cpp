@@ -47,9 +47,13 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
     }
     if (const auto guard = writeGuard(*loaded)) return std::unexpected(*guard);
 
-    constexpr std::uint32_t kFirst = 0x800u;
-    constexpr std::uint32_t kLast = 0xFFFu;
-    constexpr std::size_t kCapacity = kLast - kFirst + 1u;
+    fo4::Plugin targetPolicy;
+    targetPolicy.header = loaded->plugin.header;
+    targetPolicy.header.tes4_flags = fo4::RecordFlags{
+        targetPolicy.header.tes4_flags.value() | fo4::RecordFlags::small_file};
+    const auto [first, last] = fo4::local_form_id_range(targetPolicy);
+    const std::size_t capacity = last - first + 1u;
+    const std::string range = first == 1u ? "0x001-0xFFF" : "0x800-0xFFF";
 
     std::set<std::uint32_t> inRange;
     std::vector<fo4::FormKey> outOfRange;
@@ -61,9 +65,9 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
         }
         ++nativeCount;
         const auto local = record->form_key.local().value();
-        if (local >= kFirst && local <= kLast) {
+        if (local >= first && local <= last) {
             inRange.insert(local);
-        } else if (local > kLast) {
+        } else {
             outOfRange.push_back(record->form_key);
         }
     }
@@ -71,14 +75,14 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
     if (outOfRange.empty()) {
         return nlohmann::json(
             "'" + pluginName +
-            "' is already ESL-compatible (all native FormIDs within 0x800-0xFFF).");
+            "' is already ESL-compatible (all native FormIDs within " + range + ").");
     }
-    if (nativeCount > kCapacity) {
+    if (nativeCount > capacity) {
         return std::unexpected(Error{
             "EslCapacityExceeded",
             "Cannot compact '" + pluginName + "': it has " +
                 std::to_string(nativeCount) + " native records, exceeding the " +
-                std::to_string(kCapacity) + "-record ESL range"
+                std::to_string(capacity) + "-record ESL range"
         });
     }
 
@@ -98,11 +102,13 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
 
     try {
         auto mutated = loaded->plugin;
-        std::uint32_t next = kFirst;
+        const auto originalFlags = mutated.header.tes4_flags;
+        mutated.header.tes4_flags = targetPolicy.header.tes4_flags;
+        std::uint32_t next = first;
         std::size_t remapped = 0;
         for (const auto& oldKey : outOfRange) {
-            while (next <= kLast && inRange.contains(next)) ++next;
-            if (next > kLast) {
+            while (next <= last && inRange.contains(next)) ++next;
+            if (next > last) {
                 return std::unexpected(Error{
                     "EslCapacityExceeded",
                     "No free ESL FormID remains while compacting " + pluginName
@@ -123,11 +129,12 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
             ++remapped;
         }
 
+        mutated.header.tes4_flags = originalFlags;
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Compacted " + pluginName + ": remapped " +
             std::to_string(remapped) +
-            " record(s) into the ESL range (0x800-0xFFF) and fixed all supported in-plugin references.");
+            " record(s) into the ESL range (" + range + ") and fixed all supported in-plugin references.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CompactToEslFailed", error.what()});
     }
