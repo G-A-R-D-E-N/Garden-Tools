@@ -22,7 +22,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsDisabledOverride(const nlohma
     const auto key = fo4::FormKey::parse(arguments.at(1).get<std::string>());
     const auto targetName = arguments.at(2).get<std::string>();
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {targetName});
     auto* target = findPlugin(targetName);
     if (target == nullptr) {
         return std::unexpected(Error{"TargetPluginMissing", "Target plugin is not loaded: " + targetName});

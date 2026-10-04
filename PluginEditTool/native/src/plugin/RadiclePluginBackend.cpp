@@ -1,32 +1,22 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
-#include <chrono>
-#include <ctime>
 #include <array>
-#include <cctype>
 #include <cstddef>
 #include <exception>
-#include <iomanip>
 #include <map>
 #include <optional>
 #include <set>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
 
-#include <fo4ide/plugin/ConditionCodec.hpp>
-#include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4/plugin/reader.hpp>
-#include <fo4/plugin/writer.hpp>
-#include <fo4/schema/condition_scopes.hpp>
-#include <fo4/schema/ctda.hpp>
-#include <fo4/schema/form_links.hpp>
 
 namespace fo4ide::plugin {
+using namespace support;
 
 #ifdef FO4IDE_TEST_HOOKS
 namespace {
@@ -40,11 +30,6 @@ void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook) {
 
 namespace {
 
-std::string stringArgument(const nlohmann::json& args, std::size_t index) {
-    if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
-    return args[index].get<std::string>();
-}
-
 std::filesystem::path utf8Path(std::string_view value) {
     std::u8string utf8;
     utf8.reserve(value.size());
@@ -52,12 +37,6 @@ std::filesystem::path utf8Path(std::string_view value) {
         utf8.push_back(static_cast<char8_t>(ch));
     }
     return std::filesystem::path(utf8);
-}
-
-std::string pluginKind(const fo4::Plugin& plugin) {
-    if (plugin.header.tes4_flags.is_small_file()) return "light";
-    if (plugin.header.tes4_flags.is_master()) return "master";
-    return "plugin";
 }
 
 std::pair<std::string, std::string> splitTreePath(std::string_view path) {
@@ -68,202 +47,6 @@ std::pair<std::string, std::string> splitTreePath(std::string_view path) {
         return {std::string(path.substr(0, slash)), std::string(path.substr(slash + 1))};
     }
     return {std::string(path.substr(0, slash)), std::string(path.substr(slash + 1, second - slash - 1))};
-}
-
-std::string editorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
-}
-
-std::string asciiLower(std::string_view value) {
-    std::string out(value);
-    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return out;
-}
-
-bool containsInsensitive(std::string_view value, std::string_view needle) {
-    if (needle.empty()) return true;
-    const auto haystackLower = asciiLower(value);
-    const auto needleLower = asciiLower(needle);
-    return haystackLower.find(needleLower) != std::string::npos;
-}
-
-std::string subrecordValue(const fo4::Subrecord& subrecord) {
-    if (subrecord.signature == fo4::sig_edid) {
-        if (subrecord.data.empty()) return "<empty>";
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    if (subrecord.data.empty()) return "<empty>";
-
-    constexpr std::size_t maxShown = 48;
-    const auto shown = std::min(maxShown, subrecord.data.size());
-    std::ostringstream out;
-    out << subrecord.data.size() << " B: ";
-    for (std::size_t i = 0; i < shown; ++i) {
-        if (i != 0) out << ' ';
-        out << std::uppercase << std::hex << std::setw(2) << std::setfill('0')
-            << std::to_integer<unsigned int>(subrecord.data[i]);
-    }
-    if (shown < subrecord.data.size()) out << " ...";
-    return out.str();
-}
-
-const fo4::Subrecord* nthSubrecord(const fo4::Record& record,
-                                   std::string_view signature,
-                                   std::size_t ordinal) {
-    std::size_t found = 0;
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature.to_string() != signature) continue;
-        if (found++ == ordinal) return &subrecord;
-    }
-    return nullptr;
-}
-
-nlohmann::json matrixStatuses(const std::vector<const fo4::Subrecord*>& cells) {
-    nlohmann::json statuses = nlohmann::json::array();
-    std::vector<std::size_t> present;
-    present.reserve(cells.size());
-    for (std::size_t i = 0; i < cells.size(); ++i) {
-        if (cells[i] != nullptr) present.push_back(i);
-    }
-
-    bool allSame = present.size() > 1;
-    if (allSame) {
-        const auto& first = cells[present.front()]->data;
-        for (const auto index : present) {
-            if (cells[index]->data != first) {
-                allSame = false;
-                break;
-            }
-        }
-    }
-
-    const auto winner = present.empty() ? cells.size() : present.back();
-    for (std::size_t i = 0; i < cells.size(); ++i) {
-        if (cells[i] == nullptr) {
-            statuses.push_back("notdefined");
-        } else if (present.size() == 1) {
-            statuses.push_back("only");
-        } else if (allSame) {
-            statuses.push_back(i == present.front() ? "master" : "identical");
-        } else if (i == winner) {
-            statuses.push_back("win");
-        } else if (i == present.front()) {
-            statuses.push_back("master");
-        } else if (cells[i]->data == cells[winner]->data) {
-            statuses.push_back("override");
-        } else {
-            statuses.push_back("lose");
-        }
-    }
-    return statuses;
-}
-
-bool matrixDiffers(const std::vector<const fo4::Subrecord*>& cells) {
-    if (cells.empty()) return false;
-    const auto present = static_cast<std::size_t>(
-        std::count_if(cells.begin(), cells.end(), [](const auto* cell) { return cell != nullptr; }));
-    if (present != cells.size()) return true;
-    if (present < 2) return false;
-    const auto& first = cells.front()->data;
-    return std::any_of(cells.begin() + 1, cells.end(), [&](const auto* cell) {
-        return cell->data != first;
-    });
-}
-
-nlohmann::json buildRawMatrixRows(const std::vector<const fo4::Record*>& records) {
-    using SubrecordKey = std::pair<std::string, std::size_t>;
-    std::set<SubrecordKey> keys;
-    for (const auto* record : records) {
-        if (record == nullptr) continue;
-        std::map<std::string, std::size_t> ordinals;
-        for (const auto& subrecord : record->subrecords) {
-            const auto signature = subrecord.signature.to_string();
-            keys.emplace(signature, ordinals[signature]++);
-        }
-    }
-
-    nlohmann::json rows = nlohmann::json::array();
-    nlohmann::json counts = nlohmann::json::array();
-    bool countsDiffer = false;
-    std::size_t firstCount = 0;
-    bool haveFirst = false;
-    for (const auto* record : records) {
-        if (record == nullptr) {
-            counts.push_back("");
-            countsDiffer = true;
-            continue;
-        }
-        const auto count = record->subrecords.size();
-        counts.push_back(std::to_string(count));
-        if (!haveFirst) {
-            firstCount = count;
-            haveFirst = true;
-        } else if (count != firstCount) {
-            countsDiffer = true;
-        }
-    }
-    rows.push_back({
-        {"Field", "Subrecords"},
-        {"DisplayLabel", "Subrecords"},
-        {"Level", 0},
-        {"Values", std::move(counts)},
-        {"Differs", countsDiffer},
-        {"Statuses", nlohmann::json::array()},
-        {"Severity", countsDiffer ? "conflict" : "none"},
-        {"Kind", "Value"},
-        {"Group", "Raw"},
-        {"GroupLabel", "Raw record"},
-        {"IsSummary", true},
-        {"HasChildren", !keys.empty()},
-        {"EditKind", "Text"},
-        {"EnumOptions", nullptr},
-        {"RefType", nullptr},
-        {"RefTypes", nullptr}
-    });
-
-    for (const auto& [signature, ordinal] : keys) {
-        std::vector<const fo4::Subrecord*> cells;
-        cells.reserve(records.size());
-        nlohmann::json values = nlohmann::json::array();
-        for (const auto* record : records) {
-            const auto* subrecord = record == nullptr ? nullptr : nthSubrecord(*record, signature, ordinal);
-            cells.push_back(subrecord);
-            values.push_back(subrecord == nullptr ? std::string{} : subrecordValue(*subrecord));
-        }
-
-        const auto differs = matrixDiffers(cells);
-        rows.push_back({
-            {"Field", "Subrecords\\" + signature + "[" + std::to_string(ordinal) + "]"},
-            {"DisplayLabel", signature + (ordinal == 0 ? std::string{} : " [" + std::to_string(ordinal) + "]")},
-            {"Level", 1},
-            {"Values", std::move(values)},
-            {"Differs", differs},
-            {"Statuses", matrixStatuses(cells)},
-            {"Severity", differs ? "conflict" : "none"},
-            {"Kind", "Value"},
-            {"Group", "Raw"},
-            {"GroupLabel", "Raw record"},
-            {"IsSummary", false},
-            {"HasChildren", false},
-            {"EditKind", "Text"},
-            {"EnumOptions", nullptr},
-            {"RefType", nullptr},
-            {"RefTypes", nullptr}
-        });
-    }
-    return rows;
 }
 
 }
@@ -442,7 +225,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
                                 arguments["discardPending"].get<bool>();
     std::uint64_t consentEpoch = 0;
     {
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Read);
         consentEpoch = mutationEpoch_;
         if (!discardPending) {
             const auto pendingList = dirtyPluginListLocked();
@@ -503,6 +286,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 
     const auto loadedCount = loaded.size();
     {
+        OpLock lock(*this, OpLock::Mode::Lifecycle);
         // Capture the Save-As roots from this trusted snapshot once. They
         // stay fixed until the next LoadMo2; OpenPlugin can never add to or
         // move them.
@@ -518,7 +302,6 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
             if (rootEc || root.empty()) continue;  // fail closed: no root
             if (uniqueRoots.insert(root).second) roots.push_back(root);
         }
-        std::scoped_lock lock(mutex_);
         const bool consentStale = mutationEpoch_ != consentEpoch;
         const auto pendingList = dirtyPluginListLocked();
         if (consentStale || (!discardPending && !pendingList.empty())) {
@@ -545,7 +328,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 
 Result<nlohmann::json> RadiclePluginBackend::getPlugins() const {
     nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     for (const auto& loaded : plugins_) {
         rows.push_back({
             {"Key", loaded.name},
@@ -564,7 +347,7 @@ Result<nlohmann::json> RadiclePluginBackend::getChildren(const nlohmann::json& a
     if (path.empty()) return nlohmann::json("[]");
     const auto [pluginName, signature] = splitTreePath(path);
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     // An unknown plugin must be an error, not an empty tree: the two are
     // indistinguishable for the client otherwise.
@@ -648,7 +431,7 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
         // influence save-root decisions or silently swap record data.
         std::error_code newEc;
         const auto newCanonical = std::filesystem::weakly_canonical(filePath, newEc);
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Lifecycle);
         auto* existing = findPlugin(name);
         if (existing != nullptr) {
             std::error_code existingEc;
@@ -709,7 +492,7 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
     const auto requestedPath = stringArgument(arguments, 1);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     // Guards live here, not only in the RPC shim: every dispatch path into
@@ -751,7 +534,7 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
     const auto name = stringArgument(arguments, 0);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
     if (!loaded) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     if (!loaded->dirty) {
@@ -763,342 +546,13 @@ Result<nlohmann::json> RadiclePluginBackend::discardPlugin(const nlohmann::json&
             "Plugin is dirty but has no recoverable original snapshot: " + name
         });
     }
+    CommitScope commit;
     loaded->plugin = *loaded->originalPlugin;
     loaded->originalPlugin.reset();
     loaded->stagedLocalization.reset();
     loaded->dirty = false;
     rebuildGraphLocked();
     return nlohmann::json{{"ok", true}, {"plugin", name}, {"pending", false}}.dump();
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getEditablePlugins() const {
-    nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
-    for (const auto& loaded : plugins_) {
-        if (isEditable(loaded)) rows.push_back(loaded.name);
-    }
-    return nlohmann::json(rows.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getActivePlugins() const {
-    nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
-    for (std::size_t index = 0; index < plugins_.size(); ++index) {
-        const auto& loaded = plugins_[index];
-        rows.push_back({
-            {"Name", loaded.name},
-            {"Kind", pluginKind(loaded.plugin)},
-            {"LoadOrder", index},
-            {"Editable", isEditable(loaded)},
-            {"Pending", loaded.dirty},
-            {"Size", fo4::plugin_original_bytes(loaded.plugin).size()}
-        });
-    }
-    return nlohmann::json(rows.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getRecordTypeIndex() const {
-    std::map<std::string, std::size_t> counts;
-    std::scoped_lock lock(mutex_);
-    for (const auto& loaded : plugins_) {
-        for (const auto* record : fo4::collect_records(loaded.plugin)) {
-            if (record->header.signature == fo4::sig_tes4) continue;
-            ++counts[record->header.signature.to_string()];
-        }
-    }
-
-    nlohmann::json rows = nlohmann::json::array();
-    for (const auto& [signature, count] : counts) {
-        rows.push_back({{"Type", signature}, {"FriendlyName", signature}, {"Count", count}});
-    }
-    return nlohmann::json(rows.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getLoadOrderSummary() const {
-    std::size_t totalRecords = 0;
-    nlohmann::json names = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
-    for (const auto& loaded : plugins_) {
-        names.push_back(loaded.name);
-        for (const auto* record : fo4::collect_records(loaded.plugin)) {
-            if (record->header.signature != fo4::sig_tes4) ++totalRecords;
-        }
-    }
-    return nlohmann::json(nlohmann::json{
-        {"TotalRecords", totalRecords},
-        {"PluginCount", plugins_.size()},
-        {"Plugins", std::move(names)}
-    }.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getConflicts() const {
-    std::scoped_lock lock(mutex_);
-    nlohmann::json rows = nlohmann::json::array();
-    for (const auto& key : graph_.conflicts()) {
-        const auto& versions = graph_.versions(key);
-        const auto* winner = graph_.winner(key);
-        if (winner == nullptr) continue;
-
-        nlohmann::json pluginNames = nlohmann::json::array();
-        for (const auto& version : versions) {
-            pluginNames.push_back(std::string(version.plugin.filename()));
-        }
-
-        std::string editor;
-        const auto* winningPlugin = findPlugin(winner->plugin.filename());
-        if (winningPlugin != nullptr) {
-            if (const auto* record = fo4::find_record(winningPlugin->plugin, key)) {
-                editor = editorId(*record);
-            }
-        }
-
-        rows.push_back({
-            {"FormKey", key.to_string()},
-            {"EditorID", editor},
-            {"Type", winner->signature.to_string()},
-            {"Plugins", std::move(pluginNames)},
-            {"Winner", std::string(winner->plugin.filename())},
-            {"InvolvesMod", versions.size() > 1}
-        });
-    }
-    return nlohmann::json(rows.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getConflictMatrix(const nlohmann::json& arguments) const {
-    const auto formKeyText = stringArgument(arguments, 0);
-    if (formKeyText.empty()) return nlohmann::json("");
-
-    fo4::FormKey key;
-    try {
-        key = fo4::FormKey::parse(formKeyText);
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"InvalidFormKey", error.what()});
-    }
-
-    std::scoped_lock lock(mutex_);
-    const auto& versions = graph_.versions(key);
-    const auto* winner = graph_.winner(key);
-    if (winner == nullptr) {
-        return std::unexpected(Error{
-            "RecordNotFound",
-            "No loaded plugin contains this FormKey: " + formKeyText
-        });
-    }
-
-    nlohmann::json pluginNames = nlohmann::json::array();
-    std::vector<const fo4::Record*> records;
-    records.reserve(versions.size());
-    for (const auto& version : versions) {
-        const auto name = std::string(version.plugin.filename());
-        pluginNames.push_back(name);
-        const auto* loaded = findPlugin(name);
-        records.push_back(loaded == nullptr ? nullptr : fo4::find_record(loaded->plugin, key));
-    }
-
-    std::string editor;
-    if (!records.empty() && records.back() != nullptr) editor = editorId(*records.back());
-    auto rows = buildRawMatrixRows(records);
-    const auto hasDifferences = std::any_of(rows.begin(), rows.end(), [](const auto& row) {
-        return row.is_object() && row.value("Differs", false) && !row.value("HasChildren", false);
-    });
-
-    return nlohmann::json(nlohmann::json{
-        {"FormKey", key.to_string()},
-        {"EditorID", editor},
-        {"Type", winner->signature.to_string()},
-        {"Winner", std::string(winner->plugin.filename())},
-        {"Plugins", std::move(pluginNames)},
-        {"Rows", std::move(rows)},
-        {"Level", versions.size() == 1 ? "onlyone" : (hasDifferences ? "conflict" : "override")}
-    }.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getReferencedBy(const nlohmann::json& arguments) const {
-    const auto formKeyText = stringArgument(arguments, 0);
-    if (formKeyText.empty()) return nlohmann::json("[]");
-
-    fo4::FormKey key;
-    try {
-        key = fo4::FormKey::parse(formKeyText);
-    } catch (const std::exception& error) {
-        return std::unexpected(Error{"InvalidFormKey", error.what()});
-    }
-
-    std::scoped_lock lock(mutex_);
-    nlohmann::json rows = nlohmann::json::array();
-    std::set<std::pair<std::string, std::string>> seen;
-    for (const auto& hit : graph_.referenced_by(key)) {
-        const auto source = hit.source.to_string();
-        const auto pluginName = std::string(hit.plugin.filename());
-        if (!seen.emplace(pluginName, source).second) continue;
-
-        std::string editor;
-        std::string type;
-        const auto* loaded = findPlugin(pluginName);
-        if (loaded != nullptr) {
-            if (const auto* record = fo4::find_record(loaded->plugin, hit.source)) {
-                editor = editorId(*record);
-                type = record->header.signature.to_string();
-            }
-        }
-
-        rows.push_back({
-            {"Plugin", pluginName},
-            {"FormKey", source},
-            {"EditorID", editor},
-            {"Type", type}
-        });
-    }
-    return nlohmann::json(rows.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::searchRecords(const nlohmann::json& arguments) const {
-    const auto query = stringArgument(arguments, 0);
-    const auto typeFilter = stringArgument(arguments, 1);
-
-    nlohmann::json rows = nlohmann::json::array();
-    std::scoped_lock lock(mutex_);
-    constexpr std::size_t maxResults = 500;
-
-    for (const auto& loaded : plugins_) {
-        for (const auto* record : fo4::collect_records(loaded.plugin)) {
-            if (record->header.signature == fo4::sig_tes4 || record->form_key.owner().empty()) continue;
-            const auto type = record->header.signature.to_string();
-            if (!typeFilter.empty() && type != typeFilter) continue;
-
-            const auto formKey = record->form_key.to_string();
-            const auto editor = editorId(*record);
-            if (!containsInsensitive(formKey, query) &&
-                !containsInsensitive(editor, query) &&
-                !containsInsensitive(type, query)) {
-                continue;
-            }
-
-            rows.push_back({
-                {"FormKey", formKey},
-                {"EditorID", editor},
-                {"Type", type},
-                {"Plugin", loaded.name}
-            });
-            if (rows.size() >= maxResults) return nlohmann::json(rows.dump());
-        }
-    }
-    return nlohmann::json(rows.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::scanConflicts() const {
-    std::scoped_lock lock(mutex_);
-    const auto count = graph_.conflicts().size();
-    return nlohmann::json(
-        "Found " + std::to_string(count) + " conflicted record" +
-        (count == 1 ? std::string{} : "s") + " across " +
-        std::to_string(plugins_.size()) + " loaded plugins.");
-}
-
-Result<nlohmann::json> RadiclePluginBackend::scanBrokenRefs() const {
-    std::scoped_lock lock(mutex_);
-
-    std::set<fo4::FormKey> knownRecords;
-    for (const auto& loaded : plugins_) {
-        for (const auto* record : fo4::collect_records(loaded.plugin)) {
-            if (!record->form_key.owner().empty()) knownRecords.insert(record->form_key);
-        }
-    }
-
-    std::set<std::string> missing;
-    std::size_t recordsWithIncompleteVmad = 0;
-    for (const auto& loaded : plugins_) {
-        const auto collection = fo4::collect_form_links_detailed(loaded.plugin);
-        recordsWithIncompleteVmad += collection.records_with_incomplete_vmad;
-        for (const auto& link : collection.links) {
-            if (link.key.owner().empty() || knownRecords.contains(link.key)) continue;
-            const auto source = link.record.owner().empty()
-                ? std::string("<TES4>")
-                : link.record.to_string();
-            missing.insert(source + " -> " + link.key.to_string() +
-                           " [" + link.subrecord.to_string() + "]");
-        }
-    }
-
-    std::ostringstream report;
-    report << "Radicle crash-risk scan\n\n";
-    report << "Loaded plugins: " << plugins_.size() << '\n';
-    report << "Indexed records: " << knownRecords.size() << '\n';
-    report << "Dangling FormLinks: " << missing.size() << "\n\n";
-    if (recordsWithIncompleteVmad != 0) {
-        report << "NOTE: " << recordsWithIncompleteVmad
-               << " record(s) contain VMAD script data Radicle could not fully scan"
-               << " (unsupported property types, a parse failure, trailing bytes, or an"
-               << " unconsumed remainder); FormLinks from those records may be"
-               << " incomplete, so the results below are not exhaustive.\n\n";
-    }
-
-    if (missing.empty()) {
-        report << "No dangling FormLinks were found in the currently loaded plugin set.";
-    } else {
-        constexpr std::size_t maxLines = 200;
-        std::size_t emitted = 0;
-        for (const auto& line : missing) {
-            if (emitted++ == maxLines) break;
-            report << line << '\n';
-        }
-        if (missing.size() > maxLines) {
-            report << "... " << (missing.size() - maxLines) << " more omitted\n";
-        }
-    }
-    return nlohmann::json(report.str());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& arguments) const {
-    const auto name = stringArgument(arguments, 0);
-    if (name.empty()) return nlohmann::json("{}");
-
-    std::scoped_lock lock(mutex_);
-    const auto* loaded = findPlugin(name);
-    if (!loaded) return nlohmann::json("{}");
-
-    nlohmann::json masters = nlohmann::json::array();
-    // Compute real usage conservatively. A master is "used" when either
-    //   (a) a record in this plugin is owned by it (overrides), or
-    //   (b) a FormLink resolves into it, or
-    //   (c) the plugin contains VMAD we cannot fully scan — the link set may
-    //       be incomplete, so every master is reported used rather than risk
-    //       telling the user a load-order-relevant master is droppable.
-    std::set<std::string> usedMasters;
-    const auto collection = fo4::collect_form_links_detailed(loaded->plugin);
-    for (const auto& link : collection.links) {
-        if (!link.key.owner().empty()) {
-            usedMasters.insert(std::string(link.key.owner().filename()));
-        }
-    }
-    for (const auto* record : fo4::collect_records(loaded->plugin)) {
-        if (!record->form_key.owner().empty()) {
-            usedMasters.insert(std::string(record->form_key.owner().filename()));
-        }
-    }
-    if (collection.records_with_incomplete_vmad != 0) {
-        for (const auto& master : loaded->plugin.header.masters) {
-            usedMasters.insert(std::string(master.key.filename()));
-        }
-    }
-    usedMasters.erase(std::string(loaded->plugin.key.filename()));
-    for (std::size_t index = 0; index < loaded->plugin.header.masters.size(); ++index) {
-        const auto& master = loaded->plugin.header.masters[index];
-        // Expose the resolved kind so clients (and tests) can catch a
-        // full/light mis-stamp before a later remap bakes wrong FormIDs.
-        masters.push_back({
-            {"index", index},
-            {"name", std::string(master.key.filename())},
-            {"size", master.data_size},
-            {"used", usedMasters.contains(std::string(master.key.filename()))},
-            {"kind", master.kind == fo4::PluginKind::light ? "light" : "full"}
-        });
-    }
-    return nlohmann::json(nlohmann::json{
-        {"pluginName", loaded->name},
-        {"masters", std::move(masters)},
-        {"light", loaded->plugin.header.tes4_flags.is_small_file()}
-    }.dump());
 }
 
 RadiclePluginBackend::LoadedPlugin* RadiclePluginBackend::findPlugin(std::string_view name) {
@@ -1124,175 +578,6 @@ void RadiclePluginBackend::rebuildGraphLocked() {
     loadOrder.reserve(plugins_.size());
     for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
     graph_ = fo4::ConflictGraph::build(loadOrder);
-}
-
-
-Result<nlohmann::json> RadiclePluginBackend::getConditions(
-    const nlohmann::json& arguments) const {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto recordId = stringArgument(arguments, 1);
-    if (recordId.empty()) {
-        return std::unexpected(Error{"RecordMissing", "Record ID is empty"});
-    }
-
-    std::scoped_lock lock(mutex_);
-    const LoadedPlugin* loaded = nullptr;
-    if (!pluginName.empty()) {
-        loaded = findPlugin(pluginName);
-        if (loaded == nullptr) {
-            return std::unexpected(Error{
-                "PluginNotLoaded",
-                "Plugin is not loaded: " + pluginName
-            });
-        }
-    }
-
-    // Resolve the record: FormKey text first, then editor ID over the loaded
-    // set, mirroring WriteService.GetConditionsJsonCore / ResolveFk.
-    const auto resolveRecord = [&](const LoadedPlugin& candidate)
-        -> const fo4::Record* {
-        const auto& plugin = candidate.plugin;
-        try {
-            if (const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(recordId))) {
-                return record;
-            }
-        } catch (const std::exception&) {
-            // not a FormKey text; fall through to the editor-ID scan
-        }
-        for (const auto* record : fo4::collect_records(plugin)) {
-            if (editorId(*record) == recordId) return record;
-        }
-        return nullptr;
-    };
-
-    const fo4::Record* record = nullptr;
-    if (loaded != nullptr) {
-        record = resolveRecord(*loaded);
-    } else {
-        for (const auto& candidate : plugins_) {
-            record = resolveRecord(candidate);
-            if (record != nullptr) break;
-        }
-    }
-    if (record == nullptr) {
-        return std::unexpected(Error{
-            "RecordNotFound",
-            "Record '" + recordId + "' not found."
-        });
-    }
-
-    const auto conditions = fo4::read_ctda_conditions(*record);
-    const auto* owner = loaded != nullptr ? loaded : &plugins_.front();
-    nlohmann::json outp = nlohmann::json::array();
-    for (const auto& condition : conditions) {
-        outp.push_back(describeCondition(condition, owner->plugin));
-    }
-    return nlohmann::json(outp.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getConditionsAtPath(
-    const nlohmann::json& arguments) const {
-    const auto pluginName = stringArgument(arguments, 0);
-    const auto recordId = stringArgument(arguments, 1);
-    const auto path = stringArgument(arguments, 2);
-    if (recordId.empty()) {
-        return std::unexpected(Error{"RecordMissing", "Record ID is empty"});
-    }
-
-    std::scoped_lock lock(mutex_);
-    const LoadedPlugin* loaded = nullptr;
-    if (!pluginName.empty()) {
-        loaded = findPlugin(pluginName);
-        if (loaded == nullptr) {
-            return std::unexpected(Error{
-                "PluginNotLoaded",
-                "Plugin is not loaded: " + pluginName
-            });
-        }
-    }
-
-    const auto resolveRecord = [&](const LoadedPlugin& candidate)
-        -> const fo4::Record* {
-        const auto& plugin = candidate.plugin;
-        try {
-            if (const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(recordId))) {
-                return record;
-            }
-        } catch (const std::exception&) {
-        }
-        for (const auto* record : fo4::collect_records(plugin)) {
-            if (editorId(*record) == recordId) return record;
-        }
-        return nullptr;
-    };
-
-    const fo4::Record* record = nullptr;
-    const LoadedPlugin* owner = loaded;
-    if (loaded != nullptr) {
-        record = resolveRecord(*loaded);
-    } else {
-        for (const auto& candidate : plugins_) {
-            record = resolveRecord(candidate);
-            if (record != nullptr) {
-                owner = &candidate;
-                break;
-            }
-        }
-    }
-    if (record == nullptr) {
-        return std::unexpected(Error{
-            "RecordNotFound",
-            "Record '" + recordId + "' not found."
-        });
-    }
-
-    const auto scoped =
-        fo4::schema::scoped_condition_path(record->header.signature, path);
-    if (!scoped.has_value()) {
-        return std::unexpected(Error{
-            "ConditionPathUnsupported",
-            "Native condition editing does not represent path '" + path +
-                "' on " + record->header.signature.to_string() + " records"
-        });
-    }
-
-    const auto conditions = fo4::schema::read_scoped_conditions(
-        *record, scoped->descriptor, scoped->container_index);
-    if (!conditions.ok) {
-        if (conditions.error == fo4::schema::ScopedConditionStatus::element_not_conditioned) {
-            return std::unexpected(Error{
-                "ConditionScopeNotConditioned",
-                "'" + path + "' addresses an element that carries no conditions on record '" +
-                    recordId + "'"
-            });
-        }
-        if (conditions.error == fo4::schema::ScopedConditionStatus::alias_structure_invalid) {
-            return std::unexpected(Error{
-                "ConditionAliasMalformed",
-                "Record '" + recordId + "' has a malformed alias array for path '" + path + "'"
-            });
-        }
-        return std::unexpected(Error{
-            "ConditionScopeOutOfRange",
-            "Container index for '" + path + "' is out of range on record '" +
-                recordId + "'"
-        });
-    }
-
-    const auto* context = owner != nullptr ? owner : &plugins_.front();
-    nlohmann::json outp = nlohmann::json::array();
-    for (const auto& condition : conditions.conditions) {
-        outp.push_back(describeCondition(condition, context->plugin));
-    }
-    return nlohmann::json(outp.dump());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getConditionFunctions() const {
-    return nlohmann::json(fo4ide::plugin::ConditionFunctions::asJson());
-}
-
-Result<nlohmann::json> RadiclePluginBackend::getConditionRunOnTypes() const {
-    return nlohmann::json(fo4ide::plugin::conditionRunOnNames());
 }
 
 }

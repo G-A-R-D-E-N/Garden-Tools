@@ -76,7 +76,7 @@ Result<nlohmann::json> RadiclePluginBackend::checkCircularLeveledLists(
     const auto sigLvli = fo4::Signature::from_string("LVLI");
     const auto sigLvln = fo4::Signature::from_string("LVLN");
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     std::map<fo4::FormKey, std::vector<fo4::FormKey>> edges;
     std::map<fo4::FormKey, LeveledOwner> owners;
 

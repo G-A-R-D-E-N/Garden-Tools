@@ -28,7 +28,7 @@ Result<nlohmann::json> RadiclePluginBackend::checkForErrors(const nlohmann::json
         if (raw > 0) limit = std::min<std::size_t>(static_cast<std::size_t>(raw), 100000);
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     std::vector<const fo4::Plugin*> loadOrder;
     loadOrder.reserve(plugins_.size());
     for (const auto& loaded : plugins_) loadOrder.push_back(&loaded.plugin);
@@ -69,7 +69,7 @@ Result<nlohmann::json> RadiclePluginBackend::lootCleaningReport(const nlohmann::
                                 : std::string{};
     if (pluginName.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
@@ -126,7 +126,7 @@ Result<nlohmann::json> RadiclePluginBackend::findUnreachable(const nlohmann::jso
         if (raw > 0) limit = std::min<std::size_t>(static_cast<std::size_t>(raw), 100000);
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* wanted = findPlugin(pluginName);
     std::vector<const fo4::Plugin*> loadOrder;
     std::size_t target = plugins_.size();
