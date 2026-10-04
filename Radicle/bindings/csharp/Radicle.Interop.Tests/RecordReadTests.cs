@@ -41,6 +41,25 @@ public class RecordReadTests
     }
 
     [Fact]
+    public void ReadsRejectARecordFromAnotherLiveEnvironment()
+    {
+        using var temp = new TempDirectory();
+        var first = temp.Write("First.esp", Build(0, Array.Empty<string>(),
+            Top("BOOK", new Rec("BOOK", 0x800, new[] { ("EDID", Z("First")) }))));
+        var second = temp.Write("Second.esp", Build(0, Array.Empty<string>(),
+            Top("BOOK", new Rec("BOOK", 0x800, new[] { ("EDID", Z("Second")) }))));
+
+        using var owner = RadicleEnvironment.Load(new[] { first });
+        using var other = RadicleEnvironment.Load(new[] { second });
+        var record = owner.Winner(new FormKey("First.esp", 0x800))!.Value;
+
+        Assert.Equal(new FormKey("First.esp", 0x800), owner.ResolveFormId(record, 0x800));
+        Assert.Throws<RadicleException>(() => other.ResolveFormId(record, 0x800));
+        Assert.Throws<RadicleException>(() => other.ReadPayload(record));
+        Assert.Throws<RadicleException>(() => owner.ReadPayload(default));
+    }
+
+    [Fact]
     public void ExtendedPayloadIsCopiedWithoutLosingItsMarkerOrBytes()
     {
         using var temp = new TempDirectory();

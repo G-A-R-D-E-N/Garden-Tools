@@ -2,7 +2,6 @@
 #include "fo4/c_api_records.h"
 #include "fo4/c_api_materials.h"
 #include "fo4/c_api_maintenance.h"
-#include "fo4/c_api_records.h"
 #include <cstddef>
 #include <cstdio>
 

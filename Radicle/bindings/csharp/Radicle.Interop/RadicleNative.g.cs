@@ -619,7 +619,7 @@ public unsafe struct MaterialSwap
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 4u;
+    public const uint CompiledAbiVersion = 5u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -897,6 +897,18 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_water_get_info")]
     public static extern Status WaterGetInfo(IntPtr env, IntPtr record, WaterInfo* out_info);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_payload_info")]
+    public static extern Status RecordPayloadInfo(IntPtr env, IntPtr record, ushort* out_form_version, nuint* out_subrecord_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_copy_subrecord")]
+    public static extern Status RecordCopySubrecord(IntPtr env, IntPtr record, nuint index, byte* out_signature, byte** out_bytes, nuint* out_size, int* out_extended_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_resolve_form_id")]
+    public static extern Status RecordResolveFormId(IntPtr env, IntPtr record, uint raw_form_id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_topic_children")]
+    public static extern Status RecordTopicChildren(IntPtr env, IntPtr record, IntPtr** out_records, nuint* out_count);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_swap_decode")]
     public static extern Status MaterialSwapDecode(IntPtr env, IntPtr record, MaterialSwap** out_swap);
 
@@ -923,17 +935,5 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
     public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_payload_info")]
-    public static extern Status RecordPayloadInfo(IntPtr env, IntPtr record, ushort* out_form_version, nuint* out_subrecord_count);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_copy_subrecord")]
-    public static extern Status RecordCopySubrecord(IntPtr env, IntPtr record, nuint index, byte* out_signature, byte** out_bytes, nuint* out_size, int* out_extended_size);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_resolve_form_id")]
-    public static extern Status RecordResolveFormId(IntPtr env, IntPtr record, uint raw_form_id, FormKey* out_key);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_topic_children")]
-    public static extern Status RecordTopicChildren(IntPtr env, IntPtr record, IntPtr** out_records, nuint* out_count);
 
 }

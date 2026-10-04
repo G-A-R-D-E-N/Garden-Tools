@@ -16,8 +16,7 @@ fail closed. Recursive lookup supports DIAL records nested beneath quest groups.
 The returned array uses radicle_free_record_array; record handles remain borrowed from
 the supplied environment. Managed TopicChildren copies only the handle array via
 the existing Records helper. Keep the environment alive while reading the children
-and their payloads. No C struct layouts or ABI version change. Consumers require a
-native library containing the new export. TopicReadTests.cs covers selected and
+and their payloads. No C struct layouts change, but the four new exports move `RADICLE_ABI_VERSION` to 5, so a library built from the ABI-4 headers is refused by the binding's version guard on its first call, before any new export is reached (`AbiGuardTests.cs:ALibraryFromBeforeTheRecordPayloadExportsIsRejected` uses the `radicle_abi_stub_v4` stub). Consumers require a native library containing the new exports. TopicReadTests.cs covers selected and
 overridden versions, physical order, sibling separation, nested topics, master/self
 keys, empty results, invalid owners/types and disposed-environment access. This
 does not validate scene decoding, voice playback or menu fidelity.
@@ -46,6 +45,21 @@ created/save IDs; null and the explicit none sentinel return no key. The existin
 environment link helper otherwise coerces oversized indices to the source plugin,
 so this new strict read validates before invoking it. Existing decoders are unchanged.
 Unknown four-byte signatures use reversible Latin1 in managed snapshots.
+
+A `radicle_record` handle is only meaningful to the environment that produced it: it
+is a pointer to one of that environment's own `RecordRef` versions, and the plugin
+index it carries is an index into that environment's plugin list. All four exports
+therefore call `src/c_api_records.cpp:belongs_to_env` first, which looks the record's
+FormKey up in `env->value.versions` and compares addresses. That is the same
+pointer-identity test `radicle_record_topic_children` already used, now shared.
+`ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
+handle from a second live environment resolved through the supplied environment:
+`ResolveFormId` read `env->value.plugins().at(ref.plugin)` from the wrong plugin list
+and returned a key built from another plugin's master table. The wrong answer is
+plausible rather than obvious when both environments have a plugin at that index, so
+`RecordReadTests.cs:ReadsRejectARecordFromAnotherLiveEnvironment` loads two plugins
+that each define a record at local ID 0x800, checks the owner environment resolves it,
+and requires the other environment to refuse both `ResolveFormId` and `ReadPayload`.
 
 The C caller supplies four writable signature bytes. Copied payload buffers use
 radicle_free_bytes; resolved plugin strings are borrowed until environment disposal.

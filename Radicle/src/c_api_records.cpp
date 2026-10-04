@@ -21,6 +21,12 @@ bool find_topic_group(const fo4::Group& group, const fo4::Record* record,
   return false;
 }
 
+bool belongs_to_env(const radicle_env* env, const fo4::env::RecordRef* ref) {
+  const auto versions = env->value.versions(ref->record->form_key);
+  return std::any_of(versions.begin(), versions.end(),
+                     [&](const auto& candidate) { return &candidate == ref; });
+}
+
 }
 
 extern "C" {
@@ -37,8 +43,7 @@ radicle_status radicle_record_topic_children(
     const auto& ref = *to_ref(record);
     if (ref.record->header.signature != fo4::Signature::from_string("DIAL"))
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record must be a DIAL");
-    const auto versions = env->value.versions(ref.record->form_key);
-    if (std::none_of(versions.begin(), versions.end(), [&](const auto& candidate) { return &candidate == &ref; }))
+    if (!belongs_to_env(env, &ref))
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
     const fo4::Group* children = nullptr;
     bool found = false;
@@ -76,7 +81,10 @@ radicle_status radicle_record_payload_info(
   if (out_subrecord_count != nullptr) *out_subrecord_count = 0;
   if (env == nullptr || record == nullptr || out_form_version == nullptr || out_subrecord_count == nullptr)
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and outputs are required");
-  const auto& value = *to_ref(record)->record;
+  const auto* ref = to_ref(record);
+  if (!belongs_to_env(env, ref))
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  const auto& value = *ref->record;
   *out_form_version = value.header.form_version;
   *out_subrecord_count = value.subrecords.size();
   return RADICLE_STATUS_OK;
@@ -94,7 +102,10 @@ radicle_status radicle_record_copy_subrecord(
   if (env == nullptr || record == nullptr || out_signature == nullptr || out_bytes == nullptr ||
       out_size == nullptr || out_extended_size == nullptr)
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and outputs are required");
-  const auto& subs = to_ref(record)->record->subrecords;
+  const auto* ref = to_ref(record);
+  if (!belongs_to_env(env, ref))
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  const auto& subs = ref->record->subrecords;
   if (index >= subs.size()) return fail(RADICLE_STATUS_NOT_FOUND, "subrecord index is out of range");
   const auto& sub = subs[index];
   if (!sub.data.empty()) {
@@ -120,7 +131,8 @@ radicle_status radicle_record_resolve_form_id(
     const fo4::RawFormId raw{raw_form_id};
     if (raw.is_none()) return RADICLE_STATUS_OK;
     const auto& ref = *to_ref(record);
-    // Invalid indices must be rejected before coercion (source:src/formid.cpp:resolve_plugin_link).
+    if (!belongs_to_env(env, &ref))
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
     if (raw.is_created() || raw.index_byte() > env->value.plugins().at(ref.plugin).masters.size())
       return fail(RADICLE_STATUS_PARSE_ERROR, "FormID index is outside the record plugin's master table");
     *out_key = to_c_key(*env, env->value.resolve_link(ref, raw));
