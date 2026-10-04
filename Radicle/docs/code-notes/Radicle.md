@@ -1,5 +1,21 @@
 # Radicle code notes
 
+## src/environment/vegetation.cpp:decode_grass, decode_tree, decode_flora
+
+`docs/VEGETATION.md` pins stored fields and official-master size measurements.
+The shared model/bounds fields retain the existing metadata API; these getters
+validate present MODL and OBND rather than duplicating their surface. Raw flags,
+discriminators, seasonal bytes and tree wind values carry no runtime defaults.
+`decode_landscape_grasses` preserves repeated GNAM order and validates each
+individual link. Unknown payloads stay untouched in the container.
+
+`src/c_api_vegetation.cpp:radicle_landscape_grasses_decode` owns its key array
+until free; fixed record getters reuse environment-owned strings. C#
+`Vegetation.cs:RadicleEnvironment` copies arrays and releases the holder.
+ABI 11 avoids main4, PR383's5/6/7 and PR398/400/402's8/9/10; reconcile the
+independent branches before merge. `CMakeLists.txt:RADICLE_CSHARP_TESTS` is
+enabled in native CI with a writable runner-local .NET install directory.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.

@@ -616,10 +616,59 @@ public unsafe struct MaterialSwap
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct GrassInfo
+{
+    public int HasData;
+    public byte Density;
+    public byte MinSlope;
+    public byte MaxSlope;
+    public ushort UnitsFromWater;
+    public uint WaterType;
+    public float PositionRange;
+    public float HeightRange;
+    public float ColorRange;
+    public float WavePeriod;
+    public byte Flags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct HarvestInfo
+{
+    public FormKey Ingredient;
+    public FormKey Sound;
+    public int HasSeasons;
+    public fixed byte Seasons[4];
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct TreeInfo
+{
+    public HarvestInfo Harvest;
+    public int HasWind;
+    public fixed float Wind[12];
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FloraInfo
+{
+    public HarvestInfo Harvest;
+    public int HasFlags;
+    public ushort Flags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct GrassLinks
+{
+    public IntPtr Grasses;
+    public nuint GrassCount;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 4u;
+    public const uint CompiledAbiVersion = 11u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -923,5 +972,20 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
     public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_grass_get_info")]
+    public static extern Status GrassGetInfo(IntPtr env, IntPtr record, GrassInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_tree_get_info")]
+    public static extern Status TreeGetInfo(IntPtr env, IntPtr record, TreeInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_flora_get_info")]
+    public static extern Status FloraGetInfo(IntPtr env, IntPtr record, FloraInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_decode")]
+    public static extern Status LandscapeGrassesDecode(IntPtr env, IntPtr record, GrassLinks** out_links);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_free")]
+    public static extern void LandscapeGrassesFree(GrassLinks* links);
 
 }
