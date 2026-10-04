@@ -126,3 +126,9 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 - CELL `XCWT`: the cell's water type.
 
 `c_api_env.h` was at the file-size limit, so the typed record decoders moved to `include/fo4/c_api_records.h`, which includes the environment header for the shared types; `generate_interop.py` reads it, and the generated bindings and layout probe are regenerated from the headers, so `radicle_csharp_interop_up_to_date` still holds. Tests: `Radicle.Interop.Tests/HlodFieldTests.cs` builds a plugin with these subrecords and checks every field, including a STAT without `MNAM` and the four-slot ceiling.
+
+## CMakeLists.txt:RADICLE_CSHARP_TESTS
+
+The two native jobs in `.github/workflows/native-ci.yml` enable the existing
+managed test switch, with .NET 8 supplied by setup-dotnet. CI exercises the
+sound getters against this branch's native library, ABI probe and stubs.
