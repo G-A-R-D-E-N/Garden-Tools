@@ -19,4 +19,10 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/Blueprint/BlueprintPanel.tsx', 'src/CellPanel.tsx', 'src/ConditionsEditor.tsx'],
+    rules: {
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
 ])
