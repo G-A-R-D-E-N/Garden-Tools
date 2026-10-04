@@ -16,7 +16,7 @@ Generic lossless plugin container, FormKey identity, preservation writer, master
 
 The first machine-readable authoring schema is active under `schema/fallout4/fields.json`. A deterministic generator emits record-qualified C++ scalar descriptors and CMake checks that committed generated output is current. `REFR\\HealthPercent` / `XHLT` is the first field using this path; typed EYES and LVSP editing remain structured record models rather than scalar byte patches.
 
-BA2 support currently covers the proven Fallout 4 version-1 `BTDX/GNRL` layout: list/read, stored and zlib-compressed chunks, extraction, path lookup, and write/read round trips. PluginEditTool's native Archive panel now uses this Radicle reader through its archive backend seam. DX10 texture archives and next-generation v7/v8 layouts remain deliberately unsupported until their fields are verified.
+BA2 support covers `BTDX/GNRL` general resources and `BTDX/DX10` textures at versions 1, 7 and 8: list/read, stored and zlib-compressed chunks, path lookup, write/read round trips, and texture extraction with DDS header reconstruction. PluginEditTool's native Archive panel uses the Radicle reader. Synthetic coverage is supplemented by installed-data tests for six named version/content combinations; see `docs/BA2.md` for measured corpus scope and remaining opaque metadata.
 
 Localized string-table support now covers `.STRINGS`, `.DLSTRINGS`, and `.ILSTRINGS`: strict header/offset validation, raw text-byte preservation, lookup, deduplication, and deterministic writing. Automatic resolution of 4-byte localized plugin fields remains deliberately separate until TES4 bit 7 semantics are settled or the caller supplies an explicit localization context.
 

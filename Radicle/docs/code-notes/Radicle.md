@@ -1,5 +1,15 @@
 # Radicle code notes
 
+## tests/test_ba2_versions_real.cpp:Ba2NamedRealData
+
+Six installed archive fixtures cover GNRL and DX10 at versions 1, 7 and 8.
+The streaming reader and full models must extract identical first-entry
+bytes, and rebuilding that entry must preserve extracted content (including
+the reconstructed DDS header). This does not require byte-identical archive
+padding. `docs/BA2.md` records the named files, counts and independent table
+measurement of all 79 installed archives. The test reads game data only
+through `FO4_DATA_DIR`; missing data skips without committing payloads.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
