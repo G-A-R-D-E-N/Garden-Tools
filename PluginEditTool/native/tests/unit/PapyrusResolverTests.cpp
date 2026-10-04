@@ -199,14 +199,18 @@ const Binding& only(const Resolution& r, std::string_view name) {
 
 const Type* assignedTypeIn(const Resolution& r, std::string_view target) {
     const auto nodes = walkExpressions(*r.script);
+    const AssignStatement* found = nullptr;
     for (const Node* node : nodes) {
         const auto* assign = dynamic_cast<const AssignStatement*>(node);
         if (!assign) continue;
         const auto* id = dynamic_cast<const IdentifierExpression*>(assign->target.get());
-        if (id && id->name == target) return r.typeOf(assign->value.get());
+        if (id && id->name == target) {
+            found = assign;
+            break;
+        }
     }
-    FAIL("no assignment to " << target);
-    return nullptr;
+    if (found == nullptr) FAIL("no assignment to " << target);
+    return r.typeOf(found->value.get());
 }
 
 const Node* singleNodeOfKind(const Resolution& r, NodeKind kind) {

@@ -76,6 +76,7 @@ FormKey resolve_plugin_form_id(RawFormId raw, const PluginFormIdContext& context
 }
 
 FormKey resolve_plugin_link(RawFormId raw, const PluginFormIdContext& context) {
+  if (raw.is_none()) return FormKey{};
   if (raw.index_byte() > context.masters.size()) return FormKey{context.current_plugin, LocalFormId{raw.local_24()}};
   return resolve_plugin_form_id(raw, context);
 }

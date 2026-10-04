@@ -91,6 +91,13 @@ RADICLE_API radicle_status radicle_env_winners_of(const radicle_env* env,
                                                   size_t* out_count);
 RADICLE_API void radicle_free_record_array(const radicle_record** records);
 
+/* Requires radicle_free_string_array; one tab-separated finding per string: code, severity, plugin, record, subrecord, offset, target, message. NULL plugin checks every plugin, limit 0 is unlimited. */
+RADICLE_API radicle_status radicle_env_check_errors(const radicle_env* env,
+                                                    const char* plugin,
+                                                    size_t limit,
+                                                    char*** out_strings,
+                                                    size_t* out_count);
+
 /* Absent or malformed EDID/MODL report NULL; name_kind separates inline, string-ID and malformed FULL. */
 RADICLE_API radicle_status radicle_record_get_info(const radicle_env* env,
                                                    const radicle_record* record,

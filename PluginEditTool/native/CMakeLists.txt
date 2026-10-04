@@ -56,8 +56,9 @@ if(NOT EXISTS "${RADICLE_DIR}/CMakeLists.txt")
         "Radicle sources not found at ${RADICLE_DIR}. "
         "PluginEditTool/native expects the sibling Radicle checkout from the same repository.")
 endif()
-set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-set(RADICLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+# Not forced, so CI can build and test Radicle from this tree in one pass.
+set(RADICLE_BUILD_TOOLS OFF CACHE BOOL "")
+set(RADICLE_BUILD_TESTS OFF CACHE BOOL "")
 set(RADICLE_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${RADICLE_DIR}" "${CMAKE_BINARY_DIR}/radicle")
 

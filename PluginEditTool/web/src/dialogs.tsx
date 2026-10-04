@@ -13,6 +13,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import PluginTargetDialog, { type TargetRequest, type TargetResult } from './PluginTargetDialog';
+import PluginCompareDialog, { type CompareRequest } from './PluginCompareDialog';
 import './PluginTargetDialog.css';
 
 export interface ConfirmRequest {
@@ -39,6 +40,7 @@ interface DialogApi {
   confirm: (req: ConfirmRequest) => Promise<boolean>;
   prompt: (req: PromptRequest) => Promise<string | null>;
   pickPlugin: (req: TargetRequest) => Promise<TargetResult | null>;
+  compare: (req: CompareRequest) => Promise<void>;
 }
 
 const Ctx = createContext<DialogApi | null>(null);
@@ -52,7 +54,8 @@ export function useDialogs(): DialogApi {
 type Pending =
   | { kind: 'confirm'; req: ConfirmRequest }
   | { kind: 'prompt'; req: PromptRequest }
-  | { kind: 'plugin'; req: TargetRequest };
+  | { kind: 'plugin'; req: TargetRequest }
+  | { kind: 'compare'; req: CompareRequest };
 
 export function DialogProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null);
@@ -73,6 +76,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     confirm: req => open<boolean>({ kind: 'confirm', req }),
     prompt: req => open<string | null>({ kind: 'prompt', req }),
     pickPlugin: req => open<TargetResult | null>({ kind: 'plugin', req }),
+    compare: req => open<void>({ kind: 'compare', req }),
   };
 
   return (
@@ -86,6 +90,9 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       )}
       {pending?.kind === 'plugin' && (
         <PluginTargetDialog request={pending.req} onResolve={v => settle(v)} />
+      )}
+      {pending?.kind === 'compare' && (
+        <PluginCompareDialog req={pending.req} onClose={() => settle(undefined)} />
       )}
     </Ctx.Provider>
   );
