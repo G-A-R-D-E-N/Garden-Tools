@@ -2,6 +2,7 @@
 #include "fo4/c_api_materials.h"
 #include "fo4/c_api_maintenance.h"
 #include "fo4/c_api_pex.h"
+#include "fo4/c_api_seq.h"
 #include <cstddef>
 #include <cstdio>
 

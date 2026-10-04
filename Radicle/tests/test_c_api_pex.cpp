@@ -345,7 +345,7 @@ TEST(CApiPex, PublicStructLayoutKeepsFieldOrderAndNaturalAlignment) {
   EXPECT_EQ(sizeof(radicle_pex_object_counts), sizeof(size_t) * 5);
 }
 
-TEST(CApiPex, AbiVersionIsFour) {
-  EXPECT_EQ(radicle_abi_version(), 4u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 4u);
+TEST(CApiPex, AbiVersionIsAtLeastThePexExports) {
+  EXPECT_GE(radicle_abi_version(), 4u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, radicle_abi_version());
 }

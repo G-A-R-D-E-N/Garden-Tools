@@ -566,7 +566,7 @@ public unsafe struct PexObjectCounts
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 4u;
+    public const uint CompiledAbiVersion = 5u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -888,5 +888,23 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_string_table_entry")]
     public static extern Status PexStringTableEntry(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_parse")]
+    public static extern Status SeqParse(byte* bytes, nuint size, IntPtr* out_seq);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_read_file")]
+    public static extern Status SeqReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_seq);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_destroy")]
+    public static extern void SeqDestroy(IntPtr seq);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_write_bytes")]
+    public static extern Status SeqWriteBytes(IntPtr seq, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_entry_count")]
+    public static extern Status SeqEntryCount(IntPtr seq, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_entry_form_id")]
+    public static extern Status SeqEntryFormId(IntPtr seq, nuint index, uint* out_form_id);
 
 }
