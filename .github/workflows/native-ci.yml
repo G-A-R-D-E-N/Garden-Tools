@@ -47,9 +47,11 @@ concurrency:
 # Every job builds in its own fresh workspace, so compiles go through ccache
 # (installed on the runner hosts) to avoid rebuilding unchanged sources.
 # base_dir and nohashdir let hits carry across the per-job workspace paths.
+# CCACHE_BASEDIR is written by each job's ccache step from its real working
+# directory: `${{ github.workspace }}` is empty at workflow level on the
+# host-mode runners, which left the base dir blank and the cache cold.
 # A runner without ccache still builds, just without the cache.
 env:
-  CCACHE_BASEDIR: ${{ github.workspace }}
   CCACHE_NOHASHDIR: "1"
 
 jobs:
@@ -100,6 +102,7 @@ jobs:
           for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
             if [ -n "$c" ] && [ -x "$c" ]; then
               echo "CCACHE=$c" >> "$GITHUB_ENV"
+              echo "CCACHE_BASEDIR=$PWD" >> "$GITHUB_ENV"
               "$c" --zero-stats > /dev/null
               echo "Using $c"
               exit 0
@@ -295,6 +298,7 @@ jobs:
           if (-not $ccache -and (Test-Path 'C:\tools\ccache\ccache.exe')) { $ccache = 'C:\tools\ccache\ccache.exe' }
           if ($ccache) {
             [IO.File]::AppendAllText($env:GITHUB_ENV, "CCACHE=$ccache`n")
+            [IO.File]::AppendAllText($env:GITHUB_ENV, "CCACHE_BASEDIR=$((Get-Location).Path)`n")
             & $ccache --zero-stats | Out-Null
             "Using $ccache"
           } else {
