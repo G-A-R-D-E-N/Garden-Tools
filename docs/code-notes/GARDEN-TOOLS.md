@@ -1054,6 +1054,8 @@ Each job builds from the workspace into its own directories: `build\native` for 
 
 `.github/workflows/native-ci.yml:native-windows-tests` also configures, builds and tests the same PluginEditTool native tree in Debug as `build\native-debug`, after the Release suite, so MSVC debug-only checks (iterator debugging, CRT asserts) run in CI. The Debug configure repeats the Release flags with `-DCMAKE_BUILD_TYPE=Debug` and the same `%LAUNCHER%`, so one build still covers Radicle and PluginEditTool native together through the same dependency path.
 
+`Radicle/CMakeLists.txt:gtest_discover_tests` passes `DISCOVERY_TIMEOUT 120`. CMake's default is 5 seconds, and discovery runs `fo4_tests.exe --gtest_list_tests` as part of the build. The Debug executable is much larger than the Release one, and on the Windows runner its first, cold run exceeded that default, so the Debug build failed with `Process terminated due to timeout` right after linking `fo4_tests.exe`. The longer bound only matters when the executable is slow to start; Release discovery stays well inside it.
+
 ## Radicle/src/forms/placed_reference_edit.cpp / c_api_ref_fields.cpp — GardenEngine #114 writeback fields
 
 Eighth #114 slice, stacked on the writeback slice. It covers every field `ReferenceWriteback.Commit` sets beyond placement and scale:
