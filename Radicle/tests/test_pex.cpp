@@ -282,7 +282,9 @@ TEST(Pex, OpcodeTableIsTheFallout4Table) {
   EXPECT_TRUE(PexFile::kOpCodes[24].varargs);
   EXPECT_TRUE(PexFile::kOpCodes[25].varargs);
   for (std::size_t i = 0; i < std::size(PexFile::kOpCodes); ++i) {
-    if (i != 23u && i != 24u && i != 25u) EXPECT_FALSE(PexFile::kOpCodes[i].varargs);
+    if (i != 23u && i != 24u && i != 25u) {
+      EXPECT_FALSE(PexFile::kOpCodes[i].varargs);
+    }
   }
 }
 
