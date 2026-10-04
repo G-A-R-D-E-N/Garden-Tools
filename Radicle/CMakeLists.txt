@@ -374,6 +374,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
+    tests/test_water_real.cpp
     tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
     tests/test_env_bench_real.cpp

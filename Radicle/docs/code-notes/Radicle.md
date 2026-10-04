@@ -1,5 +1,16 @@
 # Radicle code notes
 
+## Water corpus evidence (#341)
+
+`tests/test_water_real.cpp:WaterRealData` covers every on-disk WATR in the
+seven official masters through the native decoder and existing C ABI,
+records DNAM sizes, and compares untouched master serialization byte for
+byte. `docs/WATER.md` pins layout evidence for
+`src/environment/base_records.cpp:decode_water`. Effective selection and
+finite sentinel conversion remain blocked on RE #395; raw links and heights
+are preserved by `src/environment/world.cpp:decode_cell` and
+`decode_worldspace`.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
