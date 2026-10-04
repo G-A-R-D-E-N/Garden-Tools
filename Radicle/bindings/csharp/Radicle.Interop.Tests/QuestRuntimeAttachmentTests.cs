@@ -1,16 +1,20 @@
 using System;
-using System.Collections.Generic;
 using Radicle.Interop;
+using Radicle.Interop.Native;
 using Xunit;
 
 namespace Radicle.Interop.Tests;
 
-/// <summary>
-/// Regression tests for the row-to-model mapping, covering the attachment rows the decoder used to drop.
-/// </summary>
 public class QuestRuntimeAttachmentTests
 {
     private static readonly FormKey Quest = new("Quests.esp", 0x000800);
+
+    private static QuestRuntimePropertyEntry ScriptProperty(string script, string name, byte type, int? value = null) =>
+        new(QuestPropertyOwner.Script, -1, script, name, type, 0,
+            new QuestRuntimeValue { Integer = value });
+
+    private static QuestRuntimePropertyEntry AliasScriptProperty(int alias, string script, string name, byte type) =>
+        new(QuestPropertyOwner.AliasScript, alias, script, name, type, 0, default);
 
     [Fact]
     public void AZeroPropertyScriptIsPreserved()
@@ -21,7 +25,7 @@ public class QuestRuntimeAttachmentTests
             "script\tQF_Empty",
         };
 
-        var data = QuestRuntime.DecodeRows(rows, Quest);
+        var data = QuestRuntime.DecodeRows(rows, Array.Empty<QuestRuntimePropertyEntry>(), Quest);
 
         var script = Assert.Single(data.Scripts);
         Assert.Equal(QuestRuntime.QuestOwnedAlias, script.Alias);
@@ -36,32 +40,33 @@ public class QuestRuntimeAttachmentTests
         {
             "alias\t0",
             "alias-script\t0\tQF_Alias",
-            "alias-script-property\t0\tQF_Alias\tTarget\t1",
             "alias\t1",
             "alias-script\t1\tQF_Alias",
-            "alias-script-property\t1\tQF_Alias\tTarget\t1",
+        };
+        var properties = new[]
+        {
+            AliasScriptProperty(0, "QF_Alias", "Target", 1),
+            AliasScriptProperty(1, "QF_Alias", "Target", 1),
         };
 
-        var data = QuestRuntime.DecodeRows(rows, Quest);
+        var data = QuestRuntime.DecodeRows(rows, properties, Quest);
 
         Assert.Equal(new[] { 0, 1 }, data.Aliases);
         Assert.Equal(2, data.AliasScripts.Count);
         Assert.Contains(new QuestRuntimeScript(0, "QF_Alias"), data.AliasScripts);
         Assert.Contains(new QuestRuntimeScript(1, "QF_Alias"), data.AliasScripts);
         Assert.Equal(2, data.AliasScriptProperties.Count);
-        Assert.Contains(new QuestRuntimeAliasScriptProperty(0, "QF_Alias", "Target", 1), data.AliasScriptProperties);
-        Assert.Contains(new QuestRuntimeAliasScriptProperty(1, "QF_Alias", "Target", 1), data.AliasScriptProperties);
+        Assert.Equal(0, data.AliasScriptProperties[0].Alias);
+        Assert.Equal(1, data.AliasScriptProperties[1].Alias);
     }
 
     [Fact]
     public void AliasScriptPropertiesKeepTheirAlias()
     {
-        var rows = new[]
-        {
-            "alias-script-property\t7\tQF_Alias\tCount\t3",
-        };
+        var properties = new[] { AliasScriptProperty(7, "QF_Alias", "Count", 3) };
 
-        var property = Assert.Single(QuestRuntime.DecodeRows(rows, Quest).AliasScriptProperties);
+        var property = Assert.Single(
+            QuestRuntime.DecodeRows(Array.Empty<string>(), properties, Quest).AliasScriptProperties);
 
         Assert.Equal(7, property.Alias);
         Assert.Equal("QF_Alias", property.Script);
@@ -76,17 +81,20 @@ public class QuestRuntimeAttachmentTests
         {
             "quest\t000800:Quests.esp\t1",
             "script\tQF_TestQuest",
-            "script-property\tQF_TestQuest\tCount\t3",
             "fragment-script\tQF_TestQuest",
-            "fragment-property\tStage\t3",
             "fragment\t10\t0\tQF_TestQuest\tFragment_Stage_0010",
             "alias\t0",
             "alias-script\t0\tQF_TestQuest_Alias",
-            "alias-script-property\t0\tQF_TestQuest_Alias\tTarget\t1",
             "unsupported\talias fill",
         };
+        var properties = new[]
+        {
+            ScriptProperty("QF_TestQuest", "Count", 3, 7),
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Fragment, -1, string.Empty, "Stage", 3, 0, default),
+            AliasScriptProperty(0, "QF_TestQuest_Alias", "Target", 1),
+        };
 
-        var data = QuestRuntime.DecodeRows(rows, Quest);
+        var data = QuestRuntime.DecodeRows(rows, properties, Quest);
 
         Assert.True(data.StartGameEnabled);
         Assert.Single(data.Scripts);
@@ -103,18 +111,64 @@ public class QuestRuntimeAttachmentTests
     [Fact]
     public void ScriptPropertiesKeepTheirOwningScript()
     {
-        var rows = new[]
+        var properties = new[]
         {
-            "script\tQF_A",
-            "script-property\tQF_A\tCount\t3",
-            "script\tQF_B",
-            "script-property\tQF_B\tCount\t3",
+            ScriptProperty("QF_A", "Count", 3, 7),
+            ScriptProperty("QF_B", "Count", 3, 7),
         };
 
-        var data = QuestRuntime.DecodeRows(rows, Quest);
+        var data = QuestRuntime.DecodeRows(Array.Empty<string>(), properties, Quest);
 
-        Assert.Equal(2, data.Scripts.Count);
-        Assert.Contains(new QuestRuntimeProperty("QF_A", "Count", 3), data.ScriptProperties);
-        Assert.Contains(new QuestRuntimeProperty("QF_B", "Count", 3), data.ScriptProperties);
+        Assert.Equal(2, data.ScriptProperties.Count);
+        Assert.Contains(new QuestRuntimeProperty("QF_A", "Count", 3, 0, new QuestRuntimeValue { Integer = 7 }),
+            data.ScriptProperties);
+        Assert.Contains(new QuestRuntimeProperty("QF_B", "Count", 3, 0, new QuestRuntimeValue { Integer = 7 }),
+            data.ScriptProperties);
+    }
+
+    [Fact]
+    public void FragmentPropertiesTakeTheFragmentScriptName()
+    {
+        var rows = new[] { "fragment-script\tQF_TestQuest" };
+        var properties = new[]
+        {
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Fragment, -1, string.Empty, "Stage", 3, 0,
+                new QuestRuntimeValue { Integer = 10 }),
+        };
+
+        var data = QuestRuntime.DecodeRows(rows, properties, Quest);
+
+        var property = Assert.Single(data.FragmentProperties);
+        Assert.Equal("QF_TestQuest", property.Script);
+        Assert.Equal(10, property.Value.Integer);
+    }
+
+    [Fact]
+    public void ValuesSurviveTheRowMapping()
+    {
+        var properties = new[]
+        {
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Ratio", 4, 1,
+                new QuestRuntimeValue { Real = 1.5f }),
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Enabled", 5, 0,
+                new QuestRuntimeValue { Boolean = true }),
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Label", 2, 0,
+                new QuestRuntimeValue { Text = "Garden\tPatch" }),
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Target", 1, 0,
+                new QuestRuntimeValue { ObjectFormId = 0x00012345, Alias = 5 }),
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Stages", 13, 0,
+                new QuestRuntimeValue { ElementCount = 3 }),
+        };
+
+        var data = QuestRuntime.DecodeRows(Array.Empty<string>(), properties, Quest);
+
+        Assert.Equal(5, data.ScriptProperties.Count);
+        Assert.Equal(1.5f, data.ScriptProperties[0].Value.Real);
+        Assert.Equal(1, data.ScriptProperties[0].Flags);
+        Assert.True(data.ScriptProperties[1].Value.Boolean);
+        Assert.Equal("Garden\tPatch", data.ScriptProperties[2].Value.Text);
+        Assert.Equal(0x00012345u, data.ScriptProperties[3].Value.ObjectFormId);
+        Assert.Equal((short)5, data.ScriptProperties[3].Value.Alias);
+        Assert.Equal(3u, data.ScriptProperties[4].Value.ElementCount);
     }
 }

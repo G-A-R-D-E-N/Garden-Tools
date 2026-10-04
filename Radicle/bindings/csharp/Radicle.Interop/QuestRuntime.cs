@@ -5,34 +5,51 @@ using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
 
-public readonly record struct QuestRuntimeProperty(string Script, string Name, byte Type);
+public readonly record struct QuestRuntimeValue
+{
+    public int? Integer { get; init; }
 
-/// <summary>
-/// A script attached to a quest or to one of its aliases.
-/// </summary>
-/// <param name="Alias">The alias id that owns the script, or -1 when the quest itself owns it.</param>
-/// <param name="Script">The script name.</param>
+    public float? Real { get; init; }
+
+    public bool? Boolean { get; init; }
+
+    public string? Text { get; init; }
+
+    public uint? ObjectFormId { get; init; }
+
+    public short? Alias { get; init; }
+
+    public uint? ElementCount { get; init; }
+}
+
+public readonly record struct QuestRuntimeProperty(
+    string Script,
+    string Name,
+    byte Type,
+    byte Flags,
+    QuestRuntimeValue Value);
+
 public readonly record struct QuestRuntimeScript(int Alias, string Script);
 
-/// <summary>
-/// A property of an alias-owned script, keeping the alias it belongs to.
-/// </summary>
-/// <param name="Alias">The alias id that owns the script.</param>
-/// <param name="Script">The owning script name.</param>
-/// <param name="Name">The property name.</param>
-/// <param name="Type">The decoded VMAD property type.</param>
-public readonly record struct QuestRuntimeAliasScriptProperty(int Alias, string Script, string Name, byte Type);
+public readonly record struct QuestRuntimeAliasScriptProperty(
+    int Alias,
+    string Script,
+    string Name,
+    byte Type,
+    byte Flags,
+    QuestRuntimeValue Value);
 
 public readonly record struct QuestRuntimeFragment(ushort Stage, int StageIndex, string Script, string Function);
 
-/// <summary>
-/// The VMAD-derived runtime data Radicle decodes for one quest.
-/// </summary>
-/// <remarks>
-/// Everything here comes from the QUST record's VMAD and DNAM subrecords. Radicle never guesses,
-/// so anything it could not decode is reported in <see cref="Unsupported"/> and the caller is
-/// expected to count it rather than treat it as absent.
-/// </remarks>
+public readonly record struct QuestRuntimePropertyEntry(
+    QuestPropertyOwner Owner,
+    int Alias,
+    string Script,
+    string Name,
+    byte Type,
+    byte Flags,
+    QuestRuntimeValue Value);
+
 public sealed record QuestRuntimeData(
     FormKey Quest,
     bool StartGameEnabled,
@@ -48,10 +65,8 @@ public sealed record QuestRuntimeData(
 
 public static class QuestRuntime
 {
-    /// <summary>The alias id used for a script the quest itself owns.</summary>
     public const int QuestOwnedAlias = -1;
 
-    /// <summary>One tab-separated row per fact, exactly as the C ABI returns them.</summary>
     public static unsafe string[] Rows(PluginFile plugin, FormKey quest)
     {
         IntPtr* rows = null;
@@ -60,19 +75,49 @@ public static class QuestRuntime
         return Call.TakeStrings(rows, count);
     }
 
-    public static QuestRuntimeData Decode(PluginFile plugin, FormKey quest) =>
-        DecodeRows(Rows(plugin, quest), quest);
+    public static unsafe IReadOnlyList<QuestRuntimePropertyEntry> Properties(PluginFile plugin, FormKey quest)
+    {
+        QuestProperty* properties = null;
+        nuint count = 0;
+        Call.Check(RadicleNative.QuestRuntimeProperties(plugin.Handle, quest.ToString(), &properties, &count));
+        try
+        {
+            var entries = new QuestRuntimePropertyEntry[checked((int)count)];
+            for (var i = 0; i < entries.Length; ++i)
+            {
+                var property = properties[i];
+                entries[i] = new QuestRuntimePropertyEntry(
+                    property.Owner,
+                    property.Alias,
+                    Utf8.Read(property.Script) ?? string.Empty,
+                    Utf8.Read(property.Name) ?? string.Empty,
+                    property.Type,
+                    property.Flags,
+                    new QuestRuntimeValue
+                    {
+                        Integer = property.HasInteger != 0 ? property.Integer : null,
+                        Real = property.HasReal != 0 ? property.Real : null,
+                        Boolean = property.HasBoolean != 0 ? property.Boolean != 0 : null,
+                        Text = Utf8.Read(property.Text),
+                        ObjectFormId = property.HasObject != 0 ? property.ObjectFormId : null,
+                        Alias = property.HasPropertyAlias != 0 ? property.PropertyAlias : null,
+                        ElementCount = property.HasElementCount != 0 ? property.ElementCount : null,
+                    });
+            }
+            return entries;
+        }
+        finally
+        {
+            RadicleNative.FreeQuestProperties(properties, count);
+        }
+    }
 
-    /// <summary>
-    /// Maps the C ABI rows onto the runtime model.
-    /// </summary>
-    /// <remarks>
-    /// Every row kind the C ABI emits is represented here, including the attachment rows: a
-    /// <c>script</c> row is a script the quest owns even when it declares no properties, and an
-    /// <c>alias-script</c> row is a script an alias owns. Alias-owned scripts and their properties keep
-    /// the alias id, so two aliases carrying the same script name stay distinct.
-    /// </remarks>
-    public static QuestRuntimeData DecodeRows(IReadOnlyList<string> rows, FormKey quest)
+    public static QuestRuntimeData Decode(PluginFile plugin, FormKey quest) =>
+        DecodeRows(Rows(plugin, quest), Properties(plugin, quest), quest);
+
+    public static QuestRuntimeData DecodeRows(IReadOnlyList<string> rows,
+                                              IReadOnlyList<QuestRuntimePropertyEntry> properties,
+                                              FormKey quest)
     {
         var scripts = new List<QuestRuntimeScript>();
         var scriptProperties = new List<QuestRuntimeProperty>();
@@ -96,14 +141,8 @@ public static class QuestRuntime
                 case "script":
                     scripts.Add(new QuestRuntimeScript(QuestOwnedAlias, fields[1]));
                     break;
-                case "script-property":
-                    scriptProperties.Add(new QuestRuntimeProperty(fields[1], fields[2], ParseType(fields[3])));
-                    break;
                 case "fragment-script":
                     fragmentScript = fields.Length > 1 ? fields[1] : string.Empty;
-                    break;
-                case "fragment-property":
-                    fragmentProperties.Add(new QuestRuntimeProperty(string.Empty, fields[1], ParseType(fields[2])));
                     break;
                 case "fragment":
                     fragments.Add(new QuestRuntimeFragment(
@@ -119,15 +158,27 @@ public static class QuestRuntime
                     aliasScripts.Add(new QuestRuntimeScript(
                         int.Parse(fields[1], CultureInfo.InvariantCulture), fields[2]));
                     break;
-                case "alias-script-property":
-                    aliasProperties.Add(new QuestRuntimeAliasScriptProperty(
-                        int.Parse(fields[1], CultureInfo.InvariantCulture),
-                        fields[2],
-                        fields[3],
-                        ParseType(fields[4])));
-                    break;
                 case "unsupported":
                     unsupported.Add(fields.Length > 1 ? fields[1] : string.Empty);
+                    break;
+            }
+        }
+
+        foreach (var entry in properties)
+        {
+            switch (entry.Owner)
+            {
+                case QuestPropertyOwner.Script:
+                    scriptProperties.Add(new QuestRuntimeProperty(
+                        entry.Script, entry.Name, entry.Type, entry.Flags, entry.Value));
+                    break;
+                case QuestPropertyOwner.Fragment:
+                    fragmentProperties.Add(new QuestRuntimeProperty(
+                        fragmentScript, entry.Name, entry.Type, entry.Flags, entry.Value));
+                    break;
+                case QuestPropertyOwner.AliasScript:
+                    aliasProperties.Add(new QuestRuntimeAliasScriptProperty(
+                        entry.Alias, entry.Script, entry.Name, entry.Type, entry.Flags, entry.Value));
                     break;
             }
         }
@@ -135,6 +186,4 @@ public static class QuestRuntime
         return new QuestRuntimeData(quest, startGameEnabled, scripts, scriptProperties, fragmentScript,
             fragmentProperties, fragments, aliases, aliasScripts, aliasProperties, unsupported);
     }
-
-    private static byte ParseType(string text) => byte.Parse(text, CultureInfo.InvariantCulture);
 }
