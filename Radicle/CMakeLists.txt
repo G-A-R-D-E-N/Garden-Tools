@@ -384,6 +384,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex.cpp
     tests/test_pex_hardening.cpp
     tests/test_pex_corpus.cpp
+    tests/test_pex_oracle.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )

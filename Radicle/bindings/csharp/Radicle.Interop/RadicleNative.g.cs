@@ -542,6 +542,27 @@ public unsafe struct MaterialSwap
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexHeader
+{
+    public byte MajorVersion;
+    public byte MinorVersion;
+    public ushort GameId;
+    public long CompilationTime;
+    public nuint StringCount;
+    public nuint ObjectCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexObjectCounts
+{
+    public nuint StructCount;
+    public nuint VariableCount;
+    public nuint PropertyCount;
+    public nuint StateCount;
+    public nuint FunctionCount;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
@@ -840,5 +861,32 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
     public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
+    public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_read_file")]
+    public static extern Status PexReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_pex);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_destroy")]
+    public static extern void PexDestroy(IntPtr pex);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_write_bytes")]
+    public static extern Status PexWriteBytes(IntPtr pex, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_get_header")]
+    public static extern Status PexGetHeader(IntPtr pex, PexHeader* out_header);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_get_counts")]
+    public static extern Status PexObjectGetCounts(IntPtr pex, nuint index, PexObjectCounts* out_counts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_name")]
+    public static extern Status PexObjectName(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_parent_name")]
+    public static extern Status PexObjectParentName(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_string_table_entry")]
+    public static extern Status PexStringTableEntry(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
 
 }
