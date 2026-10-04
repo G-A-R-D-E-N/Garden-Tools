@@ -1,0 +1,140 @@
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
+#include "fo4/quest/runtime.hpp"
+#include "fo4/schema/vmad.hpp"
+#include "fo4/signature.hpp"
+
+#include "quest_plugin_fixture.hpp"
+
+#include <gtest/gtest.h>
+
+#include <cstddef>
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+
+TEST(QuestVmadExtras, DecodesFragmentScriptsAndAliasScripts) {
+  const auto extras = fo4::read_quest_vmad_extras(fo4::test::vmad_extras(), 2);
+
+  EXPECT_FALSE(extras.unsupported) << extras.unsupported_reason;
+  EXPECT_TRUE(extras.fully_consumed);
+  EXPECT_EQ(extras.script_name, "QF_TestQuest");
+  ASSERT_EQ(extras.properties.size(), 1u);
+  EXPECT_EQ(extras.properties[0].name, "Stage");
+  ASSERT_TRUE(extras.properties[0].integer.has_value());
+  EXPECT_EQ(*extras.properties[0].integer, 10);
+
+  ASSERT_EQ(extras.fragments.size(), 1u);
+  EXPECT_EQ(extras.fragments[0].stage, 10u);
+  EXPECT_EQ(extras.fragments[0].script, "QF_TestQuest");
+  EXPECT_EQ(extras.fragments[0].function, "Fragment_Stage_0010");
+
+  ASSERT_EQ(extras.aliases.size(), 1u);
+  EXPECT_EQ(extras.aliases[0].alias_id, 5);
+  ASSERT_EQ(extras.aliases[0].scripts.size(), 1u);
+  EXPECT_EQ(extras.aliases[0].scripts[0].name, "AliasScript");
+  ASSERT_EQ(extras.aliases[0].scripts[0].properties.size(), 1u);
+  const auto& property = extras.aliases[0].scripts[0].properties[0];
+  EXPECT_EQ(property.name, "Target");
+  ASSERT_TRUE(property.alias.has_value());
+  EXPECT_EQ(*property.alias, 5);
+  ASSERT_TRUE(property.object.has_value());
+  EXPECT_EQ(property.object->value(), 0x00012345u);
+}
+
+TEST(QuestVmadExtras, TruncatedExtrasReportUnsupportedInsteadOfThrowing) {
+  auto truncated = fo4::test::vmad_extras();
+  truncated.resize(truncated.size() / 2);
+
+  const auto extras = fo4::read_quest_vmad_extras(truncated, 2);
+  EXPECT_TRUE(extras.unsupported);
+  EXPECT_FALSE(extras.unsupported_reason.empty());
+  EXPECT_FALSE(extras.fully_consumed);
+}
+
+TEST(QuestRuntime, AggregatesStartGameFlagScriptsFragmentsAndAliases) {
+  const auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(1), "Quests.esp");
+  const auto data = fo4::quest::quest_runtime_data(plugin, fo4::test::quest_key());
+
+  EXPECT_TRUE(data.unsupported.empty()) << data.unsupported.front();
+  EXPECT_TRUE(data.start_game_enabled);
+  ASSERT_EQ(data.scripts.size(), 1u);
+  EXPECT_EQ(data.scripts[0].name, "QuestScript");
+  ASSERT_EQ(data.scripts[0].properties.size(), 1u);
+  EXPECT_EQ(data.scripts[0].properties[0].name, "Count");
+  EXPECT_EQ(data.fragment_script, "QF_TestQuest");
+  ASSERT_EQ(data.fragment_properties.size(), 1u);
+  ASSERT_EQ(data.fragments.size(), 1u);
+  EXPECT_EQ(data.fragments[0].stage, 10u);
+  EXPECT_EQ(data.fragments[0].function, "Fragment_Stage_0010");
+  ASSERT_EQ(data.alias_scripts.size(), 1u);
+  EXPECT_EQ(data.alias_scripts[0].alias_id, 5);
+  ASSERT_EQ(data.alias_scripts[0].scripts.size(), 1u);
+}
+
+TEST(QuestRuntime, StartGameFlagComesFromDnamBitZero) {
+  const auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(0), "Quests.esp");
+  const auto data = fo4::quest::quest_runtime_data(plugin, fo4::test::quest_key());
+
+  EXPECT_FALSE(data.start_game_enabled);
+  EXPECT_TRUE(data.unsupported.empty()) << data.unsupported.front();
+  EXPECT_EQ(data.fragments.size(), 1u);
+}
+
+TEST(QuestRuntime, MissingQuestIsReportedNotGuessed) {
+  const auto plugin = fo4::read_plugin(fo4::test::make_quest_plugin(1), "Quests.esp");
+  const auto data = fo4::quest::quest_runtime_data(plugin, fo4::FormKey::parse("000900:Quests.esp"));
+
+  ASSERT_EQ(data.unsupported.size(), 1u);
+  EXPECT_FALSE(data.unsupported[0].empty());
+  EXPECT_TRUE(data.scripts.empty());
+  EXPECT_TRUE(data.fragments.empty());
+  EXPECT_TRUE(data.alias_scripts.empty());
+  EXPECT_FALSE(data.start_game_enabled);
+}
+
+TEST(QuestRuntimeReal, EveryShippedQuestDecodesOrReportsUnsupported) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  }
+  const auto path = std::filesystem::path{dir} / "Fallout4.esm";
+  if (!std::filesystem::exists(path)) GTEST_SKIP() << "Fallout4.esm not found under " << dir;
+
+  const auto plugin = fo4::read_plugin_file(path);
+  std::size_t quests = 0;
+  std::size_t clean = 0;
+  std::size_t reported = 0;
+  std::size_t scripts = 0;
+  std::size_t fragments = 0;
+  std::size_t alias_scripts = 0;
+  std::map<std::string, std::size_t> causes;
+
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->header.signature != fo4::sig_qust) continue;
+    ++quests;
+    const auto data = fo4::quest::quest_runtime_data(plugin, record->form_key);
+    if (data.unsupported.empty()) {
+      ++clean;
+    } else {
+      ++reported;
+      causes[data.unsupported.front()]++;
+    }
+    scripts += data.scripts.size();
+    fragments += data.fragments.size();
+    alias_scripts += data.alias_scripts.size();
+  }
+
+  std::cout << "quest runtime: quests=" << quests << " clean=" << clean << " unsupported=" << reported
+            << " scripts=" << scripts << " fragments=" << fragments
+            << " alias_scripts=" << alias_scripts << std::endl;
+  for (const auto& cause : causes) {
+    std::cout << "  class(" << cause.second << "): " << cause.first << std::endl;
+  }
+
+  EXPECT_GT(quests, 0u);
+  EXPECT_EQ(clean + reported, quests) << "every quest must decode or report unsupported";
+}
