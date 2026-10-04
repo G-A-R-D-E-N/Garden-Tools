@@ -8,10 +8,7 @@ namespace Radicle.Interop.Tests;
 
 public class QuestRuntimeTests
 {
-    // A synthetic plugin with one QUST record carrying DNAM flags and a VMAD whose extras hold a
-    // stage fragment and an alias script. Built here so nothing comes from a shipped or
-    // third-party file.
-    private static byte[] MakeQuestPlugin(ushort dnamFlags)
+    private static byte[] MakeQuestPlugin(ushort dnamFlags, int count)
     {
         var bytes = new List<byte>();
         void U8(byte value) => bytes.Add(value);
@@ -79,14 +76,14 @@ public class QuestRuntimeTests
         dnam.AddRange(BitConverter.GetBytes(0u));
         dnam.AddRange(BitConverter.GetBytes(0u));
         Sub("DNAM", dnam);
-        Sub("VMAD", VmadBytes());
+        Sub("VMAD", VmadBytes(count));
         PatchU32(bytes, rec + 4, (uint)(bytes.Count - (rec + 24)));
 
         PatchU32(bytes, grup + 4, (uint)(bytes.Count - grup));
         return bytes.ToArray();
     }
 
-    private static List<byte> VmadBytes()
+    private static List<byte> VmadBytes(int count)
     {
         var bytes = new List<byte>();
         void U8(byte value) => bytes.Add(value);
@@ -106,19 +103,36 @@ public class QuestRuntimeTests
             foreach (var character in text) U8((byte)character);
         }
 
-        // The leading script list: version 5, object format 2, one script with one property.
         U16(5);
         U16(2);
         U16(1);
         Wstring("QuestScript");
         U8(0);
-        U16(1);
+        U16(5);
         Wstring("Count");
         U8(3);
         U8(0);
-        U32(7);
+        U32((uint)count);
+        Wstring("Ratio");
+        U8(4);
+        U8(1);
+        U32(BitConverter.ToUInt32(BitConverter.GetBytes(1.5f), 0));
+        Wstring("Enabled");
+        U8(5);
+        U8(0);
+        U8(1);
+        Wstring("Label");
+        U8(2);
+        U8(0);
+        Wstring("Garden\tPatch");
+        Wstring("Stages");
+        U8(13);
+        U8(0);
+        U32(3);
+        U32(1);
+        U32(2);
+        U32(3);
 
-        // The quest extras: fragment script, one stage fragment, one alias script.
         U8(0);
         U16(1);
         Wstring("QF_TestQuest");
@@ -163,12 +177,27 @@ public class QuestRuntimeTests
         bytes[offset + 3] = (byte)((value >> 24) & 0xFF);
     }
 
-    private static PluginFile LoadQuestPlugin(ushort dnamFlags, string root)
+    private static PluginFile LoadQuestPlugin(ushort dnamFlags, string root, int count = 7)
     {
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "Quests.esp");
-        File.WriteAllBytes(path, MakeQuestPlugin(dnamFlags));
+        File.WriteAllBytes(path, MakeQuestPlugin(dnamFlags, count));
         return PluginFile.Read(path);
+    }
+
+    private static QuestRuntimeProperty Property(QuestRuntimeData data, string name)
+    {
+        foreach (var property in data.ScriptProperties)
+            if (property.Name == name) return property;
+        foreach (var property in data.FragmentProperties)
+            if (property.Name == name) return property;
+        throw new InvalidOperationException("no property named " + name);
+    }
+
+    private static QuestRuntimeData DecodeCount(int count, string root)
+    {
+        using var plugin = LoadQuestPlugin(1, root, count);
+        return QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
     }
 
     [Fact]
@@ -183,13 +212,61 @@ public class QuestRuntimeTests
             Assert.True(data.StartGameEnabled);
             Assert.Empty(data.Unsupported);
             Assert.Contains(new QuestRuntimeScript(QuestRuntime.QuestOwnedAlias, "QuestScript"), data.Scripts);
-            Assert.Contains(new QuestRuntimeProperty("QuestScript", "Count", 3), data.ScriptProperties);
+            Assert.Equal(5, data.ScriptProperties.Count);
             Assert.Equal("QF_TestQuest", data.FragmentScript);
-            Assert.Contains(new QuestRuntimeProperty(string.Empty, "Stage", 3), data.FragmentProperties);
+            Assert.Single(data.FragmentProperties);
             Assert.Contains(new QuestRuntimeFragment(10, 0, "QF_TestQuest", "Fragment_Stage_0010"), data.Fragments);
             Assert.Contains(5, data.Aliases);
             Assert.Contains(new QuestRuntimeScript(5, "AliasScript"), data.AliasScripts);
-            Assert.Contains(new QuestRuntimeAliasScriptProperty(5, "AliasScript", "Target", 1), data.AliasScriptProperties);
+            Assert.Single(data.AliasScriptProperties);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EveryValueKindSurvives()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_values_test");
+        try
+        {
+            using var plugin = LoadQuestPlugin(1, root);
+            var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
+
+            var integer = Property(data, "Count");
+            Assert.Equal("QuestScript", integer.Script);
+            Assert.Equal(3, integer.Type);
+            Assert.Equal(0, integer.Flags);
+            Assert.Equal(7, integer.Value.Integer);
+            Assert.Null(integer.Value.Real);
+
+            var real = Property(data, "Ratio");
+            Assert.Equal(1, real.Flags);
+            Assert.Equal(1.5f, real.Value.Real);
+            Assert.Null(real.Value.Integer);
+
+            var boolean = Property(data, "Enabled");
+            Assert.True(boolean.Value.Boolean);
+
+            var text = Property(data, "Label");
+            Assert.Equal("Garden\tPatch", text.Value.Text);
+
+            var elements = Property(data, "Stages");
+            Assert.Equal(3u, elements.Value.ElementCount);
+
+            var fragment = Property(data, "Stage");
+            Assert.Equal("QF_TestQuest", fragment.Script);
+            Assert.Equal(10, fragment.Value.Integer);
+
+            var alias = Assert.Single(data.AliasScriptProperties);
+            Assert.Equal(5, alias.Alias);
+            Assert.Equal("AliasScript", alias.Script);
+            Assert.Equal("Target", alias.Name);
+            Assert.Equal(1, alias.Type);
+            Assert.Equal(0x00012345u, alias.Value.ObjectFormId);
+            Assert.Equal((short)5, alias.Value.Alias);
         }
         finally
         {
@@ -243,9 +320,48 @@ public class QuestRuntimeTests
             using var plugin = LoadQuestPlugin(1, root);
             var rows = QuestRuntime.Rows(plugin, new FormKey("Quests.esp", 0x000800));
 
-            Assert.Equal(9, rows.Length);
+            Assert.Equal(6, rows.Length);
             Assert.Contains("quest\t000800:Quests.esp\t1", rows);
             Assert.Contains("fragment\t10\t0\tQF_TestQuest\tFragment_Stage_0010", rows);
+            Assert.DoesNotContain(rows, row => row.Contains("property", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheRowApiCarriesNoPropertyValues()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_rows_identical_test");
+        try
+        {
+            using var seven = LoadQuestPlugin(1, Path.Combine(root, "seven"), 7);
+            using var ninetyNine = LoadQuestPlugin(1, Path.Combine(root, "ninety_nine"), 99);
+
+            Assert.Equal(
+                QuestRuntime.Rows(seven, new FormKey("Quests.esp", 0x000800)),
+                QuestRuntime.Rows(ninetyNine, new FormKey("Quests.esp", 0x000800)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IntegerPropertyValuesAreDistinguishable()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_value_test");
+        try
+        {
+            var seven = DecodeCount(7, Path.Combine(root, "seven"));
+            var ninetyNine = DecodeCount(99, Path.Combine(root, "ninety_nine"));
+
+            Assert.Equal(7, Property(seven, "Count").Value.Integer);
+            Assert.Equal(99, Property(ninetyNine, "Count").Value.Integer);
+            Assert.NotEqual(seven.ScriptProperties, ninetyNine.ScriptProperties);
         }
         finally
         {
