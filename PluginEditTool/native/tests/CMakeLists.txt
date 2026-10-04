@@ -69,11 +69,13 @@ fo4ide_add_test(fo4ide_test_papyrus_resolver unit/PapyrusResolverTests.cpp fo4id
 fo4ide_add_test(fo4ide_test_papyrus_type_checker unit/PapyrusTypeCheckerTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_pex unit/PapyrusPexTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_codegen unit/PapyrusCodeGenTests.cpp fo4ide_papyrus)
+fo4ide_add_test(fo4ide_test_papyrus_user_flags unit/PapyrusUserFlagTableTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_decompiler unit/PapyrusDecompilerTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_security unit/PapyrusSecurityTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_symbols unit/PapyrusSymbolsTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_analysis unit/PapyrusAnalysisServiceTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_papyrus_target unit/PapyrusTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_backend_target unit/PluginBackendTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_element_routing unit/PluginBackendElementRoutingTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
@@ -114,11 +116,15 @@ add_executable(
     unit/RadiclePluginLvspGridTests.cpp
     unit/RadiclePluginBatchMutationTests.cpp
     unit/RadiclePluginAddMastersTests.cpp
+    unit/RadiclePluginItmNestedTests.cpp
+    unit/RadiclePluginCompareTests.cpp
+    unit/RadiclePluginReachableTests.cpp
     unit/RadiclePluginReadApiTests.cpp
     unit/RadiclePluginEslTests.cpp
     unit/RadiclePluginEditableTests.cpp
     unit/ConditionFunctionsTests.cpp
     unit/ConditionBackendTests.cpp
+    unit/RadiclePluginConcurrencyTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
 target_include_directories(
@@ -133,6 +139,7 @@ target_link_libraries(
     fo4ide_test_plugin_backend
     PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
 )
+target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)
 fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
 catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT 10)

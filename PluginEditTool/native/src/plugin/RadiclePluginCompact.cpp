@@ -40,7 +40,7 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
         return std::unexpected(Error{"PluginMissing", "CompactToEsl requires a plugin name"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});

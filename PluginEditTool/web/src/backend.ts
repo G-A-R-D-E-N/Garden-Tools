@@ -31,6 +31,13 @@ export interface Backend {
   RevertOverrides(badPlugin: string, patchPlugin: string, signature: string,
                   containsComponent: string, apply: boolean, limit: number): Promise<string>;
   CompactToEsl(plugin: string): Promise<string>;
+  CleanUnusedMasters(plugin: string, apply: boolean): Promise<string>;
+  CheckForErrors(plugin: string, limit: number): Promise<string>;
+  FindUnreachable(plugin: string, limit: number): Promise<string>;
+  LootCleaningReport(plugin: string): Promise<string>;
+  UpdateOnam(plugin: string): Promise<string>;
+  CopyAsDisabledOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
+  ComparePluginTo(plugin: string, otherPath: string, formKey?: string): Promise<string>;
   CheckEslEligibility(plugin: string): Promise<string>;
   CleanPlugin(plugin: string): Promise<string>;
   RenumberFormId(plugin: string, record: string, newId: string): Promise<string>;
@@ -212,27 +219,6 @@ export interface FieldNode {
 }
 
 
-export interface Chat {
-  SendMessage(sessionId: string, text: string, imagesJson: string): Promise<void>;
-  CancelMessage(sessionId: string): Promise<void>;
-  ResetChat(): Promise<void>;
-  IsAgentReady(): Promise<boolean>;
-
-  ListSessions(): Promise<string>;
-  NewSession(): Promise<string>;
-  LoadSession(id: string): Promise<string>;
-  RenameSession(id: string, name: string): Promise<string>;
-  DeleteSession(id: string): Promise<string>;
-  ForkSession(id: string): Promise<string>;
-  GetCommands(): Promise<string>;
-}
-
-export interface ChatSessionMeta { id: string; name: string; createdAt: string; count: number; }
-export interface ChatSessionMsg { isUser: boolean; text: string; }
-export interface ChatSessionFull { id: string; name: string; messages: ChatSessionMsg[]; }
-export interface SlashCommand { name: string; args: string; help: string; }
-
-
 export interface PapyrusHost {
   BrowseForFile(title: string, filter: string): Promise<string>;
   BrowseForFolder(title: string): Promise<string>;
@@ -364,6 +350,7 @@ export interface MastersHost {
 
   Reorder(plugin: string, orderJson: string): Promise<string>;
   SetLight(plugin: string, light: boolean): Promise<string>;
+  CleanUnused(plugin: string, apply: boolean): Promise<string>;
   SavePlugin(plugin: string): Promise<string>;
 }
 
@@ -566,7 +553,6 @@ declare global {
         hostObjects?: {
           backend?: Backend;
           appInterop?: AppInterop;
-          chat?: Chat;
           settings?: SettingsHost;
           papyrus?: PapyrusHost;
           nif?: NifHost;

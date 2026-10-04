@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
@@ -13,7 +13,7 @@ import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
 import BlueprintPanel from './Blueprint/BlueprintPanel';
 import { readFavourites, removeFavourite, FAVOURITES_CHANGED } from './favourites';
-import { useDialogs } from './dialogs';
+import { useDialogs } from './useDialogs';
 
 interface McpLiveMsg {
   Tool: string;
@@ -25,6 +25,11 @@ interface McpLiveMsg {
   ts: number;
   isNew?: boolean;
 }
+interface HostMessage {
+  Type?: string;
+  Text?: string;
+  Value?: number;
+}
 import './MainShell.css';
 import SettingsModal from './SettingsModal';
 import RecordView from './RecordView';
@@ -33,78 +38,11 @@ import TopBar, { type ShellTab } from './Shell/TopBar';
 import DetailRail from './Shell/DetailRail';
 import StatusBar from './Shell/StatusBar';
 import type {
-  ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
+  AppInterop, ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
 } from './backend';
 import type { RecordTab } from './RecordView';
-
-interface RecordNode {
-  Key: string;
-  ConflictStatus: number;
-  IsRecordNode: boolean;
-  HasChildren: boolean;
-  FilePath: string;
-}
-
-const ExplorerTree = ({ path, node, backend, onOpenRecord }: { path: string, node: RecordNode, backend: any, onOpenRecord: (path: string, node: RecordNode) => void }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [children, setChildren] = useState<RecordNode[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState('');
-
-  const toggle = async () => {
-    if (!expanded) {
-      if (node.HasChildren && children.length === 0) {
-        setLoading(true);
-
-
-        try {
-          const json = await backend.GetChildren(path);
-          setChildren(JSON.parse(json));
-        } catch (err: any) {
-          setLoadError(err?.message || String(err));
-        } finally {
-          setLoading(false);
-        }
-      }
-    }
-    setExpanded(!expanded);
-  };
-
-  return (
-    <div className="tree-node">
-      <div
-        className={`tree-row ${node.IsRecordNode ? 'is-record' : ''}`}
-        onClick={node.IsRecordNode ? () => onOpenRecord(path, node) : toggle}
-      >
-        <div className="tree-icon-container">
-          {node.HasChildren ? (
-            expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-          ) : <div style={{width: 14}}/>}
-        </div>
-        <div className="tree-icon">
-          {node.IsRecordNode ? <FileBox size={14} color="#569CD6"/> : <Database size={14} color="#DCDCAA" />}
-        </div>
-        <span
-          className="tree-label"
-          style={node.ConflictStatus === 1 ? { color: '#c79a5e' }
-            : node.ConflictStatus === 2 ? { color: '#b07a7a' }
-            : undefined}
-        >{node.Key}</span>
-        {loading && <span className="tree-loading">...</span>}
-        {!loading && loadError && (
-          <span className="tree-loading" style={{ color: '#f44747' }} title={loadError}>failed</span>
-        )}
-      </div>
-      {expanded && (
-        <div className="tree-children">
-          {children.map((c, i) => (
-            <ExplorerTree key={`${c.Key}:${i}`} path={`${path}\\${c.Key}`} node={c} backend={backend} onOpenRecord={onOpenRecord} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+import { errorMessage, errorText } from './errors';
+import ExplorerTree, { type RecordNode } from './Shell/ExplorerTree';
 
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
@@ -188,7 +126,7 @@ export default function MainShell() {
 
   const [recordTab, setRecordTab] = useState<RecordTab>('grid');
   const [plugins, setPlugins] = useState<RecordNode[]>([]);
-  const [backend, setBackend] = useState<any>(null);
+  const [backend, setBackend] = useState<AppInterop | null>(null);
   const [errorStr, setErrorStr] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [progress, setProgress] = useState<number | null>(null);
@@ -255,11 +193,12 @@ export default function MainShell() {
 
   const [aiHighlightField, setAiHighlightField] = useState('');
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-
+  const [aiHighlightSeq, setAiHighlightSeq] = useState(0);
 
   const openRecordRef = useRef(openRecord);
-  openRecordRef.current = openRecord;
+  const reloadMatrixRef = useRef<() => Promise<void>>(async () => {});
+  const openByFormKeyRef = useRef<(formKey: string, pluginName: string) => Promise<void>>(async () => {});
+  useLayoutEffect(() => { openRecordRef.current = openRecord; });
 
 
   const [search, setSearch] = useState('');
@@ -285,6 +224,39 @@ export default function MainShell() {
     }
   }, []);
 
+  const parseMo2Status = (raw: unknown): Mo2Status | null => {
+    try {
+      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!value || typeof value !== 'object') return null;
+      return value as Mo2Status;
+    } catch {
+      return null;
+    }
+  };
+
+  const refreshMo2Status = async () => {
+    const b = window.chrome?.webview?.hostObjects?.appInterop as
+      | { GetMo2Status?: () => Promise<unknown> }
+      | undefined;
+    if (!b?.GetMo2Status) return;
+    try {
+      setMo2Status(parseMo2Status(await b.GetMo2Status()));
+    } catch {
+      setMo2Status(null);
+    }
+  };
+
+  const refreshPlugins = async () => {
+    const b = window.chrome?.webview?.hostObjects?.appInterop;
+    if (!b) return;
+    const json = await b.GetPlugins();
+    setPlugins(JSON.parse(json));
+    setErrorStr("");
+
+    await refreshNavigator();
+    await refreshMo2Status();
+  };
+
   useEffect(() => {
     const handleRejection = (event: PromiseRejectionEvent) => {
       let msg = "Unhandled Promise: ";
@@ -301,15 +273,13 @@ export default function MainShell() {
     };
     window.addEventListener('unhandledrejection', handleRejection);
 
-
-
-    const onMessage = (e: any) => {
-      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    const onMessage = (e: MessageEvent) => {
+      const data = (typeof e.data === 'string' ? JSON.parse(e.data) : e.data) as HostMessage | null;
       if (!data || !data.Type) return;
       if (data.Type === 'SetStatus') setStatus(data.Text || "");
-      if (data.Type === 'SetProgress') setProgress(data.Value < 0 ? null : data.Value);
+      if (data.Type === 'SetProgress') setProgress((data.Value ?? 0) < 0 ? null : data.Value ?? null);
       if (data.Type === 'McpLive') {
-        const ev: McpLiveMsg = { ...data, ts: Date.now(), isNew: true };
+        const ev: McpLiveMsg = { ...(data as Omit<McpLiveMsg, 'ts' | 'isNew'>), ts: Date.now(), isNew: true };
         setMcpFeed(prev => [ev, ...prev].slice(0, 12));
         setMcpActive(true);
         if (mcpActiveTimerRef.current) clearTimeout(mcpActiveTimerRef.current);
@@ -319,13 +289,14 @@ export default function MainShell() {
           if (cur && cur.matrix.FormKey === ev.Record) {
             reloadMatrixRef.current();
           } else {
-
             openByFormKeyRef.current(ev.Record, ev.Plugin);
           }
 
           if (ev.Field) {
             if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
             setAiHighlightField(ev.Field);
+            setAiHighlightSeq(s => s + 1);
+            setRecordTab('grid');
             highlightTimerRef.current = setTimeout(() => setAiHighlightField(''), 3000);
           }
         } else if (ev.IsWrite && openRecordRef.current) {
@@ -350,9 +321,9 @@ export default function MainShell() {
           setBackend(() => b);
           await refreshPlugins();
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Init Error:", err);
-        setErrorStr(err?.message || JSON.stringify(err) || String(err));
+        setErrorStr(errorMessage(err) ?? (JSON.stringify(err) || String(err)));
       }
     };
     init();
@@ -365,27 +336,7 @@ export default function MainShell() {
   }, []);
 
 
-  const parseMo2Status = (raw: unknown): Mo2Status | null => {
-    try {
-      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (!value || typeof value !== 'object') return null;
-      return value as Mo2Status;
-    } catch {
-      return null;
-    }
-  };
 
-  const refreshMo2Status = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop as
-      | { GetMo2Status?: () => Promise<unknown> }
-      | undefined;
-    if (!b?.GetMo2Status) return;
-    try {
-      setMo2Status(parseMo2Status(await b.GetMo2Status()));
-    } catch {
-      setMo2Status(null);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -409,16 +360,6 @@ export default function MainShell() {
     };
   }, [backend]);
 
-  const refreshPlugins = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop;
-    if (!b) return;
-    const json = await b.GetPlugins();
-    setPlugins(JSON.parse(json));
-    setErrorStr("");
-
-    await refreshNavigator();
-    await refreshMo2Status();
-  };
 
   const isPendingReloadError = (err: unknown) =>
     String((err as { message?: string })?.message ?? err ?? '').includes('PluginHasPendingChanges');
@@ -438,14 +379,14 @@ export default function MainShell() {
     try {
       try {
         await b.LoadEnvironment();
-      } catch (err: any) {
+      } catch (err) {
         if (!isPendingReloadError(err)) throw err;
         if (!(await confirmDiscardPendingReload())) return;
         await b.LoadEnvironment(true);
       }
       await refreshPlugins();
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setProgress(null);
       setEnvLoading(false);
@@ -461,14 +402,14 @@ export default function MainShell() {
       setEnvLoading(true);
       try {
         await b.OpenMo2Profile(path);
-      } catch (err: any) {
+      } catch (err) {
         if (!isPendingReloadError(err)) throw err;
         if (!(await confirmDiscardPendingReload())) return;
         await b.OpenMo2Profile(path, true);
       }
       await refreshPlugins();
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setProgress(null);
       setEnvLoading(false);
@@ -486,8 +427,8 @@ export default function MainShell() {
       await refreshNavigator();
       if (openRecord) await reloadMatrix();
       setStatus('Refreshed.');
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     }
   };
 
@@ -498,8 +439,8 @@ export default function MainShell() {
       const summary = await b.ScanConflicts();
       setStatus(summary);
       await refreshPlugins();
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setProgress(null);
     }
@@ -517,8 +458,8 @@ export default function MainShell() {
       const report = await b.ScanBrokenRefs();
       setBrokenRefsReport(report);
       setStatus('Broken-ref scan complete.');
-    } catch (err: any) {
-      setErrorStr(err?.message || JSON.stringify(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     } finally {
       setBrokenRefsScanning(false);
       setProgress(null);
@@ -552,17 +493,16 @@ export default function MainShell() {
         return;
       }
       putRecord({ title: node.Key, plugin, matrix });
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     } finally {
       setRecordLoading(false);
     }
   };
 
-
   useEffect(() => {
     const q = search.trim();
-    if (q.length < 2) { setSearchResults(null); return; }
+    if (q.length < 2) return;
     const t = setTimeout(async () => {
       const back = window.chrome?.webview?.hostObjects?.backend;
       if (!back) return;
@@ -571,19 +511,15 @@ export default function MainShell() {
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
-
+  const changeSearch = (v: string) => { setSearch(v); if (v.trim().length < 2) setSearchResults(null); };
 
   const [conflicts, setConflicts] = useState<ConflictEntry[] | null>(null);
   const [conflictSel, setConflictSel] = useState<Record<string, boolean>>({});
   const [conflictBusy, setConflictBusy] = useState(false);
 
-  const loadConflicts = async () => {
-    const b = window.chrome?.webview?.hostObjects?.backend;
-    if (!b) return;
-    setConflicts(null);
-    try { setConflicts(JSON.parse(await b.GetConflicts())); }
-    catch (e: any) { setErrorStr(e?.message || String(e)); setConflicts([]); }
-  };
+  const loadConflicts = () => window.chrome?.webview?.hostObjects?.backend?.GetConflicts()
+    .then(raw => setConflicts(JSON.parse(raw)))
+    .catch(e => { setErrorStr(errorText(e)); setConflicts([]); });
 
 
   useEffect(() => {
@@ -611,9 +547,8 @@ export default function MainShell() {
       let allowLosing = false;
       let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
       if (res.requiresOverwrite) {
-        const existing = Array.isArray(res.existing) ? res.existing : [];
-        const sample = existing.slice(0, 5)
-          .map((x: any) => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
+        const existing: { formKey: string; editorId?: string }[] = Array.isArray(res.existing) ? res.existing : [];
+        const sample = existing.slice(0, 5).map(x => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
         const more = existing.length > 5 ? `\n...and ${existing.length - 5} more.` : '';
         const proceed = await askConfirm({
           title: 'Overwrite existing overrides?',
@@ -655,8 +590,8 @@ export default function MainShell() {
         : '';
       setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
       if (!res.failed) setConflictSel({});
-    } catch (e: any) {
-      setStatus('Batch copy failed: ' + (e?.message || e));
+    } catch (e) {
+      setStatus('Batch copy failed: ' + (errorMessage(e) ?? String(e)));
     } finally { setConflictBusy(false); }
   };
 
@@ -670,8 +605,8 @@ export default function MainShell() {
       const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
       if (!matrix) { setErrorStr(`No record for ${hit.FormKey}.`); return; }
       putRecord({ title: hit.EditorID || hit.FormKey, plugin: hit.Plugin, matrix });
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     } finally {
       setRecordLoading(false);
     }
@@ -687,8 +622,8 @@ export default function MainShell() {
       const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
       if (!matrix) { setErrorStr(`No record for ${formKey}.`); return; }
       putRecord({ title: matrix.EditorID || formKey, plugin: pluginName || matrix.Winner, matrix });
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     } finally {
       setRecordLoading(false);
     }
@@ -704,22 +639,24 @@ export default function MainShell() {
 
       if (!matrix || !matrix.Plugins || matrix.Plugins.length === 0) closeRecordTab(openRecord.matrix.FormKey);
       else setOpenRecords(prev => prev.map(r => (r.matrix.FormKey === matrix.FormKey ? { ...r, matrix } : r)));
-    } catch (err: any) {
-      setErrorStr(err?.message || String(err));
+    } catch (err) {
+      setErrorStr(errorMessage(err) ?? String(err));
     }
   };
 
 
 
-  const reloadMatrixRef = useRef(reloadMatrix);
-  reloadMatrixRef.current = reloadMatrix;
-  const openByFormKeyRef = useRef(openByFormKey);
-  openByFormKeyRef.current = openByFormKey;
+  useLayoutEffect(() => {
+    reloadMatrixRef.current = reloadMatrix;
+    openByFormKeyRef.current = openByFormKey;
+  });
 
 
-  useEffect(() => {
+  const [prevOpenKey, setPrevOpenKey] = useState(activeKey);
+  if (prevOpenKey !== activeKey) {
+    setPrevOpenKey(activeKey);
     if (openRecord) { setShellTab('record'); setRecordTab('grid'); }
-  }, [openRecord?.matrix?.FormKey]);
+  }
 
 
   const commandSearch = useCallback(async (q: string): Promise<SearchHit[]> => {
@@ -847,10 +784,10 @@ export default function MainShell() {
           <Search size={13} />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => changeSearch(e.target.value)}
             placeholder="Search plugins & records…"
           />
-          {search && <button className="sidebar-search-clear" onClick={() => setSearch('')} title="Clear"><X size={13} /></button>}
+          {search && <button className="sidebar-search-clear" onClick={() => changeSearch('')} title="Clear"><X size={13} /></button>}
         </div>
         )}
 
@@ -942,7 +879,7 @@ export default function MainShell() {
         {activeTab === 'explorer' && treeMode === 'conflicts' && (
           <div className="conflicts-panel">
             <div className="conflicts-actions">
-              <button className="sidebar-action-btn" onClick={loadConflicts}>Rescan</button>
+              <button className="sidebar-action-btn" onClick={() => { setConflicts(null); loadConflicts(); }}>Rescan</button>
               <button className="sidebar-action-btn" disabled={conflictBusy} onClick={batchCopyAsOverride}>
                 Copy selected → patch
               </button>
@@ -1032,6 +969,7 @@ export default function MainShell() {
                   activeTab={recordTab}
                   onTabChange={setRecordTab}
                   highlightField={aiHighlightField}
+                  highlightSeq={aiHighlightSeq}
                   onPluginsChanged={() => { void refreshPlugins(); }}
                 />
               ) : (
@@ -1072,7 +1010,7 @@ export default function MainShell() {
           onOpenConflictsTab={() => { setRecordTab('conflicts'); setShellTab('record'); }}
           onOpenRecord={openByFormKey}
           onAddToFilter={needle => {
-            setSearch(needle);
+            changeSearch(needle);
             setActiveTab('explorer');
             setTreeMode('files');
           }}

@@ -199,3 +199,24 @@ TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) 
   ASSERT_TRUE(constraint.has_value());
   EXPECT_EQ(fo4::schema::authoring_subrecords(*constraint).size(), 7u);
 }
+
+TEST(ListPreflight, PackedKeywordArrayIsChecked4BytesPerElement) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("MISC");
+  record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+  record.subrecords.push_back(u32_subrecord(fo4::Signature::from_string("KSIZ"), 2));
+  fo4::Subrecord kwda;
+  kwda.signature = fo4::Signature::from_string("KWDA");
+  kwda.data.resize(8);
+  record.subrecords.push_back(kwda);
+  for (const auto& issue : fo4::schema::preflight_record(record)) {
+    EXPECT_NE(issue.code, "invalid_formlink_list_storage") << issue.message;
+  }
+
+  record.subrecords.back().data.resize(6);
+  bool flagged = false;
+  for (const auto& issue : fo4::schema::preflight_record(record)) {
+    flagged = flagged || issue.code == "invalid_formlink_list_storage";
+  }
+  EXPECT_TRUE(flagged);
+}

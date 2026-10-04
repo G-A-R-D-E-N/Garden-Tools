@@ -44,9 +44,16 @@ fo4inspect record testdata/FW_HeatherSurvivalPatch.esp 01000800
 fo4inspect raw testdata/FW_HeatherSurvivalPatch.esp 01000800
 fo4inspect write testdata/FW_HeatherSurvivalPatch.esp /tmp/heather-copy.esp
 fo4inspect formlinks testdata/FW_HeatherSurvivalPatch.esp
+fo4inspect check Fallout4.esm testdata/FW_HeatherSurvivalPatch.esp
+fo4inspect itm Fallout4.esm testdata/FW_HeatherSurvivalPatch.esp
+fo4inspect udr testdata/FW_HeatherSurvivalPatch.esp
+fo4inspect unused-masters testdata/FW_HeatherSurvivalPatch.esp
+fo4inspect diff before.esp after.esp
 ```
 
 JSON is the default output.
+
+`check` loads the listed plugins as a load order (masters first) and reports problems in the last one: unresolved or wrong-type FormLinks, links to deleted records, out-of-range master indexes, schema preflight violations and circular leveled lists. `itm` lists the last plugin's identical-to-master records (nested ones before their parent) and its deleted-record counts, `udr` lists deleted placed references, `unused-masters` reports per-master reference counts, and `diff` lists added, removed and changed records.
 
 ## Canonical identity
 

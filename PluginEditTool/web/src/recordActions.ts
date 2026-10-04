@@ -1,7 +1,7 @@
 import type { ConflictFieldRow, ConflictMatrix } from './backend';
-import { useDialogs } from './dialogs';
-
-const errorText = (e: unknown) => (e as { message?: string } | null)?.message || String(e);
+import { useDialogs } from './useDialogs';
+import type { CompareRow } from './PluginCompareDialog';
+import { errorText } from './errors';
 
 export const back = () => window.chrome?.webview?.hostObjects?.backend;
 
@@ -13,7 +13,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
   onReload: () => Promise<void>;
   onPluginsChanged?: () => void;
 }) {
-  const { confirm: askConfirm, prompt: askPrompt, pickPlugin: askForTarget } = useDialogs();
+  const { confirm: askConfirm, prompt: askPrompt, pickPlugin: askForTarget, compare: showCompare } = useDialogs();
 
   const copyAsOverrideInto = async (col: number) => {
     closeMenu();
@@ -23,6 +23,25 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
       confirmLabel: 'Copy', defaultTarget: editablePlugins[0] ?? '',
     });
     if (picked) await copyInto(col, picked.target);
+  };
+
+  const copyAsDisabledOverrideInto = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const picked = await askForTarget({
+      title: 'Copy as disabled override into',
+      description: `Copies ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[col]} as an override and marks the copy Initially Disabled.`,
+      confirmLabel: 'Copy', defaultTarget: editablePlugins[0] ?? '',
+    });
+    if (!picked) return;
+    setStatus('Copying…');
+    try {
+      const msg = await b.CopyAsDisabledOverride(matrix.Plugins[col], matrix.FormKey, picked.target, false);
+      setStatus(msg.startsWith('LOSES:') || msg.startsWith('EXISTS:')
+        ? `Not copied -- ${msg.slice(msg.indexOf(':') + 1).trim()}` : msg);
+      await onReload();
+    } catch (e) { setStatus('Copy failed: ' + errorText(e)); }
   };
 
   const copyInto = async (col: number, target: string) => {
@@ -112,6 +131,22 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     setStatus('Compacting…');
     try { setStatus(await b.CompactToEsl(matrix.Plugins[col])); await onReload(); }
     catch (e) { setStatus('Compact failed: ' + errorText(e)); }
+  };
+
+  const cleanMasters = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    try {
+      const preview = await b.CleanUnusedMasters(plug, false);
+      if (!preview.startsWith('DRY RUN:')) { setStatus(preview); return; }
+      if (!await askConfirm({ title: 'Clean Masters', confirmLabel: 'Remove unused',
+        message: preview.replace('DRY RUN: would remove', 'Remove') + '\n\nSave Plugin afterwards to write the change.' })) return;
+      setStatus('Cleaning masters…');
+      setStatus(await b.CleanUnusedMasters(plug, true));
+      await onReload();
+    } catch (e) { setStatus('Clean masters failed: ' + errorText(e)); }
   };
 
   const cleanPlugin = async (col: number) => {
@@ -296,6 +331,81 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     catch (e) { setStatus('Create SEQ failed: ' + errorText(e)); }
   };
 
+  const compareTo = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    const path = await askPrompt({
+      title: 'Compare to...',
+      description: `Diffs ${plug} against another copy of it. The other file is only read.`,
+      label: 'Path to the other .esp/.esm/.esl', placeholder: 'C:\\Backups\\MyMod.esp',
+      validate: v => v.trim().length > 0 ? null : 'Enter a file path.',
+    });
+    if (!path) return;
+    const otherPath = path.trim();
+    try {
+      const rows: CompareRow[] = JSON.parse(await b.ComparePluginTo(plug, otherPath));
+      const count = (c: string) => rows.filter(r => r.Change === c).length;
+      setStatus(rows.length === 0 ? `${plug} matches ${otherPath}.`
+        : `${count('changed')} changed, ${count('added')} added, ${count('removed')} removed vs ${otherPath}.`);
+      await showCompare({
+        plugin: plug, otherPath, rows,
+        loadRecord: async formKey => JSON.parse(await b.ComparePluginTo(plug, otherPath, formKey)),
+      });
+    } catch (e) { setStatus('Compare failed: ' + errorText(e)); }
+  };
+
+  const checkForErrors = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    setStatus(`Checking ${plug} for errors…`);
+    try {
+      const rows: { Code: string; Severity: string; FormKey: string; Message: string }[] =
+        JSON.parse(await b.CheckForErrors(plug, 500));
+      const errors = rows.filter(r => r.Severity === 'error').length;
+      setStatus(rows.length === 0 ? `No errors found in ${plug}.`
+        : `${errors} error(s), ${rows.length - errors} warning(s) in ${plug}:\n`
+          + rows.slice(0, 20).map(r => `${r.Severity} ${r.Code} ${r.FormKey}: ${r.Message}`).join('\n')
+          + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
+    } catch (e) { setStatus('Check failed: ' + errorText(e)); }
+  };
+
+  const findUnreachable = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const plug = matrix.Plugins[col];
+    setStatus(`Building reachable info for ${plug}…`);
+    try {
+      const report: { Total: number; BySignature: Record<string, number>; Records: { FormKey: string; Signature: string }[] } =
+        JSON.parse(await b.FindUnreachable(plug, 20));
+      setStatus(report.Total === 0 ? `Every record in ${plug} is reachable.`
+        : `${report.Total} unreachable record(s) in ${plug}: `
+          + Object.entries(report.BySignature).sort((a, c) => c[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(', ')
+          + '\n' + report.Records.map(r => `${r.Signature} ${r.FormKey}`).join('\n')
+          + (report.Total > report.Records.length ? `\n…and ${report.Total - report.Records.length} more` : ''));
+    } catch (e) { setStatus('Reachable info failed: ' + errorText(e)); }
+  };
+
+  const updateOnam = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    try { setStatus(await b.UpdateOnam(matrix.Plugins[col])); await onReload(); }
+    catch (e) { setStatus('ONAM update failed: ' + errorText(e)); }
+  };
+
+  const lootReport = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    try { setStatus(await b.LootCleaningReport(matrix.Plugins[col])); }
+    catch (e) { setStatus('LOOT report failed: ' + errorText(e)); }
+  };
+
   const checkCircularLeveled = async (col: number) => {
     closeMenu();
     const b = back();
@@ -354,6 +464,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     deleteRecord,
     renumberFormId,
     compactEsl,
+    cleanMasters,
     cleanPlugin,
     copyAsNewRecord,
     deepCopyAsOverride,
@@ -363,6 +474,12 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     renumberPlugin,
     createSeq,
     checkCircularLeveled,
+    compareTo,
+    checkForErrors,
+    findUnreachable,
+    lootReport,
+    updateOnam,
+    copyAsDisabledOverrideInto,
     copyText,
     elementAction,
     askImpact,

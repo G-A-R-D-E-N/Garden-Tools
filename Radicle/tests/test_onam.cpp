@@ -188,3 +188,20 @@ TEST(Onam, MasterReorderPreservesLogicalOverrideIdentity) {
       plugin.header.overrides[0], fo4::plugin_form_id_context(plugin));
   EXPECT_EQ(after, before);
 }
+
+TEST(Onam, Fo4ParticipantsIncludeParwAndNotAcre) {
+  auto plugin = fo4::read_plugin(make_header({"Base.esm"}), "Patch.esm");
+  auto cell = top_group("CELL");
+  cell.children.emplace_back(record("CELL", 0x00000010u));
+  auto children = nested_group(fo4::GroupType::cell_children);
+  auto temporary = nested_group(fo4::GroupType::cell_temporary_children);
+  temporary.children.emplace_back(record("PARW", 0x00000105u));
+  temporary.children.emplace_back(record("ACRE", 0x00000106u));
+  children.children.emplace_back(std::move(temporary));
+  cell.children.emplace_back(std::move(children));
+  plugin.groups.push_back(std::move(cell));
+  plugin.original_range.clear();
+  fo4::rebuild_tes4_onam(plugin);
+
+  EXPECT_EQ(plugin.header.overrides, std::vector<fo4::RawFormId>{fo4::RawFormId{0x00000105u}});
+}

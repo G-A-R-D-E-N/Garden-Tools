@@ -23,7 +23,7 @@ For Fallout 4, xEdit considers these signatures while rebuilding ONAM:
 - `PGRE`
 - `PMIS`
 - `ACHR`
-- `ACRE`
+- `PARW`
 - `PBEA`
 - `PFLA`
 - `PCON`
@@ -35,6 +35,8 @@ For Fallout 4, xEdit considers these signatures while rebuilding ONAM:
 - `INFO`
 
 The source also enters the branch for `CELL`, but explicitly does not emit the CELL FormID itself.
+
+This is the Fallout 4 `TES4` `ONAM` definition, `wbArray(ONAM, 'Overridden Forms', wbFormIDCk('Form', [ACHR,DIAL,DLBR,INFO,LAND,NAVM,PARW,PBAR,PBEA,PCON,PFLA,PGRE,PHZD,PMIS,REFR,SCEN]))` (source:TES5Edit/TES5Edit@dev-4.1.6 `Core/wbDefinitionsFO4.pas:12109`). The `PrepareSave` branch is shared across games: it also names `ACRE`, which is not a Fallout 4 record type, and `PARW`. `Radicle/src/plugin/onam.cpp:participates_in_fo4_onam` first listed `ACRE` and left out `PARW`, so a temporary `PARW` override was missing from ONAM. Test: `Radicle/tests/test_onam.cpp:Fo4ParticipantsIncludeParwAndNotAcre`.
 
 A record is emitted only when:
 

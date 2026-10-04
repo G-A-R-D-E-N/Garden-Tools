@@ -195,7 +195,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPluginRecordTypes(
         return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     // A typo'd plugin name must not be reported as "plugin with no records".
     if (loaded == nullptr) {
@@ -222,7 +222,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
     const auto limit = sizeArgument(arguments, 2, 200, 1000);
     const auto offset = sizeArgument(arguments, 3, 0, 1000000);
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     // An unknown plugin must be an error, not an empty grid: the two are
     // indistinguishable for the client otherwise.
@@ -436,7 +436,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsOfType(
         const fo4::Record* record{nullptr};
     };
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     std::map<fo4::FormKey, WinnerRow> winners;
     for (const auto& loaded : plugins_) {
         for (const auto* record : fo4::collect_records(loaded.plugin)) {
@@ -476,7 +476,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordDetails(
     if (!keyResult) return std::unexpected(keyResult.error());
     const auto& key = *keyResult;
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* winner = graph_.winner(key);
     if (winner == nullptr) {
         return std::unexpected(Error{
@@ -543,7 +543,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordPluginMatrix(
     if (!keyResult) return std::unexpected(keyResult.error());
     const auto& key = *keyResult;
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto& versions = graph_.versions(key);
     nlohmann::json rows = nlohmann::json::array();
     const fo4::Record* previous = nullptr;
@@ -574,7 +574,7 @@ Result<nlohmann::json> RadiclePluginBackend::getContainmentPath(
     if (!keyResult) return std::unexpected(keyResult.error());
     const auto& key = *keyResult;
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* winner = graph_.winner(key);
     if (winner == nullptr) {
         return std::unexpected(Error{

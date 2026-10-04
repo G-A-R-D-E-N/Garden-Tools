@@ -43,7 +43,8 @@ void writeBytes(const std::filesystem::path& path,
 }
 
 std::vector<std::byte> makePlugin(std::uint32_t tes4Flags = 0,
-                                  std::uint32_t nextFormId = 0x900) {
+                                  std::uint32_t nextFormId = 0x900,
+                                  std::string_view master = {}) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", tes4Flags, 0);
     fo4::test::ByteWriter hedr;
@@ -51,10 +52,20 @@ std::vector<std::byte> makePlugin(std::uint32_t tes4Flags = 0,
     hedr.u32(2);
     hedr.u32(nextFormId);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    if (!master.empty()) {
+        std::vector<std::byte> name;
+        for (const char ch : master) name.push_back(static_cast<std::byte>(ch));
+        name.push_back(std::byte{0});
+        fo4::test::ByteWriter data;
+        data.u32(0);
+        data.u32(0);
+        fo4::test::write_subrecord(out, "MAST", name);
+        fo4::test::write_subrecord(out, "DATA", data.bytes);
+    }
     fo4::test::end_record(out, tes4);
 
     const auto group = fo4::test::begin_group(out, "MISC", 0);
-    const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000800);
+    const auto record = fo4::test::begin_record(out, "MISC", 0, (master.empty() ? 0u : 0x01000000u) | 0x800u);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"Existing\0", 9});
     fo4::test::end_record(out, record);
     fo4::test::end_group(out, group);
@@ -298,12 +309,15 @@ TEST_CASE("Native lifecycle refuses protected Data plugins") {
 TEST_CASE("Native lifecycle creates and renumbers in light plugins") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
+    const auto basePath = root / "mods" / "Base" / "Base.esm";
     const auto pluginPath = root / "mods" / "LightMod" / "Light.esl";
-    writeBytes(pluginPath, makePlugin(fo4::RecordFlags::small_file));
+    writeBytes(basePath, makePlugin());
+    writeBytes(pluginPath, makePlugin(fo4::RecordFlags::small_file, 0x900, "Base.esm"));
 
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
         {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", basePath, "Base"),
             pluginEntry("Light.esl", pluginPath, "LightMod")
         })}
     };
@@ -335,6 +349,22 @@ TEST_CASE("Native lifecycle creates and renumbers in light plugins") {
         "RenumberRecord",
         nlohmann::json::array({"Light.esl", "000001:Light.esl", "001000:Light.esl"}));
     CHECK_FALSE(tooHigh.has_value());
+}
+
+TEST_CASE("Native lifecycle keeps the 0x800 floor in a light plugin without a master") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "LightMod" / "Light.esl";
+    writeBytes(pluginPath, makePlugin(fo4::RecordFlags::small_file));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", nlohmann::json::array({
+        pluginEntry("Light.esl", pluginPath, "LightMod")})}}).has_value());
+
+    CHECK_FALSE(backend.invokeBackend(
+        "RenumberRecord", nlohmann::json::array({"Light.esl", "000800:Light.esl", "000001:Light.esl"})).has_value());
+    CHECK(backend.invokeBackend(
+        "RenumberRecord", nlohmann::json::array({"Light.esl", "000800:Light.esl", "000901:Light.esl"})).has_value());
 }
 
 TEST_CASE("Native lifecycle refuses delete and renumber across external references") {
