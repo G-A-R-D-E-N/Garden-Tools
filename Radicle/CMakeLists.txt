@@ -381,6 +381,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_text_boundary.cpp
     tests/test_parity_dds.cpp
     tests/test_pex.cpp
+    tests/test_pex_hardening.cpp
+    tests/test_pex_corpus.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )

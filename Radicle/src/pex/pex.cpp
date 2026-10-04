@@ -144,8 +144,8 @@ const std::string* tableString(const std::vector<std::string>& table, std::uint1
 
 const std::string& stringAt(const std::vector<std::string>& table, std::uint16_t index) {
     if (const auto* s = tableString(table, index)) return *s;
-    static const std::string missing = "<str#?>";
-    return missing;
+    fail("String table index " + std::to_string(index) + " is out of range; the table has " +
+         std::to_string(table.size()) + " entries.");
 }
 
 std::string escaped(std::string_view text) {
@@ -227,7 +227,16 @@ PexFunction readFunction(Reader& r, const std::vector<std::string>& table) {
         for (int a = 0; a < meta.args; ++a) instruction.args.push_back(readValue(r, table));
         if (meta.varargs) {
             const auto countValue = readValue(r, table);
-            const auto n = countValue.type == PexValueType::Integer ? countValue.int_ : 0;
+            if (countValue.type != PexValueType::Integer || countValue.int_ < 0) {
+                fail("Variable-argument count for " + std::string(meta.name) +
+                     " must be a non-negative integer.");
+            }
+            const auto n = countValue.int_;
+            if (static_cast<std::size_t>(n) > r.size() - r.position()) {
+                fail("Variable-argument count " + std::to_string(n) + " for " +
+                     std::string(meta.name) + " exceeds the " +
+                     std::to_string(r.size() - r.position()) + " bytes left in the file.");
+            }
             for (int a = 0; a < n; ++a) instruction.args.push_back(readValue(r, table));
         }
         fn.instructions.push_back(std::move(instruction));
@@ -459,6 +468,10 @@ PexFile PexFile::fromBytes(const std::vector<std::uint8_t>& bytes) {
              "; Fallout 4 is game id 2 at format 3.9. It was built by another game's Papyrus "
              "compiler.");
     }
+    if (pex.majorVersion != 3) {
+        fail("Unsupported .pex format major version " + std::to_string(pex.majorVersion) +
+             "; only the Fallout 4 3.x container is supported.");
+    }
 
     pex.sourceFileName = r.latin1();
     pex.userName = r.latin1();
@@ -589,7 +602,12 @@ PexFile PexFile::fromBytes(const std::vector<std::uint8_t>& bytes) {
         }
 
         const auto body = r.position() - bodyStart;
-        if (declaredSize == body) obj.sizeIncludesItself = false;
+        if (declaredSize == body) {
+            obj.sizeIncludesItself = false;
+        } else if (declaredSize != body + sizeof(std::uint32_t)) {
+            fail("Object \"" + obj.name + "\" declares " + std::to_string(declaredSize) +
+                 " bytes but its body is " + std::to_string(body) + " bytes.");
+        }
 
         pex.objects.push_back(std::move(obj));
     }
