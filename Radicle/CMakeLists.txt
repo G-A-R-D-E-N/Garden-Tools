@@ -407,7 +407,7 @@ if(RADICLE_BUILD_TESTS)
   target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
-  gtest_discover_tests(fo4_tests)
+  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120)
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_env_bench_non_ansi_data_dir
              COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>

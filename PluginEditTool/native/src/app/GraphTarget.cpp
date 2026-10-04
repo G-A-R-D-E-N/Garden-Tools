@@ -1,5 +1,6 @@
 #include <fo4ide/app/ServiceTargets.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>

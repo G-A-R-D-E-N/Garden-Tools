@@ -1,5 +1,6 @@
 #include <fo4/pex/pex.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <functional>
