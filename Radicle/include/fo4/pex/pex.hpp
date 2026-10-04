@@ -7,7 +7,6 @@
 
 namespace fo4::pex {
 
-// Port of PexValueType / PexValue.
 enum class PexValueType : std::uint8_t {
     None = 0,
     Identifier = 1,
@@ -140,8 +139,6 @@ struct PexStructOrder {
     std::vector<std::string> memberNames;
 };
 
-// Port of PexFile: the .pex object model plus binary reader/writer for the
-// Fallout 4 (little-endian, game id 2, format 3.9) container.
 struct PexFile {
     std::vector<std::uint8_t> trailingBytes;
 
@@ -185,8 +182,6 @@ struct PexFile {
         {"array_removelast", 1, false}, {"array_remove", 3, false}, {"array_clear", 1, false},
     };
 
-    // Throws std::runtime_error on malformed input (mirrors the C#
-    // InvalidDataException).
     static PexFile fromBytes(const std::vector<std::uint8_t>& bytes);
 
     std::vector<std::uint8_t> toBytes() const;

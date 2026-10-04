@@ -4,15 +4,6 @@ using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
 
-/// <summary>
-/// A read-only snapshot of one .seq container.
-/// </summary>
-/// <remarks>
-/// A .seq is a bare array of little-endian uint32 runtime FormIDs: no header, no count and no
-/// magic. Entries stay raw FormIDs and this model never resolves one to a FormKey, because that
-/// needs a load order the container does not carry. The evidence and the rules that stay UNPROVEN
-/// are in Radicle/docs/SEQ_FORMAT.md.
-/// </remarks>
 public sealed class SeqFile : IDisposable
 {
     private IntPtr _handle;

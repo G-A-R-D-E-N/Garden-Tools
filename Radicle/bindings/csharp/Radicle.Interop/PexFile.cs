@@ -25,16 +25,6 @@ public sealed record PexObjectInfo(
     byte[] ParentClassName,
     PexObjectCounts Counts);
 
-/// <summary>
-/// A read-only snapshot of one .pex container.
-/// </summary>
-/// <remarks>
-/// The snapshot is taken when the file is parsed, so every property stays readable after
-/// <see cref="Dispose"/>. Names and string table entries are raw bytes: the container stores one
-/// byte per character and the character encoding above 0x7F is UNPROVEN, so this layer never
-/// transcodes. Latin-1 is a reading a consumer may apply to those bytes, not something this model
-/// assumes.
-/// </remarks>
 public sealed class PexFile : IDisposable
 {
     private IntPtr _handle;

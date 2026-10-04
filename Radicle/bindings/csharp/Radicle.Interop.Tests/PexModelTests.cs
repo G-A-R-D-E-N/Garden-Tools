@@ -11,8 +11,6 @@ public class PexModelTests
 {
     private static readonly byte[] HighBytes = { 0x80, 0xA9, 0xFE, 0xFF };
 
-    // A minimal but complete Fallout 4 .pex built byte by byte, so the fixture is project-authored
-    // and needs no corpus. One object with one variable, and one state with one empty function.
     private static byte[] SyntheticPex()
     {
         var bytes = new List<byte>();

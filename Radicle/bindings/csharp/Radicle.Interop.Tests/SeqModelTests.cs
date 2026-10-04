@@ -8,8 +8,6 @@ namespace Radicle.Interop.Tests;
 
 public class SeqModelTests
 {
-    // A .seq is a bare array of little-endian uint32 runtime FormIDs, so the fixture is a list of
-    // values the test writes itself. Nothing here comes from a shipped or third-party file.
     private static byte[] SyntheticSeq(params uint[] values)
     {
         var bytes = new List<byte>();
