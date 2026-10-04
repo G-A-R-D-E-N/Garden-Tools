@@ -164,7 +164,7 @@ TEST(CApiSeq, OutOfRangeIndexReturnsInvalidArgument) {
   radicle_seq_destroy(seq);
 }
 
-TEST(CApiSeq, AbiVersionIsFive) {
-  EXPECT_EQ(radicle_abi_version(), 5u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 5u);
+TEST(CApiSeq, AbiVersionIsAtLeastTheSeqExports) {
+  EXPECT_GE(radicle_abi_version(), 5u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, radicle_abi_version());
 }

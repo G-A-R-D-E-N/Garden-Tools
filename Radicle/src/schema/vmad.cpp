@@ -536,4 +536,74 @@ VmadScripts read_vmad_scripts(std::span<const std::byte> data) {
   return result;
 }
 
+QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int16_t object_format) {
+  QuestVmadExtras result;
+  try {
+    Slice slice(data);
+    slice.u8();
+    const auto fragment_count = slice.u16();
+    result.script_name = slice.wstring();
+    if (!result.script_name.empty()) {
+      slice.u8();
+      const auto properties = slice.u16();
+      for (std::uint16_t i = 0; i < properties; ++i) {
+        result.properties.push_back(read_property(slice, object_format));
+      }
+    }
+
+    result.fragments.reserve(fragment_count);
+    for (std::uint16_t i = 0; i < fragment_count; ++i) {
+      QuestVmadFragment fragment;
+      fragment.stage = slice.u16();
+      fragment.unknown = slice.u16();
+      fragment.stage_index = static_cast<std::int32_t>(slice.u32());
+      slice.u8();
+      fragment.script = slice.wstring();
+      fragment.function = slice.wstring();
+      result.fragments.push_back(std::move(fragment));
+    }
+
+    const auto alias_count = slice.u16();
+    result.aliases.reserve(alias_count);
+    for (std::uint16_t i = 0; i < alias_count; ++i) {
+      QuestVmadAliasScripts alias;
+      if (object_format == 2) {
+        slice.u16();
+        alias.alias_id = slice.i16();
+        slice.u32();
+      } else if (object_format == 1) {
+        slice.u32();
+        alias.alias_id = slice.i16();
+        slice.u16();
+      } else {
+        throw parse_error(slice.position(), "unknown VMAD object format");
+      }
+      slice.i16();
+      alias.script_format = slice.i16();
+      const auto scripts = slice.u16();
+      for (std::uint16_t s = 0; s < scripts; ++s) {
+        VmadScript script;
+        script.name = slice.wstring();
+        if (!script.name.empty()) {
+          script.flags = slice.u8();
+          const auto properties = slice.u16();
+          for (std::uint16_t p = 0; p < properties; ++p) {
+            script.properties.push_back(read_property(slice, alias.script_format));
+          }
+        }
+        alias.scripts.push_back(std::move(script));
+      }
+      result.aliases.push_back(std::move(alias));
+    }
+    result.fully_consumed = slice.at_end();
+  } catch (const UnsupportedVmadProperty&) {
+    result.unsupported = true;
+    result.unsupported_reason = "a VMAD property type in the quest extras is unsupported";
+  } catch (const std::exception& error) {
+    result.unsupported = true;
+    result.unsupported_reason = error.what();
+  }
+  return result;
+}
+
 }  // namespace fo4

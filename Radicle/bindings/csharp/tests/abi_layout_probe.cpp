@@ -3,6 +3,7 @@
 #include "fo4/c_api_maintenance.h"
 #include "fo4/c_api_pex.h"
 #include "fo4/c_api_seq.h"
+#include "fo4/c_api_quest.h"
 #include <cstddef>
 #include <cstdio>
 

@@ -566,7 +566,7 @@ public unsafe struct PexObjectCounts
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 5u;
+    public const uint CompiledAbiVersion = 6u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -906,5 +906,8 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_entry_form_id")]
     public static extern Status SeqEntryFormId(IntPtr seq, nuint index, uint* out_form_id);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_runtime_rows")]
+    public static extern Status QuestRuntimeRows(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? form_key, IntPtr** out_rows, nuint* out_count);
 
 }
