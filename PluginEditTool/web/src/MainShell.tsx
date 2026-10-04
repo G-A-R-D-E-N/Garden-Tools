@@ -41,7 +41,7 @@ import type {
   AppInterop, ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
 } from './backend';
 import type { RecordTab } from './RecordView';
-import { errorMessage } from './errors';
+import { errorMessage, errorText } from './errors';
 import ExplorerTree, { type RecordNode } from './Shell/ExplorerTree';
 
 export default function MainShell() {
@@ -193,8 +193,7 @@ export default function MainShell() {
 
   const [aiHighlightField, setAiHighlightField] = useState('');
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-
+  const [aiHighlightSeq, setAiHighlightSeq] = useState(0);
 
   const openRecordRef = useRef(openRecord);
   const reloadMatrixRef = useRef<() => Promise<void>>(async () => {});
@@ -274,8 +273,6 @@ export default function MainShell() {
     };
     window.addEventListener('unhandledrejection', handleRejection);
 
-
-
     const onMessage = (e: MessageEvent) => {
       const data = (typeof e.data === 'string' ? JSON.parse(e.data) : e.data) as HostMessage | null;
       if (!data || !data.Type) return;
@@ -292,13 +289,14 @@ export default function MainShell() {
           if (cur && cur.matrix.FormKey === ev.Record) {
             reloadMatrixRef.current();
           } else {
-
             openByFormKeyRef.current(ev.Record, ev.Plugin);
           }
 
           if (ev.Field) {
             if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
             setAiHighlightField(ev.Field);
+            setAiHighlightSeq(s => s + 1);
+            setRecordTab('grid');
             highlightTimerRef.current = setTimeout(() => setAiHighlightField(''), 3000);
           }
         } else if (ev.IsWrite && openRecordRef.current) {
@@ -502,10 +500,9 @@ export default function MainShell() {
     }
   };
 
-
   useEffect(() => {
     const q = search.trim();
-    if (q.length < 2) { setSearchResults(null); return; }
+    if (q.length < 2) return;
     const t = setTimeout(async () => {
       const back = window.chrome?.webview?.hostObjects?.backend;
       if (!back) return;
@@ -514,19 +511,15 @@ export default function MainShell() {
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
-
+  const changeSearch = (v: string) => { setSearch(v); if (v.trim().length < 2) setSearchResults(null); };
 
   const [conflicts, setConflicts] = useState<ConflictEntry[] | null>(null);
   const [conflictSel, setConflictSel] = useState<Record<string, boolean>>({});
   const [conflictBusy, setConflictBusy] = useState(false);
 
-  const loadConflicts = async () => {
-    const b = window.chrome?.webview?.hostObjects?.backend;
-    if (!b) return;
-    setConflicts(null);
-    try { setConflicts(JSON.parse(await b.GetConflicts())); }
-    catch (e) { setErrorStr(errorMessage(e) ?? String(e)); setConflicts([]); }
-  };
+  const loadConflicts = () => window.chrome?.webview?.hostObjects?.backend?.GetConflicts()
+    .then(raw => setConflicts(JSON.parse(raw)))
+    .catch(e => { setErrorStr(errorText(e)); setConflicts([]); });
 
 
   useEffect(() => {
@@ -659,9 +652,11 @@ export default function MainShell() {
   });
 
 
-  useEffect(() => {
+  const [prevOpenKey, setPrevOpenKey] = useState(activeKey);
+  if (prevOpenKey !== activeKey) {
+    setPrevOpenKey(activeKey);
     if (openRecord) { setShellTab('record'); setRecordTab('grid'); }
-  }, [openRecord?.matrix?.FormKey]);
+  }
 
 
   const commandSearch = useCallback(async (q: string): Promise<SearchHit[]> => {
@@ -789,10 +784,10 @@ export default function MainShell() {
           <Search size={13} />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => changeSearch(e.target.value)}
             placeholder="Search plugins & records…"
           />
-          {search && <button className="sidebar-search-clear" onClick={() => setSearch('')} title="Clear"><X size={13} /></button>}
+          {search && <button className="sidebar-search-clear" onClick={() => changeSearch('')} title="Clear"><X size={13} /></button>}
         </div>
         )}
 
@@ -884,7 +879,7 @@ export default function MainShell() {
         {activeTab === 'explorer' && treeMode === 'conflicts' && (
           <div className="conflicts-panel">
             <div className="conflicts-actions">
-              <button className="sidebar-action-btn" onClick={loadConflicts}>Rescan</button>
+              <button className="sidebar-action-btn" onClick={() => { setConflicts(null); loadConflicts(); }}>Rescan</button>
               <button className="sidebar-action-btn" disabled={conflictBusy} onClick={batchCopyAsOverride}>
                 Copy selected → patch
               </button>
@@ -974,6 +969,7 @@ export default function MainShell() {
                   activeTab={recordTab}
                   onTabChange={setRecordTab}
                   highlightField={aiHighlightField}
+                  highlightSeq={aiHighlightSeq}
                   onPluginsChanged={() => { void refreshPlugins(); }}
                 />
               ) : (
@@ -1014,7 +1010,7 @@ export default function MainShell() {
           onOpenConflictsTab={() => { setRecordTab('conflicts'); setShellTab('record'); }}
           onOpenRecord={openByFormKey}
           onAddToFilter={needle => {
-            setSearch(needle);
+            changeSearch(needle);
             setActiveTab('explorer');
             setTreeMode('files');
           }}

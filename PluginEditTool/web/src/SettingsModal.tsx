@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import './SettingsModal.css';
-import { errorMessage } from './errors';
+import { errorText } from './errors';
 
 interface Settings {
   AiProvider: string;
@@ -54,7 +54,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       const h = host();
       if (!h) { setStatus('Settings bridge unavailable.'); return; }
       try { setS(JSON.parse(await h.GetSettings())); }
-      catch (e) { setStatus('Failed to load settings: ' + (errorMessage(e) ?? String(e))); }
+      catch (e) { setStatus('Failed to load settings: ' + errorText(e)); }
     })();
   }, []);
 
@@ -70,7 +70,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       if (geminiDraft.trim()) payload.GeminiApiKey = geminiDraft.trim();
       setStatus(await h.SaveSettings(JSON.stringify(payload)));
     }
-    catch (e) { setStatus('Save failed: ' + (errorMessage(e) ?? String(e))); }
+    catch (e) { setStatus('Save failed: ' + errorText(e)); }
   };
 
   const browse = async (key: keyof Settings, title: string) => {
@@ -92,7 +92,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     if (!h || !s) return;
     setClaudeTest('Testing…');
     try { setClaudeTest(await h.TestClaude(s.ClaudeCodePath || '')); }
-    catch (e) { setClaudeTest('✗ ' + (errorMessage(e) ?? String(e))); }
+    catch (e) { setClaudeTest('✗ ' + errorText(e)); }
   };
 
   return (
