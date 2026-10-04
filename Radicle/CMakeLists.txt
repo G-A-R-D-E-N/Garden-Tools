@@ -158,6 +158,7 @@ add_library(fo4
   src/environment/strings.cpp
   src/environment/base_records.cpp
   src/environment/material_swap.cpp
+  src/pex/pex.cpp
 )
 
 if(TARGET radicle_schema_check)
@@ -379,6 +380,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_env_bench_real.cpp
     tests/test_text_boundary.cpp
     tests/test_parity_dds.cpp
+    tests/test_pex.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
