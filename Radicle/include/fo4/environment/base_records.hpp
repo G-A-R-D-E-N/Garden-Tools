@@ -57,10 +57,20 @@ struct ClimateWeather {
   FormKey global;
 };
 
+struct ClimateTiming {
+  std::uint8_t sunrise_begin{0};
+  std::uint8_t sunrise_end{0};
+  std::uint8_t sunset_begin{0};
+  std::uint8_t sunset_end{0};
+  std::uint8_t volatility{0};
+  std::uint8_t moons_phase_length{0};
+};
+
 struct ClimateData {
   std::vector<ClimateWeather> weathers;
   std::optional<std::string_view> sun_texture;
   std::optional<std::string_view> sun_glare_texture;
+  std::optional<ClimateTiming> timing;
 };
 
 enum class WeatherColorGroup : std::uint8_t {
@@ -79,9 +89,29 @@ struct WeatherColors {
   std::optional<ByteColor> color(WeatherColorGroup group, std::size_t time) const noexcept;
 };
 
+struct WeatherParameters {
+  std::uint8_t wind_speed{0};
+  std::uint8_t transition_delta{0};
+  std::uint8_t sun_glare{0};
+  std::uint8_t sun_damage{0};
+  std::uint8_t precipitation_begin{0};
+  std::uint8_t precipitation_end{0};
+  std::uint8_t lightning_begin{0};
+  std::uint8_t lightning_end{0};
+  std::uint8_t lightning_frequency{0};
+  std::uint8_t flags{0};
+  ByteColor lightning_color;
+  std::uint8_t visual_effect_begin{0};
+  std::uint8_t visual_effect_end{0};
+  std::uint8_t wind_direction{0};
+  std::uint8_t wind_direction_range{0};
+  std::optional<std::uint8_t> wind_turbulence;
+};
+
 struct WeatherData {
   std::optional<WeatherColors> colors;
   std::vector<float> fog_distances;
+  std::optional<WeatherParameters> parameters;
 };
 
 struct StaticPlacement {

@@ -1,5 +1,33 @@
 # Radicle code notes
 
+## Climate timing and weather parameters (#343)
+
+`src/environment/base_records.cpp:decode_climate` decodes the six-byte CLMT
+TNAM and `decode_weather` decodes the measured 19/20-byte WTHR DATA variants.
+`docs/CLIMATE_WEATHER.md` pins the field-layout evidence and explicitly limits
+interpretation to stored bytes. `src/c_api_base_records.cpp:radicle_climate_decode`
+and `radicle_weather_decode` expose them in ABI 8; managed properties preserve
+the raw encoding. `include/fo4/forms/weather.hpp:Weather` provides a stable
+include name while `weather_concept.hpp` keeps existing consumers building.
+
+`bindings/csharp/tools/generate_interop.py:emit_probe` names the authoritative
+public header directory in the generated probe's existing source constraint.
+Its `offsetof` values describe Radicle's own compiled ABI, not game layouts.
+
+`probes/gardenengine/ClimateProbe.cs:ClimateProbe._Ready` runs in the current
+GardenEngine project, reads Commonwealth's climate and chosen weather through
+the generated C ABI binding, and invokes `CellService.BuildExteriorSkyJson`
+to verify that actual consumer path. It serializes stored timing/parameters
+and the existing sky payload, without a Mutagen lookup or asset conversion.
+The reflection call is confined to this integration probe because the
+existing consumer is private. The probe does not validate live transitions.
+
+`src/environment/base_records.cpp:decode_weather` keeps transition delta
+encoded. The private stamped record
+`E:/GardenEngine/git/garden-tools/git/gt-stack/git/F4RR/RE-Work/Runtime/Organized/1.10.163/README-Weather.md`
+confirms DATA byte 3 in `Sky::UpdateWeather` (RVA `0x64E530`) but leaves the
+duration bounds unnamed. The decoder therefore supplies no guessed hours.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
