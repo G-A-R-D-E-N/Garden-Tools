@@ -128,11 +128,11 @@ radicle_status radicle_record_resolve_form_id(
   if (env == nullptr || record == nullptr || out_key == nullptr)
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_key are required");
   return guarded("unknown exception while resolving record FormID", [&] {
-    const fo4::RawFormId raw{raw_form_id};
-    if (raw.is_none()) return RADICLE_STATUS_OK;
     const auto& ref = *to_ref(record);
     if (!belongs_to_env(env, &ref))
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+    const fo4::RawFormId raw{raw_form_id};
+    if (raw.is_none()) return RADICLE_STATUS_OK;
     if (raw.is_created() || raw.index_byte() > env->value.plugins().at(ref.plugin).masters.size())
       return fail(RADICLE_STATUS_PARSE_ERROR, "FormID index is outside the record plugin's master table");
     *out_key = to_c_key(*env, env->value.resolve_link(ref, raw));

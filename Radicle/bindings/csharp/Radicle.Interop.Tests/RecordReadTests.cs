@@ -55,6 +55,8 @@ public class RecordReadTests
 
         Assert.Equal(new FormKey("First.esp", 0x800), owner.ResolveFormId(record, 0x800));
         Assert.Throws<RadicleException>(() => other.ResolveFormId(record, 0x800));
+        Assert.Throws<RadicleException>(() => other.ResolveFormId(record, 0));
+        Assert.Throws<RadicleException>(() => other.ResolveFormId(record, 0xffffffff));
         Assert.Throws<RadicleException>(() => other.ReadPayload(record));
         Assert.Throws<RadicleException>(() => owner.ReadPayload(default));
     }

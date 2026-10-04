@@ -61,6 +61,14 @@ plausible rather than obvious when both environments have a plugin at that index
 that each define a record at local ID 0x800, checks the owner environment resolves it,
 and requires the other environment to refuse both `ResolveFormId` and `ReadPayload`.
 
+In `ResolveFormId` the membership test runs before the `RawFormId::is_none()` early
+return, so the handle is validated for every `raw_form_id` and not only for the ones
+that reach link resolution. `is_none()` is `value_ == 0xFFFFFFFFu`, so with the check
+after it a foreign handle plus `0xFFFFFFFF` returned `RADICLE_STATUS_OK` with a null
+key instead of being refused; `0` never took that path, because `is_none()` is false
+for it. The test asserts refusal for `0x800`, `0` and `0xFFFFFFFF`, which covers both
+the ordinary resolution path and the sentinel.
+
 The C caller supplies four writable signature bytes. Copied payload buffers use
 radicle_free_bytes; resolved plugin strings are borrowed until environment disposal.
 As with existing record readers, keep the environment alive throughout a call;
