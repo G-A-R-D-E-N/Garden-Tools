@@ -222,8 +222,8 @@ def emit_probe(model):
 def main():
     include_dir, cs_path, probe_path = map(Path, sys.argv[1:4])
     model = parse(include_dir)
-    Path(cs_path).write_text(emit_cs(model))
-    Path(probe_path).write_text(emit_probe(model))
+    Path(cs_path).write_bytes(emit_cs(model).encode("utf-8"))
+    Path(probe_path).write_bytes(emit_probe(model).encode("utf-8"))
 
 
 if __name__ == "__main__":

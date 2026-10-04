@@ -637,6 +637,37 @@ public unsafe struct PexObjectCounts
     public nuint FunctionCount;
 }
 
+public enum QuestPropertyOwner : int
+{
+    Script = 0,
+    Fragment = 1,
+    AliasScript = 2,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestProperty
+{
+    public QuestPropertyOwner Owner;
+    public int Alias;
+    public IntPtr Script;
+    public IntPtr Name;
+    public byte Type;
+    public byte Flags;
+    public byte HasInteger;
+    public int Integer;
+    public byte HasReal;
+    public float Real;
+    public byte HasBoolean;
+    public byte Boolean;
+    public IntPtr Text;
+    public byte HasObject;
+    public uint ObjectFormId;
+    public byte HasPropertyAlias;
+    public short PropertyAlias;
+    public byte HasElementCount;
+    public uint ElementCount;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
@@ -992,5 +1023,11 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_runtime_rows")]
     public static extern Status QuestRuntimeRows(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? form_key, IntPtr** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_runtime_properties")]
+    public static extern Status QuestRuntimeProperties(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? form_key, QuestProperty** out_properties, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_quest_properties")]
+    public static extern void FreeQuestProperties(QuestProperty* properties, nuint count);
 
 }

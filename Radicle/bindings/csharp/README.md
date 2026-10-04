@@ -55,9 +55,16 @@ To run the C# suite:
 
 Call `RadicleLibrary.SetPath(fullPath)` before any other call, or set `RADICLE_NATIVE_PATH`. Otherwise .NET's default probing looks for `radicle` (`radicle.dll` / `libradicle.so`).
 
+## Quest runtime data
+
+`QuestRuntime` reads one QUST record's VMAD and DNAM. `QuestRuntime.Rows` returns the C ABI's structural rows (`quest`, `script`, `fragment-script`, `fragment`, `alias`, `alias-script`, `unsupported`), `QuestRuntime.Properties` returns the structured `radicle_quest_property` entries with every decoded value, and `Decode` merges both.
+
+Properties are not rows because a VMAD value does not fit the row grammar: a string value can hold a tab or a newline, and an object property carries a FormID and an alias at once. `DecodeRows(rows, properties, quest)` takes both halves, so the row-to-model mapping is testable without a native plugin. Every row kind the C ABI emits is represented, including the attachment rows: a `script` row is a script the quest owns even when it declares no properties, and an `alias-script` row is a script an alias owns. Alias-owned scripts and their properties keep the alias id, so two aliases carrying the same script name stay distinct.
+
 ## Runtime notes
 
 - **Memory.** `RadicleEnvironment` parses every plugin in the load order into memory up front; nothing is read lazily. Measure a real load order with `radicle_env_bench "<Data dir>" [plugin ...]` (built with the Radicle tools), which reports load time, resident and peak memory, archive and string-table open times, and record counts.
+- **Snapshots.** `PexFile` and `SeqFile` copy everything they need while they parse, so their properties stay readable after `Dispose`. A `.pex` name or string-table entry stays raw bytes: the container stores one byte per character and the encoding above `0x7F` is UNPROVEN, so this layer never transcodes, and Latin-1 is a reading a consumer may apply to those bytes rather than something the model assumes. A `.seq` entry stays a raw FormID and is never resolved to a `FormKey`; the evidence is in `Radicle/docs/SEQ_FORMAT.md`.
 - **Load off the main thread.** Loading the official masters takes long enough to stall a frame. In Godot, build the `RadicleEnvironment` (and `StringTables` / `AssetResolver`) on a background thread or task, never on the main thread, and hand the finished objects over.
 - **Shipping the native library.** Export `radicle.dll` (Windows) or `libradicle.so` (Linux) with the Godot build and call `RadicleLibrary.SetPath(fullPath)` at startup, before any other Radicle call.
 - **Record handles are borrowed.** A `Record` belongs to the `RadicleEnvironment` that returned it. Do not use it after that environment is disposed, and never pass it to a different environment.

@@ -438,5 +438,25 @@ int main() {
   printf("PexObjectCounts.PropertyCount %zu\n", offsetof(radicle_pex_object_counts, property_count));
   printf("PexObjectCounts.StateCount %zu\n", offsetof(radicle_pex_object_counts, state_count));
   printf("PexObjectCounts.FunctionCount %zu\n", offsetof(radicle_pex_object_counts, function_count));
+  printf("QuestProperty %zu\n", sizeof(radicle_quest_property));
+  printf("QuestProperty.Owner %zu\n", offsetof(radicle_quest_property, owner));
+  printf("QuestProperty.Alias %zu\n", offsetof(radicle_quest_property, alias));
+  printf("QuestProperty.Script %zu\n", offsetof(radicle_quest_property, script));
+  printf("QuestProperty.Name %zu\n", offsetof(radicle_quest_property, name));
+  printf("QuestProperty.Type %zu\n", offsetof(radicle_quest_property, type));
+  printf("QuestProperty.Flags %zu\n", offsetof(radicle_quest_property, flags));
+  printf("QuestProperty.HasInteger %zu\n", offsetof(radicle_quest_property, has_integer));
+  printf("QuestProperty.Integer %zu\n", offsetof(radicle_quest_property, integer));
+  printf("QuestProperty.HasReal %zu\n", offsetof(radicle_quest_property, has_real));
+  printf("QuestProperty.Real %zu\n", offsetof(radicle_quest_property, real));
+  printf("QuestProperty.HasBoolean %zu\n", offsetof(radicle_quest_property, has_boolean));
+  printf("QuestProperty.Boolean %zu\n", offsetof(radicle_quest_property, boolean));
+  printf("QuestProperty.Text %zu\n", offsetof(radicle_quest_property, text));
+  printf("QuestProperty.HasObject %zu\n", offsetof(radicle_quest_property, has_object));
+  printf("QuestProperty.ObjectFormId %zu\n", offsetof(radicle_quest_property, object_form_id));
+  printf("QuestProperty.HasPropertyAlias %zu\n", offsetof(radicle_quest_property, has_property_alias));
+  printf("QuestProperty.PropertyAlias %zu\n", offsetof(radicle_quest_property, property_alias));
+  printf("QuestProperty.HasElementCount %zu\n", offsetof(radicle_quest_property, has_element_count));
+  printf("QuestProperty.ElementCount %zu\n", offsetof(radicle_quest_property, element_count));
   return 0;
 }
