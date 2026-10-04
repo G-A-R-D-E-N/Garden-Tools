@@ -1384,3 +1384,21 @@ Moved out of `CellViewport.tsx` and `MainShell.tsx` unchanged so each of those o
 ## PluginEditTool/web/src/errors.ts:errorMessage, errorText — host-call rejection text
 
 `errorMessage` takes anything a host call can reject with: an `Error`, a plain object carrying `message`, or a bare value. It returns the message text, or `undefined` when there is none, so callers keep their own fallback. `errorText` is the common fallback, `errorMessage(e) ?? String(e)`.
+
+## PluginEditTool/web — first ESLint tranche (#77)
+
+Tranche 1 clears the lint findings that can be fixed without changing UI behaviour; the react-hooks rendering refactors and the two `react-refresh/only-export-components` findings in `dialogs.tsx` and `Shell/StatusBar.tsx` are left to later tranches. `PluginEditTool/web/eslint.config.js` runs `js.configs.recommended`, `tseslint.configs.recommended`, `reactHooks.configs.flat.recommended` and `reactRefresh.configs.vite` over `src/**/*.{ts,tsx}`.
+
+The empty `catch` bodies are deliberate best-effort paths, and they carry no source comment. `no-empty` treats a block holding a comment as non-empty, so the explanation used to live in the source; it lives here instead, and the three files that need it are named in `eslint.config.js` with `'no-empty': ['error', { allowEmptyCatch: true }]`, which keeps the rule strict everywhere else. What each one swallows:
+
+- `Blueprint/BlueprintPanel.tsx`: the palette search keeps the previous entries when `SearchRecords` fails, and the next keystroke retries; live validation keeps the last result when `Validate` fails, and the next edit revalidates.
+- `CellPanel.tsx`: the 200 ms `GetGeometryBatchProgress` poll is ignored when it fails; the batch call itself reports the real failure.
+- `ConditionsEditor.tsx`: a failed `ResolveFormKeyLabels` leaves the labels as they are; they are cosmetic and every row keeps its raw FormKey.
+
+`MainShell.tsx:HostMessage` types what the host posts to the page. Only the fields each `Type` reads are declared: `SetStatus.Text`, `SetProgress.Value`, and the `McpLive` fields. A `SetProgress` message without `Value` now sets progress to `null` (hidden) instead of `undefined`, which is what the state's `number | null` says.
+
+`NifPanel.tsx` declares `onDrop` after `loadGeo`/`loadTree`/`loadMaterial`. `react-hooks/immutability` rejected the earlier order with "Cannot access variable before it is declared" once per loader, because a memoised callback that captures them from an earlier render does not see later ones. The handler keeps `useCallback(..., [nif, mode])`. Every loader call it makes passes an explicit path (`loadGeo(path)`, `loadTree(path)`, `loadMaterial(path)`), and the only other state a loader reads is `getNif()`/`getMaterial()`, called fresh inside it, so nothing observable is read through the captured closures: `src/NifPanelDrop.test.tsx` types one NIF path and drops another, and the staged path is what reaches the host, under both declaration orders. Moving the declaration alone clears the three errors; the `react-hooks/exhaustive-deps` warning on that callback (`missing dependencies: 'loadGeo', 'loadMaterial', and 'loadTree'`) is the one `main` already has.
+
+`src/errors.test.ts` pins that `errorText` produces the same text as the helper it replaced for `Error`s, message-carrying objects, empty messages, bare strings, `null`, `undefined` and numbers. `src/MainShellBridge.test.tsx` covers the startup `appInterop` wiring, the environment reload with its pending-changes prompt, and the batch-copy failure text.
+
+Validation: `vitest run` 122/122 in 15 files, `tsc -b` clean, `vite build` clean (the pre-existing 1.08 MB chunk warning only), `eslint .` 34 errors and 16 warnings, `git diff --check` clean. The 34 errors are the react-hooks and react-refresh findings the later tranches take; `no-explicit-any` and `no-empty` are 0. The 16th warning is the `NifPanel.tsx:onDrop` `exhaustive-deps` one above, which `main` also has and this tranche leaves in place.
