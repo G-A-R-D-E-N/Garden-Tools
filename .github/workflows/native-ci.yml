@@ -282,3 +282,15 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build\native --output-on-failure
+
+      - name: Configure (Debug)
+        run: |
+          set "LAUNCHER="
+          if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
+          cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+
+      - name: Build (Debug)
+        run: cmake --build build\native-debug --parallel
+
+      - name: Test (Debug)
+        run: ctest --test-dir build\native-debug --output-on-failure
