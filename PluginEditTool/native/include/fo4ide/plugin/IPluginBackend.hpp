@@ -55,6 +55,24 @@ public:
         return invokeBackend("SetField", arguments);
     }
 
+    virtual Result<nlohmann::json> copyAsDisabledOverride(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "CopyAsDisabledOverrideUnavailable",
+            "Native copy as disabled override is unavailable for this backend"
+        });
+    }
+    virtual Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "CleanMastersUnavailable",
+            "Native clean-masters is unavailable for this backend"
+        });
+    }
+    virtual Result<nlohmann::json> updateOnam(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "UpdateOnamUnavailable",
+            "Native ONAM update is unavailable for this backend"
+        });
+    }
     virtual Result<nlohmann::json> compactToEsl(const nlohmann::json&) {
         return std::unexpected(Error{
             "CompactToEslUnavailable",
@@ -101,6 +119,33 @@ public:
         return std::unexpected(Error{
             "CircularLeveledListCheckUnavailable",
             "Native circular leveled-list checking is unavailable for this backend"
+        });
+    }
+
+    virtual Result<nlohmann::json> lootCleaningReport(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "LootCleaningReportUnavailable",
+            "Native LOOT cleaning report is unavailable for this backend"
+        });
+    }
+
+    virtual Result<nlohmann::json> checkForErrors(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "CheckForErrorsUnavailable",
+            "Native check for errors is unavailable for this backend"
+        });
+    }
+    virtual Result<nlohmann::json> findUnreachable(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "FindUnreachableUnavailable",
+            "Native reachable-info analysis is unavailable for this backend"
+        });
+    }
+
+    virtual Result<nlohmann::json> comparePluginTo(const nlohmann::json&) const {
+        return std::unexpected(Error{
+            "ComparePluginUnavailable",
+            "Native plugin comparison is unavailable for this backend"
         });
     }
 

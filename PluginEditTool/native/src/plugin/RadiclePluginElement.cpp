@@ -303,7 +303,7 @@ Result<nlohmann::json> RadiclePluginBackend::describeElement(
     auto keyResult = elementRecordKey(recordText);
     if (!keyResult) return std::unexpected(keyResult.error());
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return nlohmann::json(nlohmann::json{{"error", "Plugin is not loaded: " + pluginName}}.dump());
@@ -362,7 +362,7 @@ Result<nlohmann::json> RadiclePluginBackend::addElement(
     auto keyResult = elementRecordKey(recordText);
     if (!keyResult) return std::unexpected(keyResult.error());
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     if (const auto guard = writeGuard(*loaded)) return std::unexpected(*guard);
@@ -414,7 +414,7 @@ Result<nlohmann::json> RadiclePluginBackend::removeElement(
     auto keyResult = elementRecordKey(recordText);
     if (!keyResult) return std::unexpected(keyResult.error());
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     if (const auto guard = writeGuard(*loaded)) return std::unexpected(*guard);
@@ -463,7 +463,7 @@ Result<nlohmann::json> RadiclePluginBackend::moveElement(
     auto keyResult = elementRecordKey(recordText);
     if (!keyResult) return std::unexpected(keyResult.error());
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     if (const auto guard = writeGuard(*loaded)) return std::unexpected(*guard);
@@ -529,7 +529,7 @@ Result<nlohmann::json> RadiclePluginBackend::clearElement(
     auto keyResult = elementRecordKey(recordText);
     if (!keyResult) return std::unexpected(keyResult.error());
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     if (const auto guard = writeGuard(*loaded)) return std::unexpected(*guard);

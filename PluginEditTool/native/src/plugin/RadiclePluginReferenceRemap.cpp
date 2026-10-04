@@ -85,7 +85,7 @@ Result<nlohmann::json> RadiclePluginBackend::changeReferencingRecords(
         });
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {patchName});
 
     const auto resolveKey = [&](std::string_view text) -> Result<fo4::FormKey> {
         if (text.find(':') != std::string_view::npos) {

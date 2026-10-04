@@ -123,11 +123,10 @@ nlohmann::json grid(fo4ide::plugin::RadiclePluginBackend& backend) {
 
 std::size_t columnIndex(const nlohmann::json& value, std::string_view column) {
     const auto& columns = value.at("columns");
-    for (std::size_t index = 0; index < columns.size(); ++index) {
-        if (columns[index].get<std::string>() == column) return index;
-    }
-    FAIL("Spreadsheet column is missing: " << column);
-    return 0;
+    std::size_t index = 0;
+    while (index < columns.size() && columns[index].get<std::string>() != column) ++index;
+    if (index == columns.size()) FAIL("Spreadsheet column is missing: " << column);
+    return index;
 }
 
 }

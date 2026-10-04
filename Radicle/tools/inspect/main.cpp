@@ -1,4 +1,5 @@
 #include "fo4/fo4.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -254,9 +255,139 @@ void print_formlinks(const fo4::Plugin& plugin) {
   std::cout << "  ]\n}\n";
 }
 
+void print_check(const std::vector<std::string>& paths) {
+  std::vector<fo4::Plugin> plugins;
+  plugins.reserve(paths.size());
+  for (const auto& path : paths) plugins.push_back(fo4::read_plugin_file(path));
+  std::vector<const fo4::Plugin*> load_order;
+  for (const auto& plugin : plugins) load_order.push_back(&plugin);
+  fo4::CheckOptions options;
+  options.plugins.push_back(plugins.back().key);
+  const auto findings = fo4::check_load_order(load_order, options);
+  std::cout << "{\n  \"findings\": [\n";
+  for (std::size_t i = 0; i < findings.size(); ++i) {
+    const auto& finding = findings[i];
+    std::cout << "    {\"code\": " << json_string(fo4::check_code_name(finding.code))
+              << ", \"severity\": " << json_string(fo4::check_severity_name(finding.severity))
+              << ", \"plugin\": " << json_string(finding.plugin.filename())
+              << ", \"record\": " << json_string(finding.record.to_string())
+              << ", \"subrecord\": "
+              << json_string(finding.subrecord == fo4::Signature{} ? std::string{}
+                                                                   : finding.subrecord.to_string())
+              << ", \"offset\": " << finding.offset
+              << ", \"target\": " << json_string(finding.target.to_string())
+              << ", \"message\": " << json_string(finding.message) << "}";
+    if (i + 1 != findings.size()) {
+      std::cout << ",";
+    }
+    std::cout << "\n";
+  }
+  std::cout << "  ]\n}\n";
+}
+
+void print_unreachable(const std::vector<std::string>& paths) {
+  std::vector<fo4::Plugin> plugins;
+  plugins.reserve(paths.size());
+  for (const auto& path : paths) plugins.push_back(fo4::read_plugin_file(path));
+  std::vector<const fo4::Plugin*> load_order;
+  for (const auto& plugin : plugins) load_order.push_back(&plugin);
+  const auto rows = fo4::find_unreachable(load_order, load_order.size() - 1);
+  std::cout << "{\n  \"unreachable\": [\n";
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    std::cout << "    {\"record\": " << json_string(rows[i].key.to_string())
+              << ", \"signature\": " << json_string(rows[i].signature.to_string()) << "}"
+              << (i + 1 != rows.size() ? ",\n" : "\n");
+  }
+  std::cout << "  ]\n}\n";
+}
+
+void print_itm(const std::vector<std::string>& paths) {
+  std::vector<fo4::Plugin> plugins;
+  plugins.reserve(paths.size());
+  for (const auto& path : paths) plugins.push_back(fo4::read_plugin_file(path));
+  std::vector<const fo4::Plugin*> load_order;
+  for (const auto& plugin : plugins) load_order.push_back(&plugin);
+  const auto itm = fo4::find_identical_to_master(load_order, load_order.size() - 1);
+  const auto deleted = fo4::count_deleted_records(plugins.back());
+  std::cout << "{\n  \"deleted_records\": " << deleted.records
+            << ",\n  \"deleted_references\": " << deleted.references
+            << ",\n  \"deleted_navmeshes\": " << deleted.navmeshes << ",\n  \"itm\": [\n";
+  for (std::size_t i = 0; i < itm.size(); ++i) {
+    std::cout << "    {\"record\": " << json_string(itm[i].key.to_string())
+              << ", \"signature\": " << json_string(itm[i].signature.to_string())
+              << ", \"previous\": " << json_string(itm[i].previous.filename()) << "}";
+    if (i + 1 != itm.size()) {
+      std::cout << ",";
+    }
+    std::cout << "\n";
+  }
+  std::cout << "  ]\n}\n";
+}
+
+void print_udr(const fo4::Plugin& plugin) {
+  const auto counts = fo4::count_deleted_records(plugin);
+  std::cout << "{\n  \"deleted_records\": " << counts.records
+            << ",\n  \"deleted_navmeshes\": " << counts.navmeshes << ",\n  \"deleted_references\": [\n";
+  bool first = true;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (!record.header.flags.is_deleted() || !fo4::is_placed_reference_signature(record.header.signature)) return;
+    std::cout << (first ? "" : ",\n") << "    {\"record\": " << json_string(record.form_key.to_string())
+              << ", \"signature\": " << json_string(record.header.signature.to_string()) << "}";
+    first = false;
+  });
+  std::cout << (first ? "" : "\n") << "  ]\n}\n";
+}
+
+void print_master_usage(const fo4::Plugin& plugin) {
+  const auto usage = fo4::scan_master_usage(plugin);
+  std::cout << "{\n  \"complete\": " << (usage.complete() ? "true" : "false")
+            << ",\n  \"records_with_incomplete_vmad\": " << usage.records_with_incomplete_vmad
+            << ",\n  \"masters\": [\n";
+  for (std::size_t i = 0; i < usage.references.size(); ++i) {
+    std::cout << "    {\"name\": " << json_string(plugin.header.masters[i].key.filename())
+              << ", \"references\": " << usage.references[i] << "}";
+    if (i + 1 != usage.references.size()) {
+      std::cout << ",";
+    }
+    std::cout << "\n";
+  }
+  std::cout << "  ]\n}\n";
+}
+
+void print_diff(const std::string& before_path, const std::string& after_path) {
+  const auto before = fo4::read_plugin_file(before_path);
+  const auto after = fo4::read_plugin_file(after_path);
+  const auto diffs = fo4::diff_plugins(before, after);
+  std::cout << "{\n  \"records\": [\n";
+  for (std::size_t i = 0; i < diffs.size(); ++i) {
+    const auto& diff = diffs[i];
+    const char* change = diff.change == fo4::RecordChange::added     ? "added"
+                         : diff.change == fo4::RecordChange::removed ? "removed"
+                                                                     : "changed";
+    std::cout << "    {\"record\": " << json_string(diff.key.to_string())
+              << ", \"signature\": " << json_string(diff.signature.to_string())
+              << ", \"change\": " << json_string(change)
+              << ", \"header_changed\": " << (diff.header_changed ? "true" : "false")
+              << ", \"subrecords\": [";
+    for (std::size_t s = 0; s < diff.changed_subrecords.size(); ++s) {
+      if (s != 0) std::cout << ", ";
+      std::cout << json_string(diff.changed_subrecords[s].to_string());
+    }
+    std::cout << "]}";
+    if (i + 1 != diffs.size()) {
+      std::cout << ",";
+    }
+    std::cout << "\n";
+  }
+  std::cout << "  ]\n}\n";
+}
+
 void usage() {
   std::cerr << "usage: fo4inspect [header|groups|records|record|masters|raw|summary|write|"
                "formlinks] plugin.esp [formid|out.esp]\n";
+  std::cerr << "       fo4inspect [udr|unused-masters] plugin.esp\n"
+               "       fo4inspect [check|itm|unreachable] master.esm ... plugin.esp\n"
+               "       fo4inspect diff before.esp after.esp\n";
 }
 
 }  // namespace
@@ -279,6 +410,23 @@ int main(int argc, char** argv) {
       if (argc >= 4) {
         form_id_text = argv[3];
       }
+    }
+
+    if (command == "diff" && argc == 4) {
+      print_diff(argv[2], argv[3]);
+      return 0;
+    }
+    if (command == "unreachable") {
+      print_unreachable(std::vector<std::string>(argv + 2, argv + argc));
+      return 0;
+    }
+    if (command == "itm") {
+      print_itm(std::vector<std::string>(argv + 2, argv + argc));
+      return 0;
+    }
+    if (command == "check") {
+      print_check(std::vector<std::string>(argv + 2, argv + argc));
+      return 0;
     }
 
     const auto plugin = fo4::read_plugin_file(path);
@@ -306,6 +454,10 @@ int main(int argc, char** argv) {
       print_summary(plugin);
     } else if (command == "formlinks") {
       print_formlinks(plugin);
+    } else if (command == "udr") {
+      print_udr(plugin);
+    } else if (command == "unused-masters") {
+      print_master_usage(plugin);
     } else if (command == "write") {
       if (form_id_text.empty()) {
         usage();

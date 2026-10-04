@@ -15,6 +15,7 @@
 #include <fo4/forms/placed_reference.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/maintenance.hpp>
 #include <fo4/plugin/visit.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/form_links.hpp>
@@ -85,52 +86,6 @@ fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
     return found;
 }
 
-bool eraseTopLevelRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
-    for (auto& group : plugin.groups) {
-        if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-        for (auto it = group.children.begin(); it != group.children.end(); ++it) {
-            const auto* record = std::get_if<fo4::Record>(&*it);
-            if (record == nullptr || record->form_key != key) continue;
-            group.children.erase(it);
-            plugin.original_range.clear();
-            plugin.original_structure_fingerprint = 0;
-            return true;
-        }
-    }
-    return false;
-}
-
-bool sameSemanticRecord(const fo4::Record& left, const fo4::Record& right) {
-    if (left.header.signature != right.header.signature ||
-        left.header.flags != right.header.flags ||
-        left.subrecords.size() != right.subrecords.size()) {
-        return false;
-    }
-    for (std::size_t index = 0; index < left.subrecords.size(); ++index) {
-        if (left.subrecords[index].signature != right.subrecords[index].signature ||
-            left.subrecords[index].data != right.subrecords[index].data) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool previousVersionNormalizesEqual(const fo4::Plugin& current,
-                                    const fo4::Plugin& previous,
-                                    const fo4::FormKey& key) {
-    const auto* currentRecord = topLevelRecord(current, key);
-    if (currentRecord == nullptr) return false;
-
-    auto normalized = current;
-    const auto copied = fo4::copy_record_as_override(normalized, previous, key, true);
-    if (copied != fo4::RecordCopyStatus::replaced &&
-        copied != fo4::RecordCopyStatus::already_exists) {
-        return false;
-    }
-    const auto* previousNormalized = topLevelRecord(normalized, key);
-    return previousNormalized != nullptr && sameSemanticRecord(*currentRecord, *previousNormalized);
-}
-
 fo4::PluginKind maintenanceOwnerKind(const fo4::Plugin& source,
                                      const fo4::PluginKey& owner) {
     if (owner == source.key) {
@@ -165,7 +120,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             });
         }
 
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Write, {targetPluginName, sourcePluginName});
         auto* target = findPlugin(targetPluginName);
         if (target == nullptr) {
             return std::unexpected(Error{
@@ -384,7 +339,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             return std::unexpected(Error{"PluginMissing", "CleanPlugin requires a plugin name"});
         }
 
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Write, {pluginName});
         auto* loaded = findPlugin(pluginName);
         if (loaded == nullptr) {
             return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
@@ -429,7 +384,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             });
         }
 
-        std::scoped_lock lock(mutex_);
+        OpLock lock(*this, OpLock::Mode::Write, {pluginName});
         auto* loaded = findPlugin(pluginName);
         if (loaded == nullptr) {
             return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
@@ -459,34 +414,21 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
         std::size_t scanned = 0;
 
         try {
-            for (const auto& group : loaded->plugin.groups) {
-                if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-                for (const auto& child : group.children) {
-                    const auto* record = std::get_if<fo4::Record>(&child);
-                    if (record == nullptr || record->form_key.owner().empty()) continue;
-                    ++scanned;
-
-                    const LoadedPlugin* previous = nullptr;
-                    for (std::size_t index = currentIndex; index-- > 0;) {
-                        if (fo4::find_record(plugins_[index].plugin, record->form_key) == nullptr) continue;
-                        previous = &plugins_[index];
-                        break;
-                    }
-                    if (previous == nullptr) continue;
-                    if (!previousVersionNormalizesEqual(
-                            loaded->plugin, previous->plugin, record->form_key)) {
-                        continue;
-                    }
-
-                    identical.push_back({
-                        .key = record->form_key,
-                        .editorId = recordEditorId(*record),
-                        .type = record->header.signature.to_string(),
-                        .previousPlugin = previous->name,
-                    });
-                    if (identical.size() >= limit) break;
-                }
-                if (identical.size() >= limit) break;
+            fo4::visit_records(loaded->plugin, [&](const fo4::Record& record) {
+                if (record.header.signature != fo4::sig_tes4 && !record.form_key.owner().empty()) ++scanned;
+            });
+            std::vector<const fo4::Plugin*> loadOrder;
+            for (std::size_t index = 0; index <= currentIndex; ++index) {
+                loadOrder.push_back(&plugins_[index].plugin);
+            }
+            for (const auto& item : fo4::find_identical_to_master(loadOrder, currentIndex, limit)) {
+                const auto* record = fo4::find_record(loaded->plugin, item.key);
+                identical.push_back({
+                    .key = item.key,
+                    .editorId = record == nullptr ? std::string{} : recordEditorId(*record),
+                    .type = item.signature.to_string(),
+                    .previousPlugin = std::string(item.previous.filename()),
+                });
             }
 
             if (identical.empty()) {
@@ -515,10 +457,9 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             }
 
             auto mutated = loaded->plugin;
-            std::size_t removed = 0;
-            for (const auto& item : identical) {
-                if (eraseTopLevelRecord(mutated, item.key)) ++removed;
-            }
+            std::vector<fo4::FormKey> keys;
+            for (const auto& item : identical) keys.push_back(item.key);
+            const auto removed = fo4::remove_records(mutated, keys);
             if (removed != 0) {
                 stagePluginMutationLocked(*loaded, std::move(mutated));
             }

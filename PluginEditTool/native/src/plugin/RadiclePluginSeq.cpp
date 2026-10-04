@@ -85,7 +85,7 @@ Result<nlohmann::json> RadiclePluginBackend::createSeqFile(
         return std::unexpected(Error{"PluginMissing", "CreateSeqFile requires a plugin name"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});

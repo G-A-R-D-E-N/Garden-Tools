@@ -133,7 +133,7 @@ Result<nlohmann::json> RadiclePluginBackend::getDependencies(const nlohmann::jso
     if (!keyResult) return std::unexpected(keyResult.error());
     const auto& key = *keyResult;
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* sourceWinner = graph_.winner(key);
     if (sourceWinner == nullptr) {
         return std::unexpected(Error{
@@ -180,7 +180,7 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
     if (!keyResult) return std::unexpected(keyResult.error());
     const auto& key = *keyResult;
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* sourceWinner = graph_.winner(key);
     if (sourceWinner == nullptr) {
         return std::unexpected(Error{
@@ -223,7 +223,7 @@ Result<nlohmann::json> RadiclePluginBackend::getHistory(const nlohmann::json& ar
     if (!keyResult) return std::unexpected(keyResult.error());
     const auto& key = *keyResult;
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto& versions = graph_.versions(key);
     if (versions.empty()) {
         return std::unexpected(Error{
@@ -280,7 +280,7 @@ Result<nlohmann::json> RadiclePluginBackend::getPluginWorklist(
         signature = fo4::Signature::from_string(signatureText);
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});

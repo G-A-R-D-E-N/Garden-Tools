@@ -315,6 +315,19 @@ TEST_F(WorldEnvironmentTest, AReferenceMovedToAnotherCellLeavesItsOldCell) {
   }
 }
 
+TEST_F(WorldEnvironmentTest, NoneSentinelLinksDecodeLikeNull) {
+  const auto none = write(
+      "None.esp",
+      make_plugin({"Base.esm"}, {top("WRLD", {rec("WRLD", 0x800,
+                                                  {{"WNAM", bytes_of({0})},
+                                                   {"CNAM", bytes_of({0xFFFFFFFFu})}})})}));
+  const std::vector<std::filesystem::path> order{paths_[0], none};
+  const auto env = fo4::env::Environment::load(order);
+  const auto world = fo4::env::decode_worldspace(env, *env.winner(key("000800:Base.esm")));
+  EXPECT_EQ(world.parent, fo4::FormKey{});
+  EXPECT_EQ(world.climate, fo4::FormKey{});
+}
+
 TEST_F(WorldEnvironmentTest, DecodesCellFields) {
   const auto env = fo4::env::Environment::load(paths_);
   const auto base = fo4::env::decode_cell(env, env.versions(key("000802:Base.esm"))[0]);

@@ -16,6 +16,8 @@ constexpr Signature k_wnam{'W', 'N', 'A', 'M'};
 constexpr Signature k_pnam{'P', 'N', 'A', 'M'};
 constexpr Signature k_cnam{'C', 'N', 'A', 'M'};
 constexpr Signature k_nam2{'N', 'A', 'M', '2'};
+constexpr Signature k_nam3{'N', 'A', 'M', '3'};
+constexpr Signature k_nam4{'N', 'A', 'M', '4'};
 constexpr Signature k_ltmp{'L', 'T', 'M', 'P'};
 constexpr Signature k_dnam{'D', 'N', 'A', 'M'};
 constexpr Signature k_nam0{'N', 'A', 'M', '0'};
@@ -24,6 +26,7 @@ constexpr Signature k_data{'D', 'A', 'T', 'A'};
 constexpr Signature k_xclc{'X', 'C', 'L', 'C'};
 constexpr Signature k_xcll{'X', 'C', 'L', 'L'};
 constexpr Signature k_xclw{'X', 'C', 'L', 'W'};
+constexpr Signature k_xcwt{'X', 'C', 'W', 'T'};
 constexpr Signature k_xcim{'X', 'C', 'I', 'M'};
 constexpr Signature k_xezn{'X', 'E', 'Z', 'N'};
 constexpr Signature k_xlcn{'X', 'L', 'C', 'N'};
@@ -84,6 +87,8 @@ WorldspaceData decode_worldspace(const Environment& env, const RecordRef& ref) {
   if (const auto* flags = reader.sized(k_data, 1)) {
     data.flags = std::to_integer<std::uint8_t>(flags->data[0]);
   }
+  data.lod_water = reader.link(k_nam3);
+  data.lod_water_height = reader.f32(k_nam4);
   return data;
 }
 
@@ -120,6 +125,7 @@ CellData decode_cell(const Environment& env, const RecordRef& ref) {
   data.encounter_zone = reader.link(k_xezn);
   data.location = reader.link(k_xlcn);
   data.worldspace = env.world_of(ref);
+  data.water = reader.link(k_xcwt);
   return data;
 }
 

@@ -19,6 +19,8 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState('');
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState('');
+  const [cleanPreview, setCleanPreview] = useState('');
+  const [staged, setStaged] = useState(false);
 
   const masters = getMasters();
   const unavailable = !masters;
@@ -48,6 +50,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
       setOrder(parsed.masters.map(m => m.name));
       setLight(!!parsed.light);
       setOrigLight(!!parsed.light);
+      setCleanPreview('');
       appendLog(`• loaded masters of ${name} (${parsed.masters.length})`);
     } catch (e) {
       setRows(null);
@@ -95,6 +98,20 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
     } finally { setBusy(false); }
   };
 
+  const cleanMasters = async (apply: boolean) => {
+    if (!masters || !plugin.trim()) return;
+    setBusy(true);
+    try {
+      const res = await masters.CleanUnused(plugin, apply);
+      appendLog(`${/^(DRY RUN|Removed|No unused)/.test(res) ? '✓' : '✗'} ${res}`);
+      setCleanPreview(!apply && res.startsWith('DRY RUN:') ? res : '');
+      if (apply && res.startsWith('Removed')) { setStaged(true); setResult(res); await load(plugin); }
+      else if (!apply) setResult(res);
+    } catch (e) {
+      appendLog('✗ clean masters failed -- ' + (e instanceof Error ? e.message : String(e)));
+    } finally { setBusy(false); }
+  };
+
   const savePlugin = async () => {
     if (!masters || !plugin.trim()) return;
     setBusy(true);
@@ -103,7 +120,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
       const ok = /^Saved /.test(res);
       setResult(res);
       appendLog(`${ok ? '✓' : '✗'} ${ok ? 'saved ' + plugin : 'save failed'}`);
-      if (ok) { setOrigLight(light); await load(plugin); }
+      if (ok) { setOrigLight(light); setStaged(false); await load(plugin); }
     } catch (e) {
       appendLog('✗ save failed -- ' + (e instanceof Error ? e.message : String(e)));
     } finally { setBusy(false); }
@@ -163,14 +180,23 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
                          onChange={e => toggleLight(e.target.checked)} />
                   Light plugin (ESL)
                 </label>
-                {lightDirty && <span className="masters-dirty-badge">unsaved -- click Save Plugin</span>}
+                {(lightDirty || staged) && <span className="masters-dirty-badge">unsaved -- click Save Plugin</span>}
               </div>
 
               <div className="masters-actions">
                 <button className="sidebar-action-btn" disabled={!orderDirty || busy} onClick={applyOrder}>
                   Apply New Order (writes immediately)
                 </button>
-                <button className="papyrus-run" disabled={!lightDirty || busy} onClick={savePlugin}>
+                <button className="sidebar-action-btn" disabled={busy || orderDirty} onClick={() => cleanMasters(false)}
+                        title="Preview which unreferenced masters would be removed">
+                  Clean Masters
+                </button>
+                {cleanPreview && (
+                  <button className="sidebar-action-btn" disabled={busy} onClick={() => cleanMasters(true)}>
+                    Remove them
+                  </button>
+                )}
+                <button className="papyrus-run" disabled={!(lightDirty || staged) || busy} onClick={savePlugin}>
                   <Save size={14} /> Save Plugin
                 </button>
               </div>
@@ -178,8 +204,8 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
           )}
 
           {result && (
-            <div className={`papyrus-banner ${/^(Wrote|Saved)/.test(result) ? 'ok' : /WARNING/.test(result) ? 'warn' : 'error'}`}>
-              {/^(Wrote|Saved)/.test(result) ? <CheckCircle2 size={15} /> : /WARNING/.test(result) ? <AlertTriangle size={15} /> : <XCircle size={15} />}
+            <div className={`papyrus-banner ${/^(Wrote|Saved|Removed|No unused)/.test(result) ? 'ok' : /WARNING|DRY RUN/.test(result) ? 'warn' : 'error'}`}>
+              {/^(Wrote|Saved|Removed|No unused)/.test(result) ? <CheckCircle2 size={15} /> : /WARNING|DRY RUN/.test(result) ? <AlertTriangle size={15} /> : <XCircle size={15} />}
               <span className="papyrus-banner-text">{result}</span>
             </div>
           )}

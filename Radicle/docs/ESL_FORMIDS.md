@@ -71,8 +71,21 @@ with a `0x001`–`0xFFF` range. `Mutation.LightPluginRangeStartsAtOneAndStopsAtT
 ## What this implementation does
 
 `fo4::local_form_id_range(plugin)` (`fo4/plugin/mutation.hpp`) returns
-`[0x001, 0xFFF]` when TES4 SmallFile (bit 9) is set and `[0x800, 0xFFFFFF]`
-otherwise. `create_local_record` and `renumber_local_record` both honour it, so
+`[0x001, 0xFFF]` when TES4 SmallFile (bit 9) is set and
+`fo4::allows_hardcoded_range(plugin)` holds, `[0x800, 0xFFF]` for a light
+plugin where it does not, and `[0x800, 0xFFFFFF]` otherwise.
+
+`allows_hardcoded_range` is xEdit's rule, not an engine finding: HEDR version
+at least 1.0 and at least one master
+(source:TES5Edit/TES5Edit@dev-4.1.6 `Core/wbImplementation.pas:TwbFile.GetAllowHardcodedRangeUse`).
+`AdjustFormIDFileIndex` above has no version check, and `commonlib_NonVR`
+(`include/RE/T/TESFile.h`) has none either, so the engine may accept more.
+Following xEdit only narrows what Radicle allocates: `0x800`-`0xFFF` is valid
+in every light plugin. Every shipped ESL in the table has HEDR 1.00 and one
+master, so all of them still qualify. xEdit also reads a non-qualifying
+plugin's own IDs below `0x800` as the game master's hardcoded records
+(`TwbFile.FileFormIDtoLoadOrderFormID`); Radicle's FormID resolution does not
+do that, and it stays unmodelled until the engine side is confirmed. `create_local_record` and `renumber_local_record` both honour it, so
 a light plugin allocates from `0x001` and refuses anything above `0xFFF` rather
 than emitting a record the engine would alias away.
 

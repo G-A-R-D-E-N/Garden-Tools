@@ -55,7 +55,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!backend) return;
-    if (!plugin.trim()) { setTypes([]); return; }
+    if (!plugin.trim()) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -154,7 +154,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           </select>
           <select className="spreadsheet-select" value={type} onChange={e => setType(e.target.value)} disabled={unavailable}>
             <option value="">Choose a record type…</option>
-            {types.map(t => <option key={t.Type} value={t.Type}>{t.FriendlyName} ({t.Count})</option>)}
+            {(plugin.trim() ? types : []).map(t => <option key={t.Type} value={t.Type}>{t.FriendlyName} ({t.Count})</option>)}
           </select>
           <button className="papyrus-run" onClick={load} disabled={busy || unavailable || !plugin.trim() || !type.trim()}>
             <RefreshCw size={13} /> {busy ? 'Loading…' : 'Load'}

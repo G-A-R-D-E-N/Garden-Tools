@@ -2,6 +2,7 @@
 
 #include "record_reader.hpp"
 
+#include <cstring>
 #include <string>
 
 namespace fo4::env {
@@ -15,6 +16,9 @@ constexpr Signature sig(const char (&text)[5]) {
 
 constexpr std::uint16_t k_weather_eight_times_form_version = 111;
 constexpr std::size_t k_light_required_size = 48;
+constexpr std::size_t k_distant_lod_slot = 260;
+constexpr std::size_t k_water_visual_required_size = 188;
+constexpr std::size_t k_water_visual_full_size = 201;
 
 std::optional<std::string_view> text(const Reader& reader, Signature signature) {
   const auto* sub = reader.unique(signature);
@@ -22,6 +26,12 @@ std::optional<std::string_view> text(const Reader& reader, Signature signature) 
   const auto value = zstring_view(*sub);
   if (!value) reader.fail(signature, "is not a single NUL-terminated string");
   return value;
+}
+
+std::optional<std::array<float, 3>> vec3(const Reader& reader, Signature signature) {
+  const auto* sub = reader.sized(signature, 12);
+  if (sub == nullptr) return std::nullopt;
+  return reader.vec3(*sub, 0);
 }
 
 }  // namespace
@@ -147,6 +157,90 @@ std::vector<StaticCollectionPart> decode_static_collection(const Environment& en
     }
   }
   return parts;
+}
+
+StaticDistantLod decode_static_distant_lod(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, sig("STAT"));
+  StaticDistantLod out;
+  const auto* sub = reader.unique(sig("MNAM"));
+  if (sub == nullptr) return out;
+  const auto size = sub->data.size();
+  if (size % k_distant_lod_slot != 0 || size > k_distant_lod_slot * k_distant_lod_levels) {
+    reader.fail(sub->signature, "must be up to four 260-byte mesh slots");
+  }
+  out.levels = size / k_distant_lod_slot;
+  for (std::size_t level = 0; level < out.levels; ++level) {
+    const auto* begin = reinterpret_cast<const char*>(sub->data.data()) + level * k_distant_lod_slot;
+    const auto* end = static_cast<const char*>(std::memchr(begin, 0, k_distant_lod_slot));
+    if (end == nullptr) reader.fail(sub->signature, "has a mesh slot without a NUL terminator");
+    if (end != begin) out.meshes[level] = std::string_view{begin, static_cast<std::size_t>(end - begin)};
+  }
+  return out;
+}
+
+std::optional<FormKey> decode_activator_water_type(const Environment& env, const RecordRef& ref) {
+  return Reader(env, ref, sig("ACTI")).link(sig("WNAM"));
+}
+
+WaterData decode_water(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, sig("WATR"));
+  WaterData out;
+  if (const auto* sub = reader.sized(sig("FNAM"), 1)) out.flags = std::to_integer<std::uint8_t>(sub->data[0]);
+  if (const auto* sub = reader.unique(sig("DNAM"))) {
+    const auto size = sub->data.size();
+    if (size < k_water_visual_required_size) reader.fail(sub->signature, "is shorter than its required members");
+    if (size > k_water_visual_full_size) reader.fail(sub->signature, "ends past Screen Space Reflections");
+    WaterVisual v;
+    v.fog_depth_amount = Reader::f32(*sub, 0);
+    v.fog_shallow_color = Reader::color(*sub, 4);
+    v.fog_deep_color = Reader::color(*sub, 8);
+    v.fog_color_shallow_range = Reader::f32(*sub, 12);
+    v.fog_color_deep_range = Reader::f32(*sub, 16);
+    v.fog_shallow_alpha = Reader::f32(*sub, 20);
+    v.fog_deep_alpha = Reader::f32(*sub, 24);
+    v.fog_alpha_shallow_range = Reader::f32(*sub, 28);
+    v.fog_alpha_deep_range = Reader::f32(*sub, 32);
+    v.fog_underwater_color = Reader::color(*sub, 36);
+    v.fog_underwater_amount = Reader::f32(*sub, 40);
+    v.fog_underwater_near = Reader::f32(*sub, 44);
+    v.fog_underwater_far = Reader::f32(*sub, 48);
+    v.normal_magnitude = Reader::f32(*sub, 52);
+    v.shallow_normal_falloff = Reader::f32(*sub, 56);
+    v.deep_normal_falloff = Reader::f32(*sub, 60);
+    v.reflectivity_amount = Reader::f32(*sub, 64);
+    v.fresnel_amount = Reader::f32(*sub, 68);
+    v.surface_effect_falloff = Reader::f32(*sub, 72);
+    v.displacement_force = Reader::f32(*sub, 76);
+    v.displacement_velocity = Reader::f32(*sub, 80);
+    v.displacement_falloff = Reader::f32(*sub, 84);
+    v.displacement_dampener = Reader::f32(*sub, 88);
+    v.displacement_starting_size = Reader::f32(*sub, 92);
+    v.reflection_color = Reader::color(*sub, 96);
+    v.sun_specular_power = Reader::f32(*sub, 100);
+    v.sun_specular_magnitude = Reader::f32(*sub, 104);
+    v.sun_sparkle_power = Reader::f32(*sub, 108);
+    v.sun_sparkle_magnitude = Reader::f32(*sub, 112);
+    v.interior_specular_radius = Reader::f32(*sub, 116);
+    v.interior_specular_brightness = Reader::f32(*sub, 120);
+    v.interior_specular_power = Reader::f32(*sub, 124);
+    for (std::size_t layer = 0; layer < 3; ++layer) {
+      auto& n = v.noise[layer];
+      n.wind_direction = Reader::f32(*sub, 128 + layer * 4);
+      n.wind_speed = Reader::f32(*sub, 140 + layer * 4);
+      n.amplitude_scale = Reader::f32(*sub, 152 + layer * 4);
+      n.uv_scale = Reader::f32(*sub, 164 + layer * 4);
+      n.noise_falloff = Reader::f32(*sub, 176 + layer * 4);
+    }
+    if (size >= 192) v.silt_amount = Reader::f32(*sub, 188);
+    if (size >= 196) v.silt_light_color = Reader::color(*sub, 192);
+    if (size >= 200) v.silt_dark_color = Reader::color(*sub, 196);
+    if (size >= 201) v.screen_space_reflections = sub->data[200] != std::byte{0};
+    out.visual = v;
+  }
+  out.noise_textures = {text(reader, sig("NAM2")), text(reader, sig("NAM3")), text(reader, sig("NAM4"))};
+  out.linear_velocity = vec3(reader, sig("NAM0"));
+  out.angular_velocity = vec3(reader, sig("NAM1"));
+  return out;
 }
 
 }  // namespace fo4::env
