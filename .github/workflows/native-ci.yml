@@ -106,6 +106,8 @@ jobs:
 
       - name: Set up .NET for Radicle binding tests
         uses: actions/setup-dotnet@v5
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/.dotnet
         with:
           dotnet-version: '8.0.x'
 
@@ -314,6 +316,8 @@ jobs:
 
       - name: Set up .NET for Radicle binding tests
         uses: actions/setup-dotnet@v5
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/.dotnet
         with:
           dotnet-version: '8.0.x'
 
