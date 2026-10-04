@@ -22,7 +22,8 @@ public readonly record struct CellChild(Record Record, bool Persistent);
 
 public sealed record WorldspaceInfo(FormKey? Parent, ushort? ParentFlags, FormKey? Climate, FormKey? Water,
                                     FormKey? LightingTemplate, float? DefaultLandHeight, float? DefaultWaterHeight,
-                                    (float X, float Y)? BoundsMin, (float X, float Y)? BoundsMax, byte? Flags);
+                                    (float X, float Y)? BoundsMin, (float X, float Y)? BoundsMax, byte? Flags,
+                                    FormKey? LodWater = null, float? LodWaterHeight = null);
 
 public readonly record struct ByteColor(byte Red, byte Green, byte Blue);
 
@@ -33,7 +34,7 @@ public sealed record Lighting(ByteColor Ambient, ByteColor Directional, ByteColo
 
 public sealed record CellInfo(ushort? Flags, (int X, int Y)? Grid, byte? LandFlags, Lighting? Lighting,
                               FormKey? LightingTemplate, float? WaterHeight, FormKey? ImageSpace,
-                              FormKey? EncounterZone, FormKey? Location, FormKey? Worldspace);
+                              FormKey? EncounterZone, FormKey? Location, FormKey? Worldspace, FormKey? Water = null);
 
 public sealed record TextureSetInfo(IReadOnlyList<string?> Textures, string? Material, ushort? Flags,
                                     IReadOnlyList<float> Decal);
@@ -76,6 +77,25 @@ public readonly record struct StaticPlacement((float X, float Y, float Z) Positi
                                               float Scale);
 
 public sealed record StaticPart(FormKey? Static, IReadOnlyList<StaticPlacement> Placements);
+
+public sealed record DistantLod(int LevelCount, IReadOnlyList<string?> Meshes);
+
+public sealed record WaterNoiseLayer(float WindDirection, float WindSpeed, float AmplitudeScale, float UvScale, float NoiseFalloff,
+                                     string? Texture);
+
+public sealed record WaterVisual(
+    float FogDepthAmount, ByteColor FogShallowColor, ByteColor FogDeepColor, float FogColorShallowRange,
+    float FogColorDeepRange, float FogShallowAlpha, float FogDeepAlpha, float FogAlphaShallowRange, float FogAlphaDeepRange,
+    ByteColor FogUnderwaterColor, float FogUnderwaterAmount, float FogUnderwaterNear, float FogUnderwaterFar,
+    float NormalMagnitude, float ShallowNormalFalloff, float DeepNormalFalloff, float ReflectivityAmount, float FresnelAmount,
+    float SurfaceEffectFalloff, float DisplacementForce, float DisplacementVelocity, float DisplacementFalloff,
+    float DisplacementDampener, float DisplacementStartingSize, ByteColor ReflectionColor, float SunSpecularPower,
+    float SunSpecularMagnitude, float SunSparklePower, float SunSparkleMagnitude, float InteriorSpecularRadius,
+    float InteriorSpecularBrightness, float InteriorSpecularPower, float? SiltAmount, ByteColor? SiltLightColor,
+    ByteColor? SiltDarkColor, bool? ScreenSpaceReflections);
+
+public sealed record Water(byte? Flags, WaterVisual? Visual, IReadOnlyList<WaterNoiseLayer> Noise,
+                           (float X, float Y, float Z)? LinearVelocity, (float X, float Y, float Z)? AngularVelocity);
 
 public sealed unsafe partial class RadicleEnvironment : IDisposable
 {
@@ -210,7 +230,8 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
                                   w.HasLandDefaults != 0 ? w.DefaultWaterHeight : null,
                                   w.HasBoundsMin != 0 ? (w.BoundsMin[0], w.BoundsMin[1]) : null,
                                   w.HasBoundsMax != 0 ? (w.BoundsMax[0], w.BoundsMax[1]) : null,
-                                  w.HasFlags != 0 ? w.Flags : null);
+                                  w.HasFlags != 0 ? w.Flags : null, FormKey.FromNative(w.LodWater),
+                                  w.HasLodWaterHeight != 0 ? w.LodWaterHeight : null);
     }
 
     public CellInfo Cell(Record record)
@@ -221,7 +242,7 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
                             c.HasLandFlags != 0 ? c.LandFlags : null, c.HasLighting != 0 ? ToLighting(c.Lighting) : null,
                             FormKey.FromNative(c.LightingTemplate), c.HasWaterHeight != 0 ? c.WaterHeight : null,
                             FormKey.FromNative(c.ImageSpace), FormKey.FromNative(c.EncounterZone),
-                            FormKey.FromNative(c.Location), FormKey.FromNative(c.Worldspace));
+                            FormKey.FromNative(c.Location), FormKey.FromNative(c.Worldspace), FormKey.FromNative(c.Water));
     }
 
     public Record? WorldspaceTopCell(FormKey worldspace)
@@ -415,6 +436,45 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
         {
             RadicleNative.StaticCollectionFree(c);
         }
+    }
+
+    public DistantLod StaticDistantLod(Record record)
+    {
+        Native.StaticDistantLod d;
+        Call.Check(RadicleNative.StaticGetDistantLod(Handle, record.Handle, &d));
+        return new DistantLod((int)d.LevelCount, new[] { Utf8.Read(d.Meshes0), Utf8.Read(d.Meshes1), Utf8.Read(d.Meshes2), Utf8.Read(d.Meshes3) });
+    }
+
+    public FormKey? ActivatorWaterType(Record record)
+    {
+        Native.FormKey key;
+        Call.Check(RadicleNative.ActivatorGetWaterType(Handle, record.Handle, &key));
+        return FormKey.FromNative(key);
+    }
+
+    public Water Water(Record record)
+    {
+        WaterInfo w;
+        Call.Check(RadicleNative.WaterGetInfo(Handle, record.Handle, &w));
+        var textures = new[] { Utf8.Read(w.NoiseTextures0), Utf8.Read(w.NoiseTextures1), Utf8.Read(w.NoiseTextures2) };
+        var noise = new WaterNoiseLayer[3];
+        for (var i = 0; i < 3; ++i)
+            noise[i] = new WaterNoiseLayer(w.NoiseWindDirection[i], w.NoiseWindSpeed[i], w.NoiseAmplitudeScale[i], w.NoiseUvScale[i],
+                                           w.NoiseFalloff[i], textures[i]);
+        WaterVisual? visual = w.HasVisual == 0 ? null : new WaterVisual(
+            w.FogDepthAmount, ToColor(w.FogShallowColor), ToColor(w.FogDeepColor), w.FogColorShallowRange, w.FogColorDeepRange,
+            w.FogShallowAlpha, w.FogDeepAlpha, w.FogAlphaShallowRange, w.FogAlphaDeepRange, ToColor(w.FogUnderwaterColor),
+            w.FogUnderwaterAmount, w.FogUnderwaterNear, w.FogUnderwaterFar, w.NormalMagnitude, w.ShallowNormalFalloff,
+            w.DeepNormalFalloff, w.ReflectivityAmount, w.FresnelAmount, w.SurfaceEffectFalloff, w.DisplacementForce,
+            w.DisplacementVelocity, w.DisplacementFalloff, w.DisplacementDampener, w.DisplacementStartingSize,
+            ToColor(w.ReflectionColor), w.SunSpecularPower, w.SunSpecularMagnitude, w.SunSparklePower, w.SunSparkleMagnitude,
+            w.InteriorSpecularRadius, w.InteriorSpecularBrightness, w.InteriorSpecularPower,
+            w.HasSiltAmount != 0 ? w.SiltAmount : null, w.HasSiltLightColor != 0 ? ToColor(w.SiltLightColor) : null,
+            w.HasSiltDarkColor != 0 ? ToColor(w.SiltDarkColor) : null,
+            w.HasScreenSpaceReflections != 0 ? w.ScreenSpaceReflections != 0 : null);
+        return new Water(w.HasFlags != 0 ? w.Flags : null, visual, noise,
+                         w.HasLinearVelocity != 0 ? (w.LinearVelocity[0], w.LinearVelocity[1], w.LinearVelocity[2]) : null,
+                         w.HasAngularVelocity != 0 ? (w.AngularVelocity[0], w.AngularVelocity[1], w.AngularVelocity[2]) : null);
     }
 
     internal static ByteColor ToColor(Native.ByteColor color) => new(color.Red, color.Green, color.Blue);

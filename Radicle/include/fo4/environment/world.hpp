@@ -26,6 +26,8 @@ struct WorldspaceData {
   std::optional<std::array<float, 2>> bounds_min;
   std::optional<std::array<float, 2>> bounds_max;
   std::optional<std::uint8_t> flags;
+  std::optional<FormKey> lod_water;
+  std::optional<float> lod_water_height;
 };
 
 struct CellGrid {
@@ -63,6 +65,7 @@ struct CellData {
   std::optional<FormKey> encounter_zone;
   std::optional<FormKey> location;
   std::optional<FormKey> worldspace;
+  std::optional<FormKey> water;
 };
 
 struct LightingTemplateData {
