@@ -25,7 +25,6 @@ interface McpLiveMsg {
   ts: number;
   isNew?: boolean;
 }
-// Host -> page messages; only the fields each Type uses are read.
 interface HostMessage {
   Type?: string;
   Text?: string;
