@@ -182,12 +182,14 @@ public class QuestRuntimeTests
 
             Assert.True(data.StartGameEnabled);
             Assert.Empty(data.Unsupported);
+            Assert.Contains(new QuestRuntimeScript(QuestRuntime.QuestOwnedAlias, "QuestScript"), data.Scripts);
             Assert.Contains(new QuestRuntimeProperty("QuestScript", "Count", 3), data.ScriptProperties);
             Assert.Equal("QF_TestQuest", data.FragmentScript);
             Assert.Contains(new QuestRuntimeProperty(string.Empty, "Stage", 3), data.FragmentProperties);
             Assert.Contains(new QuestRuntimeFragment(10, 0, "QF_TestQuest", "Fragment_Stage_0010"), data.Fragments);
             Assert.Contains(5, data.Aliases);
-            Assert.Contains(new QuestRuntimeProperty("AliasScript", "Target", 1), data.AliasScriptProperties);
+            Assert.Contains(new QuestRuntimeScript(5, "AliasScript"), data.AliasScripts);
+            Assert.Contains(new QuestRuntimeAliasScriptProperty(5, "AliasScript", "Target", 1), data.AliasScriptProperties);
         }
         finally
         {
