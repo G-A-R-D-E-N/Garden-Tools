@@ -173,7 +173,7 @@ void releaseGate() {
     gate->changed.notify_all();
 }
 
-}  // namespace
+}
 
 TEST_CASE("Writers to the same plugin enter their write ops one at a time and keep both edits") {
     const auto root = tempRoot();
