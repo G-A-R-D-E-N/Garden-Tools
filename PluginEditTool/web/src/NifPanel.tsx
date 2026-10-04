@@ -148,7 +148,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
   };
 
 
-  const onDrop = async (e: DragEvent) => {
+  const onDrop = useCallback(async (e: DragEvent) => {
     e.preventDefault(); setDragOver(false);
     if (!nif) return;
     const f = e.dataTransfer.files?.[0];
@@ -166,7 +166,7 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
     } catch (err) {
       appendLog('✗ drop failed -- ' + (err instanceof Error ? err.message : String(err)));
     }
-  };
+  }, [nif, mode]);
 
   const onEditorSaved = () => { loadTree(nifPath); };
 
