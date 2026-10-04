@@ -21,7 +21,7 @@ Speculative answers must not be hardcoded as facts.
    shift. Check the PE timestamp before trusting an address.
 3. Exact bytes of `TESFile::AdjustFormIDFileIndex` (OG RVA `0x131fa0`).
 4. **Answered.** `TESFile::AdjustFormIDFileIndex` (RVA `0x131f90`, 55 bytes) masks a light plugin's local to 12 bits *destructively* before OR-ing in the slot, so anything above `0xFFF` silently aliases onto another record. Usable range is `0x001`–`0xFFF` — the `0x800` floor belongs to the full-plugin encoding only. Six of the nine shipped ESLs allocate below `0x800`, and `ccFSVFO4007-Halloween.esl` has 2078 own records, disproving the `0x800`–`0xFFF`/2048 folklore. See `ESL_FORMIDS.md`.
-5. How next-gen 1.11.x assigns `smallFileCompileIndex` vs OG 1.10.163.
+5. **Partial answer:** the verified OG 1.10.163 and AE 1.11.240 collection writers assign separate full/light array positions starting at zero. `.esl` extension or header SmallFile flag selects the light array. NG 1.10.984 is decompile-only; file-list construction and upstream limits remain open in [#389](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/389). Radicle retains caller-supplied order and safe caps. See `RUNTIME_PLUGIN_INDEX_EVIDENCE.md`.
 6. Can a plugin list more than 254 masters, and what happens?
 
 ## HEDR

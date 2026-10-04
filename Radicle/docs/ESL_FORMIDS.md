@@ -97,7 +97,9 @@ while #26 was open.
 - `0x000` is excluded. No shipped ESL uses it and nothing in the disassembly
   rules it out; it is left unavailable rather than guessed at.
 - `smallFileCompileIndex` is a `u16` read from `TESFile+0x372`, versus the
-  full-plugin `u8` at `+0x370`. How 1.11.x assigns it is still open.
+  full-plugin `u8` at `+0x370`. OG and AE assign the position in independent
+  arrays starting at zero. List construction and NG byte verification remain
+  open; see `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for the build-scoped evidence.
 - This is the *runtime* rule. `TESFile::CheckValidIDForSmallFile` is listed in
   the symbol dumps at RVA `0x130560` with `sizeof=10`, but that address holds a
   different, much larger function in the unpacked binary, and no 10-byte leaf

@@ -172,8 +172,9 @@ PluginKind resolve_master_kind(const PluginKey& owner,
                                std::span<const Plugin* const> environment) {
   for (const auto* candidate : environment) {
     if (candidate == nullptr || candidate->key != owner) continue;
-    return candidate->header.tes4_flags.is_small_file() ? PluginKind::light
-                                                       : PluginKind::full;
+    return candidate->header.tes4_flags.is_small_file() || owner.looks_light()
+               ? PluginKind::light
+               : PluginKind::full;
   }
   return owner.looks_light() ? PluginKind::light : PluginKind::full;
 }

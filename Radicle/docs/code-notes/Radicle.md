@@ -1,5 +1,13 @@
 # Radicle code notes
 
+## src/plugin/load_order.cpp:build_runtime_form_id_context
+
+Runtime classification uses TES4 SmallFile or the case-insensitive `.esl` extension, as the verified OG/AE header paths establish in `docs/RUNTIME_PLUGIN_INDEX_EVIDENCE.md`. The supplied order is already enabled and resolved by the caller. Existing safe table caps and duplicate refusal remain Radicle policy; no unverified engine sorting or overflow behavior is added. `tests/test_load_order.cpp:EslExtensionAssignsALightSlotWithoutChangingHeaderFlags` checks both classification sources and independent positions.
+
+## src/forms/weather_concept.cpp:resolve_master_kind
+
+Weather master insertion uses the same flag-or-extension classification when the target plugin is present in the supplied environment. `tests/test_weather_concept.cpp:MnamExtensionOnlyLightMasterInsertion` checks the resulting master kind and decoded reference without changing the source header. Evidence: `docs/RUNTIME_PLUGIN_INDEX_EVIDENCE.md`.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
