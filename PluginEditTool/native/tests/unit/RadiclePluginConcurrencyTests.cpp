@@ -129,7 +129,6 @@ std::string recordEditorId(fo4ide::plugin::RadiclePluginBackend& backend,
         }
     }
     FAIL("EDID row missing for " << formKey);
-    return {};
 }
 
 // Runs on the writer thread while it holds its op's lifecycle, owner and state locks.
