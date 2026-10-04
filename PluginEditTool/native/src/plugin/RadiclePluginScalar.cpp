@@ -67,7 +67,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{
@@ -176,7 +176,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
         }
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});

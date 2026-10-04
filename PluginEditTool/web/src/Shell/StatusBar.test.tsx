@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import StatusBar, { mo2FreshnessLabel } from './StatusBar';
+import StatusBar from './StatusBar';
+import { mo2FreshnessLabel } from './mo2Freshness';
 
 describe('StatusBar', () => {
   it('reports current and stale MO2 config or load-order state', () => {

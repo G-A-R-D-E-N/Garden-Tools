@@ -119,6 +119,9 @@ public unsafe struct WorldspaceInfo
     public fixed float BoundsMax[2];
     public int HasFlags;
     public byte Flags;
+    public FormKey LodWater;
+    public int HasLodWaterHeight;
+    public float LodWaterHeight;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -172,6 +175,7 @@ public unsafe struct CellInfo
     public FormKey EncounterZone;
     public FormKey Location;
     public FormKey Worldspace;
+    public FormKey Water;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -518,6 +522,76 @@ public unsafe struct StaticCollection
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct StaticDistantLod
+{
+    public nuint LevelCount;
+    public IntPtr Meshes0;
+    public IntPtr Meshes1;
+    public IntPtr Meshes2;
+    public IntPtr Meshes3;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct WaterInfo
+{
+    public int HasFlags;
+    public byte Flags;
+    public int HasVisual;
+    public float FogDepthAmount;
+    public ByteColor FogShallowColor;
+    public ByteColor FogDeepColor;
+    public float FogColorShallowRange;
+    public float FogColorDeepRange;
+    public float FogShallowAlpha;
+    public float FogDeepAlpha;
+    public float FogAlphaShallowRange;
+    public float FogAlphaDeepRange;
+    public ByteColor FogUnderwaterColor;
+    public float FogUnderwaterAmount;
+    public float FogUnderwaterNear;
+    public float FogUnderwaterFar;
+    public float NormalMagnitude;
+    public float ShallowNormalFalloff;
+    public float DeepNormalFalloff;
+    public float ReflectivityAmount;
+    public float FresnelAmount;
+    public float SurfaceEffectFalloff;
+    public float DisplacementForce;
+    public float DisplacementVelocity;
+    public float DisplacementFalloff;
+    public float DisplacementDampener;
+    public float DisplacementStartingSize;
+    public ByteColor ReflectionColor;
+    public float SunSpecularPower;
+    public float SunSpecularMagnitude;
+    public float SunSparklePower;
+    public float SunSparkleMagnitude;
+    public float InteriorSpecularRadius;
+    public float InteriorSpecularBrightness;
+    public float InteriorSpecularPower;
+    public fixed float NoiseWindDirection[3];
+    public fixed float NoiseWindSpeed[3];
+    public fixed float NoiseAmplitudeScale[3];
+    public fixed float NoiseUvScale[3];
+    public fixed float NoiseFalloff[3];
+    public int HasSiltAmount;
+    public float SiltAmount;
+    public int HasSiltLightColor;
+    public ByteColor SiltLightColor;
+    public int HasSiltDarkColor;
+    public ByteColor SiltDarkColor;
+    public int HasScreenSpaceReflections;
+    public int ScreenSpaceReflections;
+    public IntPtr NoiseTextures0;
+    public IntPtr NoiseTextures1;
+    public IntPtr NoiseTextures2;
+    public int HasLinearVelocity;
+    public fixed float LinearVelocity[3];
+    public int HasAngularVelocity;
+    public fixed float AngularVelocity[3];
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct LightingTemplateInfo
 {
     public int HasLighting;
@@ -834,6 +908,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_static_collection_free")]
     public static extern void StaticCollectionFree(StaticCollection* collection);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_static_get_distant_lod")]
+    public static extern Status StaticGetDistantLod(IntPtr env, IntPtr record, StaticDistantLod* out_lod);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_activator_get_water_type")]
+    public static extern Status ActivatorGetWaterType(IntPtr env, IntPtr record, FormKey* out_water);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_water_get_info")]
+    public static extern Status WaterGetInfo(IntPtr env, IntPtr record, WaterInfo* out_info);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_swap_decode")]
     public static extern Status MaterialSwapDecode(IntPtr env, IntPtr record, MaterialSwap** out_swap);

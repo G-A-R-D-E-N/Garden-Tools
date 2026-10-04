@@ -35,7 +35,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         });
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
@@ -361,7 +361,7 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
@@ -450,7 +450,7 @@ Result<nlohmann::json> RadiclePluginBackend::renumberRecord(const nlohmann::json
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});

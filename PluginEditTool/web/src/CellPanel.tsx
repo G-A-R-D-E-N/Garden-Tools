@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDialogs } from './dialogs';
+import { useDialogs } from './useDialogs';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
 import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
 import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import { parseCellGridCoordinate } from './util/cellGrid';
 import { statusBanner } from './util/cellStatus';
+import { pushHistory, redoHistory, undoHistory, type UndoHistory } from './util/undoHistory';
 import './PapyrusPanel.css';
 import './NifPanel.css';
 import './CellPanel.css';
@@ -39,36 +40,29 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
 
   type VisSnapshot = { types: Set<string>; refs: Set<string> };
-  const HISTORY_CAP = 50;
-  const undoStackRef = useRef<VisSnapshot[]>([]);
-  const redoStackRef = useRef<VisSnapshot[]>([]);
-
-
-  const [, setHistoryTick] = useState(0);
+  const [history, setHistory] = useState<UndoHistory<VisSnapshot>>({ undo: [], redo: [] });
 
   const snapshotVisibility = (): VisSnapshot => ({ types: new Set(hiddenTypes), refs: new Set(hiddenRefs) });
   const pushUndo = () => {
-    undoStackRef.current.push(snapshotVisibility());
-    if (undoStackRef.current.length > HISTORY_CAP) undoStackRef.current.shift();
-    redoStackRef.current = [];
-    setHistoryTick(t => t + 1);
+    const snap = snapshotVisibility();
+    setHistory(h => pushHistory(h, snap));
   };
   const applySnapshot = (s: VisSnapshot) => { setHiddenTypes(s.types); setHiddenRefs(s.refs); };
   const undoVisibility = () => {
-    const prev = undoStackRef.current.pop();
+    const prev = history.undo.at(-1);
     if (!prev) return;
-    redoStackRef.current.push(snapshotVisibility());
+    const cur = snapshotVisibility();
+    setHistory(h => undoHistory(h, cur));
     applySnapshot(prev);
-    setHistoryTick(t => t + 1);
   };
   const redoVisibility = () => {
-    const next = redoStackRef.current.pop();
+    const next = history.redo.at(-1);
     if (!next) return;
-    undoStackRef.current.push(snapshotVisibility());
+    const cur = snapshotVisibility();
+    setHistory(h => redoHistory(h, cur));
     applySnapshot(next);
-    setHistoryTick(t => t + 1);
   };
-  const resetVisibilityHistory = () => { undoStackRef.current = []; redoStackRef.current = []; };
+  const resetVisibilityHistory = () => setHistory({ undo: [], redo: [] });
 
 
 
@@ -126,14 +120,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     appendLog(`${failed > 0 ? '✗' : 'ℹ'} ${line}`);
   }, []);
 
-  const checkPlugins = async () => {
-    if (!cell) { setPluginCount(0); return; }
-    try {
-      const raw = await cell.GetPlugins();
+  const checkPlugins = () => cell?.GetPlugins()
+    .then(raw => {
       const list = JSON.parse(raw) as string[];
       setPluginCount(Array.isArray(list) ? list.length : 0);
-    } catch { setPluginCount(0); }
-  };
+    })
+    .catch(() => setPluginCount(0));
 
   useEffect(() => { checkPlugins(); }, []);
 
@@ -150,10 +142,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
 
   useEffect(() => {
-    if (!cell || noEnv) { setMatches(null); return; }
+    if (!cell || noEnv) return;
     const mySeq = ++searchSeq.current;
-    setMatchesLoading(true);
     const t = setTimeout(async () => {
+      setMatchesLoading(true);
       try {
         const raw = await cell.SearchCells(cellId.trim(), 30);
         if (searchSeq.current !== mySeq) return;
@@ -181,10 +173,10 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const wsSeq = useRef(0);
 
   useEffect(() => {
-    if (!cell || noEnv || pickMode !== 'grid') { setWsMatches(null); return; }
+    if (!cell || noEnv || pickMode !== 'grid') return;
     const mySeq = ++wsSeq.current;
-    setWsLoading(true);
     const t = setTimeout(async () => {
+      setWsLoading(true);
       try {
         const raw = await cell.SearchWorldspaces(worldspace.trim(), 100);
         if (wsSeq.current !== mySeq) return;
@@ -630,14 +622,14 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
 
-                {(hiddenRefs.size > 0 || undoStackRef.current.length > 0 || redoStackRef.current.length > 0) && (
+                {(hiddenRefs.size > 0 || history.undo.length > 0 || history.redo.length > 0) && (
                   <div className="cell-hidden-bar">
                     <span>{hiddenRefs.size > 0 ? `${hiddenRefs.size} mesh${hiddenRefs.size === 1 ? '' : 'es'} hidden` : ''}</span>
                     <div className="cell-hidden-actions">
-                      <button className="papyrus-copy" onClick={undoVisibility} disabled={undoStackRef.current.length === 0} title="Undo last hide/show">
+                      <button className="papyrus-copy" onClick={undoVisibility} disabled={history.undo.length === 0} title="Undo last hide/show">
                         Undo <kbd>Ctrl+Z</kbd>
                       </button>
-                      <button className="papyrus-copy" onClick={redoVisibility} disabled={redoStackRef.current.length === 0} title="Redo">
+                      <button className="papyrus-copy" onClick={redoVisibility} disabled={history.redo.length === 0} title="Redo">
                         Redo <kbd>Ctrl+Y</kbd>
                       </button>
                       {hiddenRefs.size > 0 && <button className="papyrus-copy" onClick={unhideAll}>Unhide all <kbd>Alt+1</kbd></button>}

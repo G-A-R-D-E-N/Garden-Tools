@@ -219,27 +219,6 @@ export interface FieldNode {
 }
 
 
-export interface Chat {
-  SendMessage(sessionId: string, text: string, imagesJson: string): Promise<void>;
-  CancelMessage(sessionId: string): Promise<void>;
-  ResetChat(): Promise<void>;
-  IsAgentReady(): Promise<boolean>;
-
-  ListSessions(): Promise<string>;
-  NewSession(): Promise<string>;
-  LoadSession(id: string): Promise<string>;
-  RenameSession(id: string, name: string): Promise<string>;
-  DeleteSession(id: string): Promise<string>;
-  ForkSession(id: string): Promise<string>;
-  GetCommands(): Promise<string>;
-}
-
-export interface ChatSessionMeta { id: string; name: string; createdAt: string; count: number; }
-export interface ChatSessionMsg { isUser: boolean; text: string; }
-export interface ChatSessionFull { id: string; name: string; messages: ChatSessionMsg[]; }
-export interface SlashCommand { name: string; args: string; help: string; }
-
-
 export interface PapyrusHost {
   BrowseForFile(title: string, filter: string): Promise<string>;
   BrowseForFolder(title: string): Promise<string>;
@@ -574,7 +553,6 @@ declare global {
         hostObjects?: {
           backend?: Backend;
           appInterop?: AppInterop;
-          chat?: Chat;
           settings?: SettingsHost;
           papyrus?: PapyrusHost;
           nif?: NifHost;

@@ -54,7 +54,7 @@ Result<nlohmann::json> RadiclePluginBackend::setArmorField(
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
     if (loaded == nullptr) {
         return std::unexpected(Error{

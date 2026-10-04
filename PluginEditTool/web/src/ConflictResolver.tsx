@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, ShieldAlert, Check, Copy } from 'lucide-react';
-import { useDialogs } from './dialogs';
+import { useDialogs } from './useDialogs';
 import './ConflictResolver.css';
 
 interface ConflictEntry {

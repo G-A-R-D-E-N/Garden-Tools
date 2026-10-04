@@ -60,7 +60,7 @@ Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& ar
         return std::unexpected(Error{"MastersMissing", "No usable master filenames were supplied"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* target = findPlugin(pluginName);
     if (target == nullptr) {
         return std::unexpected(Error{
