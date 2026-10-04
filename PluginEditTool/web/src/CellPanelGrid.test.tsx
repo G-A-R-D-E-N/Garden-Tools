@@ -19,7 +19,7 @@ vi.mock('./backend', () => ({
   }),
   getBackend: () => ({ CreateRecord: bridge.create, SavePlugin: bridge.save }),
 }));
-vi.mock('./dialogs', () => ({ useDialogs: () => ({ pickPlugin: bridge.pick }) }));
+vi.mock('./useDialogs', () => ({ useDialogs: () => ({ pickPlugin: bridge.pick }) }));
 
 beforeEach(() => {
   vi.resetAllMocks();

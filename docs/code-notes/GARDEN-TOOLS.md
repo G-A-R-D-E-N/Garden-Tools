@@ -1361,6 +1361,26 @@ Source: TES5Edit dev-4.1.6 `9fb016884bec138ea6c7b872cec831537d464c3e`.
 
 Not changed, by design: `Radicle/src/environment/environment.cpp:Environment::winner` (the GardenEngine read path) returns the last version, partial or not. That is Mutagen's rule, which GardenEngine's parity checks compare against: `Mutagen.Bethesda.Core/Plugins/Cache/Internals/Implementations/Internal/ImmutableLoadOrderLinkCacheCategory.cs:FillNextCacheDepth` fills the winner cache from the last listed mod backwards and keeps the first record it meets (`AddIfMissing`), and nothing under `Mutagen.Bethesda.Core/Plugins/Cache` tests `IsPartialForm` or the `0x4000` flag (Mutagen only uses `PartialFormFlag` while parsing subgroups, `Plugins/Binary/Translations/SubgroupsBinaryTranslation.cs`). xEdit's winner rule therefore applies to `ConflictGraph`, the conflict and patching view, and Mutagen's to `Environment`. Which one the game itself uses when it loads a partial form is not in `ReverseEng/commonlib_NonVR` or `ReverseEng/Fallout4_Runtime_Research` and stays unverified.
 
+## PluginEditTool/web/src/CellViewport.tsx:CellViewport, MainShell.tsx:MainShell — latest-value refs (#77 tranche 2)
+
+The React Compiler `react-hooks/refs` rule forbids writing `ref.current` during render. Refs that mirror the latest prop/callback for long-lived three.js or host-message listeners are now updated in a dep-less `useLayoutEffect`, which runs before any passive `useEffect` in the same commit, so listeners never see a stale value. `MainShell`'s `reloadMatrixRef`/`openByFormKeyRef` are declared before the host-message effect that reads them (with no-op initial values) because the compiler's `immutability` rule rejects modifying a value an earlier effect already captured.
+
+## PluginEditTool/web/src/CellPanel.tsx:CellPanel — visibility undo/redo history
+
+Undo/redo stacks moved from refs plus a render-tick counter into one `history` state object, so the hidden bar and Undo/Redo `disabled` flags read state instead of refs during render. `undoVisibility`/`redoVisibility` read the top snapshot from the render closure (`CellViewport` reaches them through its layout-effect-mirrored `onUndoRef`/`onRedoRef`); stack updates use functional `setHistory` so batched pushes stay capped at `HISTORY_CAP`.
+
+## PluginEditTool/web/src/NifViewport.tsx:setWireframe
+
+The wireframe toggle mutates three.js materials owned by the main scene effect. Doing it through `setWireframe(mats, on)` keeps the mutation outside the component body the compiler analyses (same pattern as `util/cellInstances.ts:applyVisibility`).
+
+## PluginEditTool/web/src/useDialogs.ts:useDialogs, Shell/mo2Freshness.ts:mo2FreshnessLabel
+
+Split out of `dialogs.tsx` and `Shell/StatusBar.tsx` so those files export only components (`react-refresh/only-export-components`). `dialogs.tsx:DialogProvider` supplies `DialogContext` from `useDialogs.ts`.
+
+## PluginEditTool/web/src/util/cellInstances.ts:applyHidden, Shell/ExplorerTree.tsx:ExplorerTree
+
+Moved out of `CellViewport.tsx` and `MainShell.tsx` unchanged so each of those over-750-line files shrinks when touched (source line-limit guard). `cellInstances.ts` holds the instanced-mesh hide/visibility/selection helpers and `InstanceRef`; `ExplorerTree.tsx` is the lazy plugin/record tree. Tranche 2 also moved RecordView's conflict-status tables to `Workspace/conflictStatus.ts`; main had already moved the same code to `recordStatus.ts` (#317), so the merge of the updated #318 dropped `conflictStatus.ts` and `RecordView.tsx` imports from `recordStatus.ts` only.
+
 ## PluginEditTool/web/src/errors.ts:errorMessage, errorText — host-call rejection text
 
 `errorMessage` takes anything a host call can reject with: an `Error`, a plain object carrying `message`, or a bare value. It returns the message text, or `undefined` when there is none, so callers keep their own fallback. `errorText` is the common fallback, `errorMessage(e) ?? String(e)`.
