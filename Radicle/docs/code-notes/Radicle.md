@@ -1,5 +1,26 @@
 # Radicle code notes
 
+## src/environment/sound.cpp:decode_sound_descriptor
+
+`docs/SOUND.md` pins each stored layout and the independent official-master
+census. SNDR's CNAM controls the BNAM union; known kinds keep their stored
+links, raw controls and complete rate blocks. Unknown kinds, duplicate scalar
+fields, wrong sizes and incomplete/count-mismatched rate groups fail closed.
+Playback selection and runtime mixing remain unverified.
+
+`src/environment/sound.cpp:decode_sound_marker` accepts the optional REPT tail
+without filling in a default. `decode_footstep_set` maps the reverse disk order
+into walking/running/sprinting/sneaking/swimming categories after validating
+the complete count table. `decode_music_type` and `decode_footstep` expose
+only their evidenced fields; unknown container bytes are untouched.
+
+`src/c_api_sound.cpp:radicle_sound_descriptor_decode` and the other sound
+exports use owned array holders and existing environment string storage.
+`bindings/csharp/Radicle.Interop/SoundRecords.cs:RadicleEnvironment` copies
+every array before freeing its holder. The generated declaration/layout probe
+now includes `include/fo4/c_api_sound.h` at ABI 9: main is 4, PR #383 reserves
+5/6/7, and #398 reserves 8. Reconcile the independent branches before merging.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.

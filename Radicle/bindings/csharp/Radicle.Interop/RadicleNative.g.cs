@@ -616,10 +616,96 @@ public unsafe struct MaterialSwap
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SoundPlayback
+{
+    public sbyte FrequencyShift;
+    public sbyte FrequencyVariance;
+    public byte Priority;
+    public byte DbVariance;
+    public ushort AttenuationHundredths;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SoundFile
+{
+    public IntPtr Path;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SoundRateFile
+{
+    public uint Rpm;
+    public IntPtr Path;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SoundDescriptor
+{
+    public uint Kind;
+    public FormKey Category;
+    public FormKey Alternate;
+    public FormKey OutputModel;
+    public FormKey BaseDescriptor;
+    public IntPtr Descriptors;
+    public nuint DescriptorCount;
+    public IntPtr Files;
+    public nuint FileCount;
+    public int HasControls;
+    public fixed byte Controls[4];
+    public int HasPlayback;
+    public SoundPlayback Playback;
+    public IntPtr RateFiles;
+    public nuint RateFileCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SoundMarkerInfo
+{
+    public FormKey Descriptor;
+    public int HasRepeat;
+    public float MinTime;
+    public float MaxTime;
+    public int HasStackable;
+    public byte Stackable;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct MusicType
+{
+    public int HasFlags;
+    public uint Flags;
+    public int HasPriority;
+    public ushort Priority;
+    public ushort DuckingHundredths;
+    public int HasFadeDuration;
+    public float FadeDuration;
+    public IntPtr Tracks;
+    public nuint TrackCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FootstepInfo
+{
+    public FormKey ImpactSet;
+    public IntPtr Tag;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct FootstepSet
+{
+    public fixed uint Counts[5];
+    public IntPtr Steps;
+    public nuint StepCount;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 4u;
+    public const uint CompiledAbiVersion = 9u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -923,5 +1009,29 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
     public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_descriptor_decode")]
+    public static extern Status SoundDescriptorDecode(IntPtr env, IntPtr record, SoundDescriptor** out_descriptor);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_descriptor_free")]
+    public static extern void SoundDescriptorFree(SoundDescriptor* descriptor);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_marker_get_info")]
+    public static extern Status SoundMarkerGetInfo(IntPtr env, IntPtr record, SoundMarkerInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_music_type_decode")]
+    public static extern Status MusicTypeDecode(IntPtr env, IntPtr record, MusicType** out_music);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_music_type_free")]
+    public static extern void MusicTypeFree(MusicType* music);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_footstep_get_info")]
+    public static extern Status FootstepGetInfo(IntPtr env, IntPtr record, FootstepInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_footstep_set_decode")]
+    public static extern Status FootstepSetDecode(IntPtr env, IntPtr record, FootstepSet** out_set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_footstep_set_free")]
+    public static extern void FootstepSetFree(FootstepSet* set);
 
 }
