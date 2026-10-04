@@ -547,3 +547,41 @@ TEST_CASE("LoadMo2 discardPending does not drop an edit created after consent") 
     SUCCEED("FO4IDE_TEST_HOOKS is required for the LoadMo2 discard consent race");
 #endif
 }
+
+TEST_CASE("LoadMo2 discardPending does not drop a SetLight made after consent") {
+#ifdef FO4IDE_TEST_HOOKS
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeLocalizedPlugin());
+    writeLocalizationSet(root);
+    const auto pluginBefore = readBytes(path);
+    const auto environment = nlohmann::json{{"plugins", nlohmann::json::array({
+        {{"name", "Patch.esp"}, {"path", path.string()}, {"source", "PendingLifecycle"}, {"resolved", true}}
+    })}};
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    auto discarding = environment;
+    discarding["discardPending"] = true;
+    LoadMo2Barrier barrier;
+    fo4ide::Result<nlohmann::json> reloadResult = nlohmann::json(nullptr);
+    std::thread reloader([&] {
+        reloadResult = backend.invoke("environment.LoadMo2", discarding);
+    });
+    JoinReload join{reloader, barrier};
+    barrier.afterCheck.wait();
+    REQUIRE(backend.invoke(
+        "masters.SetLight", nlohmann::json::array({"Patch.esp", true})).has_value());
+    barrier.release();
+    if (reloader.joinable()) reloader.join();
+
+    REQUIRE_FALSE(reloadResult.has_value());
+    CHECK(reloadResult.error().type == "PluginHasPendingChanges");
+    CHECK(pluginPending(activePlugins(backend), "Patch.esp"));
+    CHECK(readBytes(path) == pluginBefore);
+#else
+    SUCCEED("FO4IDE_TEST_HOOKS is required for the LoadMo2 SetLight consent race");
+#endif
+}

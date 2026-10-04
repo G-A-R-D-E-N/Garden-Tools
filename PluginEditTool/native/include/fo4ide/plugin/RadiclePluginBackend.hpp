@@ -3,8 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,6 +25,9 @@ using LocalizedQuestAfterTableParseHook = void (*)();
 void setLocalizedQuestAfterTableParseHook(LocalizedQuestAfterTableParseHook hook);
 using LoadMo2AfterPendingCheckHook = void (*)();
 void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
+using WriteOpLockedHook = void (*)();
+void setWriteOpLockedHook(WriteOpLockedHook hook);
+void setSaveIoLockedHook(WriteOpLockedHook hook);
 #endif
 
 class RadiclePluginBackend final : public IPluginBackend {
@@ -84,10 +89,54 @@ private:
         std::optional<fo4::Plugin> originalPlugin;
         bool dirty{false};
         std::optional<StagedLocalization> stagedLocalization;
+        std::unique_ptr<std::mutex> writeMutex = std::make_unique<std::mutex>();
+    };
+
+    enum class StateHold { None, Shared, Exclusive };
+
+    class OpLock {
+    public:
+        enum class Mode { Read, Write, Lifecycle };
+        OpLock(const RadiclePluginBackend& backend, Mode mode,
+               const std::vector<std::string_view>& owners = {});
+        ~OpLock();
+        OpLock(const OpLock&) = delete;
+        OpLock& operator=(const OpLock&) = delete;
+
+        const RadiclePluginBackend& backend;
+        Mode mode;
+        StateHold state{StateHold::None};
+        std::vector<std::unique_lock<std::mutex>> owners;
+        OpLock* previous;
+
+        static thread_local OpLock* current;
+    };
+
+    class CommitScope {
+    public:
+        CommitScope();
+        ~CommitScope();
+        CommitScope(const CommitScope&) = delete;
+        CommitScope& operator=(const CommitScope&) = delete;
+
+    private:
+        OpLock* op_;
+        StateHold restore_;
+    };
+
+    class StateReleased {
+    public:
+        StateReleased();
+        ~StateReleased();
+        StateReleased(const StateReleased&) = delete;
+        StateReleased& operator=(const StateReleased&) = delete;
+
+    private:
+        OpLock* op_;
+        StateHold restore_;
     };
 
     Result<LoadedPlugin*> createPluginLocked(std::string fileName);
-    Result<LoadedPlugin*> ensureTargetPluginLocked(std::string_view requestedName);
     void stagePluginMutationLocked(LoadedPlugin& loaded, fo4::Plugin mutated);
     std::vector<std::string> laterOverridesLocked(const LoadedPlugin& target,
                                                   const fo4::FormKey& key) const;
@@ -177,7 +226,9 @@ private:
     void rebuildGraphLocked();
     std::string dirtyPluginListLocked() const;
 
-    mutable std::mutex mutex_;
+    mutable std::shared_mutex lifecycleMutex_;
+    mutable std::shared_mutex stateMutex_;
+    std::mutex saveIoMutex_;
     std::vector<LoadedPlugin> plugins_;
     std::uint64_t mutationEpoch_{0};
     fo4::ConflictGraph graph_;

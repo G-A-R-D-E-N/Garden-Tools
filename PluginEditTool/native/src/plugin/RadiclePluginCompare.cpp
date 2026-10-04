@@ -84,7 +84,7 @@ Result<nlohmann::json> RadiclePluginBackend::comparePluginTo(const nlohmann::jso
         return std::unexpected(Error{"InvalidPluginExtension", "Comparison file must be .esp, .esm or .esl"});
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Read);
     const auto* loaded = findPlugin(name);
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});

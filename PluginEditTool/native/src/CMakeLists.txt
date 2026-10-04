@@ -8,6 +8,8 @@ target_link_libraries(fo4ide_plugin_api INTERFACE fo4ide_core)
 add_library(
     fo4ide_plugin
     plugin/RadiclePluginBackend.cpp
+    plugin/RadiclePluginQueries.cpp
+    plugin/RadiclePluginConditions.cpp
     plugin/RadiclePluginPending.cpp
     plugin/RadiclePluginAnalysis.cpp
     plugin/RadiclePluginMasters.cpp

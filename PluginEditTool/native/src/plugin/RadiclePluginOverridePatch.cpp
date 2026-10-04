@@ -141,7 +141,7 @@ Result<nlohmann::json> RadiclePluginBackend::createMergedPatch(const nlohmann::j
         return selected.empty() || selected.count(lowered) != 0;
     };
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {patchName});
 
     std::set<std::string> selectedPresent;
     for (const auto& plugin : plugins_) {
@@ -275,7 +275,7 @@ Result<nlohmann::json> RadiclePluginBackend::revertOverrides(const nlohmann::jso
     const auto signatureLower = asciiLower(signature);
     const auto patchName = normalizePluginName(patchArg);
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Write, {patchName});
 
     const auto* bad = findPlugin(badPlugin);
     if (bad == nullptr) {

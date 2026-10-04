@@ -11,7 +11,7 @@
 type Listener = (e: { data: unknown }) => void;
 
 const HOST_OBJECTS = [
-  'backend', 'appInterop', 'chat', 'settings', 'papyrus',
+  'backend', 'appInterop', 'settings', 'papyrus',
   'nif', 'material', 'masters', 'archive', 'audio', 'cell', 'graph',
 ] as const;
 
@@ -56,7 +56,8 @@ function install() {
     postMessage: () => {  },
   };
 
-  (window as unknown as { chrome: unknown }).chrome = { ...(window as any).chrome, webview };
+  const host = window as unknown as { chrome?: object };
+  host.chrome = { ...host.chrome, webview };
   (window as unknown as { __FO4IDE_HTTP_BRIDGE__: boolean }).__FO4IDE_HTTP_BRIDGE__ = true;
 
 
@@ -70,4 +71,4 @@ function install() {
   };
 }
 
-if (window.location.protocol === 'http:' || !(window as any).chrome?.webview) install();
+if (window.location.protocol === 'http:' || !window.chrome?.webview) install();

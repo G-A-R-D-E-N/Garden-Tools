@@ -150,7 +150,7 @@ bool emptyCreatedPlugin(const fo4::Plugin& plugin) {
 
 Result<void> RadiclePluginBackend::setTrustedNewPluginRoot(
     const std::filesystem::path& root) {
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Lifecycle);
     if (root.empty()) {
         trustedNewPluginRoot_.clear();
         return {};
@@ -293,13 +293,6 @@ Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::createPluginLo
     }
 }
 
-Result<RadiclePluginBackend::LoadedPlugin*> RadiclePluginBackend::ensureTargetPluginLocked(
-    std::string_view requestedName) {
-    auto fileName = normalizedPluginFilename(std::string(requestedName));
-    if (auto* loaded = findPlugin(fileName)) return loaded;
-    return createPluginLocked(std::move(fileName));
-}
-
 Result<nlohmann::json> RadiclePluginBackend::createPlugin(
     const nlohmann::json& arguments) {
     auto fileName = createStringArgument(arguments, 0);
@@ -310,7 +303,7 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
         });
     }
 
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Lifecycle);
     auto created = createPluginLocked(std::move(fileName));
     if (!created) return std::unexpected(created.error());
     return nlohmann::json(
@@ -319,7 +312,7 @@ Result<nlohmann::json> RadiclePluginBackend::createPlugin(
 }
 
 Result<void> RadiclePluginBackend::discardCreatedPlugin(std::string_view name) {
-    std::scoped_lock lock(mutex_);
+    OpLock lock(*this, OpLock::Mode::Lifecycle);
     const auto normalized = normalizedPluginFilename(std::string(name));
     auto it = std::find_if(plugins_.begin(), plugins_.end(), [&](const LoadedPlugin& loaded) {
         return createLower(loaded.name) == createLower(normalized);
