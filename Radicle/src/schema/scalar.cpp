@@ -103,6 +103,7 @@ std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload
     }
     return payload;
   }
+  if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
   if (payload.size() < descriptor.offset + width) return {};
   return payload.subspan(descriptor.offset, width);
 }

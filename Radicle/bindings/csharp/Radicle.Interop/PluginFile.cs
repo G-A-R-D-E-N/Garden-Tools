@@ -115,6 +115,13 @@ public sealed unsafe class PluginFile : IDisposable
     public bool SetActivateParentDelay(FormKey reference, int index, float delay) =>
         Edit(reference, (s, key) => RadicleNative.PluginSetPlacedActivateParentDelay(Handle, key, (nuint)index, delay));
 
+    public bool SetScalar(FormKey record, string path, string value)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(value);
+        return Edit(record, (s, key) => RadicleNative.PluginSetRecordScalar(Handle, key, path, value));
+    }
+
     public void Dispose()
     {
         var handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);

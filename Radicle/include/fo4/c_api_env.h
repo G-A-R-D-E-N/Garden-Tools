@@ -601,6 +601,10 @@ RADICLE_API radicle_status radicle_plugin_set_placed_activate_parent_delay(radic
                                                                            radicle_form_key reference,
                                                                            size_t index,
                                                                            float delay);
+RADICLE_API radicle_status radicle_plugin_set_record_scalar(radicle_plugin* plugin,
+                                                            radicle_form_key key,
+                                                            const char* path,
+                                                            const char* value);
 
 RADICLE_API radicle_status radicle_env_plugin_records(const radicle_env* env,
                                                       size_t plugin_index,

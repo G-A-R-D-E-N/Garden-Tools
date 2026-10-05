@@ -341,6 +341,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_vegetation.cpp
+    tests/test_vegetation_edit.cpp
     tests/test_vegetation_real.cpp
     tests/test_navmesh_formlinks.cpp
     tests/test_armor_creation.cpp

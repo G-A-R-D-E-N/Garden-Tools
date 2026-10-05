@@ -1,5 +1,6 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/forms/placed_reference.hpp"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/writer.hpp"
 
 #include <memory>
@@ -137,6 +138,33 @@ radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugin,
       return RADICLE_STATUS_OK;
     } catch (const fo4::forms::PlacedReferenceError& error) {
       return placed_error(error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_set_record_scalar(radicle_plugin* plugin,
+                                                radicle_form_key key,
+                                                const char* path,
+                                                const char* value) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || path == nullptr || value == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and value are required");
+  }
+  return guarded("unknown exception while setting scalar field", [&] {
+    const auto field = fo4::schema::scalar_field_descriptor(path);
+    if (!field) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown scalar field path");
+    try {
+      switch (fo4::set_record_scalar(plugin->value, *form_key, *field, value)) {
+        case fo4::ScalarMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::ScalarMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "record has no such subrecord, or the field is outside its supported payload layout");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
   });
 }

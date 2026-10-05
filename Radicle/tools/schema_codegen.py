@@ -10,6 +10,7 @@ PRESENTATIONS = {"identity", "percent_0_100"}
 # Missing-field insertion is intentionally not generated yet. Safe insertion
 # requires record-level subrecord ordering metadata, not only a scalar field row.
 INSERTIONS = {"existing_only"}
+WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4}
 INTEGER_BOUNDS = {
     "u8": (0, 0xFF),
     "u16": (0, 0xFFFF),
@@ -116,6 +117,16 @@ def load_fields(schema_path: Path):
                 raise ValueError(
                     f"unsupported insertion policy until record ordering exists: {insertion!r}")
 
+            payload_size = 0
+            if "payload_size" in field:
+                payload_size = field["payload_size"]
+                if not embedded:
+                    raise ValueError(f"payload_size requires an embedded field: {path!r}")
+                if type(payload_size) is not int or payload_size <= 0:
+                    raise ValueError(f"payload_size must be a positive integer: {path!r}")
+                if payload_size < offset + WIDTHS[storage]:
+                    raise ValueError(f"payload_size is smaller than the field end: {path!r}")
+
             minimum = numeric(field.get("minimum"), "minimum", path)
             maximum = numeric(field.get("maximum"), "maximum", path)
             if minimum > maximum:
@@ -144,12 +155,12 @@ def load_fields(schema_path: Path):
                 "maximum": maximum,
                 "offset": offset,
                 "embedded": embedded,
+                "payload_size": payload_size,
                 "can_insert": False,
             })
 
     # Two embedded fields in one payload must not overlap. A transposed offset
     # is otherwise invisible until a write corrupts the neighbouring field.
-    widths = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4}
     by_payload = {}
     for field in fields:
         if not field["embedded"]:
@@ -158,7 +169,7 @@ def load_fields(schema_path: Path):
     for (record_signature, subrecord), group in by_payload.items():
         group.sort(key=lambda item: item["offset"])
         for earlier, later in zip(group, group[1:]):
-            end = earlier["offset"] + widths[earlier["storage"]]
+            end = earlier["offset"] + WIDTHS[earlier["storage"]]
             if end > later["offset"]:
                 raise ValueError(
                     f"overlapping scalar fields in {record_signature}.{subrecord}: "
@@ -186,7 +197,7 @@ def render(fields) -> str:
             f"ScalarPresentation::{field['presentation']}, " +
             f"{cpp_number(field['minimum'])}, {cpp_number(field['maximum'])}, " +
             f"{field['offset']}, " +
-            ("true" if field["embedded"] else "false") +
+            ("true" if field["embedded"] else "false") + f", {field['payload_size']}" +
             "}, " +
             ("true" if field["can_insert"] else "false") +
             "},"

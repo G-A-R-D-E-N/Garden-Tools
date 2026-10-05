@@ -54,3 +54,10 @@ GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` consumes LAND/LTEX
 diffuse textures through `CellService` and `LandscapeTextureCatalog`, but has no
 LTEX GNAM or GRAS/TREE/FLOR vegetation consumer. GardenEngine #148 must add that
 consumer before a meaningful vegetation probe can run.
+
+## Editing
+
+The existing numeric GRAS DATA, TREE CNAM, TREE/FLOR PFPC and FLOR FNAM fields can be
+rewritten in place with `radicle_plugin_set_record_scalar` and
+`PluginFile.SetScalar`; nothing is added or removed. Field list, size guards and
+refusal rules are in `docs/code-notes/radicle-vegetation-writer.md`.

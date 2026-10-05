@@ -721,7 +721,7 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 11u;
+    public const uint CompiledAbiVersion = 17u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -956,6 +956,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_activate_parent_delay")]
     public static extern Status PluginSetPlacedActivateParentDelay(IntPtr plugin, FormKey reference, nuint index, float delay);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_scalar")]
+    public static extern Status PluginSetRecordScalar(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, [MarshalAs(UnmanagedType.LPUTF8Str)] string? value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_plugin_records")]
     public static extern Status EnvPluginRecords(IntPtr env, nuint plugin_index, IntPtr** out_records, nuint* out_count);

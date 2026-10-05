@@ -43,6 +43,8 @@ struct ScalarDescriptor {
   // fields, and a short payload simply does not expose the ones past its end
   // (EXPL DATA ships truncated at 52/56/60/64 bytes as well as 84).
   bool embedded{false};
+  // Non-zero: an embedded field is treated as absent unless the payload is exactly this size.
+  std::size_t payload_size{0};
 };
 
 struct ScalarFieldDescriptor {
