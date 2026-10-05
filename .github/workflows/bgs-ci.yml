@@ -20,8 +20,8 @@ permissions:
 # A newer push supersedes a pull request or branch run, but main runs always
 # finish: cancelling them on every merge left main itself untested.
 concurrency:
-  group: bgs-ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: bgs-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:

@@ -43,8 +43,8 @@ on:
 # A newer push supersedes a pull request or branch run, but main runs always
 # finish: cancelling them on every merge left main itself untested.
 concurrency:
-  group: native-ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: native-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: true
 
 # Every job builds in its own fresh workspace, so compiles go through ccache
 # (installed on the runner hosts) to avoid rebuilding unchanged sources.
