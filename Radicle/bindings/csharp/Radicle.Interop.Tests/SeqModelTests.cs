@@ -63,19 +63,12 @@ public class SeqModelTests
     [Fact]
     public void ReadsFromAFile()
     {
-        var path = Path.Combine(Path.GetTempPath(), "radicle_interop_seq_test.seq");
-        try
-        {
-            File.WriteAllBytes(path, SyntheticSeq(0x07000800));
-            using var seq = SeqFile.FromFile(path);
-            Assert.Single(seq.Entries);
-            Assert.Equal(0x07000800u, seq.Entries[0]);
-            Assert.Equal(SyntheticSeq(0x07000800), seq.ToBytes());
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        using var temp = new TempDirectory();
+        var path = temp.Write("fixture.seq", SyntheticSeq(0x07000800));
+        using var seq = SeqFile.FromFile(path);
+        Assert.Single(seq.Entries);
+        Assert.Equal(0x07000800u, seq.Entries[0]);
+        Assert.Equal(SyntheticSeq(0x07000800), seq.ToBytes());
     }
 
     [Fact]

@@ -149,18 +149,11 @@ public class PexModelTests
     [Fact]
     public void ReadsFromAFile()
     {
-        var path = Path.Combine(Path.GetTempPath(), "radicle_interop_pex_test.pex");
-        try
-        {
-            File.WriteAllBytes(path, SyntheticPex());
-            using var pex = PexFile.FromFile(path);
-            Assert.Equal(1, pex.Header.ObjectCount);
-            Assert.Equal(SyntheticPex(), pex.ToBytes());
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        using var temp = new TempDirectory();
+        var path = temp.Write("fixture.pex", SyntheticPex());
+        using var pex = PexFile.FromFile(path);
+        Assert.Equal(1, pex.Header.ObjectCount);
+        Assert.Equal(SyntheticPex(), pex.ToBytes());
     }
 
     [Fact]
