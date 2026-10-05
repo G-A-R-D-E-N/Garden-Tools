@@ -131,7 +131,7 @@ jobs:
         run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
       - name: Test
-        run: ctest --test-dir build/native --output-on-failure --parallel 4
+        run: ctest --test-dir build/native --output-on-failure
 
       - name: Upload logs and binaries on failure
         if: failure()
@@ -359,7 +359,7 @@ jobs:
         run: if defined CCACHE "%CCACHE%" --show-stats
 
       - name: Test
-        run: ctest --test-dir build\native --output-on-failure --parallel 4
+        run: ctest --test-dir build\native --output-on-failure
 
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.
@@ -376,4 +376,4 @@ jobs:
 
       - name: Test (Debug)
         if: github.event_name != 'pull_request'
-        run: ctest --test-dir build\native-debug --output-on-failure --parallel 4
+        run: ctest --test-dir build\native-debug --output-on-failure
