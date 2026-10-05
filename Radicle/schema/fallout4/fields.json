@@ -1191,7 +1191,38 @@
           "mutation": "terminated_group"
         }
       ],
-      "fields": [],
+      "fields": [
+        {
+          "path": "RACE\\BipedObjectNames",
+          "label": "Biped object name",
+          "kind": "string",
+          "subrecord": "NAME",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorExtendedLookupTexture",
+          "label": "Hair color extended lookup texture",
+          "kind": "string",
+          "subrecord": "HLTX",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorLookupTexture",
+          "label": "Hair color lookup texture",
+          "kind": "string",
+          "subrecord": "HNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\PhonemeTargetNames",
+          "label": "Phoneme target name",
+          "kind": "string",
+          "subrecord": "PHTN",
+          "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": [
         "FULL",
         "DESC"

@@ -1,5 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 
+#include "record_edit.hpp"
+
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
@@ -68,16 +70,7 @@ const Group* source_top_group_for_record(const Plugin& source,
   return nullptr;
 }
 
-Record* find_mutable_record(Plugin& plugin, const FormKey& record_key) {
-  Record* target = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (target == nullptr && record.header.signature != sig_tes4 &&
-        record.form_key == record_key) {
-      target = &record;
-    }
-  });
-  return target;
-}
+using detail::find_mutable_record;
 
 Record* find_top_level_record(Plugin& plugin, const FormKey& record_key) {
   for (auto& group : plugin.groups) {
@@ -321,49 +314,7 @@ ScalarMutationStatus set_record_scalar(
     const FormKey& record_key,
     const schema::ScalarFieldDescriptor& field,
     std::string_view value) {
-  assign_record_form_keys(plugin);
-  auto* target = find_mutable_record(plugin, record_key);
-  if (target == nullptr) return ScalarMutationStatus::record_missing;
-
-  if (target->header.signature != field.record) {
-    throw schema::ScalarError(
-        std::string(field.path) + " does not apply to " +
-        target->header.signature.to_string() + " records");
-  }
-
-  Subrecord* found = nullptr;
-  for (auto& subrecord : target->subrecords) {
-    if (subrecord.signature != field.scalar.subrecord) continue;
-    if (found != nullptr) {
-      throw schema::ScalarError(
-          "record contains duplicate scalar subrecords: " +
-          field.scalar.subrecord.to_string());
-    }
-    found = &subrecord;
-  }
-  if (found == nullptr) return ScalarMutationStatus::subrecord_missing;
-
-  // Reject a payload this field cannot address before touching anything. For
-  // an embedded field that means the payload is too short to reach it, which
-  // is the truncated-legacy case, not a malformed record.
-  const auto existing = schema::scalar_field_bytes(found->data, field.scalar);
-  if (existing.empty()) return ScalarMutationStatus::subrecord_missing;
-  static_cast<void>(schema::decode_scalar(existing, field.scalar));
-
-  const auto encoded = schema::encode_scalar(value, field.scalar);
-  if (std::equal(existing.begin(), existing.end(), encoded.begin(), encoded.end())) {
-    return ScalarMutationStatus::unchanged;
-  }
-
-  // Patch in place: an embedded field shares its payload with every other
-  // field in the struct, so replacing the payload would erase its neighbours.
-  schema::patch_scalar_field(found->data, field.scalar, encoded);
-  target->original_range.clear();
-  target->decompressed_payload.clear();
-  target->header.data_size = 0;
-  target->uncompressed_size = 0;
-  plugin.original_range.clear();
-  return ScalarMutationStatus::updated;
+  return set_record_scalar(plugin, record_key, field, 0, value);
 }
 
 ScalarMutationStatus set_record_scalar(Plugin& plugin,
@@ -391,58 +342,7 @@ FormLinkFieldMutationStatus set_record_formlink_field(
     const FormKey& record_key,
     const schema::FormLinkFieldDescriptor& field,
     const FormKey& target) {
-  assign_record_form_keys(plugin);
-  auto* record = find_mutable_record(plugin, record_key);
-  if (record == nullptr) return FormLinkFieldMutationStatus::record_missing;
-  if (record->header.signature != field.record) {
-    return FormLinkFieldMutationStatus::record_mismatch;
-  }
-
-  if (target.owner().empty() && target.local().value() != 0) {
-    throw schema::FormLinkFieldError("FormLink target has no owner");
-  }
-  if (target.owner().empty() && target.local().value() == 0 && !field.nullable) {
-    throw schema::FormLinkFieldError(std::string(field.path) + " does not allow NULL");
-  }
-  if (!target.owner().empty() && target.owner() == plugin.key) {
-    const auto* local_target = find_record(plugin, target);
-    if (local_target == nullptr ||
-        !schema::formlink_field_target_allowed(field, local_target->header.signature)) {
-      throw schema::FormLinkFieldError(std::string(field.path) + " target type is not allowed");
-    }
-  }
-
-  Subrecord* found = nullptr;
-  for (auto& subrecord : record->subrecords) {
-    if (subrecord.signature != field.subrecord) continue;
-    if (found != nullptr) {
-      throw schema::FormLinkFieldError(
-          "record contains duplicate FormLink subrecords: " +
-          field.subrecord.to_string());
-    }
-    found = &subrecord;
-  }
-  if (found == nullptr) return FormLinkFieldMutationStatus::subrecord_missing;
-  if (field.offset > found->data.size() || found->data.size() - field.offset < 4) {
-    throw schema::FormLinkFieldError(std::string(field.path) +
-                                     " does not fit in the subrecord payload");
-  }
-
-  std::uint32_t current_raw = 0;
-  std::memcpy(&current_raw, found->data.data() + field.offset, sizeof(current_raw));
-  const auto context = plugin_form_id_context(plugin);
-  const auto current = resolve_plugin_form_id(RawFormId{current_raw}, context);
-  const auto encoded = encode_plugin_form_id(target, context);
-  if (current == target) return FormLinkFieldMutationStatus::unchanged;
-
-  const auto encoded_value = encoded.value();
-  std::memcpy(found->data.data() + field.offset, &encoded_value, sizeof(encoded_value));
-  record->original_range.clear();
-  record->decompressed_payload.clear();
-  record->header.data_size = 0;
-  record->uncompressed_size = 0;
-  plugin.original_range.clear();
-  return FormLinkFieldMutationStatus::updated;
+  return set_record_formlink_field(plugin, record_key, field, 0, target);
 }
 
 RecordCopyStatus copy_record_as_override(Plugin& destination,
