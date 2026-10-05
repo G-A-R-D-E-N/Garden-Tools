@@ -92,7 +92,7 @@ TEST_F(BehaviorRead, LocationAndTargetViewsKeepVariantValuesAndOriginalPositions
       const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
       ASSERT_EQ(p.locations.size(), 1); const auto& l = p.locations[0];
       EXPECT_EQ(l.subrecord_index, 1u); EXPECT_EQ(l.type, type); EXPECT_EQ(l.value, 0x810u); EXPECT_EQ(l.radius, 0xFFFFFFFFu);
-      EXPECT_EQ(l.item_index.has_value(), extended); if (extended) EXPECT_EQ(*l.item_index, 0x80000001u);
+      EXPECT_EQ(l.item_index.has_value(), extended); if (extended) { EXPECT_EQ(*l.item_index, 0x80000001u); }
       EXPECT_EQ(l.form.has_value(), type == 0 || type == 1 || type == 6);
       ASSERT_EQ(p.targets.size(), type <= 8 ? 1u : 0u);
       if (!p.targets.empty()) {
