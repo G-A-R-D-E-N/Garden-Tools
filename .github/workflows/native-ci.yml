@@ -164,6 +164,19 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Find ccache
+        run: |
+          for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              echo "CCACHE=$c" >> "$GITHUB_ENV"
+              echo "CCACHE_BASEDIR=$PWD" >> "$GITHUB_ENV"
+              "$c" --zero-stats > /dev/null
+              echo "Using $c"
+              exit 0
+            fi
+          done
+          echo "ccache not found; building without a compiler cache"
+
       - name: Build Windows static zlib dependency
         run: |
           git clone --filter=blob:none https://github.com/madler/zlib.git build/zlib-src
@@ -171,7 +184,8 @@ jobs:
           cmake -S build/zlib-src -B build/zlib-win -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
             -DCMAKE_BUILD_TYPE=Release \
-            -DZLIB_BUILD_EXAMPLES=OFF
+            -DZLIB_BUILD_EXAMPLES=OFF \
+            ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
           cmake --build build/zlib-win --target zlibstatic
           cp build/zlib-src/zlib.h build/zlib-win/zlib.h
           test -f build/zlib-win/zconf.h
@@ -188,9 +202,14 @@ jobs:
           -DZLIB_LIBRARY=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
           -DZLIB_LIBRARY_RELEASE=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
           -DZLIB_LIBRARY_DEBUG=${{ github.workspace }}/build/zlib-win/zlibstatic.lib
+          ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
 
       - name: Build
         run: cmake --build build/radicle-win
+
+      - name: ccache statistics
+        if: always()
+        run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
       - name: Upload Windows binaries
         if: always()
@@ -220,6 +239,19 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Find ccache
+        run: |
+          for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              echo "CCACHE=$c" >> "$GITHUB_ENV"
+              echo "CCACHE_BASEDIR=$PWD" >> "$GITHUB_ENV"
+              "$c" --zero-stats > /dev/null
+              echo "Using $c"
+              exit 0
+            fi
+          done
+          echo "ccache not found; building without a compiler cache"
+
       - name: Configure native Windows host
         run: >
           cmake -S PluginEditTool/native -B build/fo4ide-win -G Ninja
@@ -228,9 +260,14 @@ jobs:
           -DFO4IDE_BUILD_TESTS=OFF
           -DFO4IDE_BUILD_HTTP=ON
           -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
+          ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
 
       - name: Build FO4RecordEditor.exe
         run: cmake --build build/fo4ide-win --target fo4ide
+
+      - name: ccache statistics
+        if: always()
+        run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
       - name: Verify native Windows executable
         run: test -f build/fo4ide-win/bin/FO4RecordEditor.exe
