@@ -118,6 +118,7 @@ jobs:
           echo "ccache not found; building without a compiler cache"
 
       - name: Configure
+        timeout-minutes: 15
         run: >
           cmake -S PluginEditTool/native -B build/native -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
@@ -352,6 +353,7 @@ jobs:
           }
 
       - name: Configure
+        timeout-minutes: 15
         run: |
           set "LAUNCHER="
           if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
@@ -372,6 +374,7 @@ jobs:
       # /Z7 (Embedded) instead of CMake's default /Zi: ccache can't cache
       # compiles that write to a shared PDB.
       - name: Configure (Debug)
+        timeout-minutes: 15
         if: github.event_name != 'pull_request'
         run: |
           set "LAUNCHER="
