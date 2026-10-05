@@ -82,6 +82,19 @@ fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
 fo4ide_add_test(fo4ide_test_app_interop unit/AppInteropTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 
+# Fixture trees are found through an absolute path rather than __FILE__:
+# ccache's base_dir rewrites __FILE__ to a build-relative path, which no
+# longer resolves from the directory ctest runs the tests in.
+foreach(fixture_test
+        fo4ide_test_graph_palette fo4ide_test_graph_validator fo4ide_test_graph_flow
+        fo4ide_test_graph_compiler fo4ide_test_graph_lift fo4ide_test_graph_loader
+        fo4ide_test_graph_tool fo4ide_test_service_targets fo4ide_test_f4se)
+    target_compile_definitions(
+        ${fixture_test}
+        PRIVATE FO4IDE_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
+    )
+endforeach()
+
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
