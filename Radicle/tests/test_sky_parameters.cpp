@@ -1,9 +1,12 @@
 #include "fo4/c_api_env.h"
 #include "fo4/environment/base_records.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -46,6 +49,7 @@ protected:
                             const std::optional<std::vector<std::byte>>& value) {
       const auto group = fo4::test::begin_group(bytes, signature, 0);
       const auto rec = fo4::test::begin_record(bytes, signature, 0, id, 131);
+      fo4::test::write_xxxx_subrecord(bytes, "XUNK", sequence(9));
       if (value) {
         fo4::test::write_subrecord(bytes, subrecord, *value);
         if (duplicate) fo4::test::write_subrecord(bytes, subrecord, *value);
@@ -172,6 +176,103 @@ TEST_F(SkyParametersTest, ConvertsUnsignedTimingAndMoonBoundaries) {
   EXPECT_EQ(timing->days_per_phase(), 63);
   EXPECT_TRUE(timing->uses_masser());
   EXPECT_TRUE(timing->uses_secunda());
+}
+
+TEST_F(SkyParametersTest, TimingEditSavesAndReloadsWithoutChangingOtherBytes) {
+  write(sequence(6), sequence(20));
+  auto plugin = fo4::read_plugin_file(path_);
+  const auto before = fo4::write_plugin(plugin);
+  const fo4::env::ClimateTiming original{0, 1, 2, 3, 4, 5};
+  ASSERT_TRUE(fo4::env::set_climate_timing(plugin, key(0x800), original));
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  const fo4::env::ClimateTiming edited{128, 255, 36, 114, 99, 195};
+  ASSERT_TRUE(fo4::env::set_climate_timing(plugin, key(0x800), edited));
+  const auto after = fo4::write_plugin(plugin);
+  ASSERT_EQ(after.size(), before.size());
+  std::size_t changed = 0;
+  for (std::size_t i = 0; i < before.size(); ++i) changed += before[i] != after[i];
+  EXPECT_EQ(changed, 6u);
+  fo4::write_plugin_file(plugin, path_);
+  const auto env = load();
+  const auto timing = fo4::env::decode_climate(env, *env.winner(key(0x800))).timing;
+  ASSERT_TRUE(timing);
+  EXPECT_EQ(timing->sunrise_begin, 128);
+  EXPECT_EQ(timing->sunrise_end, 255);
+  EXPECT_EQ(timing->sunset_begin, 36);
+  EXPECT_EQ(timing->sunset_end, 114);
+  EXPECT_EQ(timing->volatility, 99);
+  EXPECT_EQ(timing->moons_phase_length, 195);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), after);
+}
+
+TEST_F(SkyParametersTest, TimingEditRefusesUnsafeLayoutsBeforeMutation) {
+  for (const std::size_t size : {0u, 5u, 6u, 7u}) {
+    write(size == 0 ? std::nullopt : std::optional{sequence(size)}, sequence(20), size == 6);
+    auto plugin = fo4::read_plugin_file(path_);
+    const auto before = fo4::write_plugin(plugin);
+    EXPECT_THROW(fo4::env::set_climate_timing(plugin, key(0x800), {}), fo4::env::WorldDecodeError);
+    EXPECT_THROW(fo4::env::set_climate_timing(plugin, key(0x801), {}), fo4::env::WorldDecodeError);
+    EXPECT_FALSE(fo4::env::set_climate_timing(plugin, key(0x999), {}));
+    EXPECT_EQ(fo4::write_plugin(plugin), before);
+  }
+}
+
+TEST_F(SkyParametersTest, TimingEditPreservesCompressionAndExtendedUnknownFields) {
+  write(sequence(6), sequence(20));
+  auto seed = fo4::read_plugin_file(path_);
+  auto& climate = std::get<fo4::Record>(seed.groups.front().children.front());
+  climate.compressed = true;
+  climate.header.flags = fo4::RecordFlags{climate.header.flags.value() | fo4::RecordFlags::compressed};
+  climate.original_range.clear();
+  seed.original_range.clear();
+  fo4::write_plugin_file(seed, path_);
+  auto plugin = fo4::read_plugin_file(path_);
+  const auto before = fo4::write_plugin(plugin);
+  ASSERT_TRUE(fo4::env::set_climate_timing(plugin, key(0x800), {0, 1, 2, 3, 4, 5}));
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  ASSERT_TRUE(fo4::env::set_climate_timing(plugin, key(0x800), {30, 42, 102, 114, 10, 195}));
+  fo4::write_plugin_file(plugin, path_);
+  const auto env = load();
+  const auto* ref = env.winner(key(0x800));
+  ASSERT_NE(ref, nullptr);
+  EXPECT_TRUE(ref->record->compressed);
+  const auto& subs = ref->record->subrecords;
+  const auto unknown = std::find_if(subs.begin(), subs.end(), [](const fo4::Subrecord& sub) {
+    return sub.signature == fo4::Signature::from_string("XUNK");
+  });
+  ASSERT_NE(unknown, subs.end());
+  EXPECT_TRUE(unknown->extended_size);
+  EXPECT_EQ(unknown->data, sequence(9));
+  const auto actual = fo4::env::decode_climate(env, *ref).timing;
+  ASSERT_TRUE(actual);
+  EXPECT_EQ(actual->sunrise_begin, 30);
+  EXPECT_EQ(actual->moons_phase_length, 195);
+}
+
+TEST_F(SkyParametersTest, CAbiTimingEditChecksArgumentsAndSavesRequestedValues) {
+  write(sequence(6), sequence(20));
+  const auto path = path_.string();
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.c_str(), &plugin), RADICLE_STATUS_OK);
+  const radicle_climate_timing_edit timing{30, 42, 102, 114, 10, 255};
+  EXPECT_EQ(radicle_plugin_set_climate_timing(nullptr, {"Sky.esm", 0x800}, &timing), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_climate_timing(plugin, {"Sky.esm", 0x800}, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_climate_timing(plugin, {nullptr, 0x800}, &timing), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_climate_timing(plugin, {"Sky.esm", 0x1000000}, &timing), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_climate_timing(plugin, {"Sky.esm", 0x801}, &timing), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(radicle_plugin_set_climate_timing(plugin, {"Sky.esm", 0x999}, &timing), RADICLE_STATUS_NOT_FOUND);
+  ASSERT_EQ(radicle_plugin_set_climate_timing(plugin, {"Sky.esm", 0x800}, &timing), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_plugin_write_file(plugin, path.c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(plugin);
+  const auto env = load();
+  const auto actual = fo4::env::decode_climate(env, *env.winner(key(0x800))).timing;
+  ASSERT_TRUE(actual);
+  EXPECT_EQ(actual->sunrise_begin, 30);
+  EXPECT_EQ(actual->sunrise_end, 42);
+  EXPECT_EQ(actual->sunset_begin, 102);
+  EXPECT_EQ(actual->sunset_end, 114);
+  EXPECT_EQ(actual->volatility, 10);
+  EXPECT_EQ(actual->moons_phase_length, 255);
 }
 
 }

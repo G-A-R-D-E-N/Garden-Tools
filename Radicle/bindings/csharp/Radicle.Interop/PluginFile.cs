@@ -115,6 +115,21 @@ public sealed unsafe class PluginFile : IDisposable
     public bool SetActivateParentDelay(FormKey reference, int index, float delay) =>
         Edit(reference, (s, key) => RadicleNative.PluginSetPlacedActivateParentDelay(Handle, key, (nuint)index, delay));
 
+    public bool SetClimateTiming(FormKey climate, ClimateTiming timing)
+    {
+        ArgumentNullException.ThrowIfNull(timing);
+        return Edit(climate, (s, key) =>
+        {
+            var value = new ClimateTimingEdit
+            {
+                SunriseBegin = timing.SunriseBegin, SunriseEnd = timing.SunriseEnd,
+                SunsetBegin = timing.SunsetBegin, SunsetEnd = timing.SunsetEnd,
+                Volatility = timing.Volatility, MoonsPhaseLength = timing.MoonsPhaseLength,
+            };
+            return RadicleNative.PluginSetClimateTiming(Handle, key, &value);
+        });
+    }
+
     public void Dispose()
     {
         var handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);

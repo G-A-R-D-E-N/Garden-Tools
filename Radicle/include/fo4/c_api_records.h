@@ -216,6 +216,18 @@ RADICLE_API radicle_status radicle_climate_decode(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_climate** out_climate);
 RADICLE_API void radicle_climate_free(radicle_climate* climate);
+typedef struct radicle_climate_timing_edit {
+  uint8_t sunrise_begin;
+  uint8_t sunrise_end;
+  uint8_t sunset_begin;
+  uint8_t sunset_end;
+  uint8_t volatility;
+  uint8_t moons_phase_length;
+} radicle_climate_timing_edit;
+
+RADICLE_API radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             const radicle_climate_timing_edit* timing);
 RADICLE_API radicle_status radicle_weather_decode(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_weather_info** out_weather);

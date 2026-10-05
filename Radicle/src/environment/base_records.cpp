@@ -1,7 +1,9 @@
 #include "fo4/environment/base_records.hpp"
 
 #include "record_reader.hpp"
+#include "fo4/plugin/visit.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -118,6 +120,36 @@ ClimateData decode_climate(const Environment& env, const RecordRef& ref) {
     out.timing = ClimateTiming{byte(0), byte(1), byte(2), byte(3), byte(4), byte(5)};
   }
   return out;
+}
+
+bool set_climate_timing(Plugin& plugin, const FormKey& key, const ClimateTiming& timing) {
+  Record* record = nullptr;
+  visit_records(plugin, [&](Record& candidate) {
+    if (candidate.form_key == key) {
+      if (record != nullptr) throw WorldDecodeError("duplicate climate record key");
+      record = &candidate;
+    }
+  });
+  if (record == nullptr) return false;
+  if (record->header.signature != sig("CLMT")) throw WorldDecodeError("expected a CLMT record");
+  Subrecord* slot = nullptr;
+  for (auto& sub : record->subrecords) {
+    if (sub.signature != sig("TNAM")) continue;
+    if (slot != nullptr) throw WorldDecodeError("CLMT contains duplicate TNAM");
+    slot = &sub;
+  }
+  if (slot == nullptr || slot->data.size() != 6) throw WorldDecodeError("CLMT requires a six-byte TNAM");
+  const std::array bytes{std::byte{timing.sunrise_begin}, std::byte{timing.sunrise_end},
+                         std::byte{timing.sunset_begin}, std::byte{timing.sunset_end},
+                         std::byte{timing.volatility}, std::byte{timing.moons_phase_length}};
+  if (std::equal(bytes.begin(), bytes.end(), slot->data.begin())) return true;
+  std::copy(bytes.begin(), bytes.end(), slot->data.begin());
+  record->original_range.clear();
+  record->decompressed_payload.clear();
+  record->header.data_size = 0;
+  record->uncompressed_size = 0;
+  plugin.original_range.clear();
+  return true;
 }
 
 WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
