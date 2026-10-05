@@ -738,9 +738,9 @@ public unsafe struct SceneAction
     public int HasFlags;
     public uint Flags;
     public int HasStartPhase;
-    public ushort StartPhase;
+    public uint StartPhase;
     public int HasEndPhase;
-    public ushort EndPhase;
+    public uint EndPhase;
     public IntPtr Payload;
     public nuint PayloadCount;
 }

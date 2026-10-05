@@ -2,15 +2,15 @@
 
 ## src/environment/dialogue.cpp:decode_scene
 
-The private pinned loader record at
-`../radicle-341-re-followup-20261005/build/RE-Work/6916afb/dialogue-scenes-405-344/README.md`
-commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3, stamps the
-OG action reader at RVA 0x5975E0 and range consumer at 0x597910. SNAM/ENAM
-are unsigned 16-bit phase indices, separate from action-specific payloads.
-The common header previously demanded four bytes and rejected valid stored
-two-byte fields. Native, C and C# now preserve the full unsigned range.
-SCQS values keep their schema-derived labels only; their runtime meaning
-is unresolved and no quest-stage execution behavior is implemented.
+Stored action-header SNAM/ENAM are four-byte unsigned values in pinned xEdit
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas:9010-9011`.
+The seven-master corpus test caught the incorrect two-byte requirement. Native,
+C and C# preserve all 32 stored bits, including values above 65535. The private
+record `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/dialogue-scenes-405-344/README.md`
+stamps OG runtime action storage/range use at RVA 0x5975E0/0x597910 as 16-bit;
+that runtime representation does not establish the on-disk field size. Action
+payload SNAM after the header remains opaque. SCQS values keep schema-derived
+labels only; no quest-stage execution behavior is implemented.
 
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 

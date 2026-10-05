@@ -21,7 +21,7 @@ public sealed record ScenePhase(string? Name, uint? EditorWidth, ushort? Flags, 
 public sealed record SceneActor(int Alias, uint Flags, uint BehaviorFlags);
 public sealed record ScenePayload(string Signature, byte[] Bytes);
 public sealed record SceneAction(ushort Type, string? Name, int? ActorAlias, uint? Index, uint? Flags,
-    ushort? StartPhase, ushort? EndPhase, IReadOnlyList<ScenePayload> Payload);
+    uint? StartPhase, uint? EndPhase, IReadOnlyList<ScenePayload> Payload);
 public sealed record Scene(uint? Flags, FormKey? ParentQuest, IReadOnlyList<ScenePhase> Phases,
     IReadOnlyList<SceneActor> Actors, IReadOnlyList<SceneAction> Actions, IReadOnlyList<DialogueCondition> Conditions);
 

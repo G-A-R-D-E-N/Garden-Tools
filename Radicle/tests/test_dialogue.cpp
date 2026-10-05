@@ -94,15 +94,15 @@ TEST_F(DialogueRead, SceneScopesSeparatePhaseActorActionAndTailIncludingOpaqueTi
     {"FNAM", half(0x8001)}, {"SCQS", words({0x000AFFFF})}, {"HNAM", {}},
     {"ALID", words({0xFFFFFFFF})}, {"LNAM", words({2})}, {"DNAM", words({4})},
     {"ANAM", half(2)}, {"NAM0", text("action")}, {"ALID", words({8})}, {"INAM", words({9})},
-    {"FNAM", words({16})}, {"SNAM", half(1)}, {"ENAM", half(65535)},
+    {"FNAM", words({16})}, {"SNAM", words({65537})}, {"ENAM", words({0xFFFFFFFF})},
     {"SNAM", words({0x41200000})}, {"PNAM", words({0x813})}, {"ZZZZ", words({7})}, {"ANAM", {}},
     {"PNAM", words({0x812})}, {"CTDA", condition(16)}}}});
   const auto env = load(); const auto scene = fo4::env::decode_scene(env, record(env));
   EXPECT_EQ(scene.flags, 0x80000001u); ASSERT_EQ(scene.phases.size(), 1); EXPECT_EQ(scene.phases[0].flags, 0x8001);
   EXPECT_EQ((*scene.phases[0].quest_stages)[0], -1); EXPECT_EQ(scene.phases[0].start_conditions[0].function, 14);
   EXPECT_EQ(scene.phases[0].completion_conditions[0].function, 15); ASSERT_EQ(scene.actors.size(), 1); EXPECT_EQ(scene.actors[0].alias, -1);
-  ASSERT_EQ(scene.actions.size(), 1); EXPECT_EQ(scene.actions[0].actor_alias, 8); EXPECT_EQ(scene.actions[0].start_phase, 1u);
-  EXPECT_EQ(scene.actions[0].end_phase, 65535u);
+  ASSERT_EQ(scene.actions.size(), 1); EXPECT_EQ(scene.actions[0].actor_alias, 8); EXPECT_EQ(scene.actions[0].start_phase, 65537u);
+  EXPECT_EQ(scene.actions[0].end_phase, 0xFFFFFFFFu);
   ASSERT_EQ(scene.actions[0].payload.size(), 3); EXPECT_EQ(scene.actions[0].payload[0].signature.to_string(), "SNAM");
   EXPECT_EQ(scene.parent_quest->local().value(), 0x812u); ASSERT_EQ(scene.conditions.size(), 1); EXPECT_EQ(scene.conditions[0].function, 16);
   EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
@@ -112,11 +112,12 @@ TEST_F(DialogueRead, MalformedKnownFieldsAndUnpairedGroupsFailClosed) {
   write({{"DIAL", 0x800, {{"DATA", half(1)}}}, {"INFO", 0x801, {{"TRDA", response(1)}}},
     {"SCEN", 0x802, {{"HNAM", {}}, {"NEXT", {}}, {"HNAM", {}}}},
     {"SCEN", 0x803, {{"ANAM", half(2)}, {"ENAM", words({1})}}},
-    {"SCEN", 0x804, {{"ALID", words({1})}, {"LNAM", words({2})}}}});
+    {"SCEN", 0x804, {{"ALID", words({1})}, {"LNAM", words({2})}}},
+    {"SCEN", 0x805, {{"ANAM", half(2)}, {"SNAM", half(1)}, {"ENAM", words({2})}, {"ANAM", {}}}}});
   const auto env = load();
   EXPECT_THROW(fo4::env::decode_dialogue_topic(env, record(env, 0x800)), fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::decode_dialogue_info(env, record(env, 0x801)), fo4::env::WorldDecodeError);
-  for (const auto id : {0x802u, 0x803u, 0x804u}) {
+  for (const auto id : {0x802u, 0x803u, 0x804u, 0x805u}) {
     EXPECT_THROW(fo4::env::decode_scene(env, record(env, id)), fo4::env::WorldDecodeError);
   }
 }

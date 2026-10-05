@@ -50,7 +50,7 @@ struct SceneAction {
   std::optional<std::string_view> name;
   std::optional<std::int32_t> actor_alias;
   std::optional<std::uint32_t> index, flags;
-  std::optional<std::uint16_t> start_phase, end_phase;
+  std::optional<std::uint32_t> start_phase, end_phase;
   std::span<const Subrecord> payload;
 };
 

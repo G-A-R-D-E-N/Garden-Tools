@@ -42,10 +42,6 @@ struct Scope {
     const auto* sub = sized(tag, 4);
     return sub ? std::optional{Reader::u32(*sub, 0)} : std::nullopt;
   }
-  std::optional<std::uint16_t> u16(Signature tag) const {
-    const auto* sub = sized(tag, 2);
-    return sub ? std::optional{Reader::u16(*sub, 0)} : std::nullopt;
-  }
   std::optional<std::int32_t> i32(Signature tag) const {
     const auto* sub = sized(tag, 4);
     return sub ? std::optional{Reader::i32(*sub, 0)} : std::nullopt;
@@ -164,7 +160,7 @@ Scene decode_scene(const Environment& env, const RecordRef& ref) {
       empty(r, subs[close]); const Scope header{r, subs.subspan(i + 1, header_end - i - 1)};
       SceneAction a; a.type = Reader::u16(subs[i], 0); a.name = header.text(sig("NAM0"));
       a.actor_alias = header.i32(sig("ALID")); a.index = header.u32(sig("INAM")); a.flags = header.u32(sig("FNAM"));
-      a.start_phase = header.u16(sig("SNAM")); a.end_phase = header.u16(sig("ENAM"));
+      a.start_phase = header.u32(sig("SNAM")); a.end_phase = header.u32(sig("ENAM"));
       a.payload = subs.subspan(header_end, close - header_end);
       out.actions.push_back(a); i = close; tail = close + 1;
     } else if (tag == sig("NEXT")) {

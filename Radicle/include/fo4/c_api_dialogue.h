@@ -110,9 +110,9 @@ typedef struct radicle_scene_action {
   int32_t has_flags;
   uint32_t flags;
   int32_t has_start_phase;
-  uint16_t start_phase;
+  uint32_t start_phase;
   int32_t has_end_phase;
-  uint16_t end_phase;
+  uint32_t end_phase;
   const radicle_scene_payload* payload;
   size_t payload_count;
 } radicle_scene_action;
