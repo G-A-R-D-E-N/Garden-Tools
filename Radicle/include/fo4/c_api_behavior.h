@@ -26,6 +26,24 @@ typedef struct radicle_package_payload {
   size_t size;
 } radicle_package_payload;
 
+typedef struct radicle_package_location {
+  size_t subrecord_index;
+  uint8_t type;
+  uint32_t value;
+  uint32_t radius;
+  int32_t has_item_index;
+  uint32_t item_index;
+  radicle_form_key form;
+} radicle_package_location;
+
+typedef struct radicle_package_target {
+  size_t subrecord_index;
+  uint32_t type;
+  uint32_t value;
+  int32_t count_or_distance;
+  radicle_form_key form;
+} radicle_package_target;
+
 typedef struct radicle_package_info {
   int32_t has_data;
   uint32_t flags;
@@ -34,13 +52,14 @@ typedef struct radicle_package_info {
   uint8_t preferred_speed;
   uint8_t unknown;
   uint16_t interrupt_flags;
+  uint16_t trailing_value;
   int32_t has_schedule;
   int8_t month;
   int8_t weekday;
   int8_t date;
   int8_t hour;
   int8_t minute;
-  uint32_t duration_encoded;
+  int32_t duration_minutes;
   int32_t has_counter;
   uint32_t input_count;
   uint32_t version;
@@ -54,6 +73,10 @@ typedef struct radicle_package_info {
   size_t condition_count;
   const radicle_package_payload* opaque;
   size_t opaque_count;
+  const radicle_package_location* locations;
+  size_t location_count;
+  const radicle_package_target* targets;
+  size_t target_count;
   void* internal;
 } radicle_package_info;
 

@@ -23,7 +23,13 @@ struct ConditionStorage {
         c.param1, c.param2, c.run_on, c.reference, c.unknown3, text(c.parameter1_string), text(c.parameter2_string)});
   }
 };
-struct PackageHolder { radicle_package_info view{}; ConditionStorage conditions; std::vector<radicle_package_payload> opaque; };
+struct PackageHolder {
+  radicle_package_info view{};
+  ConditionStorage conditions;
+  std::vector<radicle_package_payload> opaque;
+  std::vector<radicle_package_location> locations;
+  std::vector<radicle_package_target> targets;
+};
 struct IdleHolder { radicle_idle_info view{}; ConditionStorage conditions; };
 
 radicle_status invalid() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and output required"); }
@@ -41,10 +47,11 @@ radicle_status radicle_package_decode(const radicle_env* env, const radicle_reco
     if (p.data) {
       v.has_data = 1; v.flags = p.data->flags; v.type = p.data->type; v.interrupt_override = p.data->interrupt_override;
       v.preferred_speed = p.data->preferred_speed; v.unknown = p.data->unknown; v.interrupt_flags = p.data->interrupt_flags;
+      v.trailing_value = p.data->trailing_value;
     }
     if (p.schedule) {
       v.has_schedule = 1; v.month = p.schedule->month; v.weekday = p.schedule->weekday; v.date = p.schedule->date;
-      v.hour = p.schedule->hour; v.minute = p.schedule->minute; v.duration_encoded = p.schedule->duration_encoded;
+      v.hour = p.schedule->hour; v.minute = p.schedule->minute; v.duration_minutes = p.schedule->duration_minutes;
     }
     if (p.counter) {
       v.has_counter = 1; v.input_count = p.counter->input_count; v.version = p.counter->version;
@@ -57,6 +64,12 @@ radicle_status radicle_package_decode(const radicle_env* env, const radicle_reco
       radicle_package_payload raw{}; const auto name = sub.signature.to_string(); std::copy(name.begin(), name.end(), raw.signature);
       raw.bytes = reinterpret_cast<const std::uint8_t*>(sub.data.data()); raw.size = sub.data.size(); h->opaque.push_back(raw);
     }
+    for (const auto& location : p.locations) h->locations.push_back({location.subrecord_index, location.type,
+        location.value, location.radius, location.item_index.has_value(), location.item_index.value_or(0), to_c_key(*env, location.form)});
+    for (const auto& target : p.targets) h->targets.push_back({target.subrecord_index, target.type,
+        target.value, target.count_or_distance, to_c_key(*env, target.form)});
+    v.locations = h->locations.data(); v.location_count = h->locations.size();
+    v.targets = h->targets.data(); v.target_count = h->targets.size();
     v.opaque = h->opaque.data(); v.opaque_count = h->opaque.size(); v.internal = h.get();
     *out_package = &h.release()->view; return RADICLE_STATUS_OK;
   });

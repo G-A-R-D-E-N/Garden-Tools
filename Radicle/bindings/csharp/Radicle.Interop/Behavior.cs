@@ -7,13 +7,16 @@ namespace Radicle.Interop;
 
 public sealed record BehaviorCondition(byte FlagsByte, uint ComparisonRaw, ushort Function, ushort Unknown2,
     int Param1, int Param2, uint RunOn, uint Reference, int Unknown3, string? Parameter1String, string? Parameter2String);
-public sealed record PackageData(uint Flags, byte Type, byte InterruptOverride, byte PreferredSpeed, byte Unknown, ushort InterruptFlags);
-public sealed record PackageSchedule(sbyte Month, sbyte Weekday, sbyte Date, sbyte Hour, sbyte Minute, uint DurationEncoded);
+public sealed record PackageData(uint Flags, byte Type, byte InterruptOverride, byte PreferredSpeed, byte Unknown, ushort InterruptFlags, ushort TrailingValue);
+public sealed record PackageSchedule(sbyte Month, sbyte Weekday, sbyte Date, sbyte Hour, sbyte Minute, int DurationMinutes);
 public sealed record PackageCounter(uint InputCount, FormKey? TemplatePackage, uint Version);
 public sealed record PackagePayload(string Signature, byte[] Bytes);
+public sealed record PackageLocation(nuint SubrecordIndex, byte Type, uint Value, uint Radius, uint? ItemIndex, FormKey? Form);
+public sealed record PackageTarget(nuint SubrecordIndex, uint Type, uint Value, int CountOrDistance, FormKey? Form);
 public sealed record Package(PackageData? Data, PackageSchedule? Schedule, PackageCounter? Counter,
     FormKey? CombatStyle, FormKey? OwnerQuest, FormKey? BeginIdle, FormKey? EndIdle, FormKey? ChangeIdle,
-    IReadOnlyList<BehaviorCondition> Conditions, IReadOnlyList<PackagePayload> Opaque);
+    IReadOnlyList<BehaviorCondition> Conditions, IReadOnlyList<PackagePayload> Opaque,
+    IReadOnlyList<PackageLocation> Locations, IReadOnlyList<PackageTarget> Targets);
 public sealed record CombatCloseRange(float[] Values, uint ThrowMaxTargets, float FlankVariance);
 public sealed record CombatStyle(float[]? General, float[] Melee, float[] LongRange, CombatCloseRange? CloseRange,
     float[]? Flight, float? RangedAccuracy, float? CoverSearch, uint? Flags);
@@ -36,13 +39,18 @@ public sealed unsafe partial class RadicleEnvironment
         Call.Check(RadicleNative.PackageDecode(Handle, record.Handle, &p));
         try
         {
-            PackageData? data = p->HasData == 0 ? null : new(p->Flags, p->Type, p->InterruptOverride, p->PreferredSpeed, p->Unknown, p->InterruptFlags);
-            PackageSchedule? schedule = p->HasSchedule == 0 ? null : new(p->Month, p->Weekday, p->Date, p->Hour, p->Minute, p->DurationEncoded);
+            PackageData? data = p->HasData == 0 ? null : new(p->Flags, p->Type, p->InterruptOverride, p->PreferredSpeed, p->Unknown, p->InterruptFlags, p->TrailingValue);
+            PackageSchedule? schedule = p->HasSchedule == 0 ? null : new(p->Month, p->Weekday, p->Date, p->Hour, p->Minute, p->DurationMinutes);
             PackageCounter? counter = p->HasCounter == 0 ? null : new(p->InputCount, FormKey.FromNative(p->TemplatePackage), p->Version);
             return new(data, schedule, counter, FormKey.FromNative(p->CombatStyle), FormKey.FromNative(p->OwnerQuest),
                 FormKey.FromNative(p->BeginIdle), FormKey.FromNative(p->EndIdle), FormKey.FromNative(p->ChangeIdle),
                 BehaviorConditions(p->Conditions, p->ConditionCount),
-                Call.Copy<Native.PackagePayload>(p->Opaque, p->OpaqueCount).Select(PackagePayloadValue).ToArray());
+                Call.Copy<Native.PackagePayload>(p->Opaque, p->OpaqueCount).Select(PackagePayloadValue).ToArray(),
+                Call.Copy<Native.PackageLocation>(p->Locations, p->LocationCount).Select(l =>
+                    new PackageLocation(l.SubrecordIndex, l.Type, l.Value, l.Radius, l.HasItemIndex == 0 ? null : l.ItemIndex,
+                        FormKey.FromNative(l.Form))).ToArray(),
+                Call.Copy<Native.PackageTarget>(p->Targets, p->TargetCount).Select(t =>
+                    new PackageTarget(t.SubrecordIndex, t.Type, t.Value, t.CountOrDistance, FormKey.FromNative(t.Form))).ToArray());
         }
         finally { RadicleNative.PackageFree(p); }
     }

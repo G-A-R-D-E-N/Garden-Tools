@@ -1,6 +1,6 @@
 # Stored package, combat-style and idle read slice
 
-This partial #345 slice exposes stored PKDT, PSDT, PKCU, package links and top-level conditions, combat-style values, and idle selection data. It does not schedule or execute NPC behavior. [RE #407](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/407) tracks procedure/input discrimination and runtime selection semantics. Procedure trees, location/target variants, data-input streams and VMAD fragments remain opaque.
+This partial #345 slice exposes stored PKDT, PSDT, PKCU, package links and top-level conditions, location/target views, combat-style values, and idle selection data. It does not schedule or execute NPC behavior. [RE #407](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/407) contains static OG findings and the remaining questions. Procedure trees, data-input ownership, leaf payloads and VMAD fragments remain opaque.
 
 ## Sources and scope
 
@@ -8,9 +8,23 @@ The pinned compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://git
 
 ## PACK
 
-PKDT is 12 bytes: u32 general flags, u8 type, interrupt override, preferred speed and unknown byte, u16 interrupt flags and two unknown bytes. PSDT is 12 bytes: signed bytes month, weekday, date, hour and minute, three unused bytes, then u32 encoded duration. These signed values and duration are returned unchanged; no defaults, enum ranges or unit conversion are invented.
+The newer [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md) supersedes the older missing-layout index. Its local copy is `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`; Q1 stamps the OG loader at RVA 0x719180 and schedule consumer at 0x71EC30.
+
+PKDT is 12 bytes: u32 general flags, u8 type, interrupt override, preferred speed and unknown byte, u16 interrupt flags and an unnamed trailing u16. These are raw stored compatibility fields. The runtime uses that interpretation from form version 0x15; older forms follow a legacy path that forces effective preferred speed to 2. This reader still returns the stored byte, without claiming that effective value. PSDT is 12 bytes: signed bytes month, weekday, date, hour and minute, three unused bytes, then signed i32 duration in minutes. These stored values are returned unchanged. The reader does not apply the runtime's pre-version-122 month adjustment, defaults, or schedule evaluation.
 
 PKCU is 12 bytes: u32 data-input count, package-template FormID and u32 version counter. CNAM combat style and QNAM owner quest belong to the prelude before PKCU; later CNAM values are not mistaken for a record-level link. Only prelude CTDA/CIS lists are decoded with the existing condition model. POBA, POEA and POCA are empty on-begin/end/change markers, each with an optional four-byte INAM idle link in its own scope. All remaining post-PKCU subrecords are exposed as ordered opaque signature/payload views, including procedure and data-input condition lists, instead of flattening them into the top-level conditions. Duplicated known markers and malformed known sizes fail closed.
+
+Q4/Q5 verify PLDT/PTDA constructors at OG RVAs 0x726520/0x729300.
+PLDT accepts 12/16 stored bytes: type byte at 0, raw u32 value at 4,
+radius at 8 and optional collection-item index at 12. PTDA accepts 12 bytes:
+u32 type/value and i32 count-or-distance. Each view carries its original
+record subrecord index. PLDT types 0/1/6 and PTDA 0/1/3/7 resolve the value
+as a FormID; other supported variants keep it numeric. All stored values,
+including unused nonzero fields, stay unchanged. Unknown types/shapes receive
+no typed view and retain their raw bytes. These views do not claim ownership
+by a particular data input or procedure. The dispatch/container grammar is
+known, but arbitrary leaf payload boundaries are not, so no complete tree
+or data-input structure is invented.
 
 ## CSTY
 
@@ -20,7 +34,7 @@ CSRA and CSCV are individual f32 ranged-accuracy and cover-search values. CSCR i
 
 ## IDLE
 
-ANAM is eight bytes: parent and previous FormID links. DATA is six bytes: loop minimum and maximum bytes, raw flag byte, animation-group section byte and u16 replay delay. DNAM behavior graph, ENAM animation event and GNAM animation file are strict NUL-terminated stored strings. The existing CTDA model supplies raw conditions and CIS operands. Loop/flag semantics are not interpreted, and strings follow the existing C ABI Windows-1252 to UTF-8 policy.
+ANAM is eight bytes: parent and previous FormID links. DATA is six bytes: loop minimum and maximum bytes, raw flag byte, raw padding byte and u16 replay delay. The compatibility API's `GroupSection` name does not establish a runtime meaning for the padding byte. DNAM behavior graph, ENAM animation event and GNAM animation file are strict NUL-terminated stored strings. The existing CTDA model supplies raw conditions and CIS operands. Loop/replay consumers remain unresolved in Q8; their units and selection effects are not invented. Strings follow the existing C ABI Windows-1252 to UTF-8 policy.
 
 ## Validation
 
@@ -39,6 +53,6 @@ Metadata-only measurement on 2026-10-04:
 
 All packages have one PKDT/PSDT/PKCU of 12 bytes and one each of POBA/POEA/POCA, empty and in that order. All 143 combat styles have CSGD48, CSRA4, CSCR44, CSCV4, CSFL32 and DATA4; CSME is 36 bytes in 46 records and 40 in 97, while CSLR is 12 bytes in 33, 16 in 10 and 20 in 100. CSMD is absent. All idles have ANAM8 and DATA6. DNAM/ENAM/GNAM occur 3,704/2,904/841 times; all present strings have exactly one trailing NUL. Parent links are 333 null, 1,115 AACT and 2,257 IDLE; previous links are 2,232 null and 1,473 IDLE. There are no malformed measured shapes, unresolved links, wrong-type links or record/subrecord parse failures.
 
-New synthetic tests cover raw values, scoped package fields, combat size variants, conditions, malformed input and unchanged byte preservation. A seven-master corpus sweep invokes all native/C ABI getters and compares unchanged master bytes; it skips cleanly without `FO4_DATA_DIR`. Every new getter has a managed binding test. Build and test execution is through CI only, as requested; metadata measurements do not establish that the new decoder passed the real-data tests.
+New synthetic tests cover raw values, scoped package fields, location/target variants, combat size variants, conditions, malformed input and unchanged byte preservation. A seven-master corpus sweep invokes all native/C ABI getters and compares unchanged master bytes; it skips cleanly without `FO4_DATA_DIR`. Every new getter has a managed binding test. Local and CI validation are recorded separately for each published head; metadata measurements are not decoder acceptance.
 
 ABI 13 is reserved after a fresh main ABI 4 / PR #383 ABI 7 check, following this campaign's independent 8–12 branches. All branches need ABI reconciliation before merge. GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has these record names only in `Services/RecordVocabulary.cs`. GardenEngine #151 needs an actual package/combat/idle consumer before a meaningful probe.

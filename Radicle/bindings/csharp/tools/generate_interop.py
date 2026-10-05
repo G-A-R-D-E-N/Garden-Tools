@@ -11,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_behavior.h"]
+HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_behavior.h", "fo4/c_api_pex.h", "fo4/c_api_seq.h", "fo4/c_api_quest.h"]
 
 SCALARS = {
     "int8_t": "sbyte", "uint8_t": "byte", "int16_t": "short", "uint16_t": "ushort",
@@ -222,8 +222,8 @@ def emit_probe(model):
 def main():
     include_dir, cs_path, probe_path = map(Path, sys.argv[1:4])
     model = parse(include_dir)
-    Path(cs_path).write_text(emit_cs(model))
-    Path(probe_path).write_text(emit_probe(model))
+    Path(cs_path).write_bytes(emit_cs(model).encode("utf-8"))
+    Path(probe_path).write_bytes(emit_probe(model).encode("utf-8"))
 
 
 if __name__ == "__main__":

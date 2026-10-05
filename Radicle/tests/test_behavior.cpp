@@ -59,7 +59,8 @@ TEST_F(BehaviorRead, PackageKeepsEncodedScheduleAndScopedLinksAndOpaqueInputs) {
     {"POEA", {}}, {"INAM", words({0x814})}, {"POCA", {}}, {"INAM", words({0})}}}});
   const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
   ASSERT_TRUE(p.data); EXPECT_EQ(p.data->type, 0xFE); EXPECT_EQ(p.data->interrupt_flags, 0x8001);
-  ASSERT_TRUE(p.schedule); EXPECT_EQ(p.schedule->month, -1); EXPECT_EQ(p.schedule->minute, -1); EXPECT_EQ(p.schedule->duration_encoded, 120u);
+  ASSERT_TRUE(p.schedule); EXPECT_EQ(p.schedule->month, -1); EXPECT_EQ(p.schedule->minute, -1); EXPECT_EQ(p.schedule->duration_minutes, 120);
+  EXPECT_EQ(p.data->trailing_value, 0xDEAD);
   ASSERT_TRUE(p.counter); EXPECT_EQ(p.counter->input_count, 4u); EXPECT_EQ(p.counter->template_package.local().value(), 0x812u);
   EXPECT_EQ(p.combat_style->local().value(), 0x810u); EXPECT_EQ(p.owner_quest->local().value(), 0x811u);
   EXPECT_EQ(p.begin_idle->local().value(), 0x813u); EXPECT_EQ(p.end_idle->local().value(), 0x814u); EXPECT_TRUE(p.change_idle->owner().empty());
@@ -80,6 +81,31 @@ TEST_F(BehaviorRead, CombatStyleAcceptsMeasuredOptionalTailsAndKeepsIntegerSlot)
     ASSERT_TRUE(c.flight); EXPECT_EQ((*c.flight)[7], 7.5f); EXPECT_EQ(c.flags, 0x80000001u);
     EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
   }
+}
+
+TEST_F(BehaviorRead, LocationAndTargetViewsKeepVariantValuesAndOriginalPositions) {
+  for (std::uint32_t type = 0; type <= 14; ++type) {
+    for (const bool extended : {false, true}) {
+      auto location = words({type | 0xAABBCC00u, 0x810, 0xFFFFFFFFu});
+      if (extended) { const auto index = words({0x80000001}); location.insert(location.end(), index.begin(), index.end()); }
+      write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"PLDT", location}, {"PTDA", words({type, 0x810, 0xFFFFFFFFu})}}}});
+      const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
+      ASSERT_EQ(p.locations.size(), 1); const auto& l = p.locations[0];
+      EXPECT_EQ(l.subrecord_index, 1u); EXPECT_EQ(l.type, type); EXPECT_EQ(l.value, 0x810u); EXPECT_EQ(l.radius, 0xFFFFFFFFu);
+      EXPECT_EQ(l.item_index.has_value(), extended); if (extended) EXPECT_EQ(*l.item_index, 0x80000001u);
+      EXPECT_EQ(l.form.has_value(), type == 0 || type == 1 || type == 6);
+      ASSERT_EQ(p.targets.size(), type <= 8 ? 1u : 0u);
+      if (!p.targets.empty()) {
+        const auto& t = p.targets[0]; EXPECT_EQ(t.subrecord_index, 2u); EXPECT_EQ(t.count_or_distance, -1);
+        EXPECT_EQ(t.form.has_value(), type == 0 || type == 1 || type == 3 || type == 7);
+      }
+      EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+    }
+  }
+  write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"PLDT", words({255, 1, 2})}, {"PTDA", words({99, 1, 2})}, {"PLDT", words({0})}}}});
+  const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
+  EXPECT_TRUE(p.locations.empty()); EXPECT_TRUE(p.targets.empty()); EXPECT_EQ(p.opaque.size(), 3u);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
 }
 
 TEST_F(BehaviorRead, IdlePreservesSelectionDataStringsAndRawConditions) {
