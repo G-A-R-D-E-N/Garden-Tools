@@ -16,7 +16,7 @@ namespace papyrus = fo4ide::papyrus;
 namespace {
 
 std::filesystem::path baseStubs() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path() / "fixtures" / "BaseStubs";
+    return std::filesystem::path(FO4IDE_TEST_FIXTURES_DIR) / "BaseStubs";
 }
 
 // Port of GraphBuilder: the minimal document builder the C# negative tests
