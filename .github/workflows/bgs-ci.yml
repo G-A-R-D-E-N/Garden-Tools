@@ -17,8 +17,10 @@ on:
 permissions:
   contents: read
 
+# A newer push supersedes a pull request or branch run, but main runs always
+# finish: cancelling them on every merge left main itself untested.
 concurrency:
-  group: bgs-ci-${{ github.ref }}
+  group: bgs-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,10 +50,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      # The runner's tool cache persists between jobs, so the pinned SDK is
+      # downloaded once per runner host instead of on every run.
       - name: Set up pinned .NET SDK
         uses: https://github.com/actions/setup-dotnet@v6
         env:
-          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet-8.0.424
         with:
           dotnet-version: 8.0.424
 

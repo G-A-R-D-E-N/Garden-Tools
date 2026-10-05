@@ -1,7 +1,7 @@
 name: native-ci
 
 # Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runners:
-# Linux (label `garden`) and Windows (`native-windows-tests`). Hosted runners
+# Linux (label `garden`) and Windows (`self-hosted, Windows, X64`). Hosted runners
 # are intentionally avoided: both orgs are over the Free Actions minutes
 # allowance (GHRUNNER#24), and hosted jobs fail silently once exhausted.
 # Self-hosted minutes are free. Pull requests run through the
@@ -40,8 +40,10 @@ on:
       - "**/*.md"
   workflow_dispatch:
 
+# A newer push supersedes a pull request or branch run, but main runs always
+# finish: cancelling them on every merge left main itself untested.
 concurrency:
-  group: native-ci-${{ github.ref }}
+  group: native-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: true
 
 # Every job builds in its own fresh workspace, so compiles go through ccache
@@ -65,6 +67,7 @@ jobs:
   gate:
     name: Gate (skip docs-only pushes)
     runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 10
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
@@ -96,6 +99,7 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -131,7 +135,7 @@ jobs:
         run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
       - name: Test
-        run: ctest --test-dir build/native --output-on-failure
+        run: ctest --test-dir build/native --output-on-failure --parallel 4
 
       - name: Upload logs and binaries on failure
         if: failure()
@@ -153,6 +157,7 @@ jobs:
     name: Radicle (Windows cross, clang-cl/xwin, build-only)
     if: github.event_name != 'pull_request'
     runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 45
     # Cross-compiles the Windows x64 build from Linux with clang-cl + the xwin
     # CRT/SDK (GHRUNNER#17) -- the same method used elsewhere on this host. Wine
     # is retired, so Windows binaries cannot be executed here: this job proves
@@ -231,6 +236,7 @@ jobs:
     name: PluginEditTool native (Windows cross, clang-cl/xwin)
     if: github.event_name != 'pull_request'
     runs-on: [self-hosted, Linux, X64, garden]
+    timeout-minutes: 45
     # The native host now fetches the pinned WebView2 SDK itself. This lane also
     # forces the pinned zlib fallback used by package.ps1, so the build matches
     # a clean Windows release machine rather than depending on host packages.
@@ -359,16 +365,18 @@ jobs:
         run: if defined CCACHE "%CCACHE%" --show-stats
 
       - name: Test
-        run: ctest --test-dir build\native --output-on-failure
+        run: ctest --test-dir build\native --output-on-failure --parallel 4
 
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.
+      # /Z7 (Embedded) instead of CMake's default /Zi: ccache can't cache
+      # compiles that write to a shared PDB.
       - name: Configure (Debug)
         if: github.event_name != 'pull_request'
         run: |
           set "LAUNCHER="
           if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
-          cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+          cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
 
       - name: Build (Debug)
         if: github.event_name != 'pull_request'
@@ -376,4 +384,4 @@ jobs:
 
       - name: Test (Debug)
         if: github.event_name != 'pull_request'
-        run: ctest --test-dir build\native-debug --output-on-failure
+        run: ctest --test-dir build\native-debug --output-on-failure --parallel 4
