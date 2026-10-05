@@ -1,5 +1,87 @@
 # Radicle code notes
 
+## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
+
+TopicChildren returns the ordered physical INFO records in the topic-children
+group immediately following the selected DIAL version. It does not substitute
+winning INFO overrides or collect responses from other plugins or sibling topics.
+The hierarchy source is include/fo4/plugin/container.hpp:Group and
+src/plugin/maintenance.cpp:owned_child_group; the consumer behavior is verified in
+GardenEngine's vendored Mutagen.Bethesda.Fallout4/Records/Major Records/DialogTopic.cs:
+DialogTopicBinaryOverlay.CustomEnd. The group label must resolve to that DIAL in
+the selected plugin's master context. Missing, empty or differently typed following
+groups have no responses; mismatched labels, nested children and non-INFO children
+fail closed. Recursive lookup supports DIAL records nested beneath quest groups.
+
+The returned array uses radicle_free_record_array; record handles remain borrowed from
+the supplied environment. Managed TopicChildren copies only the handle array via
+the existing Records helper. Keep the environment alive while reading the children
+and their payloads. No C struct layouts change, but the four new exports move `RADICLE_ABI_VERSION` to 5, so a library built from the ABI-4 headers is refused by the binding's version guard on its first call, before any new export is reached (`AbiGuardTests.cs:ALibraryFromBeforeTheRecordPayloadExportsIsRejected` uses the `radicle_abi_stub_v4` stub). Consumers require a native library containing the new exports. TopicReadTests.cs covers selected and
+overridden versions, physical order, sibling separation, nested topics, master/self
+keys, empty results, invalid owners/types and disposed-environment access. This
+does not validate scene decoding, voice playback or menu fidelity.
+
+The source-linked installed-data comparison passed 92,861 checks across Fallout4,
+Robot, workshop01, Coast, workshop02, workshop03 and NukaWorld: exact physical
+DIAL keysets, ordered child FormKeys and selected-plugin INFO versions matched
+the independent Mutagen overlay for 46,427 topics and 102,462 responses. The
+31-test binding suite passed against the candidate native library, including ABI
+layout and mismatch tests; generated declaration/probe drift checks passed.
+These counts establish hierarchy projection only. Lookup currently walks the
+selected plugin hierarchy per request; no voice loading performance claim is made.
+
+## src/c_api_records.cpp / bindings/csharp/Radicle.Interop/RecordReads.cs:ReadPayload, ResolveFormId
+
+The Garden UI importer needs the existing parsed record's ordered subrecords and
+the native load order's FormID resolution. These reads copy opaque payload bytes,
+including duplicate/unknown fields and extended-size markers, without guessing
+their meaning or changing the environment. ReadPayload returns managed-owned
+bytes that survive environment disposal. ResolveFormId uses the selected record
+version's plugin context, including master and self indices.
+
+Verified against source:include/fo4/formid.hpp:RawFormId and
+source:src/formid.cpp:resolve_plugin_link, ResolveFormId rejects an index beyond the source plugin's master table and
+created/save IDs; null and the explicit none sentinel return no key. The existing
+environment link helper otherwise coerces oversized indices to the source plugin,
+so this new strict read validates before invoking it. Existing decoders are unchanged.
+Unknown four-byte signatures use reversible Latin1 in managed snapshots.
+
+A `radicle_record` handle is only meaningful to the environment that produced it: it
+is a pointer to one of that environment's own `RecordRef` versions, and the plugin
+index it carries is an index into that environment's plugin list. All four exports
+therefore call `src/c_api_records.cpp:belongs_to_env` first, which looks the record's
+FormKey up in `env->value.versions` and compares addresses. That is the same
+pointer-identity test `radicle_record_topic_children` already used, now shared.
+`ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
+handle from a second live environment resolved through the supplied environment:
+`ResolveFormId` read `env->value.plugins().at(ref.plugin)` from the wrong plugin list
+and returned a key built from another plugin's master table. The wrong answer is
+plausible rather than obvious when both environments have a plugin at that index, so
+`RecordReadTests.cs:ReadsRejectARecordFromAnotherLiveEnvironment` loads two plugins
+that each define a record at local ID 0x800, checks the owner environment resolves it,
+and requires the other environment to refuse both `ResolveFormId` and `ReadPayload`.
+
+In `ResolveFormId` the membership test runs before the `RawFormId::is_none()` early
+return, so the handle is validated for every `raw_form_id` and not only for the ones
+that reach link resolution. `is_none()` is `value_ == 0xFFFFFFFFu`, so with the check
+after it a foreign handle plus `0xFFFFFFFF` returned `RADICLE_STATUS_OK` with a null
+key instead of being refused; `0` never took that path, because `is_none()` is false
+for it. The test asserts refusal for `0x800`, `0` and `0xFFFFFFFF`, which covers both
+the ordinary resolution path and the sentinel.
+
+The C caller supplies four writable signature bytes. Copied payload buffers use
+radicle_free_bytes; resolved plugin strings are borrowed until environment disposal.
+As with existing record readers, keep the environment alive throughout a call;
+Garden's environment read lease must cover a snapshot and its link resolutions.
+No existing C layout changes. Consumers need a library containing these new exports.
+The C# declarations are generated from c_api_records.h by the existing generator
+and its drift check. UI field codecs, localization,
+condition/script gates and original-payload parity remain separate integration work.
+
+bindings/csharp/Radicle.Interop.Tests/RecordReadTests.cs verifies override choice,
+duplicate unknown bytes, empty payloads, master/self/null/invalid FormIDs and
+managed byte ownership after disposal. This is not a decoded UI-content claim.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
