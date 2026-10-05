@@ -6,7 +6,7 @@ namespace Radicle.Interop;
 
 public sealed record NavmeshParent(uint Crc, FormKey? World, FormKey? Cell, short GridY, short GridX);
 public sealed record NavmeshVertex(float X, float Y, float Z);
-public sealed record NavmeshTriangle(ushort[] Vertices, short[] Edges, float Height, byte Unknown, ushort Flags, ushort CoverFlags);
+public sealed record NavmeshTriangle(ushort[] Vertices, short[] Edges, float Clearance, byte Traversal, uint Flags);
 public sealed record NavmeshEdgeLink(uint Type, FormKey? Navmesh, short Triangle, byte Edge);
 public sealed record NavmeshDoorLink(short Triangle, uint Crc, FormKey? Door);
 public sealed record NaviDoorLink(uint Crc, FormKey? Door);
@@ -31,7 +31,7 @@ public sealed unsafe partial class RadicleEnvironment
             var triangles = new List<NavmeshTriangle>();
             foreach (var t in Call.Copy<Native.NavmeshTriangle>(n->Triangles, n->TriangleCount))
                 triangles.Add(new(new[] { t.Vertices[0], t.Vertices[1], t.Vertices[2] },
-                    new[] { t.Edges[0], t.Edges[1], t.Edges[2] }, t.Height, t.Unknown, t.Flags, t.CoverFlags));
+                    new[] { t.Edges[0], t.Edges[1], t.Edges[2] }, t.Clearance, t.Traversal, t.Flags));
             return new(n->Version, NavParent(n->Parent),
                 Call.Copy<Native.NavmeshVertex>(n->Vertices, n->VertexCount).Select(p => new NavmeshVertex(p.X, p.Y, p.Z)).ToArray(),
                 triangles, Call.Copy<Native.NavmeshEdgeLink>(n->Edges, n->EdgeCount)

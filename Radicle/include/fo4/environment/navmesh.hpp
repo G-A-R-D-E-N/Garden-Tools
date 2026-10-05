@@ -20,9 +20,9 @@ struct NavmeshParent {
 struct NavmeshTriangle {
   std::array<std::uint16_t, 3> vertices{};
   std::array<std::int16_t, 3> edges{};
-  float height{0};
-  std::uint8_t unknown{0};
-  std::uint16_t flags{0}, cover_flags{0};
+  float clearance{0};
+  std::uint8_t traversal{0};
+  std::uint32_t flags{0};
 };
 
 struct NavmeshEdgeLink {

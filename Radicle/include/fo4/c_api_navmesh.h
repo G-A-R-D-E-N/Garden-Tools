@@ -19,10 +19,9 @@ typedef struct radicle_navmesh_parent {
 typedef struct radicle_navmesh_triangle {
   uint16_t vertices[3];
   int16_t edges[3];
-  float height;
-  uint8_t unknown;
-  uint16_t flags;
-  uint16_t cover_flags;
+  float clearance;
+  uint8_t traversal;
+  uint32_t flags;
 } radicle_navmesh_triangle;
 
 typedef struct radicle_navmesh_edge_link {

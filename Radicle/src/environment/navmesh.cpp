@@ -42,6 +42,7 @@ std::optional<NavmeshGeometry> decode_navmesh(const Environment& env, const Reco
   const Reader r(env, ref, sig("NAVM"));
   const auto* sub = r.unique(sig("NVNM"));
   if (!sub) return std::nullopt;
+  if (ref.record->header.form_version < 128) r.fail(sub->signature, "legacy form version is unsupported");
   validate(r, *sub);
   Cursor c(sub->data);
   NavmeshGeometry out;
@@ -57,8 +58,8 @@ std::optional<NavmeshGeometry> decode_navmesh(const Environment& env, const Reco
     NavmeshTriangle t;
     for (auto& v : t.vertices) v = c.read_u16();
     for (auto& e : t.edges) e = static_cast<std::int16_t>(c.read_u16());
-    t.height = c.read_f32(); t.unknown = c.read_u8();
-    t.flags = c.read_u16(); t.cover_flags = c.read_u16();
+    t.clearance = c.read_f32(); t.traversal = c.read_u8();
+    t.flags = c.read_u32();
     out.triangles.push_back(t);
   }
   count = c.read_u32();

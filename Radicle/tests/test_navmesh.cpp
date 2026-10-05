@@ -49,12 +49,12 @@ protected:
     std::filesystem::create_directories(root); path = root / "Navigation.esm";
   }
   void TearDown() override { std::error_code error; std::filesystem::remove_all(root, error); }
-  void write(const ByteWriter& nvnm, const ByteWriter& nvmi, bool duplicate = false) {
+  void write(const ByteWriter& nvnm, const ByteWriter& nvmi, bool duplicate = false, std::uint16_t form_version = 131) {
     ByteWriter out;
     auto r = fo4::test::begin_record(out, "TES4", 1, 0);
     ByteWriter h; h.f32(1); h.u32(2); h.u32(0x900);
     fo4::test::write_subrecord(out, "HEDR", h.bytes); fo4::test::end_record(out, r);
-    auto g = fo4::test::begin_group(out, "NAVM", 0); r = fo4::test::begin_record(out, "NAVM", 0, 0x800);
+    auto g = fo4::test::begin_group(out, "NAVM", 0); r = fo4::test::begin_record(out, "NAVM", 0, 0x800, form_version);
     if (!nvnm.bytes.empty()) fo4::test::write_subrecord(out, "NVNM", nvnm.bytes);
     if (duplicate) fo4::test::write_subrecord(out, "NVNM", nvnm.bytes);
     fo4::test::end_record(out, r); fo4::test::end_group(out, g);
@@ -82,8 +82,8 @@ TEST_F(NavmeshRead, StoredGeometryLinksFlagsAndParentUnionMatchAbi) {
     else { EXPECT_EQ(mesh->parent.cell.local().value(), 0x811u); }
     ASSERT_EQ(mesh->vertices.size(), 1); EXPECT_EQ(mesh->vertices[0][0], 1.5f);
     ASSERT_EQ(mesh->triangles.size(), 1); const auto& t = mesh->triangles[0];
-    EXPECT_EQ(t.edges[0], -1); EXPECT_EQ(t.vertices[2], 2); EXPECT_EQ(t.height, 4.5f);
-    EXPECT_EQ(t.flags, 0x8012); EXPECT_EQ(t.cover_flags, 0xABCD); EXPECT_EQ(t.unknown, 0xAA);
+    EXPECT_EQ(t.edges[0], -1); EXPECT_EQ(t.vertices[2], 2); EXPECT_EQ(t.clearance, 4.5f);
+    EXPECT_EQ(t.flags, 0xABCD8012u); EXPECT_EQ(t.traversal, 0xAA);
     ASSERT_EQ(mesh->edges.size(), 1); EXPECT_EQ(mesh->edges[0].triangle, -3);
     EXPECT_EQ(mesh->edges[0].navmesh.local().value(), 0x812u);
     ASSERT_EQ(mesh->doors.size(), 1); EXPECT_EQ(mesh->doors[0].door.local().value(), 0x813u);
@@ -99,7 +99,7 @@ TEST_F(NavmeshRead, StoredGeometryLinksFlagsAndParentUnionMatchAbi) {
       if (env.plugin_records(0)[i]->record->header.signature == fo4::Signature::from_string("NAVM")) {
         const radicle_navmesh* value = nullptr;
         EXPECT_EQ(radicle_navmesh_decode(abi, records[i], &value), RADICLE_STATUS_OK);
-        if (value) { EXPECT_EQ(value->triangles[0].flags, 0x8012); radicle_navmesh_free(value); }
+        if (value) { EXPECT_EQ(value->triangles[0].flags, 0xABCD8012u); radicle_navmesh_free(value); }
       } else if (env.plugin_records(0)[i]->record->header.signature == fo4::Signature::from_string("NAVI")) {
         const radicle_navi* value = nullptr;
         EXPECT_EQ(radicle_navi_decode(abi, records[i], &value), RADICLE_STATUS_OK);
@@ -128,6 +128,19 @@ TEST_F(NavmeshRead, RejectsUnsupportedTruncatedDuplicateAndOverflowPayloads) {
 TEST_F(NavmeshRead, MissingGeometryStaysAbsent) {
   write(ByteWriter{}, info(false)); const auto env = load();
   EXPECT_FALSE(fo4::env::decode_navmesh(env, record(env, 0x800)));
+}
+
+TEST_F(NavmeshRead, LegacyFormVersionIsRejectedWithoutChangingBytes) {
+  for (const auto version : {127u, 128u}) {
+    write(geometry(false), info(false), false, static_cast<std::uint16_t>(version));
+    const auto env = load();
+    if (version < 128) {
+      EXPECT_THROW(fo4::env::decode_navmesh(env, record(env, 0x800)), fo4::env::WorldDecodeError);
+    } else {
+      EXPECT_TRUE(fo4::env::decode_navmesh(env, record(env, 0x800)));
+    }
+    EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+  }
 }
 
 }

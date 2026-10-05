@@ -67,8 +67,8 @@ public class NavmeshTests
         Assert.Equal(new NavmeshVertex(1.5f, -2f, 3f), Assert.Single(mesh.Vertices));
         var t = Assert.Single(mesh.Triangles);
         Assert.Equal(new ushort[] { 0, 1, 2 }, t.Vertices); Assert.Equal(new short[] { -1, -2, 7 }, t.Edges);
-        Assert.Equal(4.5f, t.Height); Assert.Equal((byte)0xAA, t.Unknown);
-        Assert.Equal((ushort)0x8012, t.Flags); Assert.Equal((ushort)0xABCD, t.CoverFlags);
+        Assert.Equal(4.5f, t.Clearance); Assert.Equal((byte)0xAA, t.Traversal);
+        Assert.Equal(0xABCD8012u, (uint)t.Flags);
         Assert.Equal(new NavmeshEdgeLink(0xDEADBEEF, new("Navigation.esm", 0x812), -3, 2), Assert.Single(mesh.Edges));
         Assert.Equal(new NavmeshDoorLink(-5, 0xABCDEF, new("Navigation.esm", 0x813)), Assert.Single(mesh.Doors));
         Assert.Equal(new byte[48], mesh.OpaqueTail);

@@ -7,15 +7,18 @@ The existing checked grammar is `src/schema/form_link_mixed.cpp`:
 `navmesh_mixed_formid_offsets`. It validates every counted section and the
 complete payload before the new read surface exposes fields.
 
-NVNM version 15 starts with version, pathing-cell CRC, world link and a
+NVNM version 15 starts with version, pathing-cell factory key, world link and a
 four-byte parent union: CELL link when world is null, signed grid Y/X otherwise.
 Counted vertices have three f32 values (12 bytes). Counted triangles are 21
-bytes: three u16 vertex indices, three signed i16 edge values, f32 height,
-one unknown byte and two raw u16 flag words. Edge links are 11 bytes (u32
+bytes: three u16 vertex indices, three signed i16 edge values, f32 clearance,
+one traversal byte and one raw u32 flags word. Edge links are 11 bytes (u32
 type, NAVM link, signed i16 triangle, one edge byte); doors are 10 bytes
 (signed i16 triangle, u32 CRC, REFR link). The remaining cover, cover-map,
 waypoint and grid sections are shape-validated and returned as opaque bytes.
-No runtime meaning or valid range is inferred for flags, edges or height.
+Only numeric traversal/flag values are exposed; unknown bit names remain
+unassigned. Triangles gain this width at form version 0x3A; extra-edge records
+gain their byte only above 0x7F. The current decoder requires both modern
+layouts, so form versions below 128 fail closed.
 
 NAVI NVER is 15 in this corpus. Each NVMI stores NAVM link, raw flags,
 approximate vec3 location, f32 preferred percentage, counted NAVM edge and
@@ -43,20 +46,21 @@ with zero size/count/trailing-byte failures. This is a layout measurement,
 not a successful run of the new decoder or a pathfinding acceptance test.
 `test_navmesh_real.cpp` checks every record through native and C ABI reads
 and unchanged whole-master byte identity when FO4_DATA_DIR is supplied.
-CI results are the validation source; no local build is claimed.
+Local and CI results are recorded separately for each published head.
 
 The NAVI survey found 12,568 NVMI entries (7799/106/25/2645/23/37/1933
 in the master order above), seven NVPP payloads and no NVSI. Every NVMI
 and NVPP matched the existing checked grammar, with zero failures.
 
-The private CK note `CreationKit/records/51-NVNM-HEADER.md` at
-Creation_Kit_Research commit `9e55a42ab29810a2aaca13967da9e1b91f62c514`
-contains reader/decompile verification stamps and several superseded
-hypotheses. Its final section 8 reports a runtime/disk divergence. The
-current shipped disk measurement above does not corroborate that section's
-extra-table interpretation. Reconcile the exact CK build, stream adapter
-and shipped payload before deriving runtime semantics or enabling mutation.
-This read surface follows the measured stored layout only.
+The newer [reader reconciliation](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/navigation-401-339/README.md)
+withdraws the older CK note's extra-triangle-table interpretation. Sections
+3–4 stamp the OG triangle and extra-edge readers at 0x14250FCD0 and
+0x14250FFB0, with independently matched AE/CK readers. Legacy triangles
+are 16 bytes below form version 0x3A; the extra-edge byte appears from 0x80.
+Flag bits 0–2 identify extra-edge indices. The complete modern grammar
+matches all 12,558 payloads. Cover/waypoint semantics, several triangle bits
+and NG behavior remain unresolved; those values stay raw rather than acquiring
+inferred semantic names. No pathfinding or navmesh mutation is implemented.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has vocabulary
 entries but no NAVM/NAVI geometry consumer. Issue #146 must supply that

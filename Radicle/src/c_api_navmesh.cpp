@@ -52,7 +52,7 @@ radicle_status radicle_navmesh_decode(const radicle_env* env, const radicle_reco
         radicle_navmesh_triangle row{};
         std::copy(t.vertices.begin(), t.vertices.end(), row.vertices);
         std::copy(t.edges.begin(), t.edges.end(), row.edges);
-        row.height = t.height; row.unknown = t.unknown; row.flags = t.flags; row.cover_flags = t.cover_flags;
+        row.clearance = t.clearance; row.traversal = t.traversal; row.flags = t.flags;
         h->triangles.push_back(row);
       }
       for (const auto& e : data->edges) h->edges.push_back({e.type, to_c_key(*env, e.navmesh), e.triangle, e.edge});
