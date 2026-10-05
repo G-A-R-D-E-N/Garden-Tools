@@ -17,8 +17,7 @@ namespace fo4ide::graph::test {
 // The BaseStubs and GraphScripts fixture trees live next to the test
 // sources: native/tests/fixtures/BaseStubs and .../GraphScripts.
 inline std::filesystem::path fixtureRoot(std::string_view name) {
-    return std::filesystem::path(__FILE__).parent_path().parent_path() / "fixtures" /
-           std::string(name);
+    return std::filesystem::path(FO4IDE_TEST_FIXTURES_DIR) / std::string(name);
 }
 
 inline std::filesystem::path baseStubs() { return fixtureRoot("BaseStubs"); }

@@ -21,7 +21,7 @@ namespace {
 // The BaseStubs fixture tree lives next to the test sources:
 // native/tests/fixtures/BaseStubs.
 std::filesystem::path baseStubs() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path() / "fixtures" / "BaseStubs";
+    return std::filesystem::path(FO4IDE_TEST_FIXTURES_DIR) / "BaseStubs";
 }
 
 struct PaletteFixture {
