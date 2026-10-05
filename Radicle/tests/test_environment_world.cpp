@@ -317,7 +317,9 @@ TEST_F(WorldEnvironmentTest, WaterHeightBoundariesPreserveRawValuesAndRejectActi
     SCOPED_TRACE(i);
     const auto* cell = selected(0x900u + static_cast<std::uint32_t>(i));
     EXPECT_EQ(fo4::env::resolve_water(env, *cell).height, expected[i]);
-    if (i + 1 != raw.size()) EXPECT_EQ(fo4::env::decode_cell(env, *cell).water_height, raw[i]);
+    if (i + 1 != raw.size()) {
+      EXPECT_EQ(fo4::env::decode_cell(env, *cell).water_height, raw[i]);
+    }
   }
   EXPECT_FALSE(fo4::env::resolve_water(env, *selected(0x920)).height.has_value());
   EXPECT_EQ(fo4::env::resolve_water(env, *selected(0x920)).water, key("000840:Fallout4.esm"));
