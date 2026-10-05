@@ -29,13 +29,18 @@ bool parse_form_key(const char* text, fo4::FormKey& key, radicle_status& status)
   return false;
 }
 
-const char* copy_text(const char* text) {
+const char* copy_text(const char* text, size_t size) {
   if (!text) return nullptr;
-  const auto size = std::strlen(text);
   auto* copy = static_cast<char*>(std::malloc(size + 1));
   if (!copy) return nullptr;
-  std::memcpy(copy, text, size + 1);
+  std::memcpy(copy, text, size);
+  copy[size] = '\0';
   return copy;
+}
+
+const char* copy_c_string(const char* text) {
+  if (!text) return nullptr;
+  return copy_text(text, std::strlen(text));
 }
 
 void free_text(radicle_quest_property& property) {
@@ -45,6 +50,7 @@ void free_text(radicle_quest_property& property) {
   property.script = nullptr;
   property.name = nullptr;
   property.text = nullptr;
+  property.text_size = 0;
 }
 
 void append_properties(std::vector<radicle_quest_property>& out,
@@ -74,6 +80,7 @@ void append_properties(std::vector<radicle_quest_property>& out,
     }
     if (property.text) {
       value.text = property.text->c_str();
+      value.text_size = property.text->size();
     }
     if (property.object) {
       value.has_object = 1;
@@ -108,9 +115,9 @@ radicle_status copy_properties(const std::vector<radicle_quest_property>& values
 
   for (size_t i = 0; i < values.size(); ++i) {
     result[i] = values[i];
-    result[i].script = copy_text(values[i].script);
-    result[i].name = copy_text(values[i].name);
-    result[i].text = copy_text(values[i].text);
+    result[i].script = copy_c_string(values[i].script);
+    result[i].name = copy_c_string(values[i].name);
+    result[i].text = copy_text(values[i].text, values[i].text_size);
     const bool failed = (values[i].script && !result[i].script) ||
                         (values[i].name && !result[i].name) ||
                         (values[i].text && !result[i].text);
@@ -126,7 +133,7 @@ radicle_status copy_properties(const std::vector<radicle_quest_property>& values
   return RADICLE_STATUS_OK;
 }
 
-}  // namespace
+}
 
 extern "C" {
 
@@ -212,12 +219,13 @@ radicle_status radicle_quest_runtime_properties(const radicle_plugin* plugin,
     const auto data = fo4::quest::quest_runtime_data(plugin->value, key);
 
     std::vector<radicle_quest_property> properties;
+    const std::string no_script;
     for (const auto& script : data.scripts) {
       append_properties(properties, script.properties, RADICLE_QUEST_PROPERTY_SCRIPT, -1,
                         script.name);
     }
     append_properties(properties, data.fragment_properties, RADICLE_QUEST_PROPERTY_FRAGMENT, -1,
-                      data.fragment_script);
+                      no_script);
     for (const auto& alias : data.alias_scripts) {
       for (const auto& script : alias.scripts) {
         append_properties(properties, script.properties, RADICLE_QUEST_PROPERTY_ALIAS_SCRIPT,
@@ -249,4 +257,4 @@ void radicle_free_quest_properties(radicle_quest_property* properties, size_t co
   std::free(properties);
 }
 
-}  // extern "C"
+}

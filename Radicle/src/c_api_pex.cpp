@@ -56,7 +56,7 @@ radicle_status entry_at(const std::vector<std::string>& table,
   }
 }
 
-}  // namespace
+}
 
 extern "C" {
 
@@ -251,4 +251,4 @@ radicle_status radicle_pex_string_table_entry(const radicle_pex* pex,
   return entry_at(pex->value.stringTable, index, "string table index is out of range", out_bytes, out_size);
 }
 
-}  // extern "C"
+}

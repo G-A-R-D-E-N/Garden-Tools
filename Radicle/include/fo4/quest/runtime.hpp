@@ -34,4 +34,4 @@ struct QuestRuntimeData {
 
 QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest);
 
-}  // namespace fo4::quest
+}

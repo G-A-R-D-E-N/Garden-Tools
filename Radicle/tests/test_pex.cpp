@@ -185,7 +185,7 @@ void expectParseError(const std::vector<std::uint8_t>& bytes) {
   }
 }
 
-}  // namespace
+}
 
 TEST(Pex, SyntheticFileRoundTripsByteIdentically) {
   const PexFile original = syntheticFile();

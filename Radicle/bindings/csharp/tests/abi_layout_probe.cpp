@@ -452,6 +452,7 @@ int main() {
   printf("QuestProperty.HasBoolean %zu\n", offsetof(radicle_quest_property, has_boolean));
   printf("QuestProperty.Boolean %zu\n", offsetof(radicle_quest_property, boolean));
   printf("QuestProperty.Text %zu\n", offsetof(radicle_quest_property, text));
+  printf("QuestProperty.TextSize %zu\n", offsetof(radicle_quest_property, text_size));
   printf("QuestProperty.HasObject %zu\n", offsetof(radicle_quest_property, has_object));
   printf("QuestProperty.ObjectFormId %zu\n", offsetof(radicle_quest_property, object_form_id));
   printf("QuestProperty.HasPropertyAlias %zu\n", offsetof(radicle_quest_property, has_property_alias));

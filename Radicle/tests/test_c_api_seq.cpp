@@ -43,7 +43,7 @@ private:
   std::filesystem::path path_;
 };
 
-}  // namespace
+}
 
 TEST(CApiSeq, ReportsEntriesAndRoundTrips) {
   const auto input = bytes({0x07000800u, 0x07000802u, 0x01001733u});

@@ -189,4 +189,4 @@ struct PexFile {
     void rebuildStringTable();
 };
 
-}  // namespace fo4::pex
+}

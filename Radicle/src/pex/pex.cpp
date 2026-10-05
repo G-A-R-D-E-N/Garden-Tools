@@ -805,4 +805,4 @@ void PexFile::rebuildStringTable() {
     stringTable = std::move(table);
 }
 
-}  // namespace fo4::pex
+}

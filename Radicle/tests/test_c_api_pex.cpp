@@ -100,7 +100,7 @@ private:
   std::filesystem::path path_;
 };
 
-}  // namespace
+}
 
 TEST(CApiPex, ParsesASyntheticFileAndReportsHeaderFacts) {
   const auto bytes = syntheticBytes();

@@ -108,7 +108,7 @@ public class QuestRuntimeTests
         U16(1);
         Wstring("QuestScript");
         U8(0);
-        U16(5);
+        U16(7);
         Wstring("Count");
         U8(3);
         U8(0);
@@ -132,6 +132,14 @@ public class QuestRuntimeTests
         U32(1);
         U32(2);
         U32(3);
+        Wstring("Embedded");
+        U8(2);
+        U8(0);
+        Wstring("Garden\0Patch");
+        Wstring("Empty");
+        U8(2);
+        U8(0);
+        Wstring("");
 
         U8(0);
         U16(1);
@@ -212,7 +220,7 @@ public class QuestRuntimeTests
             Assert.True(data.StartGameEnabled);
             Assert.Empty(data.Unsupported);
             Assert.Contains(new QuestRuntimeScript(QuestRuntime.QuestOwnedAlias, "QuestScript"), data.Scripts);
-            Assert.Equal(5, data.ScriptProperties.Count);
+            Assert.Equal(7, data.ScriptProperties.Count);
             Assert.Equal("QF_TestQuest", data.FragmentScript);
             Assert.Single(data.FragmentProperties);
             Assert.Contains(new QuestRuntimeFragment(10, 0, "QF_TestQuest", "Fragment_Stage_0010"), data.Fragments);
@@ -253,12 +261,29 @@ public class QuestRuntimeTests
             var text = Property(data, "Label");
             Assert.Equal("Garden\tPatch", text.Value.Text);
 
+            var embedded = Property(data, "Embedded");
+            var expectedBytes = new byte[] { 0x47, 0x61, 0x72, 0x64, 0x65, 0x6E, 0x00, 0x50, 0x61, 0x74, 0x63, 0x68 };
+            Assert.NotNull(embedded.Value.TextBytes);
+            Assert.True(expectedBytes.AsSpan().SequenceEqual(embedded.Value.TextBytes));
+            Assert.Equal("Garden\0Patch", embedded.Value.Text);
+            Assert.Equal(12, embedded.Value.Text!.Length);
+
+            var empty = Property(data, "Empty");
+            Assert.NotNull(empty.Value.TextBytes);
+            Assert.Empty(empty.Value.TextBytes!);
+            Assert.Equal(string.Empty, empty.Value.Text);
+
+            var noString = Property(data, "Count");
+            Assert.Null(noString.Value.Text);
+            Assert.Null(noString.Value.TextBytes);
+
             var elements = Property(data, "Stages");
             Assert.Equal(3u, elements.Value.ElementCount);
 
             var fragment = Property(data, "Stage");
-            Assert.Equal("QF_TestQuest", fragment.Script);
+            Assert.Equal(string.Empty, fragment.Script);
             Assert.Equal(10, fragment.Value.Integer);
+            Assert.Equal("QF_TestQuest", data.FragmentScript);
 
             var alias = Assert.Single(data.AliasScriptProperties);
             Assert.Equal(5, alias.Alias);

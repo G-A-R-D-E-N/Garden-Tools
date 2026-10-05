@@ -21,7 +21,7 @@ namespace {
 
 using namespace radicle_c_detail;
 
-}  // namespace
+}
 
 extern "C" {
 
@@ -135,4 +135,4 @@ radicle_status radicle_seq_entry_form_id(const radicle_seq* seq, size_t index, u
   return RADICLE_STATUS_OK;
 }
 
-}  // extern "C"
+}

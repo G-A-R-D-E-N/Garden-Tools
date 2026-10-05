@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using Radicle.Interop;
 using Radicle.Interop.Native;
 using Xunit;
@@ -127,20 +128,58 @@ public class QuestRuntimeAttachmentTests
     }
 
     [Fact]
-    public void FragmentPropertiesTakeTheFragmentScriptName()
+    public void FragmentPropertiesKeepTheirOwnScriptField()
     {
         var rows = new[] { "fragment-script\tQF_TestQuest" };
-        var properties = new[]
+        var emptyScript = new[]
         {
             new QuestRuntimePropertyEntry(QuestPropertyOwner.Fragment, -1, string.Empty, "Stage", 3, 0,
                 new QuestRuntimeValue { Integer = 10 }),
         };
+        var namedScript = new[]
+        {
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Fragment, -1, "QF_Other", "Stage", 3, 0,
+                new QuestRuntimeValue { Integer = 10 }),
+        };
 
-        var data = QuestRuntime.DecodeRows(rows, properties, Quest);
+        var data = QuestRuntime.DecodeRows(rows, emptyScript, Quest);
 
+        Assert.Equal("QF_TestQuest", data.FragmentScript);
         var property = Assert.Single(data.FragmentProperties);
-        Assert.Equal("QF_TestQuest", property.Script);
+        Assert.Equal(string.Empty, property.Script);
         Assert.Equal(10, property.Value.Integer);
+
+        var other = QuestRuntime.DecodeRows(rows, namedScript, Quest);
+
+        Assert.Equal("QF_TestQuest", other.FragmentScript);
+        Assert.Equal("QF_Other", Assert.Single(other.FragmentProperties).Script);
+    }
+
+    [Fact]
+    public void EmbeddedNulBytesSurviveTheRowMapping()
+    {
+        var textBytes = new byte[] { 0x47, 0x61, 0x72, 0x64, 0x65, 0x6E, 0x00, 0x50, 0x61, 0x74, 0x63, 0x68 };
+        var properties = new[]
+        {
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Embedded", 2, 0,
+                new QuestRuntimeValue { Text = Encoding.Latin1.GetString(textBytes) }),
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Empty", 2, 0,
+                new QuestRuntimeValue { Text = string.Empty }),
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Count", 3, 0,
+                new QuestRuntimeValue { Integer = 7 }),
+        };
+
+        var data = QuestRuntime.DecodeRows(Array.Empty<string>(), properties, Quest);
+
+        Assert.Equal(3, data.ScriptProperties.Count);
+        Assert.True(textBytes.AsSpan().SequenceEqual(data.ScriptProperties[0].Value.TextBytes!));
+        Assert.Equal("Garden\0Patch", data.ScriptProperties[0].Value.Text);
+        Assert.Equal(12, data.ScriptProperties[0].Value.Text!.Length);
+        Assert.NotNull(data.ScriptProperties[1].Value.TextBytes);
+        Assert.Empty(data.ScriptProperties[1].Value.TextBytes!);
+        Assert.Equal(string.Empty, data.ScriptProperties[1].Value.Text);
+        Assert.Null(data.ScriptProperties[2].Value.Text);
+        Assert.Null(data.ScriptProperties[2].Value.TextBytes);
     }
 
     [Fact]

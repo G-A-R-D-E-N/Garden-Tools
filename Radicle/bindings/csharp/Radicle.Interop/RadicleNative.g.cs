@@ -660,6 +660,7 @@ public unsafe struct QuestProperty
     public byte HasBoolean;
     public byte Boolean;
     public IntPtr Text;
+    public nuint TextSize;
     public byte HasObject;
     public uint ObjectFormId;
     public byte HasPropertyAlias;

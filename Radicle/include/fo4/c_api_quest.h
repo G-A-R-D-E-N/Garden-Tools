@@ -40,7 +40,8 @@ RADICLE_API radicle_status radicle_quest_runtime_rows(const radicle_plugin* plug
 
 /*
  * What a property is attached to. A fragment property belongs to the fragment script the
- * `fragment-script` row names, so its own script name is empty.
+ * `fragment-script` row names, so its own script name is empty and the fragment script name
+ * is transferred exactly once, through that row.
  */
 typedef enum radicle_quest_property_owner {
   RADICLE_QUEST_PROPERTY_SCRIPT = 0,
@@ -51,12 +52,22 @@ typedef enum radicle_quest_property_owner {
 /*
  * One VMAD property with its decoded value.
  *
- * Every value has a `has_` companion: a VMAD property carries at most one value of its type,
- * and an object property carries a FormID and an alias together. `text` is NULL when the
- * property holds no string, and an empty string is a value. `element_count` is the leading
- * count of a struct or array property. `alias` is the owning alias for
+ * The scalar and reference values each have a `has_` companion: `has_integer`, `has_real`,
+ * `has_boolean`, `has_object`, `has_property_alias` and `has_element_count`. A VMAD property
+ * carries at most one value of its type, and an object property carries a FormID and an alias
+ * together. The string value has no such flag: absence is a NULL `text`, and a non-NULL `text`
+ * with a `text_size` of 0 is the empty string. `element_count` is the leading count of a
+ * struct or array property. `alias` is the owning alias for
  * RADICLE_QUEST_PROPERTY_ALIAS_SCRIPT and -1 otherwise, while `property_alias` is the alias
  * the property itself names.
+ *
+ * `text` and `text_size` describe the string value, and `text_size` is the transfer contract:
+ * a NULL `text` means the property holds no string, a non-NULL `text` points at exactly
+ * `text_size` raw bytes followed by one trailing NUL for convenience, and a non-NULL `text`
+ * with a `text_size` of 0 is the empty string. `text_size` counts embedded NUL bytes as data,
+ * so the 12 bytes Garden NUL Patch arrive as `text_size` 12 and not as the 6 bytes a
+ * NUL-terminated reader would see. The bytes are not claimed to be any particular character
+ * encoding: this ABI carries bytes and a length, and naming a charset is the caller's business.
  *
  * `script`, `name` and `text` are owned by the caller and released with
  * radicle_free_quest_properties.
@@ -75,6 +86,7 @@ typedef struct radicle_quest_property {
   uint8_t has_boolean;
   uint8_t boolean;
   const char* text;
+  size_t text_size;
   uint8_t has_object;
   uint32_t object_form_id;
   uint8_t has_property_alias;

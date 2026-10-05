@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
@@ -14,6 +15,8 @@ public readonly record struct QuestRuntimeValue
     public bool? Boolean { get; init; }
 
     public string? Text { get; init; }
+
+    public byte[]? TextBytes => Text is null ? null : Encoding.Latin1.GetBytes(Text);
 
     public uint? ObjectFormId { get; init; }
 
@@ -86,6 +89,7 @@ public static class QuestRuntime
             for (var i = 0; i < entries.Length; ++i)
             {
                 var property = properties[i];
+                var text = property.Text == IntPtr.Zero ? null : Utf8.Raw(property.Text, property.TextSize);
                 entries[i] = new QuestRuntimePropertyEntry(
                     property.Owner,
                     property.Alias,
@@ -98,7 +102,7 @@ public static class QuestRuntime
                         Integer = property.HasInteger != 0 ? property.Integer : null,
                         Real = property.HasReal != 0 ? property.Real : null,
                         Boolean = property.HasBoolean != 0 ? property.Boolean != 0 : null,
-                        Text = Utf8.Read(property.Text),
+                        Text = text is null ? null : Encoding.Latin1.GetString(text),
                         ObjectFormId = property.HasObject != 0 ? property.ObjectFormId : null,
                         Alias = property.HasPropertyAlias != 0 ? property.PropertyAlias : null,
                         ElementCount = property.HasElementCount != 0 ? property.ElementCount : null,
@@ -174,7 +178,7 @@ public static class QuestRuntime
                     break;
                 case QuestPropertyOwner.Fragment:
                     fragmentProperties.Add(new QuestRuntimeProperty(
-                        fragmentScript, entry.Name, entry.Type, entry.Flags, entry.Value));
+                        entry.Script, entry.Name, entry.Type, entry.Flags, entry.Value));
                     break;
                 case QuestPropertyOwner.AliasScript:
                     aliasProperties.Add(new QuestRuntimeAliasScriptProperty(

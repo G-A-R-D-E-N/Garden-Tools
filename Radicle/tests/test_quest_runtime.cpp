@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -63,7 +64,7 @@ TEST(QuestRuntime, AggregatesStartGameFlagScriptsFragmentsAndAliases) {
   EXPECT_TRUE(data.start_game_enabled);
   ASSERT_EQ(data.scripts.size(), 1u);
   EXPECT_EQ(data.scripts[0].name, "QuestScript");
-  ASSERT_EQ(data.scripts[0].properties.size(), 5u);
+  ASSERT_EQ(data.scripts[0].properties.size(), 7u);
   EXPECT_EQ(data.scripts[0].properties[0].name, "Count");
   EXPECT_EQ(data.fragment_script, "QF_TestQuest");
   ASSERT_EQ(data.fragment_properties.size(), 1u);
@@ -103,10 +104,11 @@ TEST(QuestRuntime, KeepsThePropertyValuesTheCAbiHasToCarry) {
       fo4::read_plugin(fo4::test::make_quest_plugin(1, 99), "Quests.esp"), fo4::test::quest_key());
 
   ASSERT_EQ(seven.scripts.size(), 1u);
-  ASSERT_EQ(seven.scripts[0].properties.size(), 5u);
+  ASSERT_EQ(seven.scripts[0].properties.size(), 7u);
   const auto& count = seven.scripts[0].properties[0];
   ASSERT_TRUE(count.integer.has_value());
   EXPECT_EQ(*count.integer, 7);
+  EXPECT_FALSE(count.text.has_value());
   const auto& ratio = seven.scripts[0].properties[1];
   EXPECT_EQ(ratio.flags, 1);
   ASSERT_TRUE(ratio.real.has_value());
@@ -120,9 +122,16 @@ TEST(QuestRuntime, KeepsThePropertyValuesTheCAbiHasToCarry) {
   const auto& stages = seven.scripts[0].properties[4];
   ASSERT_TRUE(stages.element_count.has_value());
   EXPECT_EQ(*stages.element_count, 3u);
+  const auto& embedded = seven.scripts[0].properties[5];
+  ASSERT_TRUE(embedded.text.has_value());
+  EXPECT_EQ(embedded.text->size(), 12u);
+  EXPECT_EQ(std::memcmp(embedded.text->data(), "Garden\0Patch", 12), 0);
+  const auto& empty = seven.scripts[0].properties[6];
+  ASSERT_TRUE(empty.text.has_value());
+  EXPECT_TRUE(empty.text->empty());
 
   ASSERT_EQ(ninety_nine.scripts.size(), 1u);
-  ASSERT_EQ(ninety_nine.scripts[0].properties.size(), 5u);
+  ASSERT_EQ(ninety_nine.scripts[0].properties.size(), 7u);
   ASSERT_TRUE(ninety_nine.scripts[0].properties[0].integer.has_value());
   EXPECT_EQ(*ninety_nine.scripts[0].properties[0].integer, 99);
 }

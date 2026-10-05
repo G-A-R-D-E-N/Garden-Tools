@@ -30,4 +30,4 @@ struct SeqFile {
   std::vector<std::uint8_t> toBytes() const;
 };
 
-}  // namespace fo4::seq
+}

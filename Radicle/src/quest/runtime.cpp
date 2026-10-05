@@ -43,7 +43,7 @@ bool read_start_game_enabled(const Record& record, std::vector<std::string>& uns
   return (flags & 0x0001u) != 0u;
 }
 
-}  // namespace
+}
 
 QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest) {
   QuestRuntimeData data;
@@ -90,4 +90,4 @@ QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest) 
   return data;
 }
 
-}  // namespace fo4::quest
+}

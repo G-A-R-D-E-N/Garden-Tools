@@ -40,4 +40,4 @@ std::vector<std::uint8_t> SeqFile::toBytes() const {
   return bytes;
 }
 
-}  // namespace fo4::seq
+}

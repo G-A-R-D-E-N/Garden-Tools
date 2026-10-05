@@ -146,7 +146,7 @@ void report(const std::string& name, const PexFile& pex, std::size_t bytes) {
             << " strings=" << pex.stringTable.size() << " instructions=" << instructions << std::endl;
 }
 
-}  // namespace
+}
 
 TEST(PexOracle, CompiledFixturesRoundTripByteIdentically) {
   const auto compiler = tool("FO4_PAPYRUS_COMPILER");

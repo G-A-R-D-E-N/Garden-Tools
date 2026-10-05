@@ -152,7 +152,7 @@ void expectClean(const Tally& tally) {
   EXPECT_EQ(tally.identical, tally.found) << "byte-identical round trips";
 }
 
-}  // namespace
+}
 
 TEST(PexCorpus, EveryLoosePexRoundTripsByteIdentically) {
   const char* roots = std::getenv("FO4_PEX_CORPUS");

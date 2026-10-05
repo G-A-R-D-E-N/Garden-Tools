@@ -23,7 +23,7 @@ std::vector<std::uint8_t> bytes(std::initializer_list<std::uint32_t> values) {
   return out;
 }
 
-}  // namespace
+}
 
 TEST(Seq, SingleEntryRoundTripsByteIdentically) {
   const auto input = bytes({0x07000800u});

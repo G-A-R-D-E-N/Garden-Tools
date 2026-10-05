@@ -75,7 +75,9 @@ inline void object_property(ByteWriter& out,
 }
 
 /* The leading VMAD script list: version 5, object format 2, one script whose properties cover
-   every value kind this reader decodes. */
+   every value kind this reader decodes, plus an embedded NUL and an empty string. The
+   embedded value is built through the 12-byte constructor: a bare literal would itself stop
+   at the NUL and the fixture would write 6 bytes instead of 12. */
 inline std::vector<std::byte> vmad_scripts(std::int32_t count = 7) {
   ByteWriter out;
   out.u16(5);
@@ -83,12 +85,14 @@ inline std::vector<std::byte> vmad_scripts(std::int32_t count = 7) {
   out.u16(1);
   wstring(out, "QuestScript");
   out.u8(0);
-  out.u16(5);
+  out.u16(7);
   int_property(out, "Count", count);
   float_property(out, "Ratio", 1.5f, 1);
   bool_property(out, "Enabled", true);
   string_property(out, "Label", "Garden\tPatch");
   int_array_property(out, "Stages", {1, 2, 3});
+  string_property(out, "Embedded", std::string("Garden\0Patch", 12));
+  string_property(out, "Empty", std::string());
   return out.bytes;
 }
 
@@ -161,4 +165,4 @@ inline std::vector<std::byte> make_quest_plugin(std::uint16_t dnam_flags, std::i
 
 inline fo4::FormKey quest_key() { return fo4::FormKey::parse("000800:Quests.esp"); }
 
-}  // namespace fo4::test
+}

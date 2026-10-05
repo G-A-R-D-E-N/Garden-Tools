@@ -68,7 +68,7 @@ std::vector<std::uint8_t> readBytes(const std::filesystem::path& path) {
   return std::vector<std::uint8_t>(raw.begin(), raw.end());
 }
 
-}  // namespace
+}
 
 TEST(SeqCorpus, EveryLooseSeqRoundTripsByteIdentically) {
   const char* roots = std::getenv("FO4_SEQ_CORPUS");

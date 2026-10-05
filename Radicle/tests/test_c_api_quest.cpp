@@ -79,7 +79,7 @@ std::vector<std::string> questRows(std::int32_t count) {
   return result;
 }
 
-}  // namespace
+}
 
 TEST(CApiQuest, ReportsQuestRuntimeRows) {
   const TempPlugin file(fo4::test::make_quest_plugin(1));
@@ -130,7 +130,7 @@ TEST(CApiQuest, ReportsEveryPropertyValue) {
             RADICLE_STATUS_OK)
       << radicle_last_error();
   ASSERT_NE(properties, nullptr);
-  ASSERT_EQ(count, 7u);
+  ASSERT_EQ(count, 9u);
 
   const auto* integer = findProperty(properties, count, "Count");
   ASSERT_NE(integer, nullptr);
@@ -156,6 +156,7 @@ TEST(CApiQuest, ReportsEveryPropertyValue) {
   const auto* text = findProperty(properties, count, "Label");
   ASSERT_NE(text, nullptr);
   ASSERT_NE(text->text, nullptr);
+  EXPECT_EQ(text->text_size, 12u);
   EXPECT_EQ(std::string(text->text), std::string("Garden\tPatch"));
 
   const auto* elements = findProperty(properties, count, "Stages");
@@ -168,7 +169,7 @@ TEST(CApiQuest, ReportsEveryPropertyValue) {
   EXPECT_EQ(fragment->owner, RADICLE_QUEST_PROPERTY_FRAGMENT);
   EXPECT_EQ(fragment->alias, -1);
   ASSERT_NE(fragment->script, nullptr);
-  EXPECT_STREQ(fragment->script, "QF_TestQuest");
+  EXPECT_STREQ(fragment->script, "");
   EXPECT_EQ(fragment->has_integer, 1);
   EXPECT_EQ(fragment->integer, 10);
 
@@ -182,6 +183,86 @@ TEST(CApiQuest, ReportsEveryPropertyValue) {
   EXPECT_EQ(object->object_form_id, 0x00012345u);
   EXPECT_EQ(object->has_property_alias, 1);
   EXPECT_EQ(object->property_alias, 5);
+
+  radicle_free_quest_properties(properties, count);
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, KeepsEmbeddedNulBytesInAPropertyString) {
+  const TempPlugin file(fo4::test::make_quest_plugin(1, 7));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  const std::string expected("Garden\0Patch", 12);
+  ASSERT_EQ(expected.size(), 12u);
+
+  const auto* embedded = findProperty(properties, count, "Embedded");
+  ASSERT_NE(embedded, nullptr);
+  ASSERT_NE(embedded->text, nullptr);
+  EXPECT_EQ(embedded->text_size, 12u);
+  EXPECT_EQ(std::memcmp(embedded->text, expected.data(), expected.size()), 0);
+  EXPECT_EQ(embedded->text[embedded->text_size], '\0');
+
+  radicle_free_quest_properties(properties, count);
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, EmptyStringPropertyDiffersFromNoString) {
+  const TempPlugin file(fo4::test::make_quest_plugin(1, 7));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  const auto* empty = findProperty(properties, count, "Empty");
+  ASSERT_NE(empty, nullptr);
+  ASSERT_NE(empty->text, nullptr);
+  EXPECT_EQ(empty->text_size, 0u);
+  EXPECT_EQ(std::string(empty->text), std::string());
+  EXPECT_EQ(std::strlen(empty->text), 0u);
+
+  const auto* integer = findProperty(properties, count, "Count");
+  ASSERT_NE(integer, nullptr);
+  EXPECT_EQ(integer->text, nullptr);
+  EXPECT_EQ(integer->text_size, 0u);
+
+  radicle_free_quest_properties(properties, count);
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, FragmentPropertyCarriesNoScriptNameOfItsOwn) {
+  const TempPlugin file(fo4::test::make_quest_plugin(1, 7));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  const auto* fragment = findProperty(properties, count, "Stage");
+  ASSERT_NE(fragment, nullptr);
+  EXPECT_EQ(fragment->owner, RADICLE_QUEST_PROPERTY_FRAGMENT);
+  EXPECT_EQ(fragment->alias, -1);
+  ASSERT_NE(fragment->script, nullptr);
+  EXPECT_STREQ(fragment->script, "");
 
   radicle_free_quest_properties(properties, count);
   radicle_plugin_destroy(plugin);

@@ -158,7 +158,7 @@ void expectParseError(const std::vector<std::uint8_t>& bytes) {
   }
 }
 
-}  // namespace
+}
 
 TEST(PexHardening, TheHandBuiltFixtureIsValid) {
   const Fixture fixture = minimalFixture();
