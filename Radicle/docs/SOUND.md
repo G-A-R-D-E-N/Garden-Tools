@@ -5,7 +5,10 @@ Compatibility layout evidence: TES5Edit/TES5Edit commit
 These declarations establish stored-field compatibility, not runtime playback.
 The authenticated private runtime evidence index at commit
 `f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a`, section a-340, confirms CK tag
-inventories but explicitly lacks the SNDR component-hook byte grammar.
+inventories. The newer [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md)
+supplies the OG component-hook grammar: Standard loader RVA 0x4C1C10,
+AutoWeapon loader 0x2CB540 and SOUN loader 0x55A1E0. The verified local copy
+is `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/sound-399-340/README.md`.
 
 - SNDR lines 9406–9450: CNAM selects Standard `1EEF540A`, Compound
   `54651A43`, or AutoWeapon `ED157AE3`. GNAM category, SNAM alternate,
@@ -15,11 +18,15 @@ inventories but explicitly lacks the SNDR component-hook byte grammar.
   priority/dB variance, and attenuation hundredths as u16. AutoWeapon BNAM
   is a four-byte base-descriptor link; the decider is FO4 lines 1556–1576.
   LNAM has four stored bytes; the loop byte is exposed raw, as are the
-  remaining control bytes. ITMC and the ITMS/INTV/FNAM/ITME rate blocks
+  remaining control bytes. Repeated LNAM uses the last stored value. Standard
+  FNAM is a separate four-byte legacy flag word; it is not a rate filename.
+  No runtime remapping is applied to that raw legacy word.
+  ITMC and the ITMS/INTV/FNAM/ITME rate blocks
   describe auto-weapon file alternatives.
 - SOUN lines 11961–11970: SDSC is its SNDR link; REPT stores two floats
   and an optional stackable byte (`SetOptionalFrom(2)`): accept eight or nine
-  bytes without inventing the missing byte's default.
+  bytes without inventing the missing byte's default. The optional byte is
+  exposed only for form versions above 0x70; older payload bytes stay preserved.
 - MUSC lines 8665–8684: FNAM u32 flags, PNAM priority/ducking as two u16,
   WNAM float fade duration, TNAM packed four-byte MUST links.
 - FSTP lines 8686–8690: DATA is an IPDS link, ANAM a string tag.
@@ -36,8 +43,9 @@ bytes. The 24 auto-weapon records have 120 empty ITMS/ITME markers and
 120 four-byte INTV values. SOUN REPT has 66 nine-byte and three eight-byte
 variants. No Bethesda payloads are retained in the survey output.
 
-Runtime descriptor selection, category mixing, alternates, loop execution,
-side-chain/rumble semantics and attenuation scaling remain unverified. Readers
+The linked record verifies descriptor dispatch and several selection/control
+paths statically in OG. Category mixing effects, alternate substitution,
+output-model attenuation curves and live playback remain unresolved. Readers
 expose the stored fields and links; they do not choose a playback file or invent
 an audio engine. Unknown descriptor kinds/sizes fail closed and all untouched
 bytes remain in the original container.
@@ -56,9 +64,7 @@ and C ABI getters, then compares untouched serialization with the original
 master bytes. It skips cleanly with game data unset. Native synthetic cases
 exercise union selection, malformed groups, optional tails and reversed
 category ordering; managed getter tests cover all five record families.
-Following the requested CI-only validation workflow, no completed local
-sound build/test result is claimed. Exact-head CI results are reported on the
-PR when available.
+Local and CI results are recorded separately for each published head.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has no SOUN/SNDR
 consumer or marker-to-descriptor conversion path. Record vocabulary and generic

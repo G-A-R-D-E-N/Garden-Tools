@@ -31,6 +31,7 @@ struct SoundDescriptorData {
   std::vector<FormKey> descriptors;
   std::vector<std::string_view> files;
   std::optional<std::array<std::uint8_t, 4>> controls;
+  std::optional<std::uint32_t> legacy_flags;
   std::optional<SoundPlayback> playback;
   std::vector<SoundRateFile> rate_files;
 };

@@ -11,7 +11,7 @@
 namespace {
 
 using Sub = std::pair<std::string, std::vector<std::byte>>;
-struct Rec { std::string signature; std::uint32_t id; std::vector<Sub> subs; };
+struct Rec { std::string signature; std::uint32_t id; std::vector<Sub> subs; std::uint16_t version{131}; };
 
 std::vector<std::byte> words(std::initializer_list<std::uint32_t> values) {
   fo4::test::ByteWriter out;
@@ -44,7 +44,7 @@ protected:
     fo4::test::end_record(out, h);
     for (const auto& record : records) {
       const auto group = fo4::test::begin_group(out, record.signature, 0);
-      const auto rec = fo4::test::begin_record(out, record.signature, 0, record.id, 131);
+      const auto rec = fo4::test::begin_record(out, record.signature, 0, record.id, record.version);
       for (const auto& [tag, bytes] : record.subs) fo4::test::write_subrecord(out, tag, bytes);
       fo4::test::end_record(out, rec); fo4::test::end_group(out, group);
     }
@@ -85,6 +85,20 @@ TEST_F(SoundTest, CompoundAndAutoWeaponKeepTheirDistinctLinksAndRateFiles) {
   const auto weapon = fo4::env::decode_sound_descriptor(env, record(env, 0x801));
   EXPECT_EQ(weapon.base_descriptor->local().value(), 0x812u); EXPECT_FALSE(weapon.playback);
   ASSERT_EQ(weapon.rate_files.size(), 1); EXPECT_EQ(weapon.rate_files[0].rpm, 750u); EXPECT_EQ(weapon.rate_files[0].file, "sound\\auto.xwm");
+}
+
+TEST_F(SoundTest, LegacyFlagsLastControlsAndRepeatVersionBoundaryStayDistinct) {
+  fo4::test::ByteWriter repeat; repeat.f32(2); repeat.f32(8); repeat.u8(0x80);
+  for (const auto version : {112u, 113u}) {
+    write({{"SNDR", 0x800, {{"CNAM", words({0x1EEF540A})}, {"FNAM", words({0x06000010})},
+           {"LNAM", words({0})}, {"LNAM", words({0x44332211})}}},
+           {"SOUN", 0x801, {{"REPT", repeat.bytes}}, static_cast<std::uint16_t>(version)}});
+    const auto env = load(); const auto d = fo4::env::decode_sound_descriptor(env, record(env, 0x800));
+    EXPECT_EQ(d.legacy_flags, 0x06000010u); ASSERT_TRUE(d.controls); EXPECT_EQ((*d.controls)[3], 0x44);
+    const auto m = fo4::env::decode_sound_marker(env, record(env, 0x801)); ASSERT_TRUE(m.repeat);
+    EXPECT_EQ(m.repeat->stackable.has_value(), version > 112);
+    EXPECT_EQ(record(env, 0x801).record->subrecords[0].data, repeat.bytes);
+  }
 }
 
 TEST_F(SoundTest, UnknownKindsSizesAndIncompleteRateGroupsFailClosed) {

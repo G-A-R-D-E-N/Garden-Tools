@@ -8,6 +8,19 @@ namespace Radicle.Interop.Tests;
 
 public class SoundRecordTests
 {
+    [Fact]
+    public void StandardLegacyFlagsAreSeparateFromAutoWeaponFilenames()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Sound.esm", Build(1, Array.Empty<string>(), Top("SNDR",
+            new Rec("SNDR", 0x800, new[] { ("CNAM", U32(0x1EEF540A)), ("FNAM", U32(0x06000010)),
+                ("LNAM", U32(0)), ("LNAM", U32(0x44332211)), ("ANAM", Z(@"sound\one.xwm")) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var descriptor = env.SoundDescriptor(env.Winner(new FormKey("Sound.esm", 0x800))!.Value);
+        Assert.Equal(new byte[] { 0x11, 0x22, 0x33, 0x44 }, descriptor.Controls);
+        Assert.Equal(0x06000010u, descriptor.LegacyFlags);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -63,6 +63,7 @@ radicle_status radicle_sound_descriptor_decode(const radicle_env* env, const rad
       v.has_controls = 1;
       std::copy(data.controls->begin(), data.controls->end(), v.controls);
     }
+    set_optional(data.legacy_flags, v.has_legacy_flags, v.legacy_flags);
     if (data.playback) {
       v.has_playback = 1;
       const auto& p = *data.playback;
