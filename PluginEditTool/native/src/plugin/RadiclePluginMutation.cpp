@@ -322,7 +322,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 mutated, key, std::span<const fo4::CtdaCondition>{built})) {
             return std::unexpected(Error{
                 "NoConditionList",
-                "Record '" + recordId + "' has no editable Conditions list."
+                "Record '" + recordId + "' has no editable Conditions list or has more than one condition list."
             });
         }
         stagePluginMutationLocked(*loaded, std::move(mutated));
@@ -488,12 +488,10 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
                     recordId + "'"
             });
         }
-        if (status == fo4::schema::ScopedConditionStatus::alias_structure_invalid) {
-            return std::unexpected(Error{
-                "ConditionAliasMalformed",
-                "Record '" + recordId + "' has a malformed alias array for path '" + path + "'"
-            });
-        }
+        if (status == fo4::schema::ScopedConditionStatus::alias_structure_invalid)
+            return std::unexpected(Error{"ConditionAliasMalformed", "Record '" + recordId + "' has a malformed alias array for path '" + path + "'"});
+        if (status == fo4::schema::ScopedConditionStatus::multiple_lists)
+            return std::unexpected(Error{"ConditionScopeMultipleLists", "'" + path + "' spans more than one condition list on record '" + recordId + "'"});
         stagePluginMutationLocked(*loaded, std::move(mutated));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetConditionsFailed", error.what()});

@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -254,4 +256,146 @@ TEST(CtdaModel, SetRecordConditionsRoundTripsThroughWriter) {
   EXPECT_EQ(conditions[0].param1, 0x02000812);
   EXPECT_EQ(conditions[0].reference, 0x01000800);
   EXPECT_FLOAT_EQ(conditions[0].comparison_float(), 1.0f);
+}
+
+namespace {
+
+// WEAP with the given subrecord signatures; CTDA gets a distinct function id each time.
+fo4::Plugin make_plugin_with_layout(const std::vector<std::string_view>& layout) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto group = fo4::test::begin_group(out, "WEAP", 0);
+  const auto record = fo4::test::begin_record(out, "WEAP", 0, 0x00000800);
+  std::uint16_t function = 1;
+  for (const auto sig : layout) {
+    if (sig == "CTDA") {
+      fo4::test::write_subrecord(out, "CTDA",
+                                 make_ctda(0, 0x3F800000u, function++, 0, 1, 0, 0, 0, -1).bytes);
+    } else if (sig == "CITC") {
+      fo4::test::ByteWriter citc;
+      citc.u32(2);
+      fo4::test::write_subrecord(out, "CITC", citc.bytes);
+    } else {
+      fo4::test::write_subrecord(out, sig, std::string_view{"Zed\0", 4});
+    }
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, "Cond.esp");
+}
+
+fo4::CtdaCondition replacement_condition() {
+  fo4::CtdaCondition c;
+  c.comparison_raw = 0x3F800000u;
+  c.function = 99;
+  c.unknown3 = -1;
+  return c;
+}
+
+std::vector<std::string> signatures_of(const fo4::Record& record) {
+  std::vector<std::string> sigs;
+  for (const auto& sub : record.subrecords) sigs.push_back(sub.signature.to_string());
+  return sigs;
+}
+
+}  // namespace
+
+TEST(CtdaModel, WriteRefusesRecordWithSeveralConditionLists) {
+  auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "CTDA"});
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto before = record->subrecords;
+  const auto condition = replacement_condition();
+  const std::span<const fo4::CtdaCondition> span{&condition, 1};
+
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*record, 0, record->subrecords.size(), span,
+                                          std::nullopt),
+            fo4::CtdaScopeWrite::multiple_lists);
+  EXPECT_FALSE(fo4::write_ctda_conditions(*record, span));
+  EXPECT_FALSE(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), span));
+
+  record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  ASSERT_EQ(record->subrecords.size(), before.size());
+  for (std::size_t i = 0; i < before.size(); ++i) {
+    EXPECT_EQ(record->subrecords[i].signature, before[i].signature);
+    EXPECT_EQ(record->subrecords[i].data, before[i].data);
+  }
+}
+
+TEST(CtdaModel, WriteKeepsSubrecordsAroundSingleRun) {
+  auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "DESC"});
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto condition = replacement_condition();
+  ASSERT_TRUE(fo4::write_ctda_conditions(*record, std::span<const fo4::CtdaCondition>{&condition, 1}));
+  const std::vector<std::string> expected{"EDID", "CTDA", "NAM0", "DESC"};
+  EXPECT_EQ(signatures_of(*record), expected);
+  ASSERT_EQ(fo4::read_ctda_conditions(*record).size(), 1u);
+  EXPECT_EQ(fo4::read_ctda_conditions(*record)[0].function, 99);
+}
+
+TEST(CtdaModel, WriteReplacesRunWithCisAfterLeadingCitc) {
+  auto plugin = make_plugin_with_layout(
+      {"EDID", "CITC", "CTDA", "CIS1", "CIS2", "CTDA", "CIS2", "NAM0"});
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto condition = replacement_condition();
+  ASSERT_TRUE(fo4::write_ctda_conditions(*record, std::span<const fo4::CtdaCondition>{&condition, 1}));
+  const std::vector<std::string> expected{"EDID", "CITC", "CTDA", "NAM0"};
+  EXPECT_EQ(signatures_of(*record), expected);
+  std::uint32_t count = 0;
+  std::memcpy(&count, record->subrecords[1].data.data(), 4);
+  EXPECT_EQ(count, 1u);
+}
+
+TEST(CtdaModel, ScopedWriteLeavesOtherListUntouched) {
+  auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "CTDA"});
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto condition = replacement_condition();
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*record, 1, 3,
+                                          std::span<const fo4::CtdaCondition>{&condition, 1},
+                                          std::nullopt),
+            fo4::CtdaScopeWrite::replaced);
+  const std::vector<std::string> expected{"EDID", "CTDA", "NAM0", "CTDA"};
+  EXPECT_EQ(signatures_of(*record), expected);
+  const auto all = fo4::read_ctda_conditions(*record);
+  ASSERT_EQ(all.size(), 2u);
+  EXPECT_EQ(all[0].function, 99);
+  EXPECT_EQ(all[1].function, 3);
+}
+
+TEST(CtdaModel, WriteIgnoresLeadingCisBeforeFirstCtda) {
+  auto plugin = make_plugin_with_layout({"EDID", "CIS1", "CTDA"});
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto condition = replacement_condition();
+  ASSERT_TRUE(fo4::write_ctda_conditions(*record, std::span<const fo4::CtdaCondition>{&condition, 1}));
+  const std::vector<std::string> expected{"EDID", "CIS1", "CTDA"};
+  EXPECT_EQ(signatures_of(*record), expected);
+  EXPECT_EQ(fo4::read_ctda_conditions(*record)[0].function, 99);
+}
+
+TEST(CtdaModel, WriteRefusesTwoCitcLists) {
+  auto plugin = make_plugin_with_layout({"CITC", "CTDA", "CITC", "CTDA"});
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto before = record->subrecords;
+  const auto condition = replacement_condition();
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*record, 0, record->subrecords.size(),
+                                          std::span<const fo4::CtdaCondition>{&condition, 1},
+                                          std::nullopt),
+            fo4::CtdaScopeWrite::multiple_lists);
+  ASSERT_EQ(record->subrecords.size(), before.size());
+  for (std::size_t i = 0; i < before.size(); ++i) {
+    EXPECT_EQ(record->subrecords[i].signature, before[i].signature);
+    EXPECT_EQ(record->subrecords[i].data, before[i].data);
+  }
 }

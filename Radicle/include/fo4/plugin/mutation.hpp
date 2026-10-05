@@ -105,7 +105,8 @@ FormLinkFieldMutationStatus set_record_formlink_field(
 
 // Replaces the record's CTDA condition list with freshly serialized
 // conditions (see write_ctda_conditions for the subrecord-level contract).
-// Returns false when the record is missing. When the record exists, an
+// Returns false when the record is missing or holds more than one condition
+// list (left unmodified). When the record exists, an
 // unchanged/empty CTDA list remains a successful no-op. Any mutation clears
 // the current Radicle original-range caches so the writer serializes the new
 // subrecords instead of reusing stale bytes.
@@ -115,13 +116,20 @@ inline bool set_record_conditions(Plugin& plugin,
   assign_record_form_keys(plugin);
   bool found = false;
   bool changed = false;
+  bool refused = false;
 
   visit_records(plugin, [&](Record& record) {
     if (found || record.header.signature == sig_tes4 || record.form_key != record_key) {
       return;
     }
     found = true;
-    if (!write_ctda_conditions(record, conditions)) return;
+    const auto result = write_ctda_conditions_in(record, 0, record.subrecords.size(),
+                                                 conditions, std::nullopt);
+    if (result == CtdaScopeWrite::multiple_lists) {
+      refused = true;
+      return;
+    }
+    if (result != CtdaScopeWrite::replaced) return;
     record.original_range.clear();
     record.decompressed_payload.clear();
     record.header.data_size = 0;
@@ -129,7 +137,7 @@ inline bool set_record_conditions(Plugin& plugin,
     changed = true;
   });
 
-  if (!found) return false;
+  if (!found || refused) return false;
   if (changed) plugin.original_range.clear();
   return true;
 }
