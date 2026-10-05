@@ -398,3 +398,7 @@ jobs:
       - name: Test (Debug)
         if: github.event_name != 'pull_request'
         run: ctest --test-dir build\native-debug --output-on-failure --parallel 4
+
+      - name: Stop .NET build servers
+        if: always()
+        run: dotnet build-server shutdown
