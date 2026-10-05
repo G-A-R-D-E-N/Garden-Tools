@@ -211,186 +211,144 @@ public class QuestRuntimeTests
     [Fact]
     public void DecodesScriptsFragmentsAndAliasScripts()
     {
-        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_test");
-        try
-        {
-            using var plugin = LoadQuestPlugin(1, root);
-            var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
+        using var temp = new TempDirectory();
+        var root = temp.Path;
+        using var plugin = LoadQuestPlugin(1, root);
+        var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
 
-            Assert.True(data.StartGameEnabled);
-            Assert.Empty(data.Unsupported);
-            Assert.Contains(new QuestRuntimeScript(QuestRuntime.QuestOwnedAlias, "QuestScript"), data.Scripts);
-            Assert.Equal(7, data.ScriptProperties.Count);
-            Assert.Equal("QF_TestQuest", data.FragmentScript);
-            Assert.Single(data.FragmentProperties);
-            Assert.Contains(new QuestRuntimeFragment(10, 0, "QF_TestQuest", "Fragment_Stage_0010"), data.Fragments);
-            Assert.Contains(5, data.Aliases);
-            Assert.Contains(new QuestRuntimeScript(5, "AliasScript"), data.AliasScripts);
-            Assert.Single(data.AliasScriptProperties);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.True(data.StartGameEnabled);
+        Assert.Empty(data.Unsupported);
+        Assert.Contains(new QuestRuntimeScript(QuestRuntime.QuestOwnedAlias, "QuestScript"), data.Scripts);
+        Assert.Equal(7, data.ScriptProperties.Count);
+        Assert.Equal("QF_TestQuest", data.FragmentScript);
+        Assert.Single(data.FragmentProperties);
+        Assert.Contains(new QuestRuntimeFragment(10, 0, "QF_TestQuest", "Fragment_Stage_0010"), data.Fragments);
+        Assert.Contains(5, data.Aliases);
+        Assert.Contains(new QuestRuntimeScript(5, "AliasScript"), data.AliasScripts);
+        Assert.Single(data.AliasScriptProperties);
     }
 
     [Fact]
     public void EveryValueKindSurvives()
     {
-        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_values_test");
-        try
-        {
-            using var plugin = LoadQuestPlugin(1, root);
-            var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
+        using var temp = new TempDirectory();
+        var root = temp.Path;
+        using var plugin = LoadQuestPlugin(1, root);
+        var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
 
-            var integer = Property(data, "Count");
-            Assert.Equal("QuestScript", integer.Script);
-            Assert.Equal(3, integer.Type);
-            Assert.Equal(0, integer.Flags);
-            Assert.Equal(7, integer.Value.Integer);
-            Assert.Null(integer.Value.Real);
+        var integer = Property(data, "Count");
+        Assert.Equal("QuestScript", integer.Script);
+        Assert.Equal(3, integer.Type);
+        Assert.Equal(0, integer.Flags);
+        Assert.Equal(7, integer.Value.Integer);
+        Assert.Null(integer.Value.Real);
 
-            var real = Property(data, "Ratio");
-            Assert.Equal(1, real.Flags);
-            Assert.Equal(1.5f, real.Value.Real);
-            Assert.Null(real.Value.Integer);
+        var real = Property(data, "Ratio");
+        Assert.Equal(1, real.Flags);
+        Assert.Equal(1.5f, real.Value.Real);
+        Assert.Null(real.Value.Integer);
 
-            var boolean = Property(data, "Enabled");
-            Assert.True(boolean.Value.Boolean);
+        var boolean = Property(data, "Enabled");
+        Assert.True(boolean.Value.Boolean);
 
-            var text = Property(data, "Label");
-            Assert.Equal("Garden\tPatch", text.Value.Text);
+        var text = Property(data, "Label");
+        Assert.Equal("Garden\tPatch", text.Value.Text);
 
-            var embedded = Property(data, "Embedded");
-            var expectedBytes = new byte[] { 0x47, 0x61, 0x72, 0x64, 0x65, 0x6E, 0x00, 0x50, 0x61, 0x74, 0x63, 0x68 };
-            Assert.NotNull(embedded.Value.TextBytes);
-            Assert.True(expectedBytes.AsSpan().SequenceEqual(embedded.Value.TextBytes));
-            Assert.Equal("Garden\0Patch", embedded.Value.Text);
-            Assert.Equal(12, embedded.Value.Text!.Length);
+        var embedded = Property(data, "Embedded");
+        var expectedBytes = new byte[] { 0x47, 0x61, 0x72, 0x64, 0x65, 0x6E, 0x00, 0x50, 0x61, 0x74, 0x63, 0x68 };
+        Assert.NotNull(embedded.Value.TextBytes);
+        Assert.True(expectedBytes.AsSpan().SequenceEqual(embedded.Value.TextBytes));
+        Assert.Equal("Garden\0Patch", embedded.Value.Text);
+        Assert.Equal(12, embedded.Value.Text!.Length);
 
-            var empty = Property(data, "Empty");
-            Assert.NotNull(empty.Value.TextBytes);
-            Assert.Empty(empty.Value.TextBytes!);
-            Assert.Equal(string.Empty, empty.Value.Text);
+        var empty = Property(data, "Empty");
+        Assert.NotNull(empty.Value.TextBytes);
+        Assert.Empty(empty.Value.TextBytes!);
+        Assert.Equal(string.Empty, empty.Value.Text);
 
-            var noString = Property(data, "Count");
-            Assert.Null(noString.Value.Text);
-            Assert.Null(noString.Value.TextBytes);
+        var noString = Property(data, "Count");
+        Assert.Null(noString.Value.Text);
+        Assert.Null(noString.Value.TextBytes);
 
-            var elements = Property(data, "Stages");
-            Assert.Equal(3u, elements.Value.ElementCount);
+        var elements = Property(data, "Stages");
+        Assert.Equal(3u, elements.Value.ElementCount);
 
-            var fragment = Property(data, "Stage");
-            Assert.Equal(string.Empty, fragment.Script);
-            Assert.Equal(10, fragment.Value.Integer);
-            Assert.Equal("QF_TestQuest", data.FragmentScript);
+        var fragment = Property(data, "Stage");
+        Assert.Equal(string.Empty, fragment.Script);
+        Assert.Equal(10, fragment.Value.Integer);
+        Assert.Equal("QF_TestQuest", data.FragmentScript);
 
-            var alias = Assert.Single(data.AliasScriptProperties);
-            Assert.Equal(5, alias.Alias);
-            Assert.Equal("AliasScript", alias.Script);
-            Assert.Equal("Target", alias.Name);
-            Assert.Equal(1, alias.Type);
-            Assert.Equal(0x00012345u, alias.Value.ObjectFormId);
-            Assert.Equal((short)5, alias.Value.Alias);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var alias = Assert.Single(data.AliasScriptProperties);
+        Assert.Equal(5, alias.Alias);
+        Assert.Equal("AliasScript", alias.Script);
+        Assert.Equal("Target", alias.Name);
+        Assert.Equal(1, alias.Type);
+        Assert.Equal(0x00012345u, alias.Value.ObjectFormId);
+        Assert.Equal((short)5, alias.Value.Alias);
     }
 
     [Fact]
     public void StartGameFlagComesFromDnam()
     {
-        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_flag_test");
-        try
-        {
-            using var plugin = LoadQuestPlugin(0, root);
-            var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
+        using var temp = new TempDirectory();
+        var root = temp.Path;
+        using var plugin = LoadQuestPlugin(0, root);
+        var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000800));
 
-            Assert.False(data.StartGameEnabled);
-            Assert.Empty(data.Unsupported);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.False(data.StartGameEnabled);
+        Assert.Empty(data.Unsupported);
     }
 
     [Fact]
     public void MissingQuestIsReportedAsUnsupported()
     {
-        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_missing_test");
-        try
-        {
-            using var plugin = LoadQuestPlugin(1, root);
-            var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000900));
+        using var temp = new TempDirectory();
+        var root = temp.Path;
+        using var plugin = LoadQuestPlugin(1, root);
+        var data = QuestRuntime.Decode(plugin, new FormKey("Quests.esp", 0x000900));
 
-            Assert.NotEmpty(data.Unsupported);
-            Assert.Empty(data.Fragments);
-            Assert.Empty(data.ScriptProperties);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.NotEmpty(data.Unsupported);
+        Assert.Empty(data.Fragments);
+        Assert.Empty(data.ScriptProperties);
     }
 
     [Fact]
     public void RowsAreTabSeparatedAndReleasable()
     {
-        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_rows_test");
-        try
-        {
-            using var plugin = LoadQuestPlugin(1, root);
-            var rows = QuestRuntime.Rows(plugin, new FormKey("Quests.esp", 0x000800));
+        using var temp = new TempDirectory();
+        var root = temp.Path;
+        using var plugin = LoadQuestPlugin(1, root);
+        var rows = QuestRuntime.Rows(plugin, new FormKey("Quests.esp", 0x000800));
 
-            Assert.Equal(6, rows.Length);
-            Assert.Contains("quest\t000800:Quests.esp\t1", rows);
-            Assert.Contains("fragment\t10\t0\tQF_TestQuest\tFragment_Stage_0010", rows);
-            Assert.DoesNotContain(rows, row => row.Contains("property", StringComparison.Ordinal));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(6, rows.Length);
+        Assert.Contains("quest\t000800:Quests.esp\t1", rows);
+        Assert.Contains("fragment\t10\t0\tQF_TestQuest\tFragment_Stage_0010", rows);
+        Assert.DoesNotContain(rows, row => row.Contains("property", StringComparison.Ordinal));
     }
 
     [Fact]
     public void TheRowApiCarriesNoPropertyValues()
     {
-        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_rows_identical_test");
-        try
-        {
-            using var seven = LoadQuestPlugin(1, Path.Combine(root, "seven"), 7);
-            using var ninetyNine = LoadQuestPlugin(1, Path.Combine(root, "ninety_nine"), 99);
+        using var temp = new TempDirectory();
+        var root = temp.Path;
+        using var seven = LoadQuestPlugin(1, Path.Combine(root, "seven"), 7);
+        using var ninetyNine = LoadQuestPlugin(1, Path.Combine(root, "ninety_nine"), 99);
 
-            Assert.Equal(
-                QuestRuntime.Rows(seven, new FormKey("Quests.esp", 0x000800)),
-                QuestRuntime.Rows(ninetyNine, new FormKey("Quests.esp", 0x000800)));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(
+            QuestRuntime.Rows(seven, new FormKey("Quests.esp", 0x000800)),
+            QuestRuntime.Rows(ninetyNine, new FormKey("Quests.esp", 0x000800)));
     }
 
     [Fact]
     public void IntegerPropertyValuesAreDistinguishable()
     {
-        var root = Path.Combine(Path.GetTempPath(), "radicle_quest_runtime_value_test");
-        try
-        {
-            var seven = DecodeCount(7, Path.Combine(root, "seven"));
-            var ninetyNine = DecodeCount(99, Path.Combine(root, "ninety_nine"));
+        using var temp = new TempDirectory();
+        var root = temp.Path;
+        var seven = DecodeCount(7, Path.Combine(root, "seven"));
+        var ninetyNine = DecodeCount(99, Path.Combine(root, "ninety_nine"));
 
-            Assert.Equal(7, Property(seven, "Count").Value.Integer);
-            Assert.Equal(99, Property(ninetyNine, "Count").Value.Integer);
-            Assert.NotEqual(seven.ScriptProperties, ninetyNine.ScriptProperties);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        Assert.Equal(7, Property(seven, "Count").Value.Integer);
+        Assert.Equal(99, Property(ninetyNine, "Count").Value.Integer);
+        Assert.NotEqual(seven.ScriptProperties, ninetyNine.ScriptProperties);
     }
 }
