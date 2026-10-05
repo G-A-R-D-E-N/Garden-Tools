@@ -14,7 +14,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           },
           {
             "signature": "MOD2",
@@ -84,12 +85,14 @@
           {
             "signature": "ICON",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MICO",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MOD4",
@@ -104,12 +107,14 @@
           {
             "signature": "ICO2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MIC2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DESC",
@@ -119,7 +124,8 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           }
         ]
       },
@@ -436,12 +442,14 @@
           {
             "signature": "ICON",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           }
         ]
       },
@@ -662,22 +670,26 @@
           {
             "signature": "LVLD",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLF",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LLCT",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLO",

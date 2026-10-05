@@ -173,24 +173,29 @@ FormKey reserve_local_form_key(Plugin& plugin) {
 }
 
 FormKey create_local_record(Plugin& plugin, Signature signature) {
+  return create_local_record(plugin, signature, {});
+}
+
+FormKey create_local_record(Plugin& plugin,
+                            Signature signature,
+                            std::vector<Subrecord> subrecords) {
   if (signature.packed() == 0 || signature == sig_tes4 || signature == sig_grup) {
     throw FormIdError("invalid major-record signature for local record creation");
   }
 
-  auto next = plugin;
-  const auto key = reserve_local_form_key(next);
+  const auto key = reserve_local_form_key(plugin);
 
   Record record;
   record.header.signature = signature;
-  record.header.form_id = encode_plugin_form_id(key, plugin_form_id_context(next));
-  record.header.form_version = next.header.form_version;
+  record.header.form_id = encode_plugin_form_id(key, plugin_form_id_context(plugin));
+  record.header.form_version = plugin.header.form_version;
   record.form_key = key;
+  record.subrecords = std::move(subrecords);
 
-  auto* group = find_or_create_top_group(next, signature);
+  auto* group = find_or_create_top_group(plugin, signature);
   group->children.emplace_back(std::move(record));
 
-  next.original_range.clear();
-  plugin = std::move(next);
+  plugin.original_range.clear();
   return key;
 }
 

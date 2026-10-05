@@ -672,7 +672,7 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 9u;
+    public const uint CompiledAbiVersion = 10u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1072,5 +1072,14 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_quest_properties")]
     public static extern void FreeQuestProperties(QuestProperty* properties, nuint count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_subrecord")]
+    public static extern Status PluginAddSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_subrecord")]
+    public static extern Status PluginRemoveSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, nuint occurrence);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_record")]
+    public static extern Status PluginCreateRecord(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, [MarshalAs(UnmanagedType.LPUTF8Str)] string? editor_id_utf8, FormKey* out_key);
 
 }

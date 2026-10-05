@@ -17,6 +17,14 @@ struct SubrecordAuthoringConstraint {
   Signature signature{};
   std::uint16_t minimum{0};
   std::uint16_t maximum{0};
+  const std::uint8_t* default_data{nullptr};
+  std::uint16_t default_size{0};
+  bool uncounted{false};
+
+  constexpr bool has_default() const noexcept { return default_data != nullptr && default_size != 0; }
+  std::span<const std::uint8_t> default_bytes() const noexcept {
+    return {default_data, static_cast<std::size_t>(default_size)};
+  }
 };
 
 struct RecordAuthoringConstraint {

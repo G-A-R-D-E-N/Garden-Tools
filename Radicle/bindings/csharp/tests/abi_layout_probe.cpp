@@ -5,6 +5,7 @@
 #include "fo4/c_api_pex.h"
 #include "fo4/c_api_seq.h"
 #include "fo4/c_api_quest.h"
+#include "fo4/c_api_authoring.h"
 #include <cstddef>
 #include <cstdio>
 

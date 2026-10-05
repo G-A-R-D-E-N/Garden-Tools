@@ -75,6 +75,11 @@ FormKey reserve_local_form_key(Plugin& plugin);
 
 FormKey create_local_record(Plugin& plugin, Signature signature);
 
+// Same, with the record's subrecords supplied up front; nothing is copied.
+FormKey create_local_record(Plugin& plugin,
+                            Signature signature,
+                            std::vector<Subrecord> subrecords);
+
 // Refuses deletion when any schema-proven in-plugin FormLink still targets the
 // record. Unsupported remap surfaces fail closed before mutation. nextFormID
 // is never decremented or recycled.
