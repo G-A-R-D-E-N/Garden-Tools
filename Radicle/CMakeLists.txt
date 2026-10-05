@@ -195,6 +195,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -426,6 +427,10 @@ if(RADICLE_BUILD_TESTS)
   add_library(radicle_abi_stub_v1 SHARED bindings/csharp/tests/abi_stub.cpp)
   target_include_directories(radicle_abi_stub_v1 PRIVATE include)
   target_compile_definitions(radicle_abi_stub_v1 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=1u)
+  # ABI 4 is the last generation without the record payload and topic exports.
+  add_library(radicle_abi_stub_v4 SHARED bindings/csharp/tests/abi_stub.cpp)
+  target_include_directories(radicle_abi_stub_v4 PRIVATE include)
+  target_compile_definitions(radicle_abi_stub_v4 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=4u)
 
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(Python3_Interpreter_FOUND)
@@ -460,6 +465,6 @@ if(RADICLE_BUILD_TESTS)
              COMMAND ${DOTNET_EXECUTABLE} test ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/Radicle.Interop.Tests
                      --nologo -v q)
     set_tests_properties(radicle_csharp_bindings PROPERTIES
-      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>;RADICLE_ABI_STUB_V4=$<TARGET_FILE:radicle_abi_stub_v4>")
   endif()
 endif()
