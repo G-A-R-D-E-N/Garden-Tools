@@ -90,7 +90,7 @@ struct VmadScripts {
   std::int16_t version{0};
   std::int16_t object_format{0};
   std::vector<VmadScript> scripts;
-  // A Variable (6/16) property stops decoding; scripts up to that property are kept.
+  // Type 6 and nonempty type 16 stop decoding.
   bool unsupported{false};
   // Bytes after the script list, e.g. record-specific fragment data.
   std::size_t trailing_bytes{0};
@@ -98,5 +98,43 @@ struct VmadScripts {
 
 // Reads the leading script list of any VMAD; throws fo4::parse_error on truncated or unknown data.
 VmadScripts read_vmad_scripts(std::span<const std::byte> data);
+
+/*
+ * The quest-specific block that follows the leading script list of a QUST VMAD:
+ * the script the stage fragments belong to and its typed properties, the stage
+ * fragments (stage, stage index, fragment script and function names), and each
+ * alias's script attachments with their typed properties.
+ *
+ * `object_format` is the one read_vmad_scripts reported for the same VMAD. The
+ * block layout is the one walk_quest_extra consumes; this reader keeps the names
+ * and property values that walker only skips. A property type this reader cannot
+ * decode, or a truncated block, sets `unsupported` with a reason instead of
+ * throwing, so a caller can report exactly what stopped.
+ */
+struct QuestVmadFragment {
+  std::uint16_t stage{0};
+  std::uint16_t unknown{0};
+  std::int32_t stage_index{0};
+  std::string script;
+  std::string function;
+};
+
+struct QuestVmadAliasScripts {
+  std::int16_t alias_id{0};
+  std::int16_t script_format{0};
+  std::vector<VmadScript> scripts;
+};
+
+struct QuestVmadExtras {
+  std::string script_name;
+  std::vector<VmadProperty> properties;
+  std::vector<QuestVmadFragment> fragments;
+  std::vector<QuestVmadAliasScripts> aliases;
+  bool unsupported{false};
+  std::string unsupported_reason;
+  bool fully_consumed{false};
+};
+
+QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int16_t object_format);
 
 }  // namespace fo4

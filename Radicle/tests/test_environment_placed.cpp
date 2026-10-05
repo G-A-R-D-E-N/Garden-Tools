@@ -68,7 +68,7 @@ std::vector<std::byte> make_vmad(bool with_variable) {
   out.u16(1);
   wstring(out, "DoorScript");
   out.u8(0);
-  out.u16(with_variable ? 2 : 4);
+  out.u16(with_variable ? 2 : 5);
   wstring(out, "Target");
   out.u8(1);
   out.u8(1);
@@ -89,6 +89,10 @@ std::vector<std::byte> make_vmad(bool with_variable) {
   out.u8(3);
   out.u8(1);
   out.u32(7);
+  wstring(out, "EmptyVariableArray");
+  out.u8(16);
+  out.u8(1);
+  out.u32(0);
   wstring(out, "Values");
   out.u8(13);
   out.u8(1);
@@ -284,12 +288,14 @@ TEST_F(PlacedEnvironmentTest, DecodesObjectReferenceFields) {
   ASSERT_EQ(d.scripts->scripts.size(), 1u);
   const auto& script = d.scripts->scripts[0];
   EXPECT_EQ(script.name, "DoorScript");
-  ASSERT_EQ(script.properties.size(), 4u);
+  ASSERT_EQ(script.properties.size(), 5u);
   EXPECT_EQ(script.properties[0].object, key(0x805));
   EXPECT_EQ(script.properties[0].alias, std::optional<std::int16_t>{-1});
   EXPECT_EQ(script.properties[1].text, std::optional<std::string>{"hi"});
   EXPECT_EQ(script.properties[2].integer, 7);
-  EXPECT_EQ(script.properties[3].element_count, std::optional<std::uint32_t>{2});
+  EXPECT_EQ(script.properties[3].type, 16);
+  EXPECT_EQ(script.properties[3].element_count, std::optional<std::uint32_t>{0});
+  EXPECT_EQ(script.properties[4].element_count, std::optional<std::uint32_t>{2});
 
   std::optional<fo4::env::PlacedReferenceData> original{d};
   const auto copy = *original;
@@ -410,10 +416,15 @@ TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
   EXPECT_EQ(ref->patrols[0].topics[0].topic.local_id, 0x915u);
   ASSERT_EQ(ref->script_count, 1u);
   EXPECT_STREQ(ref->scripts[0].name, "DoorScript");
-  ASSERT_EQ(ref->scripts[0].property_count, 4u);
+  EXPECT_EQ(ref->scripts_unsupported, 0);
+  ASSERT_EQ(ref->scripts[0].property_count, 5u);
   EXPECT_EQ(ref->scripts[0].properties[0].object.local_id, 0x805u);
   EXPECT_STREQ(ref->scripts[0].properties[1].text, "hi");
   EXPECT_EQ(ref->scripts[0].properties[2].has_integer, 1);
+  EXPECT_EQ(ref->scripts[0].properties[3].type, 16);
+  EXPECT_EQ(ref->scripts[0].properties[3].has_element_count, 1);
+  EXPECT_EQ(ref->scripts[0].properties[3].element_count, 0u);
+  EXPECT_EQ(ref->scripts[0].properties[4].element_count, 2u);
   radicle_placed_ref_free(ref);
 
   ASSERT_EQ(radicle_env_winner(env, {"Placed.esp", 0x803}, &record), RADICLE_STATUS_OK);
