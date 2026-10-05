@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -80,7 +81,9 @@ std::string asString(const uint8_t* bytes, size_t size) {
 class TempFile {
 public:
   TempFile() {
-    path_ = std::filesystem::temp_directory_path() / "radicle_c_api_pex_test.pex";
+    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    path_ = std::filesystem::temp_directory_path() /
+            ("radicle_c_api_pex_" + std::to_string(id) + ".pex");
   }
 
   ~TempFile() {

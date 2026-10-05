@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -19,8 +20,9 @@ class TempPlugin {
 public:
   explicit TempPlugin(const std::vector<std::byte>& bytes) {
     std::error_code error;
-    root_ = std::filesystem::temp_directory_path() / "radicle_c_api_quest_test";
-    std::filesystem::remove_all(root_, error);
+    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    root_ = std::filesystem::temp_directory_path() /
+            ("radicle_c_api_quest_" + std::to_string(id));
     std::filesystem::create_directories(root_, error);
     path_ = root_ / "Quests.esp";
     std::ofstream stream(path_, std::ios::binary | std::ios::trunc);

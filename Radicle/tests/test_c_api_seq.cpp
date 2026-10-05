@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -25,7 +26,11 @@ std::vector<std::uint8_t> bytes(std::initializer_list<std::uint32_t> values) {
 
 class TempFile {
 public:
-  TempFile() { path_ = std::filesystem::temp_directory_path() / "radicle_c_api_seq_test.seq"; }
+  TempFile() {
+    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    path_ = std::filesystem::temp_directory_path() /
+            ("radicle_c_api_seq_" + std::to_string(id) + ".seq");
+  }
 
   ~TempFile() {
     std::error_code error;
