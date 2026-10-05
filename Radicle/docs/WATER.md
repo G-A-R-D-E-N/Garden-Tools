@@ -1,4 +1,4 @@
-# Water field evidence and remaining resolution work
+# Water field and selection evidence
 
 `src/environment/base_records.cpp:decode_water` exposes WATR data through
 `include/fo4/c_api_records.h:radicle_water_get_info` and the generated C#
@@ -51,10 +51,24 @@ and XCWT as a WATR link (5809). WRLD PNAM bit 3 is named Use Water Data
 defines NAM3/NAM4 LOD water and DNAM default land/water heights at 9121–9131.
 Radicle exposes these raw links/heights and load-order winners already.
 
-Runtime precedence, multi-parent inheritance, null/default fallback and the
-requested finite XCLW sentinel `-2147483648.0` remain **unverified**. They are
-tracked in [RE #395](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/395).
-No guessed effective-water resolver or automatic sentinel conversion is added.
+The [selection record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)
+resolves these questions for OG 1.10.163. The local verified copy is
+`build/RE-Work/6916afb/water-395-341/README.md`; sections 3.1–3.7 stamp
+RVAs 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910.
+`fo4::env::resolve_water`, C `radicle_water_resolve` and C# `EffectiveWater`
+select a winning CELL XCWT, otherwise the exterior world's inherited NAM2,
+otherwise Fallout4.esm form 0x18. Invalid XCWT targets fail closed because
+their runtime fix-up is unverified. Missing default WATR data stays unresolved
+through a null record handle; no synthetic visual record is created.
+
+Water type follows PNAM bit 3; height follows bit 0 independently. Ordered
+WNAM/PNAM fields affect inheritance, and active cycles fail closed. Exterior
+CELL heights require Has Water without Interior. Positive fractions round at
+one half, negative fractions truncate, and NaN/below-range values become
+-2^31. Values at least +2^31 select the world's default height: **-2^31 is
+a real height**, not a default sentinel. The original XCLW bytes remain intact.
+Interior height volumes and live rendering are outside this selection query.
+ABI 14 adds the selection result after main's ABI 8 and independent batches 9–13.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has the consumer
 `opencw/Services/WaterBuild/WaterBuilder.cs:Build`, `ReadWorld`, and `Material`,
@@ -62,6 +76,19 @@ and runtime probe `opencw/tools/probes/WaterProbe.cs` with scene
 `opencw/tools/water/water_probe.tscn`. It is pinned to Radicle
 `2360e88138aa75c60db78ab579a3d2d7fb81d142`. Its
 `WaterRules.IsDefaultHeight` recognizes missing/nonfinite or magnitude at
-least `1e30`; it currently misses the finite sentinel requested in #341.
-That consumer policy is not runtime evidence. Probe acceptance of a verified
-effective-water resolver remains outstanding.
+least `1e30`; it misses the verified positive 2^31 default-height threshold.
+That historical consumer policy is not runtime evidence.
+
+The supplied `probes/gardenengine/WaterSelectionProbe.cs` and scene were run
+in an isolated checkout of GardenEngine `676d2c1eabeceefedf53dc249cf63ee9a7f73740`.
+Build `opencw/OpenCommonwealth.csproj` with `RadicleSourceDir` set to this
+checkout, set `FO4_DATA_DIR` and `RADICLE_NATIVE_PATH` to its ABI-14 library,
+then run the matching double-precision Mono editor with
+`--headless --path opencw tools/water_selection_probe.tscn`.
+The 2026-10-05 build had zero errors (82 existing warnings); Godot
+`4.8.dev-double.mono.double.custom_build.0b0af89c9` printed
+`water_selection_probe PASS cells=36864 heights=36864` and exited zero.
+Each selected WATR key passed through the existing `WaterBuilder.Material`
+converter and retained its key/fog-depth value. With game data unset it
+printed SKIP and exited 77. This verifies consumer conversion, not live
+rendering or adoption by `WaterBuilder.Build`.

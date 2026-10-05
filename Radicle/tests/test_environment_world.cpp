@@ -1,4 +1,5 @@
 #include "fo4/c_api_env.h"
+#include "fo4/c_api_records.h"
 #include "fo4/environment/world.hpp"
 #include "plugin_bytes.hpp"
 
@@ -10,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -239,6 +241,94 @@ TEST_F(WorldEnvironmentTest, DecodesWorldspaceFields) {
   const auto winner = fo4::env::decode_worldspace(env, *env.winner(key("000800:Base.esm")));
   EXPECT_FALSE(winner.parent.has_value());
   EXPECT_FALSE(winner.default_land_height.has_value());
+}
+
+TEST_F(WorldEnvironmentTest, ResolvesWaterThroughIndependentInheritanceAndWinningRecords) {
+  const auto wrld = [](std::uint32_t id, std::uint32_t parent, std::uint16_t flags,
+                       std::uint32_t water, float height) {
+    return rec("WRLD", id, {{"WNAM", bytes_of({parent})},
+      {"PNAM", {std::byte{static_cast<std::uint8_t>(flags)}, std::byte{0}}},
+      {"NAM2", bytes_of({water})}, {"DNAM", floats({-2048, height})}});
+  };
+  paths_ = {write("Fallout4.esm", make_plugin({}, {
+    top("WATR", {rec("WATR", 0x18), rec("WATR", 0x840), rec("WATR", 0x841)}),
+    top("WRLD", {wrld(0x800, 0, 0, 0x840, 450), wrld(0x801, 0x800, 8, 0x841, 10),
+      wrld(0x802, 0x801, 9, 0x841, 20), wrld(0x803, 0x800, 1, 0x841, 30),
+      wrld(0x804, 0x999, 9, 0x841, 40), wrld(0x805, 0, 0, 0x999, 50)})})),
+    write("Override.esp", make_plugin({"Fallout4.esm"}, {top("WATR", {rec("WATR", 0x840)})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto select = [&](std::uint32_t id) {
+    return fo4::env::resolve_water(env, *env.winner(fo4::FormKey{fo4::PluginKey::from_filename("Fallout4.esm"), fo4::LocalFormId{id}}));
+  };
+  const auto inherited = select(0x802);
+  EXPECT_EQ(inherited.water, key("000840:Fallout4.esm"));
+  ASSERT_NE(inherited.record, nullptr);
+  EXPECT_EQ(inherited.record->plugin, 1u);
+  EXPECT_EQ(inherited.height, 10.0f);
+  EXPECT_FALSE(inherited.uses_default_water);
+  EXPECT_EQ(select(0x803).water, key("000841:Fallout4.esm"));
+  EXPECT_EQ(select(0x803).height, 450.0f);
+  EXPECT_EQ(select(0x804).height, 40.0f);
+  EXPECT_EQ(select(0x804).water, key("000841:Fallout4.esm"));
+  EXPECT_TRUE(select(0x805).uses_default_water);
+  EXPECT_EQ(select(0x805).water, key("000018:Fallout4.esm"));
+
+  radicle_env* handle = nullptr;
+  const auto first = paths_[0].string(), second = paths_[1].string();
+  const char* inputs[] = {first.c_str(), second.c_str()};
+  ASSERT_EQ(radicle_env_load(inputs, 2, &handle), RADICLE_STATUS_OK);
+  const radicle_record* world = nullptr;
+  ASSERT_EQ(radicle_env_winner(handle, {"Fallout4.esm", 0x802}, &world), RADICLE_STATUS_OK);
+  radicle_water_selection selection{};
+  ASSERT_EQ(radicle_water_resolve(handle, world, &selection), RADICLE_STATUS_OK);
+  EXPECT_EQ(selection.water.local_id, 0x840u);
+  EXPECT_NE(selection.record, nullptr);
+  EXPECT_EQ(selection.has_height, 1);
+  EXPECT_EQ(selection.height, 10.0f);
+  radicle_env_destroy(handle);
+}
+
+TEST_F(WorldEnvironmentTest, WaterHeightBoundariesPreserveRawValuesAndRejectActiveCycles) {
+  const std::vector<float> raw = {-2147483648.0f, 2147483648.0f,
+    std::numeric_limits<float>::max(), 2147483520.0f, 2.5f, -2.5f,
+    -3e10f, -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()};
+  const std::vector<float> expected = {-2147483648.0f, 450, 450, 2147483520.0f,
+    3, -2, -2147483648.0f, -2147483648.0f, -2147483648.0f};
+  std::vector<Node> cells;
+  for (std::size_t i = 0; i < raw.size(); ++i) {
+    cells.push_back(rec("CELL", 0x900u + static_cast<std::uint32_t>(i),
+      {{"DATA", {std::byte{2}}}, {"XCLW", floats({raw[i]})}}));
+  }
+  cells.push_back(rec("CELL", 0x920, {{"DATA", {std::byte{0}}}, {"XCWT", bytes_of({0x840})}}));
+  cells.push_back(rec("CELL", 0x921, {{"DATA", {std::byte{3}}}, {"XCWT", bytes_of({0})}}));
+  cells.push_back(rec("CELL", 0x922, {{"DATA", {std::byte{2}}}, {"XCWT", bytes_of({0x999})}}));
+  paths_ = {write("Fallout4.esm", make_plugin({}, {
+    top("WATR", {rec("WATR", 0x840)}),
+    top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x840})}, {"DNAM", floats({-2048, 450})}}),
+      grp(0x800, 1, {grp(0, 4, {grp(0, 5, cells)})}),
+      rec("WRLD", 0x801, {{"WNAM", bytes_of({0x801})}, {"PNAM", {std::byte{8}, std::byte{0}}}}),
+      rec("WRLD", 0x802, {{"PNAM", {std::byte{0}, std::byte{0}}}, {"WNAM", bytes_of({0x801})}}),
+      rec("WRLD", 0x803, {{"WNAM", bytes_of({0x803})}, {"PNAM", {std::byte{0}, std::byte{0}}}})})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto selected = [&](std::uint32_t id) {
+    return env.winner(fo4::FormKey{fo4::PluginKey::from_filename("Fallout4.esm"), fo4::LocalFormId{id}});
+  };
+  for (std::size_t i = 0; i < raw.size(); ++i) {
+    SCOPED_TRACE(i);
+    const auto* cell = selected(0x900u + static_cast<std::uint32_t>(i));
+    EXPECT_EQ(fo4::env::resolve_water(env, *cell).height, expected[i]);
+    if (i + 1 != raw.size()) EXPECT_EQ(fo4::env::decode_cell(env, *cell).water_height, raw[i]);
+  }
+  EXPECT_FALSE(fo4::env::resolve_water(env, *selected(0x920)).height.has_value());
+  EXPECT_EQ(fo4::env::resolve_water(env, *selected(0x920)).water, key("000840:Fallout4.esm"));
+  const auto interior = fo4::env::resolve_water(env, *selected(0x921));
+  EXPECT_TRUE(interior.uses_default_water);
+  EXPECT_EQ(interior.record, nullptr);
+  EXPECT_FALSE(interior.height.has_value());
+  EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x922)), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x801)), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x802)), fo4::env::WorldDecodeError);
+  EXPECT_TRUE(fo4::env::resolve_water(env, *selected(0x803)).uses_default_water);
 }
 
 TEST_F(WorldEnvironmentTest, WalksWorldspaceHierarchy) {

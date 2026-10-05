@@ -1,15 +1,129 @@
 # Radicle code notes
 
+## src/environment/world.cpp:resolve_water
+
+The read-only selection query follows the static OG water evidence in the pinned
+private record at `build/RE-Work/6916afb/water-395-341/README.md`, RE commit
+`6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 3.1-3.7 (verified RVAs
+0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910).
+CELL XCWT takes precedence, exterior cells may use their winning WRLD, and the
+global default selects Fallout4.esm form 0x18. A missing default record remains
+explicitly unresolved; the SDK does not synthesize its visual data. Invalid XCWT
+targets fail closed because their runtime fix-up remains unverified. Invalid
+WRLD parent/water targets use the verified OG null fallback. Inheritance uses
+the current world's bit 3 for water type and bit 0 for height, respecting
+WNAM/PNAM order. A visited set rejects active inheritance cycles.
+
+The query preserves raw XCLW and reports its load-time integer transform only
+in the effective height: positive halves round up, negative values truncate,
+NaN or values below -2^31 become -2^31, and values at least +2^31 select the
+world default. Thus -2^31 is a real height. Interior height volumes are outside
+this query. These are static OG semantics, with the AE confirmations and NG
+gaps listed in the evidence record, not live game acceptance.
+
+`include/fo4/c_api_records.h:radicle_water_resolve` returns the selected key,
+borrowed winning WATR handle, default-selection flag and optional height.
+ABI 14 is reserved for this independent batch after main's ABI 8, existing
+sound/navmesh/vegetation/dialogue/package batches 9-13 and climate follow-up 15.
+`bindings/csharp/Radicle.Interop/WaterSelection.cs:EffectiveWater` consumes it.
+
+`probes/gardenengine/WaterSelectionProbe.cs:WaterSelectionProbe._Ready` reads
+Commonwealth CELL selections through C ABI and passes each selected key to
+GardenEngine's existing private `WaterBuilder.Material` conversion. It checks
+the resulting material key/fog value against the selected winning WATR. The
+reflection call remains confined to this probe; rendering, `WaterBuilder.Build`
+adoption and in-game parity are separate from this consumer conversion check.
+
 ## Water corpus evidence (#341)
 
 `tests/test_water_real.cpp:WaterRealData` covers every on-disk WATR in the
 seven official masters through the native decoder and existing C ABI,
 records DNAM sizes, and compares untouched master serialization byte for
 byte. `docs/WATER.md` pins layout evidence for
-`src/environment/base_records.cpp:decode_water`. Effective selection and
-finite sentinel conversion remain blocked on RE #395; raw links and heights
-are preserved by `src/environment/world.cpp:decode_cell` and
-`decode_worldspace`.
+`src/environment/base_records.cpp:decode_water`. The selection query above uses
+the completed RE #395 evidence; raw links and heights are preserved by
+`src/environment/world.cpp:decode_cell` and `decode_worldspace`.
+## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
+
+TopicChildren returns the ordered physical INFO records in the topic-children
+group immediately following the selected DIAL version. It does not substitute
+winning INFO overrides or collect responses from other plugins or sibling topics.
+The hierarchy source is include/fo4/plugin/container.hpp:Group and
+src/plugin/maintenance.cpp:owned_child_group; the consumer behavior is verified in
+GardenEngine's vendored Mutagen.Bethesda.Fallout4/Records/Major Records/DialogTopic.cs:
+DialogTopicBinaryOverlay.CustomEnd. The group label must resolve to that DIAL in
+the selected plugin's master context. Missing, empty or differently typed following
+groups have no responses; mismatched labels, nested children and non-INFO children
+fail closed. Recursive lookup supports DIAL records nested beneath quest groups.
+
+The returned array uses radicle_free_record_array; record handles remain borrowed from
+the supplied environment. Managed TopicChildren copies only the handle array via
+the existing Records helper. Keep the environment alive while reading the children
+and their payloads. No C struct layouts change, but the four new exports move `RADICLE_ABI_VERSION` to 5, so a library built from the ABI-4 headers is refused by the binding's version guard on its first call, before any new export is reached (`AbiGuardTests.cs:ALibraryFromBeforeTheRecordPayloadExportsIsRejected` uses the `radicle_abi_stub_v4` stub). Consumers require a native library containing the new exports. TopicReadTests.cs covers selected and
+overridden versions, physical order, sibling separation, nested topics, master/self
+keys, empty results, invalid owners/types and disposed-environment access. This
+does not validate scene decoding, voice playback or menu fidelity.
+
+The source-linked installed-data comparison passed 92,861 checks across Fallout4,
+Robot, workshop01, Coast, workshop02, workshop03 and NukaWorld: exact physical
+DIAL keysets, ordered child FormKeys and selected-plugin INFO versions matched
+the independent Mutagen overlay for 46,427 topics and 102,462 responses. The
+31-test binding suite passed against the candidate native library, including ABI
+layout and mismatch tests; generated declaration/probe drift checks passed.
+These counts establish hierarchy projection only. Lookup currently walks the
+selected plugin hierarchy per request; no voice loading performance claim is made.
+
+## src/c_api_records.cpp / bindings/csharp/Radicle.Interop/RecordReads.cs:ReadPayload, ResolveFormId
+
+The Garden UI importer needs the existing parsed record's ordered subrecords and
+the native load order's FormID resolution. These reads copy opaque payload bytes,
+including duplicate/unknown fields and extended-size markers, without guessing
+their meaning or changing the environment. ReadPayload returns managed-owned
+bytes that survive environment disposal. ResolveFormId uses the selected record
+version's plugin context, including master and self indices.
+
+Verified against source:include/fo4/formid.hpp:RawFormId and
+source:src/formid.cpp:resolve_plugin_link, ResolveFormId rejects an index beyond the source plugin's master table and
+created/save IDs; null and the explicit none sentinel return no key. The existing
+environment link helper otherwise coerces oversized indices to the source plugin,
+so this new strict read validates before invoking it. Existing decoders are unchanged.
+Unknown four-byte signatures use reversible Latin1 in managed snapshots.
+
+A `radicle_record` handle is only meaningful to the environment that produced it: it
+is a pointer to one of that environment's own `RecordRef` versions, and the plugin
+index it carries is an index into that environment's plugin list. All four exports
+therefore call `src/c_api_records.cpp:belongs_to_env` first, which looks the record's
+FormKey up in `env->value.versions` and compares addresses. That is the same
+pointer-identity test `radicle_record_topic_children` already used, now shared.
+`ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
+handle from a second live environment resolved through the supplied environment:
+`ResolveFormId` read `env->value.plugins().at(ref.plugin)` from the wrong plugin list
+and returned a key built from another plugin's master table. The wrong answer is
+plausible rather than obvious when both environments have a plugin at that index, so
+`RecordReadTests.cs:ReadsRejectARecordFromAnotherLiveEnvironment` loads two plugins
+that each define a record at local ID 0x800, checks the owner environment resolves it,
+and requires the other environment to refuse both `ResolveFormId` and `ReadPayload`.
+
+In `ResolveFormId` the membership test runs before the `RawFormId::is_none()` early
+return, so the handle is validated for every `raw_form_id` and not only for the ones
+that reach link resolution. `is_none()` is `value_ == 0xFFFFFFFFu`, so with the check
+after it a foreign handle plus `0xFFFFFFFF` returned `RADICLE_STATUS_OK` with a null
+key instead of being refused; `0` never took that path, because `is_none()` is false
+for it. The test asserts refusal for `0x800`, `0` and `0xFFFFFFFF`, which covers both
+the ordinary resolution path and the sentinel.
+
+The C caller supplies four writable signature bytes. Copied payload buffers use
+radicle_free_bytes; resolved plugin strings are borrowed until environment disposal.
+As with existing record readers, keep the environment alive throughout a call;
+Garden's environment read lease must cover a snapshot and its link resolutions.
+No existing C layout changes. Consumers need a library containing these new exports.
+The C# declarations are generated from c_api_records.h by the existing generator
+and its drift check. UI field codecs, localization,
+condition/script gates and original-payload parity remain separate integration work.
+
+bindings/csharp/Radicle.Interop.Tests/RecordReadTests.cs verifies override choice,
+duplicate unknown bytes, empty payloads, master/self/null/invalid FormIDs and
+managed byte ownership after disposal. This is not a decoded UI-content claim.
 
 ## src/schema/form_links.cpp:visit_link_offsets
 
@@ -65,6 +179,22 @@ Ported from `PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePl
 ## src/c_api_check.cpp:radicle_env_check_errors
 
 Rows are tab-separated so the existing `radicle_free_string_array` contract covers ownership. An empty subrecord column means the finding is record-level (preflight, cycle). Adding this export moved `RADICLE_ABI_VERSION` to 3.
+
+## src/c_api_pex.cpp:radicle_pex_parse
+
+The `.pex` C ABI (`include/fo4/c_api_pex.h`): parse bytes or a file into a `radicle_pex` handle, read the container header, per-object counts, object and parent class names and string table entries, and serialize back to bytes. Names and string table entries are handed back as caller-owned byte ranges released with `radicle_free_bytes`. The API never transcodes: the container stores one byte per character and the character encoding above `0x7F` is UNPROVEN, so Latin-1 stays an interpretation the C++ and C# layers apply rather than something the ABI assumes. Malformed bytes map to `RADICLE_STATUS_PARSE_ERROR` carrying the reader's own message, a missing file to `RADICLE_STATUS_IO_ERROR`, and a null argument or out-of-range index to `RADICLE_STATUS_INVALID_ARGUMENT`. Adding these exports took `RADICLE_ABI_VERSION` to 6, one step after the typed record payload exports that hold 5 on main; `RadicleNative.g.cs` was regenerated for the constant and `abi_layout_probe.cpp` is unchanged, because `fo4/c_api_pex.h` is not in the generator's header list yet. Raw PEX interop joins that list with the managed PEX model in A4.
+
+## src/c_api_quest.cpp:radicle_quest_runtime_rows
+
+The quest runtime C ABI (`include/fo4/c_api_quest.h`) splits one QUST record's VMAD and DNAM into structure and values. `radicle_quest_runtime_rows` reports the structure as tab-separated rows (`quest`, `script`, `fragment-script`, `fragment`, `alias`, `alias-script`, `unsupported`) so the existing `radicle_free_string_array` contract covers ownership. `radicle_quest_runtime_properties` reports every script property as a `radicle_quest_property` carrying its owner, owning script, name, type, flags and decoded value, released with `radicle_free_quest_properties`.
+
+Properties are not rows because a VMAD value does not fit the row grammar: a string value can hold a tab or a newline, and an object property carries a FormID and an alias at once, so a tab-separated row cannot carry one losslessly. The reader already decoded every value into `fo4::VmadProperty` and the rows dropped all of them, which made two quests differing only in an integer property decode identically. The regression is pinned at both layers: `Radicle/tests/test_c_api_quest.cpp:RowsCarryNoPropertyFacts` and `ReportsEveryPropertyValue`, and `Radicle.Interop.Tests/QuestRuntimeTests.IntegerPropertyValuesAreDistinguishable`.
+
+The scalar and reference value fields (`integer`, `real`, `boolean`, `object`, `property_alias`, `element_count`) each have a `has_` companion because a property carries at most one value of its type; `element_count` is the leading count of a struct or array property. The quest batch is `RADICLE_ABI_VERSION` 8, after the record payload at 5, PEX at 6 and SEQ at 7, and it is unreleased, the same rule `src/c_api_maintenance.cpp` used to stay at 3 when its exports were added. On the managed side `Radicle.Interop/QuestRuntime.cs` maps the entries onto `ScriptProperties`, `FragmentProperties` and `AliasScriptProperties`, and `DecodeRows` takes the rows and the entries together so the mapping is testable without a native plugin.
+
+`radicle_quest_property.text` is transferred with a length. `text_size` counts the exact raw bytes and `text` points at those bytes plus one trailing NUL for convenience, so a value holding an embedded NUL (the 12 bytes Garden, NUL, Patch) arrives as `text_size` 12 while a NUL-terminated read of `text` sees only 6. A NULL `text` is no string; a non-NULL `text` with a `text_size` of 0 is the empty string. The bytes carry no claimed character encoding. `src/c_api_quest.cpp:copy_text` takes the byte count and `memcpy`s it, never `strlen`, so the transfer is lossless. Script and property names go through `src/c_api_quest.cpp:copy_c_string` instead, which is still `strlen`-based, and the managed side still reads both with `Utf8.Read` (`Marshal.PtrToStringUTF8`), so an embedded NUL in a name would still truncate there; whether a shipped plugin can contain one is UNPROVEN, and this pass did not change either. The regression is pinned by `Radicle/tests/test_c_api_quest.cpp:KeepsEmbeddedNulBytesInAPropertyString`, `EmptyStringPropertyDiffersFromNoString` and `Radicle/tests/test_quest_runtime.cpp:KeepsThePropertyValuesTheCAbiHasToCarry`, and on the managed side the lossless transfer itself is pinned by `Radicle.Interop.Tests/QuestRuntimeTests.EveryValueKindSurvives`, which reads a synthetic plugin through the native library; `QuestRuntimeAttachmentTests.EmbeddedNulBytesSurviveTheRowMapping` builds its entries by hand and covers the row mapping, so it cannot fail if the native transfer regresses. `QuestRuntimeValue.TextBytes` is derived from the stored `Text` with `Encoding.Latin1.GetBytes` rather than stored, so the record struct keeps structural value equality. Adding `text_size` did not bump `RADICLE_ABI_VERSION` past the quest batch's 8, on the same unreleased-batch rule.
+
+A fragment property belongs to the fragment script the `fragment-script` row names, which is the contract `include/fo4/c_api_quest.h` already stated, so its own `script` field is an empty string and the script name is transferred exactly once, through that row and `QuestRuntimeData.FragmentScript`. `src/c_api_quest.cpp:radicle_quest_runtime_properties` had passed `data.fragment_script` for every fragment property and `Radicle.Interop/QuestRuntime.cs:DecodeRows` had substituted the row's name as well, so the name arrived twice and the header described something the code did not do. The non-duplicated contract wins, and it is pinned by `Radicle/tests/test_c_api_quest.cpp:FragmentPropertyCarriesNoScriptNameOfItsOwn` and `Radicle.Interop.Tests/QuestRuntimeAttachmentTests.FragmentPropertiesKeepTheirOwnScriptField`.
 
 ## src/schema/non_formid_slots.cpp:corpus_non_formid_slot
 
