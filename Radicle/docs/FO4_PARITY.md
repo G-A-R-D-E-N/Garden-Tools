@@ -273,14 +273,39 @@ Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metad
 | #394 / #21 | BA2 layout/fixtures | Archive read/extract/write acceptance | Archive support does not count as plugin-field editing | Named installed fixtures; no embedded game data |
 | #419 / #422 | CI workflow / runner tooling | Infrastructure | No semantic editing promotion | #384 managed execution still required; audit shared CI changes independently |
 | #424 / #287 | Operation matrix | Documentation | Main baseline and branch capabilities stay separate; full field/helper expansion pending | No new format or runtime acceptance |
-| #426 / #384 | Required managed CI | Infrastructure | Native/C ABI/managed checks required; no field promotion | Verified both runners and clean Windows teardown at its head; adoption in feature branches pending |
+| #426 / #384 | Required managed CI | Infrastructure | Native/C ABI/managed checks required; no field promotion | Verified both runners and clean Windows teardown at its head; adopted into feature branches (ledger below); not yet adopted: #392, #419 |
 | #427 / #425 | Existing CLMT timing edits | Partial C++/C/C# | Existing WRITE tested; TNAM ADD/REMOVE and CLMT CREATE absent | See bounded writer ledger below; no runtime weather reproduction |
+| #428 / #342 | Existing GRAS/TREE/FLOR fixed fields | Partial C++/C/C# | Existing WRITE tested; ADD/REMOVE/CREATE, PFIG/SNAM link writes and LTEX GNAM list edits absent | See vegetation writer ledger below |
+
+### Managed CI adoption ledger
+
+On 2026-10-05, #426 was merged into each branch below. Local MSVC Release full ctest with the managed suite passed before each push, and exact-head CI passed both native jobs including managed CTest. The reruns marked * replaced load-induced PluginEditTool host test timeouts (588) and a hung Windows `nlohmann_json` FetchContent clone (597) without code changes.
+
+| PR | Head | CI run | Local registered / failed | Managed |
+| --- | --- | --- | --- | --- |
+| #408 | `cc99bee6` | [587](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/587) | 796 / 0 | 74/74 |
+| #406 | `af38be4b` | [588](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/588)* | 795 / 0 | 69/69 |
+| #404 | `890158cc` | [589](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/589) | 794 / 0 | 72/72 |
+| #402 | `06f0478f` | [590](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/590) | 795 / 0 | 69/69 |
+| #400 | `bfe2e23a` | [591](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/591) | 796 / 0 | 70/70 |
+| #398 | `b5c9c7bb` | [592](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/592) | 796 / 0 | 70/70 |
+| #427 | `40ec4a5f` | [593](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/593) | 800 / 0 | 75/75 |
+| #396 | `25ea41cd` | [594](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/594) | 800 / 0 | 66/66 |
+| #409 | `56c44508` | [595](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/595) | 789 / 0 | 68/68 |
+| #410 | `de899a0b` | [596](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/596) | 787 / 0 | 65/65 |
+| #411 | `15e53952` | [597](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/597)* | 787 / 0 | 65/65 |
+| #412 | `f45ca86c` | [598](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/598) | 789 / 0 | 65/65 |
+| #394 | `0780437b` | [599](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/599) | 791 / 0 | 65/65 |
+
+#410, #411, #412 and #394 were based on the older main `d71b097d`. Their merges also bring main `cca4b080`; code-note conflicts were resolved as unions with no wording changes. #408 also braces one conditional test assertion that GCC rejected in run 586. #392 changes PluginEditTool host code that the local Radicle build does not cover, and #419 is itself a CI-infrastructure PR, so neither is adopted yet.
+
+The official-corpus run for the package reader was at its pre-merge head `557718ef` (785 of 796 passed, 11 opt-in corpus skips, 0 failed, including the seven official-master package cases).
 
 Provisional ABI versions in parallel parser branches are not a merge plan. Main is ABI 8 at this baseline. Before any approved merge, rebase in dependency order, allocate the next actual version from then-current main, regenerate C# bindings and layout probes, and rerun exact-head CI.
 
 ### Pending CLMT writer tranche
 
-[WIP PR #427](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/427), head `cbe898279607d5e3efe2afcc53da778ec52b8042`, targets the #398 reader branch. It implements replacement of an existing unique six-byte TNAM. This is branch coverage, not a promotion of the main-baseline row above. Both native jobs passed in [run 577](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/577). All seven official-master-derived sky/mutation tests passed locally with zero skips/failures (9.28 seconds). Its current base does not yet include #426 required managed CI.
+[WIP PR #427](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/427), originally at head `cbe898279607d5e3efe2afcc53da778ec52b8042`, targets the #398 reader branch. It implements replacement of an existing unique six-byte TNAM. This is branch coverage, not a promotion of the main-baseline row above. Both native jobs passed in [run 577](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/577). All seven official-master-derived sky/mutation tests passed locally with zero skips/failures (9.28 seconds). After #426 adoption through its base, head `40ec4a5f` passed run 593 with managed CTest on both runners.
 
 | CLMT/TNAM stored field | READ | WRITE | ADD | REMOVE | CREATE | REMAP | VALIDATE | OPAQUE |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -291,7 +316,22 @@ Provisional ABI versions in parallel parser branches are not a merge plan. Main 
 | Volatility | P | P | -- | -- | -- | n/a | P | P |
 | Packed moon phase byte | P | P | -- | -- | -- | n/a | P | P |
 
-`environment/base_records.cpp:set_climate_timing` and `PluginFile.cs:SetClimateTiming` have native/C ABI/managed save-reload, no-op byte preservation and malformed-layout refusal tests. `tests/test_sky_parameters.cpp` covers compressed targets, extended opaque fields and edits to official-master-derived climate records; `tests/test_clmt_formlinks.cpp` covers timing edits through WLST/master remapping. Of 800 registered local tests, 756 passed and 44 optional/corpus/platform cases skipped, with zero failures; the separate managed suite passed 75/75. The seven official cases ran separately with `FO4_DATA_DIR` set, proving requested timing values after reparse, preservation of other fields and byte-identical untouched masters. Proof: `radicle-climate-writer-425-20261005/build/writer-official.log` and `build/guard-release/writer-official.xml`. Required managed CI integration remains pending. ADD/REMOVE TNAM and valid CLMT CREATE remain separate gaps in #287.
+`environment/base_records.cpp:set_climate_timing` and `PluginFile.cs:SetClimateTiming` have native/C ABI/managed save-reload, no-op byte preservation and malformed-layout refusal tests. `tests/test_sky_parameters.cpp` covers compressed targets, extended opaque fields and edits to official-master-derived climate records; `tests/test_clmt_formlinks.cpp` covers timing edits through WLST/master remapping. Of 800 registered local tests, 756 passed and 44 optional/corpus/platform cases skipped, with zero failures; the separate managed suite passed 75/75. The seven official cases ran separately with `FO4_DATA_DIR` set, proving requested timing values after reparse, preservation of other fields and byte-identical untouched masters. Proof: `radicle-climate-writer-425-20261005/build/writer-official.log` and `build/guard-release/writer-official.xml`. ADD/REMOVE TNAM and valid CLMT CREATE remain separate gaps in #287.
+
+### Pending vegetation writer tranche
+
+[WIP PR #428](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/428), head `cb1b4c582d74b9a65cc079528006f134a0edbff3`, targets the #404 reader branch. It registers 31 existing-only fields in `schema/fallout4/fields.json`, using offsets from the pinned xEdit definitions and the #404 reader, and reuses `plugin/mutation.cpp:set_record_scalar`. An optional exact `payload_size` makes TREE CNAM other than 48 bytes, PFPC other than 4 bytes and FLOR FNAM other than 2 bytes read as absent: mutation refuses with no byte change, and existing grid and preflight readers do not fail. The generic `radicle_plugin_set_record_scalar` and `PluginFile.SetScalar` expose every schema scalar through the C ABI and C#. ABI 17 is provisional. This is branch coverage, not a main-baseline promotion.
+
+| Stored fields | READ | WRITE | ADD | REMOVE | CREATE | REMAP | VALIDATE | OPAQUE |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| GRAS DATA density, slopes, water distance, ranges, wave period, flags | P | P | -- | -- | -- | n/a | P | P |
+| GRAS DATA water-distance type (0–7; official values {0,2,6,7}) | P | P | -- | -- | -- | n/a | P | P |
+| TREE CNAM twelve wind floats (exactly 48 bytes) | P | P | -- | -- | -- | n/a | P | P |
+| TREE/FLOR PFPC seasonal bytes (exactly 4 bytes) | P | P | -- | -- | -- | n/a | P | P |
+| FLOR FNAM flags (exactly 2 bytes) | P | P | -- | -- | -- | n/a | P | P |
+| TREE/FLOR PFIG, SNAM links; LTEX GNAM list | P | -- | -- | -- | -- | P | P | P |
+
+Local validation at that head: 809 registered without corpus with 0 failures (ci-guard recorded). With `FO4_DATA_DIR` set, 798 passed, 11 opt-in corpus cases skipped and 0 failed. All 14 `VegetationReal` cases passed. `EveryNewScalarPathEditsOfficialRecordsWithoutLosingData` edits each new path on every official GRAS/TREE/FLOR record and checks that all other bytes are unchanged. Managed: 77/77. Exact-head CI [run 600](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/600) is pending. Notes: `docs/code-notes/radicle-vegetation-writer.md` on that branch.
 
 The empty type-16 VMAD follow-up is sourced separately from the verified private [VMAD loader record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/plugin-io-garden-tools/vmad-388-15/README.md), inspected with its build-specific address stamps. It does not establish nonempty variable mutation.
 
@@ -311,19 +351,20 @@ The empty type-16 VMAD follow-up is sourced separately from the verified private
 | #423 | QUST C ABI expansion | Reuse typed authoring; expose tested stages/objectives/aliases; runtime execution separate |
 | #384 | Managed test CI | Required native/C ABI/managed checks; generation checks alone are insufficient |
 | #425 | Existing CLMT timing WRITE | Tested in #427; independent ADD/REMOVE/CREATE proof remains pending |
+| #342 | Existing vegetation fixed-field WRITE | Tested in #428; link writes, LTEX list edits and ADD/REMOVE/CREATE remain pending |
 | #32 | Localization editor consumer | Stored ID/inline classification is established; explicit sidecar ownership and transactional edits still need proof |
 | #31 | Native diagnostics consumer | Expand VALIDATE coverage using proven invariants; no new Mutagen dependency |
 | #35, #51 | Specialized writer/validator consumers | Precombine stamping needs generated-data/layout proof; stored dialogue-link validation is separate from runtime merge order |
 | #338 | Stale roadmap audit | Reconcile product/evidence text without changing unrelated tool roadmaps |
 | #346 | Shared plugin/archive architecture | No redesign prerequisite for proving current editing contracts |
 
-The refreshed 2026-10-05 inventory contains 85 open repository issues (both API pages inspected) and 18 open PRs. The rows above cover all explicitly Radicle-tagged/titled issues, the governing product/schema/parity/CI trackers and direct writer/validator consumers. All 18 PRs appear in the parser/infrastructure ledger, including the independent runner tooling. Other PluginTool workflows and unrelated BGS/F4LODGEN issues remain outside this backend tranche. This is a scope/disposition audit; each unexamined field remains U and needs its own implementation and acceptance audit.
+The refreshed 2026-10-05 inventory contains 85 open repository issues (both API pages inspected) and 19 open PRs. The rows above cover all explicitly Radicle-tagged/titled issues, the governing product/schema/parity/CI trackers and direct writer/validator consumers. All 19 PRs appear in the parser/infrastructure ledger, including the independent runner tooling. Other PluginTool workflows and unrelated BGS/F4LODGEN issues remain outside this backend tranche. This is a scope/disposition audit; each unexamined field remains U and needs its own implementation and acceptance audit.
 
 ## Ordered follow-ups
 
 1. Finish per-field audit for the new stored read surfaces and typed models, including generated list/string/condition descriptors. U entries remain pending, not complete or intentionally excluded.
 2. Add CLMT existing timing mutation with parse/edit/serialize/reparse, negative writes, neighbor preservation and native/C ABI/C# tests. Establish optional TNAM insertion/removal and whole CLMT creation separately.
-3. Promote vegetation fixed data edits, then sound variants, dialogue/scene containers and PACK fixed data; require add/remove/count/remap evidence before each promotion. NAVM geometry writes need complete container ownership and group structure proof.
+3. Vegetation fixed-field edits are in #428; next are sound variants, dialogue/scene containers and PACK fixed data; require add/remove/count/remap evidence before each promotion. NAVM geometry writes need complete container ownership and group structure proof.
 4. Close #384 as a required CI check, then complete exact-head and official-corpus validation for every promoted surface.
 5. Record intentionally unsupported members with specific reasons; expand #43 only where repetition warrants it. Integrate PluginTool/Garden after the backend contract is proven.
 
