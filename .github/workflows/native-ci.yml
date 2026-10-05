@@ -53,6 +53,9 @@ concurrency:
 # A runner without ccache still builds, just without the cache.
 env:
   CCACHE_NOHASHDIR: "1"
+  # All runners share one 12-thread host; cap each build so concurrent jobs
+  # don't oversubscribe it. cmake --build reads this when --parallel is absent.
+  CMAKE_BUILD_PARALLEL_LEVEL: "4"
 
 jobs:
   # paths-ignore compares the whole pull request, so a docs-only follow-up push
@@ -128,7 +131,7 @@ jobs:
         run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
       - name: Test
-        run: ctest --test-dir build/native --output-on-failure
+        run: ctest --test-dir build/native --output-on-failure --parallel 4
 
       - name: Upload logs and binaries on failure
         if: failure()
@@ -349,23 +352,28 @@ jobs:
           cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
 
       - name: Build
-        run: cmake --build build\native --parallel
+        run: cmake --build build\native
 
       - name: ccache statistics
         if: always()
         run: if defined CCACHE "%CCACHE%" --show-stats
 
       - name: Test
-        run: ctest --test-dir build\native --output-on-failure
+        run: ctest --test-dir build\native --output-on-failure --parallel 4
 
+      # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
+      # Debug on pull requests, so this runs on main pushes and manual runs.
       - name: Configure (Debug)
+        if: github.event_name != 'pull_request'
         run: |
           set "LAUNCHER="
           if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
           cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
 
       - name: Build (Debug)
-        run: cmake --build build\native-debug --parallel
+        if: github.event_name != 'pull_request'
+        run: cmake --build build\native-debug
 
       - name: Test (Debug)
-        run: ctest --test-dir build\native-debug --output-on-failure
+        if: github.event_name != 'pull_request'
+        run: ctest --test-dir build\native-debug --output-on-failure --parallel 4
