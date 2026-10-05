@@ -104,6 +104,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
       - name: Find ccache
         run: |
           for c in "$(command -v ccache || true)" "$HOME/.local/bin/ccache"; do
@@ -124,6 +129,7 @@ jobs:
           -DFO4IDE_BUILD_TESTS=ON
           -DRADICLE_BUILD_TESTS=ON
           -DRADICLE_BUILD_TOOLS=ON
+          -DRADICLE_CSHARP_TESTS=ON
           -DRADICLE_WARNINGS_AS_ERRORS=ON
           ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
 
@@ -306,6 +312,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v6
+        env:
+          DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
+        with:
+          dotnet-version: '8.0.x'
+
       - name: Set up MSVC, Ninja and ccache
         shell: powershell
         run: |
@@ -355,7 +368,7 @@ jobs:
         run: |
           set "LAUNCHER="
           if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
-          cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+          cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
 
       - name: Build
         run: cmake --build build\native
@@ -376,7 +389,7 @@ jobs:
         run: |
           set "LAUNCHER="
           if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
-          cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+          cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
 
       - name: Build (Debug)
         if: github.event_name != 'pull_request'
@@ -385,3 +398,7 @@ jobs:
       - name: Test (Debug)
         if: github.event_name != 'pull_request'
         run: ctest --test-dir build\native-debug --output-on-failure --parallel 4
+
+      - name: Stop .NET build servers
+        if: always()
+        run: dotnet build-server shutdown
