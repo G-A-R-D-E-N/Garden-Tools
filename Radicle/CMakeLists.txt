@@ -385,7 +385,7 @@ if(RADICLE_BUILD_TESTS)
   target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
-    FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+    FO4_TESTDATA_DIR="testdata"
     _CRT_SECURE_NO_WARNINGS
   )
   target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
@@ -394,7 +394,8 @@ if(RADICLE_BUILD_TESTS)
   target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
-  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120)
+  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_env_bench_non_ansi_data_dir
              COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
