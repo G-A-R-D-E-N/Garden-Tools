@@ -7,8 +7,12 @@ ESL authoring.
 ## Where it comes from
 
 `TESFile::AdjustFormIDFileIndex(TESFile* this, uint* id)` — Fallout4.exe
-1.10.163 (unpacked), RVA **`0x131f90`**, 55 bytes. Rebuilds an on-disk FormID
+1.10.155 (unpacked), RVA **`0x131f90`**, 55 bytes. Rebuilds an on-disk FormID
 into a runtime one:
+
+Build identification source: [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md), question 2's verified PE timestamps and predicate/conversion addresses. The assembly below is the older 1.10.155 image; the 1.10.163 conversion is at `0x131fa0`.
+
+The corresponding 1.10.163 conversion is recorded in `E:/GardenEngine/git/garden-tools/git/radicle-28-20261004/build/RE-Work/small-file-compile-index-389.md`; see `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for its pinned provenance.
 
 ```asm
 140131f90:  mov   byte [rdx+3], 0          ; drop the on-disk master-index byte
@@ -98,8 +102,9 @@ while #26 was open.
   rules it out; it is left unavailable rather than guessed at.
 - `smallFileCompileIndex` is a `u16` read from `TESFile+0x372`, versus the
   full-plugin `u8` at `+0x370`. OG and AE assign the position in independent
-  arrays starting at zero. List construction and NG byte verification remain
-  open; see `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for the build-scoped evidence.
+  arrays starting at zero. OG/AE list construction is now established statically;
+  NG byte verification and live list behavior remain open. See
+  `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for the build-scoped evidence.
 - This is the *runtime* rule. `TESFile::CheckValidIDForSmallFile` is listed in
   the symbol dumps at RVA `0x130560` with `sizeof=10`, but that address holds a
   different, much larger function in the unpacked binary, and no 10-byte leaf
