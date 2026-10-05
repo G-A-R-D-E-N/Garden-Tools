@@ -94,7 +94,7 @@ TEST_F(DialogueRead, SceneScopesSeparatePhaseActorActionAndTailIncludingOpaqueTi
     {"FNAM", half(0x8001)}, {"SCQS", words({0x000AFFFF})}, {"HNAM", {}},
     {"ALID", words({0xFFFFFFFF})}, {"LNAM", words({2})}, {"DNAM", words({4})},
     {"ANAM", half(2)}, {"NAM0", text("action")}, {"ALID", words({8})}, {"INAM", words({9})},
-    {"FNAM", words({16})}, {"SNAM", words({1})}, {"ENAM", words({3})},
+    {"FNAM", words({16})}, {"SNAM", half(1)}, {"ENAM", half(65535)},
     {"SNAM", words({0x41200000})}, {"PNAM", words({0x813})}, {"ZZZZ", words({7})}, {"ANAM", {}},
     {"PNAM", words({0x812})}, {"CTDA", condition(16)}}}});
   const auto env = load(); const auto scene = fo4::env::decode_scene(env, record(env));
@@ -102,6 +102,7 @@ TEST_F(DialogueRead, SceneScopesSeparatePhaseActorActionAndTailIncludingOpaqueTi
   EXPECT_EQ((*scene.phases[0].quest_stages)[0], -1); EXPECT_EQ(scene.phases[0].start_conditions[0].function, 14);
   EXPECT_EQ(scene.phases[0].completion_conditions[0].function, 15); ASSERT_EQ(scene.actors.size(), 1); EXPECT_EQ(scene.actors[0].alias, -1);
   ASSERT_EQ(scene.actions.size(), 1); EXPECT_EQ(scene.actions[0].actor_alias, 8); EXPECT_EQ(scene.actions[0].start_phase, 1u);
+  EXPECT_EQ(scene.actions[0].end_phase, 65535u);
   ASSERT_EQ(scene.actions[0].payload.size(), 3); EXPECT_EQ(scene.actions[0].payload[0].signature.to_string(), "SNAM");
   EXPECT_EQ(scene.parent_quest->local().value(), 0x812u); ASSERT_EQ(scene.conditions.size(), 1); EXPECT_EQ(scene.conditions[0].function, 16);
   EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));

@@ -84,7 +84,7 @@ public class DialogueTests
             ("NEXT", Array.Empty<byte>()), ("CTDA", Condition(15)), ("NEXT", Array.Empty<byte>()), ("FNAM", U16(0x8001)),
             ("SCQS", U32(0x000AFFFF)), ("HNAM", Array.Empty<byte>()), ("ALID", U32(uint.MaxValue)), ("LNAM", U32(2)), ("DNAM", U32(4)),
             ("ANAM", U16(2)), ("NAM0", Z("action")), ("ALID", U32(8)), ("INAM", U32(9)), ("FNAM", U32(16)),
-            ("SNAM", U32(1)), ("ENAM", U32(3)), ("SNAM", F32(10)), ("PNAM", U32(0x813)), ("ANAM", Array.Empty<byte>()),
+            ("SNAM", U16(1)), ("ENAM", U16(65535)), ("SNAM", F32(10)), ("PNAM", U32(0x813)), ("ANAM", Array.Empty<byte>()),
             ("PNAM", U32(0x812)), ("CTDA", Condition(16)) }))));
         Radicle.Interop.Scene scene;
         using (var env = RadicleEnvironment.Load(new[] { path })) scene = env.Scene(env.Winner(new FormKey("Dialogue.esm", 0x800))!.Value);
@@ -92,7 +92,8 @@ public class DialogueTests
         var phase = Assert.Single(scene.Phases); Assert.Equal((ushort)0x8001, phase.Flags); Assert.Equal((short)-1, phase.QuestStages!.Value.Start);
         Assert.Equal((ushort)14, Assert.Single(phase.StartConditions).Function); Assert.Equal((ushort)15, Assert.Single(phase.CompletionConditions).Function);
         Assert.Equal(-1, Assert.Single(scene.Actors).Alias); var action = Assert.Single(scene.Actions); Assert.Equal(8, action.ActorAlias);
-        Assert.Equal(1u, action.StartPhase); Assert.Equal("SNAM", action.Payload[0].Signature); Assert.Equal(F32(10), action.Payload[0].Bytes);
+        Assert.Equal((ushort)1, action.StartPhase); Assert.Equal((ushort)65535, action.EndPhase);
+        Assert.Equal("SNAM", action.Payload[0].Signature); Assert.Equal(F32(10), action.Payload[0].Bytes);
         Assert.Equal("PNAM", action.Payload[1].Signature); Assert.Equal((ushort)16, Assert.Single(scene.Conditions).Function);
     }
 }
