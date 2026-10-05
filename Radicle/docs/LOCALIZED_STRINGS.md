@@ -152,7 +152,7 @@ persistence point remain tracked separately in #174.
 
 ## TES4 bit 7 and plugin fields
 
-The container format is separate from plugin field classification. The verified OG 1.10.163 reader in [TES4_LOCALIZATION_EVIDENCE.md](TES4_LOCALIZATION_EVIDENCE.md) now establishes bit `0x80` set as external string IDs and clear as inline text. #29 remains partial because the CK transformation and NG/AE paths are unverified.
+The container format is separate from plugin field classification. [TES4_LOCALIZATION_EVIDENCE.md](TES4_LOCALIZATION_EVIDENCE.md) establishes bit `0x80` set as external string IDs and clear as inline text in OG/AE, with static CK direction evidence. NG reader behavior, CK table emission and live behavior remain separate #390 questions. #29 is partial; complete localized editing also needs field-aware mutation and explicit sidecar ownership proof, not merely this flag classification.
 
 The current API boundary is:
 

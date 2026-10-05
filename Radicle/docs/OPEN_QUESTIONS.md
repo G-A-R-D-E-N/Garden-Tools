@@ -30,7 +30,7 @@ Speculative answers must not be hardcoded as facts.
 
 ## TES4 flags
 
-7. **Partial answer:** OG 1.10.163 bit `0x80` set selects external string IDs; clear selects inline text. Both "Localized" and CK/CommonLib "Delocalized" describe the set-bit state in their respective naming conventions. This does not establish a naming error. See `TES4_LOCALIZATION_EVIDENCE.md`; CK flag transitions and NG/AE verification remain in #390.
+7. **Answered for stored classification and OG/AE readers:** bit `0x80` set selects external IDs; clear selects inline text. CK uses "delocalized" for the same external state. See `TES4_LOCALIZATION_EVIDENCE.md`; naming does not change serialized meaning.
 8. Are TES4 record flags and `TESFile::flags` the same bit layout? CommonLib treats them as the same enum.
 
 ## Compression / XXXX
@@ -52,7 +52,7 @@ Speculative answers must not be hardcoded as facts.
 ## Localization
 
 15. `.STRINGS` / `.DLSTRINGS` / `.ILSTRINGS` layout for FO4, including next-gen changes.
-16. How `TESFile::SetDelocalized` and `MasterfileDelocalizer` change the bit and rewrite `FULL`/`DESC` storage. Still unverified; the OG read direction is documented separately in `TES4_LOCALIZATION_EVIDENCE.md` (#390).
+16. **Partial answer:** CK 1.11.137 delocalization sets bit `0x80` and its active string-writer mode stores four-byte IDs from tagged inline text. CK table emission/language ownership, NG string-reader semantics and live behavior remain #390 work. Proven stored editing does not require runtime reproduction. See `TES4_LOCALIZATION_EVIDENCE.md`.
 
 ## Complex chunks (deferred)
 
