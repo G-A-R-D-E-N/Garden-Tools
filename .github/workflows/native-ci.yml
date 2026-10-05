@@ -314,6 +314,8 @@ jobs:
 
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v6
+        env:
+          DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
         with:
           dotnet-version: '8.0.x'
 
