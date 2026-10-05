@@ -275,6 +275,21 @@ Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metad
 
 Provisional ABI versions in parallel parser branches are not a merge plan. Main is ABI 8 at this baseline. Before any approved merge, rebase in dependency order, allocate the next actual version from then-current main, regenerate C# bindings and layout probes, and rerun exact-head CI.
 
+### Pending CLMT writer tranche
+
+[WIP PR #427](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/427), head `cbe898279607d5e3efe2afcc53da778ec52b8042`, targets the #398 reader branch. It implements replacement of an existing unique six-byte TNAM. This is branch coverage, not a promotion of the main-baseline row above. Both native jobs passed in [run 577](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/577); official-master-derived mutation execution remains pending. Its current base does not yet include #426 required managed CI.
+
+| CLMT/TNAM stored field | READ | WRITE | ADD | REMOVE | CREATE | REMAP | VALIDATE | OPAQUE |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Sunrise begin | P | I | -- | -- | -- | n/a | P | P |
+| Sunrise end | P | I | -- | -- | -- | n/a | P | P |
+| Sunset begin | P | I | -- | -- | -- | n/a | P | P |
+| Sunset end | P | I | -- | -- | -- | n/a | P | P |
+| Volatility | P | I | -- | -- | -- | n/a | P | P |
+| Packed moon phase byte | P | I | -- | -- | -- | n/a | P | P |
+
+`environment/base_records.cpp:set_climate_timing` and `PluginFile.cs:SetClimateTiming` have native/C ABI/managed save-reload, no-op byte preservation and malformed-layout refusal tests. `tests/test_sky_parameters.cpp` covers compressed targets and extended opaque fields; `tests/test_clmt_formlinks.cpp` covers timing edits through WLST/master remapping. Of 800 registered local tests, 756 passed and 44 optional/corpus/platform cases skipped, with zero failures; the separate managed suite passed 75/75. These results do not substitute for the queued official-master mutation checks or #384 required CI integration. ADD/REMOVE TNAM and valid CLMT CREATE remain separate gaps in #287.
+
 The empty type-16 VMAD follow-up is sourced separately from the verified private [VMAD loader record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/plugin-io-garden-tools/vmad-388-15/README.md), inspected with its build-specific address stamps. It does not establish nonempty variable mutation.
 
 ## Open issue disposition
