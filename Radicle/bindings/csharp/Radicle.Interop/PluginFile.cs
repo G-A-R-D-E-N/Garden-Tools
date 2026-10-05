@@ -14,7 +14,7 @@ public sealed unsafe class PluginFile : IDisposable
 
     private PluginFile(IntPtr handle) => _handle = handle;
 
-    private IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(PluginFile));
+    internal IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(PluginFile));
 
     public static PluginFile Create(string filename)
     {

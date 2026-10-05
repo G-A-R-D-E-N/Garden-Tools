@@ -2,6 +2,8 @@
 
 #include "record_reader.hpp"
 
+#include <algorithm>
+
 namespace fo4::env {
 namespace {
 
@@ -28,8 +30,12 @@ HarvestData harvest(const Reader& r) {
 
 std::optional<GrassData> decode_grass(const Environment& env, const RecordRef& ref) {
   const Reader r(env, ref, sig("GRAS")); model(r);
-  const auto* sub = r.sized(sig("DATA"), 32);
-  if (!sub) return std::nullopt;
+  const auto* stored = r.unique(sig("DATA"));
+  if (!stored) return std::nullopt;
+  Subrecord prefix;
+  prefix.data.resize(32);
+  std::copy_n(stored->data.begin(), std::min(stored->data.size(), prefix.data.size()), prefix.data.begin());
+  const auto* sub = &prefix;
   GrassData out;
   out.density = std::to_integer<std::uint8_t>(sub->data[0]);
   out.min_slope = std::to_integer<std::uint8_t>(sub->data[1]);
@@ -44,7 +50,7 @@ std::optional<GrassData> decode_grass(const Environment& env, const RecordRef& r
 TreeData decode_tree(const Environment& env, const RecordRef& ref) {
   const Reader r(env, ref, sig("TREE")); model(r);
   TreeData out; out.harvest = harvest(r);
-  if (const auto* sub = r.sized(sig("CNAM"), 48)) {
+  if (const auto* sub = r.unique(sig("CNAM")); sub && sub->data.size() == 48) {
     std::array<float, 12> values{};
     for (std::size_t i = 0; i < values.size(); ++i) values[i] = Reader::f32(*sub, i * 4);
     out.wind = values;

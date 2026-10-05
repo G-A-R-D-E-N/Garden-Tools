@@ -8,6 +8,23 @@ namespace Radicle.Interop.Tests;
 
 public class VegetationTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(33)]
+    public void GrassUsesPresentPrefixAndNonmatchingTreeWindStaysOpaque(int size)
+    {
+        using var temp = new TempDirectory();
+        var data = Enumerable.Repeat((byte)1, size).ToArray();
+        var path = temp.Write("Vegetation.esm", Build(1, Array.Empty<string>(),
+            Top("GRAS", new Rec("GRAS", 0x800, new[] { ("DATA", data) })),
+            Top("TREE", new Rec("TREE", 0x801, new[] { ("CNAM", data) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var grass = env.Grass(env.Winner(new FormKey("Vegetation.esm", 0x800))!.Value)!;
+        Assert.Equal(size == 0 ? 0 : 1, grass.Density);
+        Assert.Equal(size < 29 ? 0 : 1, grass.Flags);
+        Assert.Null(env.Tree(env.Winner(new FormKey("Vegetation.esm", 0x801))!.Value).Wind);
+    }
     [Fact]
     public void GrassGetterPreservesEncodedFieldsAndExistingMetadata()
     {

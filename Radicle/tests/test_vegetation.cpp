@@ -96,13 +96,28 @@ TEST_F(VegetationRead, AbsentFieldsStayAbsentAndMalformedKnownFieldsFailClosed) 
   write({{"GRAS", 0x800, {{"DATA", words({1})}}}, {"TREE", 0x801, {{"CNAM", words({1})}}},
          {"FLOR", 0x802, {{"PFPC", {std::byte{1}}}}}, {"LTEX", 0x803, {{"GNAM", words({0x800, 0x800})}}}});
   const auto bad = load();
-  EXPECT_THROW(fo4::env::decode_grass(bad, record(bad, 0x800)), fo4::env::WorldDecodeError);
-  EXPECT_THROW(fo4::env::decode_tree(bad, record(bad, 0x801)), fo4::env::WorldDecodeError);
+  ASSERT_TRUE(fo4::env::decode_grass(bad, record(bad, 0x800)));
+  EXPECT_FALSE(fo4::env::decode_tree(bad, record(bad, 0x801)).wind);
   EXPECT_THROW(fo4::env::decode_flora(bad, record(bad, 0x802)), fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::decode_landscape_grasses(bad, record(bad, 0x803)), fo4::env::WorldDecodeError);
   write({{"GRAS", 0x800, {{"DATA", grass_payload()}, {"DATA", grass_payload()}}}});
   const auto duplicate = load();
   EXPECT_THROW(fo4::env::decode_grass(duplicate, record(duplicate, 0x800)), fo4::env::WorldDecodeError);
+}
+
+TEST_F(VegetationRead, PresentGrassDataUsesZeroFilledPrefixAndTreeKeepsOtherLengthsOpaque) {
+  for (const std::size_t size : {0u, 1u, 5u, 31u, 32u, 33u}) {
+    auto data = grass_payload(); data.resize(size, std::byte{0xAA});
+    write({{"GRAS", 0x800, {{"DATA", data}}}, {"TREE", 0x801, {{"CNAM", data}}}});
+    const auto env = load();
+    const auto grass = fo4::env::decode_grass(env, record(env, 0x800));
+    ASSERT_TRUE(grass);
+    EXPECT_EQ(grass->density, size == 0 ? 0 : 0xFE);
+    EXPECT_EQ(grass->units_from_water, size < 5 ? 0 : (size == 5 ? 0xF4 : 500));
+    EXPECT_EQ(grass->flags, size < 29 ? 0 : 0x81);
+    EXPECT_FALSE(fo4::env::decode_tree(env, record(env, 0x801)).wind);
+    EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+  }
 }
 
 }
