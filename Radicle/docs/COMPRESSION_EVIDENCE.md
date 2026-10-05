@@ -13,7 +13,7 @@ Verified source: [versioned inflater and chunk record](https://re.nomadicinterac
 
 Raw deflate and gzip are not selected by the inspected OG initialization. Radicle removes its raw-deflate retry for nonzero declared-size records, throws a parse error on rejected framing/checksum, and continues to emit zlib when rebuilding. It does not reproduce the runtime's unsafe failure path. The existing zero-size early return is unchanged and not claimed as verified framing enforcement.
 
-The executable does not compare total output with the declared size after success in this function. A smaller buffer fails, while a larger declaration can succeed. This change does not invent exact-length equality or change that existing policy. Other callers and the additional load gate remain unexamined.
+The executable does not compare total output with the declared size after success in this function. A smaller buffer fails, while a larger declaration can succeed. This change does not invent exact-length equality or change that existing policy. The follow-up below examines the additional load gates and failure propagation; those runtime behaviors are not a policy for producing valid edited records.
 
 The source survey reports 76,895 compressed records across 16 named installed plugins: 56,399 Fallout4, 463 Robot, 50 workshop01, 11,474 Coast, 5 workshop02, 131 workshop03, 8,219 NukaWorld, and 154 across nine CC files. All were zlib framed, inflated to the declared size, and had zero raw streams or failures. The installed data version was not independently pinned to the OG executable. These measurements are source evidence, not execution of the new Radicle tests.
 
@@ -21,4 +21,8 @@ Tests reject a raw stream stripped from a valid zlib frame, a gzip-wrapped copy 
 
 The OG chunk-header path hides `XXXX` from logical runtime readers. Radicle's low-level physical subrecord list intentionally retains it for byte preservation and marks the following subrecord as extended. No API change or guessed runtime emulation is needed.
 
-AE 1.11.240 is only a structural cross-check: its inflater wrapper's window bits were not opened. NG behavior, the additional load gate, zero-size handling, external output-length checks and a live malformed-record test remain unresolved in #391. CI supplies validation for this change; no local build or test run was performed.
+The 6916afb follow-up is available locally at `E:/GardenEngine/git/garden-tools/git/radicle-341-re-followup-20261005/build/RE-Work/6916afb/compression-391-30/README.md`. AE 1.11.240 `0x2f97b0` / `0x9340` establish window bits 15 with bytes and decompile. AE 1.11.221 and VR 1.2.72 have byte-level confirmation of their decompressor/init wrappers. NG remains decompile-only and its window bits are unresolved.
+
+OG/AE decompressor records establish four gates statically: nonzero record size, non-GRUP type, compression flag, and recognized type-table entry. They do not compare total output with the declared size or reject trailing input after stream end. Failure clears the decompressed buffer/size; the traced header/advance paths then deliver no subrecords. The earlier claim that malformed streams necessarily crash is withdrawn: no such execution was observed. Stock-zlib models support the stream-boundary analysis but are not game execution.
+
+Data sizes 1–3, live malformed-input behavior, untraced form-loader reactions and CK's own reader/writer remain unresolved. Radicle continues to reject malformed framing/checksums, retain the existing zero-size policy and preserve untouched compressed bytes. Valid edited records require writer/reparse and preservation proof under #287; reproducing permissive or unsafe vanilla input behavior is separate #391 work.

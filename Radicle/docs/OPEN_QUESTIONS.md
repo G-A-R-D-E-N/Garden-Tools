@@ -35,8 +35,8 @@ Speculative answers must not be hardcoded as facts.
 
 ## Compression / XXXX
 
-9. **Partial answer:** the verified OG 1.10.163 inflater uses zlib framing and checksum validation, with no raw-deflate fallback. The reader now follows that framing. See `COMPRESSION_EVIDENCE.md`; AE wrapper, zero-size handling, other gates and malformed-record live behavior remain in #391.
-10. **Answered for the inspected OG path:** the chunk-header reader consumes `XXXX`, replaces the type with the next header, and applies its extended size before higher-level reads. Radicle retains the physical marker to preserve file bytes. See `COMPRESSION_EVIDENCE.md`; AE is a partial structural cross-check.
+9. **Answered for stored framing:** official compressed records and OG/AE init-wrapper evidence use zlib framing. This branch removes the raw-deflate retry for nonzero declared sizes. NG window bits and live malformed-input behavior remain separate #391 questions; see `COMPRESSION_EVIDENCE.md`.
+10. **Answered for the inspected OG path:** the chunk-header reader consumes `XXXX`, replaces the type with the next header, and applies its extended size before higher-level reads. Radicle retains the physical marker to preserve file bytes. See `COMPRESSION_EVIDENCE.md` for per-build scope.
 10b. Engine `GetChunkData` truncates oversize chunks (`data truncated`). Should the native reader match that or fail hard? Currently fail hard.
 
 ## Groups
