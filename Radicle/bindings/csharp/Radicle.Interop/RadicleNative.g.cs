@@ -485,6 +485,13 @@ public unsafe struct ClimateTiming
     public byte SunsetEnd;
     public byte Volatility;
     public byte MoonsPhaseLength;
+    public float SunriseBeginHours;
+    public float SunriseEndHours;
+    public float SunsetBeginHours;
+    public float SunsetEndHours;
+    public byte DaysPerPhase;
+    public int UsesSecunda;
+    public int UsesMasser;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -653,10 +660,63 @@ public unsafe struct MaterialSwap
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexHeader
+{
+    public byte MajorVersion;
+    public byte MinorVersion;
+    public ushort GameId;
+    public long CompilationTime;
+    public nuint StringCount;
+    public nuint ObjectCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexObjectCounts
+{
+    public nuint StructCount;
+    public nuint VariableCount;
+    public nuint PropertyCount;
+    public nuint StateCount;
+    public nuint FunctionCount;
+}
+
+public enum QuestPropertyOwner : int
+{
+    Script = 0,
+    Fragment = 1,
+    AliasScript = 2,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestProperty
+{
+    public QuestPropertyOwner Owner;
+    public int Alias;
+    public IntPtr Script;
+    public IntPtr Name;
+    public byte Type;
+    public byte Flags;
+    public byte HasInteger;
+    public int Integer;
+    public byte HasReal;
+    public float Real;
+    public byte HasBoolean;
+    public byte Boolean;
+    public IntPtr Text;
+    public nuint TextSize;
+    public byte HasObject;
+    public uint ObjectFormId;
+    public byte HasPropertyAlias;
+    public short PropertyAlias;
+    public byte HasElementCount;
+    public uint ElementCount;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 8u;
+    public const uint CompiledAbiVersion = 15u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -934,6 +994,18 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_water_get_info")]
     public static extern Status WaterGetInfo(IntPtr env, IntPtr record, WaterInfo* out_info);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_payload_info")]
+    public static extern Status RecordPayloadInfo(IntPtr env, IntPtr record, ushort* out_form_version, nuint* out_subrecord_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_copy_subrecord")]
+    public static extern Status RecordCopySubrecord(IntPtr env, IntPtr record, nuint index, byte* out_signature, byte** out_bytes, nuint* out_size, int* out_extended_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_resolve_form_id")]
+    public static extern Status RecordResolveFormId(IntPtr env, IntPtr record, uint raw_form_id, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_topic_children")]
+    public static extern Status RecordTopicChildren(IntPtr env, IntPtr record, IntPtr** out_records, nuint* out_count);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_swap_decode")]
     public static extern Status MaterialSwapDecode(IntPtr env, IntPtr record, MaterialSwap** out_swap);
 
@@ -960,5 +1032,59 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
     public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
+    public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_read_file")]
+    public static extern Status PexReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_pex);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_destroy")]
+    public static extern void PexDestroy(IntPtr pex);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_write_bytes")]
+    public static extern Status PexWriteBytes(IntPtr pex, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_get_header")]
+    public static extern Status PexGetHeader(IntPtr pex, PexHeader* out_header);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_get_counts")]
+    public static extern Status PexObjectGetCounts(IntPtr pex, nuint index, PexObjectCounts* out_counts);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_name")]
+    public static extern Status PexObjectName(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_parent_name")]
+    public static extern Status PexObjectParentName(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_string_table_entry")]
+    public static extern Status PexStringTableEntry(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_parse")]
+    public static extern Status SeqParse(byte* bytes, nuint size, IntPtr* out_seq);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_read_file")]
+    public static extern Status SeqReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_seq);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_destroy")]
+    public static extern void SeqDestroy(IntPtr seq);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_write_bytes")]
+    public static extern Status SeqWriteBytes(IntPtr seq, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_entry_count")]
+    public static extern Status SeqEntryCount(IntPtr seq, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_entry_form_id")]
+    public static extern Status SeqEntryFormId(IntPtr seq, nuint index, uint* out_form_id);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_runtime_rows")]
+    public static extern Status QuestRuntimeRows(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? form_key, IntPtr** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_runtime_properties")]
+    public static extern Status QuestRuntimeProperties(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? form_key, QuestProperty** out_properties, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_quest_properties")]
+    public static extern void FreeQuestProperties(QuestProperty* properties, nuint count);
 
 }

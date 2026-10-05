@@ -171,14 +171,13 @@ add_library(
     papyrus/ScriptIndex.cpp
     papyrus/Resolver.cpp
     papyrus/TypeChecker.cpp
-    papyrus/Pex.cpp
     papyrus/CodeGenerator.cpp
     papyrus/Decompiler.cpp
     papyrus/Symbols.cpp
     papyrus/CreationKitFidelity.cpp
     papyrus/AnalysisService.cpp
 )
-target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core)
+target_link_libraries(fo4ide_papyrus PUBLIC fo4ide_core fo4)
 fo4ide_enable_warnings(fo4ide_papyrus)
 fo4ide_enable_sanitizers(fo4ide_papyrus)
 

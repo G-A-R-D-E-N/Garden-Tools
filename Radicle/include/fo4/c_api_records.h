@@ -64,6 +64,13 @@ typedef struct radicle_climate_timing {
   uint8_t sunset_end;
   uint8_t volatility;
   uint8_t moons_phase_length;
+  float sunrise_begin_hours;
+  float sunrise_end_hours;
+  float sunset_begin_hours;
+  float sunset_end_hours;
+  uint8_t days_per_phase;
+  int32_t uses_secunda;
+  int32_t uses_masser;
 } radicle_climate_timing;
 
 typedef struct radicle_climate {
@@ -226,6 +233,20 @@ RADICLE_API radicle_status radicle_activator_get_water_type(const radicle_env* e
 RADICLE_API radicle_status radicle_water_get_info(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_water_info* out_info);
+
+RADICLE_API radicle_status radicle_record_payload_info(
+    const radicle_env* env, const radicle_record* record,
+    uint16_t* out_form_version, size_t* out_subrecord_count);
+RADICLE_API radicle_status radicle_record_copy_subrecord(
+    const radicle_env* env, const radicle_record* record, size_t index,
+    uint8_t* out_signature, uint8_t** out_bytes, size_t* out_size,
+    int32_t* out_extended_size);
+RADICLE_API radicle_status radicle_record_resolve_form_id(
+    const radicle_env* env, const radicle_record* record, uint32_t raw_form_id,
+    radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_record_topic_children(
+    const radicle_env* env, const radicle_record* record,
+    const radicle_record*** out_records, size_t* out_count);
 
 #ifdef __cplusplus
 }

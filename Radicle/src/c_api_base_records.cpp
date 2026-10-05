@@ -167,7 +167,9 @@ radicle_status radicle_climate_decode(const radicle_env* env, const radicle_reco
     if (const auto& t = holder->data.timing) {
       v.has_timing = 1;
       v.timing = {t->sunrise_begin, t->sunrise_end, t->sunset_begin, t->sunset_end,
-                  t->volatility, t->moons_phase_length};
+                  t->volatility, t->moons_phase_length,
+                  t->sunrise_begin_hours(), t->sunrise_end_hours(), t->sunset_begin_hours(), t->sunset_end_hours(),
+                  t->days_per_phase(), t->uses_secunda() ? 1 : 0, t->uses_masser() ? 1 : 0};
     }
     v.internal = holder.get();
     *out_climate = &holder.release()->view;

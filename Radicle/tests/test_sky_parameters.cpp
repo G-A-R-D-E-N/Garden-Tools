@@ -143,6 +143,10 @@ TEST_F(SkyParametersTest, CAbiExposesTimingAndParameters) {
   ASSERT_EQ(radicle_climate_decode(env, record, &climate), RADICLE_STATUS_OK);
   EXPECT_EQ(climate->has_timing, 1);
   EXPECT_EQ(climate->timing.sunset_end, 3);
+  EXPECT_FLOAT_EQ(climate->timing.sunset_end_hours, 0.5f);
+  EXPECT_EQ(climate->timing.days_per_phase, 5);
+  EXPECT_EQ(climate->timing.uses_secunda, 0);
+  EXPECT_EQ(climate->timing.uses_masser, 0);
   radicle_climate_free(climate);
   ASSERT_EQ(radicle_env_winner(env, {"Sky.esm", 0x801}, &record), RADICLE_STATUS_OK);
   radicle_weather_info* weather = nullptr;
@@ -153,6 +157,21 @@ TEST_F(SkyParametersTest, CAbiExposesTimingAndParameters) {
   EXPECT_EQ(weather->parameters.wind_turbulence, 19);
   radicle_weather_free(weather);
   radicle_env_destroy(env);
+}
+
+TEST_F(SkyParametersTest, ConvertsUnsignedTimingAndMoonBoundaries) {
+  const std::vector<std::byte> bytes{std::byte{128}, std::byte{255}, std::byte{36}, std::byte{114}, std::byte{0}, std::byte{255}};
+  write(bytes, std::nullopt);
+  const auto env = load();
+  const auto timing = fo4::env::decode_climate(env, *env.winner(key(0x800))).timing;
+  ASSERT_TRUE(timing);
+  EXPECT_FLOAT_EQ(timing->sunrise_begin_hours(), 128.0f * (1.0f / 6.0f));
+  EXPECT_EQ(timing->sunrise_end_hours(), 42.5f);
+  EXPECT_EQ(timing->sunset_begin_hours(), 6.0f);
+  EXPECT_EQ(timing->sunset_end_hours(), 19.0f);
+  EXPECT_EQ(timing->days_per_phase(), 63);
+  EXPECT_TRUE(timing->uses_masser());
+  EXPECT_TRUE(timing->uses_secunda());
 }
 
 }

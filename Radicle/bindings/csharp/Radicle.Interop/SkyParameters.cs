@@ -3,7 +3,16 @@ using Radicle.Interop.Native;
 namespace Radicle.Interop;
 
 public sealed record ClimateTiming(byte SunriseBegin, byte SunriseEnd, byte SunsetBegin, byte SunsetEnd,
-                                    byte Volatility, byte MoonsPhaseLength);
+                                    byte Volatility, byte MoonsPhaseLength)
+{
+    public float SunriseBeginHours => SunriseBegin * (1f / 6f);
+    public float SunriseEndHours => SunriseEnd * (1f / 6f);
+    public float SunsetBeginHours => SunsetBegin * (1f / 6f);
+    public float SunsetEndHours => SunsetEnd * (1f / 6f);
+    public byte DaysPerPhase => (byte)(MoonsPhaseLength & 0x3F);
+    public bool UsesSecunda => (MoonsPhaseLength & 0x40) != 0;
+    public bool UsesMasser => (MoonsPhaseLength & 0x80) != 0;
+}
 
 public sealed record WeatherParameters(byte WindSpeed, byte TransitionDelta, byte SunGlare, byte SunDamage,
                                         byte PrecipitationBegin, byte PrecipitationEnd, byte LightningBegin,

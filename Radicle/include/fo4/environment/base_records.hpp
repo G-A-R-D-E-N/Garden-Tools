@@ -64,6 +64,13 @@ struct ClimateTiming {
   std::uint8_t sunset_end{0};
   std::uint8_t volatility{0};
   std::uint8_t moons_phase_length{0};
+  float sunrise_begin_hours() const { return sunrise_begin * (1.0f / 6.0f); }
+  float sunrise_end_hours() const { return sunrise_end * (1.0f / 6.0f); }
+  float sunset_begin_hours() const { return sunset_begin * (1.0f / 6.0f); }
+  float sunset_end_hours() const { return sunset_end * (1.0f / 6.0f); }
+  std::uint8_t days_per_phase() const { return moons_phase_length & 0x3Fu; }
+  bool uses_secunda() const { return (moons_phase_length & 0x40u) != 0; }
+  bool uses_masser() const { return (moons_phase_length & 0x80u) != 0; }
 };
 
 struct ClimateData {

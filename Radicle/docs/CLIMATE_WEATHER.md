@@ -8,8 +8,8 @@ CLMT in `Core/wbDefinitionsFO4.pas:5855–5865` uses the shared timing helper
 `Core/wbDefinitionsCommon.pas:7909–7925`. TNAM is exactly six bytes:
 sunrise begin/end, sunset begin/end, volatility, and packed moons/phase length.
 The timing callback at FO4 lines 3117–3126 displays ordinary time values in
-ten-minute steps. Radicle exposes the encoded bytes without normalizing
-out-of-range clock values or interpreting the packed moon byte.
+ten-minute steps. Radicle preserves all six encoded bytes and exposes the
+verified conversion below without clamping out-of-range clock values.
 
 WTHR DATA is defined at FO4 lines 12609–12639. Lightning color is three bytes
 by `Core/wbDefinitionsCommon.pas:9021–9029`.
@@ -26,12 +26,12 @@ by `Core/wbDefinitionsCommon.pas:9021–9029`.
 | 12–14 | lightning RGB, u8 each |
 | 15 / 16 | visual-effect begin / end, u8 |
 | 17 / 18 | wind direction / direction range, u8 |
-| 19 | optional wind turbulence, u8; schema adds this at form version 119 |
+| 19 | optional wind turbulence, u8; decoded by payload length, with the schema's version-119 annotation as compatibility evidence only |
 
 The existing measured corpus in `WTHR_SEMANTIC_PROOF.md` has 19/20-byte DATA
 variants and 107 WTHR records. Decode accepts those two lengths and preserves
 every stored value. Other lengths and duplicate TNAM/DATA fail closed. No
-scaled float values, flag enum names, transition duration formula or clock
+weather scaled float values, flag enum names, transition duration formula or clock
 wrap behavior are asserted from schema annotations alone.
 
 The refreshed installed-data sweep covers 107 WTHR and 11 CLMT versions:
@@ -49,21 +49,22 @@ This supports exposing the transition byte, not inventing those bounds.
 The [runtime evidence index, section a-343](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a/RE-Work/subsystems/plugin-io-garden-tools/evidence-index-garden-tools/README.md#a-343)
 was read through the authenticated browser on 2026-10-04. Its stamped local copy
 is `E:/GardenEngine/git/garden-tools/git/radicle-343-20261004/build/RE-Work/evidence-index-garden-tools.md`.
-For OG 1.10.163 it records the TNAM six-byte read in `TESClimate::Load`
-(RVA `0x3989B0`) and sunrise-begin consumers at RVAs `0x658090` / `0x648A50`:
-the first byte is divided by six to obtain game hours. This proves ten-minute
-units for sunrise begin only. The other three timing consumers remain partial
-and moon packing is not found. Radicle exposes all six stored bytes and does
-not generalize the first consumer's proof into unverified runtime behavior.
-The remaining runtime interpretation is tracked in
-[#397](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/397).
+The newer [verified timing record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/README.md)
+and local copy `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/weather-climate-397-343/README.md`
+resolve all four time consumers and moon packing. Sections 3.2 and 3.4 stamp
+the OG loader and consumers at 0x3989B0, 0x658090 and 0x648A50.
+Each unsigned clock byte is multiplied by 1/6 to obtain game hours, including
+128 through 255 without signed conversion or clamping. The low six moon bits
+hold days per phase; bit 6 enables Secunda and bit 7 enables Masser.
+Raw bytes remain available. Weather transition constants and live simulation
+remain separate from these stored timing conversions.
 
 `src/environment/base_records.cpp:decode_climate` and `decode_weather` expose
-these optional fields through the existing environment decoders. C ABI 8
+these optional fields through the existing environment decoders. C ABI 15
 extends `radicle_climate` and `radicle_weather_info`; generated C# bindings and
 the friendly `Climate.Timing` / `Weather.Parameters` properties follow those
-declarations. Main was checked at ABI 4 and PR #383 reserves 5/6/7 immediately
-before this extension. Recheck/rebase before merging either ABI series.
+declarations. Main now has ABI 8 after #383; independent decoder batches use
+9–13 and the water-selection batch uses 14. Recheck before merging ABI series.
 
 `include/fo4/forms/weather.hpp:Weather` is the stable read-only name for the
 existing lossless WTHR model. `weather_concept.hpp` remains an include shim.
@@ -81,7 +82,7 @@ were copied into `opencw/tools/` in the isolated GardenEngine checkout
 `E:/GardenEngine/GardenEngine/git/radicle-343-probe-20261004` at that SHA.
 Build `opencw/OpenCommonwealth.csproj` with `RadicleSourceDir` set to this
 Radicle checkout. Set `FO4_DATA_DIR` to installed data and `RADICLE_NATIVE_PATH`
-to the built ABI-8 library, then run the matching double-precision Mono editor
+to the built library of the matching ABI, then run the double-precision Mono editor
 with `--headless --path opencw tools/climate_probe.tscn`.
 
 On 2026-10-04 the actual GardenEngine build succeeded (82 existing warnings,
@@ -90,3 +91,11 @@ zero errors). Godot `4.8.dev.mono.double.custom_build.2e64cc835` printed
 sky payload plus its decoded timing/parameters. No Mutagen lookup is used
 in that path. With game data unset it printed `SKIP` and exited 77.
 These are field/consumer conversion checks, not live transition/rendering proof.
+
+The ABI-15 follow-up probe was rerun on 2026-10-05 in an isolated GardenEngine
+checkout at `676d2c1eabeceefedf53dc249cf63ee9a7f73740`. Its project built with
+zero errors and 83 warnings. Godot
+`4.8.dev-double.mono.double.custom_build.0b0af89c9` printed `climate_probe PASS`
+and exited zero: Commonwealth timing converted to 5/9/17/21 hours, four days
+per phase, Secunda enabled and Masser disabled. The existing sky conversion
+still used the C ABI path. This remains conversion proof, not simulation.
