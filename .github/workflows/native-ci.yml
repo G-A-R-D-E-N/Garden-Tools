@@ -39,6 +39,14 @@ on:
       - "docs/**"
       - "**/*.md"
   workflow_dispatch:
+    inputs:
+      lane:
+        description: Validation to run
+        type: choice
+        default: full
+        options:
+          - full
+          - radicle-cross
 
 # A newer push supersedes a pull request or branch run, but main runs always
 # finish: cancelling them on every merge left main itself untested.
@@ -66,6 +74,7 @@ jobs:
   # (no before-sha, fetch failure) leaves run=true.
   gate:
     name: Gate (skip docs-only pushes)
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.lane != 'radicle-cross'
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 10
     outputs:
@@ -242,7 +251,7 @@ jobs:
 
   plugineditool-native-windows-cross:
     name: PluginEditTool native (Windows cross, clang-cl/xwin)
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event.inputs.lane != 'radicle-cross'
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 45
     # The native host now fetches the pinned WebView2 SDK itself. This lane also
@@ -381,6 +390,18 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build\native --output-on-failure --parallel 4
+
+      - name: Upload Radicle Release test executable
+        if: always()
+        continue-on-error: true
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        with:
+          name: radicle-msvc-release-tests
+          path: |
+            build/native/**/fo4_tests.exe
+            build/native/**/radicle.dll
+          if-no-files-found: warn
+          retention-days: 7
 
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.
