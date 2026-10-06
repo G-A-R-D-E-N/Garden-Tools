@@ -601,6 +601,50 @@ RADICLE_API radicle_status radicle_plugin_set_placed_activate_parent_delay(radic
                                                                            radicle_form_key reference,
                                                                            size_t index,
                                                                            float delay);
+RADICLE_API radicle_status radicle_plugin_set_record_scalar(radicle_plugin* plugin,
+                                                            radicle_form_key key,
+                                                            const char* path,
+                                                            const char* value);
+RADICLE_API radicle_status radicle_plugin_set_record_scalar_at(radicle_plugin* plugin,
+                                                               radicle_form_key key,
+                                                               const char* path,
+                                                               size_t index,
+                                                               const char* value);
+RADICLE_API radicle_status radicle_plugin_set_record_formlink(radicle_plugin* plugin,
+                                                              radicle_form_key key,
+                                                              const char* path,
+                                                              size_t index,
+                                                              const radicle_form_key* target);
+RADICLE_API radicle_status radicle_plugin_set_record_string(radicle_plugin* plugin,
+                                                            radicle_form_key key,
+                                                            const char* path,
+                                                            size_t index,
+                                                            const char* utf8);
+RADICLE_API radicle_status radicle_plugin_record_field_count(const radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             const char* path,
+                                                             size_t* out_count);
+RADICLE_API radicle_status radicle_plugin_formlink_list_size(const radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             const char* path,
+                                                             size_t* out_count);
+RADICLE_API radicle_status radicle_plugin_formlink_list_insert(radicle_plugin* plugin,
+                                                               radicle_form_key key,
+                                                               const char* path,
+                                                               size_t at,
+                                                               const radicle_form_key* target);
+RADICLE_API radicle_status radicle_plugin_formlink_list_remove(radicle_plugin* plugin,
+                                                               radicle_form_key key,
+                                                               const char* path,
+                                                               size_t at);
+RADICLE_API radicle_status radicle_plugin_formlink_list_set(radicle_plugin* plugin,
+                                                            radicle_form_key key,
+                                                            const char* path,
+                                                            size_t at,
+                                                            const radicle_form_key* target);
+RADICLE_API radicle_status radicle_plugin_formlink_list_clear(radicle_plugin* plugin,
+                                                              radicle_form_key key,
+                                                              const char* path);
 
 RADICLE_API radicle_status radicle_env_plugin_records(const radicle_env* env,
                                                       size_t plugin_index,

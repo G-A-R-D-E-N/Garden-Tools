@@ -130,11 +130,120 @@ public sealed unsafe class PluginFile : IDisposable
         });
     }
 
+    public bool SetScalar(FormKey record, string path, string value, int index = 0)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(value);
+        var at = Index(index);
+        return Edit(record, (s, key) => RadicleNative.PluginSetRecordScalarAt(Handle, key, path, at, value));
+    }
+
+    public bool SetFormLink(FormKey record, string path, FormKey? target, int index = 0)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var at = Index(index);
+        return Edit(record, (s, key) =>
+        {
+            var native = s.Key(target);
+            return RadicleNative.PluginSetRecordFormlink(Handle, key, path, at, target.HasValue ? &native : null);
+        });
+    }
+
+    public bool SetString(FormKey record, string path, string value, int index = 0)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Contains('\0')) throw new ArgumentException("A string field cannot hold an embedded NUL.", nameof(value));
+        var at = Index(index);
+        return Edit(record, (s, key) => RadicleNative.PluginSetRecordString(Handle, key, path, at, value));
+    }
+
+    /// <summary>Ensures the subrecord is present, adding its schema default at the schema-ordered position (returns true if added or already present; false when the record is absent).</summary>
+    public bool AddSubrecord(FormKey record, string signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return Edit(record, (s, key) => RadicleNative.PluginAddSubrecord(Handle, key, signature));
+    }
+
+    /// <summary>Removes one physical occurrence of a schema-listed subrecord; false when the record or occurrence is absent.</summary>
+    public bool RemoveSubrecord(FormKey record, string signature, int occurrence = 0)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        var at = Index(occurrence);
+        return Edit(record, (s, key) => RadicleNative.PluginRemoveSubrecord(Handle, key, signature, at));
+    }
+
+    /// <summary>Creates a local record holding the editor ID and every required subrecord at its registered default.</summary>
+    public FormKey CreateRecord(string signature, string editorId)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        ArgumentNullException.ThrowIfNull(editorId);
+        if (editorId.Contains('\0')) throw new ArgumentException("An editor ID cannot hold an embedded NUL.", nameof(editorId));
+        Native.FormKey key;
+        Call.Check(RadicleNative.PluginCreateRecord(Handle, signature, editorId, &key));
+        return FormKey.FromNative(key)!.Value;
+    }
+
+    /// <summary>Addressable occurrences or elements of a field; 0 when the field or the record is absent.</summary>
+    public int FieldCount(FormKey record, string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        using var strings = new NativeStrings();
+        nuint count;
+        return Call.Found(RadicleNative.PluginRecordFieldCount(Handle, strings.Key(record), path, &count)) ? checked((int)count) : 0;
+    }
+
+    public int FormLinkListCount(FormKey record, string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        using var strings = new NativeStrings();
+        nuint count;
+        return Call.Found(RadicleNative.PluginFormlinkListSize(Handle, strings.Key(record), path, &count)) ? checked((int)count) : 0;
+    }
+
+    public bool FormLinkListInsert(FormKey record, string path, int index, FormKey? target)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var at = Index(index);
+        return Edit(record, (s, key) =>
+        {
+            var native = s.Key(target);
+            return RadicleNative.PluginFormlinkListInsert(Handle, key, path, at, target.HasValue ? &native : null);
+        });
+    }
+
+    public bool FormLinkListRemove(FormKey record, string path, int index)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var at = Index(index);
+        return Edit(record, (s, key) => RadicleNative.PluginFormlinkListRemove(Handle, key, path, at));
+    }
+
+    public bool FormLinkListSet(FormKey record, string path, int index, FormKey? target)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var at = Index(index);
+        return Edit(record, (s, key) =>
+        {
+            var native = s.Key(target);
+            return RadicleNative.PluginFormlinkListSet(Handle, key, path, at, target.HasValue ? &native : null);
+        });
+    }
+
+    public bool FormLinkListClear(FormKey record, string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return Edit(record, (s, key) => RadicleNative.PluginFormlinkListClear(Handle, key, path));
+    }
+
     public void Dispose()
     {
         var handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);
         if (handle != IntPtr.Zero) RadicleNative.PluginDestroy(handle);
     }
+
+    private static nuint Index(int index) =>
+        index >= 0 ? (nuint)index : throw new ArgumentOutOfRangeException(nameof(index));
 
     private delegate Status NativeEdit(NativeStrings strings, Native.FormKey reference);
 

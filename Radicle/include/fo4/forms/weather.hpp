@@ -14,7 +14,7 @@
 
 namespace fo4::forms {
 
-inline constexpr const char k_weather_api_status[] = "STABLE READ-ONLY / OPAQUE UNKNOWN FIELDS";
+inline constexpr const char k_weather_api_status[] = "STABLE READ / SCHEMA FIELD EDITS / OPAQUE UNKNOWN FIELDS";
 
 class WeatherError : public std::runtime_error {
 public:
@@ -43,8 +43,8 @@ struct Weather {
   std::optional<std::string> editor_id;
 
   std::array<std::optional<std::string>, k_weather_cloud_layer_slots> cloud_textures{};
-  std::array<std::int8_t, k_weather_cloud_layer_slots> cloud_speed_y{};
-  std::array<std::int8_t, k_weather_cloud_layer_slots> cloud_speed_x{};
+  std::array<std::uint8_t, k_weather_cloud_layer_slots> cloud_speed_y{};
+  std::array<std::uint8_t, k_weather_cloud_layer_slots> cloud_speed_x{};
   std::uint32_t cloud_color_layer_count{0};
   std::vector<std::uint32_t> cloud_colors;
   std::vector<float> cloud_alphas;
@@ -61,7 +61,7 @@ struct Weather {
   std::vector<std::byte> data;
 
   std::vector<WeatherSound> snam;
-  std::vector<FormKey> tnam;
+  std::vector<std::optional<FormKey>> tnam;
   std::array<std::optional<FormKey>, k_weather_imagespace_slots> imsp{};
   std::uint8_t imsp_count{0};
   std::array<std::optional<FormKey>, k_weather_god_ray_slots> wgdr{};

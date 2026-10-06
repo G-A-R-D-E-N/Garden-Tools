@@ -727,7 +727,7 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 16u;
+    public const uint CompiledAbiVersion = 18u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -963,6 +963,36 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_activate_parent_delay")]
     public static extern Status PluginSetPlacedActivateParentDelay(IntPtr plugin, FormKey reference, nuint index, float delay);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_scalar")]
+    public static extern Status PluginSetRecordScalar(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, [MarshalAs(UnmanagedType.LPUTF8Str)] string? value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_scalar_at")]
+    public static extern Status PluginSetRecordScalarAt(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint index, [MarshalAs(UnmanagedType.LPUTF8Str)] string? value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_formlink")]
+    public static extern Status PluginSetRecordFormlink(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint index, FormKey* target);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_string")]
+    public static extern Status PluginSetRecordString(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint index, [MarshalAs(UnmanagedType.LPUTF8Str)] string? utf8);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_record_field_count")]
+    public static extern Status PluginRecordFieldCount(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_size")]
+    public static extern Status PluginFormlinkListSize(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_insert")]
+    public static extern Status PluginFormlinkListInsert(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint at, FormKey* target);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_remove")]
+    public static extern Status PluginFormlinkListRemove(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint at);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_set")]
+    public static extern Status PluginFormlinkListSet(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint at, FormKey* target);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_clear")]
+    public static extern Status PluginFormlinkListClear(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_plugin_records")]
     public static extern Status EnvPluginRecords(IntPtr env, nuint plugin_index, IntPtr** out_records, nuint* out_count);
 
@@ -1100,5 +1130,14 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_quest_properties")]
     public static extern void FreeQuestProperties(QuestProperty* properties, nuint count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_subrecord")]
+    public static extern Status PluginAddSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_subrecord")]
+    public static extern Status PluginRemoveSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, nuint occurrence);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_record")]
+    public static extern Status PluginCreateRecord(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, [MarshalAs(UnmanagedType.LPUTF8Str)] string? editor_id_utf8, FormKey* out_key);
 
 }

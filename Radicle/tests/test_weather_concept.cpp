@@ -299,7 +299,7 @@ TEST(WeatherConcept, DecodesProvenCloudAndLinkSlots) {
   ASSERT_TRUE(model.snam[0].sound.has_value());
   EXPECT_EQ(model.snam[0].sound->to_string(), "000810:WeatherPatch.esp");
   ASSERT_EQ(model.tnam.size(), 1u);
-  EXPECT_EQ(model.tnam[0].to_string(), "000820:WeatherPatch.esp");
+  EXPECT_EQ(model.tnam[0].value().to_string(), "000820:WeatherPatch.esp");
   EXPECT_EQ(model.imsp_count, 8);
   EXPECT_TRUE(model.has_wgdr);
   EXPECT_EQ(model.dalc.size(), 8u);
@@ -409,7 +409,7 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   ASSERT_FALSE(before.tnam.empty());
   ASSERT_TRUE(before.snam[0].sound.has_value());
   const auto snam_before = before.snam[0].sound->to_string();
-  const auto tnam_before = before.tnam[0].to_string();
+  const auto tnam_before = before.tnam[0].value().to_string();
 
   const auto spgd_plugin = fo4::read_plugin(make_spgd_only_plugin(0x00000100), "FalloutSpgd.esm");
   const fo4::Plugin* environment[] = {&spgd_plugin};
@@ -425,7 +425,7 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   ASSERT_FALSE(after.tnam.empty());
   ASSERT_TRUE(after.snam[0].sound.has_value());
   EXPECT_EQ(after.snam[0].sound->to_string(), snam_before);
-  EXPECT_EQ(after.tnam[0].to_string(), tnam_before);
+  EXPECT_EQ(after.tnam[0].value().to_string(), tnam_before);
   EXPECT_FLOAT_EQ(after.vnam.value_or(-1.0f), 1.0f);
   EXPECT_FLOAT_EQ(after.wnam.value_or(-1.0f), 1.0f);
 

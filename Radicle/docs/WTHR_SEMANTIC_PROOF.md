@@ -43,13 +43,13 @@ Optional:
 
 | Subrecord | Observed sizes | Runtime / packing note |
 |-----------|----------------|------------------------|
-| `RNAM` / `QNAM` | always 32 | 32 x int8 cloud layer speeds |
+| `RNAM` / `QNAM` | always 32 | 32 x u8 cloud layer speeds (stored with a 127 bias; exposed raw) |
 | `PNAM` / `JNAM` | 512 or 1024 | 16 or 32 layers x 8 time-of-day entries x 4 bytes |
 | `NAM0` | 272 / 544 / 608 | `colorData` width variants; 608 = 19x8x4 matches `colorData[19][8]` |
 | `FNAM` | 32 / 56 / 72 | 72 = 18x4 matches `fogData[18]` |
 | `DATA` | 19 / 20 | 20 matches `weatherData[20]`; 19 is legacy without final byte |
 | `NAM1` | 4 | `cloudLayerDisabledBits` |
-| `DALC` | 32 bytes x 4 or 8 | one `BGSDirectionalAmbientLightingColors` per time slot |
+| `DALC` | 24, 28 or 32 bytes x 4 or 8 | one `BGSDirectionalAmbientLightingColors` per time slot |
 | `IMSP` | 16 or 32 | 4 or 8 ImageSpace FormIDs |
 | `WGDR` | 32 | 8 GodRays FormIDs |
 | `SNAM` | 8 | `{FormID, SoundType u32}` |
@@ -66,7 +66,7 @@ Unsupported / divergent sizes must fail closed or stay opaque.
 | `IMSP+0..+1C` | yes | `IMGS` | shorter IMSP only has +00..+0C |
 | `WGDR+0..+1C` | yes | `GDRY` | absent WGDR on some records |
 | `GNAM` | optional subrecord; non-null when present | `LENS` | sun glare lens flare |
-| `TNAM` | list may be absent; elements non-null in FO4 corpus | `STAT` | sky statics |
+| `TNAM` | list may be absent; NULL allowed (xEdit `[STAT,NULL]`), none NULL in FO4 corpus | `STAT` | sky statics |
 | `SNAM+00` | rare null | `SNDR` | +04 is SoundType enum, not FormID |
 | `UNAM+00` / `UNAM+08` | yes | `SPEL` | thresholds are floats beside the FormIDs |
 
@@ -85,7 +85,7 @@ Not FormIDs: `DALC`, `VNAM`, `WNAM`, `NAM1`, cloud speed/color/alpha blobs, `LNA
 ## Radicle status before this issue
 
 No WTHR semantic decoder/mutation surface in Radicle forms/.
-Schema FormLink visitors know unrelated `MNAM`/`NNAM`/`SNAM`/`GNAM`/`TNAM` contexts (NAVM/QUST/etc.), not WTHR.
+Schema FormLink visitors know unrelated `MNAM`/`NNAM`/`SNAM`/`GNAM`/`TNAM` contexts (NAVM/QUST/etc.); WTHR links are registered in `Radicle/schema/fallout4/fields.json` (see `docs/code-notes/radicle-climate-writer.md`).
 Mutagen Weather remains the in-tree C# oracle only.
 
 ## Safe first mutation surface
