@@ -535,7 +535,9 @@ TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {
                                        : status == fo4::SubrecordAddStatus::no_default      ? " no_default"
                                        : status == fo4::SubrecordAddStatus::not_authorable  ? " not_authorable"
                                                                                             : " unknown_order")];
-        if (rule.coupled) EXPECT_EQ(status, fo4::SubrecordAddStatus::not_authorable);
+        if (rule.coupled) {
+          EXPECT_EQ(status, fo4::SubrecordAddStatus::not_authorable);
+        }
         if (status != fo4::SubrecordAddStatus::added) {
           EXPECT_EQ(after.size(), before.size());
           continue;
