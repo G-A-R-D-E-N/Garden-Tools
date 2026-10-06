@@ -1,12 +1,18 @@
 #include "fo4/c_api_authoring.h"
 #include "fo4/plugin/reader.hpp"
+#include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -36,6 +42,48 @@ std::vector<std::string> order(const fo4::Plugin& plugin, std::uint32_t local) {
     for (const auto& subrecord : record->subrecords) out.push_back(subrecord.signature.to_string());
   }
   return out;
+}
+
+std::vector<std::byte> zstr(std::string_view text) {
+  std::vector<std::byte> out;
+  for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  out.push_back(std::byte{0});
+  return out;
+}
+
+std::vector<std::byte> coupled_fixture() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const std::pair<const char*, std::vector<std::pair<const char*, std::vector<std::byte>>>> records[] = {
+      {"ARMO", {{"EDID", zstr("Armor")}, {"MOD2", zstr("a.nif")}, {"DESC", zstr("Desc")},
+                {"DATA", std::vector<std::byte>(12)}}},
+      {"PROJ", {{"EDID", zstr("Shot")}, {"OBND", std::vector<std::byte>(12)}, {"DEST", std::vector<std::byte>(8)},
+                {"DSTD", std::vector<std::byte>(20)}, {"DSTF", {}}, {"DATA", std::vector<std::byte>(92)},
+                {"DNAM", std::vector<std::byte>(4)}, {"NAM1", zstr("m.nif")}, {"VNAM", std::vector<std::byte>(4)}}}};
+  std::uint32_t form_id = 0x800;
+  for (const auto& [signature, subs] : records) {
+    const auto group = fo4::test::begin_group(out, signature, 0);
+    const auto record = fo4::test::begin_record(out, signature, 0, form_id++);
+    for (const auto& [name, data] : subs) fo4::test::write_subrecord(out, name, data);
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+  }
+  return out.bytes;
+}
+
+std::vector<std::byte> written(radicle_plugin* handle) {
+  std::uint8_t* bytes = nullptr;
+  std::size_t size = 0;
+  EXPECT_EQ(radicle_plugin_write_bytes(handle, &bytes, &size), RADICLE_STATUS_OK);
+  std::vector<std::byte> copy(reinterpret_cast<std::byte*>(bytes), reinterpret_cast<std::byte*>(bytes) + size);
+  radicle_free_bytes(bytes);
+  return copy;
 }
 
 radicle_form_key make_armor(Plugin& plugin, const char* editor_id = "NewArmor") {
@@ -70,7 +118,8 @@ TEST(CApiAuthoring, MapsEveryRefusalToAStatus) {
   const radicle_form_key missing{key.plugin, 0x8FF};
 
   EXPECT_EQ(radicle_plugin_add_subrecord(plugin.handle, missing, "ICON"), RADICLE_STATUS_NOT_FOUND);
-  EXPECT_EQ(radicle_plugin_add_subrecord(plugin.handle, key, "MOD2"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_add_subrecord(plugin.handle, key, "DESC"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("default"), std::string::npos);
   EXPECT_EQ(radicle_plugin_add_subrecord(plugin.handle, key, "KWDA"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_add_subrecord(plugin.handle, key, "ICO"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_add_subrecord(plugin.handle, key, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
@@ -79,8 +128,8 @@ TEST(CApiAuthoring, MapsEveryRefusalToAStatus) {
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_NE(std::strlen(radicle_last_error()), 0u);
 
-  EXPECT_EQ(radicle_plugin_remove_subrecord(plugin.handle, missing, "MOD2", 0), RADICLE_STATUS_NOT_FOUND);
-  EXPECT_EQ(radicle_plugin_remove_subrecord(plugin.handle, key, "MOD2", 0), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_remove_subrecord(plugin.handle, missing, "DESC", 0), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_remove_subrecord(plugin.handle, key, "DESC", 0), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_remove_subrecord(plugin.handle, key, "DATA", 0),
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_remove_subrecord(plugin.handle, key, "KWDA", 0),
@@ -110,4 +159,39 @@ TEST(CApiAuthoring, CreateRecordRefusalsLeaveThePluginUntouched) {
   EXPECT_EQ(key.local_id, 0x801u);
   const auto reread = plugin.snapshot();
   EXPECT_EQ(order(reread, 0x801), (std::vector<std::string>{"EDID", "LVLD", "LVLM", "LVLF", "LLCT"}));
+}
+
+TEST(CApiAuthoring, CoupledSubrecordsAreRefusedWithoutChangingBytes) {
+  const auto root = std::filesystem::temp_directory_path() /
+                    ("radicle_c_authoring_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  const auto path = root / "Authoring.esp";
+  {
+    const auto bytes = coupled_fixture();
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  }
+  radicle_plugin* handle = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &handle), RADICLE_STATUS_OK) << radicle_last_error();
+  const auto before = written(handle);
+
+  const radicle_form_key armor{"Authoring.esp", 0x800};
+  const radicle_form_key projectile{"Authoring.esp", 0x801};
+  const std::pair<radicle_form_key, const char*> coupled[] = {
+      {armor, "MOD2"}, {armor, "MOD4"}, {projectile, "MODL"}, {projectile, "DEST"}, {projectile, "DSTD"}};
+  for (const auto& [key, signature] : coupled) {
+    EXPECT_EQ(radicle_plugin_add_subrecord(handle, key, signature), RADICLE_STATUS_INVALID_ARGUMENT) << signature;
+    EXPECT_NE(std::string(radicle_last_error()).find("not authorable"), std::string::npos);
+    EXPECT_EQ(radicle_plugin_remove_subrecord(handle, key, signature, 0), RADICLE_STATUS_INVALID_ARGUMENT)
+        << signature;
+    EXPECT_NE(std::string(radicle_last_error()).find("not authorable"), std::string::npos);
+  }
+  EXPECT_EQ(written(handle), before);
+  EXPECT_EQ(radicle_plugin_remove_subrecord(handle, armor, "DESC", 0), RADICLE_STATUS_OK);
+  EXPECT_EQ(order(fo4::read_plugin(written(handle), "Authoring.esp"), 0x800),
+            (std::vector<std::string>{"EDID", "MOD2", "DATA"}));
+
+  radicle_plugin_destroy(handle);
+  std::error_code error;
+  std::filesystem::remove_all(root, error);
 }

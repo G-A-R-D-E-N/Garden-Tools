@@ -20,7 +20,8 @@
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -30,7 +31,8 @@
           {
             "signature": "MOD3",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO3T",
@@ -40,7 +42,8 @@
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -50,7 +53,8 @@
           {
             "signature": "MOD5",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO5T",
@@ -75,7 +79,8 @@
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -97,7 +102,8 @@
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -396,7 +402,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -897,7 +904,8 @@
           {
             "signature": "MODL",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -1296,7 +1304,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -1306,27 +1315,32 @@
           {
             "signature": "DEST",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTD",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDT",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTF",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DATA",
