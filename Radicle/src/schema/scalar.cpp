@@ -88,7 +88,10 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
   for (const auto& field : k_scalar_fields) {
     // Embedded fields share a signature with their neighbours, so a lookup by
     // signature alone cannot name one of them. See the header.
-    if (field.scalar.embedded) continue;
+    if (field.scalar.embedded || field.scalar.address.repeated ||
+        field.scalar.storage == ScalarStorage::zstring) {
+      continue;
+    }
     if (field.scalar.subrecord == subrecord) return field.scalar;
   }
   return std::nullopt;
@@ -96,6 +99,7 @@ std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept 
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
                                               const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::zstring) return payload;
   const auto width = scalar_storage_size(descriptor.storage);
   if (!descriptor.embedded) {
     if (payload.size() != width) {
@@ -106,6 +110,23 @@ std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload
   if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
   if (payload.size() < descriptor.offset + width) return {};
   return payload.subspan(descriptor.offset, width);
+}
+
+FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
+  FieldShape shape;
+  shape.subrecord = descriptor.subrecord;
+  shape.payload_size = descriptor.payload_size;
+  shape.whole_payload = !descriptor.embedded;
+  shape.offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
+  shape.width = scalar_storage_size(descriptor.storage);
+  return shape;
+}
+
+std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
+                                             const FieldSlot& slot,
+                                             const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::zstring) return payload;
+  return payload.subspan(slot.offset, scalar_storage_size(descriptor.storage));
 }
 
 void patch_scalar_field(std::span<std::byte> payload,
@@ -156,19 +177,32 @@ std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept 
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
   switch (storage) {
     case ScalarStorage::u8:
+    case ScalarStorage::i8:
       return 1;
     case ScalarStorage::u16:
+    case ScalarStorage::i16:
       return 2;
     case ScalarStorage::u32:
     case ScalarStorage::i32:
     case ScalarStorage::f32:
       return 4;
+    case ScalarStorage::zstring:
+      return 0;
   }
   return 0;
 }
 
 std::string decode_scalar(std::span<const std::byte> data,
                           const ScalarDescriptor& descriptor) {
+  if (descriptor.storage == ScalarStorage::zstring) {
+    const auto terminated = !data.empty() && data.back() == std::byte{0} &&
+                            std::find(data.begin(), data.end() - 1, std::byte{0}) == data.end() - 1;
+    if (!terminated) {
+      throw ScalarError(std::string(descriptor.field_name) + " is not a single NUL-terminated string");
+    }
+    const auto* begin = reinterpret_cast<const char*>(data.data());
+    return std::string(begin, begin + data.size() - 1);
+  }
   if (data.size() != scalar_storage_size(descriptor.storage)) {
     throw ScalarError(
         std::string(descriptor.field_name) + " has unexpected binary width");
@@ -177,6 +211,12 @@ std::string decode_scalar(std::span<const std::byte> data,
   switch (descriptor.storage) {
     case ScalarStorage::u8:
       return std::to_string(std::to_integer<std::uint8_t>(data[0]));
+    case ScalarStorage::i8:
+      return std::to_string(static_cast<std::int8_t>(std::to_integer<std::uint8_t>(data[0])));
+    case ScalarStorage::i16:
+      return std::to_string(static_cast<std::int16_t>(read_u16(data)));
+    case ScalarStorage::zstring:
+      break;
     case ScalarStorage::u16:
       return std::to_string(read_u16(data));
     case ScalarStorage::u32:
@@ -208,6 +248,34 @@ std::vector<std::byte> encode_scalar(std::string_view text,
       }
       validate_range(value, descriptor);
       out.push_back(std::byte{static_cast<std::uint8_t>(value)});
+      break;
+    }
+    case ScalarStorage::i8: {
+      const auto value = parse_integer<int>(text);
+      if (value < std::numeric_limits<std::int8_t>::min() ||
+          value > std::numeric_limits<std::int8_t>::max()) {
+        throw ScalarError("scalar value exceeds i8 storage");
+      }
+      validate_range(value, descriptor);
+      out.push_back(std::byte{static_cast<std::uint8_t>(static_cast<std::int8_t>(value))});
+      break;
+    }
+    case ScalarStorage::i16: {
+      const auto value = parse_integer<int>(text);
+      if (value < std::numeric_limits<std::int16_t>::min() ||
+          value > std::numeric_limits<std::int16_t>::max()) {
+        throw ScalarError("scalar value exceeds i16 storage");
+      }
+      validate_range(value, descriptor);
+      append_u16(out, static_cast<std::uint16_t>(static_cast<std::int16_t>(value)));
+      break;
+    }
+    case ScalarStorage::zstring: {
+      if (text.find('\0') != std::string_view::npos) {
+        throw ScalarError(std::string(descriptor.field_name) + " value contains an embedded NUL");
+      }
+      for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+      out.push_back(std::byte{0});
       break;
     }
     case ScalarStorage::u16: {

@@ -416,7 +416,7 @@ TEST_F(VegetationEdit, CAbiMapsStatusesAndSavesRequestedValues) {
   write(missing);
   ASSERT_EQ(radicle_plugin_read_file(name.c_str(), &plugin), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_record_scalar(plugin, gras, "GRAS\\Density", "1"), RADICLE_STATUS_NOT_FOUND);
-  EXPECT_STREQ(radicle_last_error(), "record has no such subrecord, or the field is outside its supported payload layout");
+  EXPECT_STREQ(radicle_last_error(), "record has no such field occurrence, or the field is outside its supported payload layout");
   EXPECT_EQ(radicle_plugin_set_record_scalar(plugin, tree, "TREE\\TrunkFlexibility", "1"), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_record_scalar(plugin, flor, "FLOR\\Flags", "1"), RADICLE_STATUS_INVALID_ARGUMENT);
   radicle_plugin_destroy(plugin);

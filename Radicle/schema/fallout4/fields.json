@@ -14,7 +14,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           },
           {
             "signature": "MOD2",
@@ -84,12 +85,14 @@
           {
             "signature": "ICON",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MICO",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MOD4",
@@ -104,12 +107,14 @@
           {
             "signature": "ICO2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MIC2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DESC",
@@ -119,7 +124,8 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           }
         ]
       },
@@ -436,12 +442,14 @@
           {
             "signature": "ICON",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           }
         ]
       },
@@ -519,7 +527,65 @@
           "insertion": "existing_only"
         }
       ],
-      "localized_subrecords": []
+      "formlink_fields": [
+        {
+          "path": "FLOR\\Ingredient",
+          "label": "Ingredient",
+          "subrecord": "PFIG",
+          "offset": 0,
+          "targets": ["ALCH", "AMMO", "ARMO", "BOOK", "INGR", "KEYM", "LIGH", "LVLI", "MISC", "NOTE", "WEAP"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\HarvestSound",
+          "label": "Harvest sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "PTRN", "minimum": 0, "maximum": 1 },
+          { "signature": "FULL", "minimum": 1, "maximum": 1, "default": "00" },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DAMC", "minimum": 0, "maximum": 1 },
+          { "signature": "DSTD", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTA", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDL", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDT", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDC", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDS", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTF", "minimum": 0, "maximum": 255 },
+          { "signature": "KSIZ", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "KWDA", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "PRPS", "minimum": 0, "maximum": 1 },
+          { "signature": "PNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "ATTX", "minimum": 0, "maximum": 1 },
+          { "signature": "RNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "FNAM", "minimum": 0, "maximum": 1, "default": "0000" },
+          { "signature": "PFIG", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "SNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "PFPC", "minimum": 1, "maximum": 1, "default": "00000000" }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL",
+        "ATTX",
+        "RNAM"
+      ]
     },
     {
       "signature": "GRAS",
@@ -645,6 +711,19 @@
           "insertion": "existing_only"
         }
       ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "1e005a00000000000000000000000042cdcc4c3e0000003f0000204100000000" }
+        ]
+      },
       "localized_subrecords": []
     },
     {
@@ -842,6 +921,44 @@
       ]
     },
     {
+      "signature": "LTEX",
+      "fields": [],
+      "formlink_lists": [
+        {
+          "path": "LTEX\\Grasses",
+          "label": "Grasses",
+          "subrecord": "GNAM",
+          "targets": ["GRAS"],
+          "nullable": false,
+          "mutation": "appendable"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "LTEX\\Grass",
+          "label": "Grass",
+          "subrecord": "GNAM",
+          "offset": 0,
+          "repeated": true,
+          "targets": ["GRAS"],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "TNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "MNAM", "minimum": 1, "maximum": 1, "default": "00000000" },
+          { "signature": "HNAM", "minimum": 1, "maximum": 1, "default": "1e1e" },
+          { "signature": "SNAM", "minimum": 1, "maximum": 1, "default": "1e" },
+          { "signature": "GNAM", "minimum": 0, "maximum": 65535, "uncounted": true }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
       "signature": "LVSP",
       "authoring": {
         "placement": "top_level",
@@ -859,22 +976,26 @@
           {
             "signature": "LVLD",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLF",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LLCT",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLO",
@@ -1388,7 +1509,38 @@
           "mutation": "terminated_group"
         }
       ],
-      "fields": [],
+      "fields": [
+        {
+          "path": "RACE\\BipedObjectNames",
+          "label": "Biped object name",
+          "kind": "string",
+          "subrecord": "NAME",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorExtendedLookupTexture",
+          "label": "Hair color extended lookup texture",
+          "kind": "string",
+          "subrecord": "HLTX",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorLookupTexture",
+          "label": "Hair color lookup texture",
+          "kind": "string",
+          "subrecord": "HNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\PhonemeTargetNames",
+          "label": "Phoneme target name",
+          "kind": "string",
+          "subrecord": "PHTN",
+          "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": [
         "FULL",
         "DESC"
@@ -1634,7 +1786,47 @@
           "insertion": "existing_only"
         }
       ],
-      "localized_subrecords": []
+      "formlink_fields": [
+        {
+          "path": "TREE\\Ingredient",
+          "label": "Ingredient",
+          "subrecord": "PFIG",
+          "offset": 0,
+          "targets": ["ACTI", "ADDN", "ALCH", "AMMO", "ARMO", "ARTO", "ASPC", "BNDS", "BOOK", "CMPO", "COBJ", "CONT", "DEBR", "DOOR", "EXPL", "FLST", "FLOR", "FURN", "HAZD", "IDLM", "INGR", "KEYM", "LIGH", "LVLI", "LVLN", "LVSP", "MISC", "MSTT", "NOTE", "NPC_", "OMOD", "PROJ", "SCOL", "SCRL", "SOUN", "SPEL", "STAT", "TACT", "TERM", "TREE", "TXST", "WATR", "WEAP", "ENCH"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\HarvestSound",
+          "label": "Harvest sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "PFIG", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "SNAM", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "PFPC", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "FULL", "minimum": 0, "maximum": 1 },
+          { "signature": "CNAM", "minimum": 1, "maximum": 1, "default": "0000803f0000803f00000000000000000000000000000000000000000000000000000000000000000000803f0000803f" }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
     },
     {
       "signature": "FLST",

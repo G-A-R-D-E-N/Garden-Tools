@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fo4/schema/field_address.hpp"
 #include "fo4/signature.hpp"
 
 #include <cstddef>
@@ -19,6 +20,9 @@ enum class ScalarStorage {
   u32,
   i32,
   f32,
+  i8,
+  i16,
+  zstring,
 };
 
 enum class ScalarPresentation {
@@ -43,8 +47,8 @@ struct ScalarDescriptor {
   // fields, and a short payload simply does not expose the ones past its end
   // (EXPL DATA ships truncated at 52/56/60/64 bytes as well as 84).
   bool embedded{false};
-  // Non-zero: an embedded field is treated as absent unless the payload is exactly this size.
   std::size_t payload_size{0};
+  FieldAddress address{};
 };
 
 struct ScalarFieldDescriptor {
@@ -76,6 +80,12 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
 // malformed. Throws for a whole-payload field of the wrong width.
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
                                               const ScalarDescriptor& descriptor);
+
+FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept;
+
+std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
+                                             const FieldSlot& slot,
+                                             const ScalarDescriptor& descriptor);
 
 // Writes an encoded field back into a payload at the descriptor's offset,
 // leaving every other byte untouched. A whole-payload field replaces it.

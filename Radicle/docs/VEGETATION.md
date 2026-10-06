@@ -57,7 +57,25 @@ consumer before a meaningful vegetation probe can run.
 
 ## Editing
 
-The existing numeric GRAS DATA, TREE CNAM, TREE/FLOR PFPC and FLOR FNAM fields can be
-rewritten in place with `radicle_plugin_set_record_scalar` and
-`PluginFile.SetScalar`; nothing is added or removed. Field list, size guards and
-refusal rules are in `docs/code-notes/radicle-vegetation-writer.md`.
+| Family | READ | WRITE | ADD | REMOVE | CREATE | REMAP |
+| --- | --- | --- | --- | --- | --- | --- |
+| GRAS DATA scalars (10) | `decode_grass`, `radicle_grass_get_info`, `Grass` | `SetScalar` (`GRAS\Density` .. `GRAS\Flags`, prefix semantics) | DATA with the 32-byte xEdit default | refused (required) | GRAS | none (no links) |
+| TREE CNAM wind (12) | `decode_tree` | `SetScalar` (`TREE\TrunkFlexibility` .. `LeafFrequency`, 48-byte CNAM only) | CNAM default | refused (required) | TREE | none |
+| TREE/FLOR PFPC seasons (4 each) | harvest seasons | `SetScalar` (`TREE\Spring` .. `FLOR\Winter`, 4-byte PFPC only) | zero default | TREE yes, FLOR refused (required) | FLOR (required), TREE optional | none |
+| FLOR FNAM flags | `decode_flora` | `SetScalar` `FLOR\Flags` (2-byte FNAM only) | zero default | yes | optional, not created by default | none |
+| TREE PFIG, SNAM | `HarvestData` ingredient, sound | `SetFormLink` `TREE\Ingredient` (base objects plus ENCH, nullable), `TREE\HarvestSound` (SNDR, nullable) | null default | yes | optional, not created by default | PFIG and SNAM payload remap |
+| FLOR PFIG, SNAM | same | `FLOR\Ingredient` (ALCH, AMMO, ARMO, BOOK, INGR, KEYM, LIGH, LVLI, MISC, NOTE, WEAP, nullable), `FLOR\HarvestSound` (SNDR, not nullable) | PFIG null default, SNAM no default | yes | optional, not created by default | same |
+| LTEX GNAM | `decode_landscape_grasses`, `LandscapeGrasses` | `SetFormLink` `LTEX\Grass` index n (GRAS, not nullable), `FieldCount` | `FormLinkListInsert` `LTEX\Grasses` with a GRAS target (`AddSubrecord GNAM` is refused: no default) | `RemoveSubrecord GNAM n` or `FormLinkListRemove` | optional | GNAM payload remap |
+| LTEX required MNAM, HNAM, SNAM | n/a | n/a | defaults null, 30/30, 30 | refused (required) | LTEX | none |
+| Records | n/a | n/a | n/a | n/a | GRAS, TREE, LTEX, FLOR (non-localized plugins) via `radicle_plugin_create_record` / `PluginFile.CreateRecord` | n/a |
+
+Stays opaque: MODL/MODT/MODC/MODS/MODF (MODL cannot be removed: it would orphan its siblings), VMAD,
+PTRN, DEST and its stage subrecords, DAMC, PRPS, PNAM, ATTX, RNAM, FULL, KSIZ/KWDA (use `FLOR\Keywords`),
+LTEX TNAM, HNAM, MNAM and SNAM (no typed field; present only through the generic surfaces), and every byte
+of an official record that no edit touched. Four FLOR records in Fallout4.esm (FloraFern01/02,
+FloraCornStalk01/02, two destructible stages) cannot take `AddSubrecord` because the flat order check does
+not model repeating stage groups; their field edits and removals still work.
+
+Field list, size guards, defaults provenance and refusal rules are in
+`docs/code-notes/radicle-vegetation-writer.md`. Subrecord add, remove and create semantics are in
+`docs/code-notes/radicle-subrecord-authoring.md`.

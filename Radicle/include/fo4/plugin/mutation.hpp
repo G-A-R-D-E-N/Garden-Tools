@@ -8,6 +8,8 @@
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <cstddef>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -73,6 +75,11 @@ FormKey reserve_local_form_key(Plugin& plugin);
 
 FormKey create_local_record(Plugin& plugin, Signature signature);
 
+// Same, with the record's subrecords supplied up front; nothing is copied.
+FormKey create_local_record(Plugin& plugin,
+                            Signature signature,
+                            std::vector<Subrecord> subrecords);
+
 // Refuses deletion when any schema-proven in-plugin FormLink still targets the
 // record. Unsupported remap surfaces fail closed before mutation. nextFormID
 // is never decremented or recycled.
@@ -102,6 +109,43 @@ FormLinkFieldMutationStatus set_record_formlink_field(
     const FormKey& record_key,
     const schema::FormLinkFieldDescriptor& field,
     const FormKey& target);
+
+ScalarMutationStatus set_record_scalar(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       const schema::ScalarFieldDescriptor& field,
+                                       std::size_t index,
+                                       std::string_view value);
+
+ScalarMutationStatus set_record_string(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       const schema::ScalarFieldDescriptor& field,
+                                       std::size_t index,
+                                       std::string_view value);
+
+ScalarMutationStatus set_record_string(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       std::string_view path,
+                                       std::size_t index,
+                                       std::string_view value);
+
+FormLinkFieldMutationStatus set_record_formlink_field(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::FormLinkFieldDescriptor& field,
+    std::size_t index,
+    const FormKey& target);
+
+std::optional<std::size_t> record_field_count(const Plugin& plugin,
+                                              const FormKey& record_key,
+                                              const schema::ScalarFieldDescriptor& field);
+
+std::optional<std::size_t> record_field_count(const Plugin& plugin,
+                                              const FormKey& record_key,
+                                              const schema::FormLinkFieldDescriptor& field);
+
+std::optional<std::size_t> record_field_count(const Plugin& plugin,
+                                              const FormKey& record_key,
+                                              std::string_view path);
 
 // Replaces the record's CTDA condition list with freshly serialized
 // conditions (see write_ctda_conditions for the subrecord-level contract).
