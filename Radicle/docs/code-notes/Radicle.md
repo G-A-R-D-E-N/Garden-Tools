@@ -23,8 +23,8 @@ gaps listed in the evidence record, not live game acceptance.
 
 `include/fo4/c_api_records.h:radicle_water_resolve` returns the selected key,
 borrowed winning WATR handle, default-selection flag and optional height.
-ABI 14 is reserved for this independent batch after main's ABI 8, existing
-sound/navmesh/vegetation/dialogue/package batches 9-13 and climate follow-up 15.
+The ABI number is provisional (19 on the water branch); see
+`docs/code-notes/radicle-water-writer.md`.
 `bindings/csharp/Radicle.Interop/WaterSelection.cs:EffectiveWater` consumes it.
 
 `probes/gardenengine/WaterSelectionProbe.cs:WaterSelectionProbe._Ready` reads
@@ -241,7 +241,7 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 
 - STAT `MNAM`: up to four 260-byte slots, each a NUL-terminated mesh path followed by unused bytes (`wbDefinitionsFO4.pas`, `wbStruct(MNAM, 'Distant LOD', [wbStringForward('Level 0', 260), ...])`). A slot with no terminator inside its own 260 bytes is a decode error rather than a read past the end into the next slot.
 - ACTI `WNAM`: the water type.
-- WATR: `FNAM` flags, the `DNAM` visual block through Screen Space Reflections, the three noise layers in their stored interleave (wind direction, speed, amplitude scale, UV scale, falloff; `wbDefinitionsFO4.pas` and `src/forms/water.cpp`'s `NoiseLayerParsing` agree), the `NAM2`/`NAM3`/`NAM4` noise textures, and `NAM0`/`NAM1` velocities. `DNAM` is required from 188 bytes and may end anywhere up to 201, matching `SetOptionalFrom(4)`; the silt and reflection tail is optional.
+- WATR: `FNAM` flags, the `DNAM` visual block through Screen Space Reflections, the three noise layers in their stored interleave (wind direction, speed, amplitude scale, UV scale, falloff; `wbDefinitionsFO4.pas` and `src/forms/water.cpp`'s `NoiseLayerParsing` agree), the `NAM2`/`NAM3`/`NAM4` noise textures, and `NAM0`/`NAM1` velocities. `DNAM` is required from 188 bytes and may end anywhere up to 201, matching `SetOptionalFrom(4)`; the silt and reflection tail is optional, and silt is decoded only when all 12 of its bytes are present (`docs/code-notes/radicle-water-writer.md`).
 - WRLD `NAM3`/`NAM4`: the LOD water and its height (`wbDefinitionsCommon.pas`, `wbWorldLODData`).
 - CELL `XCWT`: the cell's water type.
 

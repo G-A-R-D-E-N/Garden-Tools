@@ -14,12 +14,14 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           },
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -29,7 +31,8 @@
           {
             "signature": "MOD3",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO3T",
@@ -39,7 +42,8 @@
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -49,7 +53,8 @@
           {
             "signature": "MOD5",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO5T",
@@ -74,7 +79,8 @@
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -84,17 +90,20 @@
           {
             "signature": "ICON",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MICO",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -104,12 +113,14 @@
           {
             "signature": "ICO2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MIC2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DESC",
@@ -119,7 +130,8 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           }
         ]
       },
@@ -390,7 +402,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -436,12 +449,14 @@
           {
             "signature": "ICON",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           }
         ]
       },
@@ -621,7 +636,8 @@
           {
             "signature": "MODL",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -662,22 +678,26 @@
           {
             "signature": "LVLD",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLF",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LLCT",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLO",
@@ -978,7 +998,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -988,27 +1009,32 @@
           {
             "signature": "DEST",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTD",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDT",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTF",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DATA",
@@ -1191,7 +1217,38 @@
           "mutation": "terminated_group"
         }
       ],
-      "fields": [],
+      "fields": [
+        {
+          "path": "RACE\\BipedObjectNames",
+          "label": "Biped object name",
+          "kind": "string",
+          "subrecord": "NAME",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorExtendedLookupTexture",
+          "label": "Hair color extended lookup texture",
+          "kind": "string",
+          "subrecord": "HLTX",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorLookupTexture",
+          "label": "Hair color lookup texture",
+          "kind": "string",
+          "subrecord": "HNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\PhonemeTargetNames",
+          "label": "Phoneme target name",
+          "kind": "string",
+          "subrecord": "PHTN",
+          "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": [
         "FULL",
         "DESC"
@@ -1224,6 +1281,1043 @@
         }
       ],
       "localized_subrecords": []
+    },
+    {
+      "signature": "WATR",
+      "fields": [
+        {
+          "path": "WATR\\Name",
+          "label": "Name",
+          "kind": "string",
+          "subrecord": "FULL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\OpacityUnused",
+          "label": "Opacity (unused)",
+          "kind": "scalar",
+          "subrecord": "ANAM",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DepthAmount",
+          "label": "Depth amount",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ShallowColorRed",
+          "label": "Shallow color red",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ShallowColorGreen",
+          "label": "Shallow color green",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 5,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ShallowColorBlue",
+          "label": "Shallow color blue",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 6,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DeepColorRed",
+          "label": "Deep color red",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DeepColorGreen",
+          "label": "Deep color green",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 9,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DeepColorBlue",
+          "label": "Deep color blue",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ColorShallowRange",
+          "label": "Color shallow range",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ColorDeepRange",
+          "label": "Color deep range",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ShallowAlpha",
+          "label": "Shallow alpha",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DeepAlpha",
+          "label": "Deep alpha",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\AlphaShallowRange",
+          "label": "Alpha shallow range",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\AlphaDeepRange",
+          "label": "Alpha deep range",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\UnderwaterColorRed",
+          "label": "Underwater color red",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 36,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\UnderwaterColorGreen",
+          "label": "Underwater color green",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 37,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\UnderwaterColorBlue",
+          "label": "Underwater color blue",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 38,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\UnderwaterFogAmount",
+          "label": "Underwater fog amount",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\UnderwaterNearFog",
+          "label": "Underwater near fog",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\UnderwaterFarFog",
+          "label": "Underwater far fog",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 48,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\NormalMagnitude",
+          "label": "Normal magnitude",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 52,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ShallowNormalFalloff",
+          "label": "Shallow normal falloff",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 56,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DeepNormalFalloff",
+          "label": "Deep normal falloff",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 60,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ReflectivityAmount",
+          "label": "Reflectivity amount",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 64,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\FresnelAmount",
+          "label": "Fresnel amount",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 68,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\SurfaceEffectFalloff",
+          "label": "Surface effect falloff",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 72,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DisplacementForce",
+          "label": "Displacement force",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 76,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DisplacementVelocity",
+          "label": "Displacement velocity",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 80,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DisplacementFalloff",
+          "label": "Displacement falloff",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 84,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DisplacementDampener",
+          "label": "Displacement dampener",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 88,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DisplacementStartingSize",
+          "label": "Displacement starting size",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 92,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ReflectionColorRed",
+          "label": "Reflection color red",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 96,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ReflectionColorGreen",
+          "label": "Reflection color green",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 97,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ReflectionColorBlue",
+          "label": "Reflection color blue",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 98,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\SunSpecularPower",
+          "label": "Sun specular power",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 100,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\SunSpecularMagnitude",
+          "label": "Sun specular magnitude",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 104,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\SunSparklePower",
+          "label": "Sun sparkle power",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 108,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\SunSparkleMagnitude",
+          "label": "Sun sparkle magnitude",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 112,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\InteriorSpecularRadius",
+          "label": "Interior specular radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 116,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\InteriorSpecularBrightness",
+          "label": "Interior specular brightness",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 120,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\InteriorSpecularPower",
+          "label": "Interior specular power",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 124,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer1WindDirection",
+          "label": "Layer 1 wind direction",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 128,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer2WindDirection",
+          "label": "Layer 2 wind direction",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 132,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer3WindDirection",
+          "label": "Layer 3 wind direction",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 136,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer1WindSpeed",
+          "label": "Layer 1 wind speed",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 140,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer2WindSpeed",
+          "label": "Layer 2 wind speed",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 144,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer3WindSpeed",
+          "label": "Layer 3 wind speed",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 148,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer1AmplitudeScale",
+          "label": "Layer 1 amplitude scale",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 152,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer2AmplitudeScale",
+          "label": "Layer 2 amplitude scale",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 156,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer3AmplitudeScale",
+          "label": "Layer 3 amplitude scale",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 160,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer1UVScale",
+          "label": "Layer 1 UV scale",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 164,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer2UVScale",
+          "label": "Layer 2 UV scale",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 168,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer3UVScale",
+          "label": "Layer 3 UV scale",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 172,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer1NoiseFalloff",
+          "label": "Layer 1 noise falloff",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 176,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer2NoiseFalloff",
+          "label": "Layer 2 noise falloff",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 180,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer3NoiseFalloff",
+          "label": "Layer 3 noise falloff",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 184,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\SiltAmount",
+          "label": "Silt amount",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 188,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\LightColorRed",
+          "label": "Silt light color red",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 192,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\LightColorGreen",
+          "label": "Silt light color green",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 193,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\LightColorBlue",
+          "label": "Silt light color blue",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 194,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DarkColorRed",
+          "label": "Silt dark color red",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 196,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DarkColorGreen",
+          "label": "Silt dark color green",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 197,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\DarkColorBlue",
+          "label": "Silt dark color blue",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 198,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ScreenSpaceReflections",
+          "label": "Screen space reflections",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 200,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 1,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\LinearVelocityX",
+          "label": "Linear velocity X",
+          "kind": "scalar",
+          "subrecord": "NAM0",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\LinearVelocityY",
+          "label": "Linear velocity Y",
+          "kind": "scalar",
+          "subrecord": "NAM0",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\LinearVelocityZ",
+          "label": "Linear velocity Z",
+          "kind": "scalar",
+          "subrecord": "NAM0",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\AngularVelocityX",
+          "label": "Angular velocity X",
+          "kind": "scalar",
+          "subrecord": "NAM1",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\AngularVelocityY",
+          "label": "Angular velocity Y",
+          "kind": "scalar",
+          "subrecord": "NAM1",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\AngularVelocityZ",
+          "label": "Angular velocity Z",
+          "kind": "scalar",
+          "subrecord": "NAM1",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer1NoiseTexture",
+          "label": "Layer 1 noise texture",
+          "kind": "string",
+          "subrecord": "NAM2",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer2NoiseTexture",
+          "label": "Layer 2 noise texture",
+          "kind": "string",
+          "subrecord": "NAM3",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\Layer3NoiseTexture",
+          "label": "Layer 3 noise texture",
+          "kind": "string",
+          "subrecord": "NAM4",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "WATR\\MaterialUnused",
+          "label": "Material (unused)",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "targets": ["MATT"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\OpenSound",
+          "label": "Open sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ConsumeSpell",
+          "label": "Consume spell",
+          "subrecord": "XNAM",
+          "offset": 0,
+          "targets": ["SPEL"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ContactSpell",
+          "label": "Contact spell",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": ["SPEL"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WATR\\ImageSpace",
+          "label": "Image space",
+          "subrecord": "INAM",
+          "offset": 0,
+          "targets": ["IMGS"],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "FNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "TNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "YNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000004600000000000000009a99193f9a99993e000000000000803f0000803f0000003f000000000000803f0000000000007a440000003f0000803f0000403f0000003fcdcccc3c6666663fcdcccc3e9a99193ff6287c3f00002041cdcc4c3d00000000000048420000803f0000803f0000803f0050c3470000803f0000c8420000000000000000000000000000000000000000000000000000000000000000000000000000c8420000c8420000c84200009643000096430000964300000000000000000000000001"
+          },
+          {
+            "signature": "GNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM0",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "NAM1",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "NAM2",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "NAM3",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "NAM4",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          }
+        ]
+      },
+      "localized_subrecords": ["FULL"]
     },
     {
       "signature": "FLST",

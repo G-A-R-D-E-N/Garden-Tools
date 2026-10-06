@@ -28,7 +28,10 @@ three wind-direction floats at 128–136, speeds at 140–148, amplitude scales
 at 152–160, UV scales at 164–172, and falloffs at 176–184. The optional tail
 is silt amount at 188, light/dark RGBA colors at 192/196, and one reflection
 byte at 200. The decoder requires 188 bytes and rejects data beyond 201;
-unmodeled subrecords and untouched bytes stay in the container.
+unmodeled subrecords and untouched bytes stay in the container. Silt is
+all-or-nothing as in xEdit (`StructDoInit` drops an optional member that does
+not fit whole): it is decoded only from 200 bytes, the reflection byte only at
+201, and a 189-199-byte payload decodes with neither.
 
 `tests/test_water_real.cpp:WaterRealData` decodes every WATR version in each
 of the seven official masters, records counts and DNAM sizes, exercises the
@@ -41,6 +44,38 @@ DLCCoast.esm 2, DLCNukaWorld.esm 3, and zero in the other four masters.
 Two DNAMs are 188 bytes and 45 are 201 bytes. All 14 parameterized native
 and C ABI checks passed, including untouched byte identity for all seven
 masters. With `FO4_DATA_DIR` unset, all 14 skipped cleanly.
+
+## Editing
+
+WATR is registered in `schema/fallout4/fields.json` and edited through the
+generic W0 field writer and subrecord authoring (`PluginFile.SetScalar`,
+`SetString`, `SetFormLink`, `FieldCount`, `AddSubrecord`, `RemoveSubrecord`,
+`CreateRecord` and the matching `radicle_plugin_*` exports).
+
+| Family | READ | WRITE | ADD | REMOVE | CREATE | REMAP |
+| --- | --- | --- | --- | --- | --- | --- |
+| DNAM floats (44) | `decode_water`, `radicle_water_get_info`, `Water` | `SetScalar` `WATR\DepthAmount` .. `WATR\SiltAmount`; prefix rule, silt absent on a 188-byte DNAM | refused (present and required) | refused (required) | 201-byte xEdit default | none |
+| DNAM colours (6 x RGB) | same | `SetScalar` `WATR\<Colour>Red/Green/Blue` (u8); pad bytes never written | same | same | zero | none |
+| DNAM reflections | `screen_space_reflections` | `SetScalar` `WATR\ScreenSpaceReflections` (0..1, 201-byte DNAM only) | same | same | 1 (True) | none |
+| FNAM flags | `flags` | `SetScalar` `WATR\Flags` | n/a (required) | refused (required) | `00` | none |
+| ANAM | n/a | `SetScalar` `WATR\OpacityUnused` | `00` | yes | not created | none |
+| NAM0 / NAM1 velocities | `linear_velocity`, `angular_velocity` | `SetScalar` `WATR\LinearVelocityX..Z`, `AngularVelocityX..Z` (12-byte payload only) | zero vector | yes | not created | none |
+| NAM2-NAM4 noise textures | `noise_textures` | `SetString` `WATR\Layer1..3NoiseTexture` | empty string | yes | not created | none |
+| FULL name | n/a | `SetString` `WATR\Name`, refused in localized plugins | empty string (non-localized plugins only) | yes | not created | none (string) |
+| SNAM open sound | n/a | `SetFormLink` `WATR\OpenSound` (SNDR, nullable) | NULL link | yes | not created | yes |
+| TNAM, XNAM, YNAM, INAM | n/a | `SetFormLink` `WATR\MaterialUnused` (MATT), `ConsumeSpell`, `ContactSpell` (SPEL), `ImageSpace` (IMGS); none nullable | refused (`no_default`) | yes | not created | yes |
+| DATA, GNAM | n/a | n/a | refused (`no_default`) | yes | not created | none |
+| Records | n/a | n/a | n/a | n/a | `CreateRecord("WATR", ...)`: EDID, FNAM, DNAM | n/a |
+
+A non-standard 189–199-byte DNAM has no silt in the reader, but the generic
+writer still edits the silt bytes that fit (no official record has that size).
+
+Stays opaque: DATA and GNAM payloads (GNAM is 12 bytes of unknown data in
+every official record), the colour pad bytes (byte 195 is 0xFF in four
+Fallout4.esm records), and every byte of an official record that no edit
+touched. The official order check finds no violators in the 47 WATR. Field
+list, defaults provenance and refusal rules are in
+`docs/code-notes/radicle-water-writer.md`.
 
 ## Cell/worldspace resolution
 
@@ -68,7 +103,7 @@ one half, negative fractions truncate, and NaN/below-range values become
 -2^31. Values at least +2^31 select the world's default height: **-2^31 is
 a real height**, not a default sentinel. The original XCLW bytes remain intact.
 Interior height volumes and live rendering are outside this selection query.
-ABI 14 adds the selection result after main's ABI 8 and independent batches 9–13.
+The selection result uses a provisional ABI (19 on this branch); see `docs/code-notes/radicle-water-writer.md`.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has the consumer
 `opencw/Services/WaterBuild/WaterBuilder.cs:Build`, `ReadWorld`, and `Material`,

@@ -18,6 +18,7 @@ constexpr std::uint16_t k_weather_eight_times_form_version = 111;
 constexpr std::size_t k_light_required_size = 48;
 constexpr std::size_t k_distant_lod_slot = 260;
 constexpr std::size_t k_water_visual_required_size = 188;
+constexpr std::size_t k_water_silt_end = 200;
 constexpr std::size_t k_water_visual_full_size = 201;
 
 std::optional<std::string_view> text(const Reader& reader, Signature signature) {
@@ -231,10 +232,12 @@ WaterData decode_water(const Environment& env, const RecordRef& ref) {
       n.uv_scale = Reader::f32(*sub, 164 + layer * 4);
       n.noise_falloff = Reader::f32(*sub, 176 + layer * 4);
     }
-    if (size >= 192) v.silt_amount = Reader::f32(*sub, 188);
-    if (size >= 196) v.silt_light_color = Reader::color(*sub, 192);
-    if (size >= 200) v.silt_dark_color = Reader::color(*sub, 196);
-    if (size >= 201) v.screen_space_reflections = sub->data[200] != std::byte{0};
+    if (size >= k_water_silt_end) {
+      v.silt_amount = Reader::f32(*sub, 188);
+      v.silt_light_color = Reader::color(*sub, 192);
+      v.silt_dark_color = Reader::color(*sub, 196);
+    }
+    if (size >= k_water_visual_full_size) v.screen_space_reflections = sub->data[200] != std::byte{0};
     out.visual = v;
   }
   out.noise_textures = {text(reader, sig("NAM2")), text(reader, sig("NAM3")), text(reader, sig("NAM4"))};
