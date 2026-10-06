@@ -72,7 +72,7 @@ bool layout_valid(Rules rules, bool generated, const Record& record) {
 }
 
 bool editable(const schema::SubrecordAuthoringConstraint& rule) {
-  return rule.maximum == 1 || (rule.maximum > 1 && rule.uncounted);
+  return !rule.coupled && (rule.maximum == 1 || (rule.maximum > 1 && rule.uncounted));
 }
 
 Record* locate(Plugin& plugin, const FormKey& key) {

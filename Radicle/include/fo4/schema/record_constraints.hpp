@@ -20,6 +20,7 @@ struct SubrecordAuthoringConstraint {
   const std::uint8_t* default_data{nullptr};
   std::uint16_t default_size{0};
   bool uncounted{false};
+  bool coupled{false};
 
   constexpr bool has_default() const noexcept { return default_data != nullptr && default_size != 0; }
   std::span<const std::uint8_t> default_bytes() const noexcept {

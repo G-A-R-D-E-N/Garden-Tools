@@ -105,12 +105,17 @@ def load_constraints(schema_path: Path):
             if uncounted and maximum <= 1:
                 raise ValueError(f"authoring uncounted only applies to repeated entries for {signature}.{sub_signature}")
 
+            coupled = subrecord.get("coupled", False)
+            if not isinstance(coupled, bool):
+                raise ValueError(f"authoring coupled must be a boolean for {signature}.{sub_signature}")
+
             parsed_subrecords.append({
                 "signature": sub_signature,
                 "minimum": minimum,
                 "maximum": maximum,
                 "default": default,
                 "uncounted": uncounted,
+                "coupled": coupled,
             })
 
         constraints.append({
@@ -150,7 +155,8 @@ def render(constraints) -> str:
                 "  {" +
                 f"Signature::from_string({cpp_string(subrecord['signature'])}), " +
                 f"{subrecord['minimum']}, {subrecord['maximum']}, {tail}, " +
-                ("true" if subrecord["uncounted"] else "false") +
+                ("true" if subrecord["uncounted"] else "false") + ", " +
+                ("true" if subrecord["coupled"] else "false") +
                 "},"
             )
         records.append((record, first, len(record["subrecords"])))

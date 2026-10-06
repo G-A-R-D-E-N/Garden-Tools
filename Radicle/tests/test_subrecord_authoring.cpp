@@ -128,7 +128,7 @@ fo4::Plugin reload(const fo4::Plugin& plugin) {
 
 Subs armo_base() {
   return {{"EDID", zstr("Armor")}, {"MOD2", zstr("a.nif")}, {"ICO2", zstr("b.dds")},
-          {"DATA", filled(12, 7)}};
+          {"DESC", zstr("Desc")}, {"DATA", filled(12, 7)}};
 }
 
 fo4::Plugin fixture() {
@@ -176,6 +176,11 @@ const fo4::schema::SubrecordAuthoringConstraint k_create_blocked[] = {
     {fo4::Signature::from_string("CCCC"), 1, 1, nullptr, 0, false},
 };
 
+const fo4::schema::SubrecordAuthoringConstraint k_coupled_rules[] = {
+    {fo4::Signature::from_string("EDID"), 0, 1, nullptr, 0, false},
+    {fo4::Signature::from_string("HHHH"), 1, 1, k_default_a, 1, false, true},
+};
+
 const fo4::schema::SubrecordAuthoringConstraint k_localized_rules[] = {
     {fo4::Signature::from_string("EDID"), 0, 1, nullptr, 0, false},
     {fo4::Signature::from_string("FULL"), 1, 1, k_default_a, 1, false},
@@ -199,10 +204,10 @@ TEST(SubrecordAuthoring, AddsAtSchemaPositionAndLeavesNeighboursUntouched) {
 
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x800), sig("ICON")), fo4::SubrecordAddStatus::added);
   EXPECT_EQ(order(plugin, 0x800),
-            (std::vector<std::string>{"EDID", "MOD2", "ICON", "ICO2", "DATA"}));
+            (std::vector<std::string>{"EDID", "MOD2", "ICON", "ICO2", "DESC", "DATA"}));
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x800), sig("MICO")), fo4::SubrecordAddStatus::added);
   EXPECT_EQ(order(plugin, 0x800),
-            (std::vector<std::string>{"EDID", "MOD2", "ICON", "MICO", "ICO2", "DATA"}));
+            (std::vector<std::string>{"EDID", "MOD2", "ICON", "MICO", "ICO2", "DESC", "DATA"}));
   EXPECT_EQ(find_sub(plugin, 0x800, "ICON")->data, filled(1, 0));
   EXPECT_EQ(find_sub(plugin, 0x800, "MOD2")->data, zstr("a.nif"));
   EXPECT_EQ(find_sub(plugin, 0x800, "DATA")->data, filled(12, 7));
@@ -210,7 +215,7 @@ TEST(SubrecordAuthoring, AddsAtSchemaPositionAndLeavesNeighboursUntouched) {
 
   const auto reloaded = reload(plugin);
   EXPECT_EQ(order(reloaded, 0x800),
-            (std::vector<std::string>{"EDID", "MOD2", "ICON", "MICO", "ICO2", "DATA"}));
+            (std::vector<std::string>{"EDID", "MOD2", "ICON", "MICO", "ICO2", "DESC", "DATA"}));
   EXPECT_EQ(find_sub(reloaded, 0x800, "ICON")->data, filled(1, 0));
   EXPECT_TRUE(authoring_clean(reloaded, key(0x800)));
   EXPECT_EQ(fo4::test::record_original_bytes(plugin, *fo4::find_record(plugin, key(0x801))), before_odd);
@@ -228,9 +233,9 @@ TEST(SubrecordAuthoring, RefusesPresentUnknownOrderNoDefaultAndUnauthorable) {
   auto plugin = fixture();
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x800), sig("DATA")),
             fo4::SubrecordAddStatus::already_present);
-  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x800), sig("MOD2")),
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x800), sig("DESC")),
             fo4::SubrecordAddStatus::already_present);
-  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x804), sig("MOD2")), fo4::SubrecordAddStatus::no_default);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x804), sig("DESC")), fo4::SubrecordAddStatus::no_default);
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x801), sig("ICON")),
             fo4::SubrecordAddStatus::unknown_order);
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key(0x804), sig("KWDA")),
@@ -254,10 +259,10 @@ TEST(SubrecordAuthoring, RefusedAddRollsBackToTheOriginalBytes) {
 
 TEST(SubrecordAuthoring, RemovesPhysicalOccurrenceAndEnforcesTheMinimum) {
   auto plugin = fixture();
-  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("MOD2"), 0),
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("DESC"), 0),
             fo4::SubrecordRemoveStatus::removed);
-  EXPECT_EQ(order(plugin, 0x800), (std::vector<std::string>{"EDID", "ICO2", "DATA"}));
-  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("MOD2"), 0),
+  EXPECT_EQ(order(plugin, 0x800), (std::vector<std::string>{"EDID", "MOD2", "ICO2", "DATA"}));
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("DESC"), 0),
             fo4::SubrecordRemoveStatus::absent);
   EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("ICO2"), 1),
             fo4::SubrecordRemoveStatus::absent);
@@ -265,13 +270,13 @@ TEST(SubrecordAuthoring, RemovesPhysicalOccurrenceAndEnforcesTheMinimum) {
             fo4::SubrecordRemoveStatus::below_minimum);
   EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("KWDA"), 0),
             fo4::SubrecordRemoveStatus::not_authorable);
-  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x8FF), sig("MOD2"), 0),
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x8FF), sig("DESC"), 0),
             fo4::SubrecordRemoveStatus::record_missing);
   EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x805), sig("EDID"), 0),
             fo4::SubrecordRemoveStatus::not_authorable);
 
   const auto reloaded = reload(plugin);
-  EXPECT_EQ(order(reloaded, 0x800), (std::vector<std::string>{"EDID", "ICO2", "DATA"}));
+  EXPECT_EQ(order(reloaded, 0x800), (std::vector<std::string>{"EDID", "MOD2", "ICO2", "DATA"}));
   EXPECT_TRUE(authoring_clean(reloaded, key(0x800)));
 }
 
@@ -283,14 +288,14 @@ TEST(SubrecordAuthoring, CompressedRecordRoundTripsAddAndRemove) {
   auto reloaded = reload(plugin);
   EXPECT_TRUE(fo4::find_record(reloaded, key(0x802))->compressed);
   EXPECT_EQ(order(reloaded, 0x802),
-            (std::vector<std::string>{"EDID", "MOD2", "ICON", "ICO2", "DATA"}));
+            (std::vector<std::string>{"EDID", "MOD2", "ICON", "ICO2", "DESC", "DATA"}));
   EXPECT_EQ(find_sub(reloaded, 0x802, "MOD2")->data, zstr("a.nif"));
 
   EXPECT_EQ(fo4::remove_record_subrecord(reloaded, key(0x802), sig("ICON"), 0),
             fo4::SubrecordRemoveStatus::removed);
   const auto again = reload(reloaded);
   EXPECT_TRUE(fo4::find_record(again, key(0x802))->compressed);
-  EXPECT_EQ(order(again, 0x802), (std::vector<std::string>{"EDID", "MOD2", "ICO2", "DATA"}));
+  EXPECT_EQ(order(again, 0x802), (std::vector<std::string>{"EDID", "MOD2", "ICO2", "DESC", "DATA"}));
   EXPECT_EQ(find_sub(again, 0x802, "DATA")->data, filled(12, 7));
 }
 
@@ -310,6 +315,60 @@ TEST(SubrecordAuthoring, CountedRepeatedEntriesAreNeverEdited) {
             fo4::SubrecordAddStatus::not_authorable);
   EXPECT_EQ(fo4::remove_record_subrecord(generic, key(0x800), sig("FFFF"), 0, k_rules),
             fo4::SubrecordRemoveStatus::not_authorable);
+}
+
+TEST(SubrecordAuthoring, CoupledEntriesAreNeverAddedOrRemoved) {
+  auto plugin = fo4::read_plugin(
+      build({{"ARMO", 0x800, armo_base()},
+             {"ARMO", 0x801, {{"EDID", zstr("Plain")}, {"DATA", filled(12, 0)}}},
+             {"EXPL", 0x802,
+              {{"EDID", zstr("Boom")}, {"OBND", filled(12, 0)}, {"MODL", zstr("e.nif")},
+               {"MODT", filled(12, 1)}, {"DATA", filled(84, 0)}}},
+             {"PROJ", 0x803,
+              {{"EDID", zstr("Shot")}, {"OBND", filled(12, 0)}, {"MODL", zstr("p.nif")},
+               {"DEST", filled(8, 0)}, {"DSTD", filled(20, 0)}, {"DMDL", zstr("d.nif")},
+               {"DMDT", filled(12, 2)}, {"DSTF", {}}, {"DATA", filled(92, 0)},
+               {"DNAM", filled(4, 0)}, {"NAM1", zstr("m.nif")}, {"VNAM", filled(4, 0)}}}}),
+      k_plugin);
+  fo4::assign_record_form_keys(plugin);
+  const auto before = fo4::write_plugin(plugin);
+
+  const std::pair<std::uint32_t, const char*> coupled[] = {
+      {0x800, "MOD2"}, {0x801, "MOD2"}, {0x801, "MOD4"}, {0x802, "MODL"}, {0x803, "MODL"},
+      {0x803, "DEST"}, {0x803, "DSTD"}, {0x803, "DMDL"}, {0x803, "DMDT"}, {0x803, "DSTF"}};
+  for (const auto& [local, name] : coupled) {
+    EXPECT_EQ(fo4::add_record_subrecord(plugin, key(local), sig(name)),
+              fo4::SubrecordAddStatus::not_authorable) << name;
+    EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(local), sig(name), 0),
+              fo4::SubrecordRemoveStatus::not_authorable) << name;
+  }
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x802), sig("MODT"), 0),
+            fo4::SubrecordRemoveStatus::removed);
+
+  auto generic = generic_fixture();
+  EXPECT_EQ(fo4::add_record_subrecord(generic, key(0x800), sig("HHHH"), k_coupled_rules),
+            fo4::SubrecordAddStatus::not_authorable);
+  EXPECT_EQ(fo4::create_record(generic, sig("XXXX"), "", k_coupled_rules).status,
+            fo4::RecordCreateStatus::not_authorable);
+}
+
+TEST(SubrecordAuthoring, GeneratedSchemaMarksSiblingOwnersCoupled) {
+  const std::pair<const char*, std::vector<std::string>> expected[] = {
+      {"ARMA", {"MOD2", "MOD3", "MOD4", "MOD5"}},
+      {"ARMO", {"MOD2", "MOD4"}},
+      {"EXPL", {"MODL"}},
+      {"HAZD", {"MODL"}},
+      {"PROJ", {"MODL", "DEST", "DSTD", "DMDL", "DMDT", "DSTF"}}};
+  for (const auto& [record, signatures] : expected) {
+    const auto constraint = fo4::schema::record_authoring_constraint(sig(record));
+    ASSERT_TRUE(constraint.has_value()) << record;
+    std::vector<std::string> marked;
+    for (const auto& rule : fo4::schema::authoring_subrecords(*constraint)) {
+      if (rule.coupled) marked.push_back(rule.signature.to_string());
+    }
+    EXPECT_EQ(marked, signatures) << record;
+  }
 }
 
 TEST(SubrecordAuthoring, DescriptorRulesAppendRepeatedSubrecordsAfterTheLastOne) {
@@ -474,7 +533,9 @@ TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {
         ++tally[std::string(family) + (status == fo4::SubrecordAddStatus::added            ? " added"
                                        : status == fo4::SubrecordAddStatus::already_present ? " present"
                                        : status == fo4::SubrecordAddStatus::no_default      ? " no_default"
+                                       : status == fo4::SubrecordAddStatus::not_authorable  ? " not_authorable"
                                                                                             : " unknown_order")];
+        if (rule.coupled) EXPECT_EQ(status, fo4::SubrecordAddStatus::not_authorable);
         if (status != fo4::SubrecordAddStatus::added) {
           EXPECT_EQ(after.size(), before.size());
           continue;
