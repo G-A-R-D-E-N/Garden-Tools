@@ -38,7 +38,7 @@ bool record_discriminator_matches(const Record& record, const FieldDiscriminator
     if (found != nullptr) return false;
     found = &subrecord;
   }
-  if (found == nullptr) return false;
+  if (found == nullptr) return when.match_absent;
   return listed(when, read_discriminator(found->data, 0, when));
 }
 

@@ -167,3 +167,7 @@ field. Nested terminator-scoped FormLink lists in the C ABI.
 ## Radicle/src/plugin/record_edit.hpp:find_mutable_record
 
 Shared by `Radicle/src/plugin/mutation.cpp` and `Radicle/src/plugin/field_writer.cpp`; `mark_record_modified` clears the record and plugin original-byte caches only after bytes change.
+
+## Shared writer follow-up
+
+`Radicle/src/plugin/field_writer.cpp:set_record_formlink_field` compares the stored raw value with the encoded requested target, byte-identical to #406 e1c99ccb. A requested replacement does not need to resolve the old raw index. `Radicle/include/fo4/schema/field_address.hpp:FieldDiscriminator`, `Radicle/src/schema/field_address.cpp:record_discriminator_matches` and `Radicle/tools/field_address_codegen.py:parse_when` carry sound #400's exact `match_absent` machinery; absent matching is explicit and duplicate/malformed discriminator payloads remain refused.

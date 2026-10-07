@@ -131,6 +131,11 @@ class SchemaCodegenTests(unittest.TestCase):
         self.assertEqual(len(self.load(scalar(offset=0, stride=12, when=wide))), 1)
         signed = self.load(scalar(when={"offset": 0, "storage": "i32", "equals": [-1]}))
         self.assertEqual(signed[0]["address"]["when"]["equals"], [-1])
+        absent = self.load(scalar(when=dict(when, subrecord="CNAM", match_absent=True)))
+        self.assertTrue(absent[0]["address"]["when"]["match_absent"])
+        self.assertFalse(self.load(scalar(when=when))[0]["address"]["when"]["match_absent"])
+        self.rejects("requires when.subrecord", scalar(when=dict(when, match_absent=True)))
+        self.rejects("match_absent must be boolean", scalar(when=dict(when, subrecord="CNAM", match_absent=1)))
 
     def test_string_fields(self):
         field = self.load(string(repeated=True))[0]
@@ -153,9 +158,12 @@ class SchemaCodegenTests(unittest.TestCase):
     def test_rendering_includes_the_address(self):
         fields = self.load(scalar(stride=8, array_offset=4, when={"offset": 0, "storage": "u8", "equals": [1, 3]}))
         text = schema_codegen.render(fields)
-        self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{Signature{}, 0, DiscriminatorStorage::u8, 2, {{1, 3}}}}", text)
+        self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{Signature{}, 0, DiscriminatorStorage::u8, 2, {{1, 3}}, false}}", text)
         plain = schema_codegen.render(self.load(scalar()))
         self.assertIn("FieldAddress{}", plain)
+        absent = schema_codegen.render(self.load(scalar(when={"subrecord": "CNAM", "offset": 0, "storage": "u32",
+                                                              "equals": [7], "match_absent": True})))
+        self.assertIn("DiscriminatorStorage::u32, 1, {{7}}, true}", absent)
 
     def test_formlink_fields_share_the_rules(self):
         rows, _nested, fields, _unions = self.link(link(repeated=True))[0:4]

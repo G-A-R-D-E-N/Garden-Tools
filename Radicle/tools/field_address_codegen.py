@@ -23,7 +23,7 @@ def valid_signature(value):
 def parse_when(when, path, own_subrecord):
     if not isinstance(when, dict):
         raise ValueError(f"when must be an object: {path!r}")
-    unknown = set(when) - {"subrecord", "offset", "storage", "equals"}
+    unknown = set(when) - {"subrecord", "offset", "storage", "equals", "match_absent"}
     if unknown:
         raise ValueError(f"unknown when keys {sorted(unknown)} for {path!r}")
     subrecord = when.get("subrecord", "")
@@ -31,6 +31,11 @@ def parse_when(when, path, own_subrecord):
         raise ValueError(f"when.subrecord must be four printable ASCII characters: {path!r}")
     if subrecord == own_subrecord:
         raise ValueError(f"when.subrecord must be omitted to read the field's own subrecord: {path!r}")
+    match_absent = when.get("match_absent", False)
+    if not isinstance(match_absent, bool):
+        raise ValueError(f"when.match_absent must be boolean: {path!r}")
+    if match_absent and subrecord == "":
+        raise ValueError(f"when.match_absent requires when.subrecord: {path!r}")
     offset = when.get("offset")
     if not is_count(offset, 0):
         raise ValueError(f"when.offset must be a non-negative integer: {path!r}")
@@ -50,7 +55,8 @@ def parse_when(when, path, own_subrecord):
             raise ValueError(f"when.equals value {value} exceeds {storage} storage for {path!r}")
     if len(set(equals)) != len(equals):
         raise ValueError(f"when.equals contains duplicate values: {path!r}")
-    return {"subrecord": subrecord, "offset": offset, "storage": storage, "equals": list(equals)}
+    return {"subrecord": subrecord, "offset": offset, "storage": storage, "equals": list(equals),
+            "match_absent": match_absent}
 
 
 def parse_address(row, path, subrecord, has_offset, width):
@@ -98,6 +104,7 @@ def render_address(address):
         subrecord = (f"Signature::from_string({json.dumps(when['subrecord'])})"
                      if when["subrecord"] else "Signature{}")
         rendered = (f"FieldDiscriminator{{{subrecord}, {when['offset']}, "
-                    f"DiscriminatorStorage::{when['storage']}, {len(when['equals'])}, {{{{{values}}}}}}}")
+                    f"DiscriminatorStorage::{when['storage']}, {len(when['equals'])}, {{{{{values}}}}}"
+                    f"{', true' if when['match_absent'] else ', false'}}}")
     return (f"FieldAddress{{{'true' if address['repeated'] else 'false'}, {address['stride']}, "
             f"{address['array_offset']}, {rendered}}}")
