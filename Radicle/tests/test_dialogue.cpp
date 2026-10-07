@@ -108,6 +108,20 @@ TEST_F(DialogueRead, SceneScopesSeparatePhaseActorActionAndTailIncludingOpaqueTi
   EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
 }
 
+TEST_F(DialogueRead, ActionWithoutEndPhaseFollowsTheXEditHeaderOrder) {
+  write({{"SCEN", 0x800, {{"ANAM", half(2)}, {"NAM0", text("")}, {"ALID", words({1})}, {"INAM", words({2})},
+    {"SNAM", words({3})}, {"SNAM", words({0x40A00000})}, {"TNAM", words({0x3F800000})}, {"ANAM", {}},
+    {"ANAM", half(0)}, {"ALID", words({4})}, {"INAM", words({5})}, {"DATA", words({0x810})}, {"ANAM", {}},
+    {"PNAM", words({0x812})}}}});
+  const auto env = load(); const auto scene = fo4::env::decode_scene(env, record(env));
+  ASSERT_EQ(scene.actions.size(), 2u);
+  EXPECT_EQ(scene.actions[0].start_phase, 3u); EXPECT_FALSE(scene.actions[0].end_phase);
+  ASSERT_EQ(scene.actions[0].payload.size(), 2u); EXPECT_EQ(scene.actions[0].payload[0].signature.to_string(), "SNAM");
+  EXPECT_FALSE(scene.actions[1].start_phase); EXPECT_FALSE(scene.actions[1].end_phase); EXPECT_FALSE(scene.actions[1].name);
+  EXPECT_EQ(scene.actions[1].actor_alias, 4); ASSERT_EQ(scene.actions[1].payload.size(), 1u);
+  EXPECT_EQ(scene.parent_quest->local().value(), 0x812u);
+}
+
 TEST_F(DialogueRead, MalformedKnownFieldsAndUnpairedGroupsFailClosed) {
   write({{"DIAL", 0x800, {{"DATA", half(1)}}}, {"INFO", 0x801, {{"TRDA", response(1)}}},
     {"SCEN", 0x802, {{"HNAM", {}}, {"NEXT", {}}, {"HNAM", {}}}},

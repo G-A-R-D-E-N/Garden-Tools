@@ -41,7 +41,7 @@ The measured corpus contains 21,306 phase groups. Every group has empty HNAM ope
 
 The 6,270 actors are ordered ALID i32, LNAM u32 flags, DNAM u32 behavior-flags triplets outside actions. All measured triplets were well formed.
 
-There are 24,983 actions, each opened by two-byte ANAM and closed by empty ANAM. The common header contains NAM0 name, ALID i32 actor alias, INAM u32 index, FNAM u32 flags, SNAM u32 start phase and ENAM u32 end phase. xEdit lines 9010–9011 define both stored phase values as unsigned 32-bit integers. Native, C ABI and C# retain all stored bits, including values above 65535; no runtime narrowing is applied. Only the header before the first ENAM is decoded. The following subrecords are exposed in order as opaque signature/payload views. This avoids conflating timer SNAM, action PNAM and record-level PNAM or inferring type-specific execution behavior. Unknown type discriminators keep the same opaque payload representation. SCQS names are compatibility labels; their runtime meaning remains unresolved.
+There are 24,983 actions, each opened by two-byte ANAM and closed by empty ANAM. The common header contains NAM0 name, ALID i32 actor alias, INAM u32 index, FNAM u32 flags, SNAM u32 start phase and ENAM u32 end phase. xEdit lines 9010–9011 define both stored phase values as unsigned 32-bit integers. Native, C ABI and C# retain all stored bits, including values above 65535; no runtime narrowing is applied. The header is read in xEdit's member order (NAM0, ALID, INAM, FNAM, SNAM, ENAM, each at most once and in that order); ENAM is optional in xEdit and an action without it exposes no end phase. All 24,983 official actions carry ENAM, so official results did not change. The following subrecords are exposed in order as opaque signature/payload views. This avoids conflating timer SNAM, action PNAM and record-level PNAM or inferring type-specific execution behavior. Unknown type discriminators keep the same opaque payload representation. SCQS names are compatibility labels; their runtime meaning remains unresolved.
 
 Record FNAM is u32 flags in the prelude; PNAM after the groups is the parent quest link. The trailing record condition list is separate from phase and action conditions. Malformed known sizes, duplicate scoped scalar fields, unmatched markers and malformed actor triplets fail closed. Unmodified preservation writing retains all source bytes, including unknown data.
 
@@ -49,4 +49,57 @@ Record FNAM is u32 flags in the prelude; PNAM after the groups is the parent que
 
 Native synthetic tests cover grouping, localization descriptors, raw conditions, opaque payloads and malformed input. Each new C ABI getter has a managed test. The seven-master corpus test sweeps native and C ABI getters and verifies unchanged master byte identity; it skips without `FO4_DATA_DIR`. Local and CI validation are recorded separately for each published head.
 
-GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has DIAL/INFO/SCEN names only in `Services/RecordVocabulary.cs`, and no dialogue/scene consumer. GardenEngine #150 needs that consumer before a meaningful probe. ABI 12 is reserved for this independent branch after checking main ABI 4 and PR #383's 5/6/7 batches; reconciliation with the other independent ABI branches is required before merge.
+GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has DIAL/INFO/SCEN names only in `Services/RecordVocabulary.cs`, and no dialogue/scene consumer. GardenEngine #150 needs that consumer before a meaningful probe. With the W0 field writer merged and the scene writer exports added the ABI is 21 (provisional); it needs reconciliation with main and the other independent ABI branches before merging.
+
+## Editing
+
+All generic edits go through the W0 schema surfaces: `radicle_plugin_set_record_scalar_at` / `PluginFile.SetScalar`,
+`radicle_plugin_set_record_string` / `SetString`, `radicle_plugin_set_record_formlink` / `SetFormLink`,
+`radicle_plugin_record_field_count` / `FieldCount`, `radicle_plugin_add_subrecord` / `AddSubrecord`,
+`radicle_plugin_remove_subrecord` / `RemoveSubrecord` and `radicle_plugin_create_record` / `CreateRecord`. Scene fields
+whose signatures repeat inside phases, actors or actions use the typed writer: `radicle_plugin_set_scene_scalar` /
+`SetSceneScalar`, `radicle_plugin_set_scene_formlink` / `SetSceneFormLink` and `radicle_plugin_scene_group_count` /
+`SceneGroupCount`, addressed by path plus explicit group index. Every WRITE is VALIDATE: values are range-checked on write
+and by `preflight_record`; links are type-checked against local targets on write and by the error check after save.
+Localized strings (DIAL FULL, INFO NAM1 and RNAM) are writable only in non-localized plugins. REMAP is the existing
+master remapping (TRDA emotion and sound file included). OPAQUE means readable through the decoders but not writable per
+field.
+
+INFO response counts and edits require each 20-byte TRDA to be followed immediately by NAM1, NAM2, NAM3 and NAM4,
+with matching occurrence counts. Malformed response groups refuse mutation without changing bytes; top-level INFO
+fields remain editable. Preflight takes the owning plugin's localized flag explicitly.
+
+| Family | READ | WRITE | ADD | REMOVE | CREATE | REMAP |
+| --- | --- | --- | --- | --- | --- | --- |
+| DIAL FULL name | metadata / string tables | `DIAL\Name` (inline text only) | empty string (not in localized plugins) | yes | refused | none |
+| DIAL PNAM priority | `Priority` | `DIAL\Priority` (f32) | default 50.0 when absent | refused (required) | refused | none |
+| DIAL BNAM, KNAM links | `Branch`, `Keyword` | `DIAL\Branch` (DLBR), `DIAL\Keyword` (KYWD) | `no_default` | yes | refused | yes |
+| DIAL QNAM quest | `Quest` | `DIAL\Quest` (QUST) | refused (coupled to the quest group) | refused (coupled) | refused | yes |
+| DIAL DATA | `Flags`, `Category`, `Subtype` | `DIAL\TopicFlags`, `DIAL\Category` (0..7), `DIAL\Subtype` | zeroed | yes | refused | none |
+| DIAL SNAM subtype code | `SubtypeName` | `DIAL\SubtypeName` (raw u32; keep in step with `Subtype`) | `no_default` | yes | refused | none |
+| DIAL TIFC info count | `InfoCount` | OPAQUE (derived, `cpIgnore`) | refused (coupled) | refused (coupled) | refused | none |
+| DIAL records | n/a | n/a | n/a | n/a | refused: official topics live only under quest children groups | n/a |
+| INFO ENAM | `Flags`, `ResetTimeEncoded` | `INFO\Flags`, `INFO\ResetHours` (raw) | zeroed (only without responses) | yes | refused | none |
+| INFO TPIC, DNAM, GNAM, ANAM, TSCE, ONAM, MODQ links | `PreviousTopic`, `SharedInfo`, `InfoGroup`, `Speaker`, `StartScene` (ONAM, MODQ raw) | `INFO\PreviousTopic` (DIAL), `SharedInfo`, `InfoGroup` (INFO), `Speaker` (NPC_), `StartScene` (SCEN), `AudioOutputOverride` (SOPM), `ResetGlobal` (GLOB) | `no_default` | yes | refused | yes |
+| INFO PNAM previous INFO | `PreviousInfo` | `INFO\PreviousInfo` (INFO, nullable) | NULL (only without responses) | yes | refused | yes |
+| INFO IOVR, NAM0 strings | raw | `INFO\OverrideFileName`, `INFO\StartScenePhase` | empty string (only without responses) | yes | refused | none |
+| INFO RNAM prompt | `Prompt` | `INFO\Prompt` (inline text only) | empty string (only without responses, not in localized plugins) | yes | refused | none |
+| INFO ALFA, GREE, TIQS, INCC, INAM | raw | `INFO\ForcedAlias`, `GreetDistance`, `ParentQuestStageOnBegin`/`OnEnd`, `Challenge` (0..7), `SubtitlePriority` (0..3) | INCC zero; others `no_default` | yes | refused | none |
+| INFO INTV, VMAD | raw | OPAQUE | `no_default` | yes | refused | VMAD existing |
+| INFO TRDA response data | `Responses` | `INFO\ResponseNumber`, `ResponseUnknown`, `InterruptPercentage`, `CameraTargetAlias`, `CameraLocationAlias`, `Emotion` (KYWD; the 0xFFFFFFFF none value cannot be written back), `SoundFile` (SNDR, nullable, offset 5), by response index | refused (grouped) | refused (grouped) | refused | yes |
+| INFO NAM1-NAM4 | `Text` (NAM1) | `INFO\ResponseText` (inline text only), `ScriptNotes`, `Edits`, `AlternateLipText`, by response index | refused (grouped) | refused (grouped) | refused | none |
+| INFO SNAM, LNAM, TNAM, NAM9, SRAF, WZMD | `SpeakerIdle`, `ListenerIdle` | OPAQUE (optional per response; occurrence is not the response index) | refused | refused | refused | yes (links) |
+| INFO CTDA conditions | condition code | condition code | refused | refused | refused | condition code |
+| INFO records | n/a | n/a | n/a | n/a | refused: official INFO live only under topic children groups | n/a |
+| SCEN FNAM flags, INAM, CRIS, SCQS (scene level) | `Flags` | typed `SCEN\Flags`, `LastActionIndex`, `FovOverride`, `ParentQuestStageOnBegin`/`OnEnd` | refused (signature reused by groups) | refused | refused | none |
+| SCEN PNAM, TNAM links | `ParentQuest` | typed `SCEN\ParentQuest` (QUST), `SCEN\TemplateScene` (SCEN) | refused | refused | refused | yes |
+| SCEN VNAM, CNAM, ACTV, NNAM, XNAM | raw | `SCEN\DeathBehavior`, `CombatBehavior`, `PlayerDialogueBehavior`, `ObserveCombatBehavior`, `CameraDistanceOverride`, `DialogueDistanceOverride`, `Notes`, `Index` | refused in practice (`unknown_order`: every official scene has groups) | yes | refused | none |
+| SCEN KSIZ/KWDA keywords | raw | FormLink list ops | refused (coupled) | refused (coupled) | refused | yes |
+| SCEN phases | `Phases` | typed `SCEN\Phase\EditorWidth`, `Flags`, `QuestStageOnStart`/`OnCompletion` by phase index; NAM0 OPAQUE | refused | refused | refused | none |
+| SCEN actors | `Actors` | typed `SCEN\Actor\Alias`, `Flags`, `BehaviorFlags` by actor index | refused | refused | refused | none |
+| SCEN action headers | `Actions` | typed `SCEN\Action\ActorAlias`, `Index`, `Flags`, `StartPhase`, `EndPhase` (u32) by action index; ANAM type and NAM0 OPAQUE | refused | refused | refused | none |
+| SCEN action payloads, conditions | opaque payload views, condition code | OPAQUE | refused | refused | refused | existing |
+| SCEN records | n/a | n/a | n/a | n/a | refused: official scenes live only under quest children groups | n/a |
+
+All official DIAL, INFO and SCEN follow the authoring order and placement (0 violators). Field list, defaults
+provenance and refusal reasons are in `docs/code-notes/radicle-dialogue-writer.md`.

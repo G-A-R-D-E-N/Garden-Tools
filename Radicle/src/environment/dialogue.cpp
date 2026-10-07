@@ -1,6 +1,7 @@
 #include "fo4/environment/dialogue.hpp"
 
 #include "record_reader.hpp"
+#include "scene_layout.hpp"
 
 #include <algorithm>
 
@@ -57,10 +58,6 @@ RecordName localized(const Environment& env, const RecordRef& ref, const Reader&
   const auto value = zstring_view(*sub);
   if (!value) r.fail(sub->signature, "invalid inline text");
   return {NameKind::inline_text, *value, 0};
-}
-
-void empty(const Reader& r, const Subrecord& sub) {
-  if (!sub.data.empty()) r.fail(sub.signature, "marker must be empty");
 }
 
 std::vector<CtdaCondition> conditions(const Reader& r, std::size_t begin, std::size_t end) {
@@ -120,57 +117,33 @@ DialogueInfo decode_dialogue_info(const Environment& env, const RecordRef& ref) 
 Scene decode_scene(const Environment& env, const RecordRef& ref) {
   const Reader r(env, ref, sig("SCEN")); Scene out;
   const auto subs = std::span{ref.record->subrecords};
-  std::size_t first_group = subs.size(), tail = 0;
-  for (std::size_t i = 0; i < subs.size(); ++i) {
-    const auto tag = subs[i].signature;
-    if (tag == sig("HNAM")) {
-      first_group = std::min(first_group, i); empty(r, subs[i]);
-      std::size_t close = i + 1;
-      std::vector<std::size_t> next;
-      for (; close < subs.size() && subs[close].signature != sig("HNAM"); ++close) {
-        if (subs[close].signature == sig("ANAM") || subs[close].signature == sig("ALID"))
-          r.fail(tag, "phase crosses a later group");
-        if (subs[close].signature == sig("NEXT")) { empty(r, subs[close]); next.push_back(close); }
-      }
-      if (close == subs.size() || next.size() != 2) r.fail(tag, "phase requires two NEXT separators and HNAM close");
-      empty(r, subs[close]); const Scope phase{r, subs.subspan(i + 1, close - i - 1)};
-      ScenePhase p; p.name = phase.text(sig("NAM0")); p.editor_width = phase.u32(sig("WNAM"));
-      if (const auto* value = phase.sized(sig("FNAM"), 2)) p.flags = Reader::u16(*value, 0);
-      if (const auto* value = phase.sized(sig("SCQS"), 4))
-        p.quest_stages = std::array{static_cast<std::int16_t>(Reader::u16(*value, 0)),
-                                    static_cast<std::int16_t>(Reader::u16(*value, 2))};
-      p.start_conditions = conditions(r, i + 1, next[0]);
-      p.completion_conditions = conditions(r, next[0] + 1, next[1]);
-      out.phases.push_back(std::move(p)); tail = close + 1; i = close;
-    } else if (tag == sig("ALID")) {
-      first_group = std::min(first_group, i);
-      if (i + 2 >= subs.size() || subs[i].data.size() != 4 || subs[i + 1].signature != sig("LNAM") ||
-          subs[i + 1].data.size() != 4 || subs[i + 2].signature != sig("DNAM") || subs[i + 2].data.size() != 4)
-        r.fail(tag, "actor requires ALID/LNAM/DNAM four-byte triplet");
-      out.actors.push_back({Reader::i32(subs[i], 0), Reader::u32(subs[i + 1], 0), Reader::u32(subs[i + 2], 0)});
-      i += 2; tail = i + 1;
-    } else if (tag == sig("ANAM")) {
-      first_group = std::min(first_group, i);
-      if (subs[i].data.size() != 2) r.fail(tag, "action opener must be two bytes");
-      std::size_t close = i + 1, header_end = subs.size();
-      for (; close < subs.size() && subs[close].signature != sig("ANAM"); ++close) {
-        if (header_end == subs.size() && subs[close].signature == sig("ENAM")) header_end = close + 1;
-      }
-      if (close == subs.size() || header_end > close) r.fail(tag, "action requires header end and empty ANAM close");
-      empty(r, subs[close]); const Scope header{r, subs.subspan(i + 1, header_end - i - 1)};
-      SceneAction a; a.type = Reader::u16(subs[i], 0); a.name = header.text(sig("NAM0"));
-      a.actor_alias = header.i32(sig("ALID")); a.index = header.u32(sig("INAM")); a.flags = header.u32(sig("FNAM"));
-      a.start_phase = header.u32(sig("SNAM")); a.end_phase = header.u32(sig("ENAM"));
-      a.payload = subs.subspan(header_end, close - header_end);
-      out.actions.push_back(a); i = close; tail = close + 1;
-    } else if (tag == sig("NEXT")) {
-      r.fail(tag, "NEXT outside a phase");
-    }
+  detail::SceneLayout layout;
+  try { layout = detail::scene_layout(subs); }
+  catch (const detail::SceneLayoutError& error) { r.fail(error.tag, error.what()); }
+  for (const auto& span : layout.phases) {
+    const Scope phase{r, subs.subspan(span.open + 1, span.close - span.open - 1)};
+    ScenePhase p; p.name = phase.text(sig("NAM0")); p.editor_width = phase.u32(sig("WNAM"));
+    if (const auto* value = phase.sized(sig("FNAM"), 2)) p.flags = Reader::u16(*value, 0);
+    if (const auto* value = phase.sized(sig("SCQS"), 4))
+      p.quest_stages = std::array{static_cast<std::int16_t>(Reader::u16(*value, 0)),
+                                  static_cast<std::int16_t>(Reader::u16(*value, 2))};
+    p.start_conditions = conditions(r, span.open + 1, span.first_next);
+    p.completion_conditions = conditions(r, span.first_next + 1, span.second_next);
+    out.phases.push_back(std::move(p));
   }
-  out.flags = Scope{r, subs.first(first_group)}.u32(sig("FNAM"));
-  out.parent_quest = Scope{r, subs.subspan(tail)}.link(sig("PNAM"));
-  out.conditions = conditions(r, tail, subs.size());
+  for (const auto at : layout.actors)
+    out.actors.push_back({Reader::i32(subs[at], 0), Reader::u32(subs[at + 1], 0), Reader::u32(subs[at + 2], 0)});
+  for (const auto& span : layout.actions) {
+    const Scope header{r, subs.subspan(span.open + 1, span.header_end - span.open - 1)};
+    SceneAction a; a.type = Reader::u16(subs[span.open], 0); a.name = header.text(sig("NAM0"));
+    a.actor_alias = header.i32(sig("ALID")); a.index = header.u32(sig("INAM")); a.flags = header.u32(sig("FNAM"));
+    a.start_phase = header.u32(sig("SNAM")); a.end_phase = header.u32(sig("ENAM"));
+    a.payload = subs.subspan(span.header_end, span.close - span.header_end);
+    out.actions.push_back(a);
+  }
+  out.flags = Scope{r, subs.first(layout.first_group)}.u32(sig("FNAM"));
+  out.parent_quest = Scope{r, subs.subspan(layout.tail)}.link(sig("PNAM"));
+  out.conditions = conditions(r, layout.tail, subs.size());
   return out;
 }
-
 }

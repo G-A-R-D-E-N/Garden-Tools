@@ -47,6 +47,7 @@ enum class GroupType : std::int32_t {
   cell_persistent_children = 8,
   cell_temporary_children = 9,
   cell_visible_distant_children = 10,
+  quest_children = 10,
 };
 
 }  // namespace fo4

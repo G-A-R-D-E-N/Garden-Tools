@@ -132,11 +132,30 @@ typedef struct radicle_scene_info {
   void* internal;
 } radicle_scene_info;
 
+typedef enum radicle_scene_part {
+  RADICLE_SCENE_PART_PHASE = 0,
+  RADICLE_SCENE_PART_ACTOR = 1,
+  RADICLE_SCENE_PART_ACTION = 2
+} radicle_scene_part;
+
 RADICLE_API radicle_status radicle_dialogue_topic_get_info(const radicle_env* env, const radicle_record* record, radicle_dialogue_topic_info* out_info);
 RADICLE_API radicle_status radicle_dialogue_info_decode(const radicle_env* env, const radicle_record* record, const radicle_dialogue_info** out_info);
 RADICLE_API void radicle_dialogue_info_free(const radicle_dialogue_info* info);
 RADICLE_API radicle_status radicle_scene_decode(const radicle_env* env, const radicle_record* record, const radicle_scene_info** out_scene);
 RADICLE_API void radicle_scene_free(const radicle_scene_info* scene);
+RADICLE_API radicle_status radicle_plugin_set_scene_scalar(radicle_plugin* plugin,
+                                                           radicle_form_key key,
+                                                           const char* path,
+                                                           size_t group_index,
+                                                           const char* value);
+RADICLE_API radicle_status radicle_plugin_set_scene_formlink(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             const char* path,
+                                                             const radicle_form_key* target);
+RADICLE_API radicle_status radicle_plugin_scene_group_count(const radicle_plugin* plugin,
+                                                            radicle_form_key key,
+                                                            radicle_scene_part part,
+                                                            size_t* out_count);
 
 #ifdef __cplusplus
 }

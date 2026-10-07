@@ -1,9 +1,11 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/c_api_dialogue.h"
 #include "fo4/environment/dialogue.hpp"
+#include "fo4/plugin/scene_writer.hpp"
 #include "fo4/text/encoding.hpp"
 
 #include <deque>
+#include <optional>
 #include <memory>
 
 namespace {
@@ -11,6 +13,15 @@ namespace {
 using namespace radicle_c_detail;
 using namespace radicle_c_env_detail;
 using Conditions = std::vector<radicle_dialogue_condition>;
+
+std::optional<fo4::ScenePart> to_scene_part(radicle_scene_part part) {
+  switch (part) {
+    case RADICLE_SCENE_PART_PHASE: return fo4::ScenePart::phase;
+    case RADICLE_SCENE_PART_ACTOR: return fo4::ScenePart::actor;
+    case RADICLE_SCENE_PART_ACTION: return fo4::ScenePart::action;
+  }
+  return std::nullopt;
+}
 
 struct InfoHolder {
   radicle_dialogue_info view{};
@@ -132,6 +143,85 @@ radicle_status radicle_scene_decode(const radicle_env* env, const radicle_record
 
 void radicle_scene_free(const radicle_scene_info* scene) {
   if (scene) delete static_cast<SceneHolder*>(scene->internal);
+}
+
+radicle_status radicle_plugin_set_scene_scalar(radicle_plugin* plugin,
+                                               radicle_form_key key,
+                                               const char* path,
+                                               size_t group_index,
+                                               const char* value) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || path == nullptr || value == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and value are required");
+  }
+  return guarded("unknown exception while setting scene field", [&] {
+    try {
+      switch (fo4::set_scene_scalar(plugin->value, *form_key, path, group_index, value)) {
+        case fo4::ScalarMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::ScalarMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "scene has no such group or the group has no such subrecord");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_set_scene_formlink(radicle_plugin* plugin,
+                                                 radicle_form_key key,
+                                                 const char* path,
+                                                 const radicle_form_key* target) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  const auto target_key = target == nullptr ? std::optional<fo4::FormKey>{fo4::FormKey{}} : to_form_key(*target);
+  if (plugin == nullptr || !form_key || path == nullptr || !target_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target are required");
+  }
+  return guarded("unknown exception while setting scene link", [&] {
+    try {
+      switch (fo4::set_scene_formlink(plugin->value, *form_key, path, *target_key)) {
+        case fo4::FormLinkFieldMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::FormLinkFieldMutationStatus::record_mismatch:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene link path does not apply to this record type");
+        case fo4::FormLinkFieldMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "scene has no such subrecord");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::FormLinkFieldError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_scene_group_count(const radicle_plugin* plugin,
+                                                radicle_form_key key,
+                                                radicle_scene_part part,
+                                                size_t* out_count) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  const auto scene_part = to_scene_part(part);
+  if (plugin == nullptr || !form_key || out_count == nullptr || !scene_part) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, a scene part and out_count are required");
+  }
+  *out_count = 0;
+  return guarded("unknown exception while counting scene groups", [&] {
+    try {
+      const auto count = fo4::scene_group_count(plugin->value, *form_key, *scene_part);
+      if (!count) return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+      *out_count = *count;
+      return RADICLE_STATUS_OK;
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
 }
 
 }

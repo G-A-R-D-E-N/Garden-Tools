@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/schema/field_address.hpp"
 #include "fo4/signature.hpp"
 
 #include <cstddef>
@@ -26,6 +27,7 @@ struct FormLinkFieldDescriptor {
   bool nullable{false};
   std::size_t first_target{0};
   std::size_t target_count{0};
+  FieldAddress address{};
 };
 
 class FormLinkFieldError : public std::runtime_error {

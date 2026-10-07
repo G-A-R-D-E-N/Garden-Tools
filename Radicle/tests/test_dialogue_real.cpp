@@ -35,8 +35,17 @@ TEST_P(DialogueReal, EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentica
       EXPECT_NO_THROW(fo4::env::decode_dialogue_info(env, *refs[i])); const radicle_dialogue_info* value = nullptr;
       EXPECT_EQ(radicle_dialogue_info_decode(abi, records[i], &value), RADICLE_STATUS_OK); radicle_dialogue_info_free(value);
     } else {
-      EXPECT_NO_THROW(fo4::env::decode_scene(env, *refs[i])); const radicle_scene_info* value = nullptr;
-      EXPECT_EQ(radicle_scene_decode(abi, records[i], &value), RADICLE_STATUS_OK); radicle_scene_free(value);
+      const auto scene = fo4::env::decode_scene(env, *refs[i]);
+      for (const auto& action : scene.actions) {
+        EXPECT_TRUE(action.end_phase.has_value());
+        ++totals["SCEN_actions_with_ENAM"];
+      }
+      const radicle_scene_info* value = nullptr;
+      ASSERT_EQ(radicle_scene_decode(abi, records[i], &value), RADICLE_STATUS_OK);
+      for (std::size_t action = 0; action < value->action_count; ++action) {
+        EXPECT_TRUE(value->actions[action].has_end_phase);
+      }
+      radicle_scene_free(value);
     }
   }
   radicle_free_record_array(records); radicle_env_destroy(abi);

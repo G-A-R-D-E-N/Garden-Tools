@@ -11,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_dialogue.h", "fo4/c_api_pex.h", "fo4/c_api_seq.h", "fo4/c_api_quest.h"]
+HEADERS = ["fo4/c_api.h", "fo4/c_api_env.h", "fo4/c_api_records.h", "fo4/c_api_materials.h", "fo4/c_api_maintenance.h", "fo4/c_api_dialogue.h", "fo4/c_api_pex.h", "fo4/c_api_seq.h", "fo4/c_api_quest.h", "fo4/c_api_authoring.h"]
 
 SCALARS = {
     "int8_t": "sbyte", "uint8_t": "byte", "int16_t": "short", "uint16_t": "ushort",
