@@ -60,7 +60,20 @@ are 16 bytes below form version 0x3A; the extra-edge byte appears from 0x80.
 Flag bits 0–2 identify extra-edge indices. The complete modern grammar
 matches all 12,558 payloads. Cover/waypoint semantics, several triangle bits
 and NG behavior remain unresolved; those values stay raw rather than acquiring
-inferred semantic names. No pathfinding or navmesh mutation is implemented.
+inferred semantic names. Pathfinding remains outside stored-data authoring.
+
+## Editing
+
+| Capability | Coverage |
+|---|---|
+| READ/WRITE | Indexed NAVM vertices, triangles and door links through native/C ABI/C#; fixed NAVI info fields and NAVM links through W0 |
+| ADD/REMOVE/CREATE | Refused for counted or coupled geometry and info structures; NAVM creation requires parent placement which the generic creator cannot supply |
+| REMAP | Existing checked mixed-link grammar; numeric topology and opaque bytes preserved |
+| OPAQUE | Unknown triangle traversal byte, cover/waypoint/grid tails, island bytes and unsupported layouts preserved or edits refused |
+
+Edits preserve array sizes. Triangle vertex indices must fit the existing vertex array; the unknown traversal byte, unnamed triangle bits and uncertain cover-flags word must remain identical. Vertex and height values must be finite. Door references must be non-null, use an existing master, and resolve to REFR when local. These are stored-data edits; no derived navigation rebuild is implied.
+
+ABI 23 is provisional and must be reconciled in dependency merge order. Local MSVC warnings-as-errors validation: 865 registered checks, zero failures; managed 81 passed. The final official seven-master run passed 854 checks, skipped 11 and had zero failures in 215.95 seconds. All seven writer order/mutation cases passed; proof is `build/evidence/navmesh-final-full.log` and `build/evidence/navmesh-final-official-full.log`. Untouched body records are byte-identical; TES4 checks allow the existing serializer's regenerated ONAM metadata and size markers.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has vocabulary
 entries but no NAVM/NAVI geometry consumer. Issue #146 must supply that

@@ -1,6 +1,8 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/c_api_navmesh.h"
 #include "fo4/environment/navmesh.hpp"
+#include "fo4/plugin/navmesh_writer.hpp"
+#include "fo4/schema/scalar.hpp"
 
 #include <memory>
 
@@ -32,9 +34,55 @@ radicle_navmesh_parent parent(const radicle_env& env, const fo4::env::NavmeshPar
   return {p.crc, to_c_key(env, p.world), to_c_key(env, p.cell), p.grid_y, p.grid_x};
 }
 
+radicle_status edit(radicle_plugin* plugin, radicle_form_key key, const void* value, auto&& write) {
+  clear_error();
+  const auto parsed = to_form_key(key);
+  if (!plugin || !parsed || !value) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, key and value required");
+  return guarded("unknown exception while editing navmesh", [&] {
+    try {
+      const auto result = write(plugin->value, *parsed);
+      if (result == fo4::ScalarMutationStatus::record_missing || result == fo4::ScalarMutationStatus::subrecord_missing) {
+        return fail(RADICLE_STATUS_NOT_FOUND, "navmesh element not found");
+      }
+      return RADICLE_STATUS_OK;
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
 }
 
 extern "C" {
+
+radicle_status radicle_plugin_set_navmesh_vertex(radicle_plugin* plugin, radicle_form_key key,
+                                                size_t index, const radicle_navmesh_vertex* value) {
+  return edit(plugin, key, value, [&](auto& p, const auto& k) {
+    return fo4::set_navmesh_vertex(p, k, index, {value->x, value->y, value->z});
+  });
+}
+
+radicle_status radicle_plugin_set_navmesh_triangle(radicle_plugin* plugin, radicle_form_key key,
+                                                  size_t index, const radicle_navmesh_triangle* value) {
+  return edit(plugin, key, value, [&](auto& p, const auto& k) {
+    fo4::env::NavmeshTriangle t;
+    std::copy_n(value->vertices, 3, t.vertices.begin());
+    std::copy_n(value->edges, 3, t.edges.begin());
+    t.clearance = value->clearance; t.traversal = value->traversal; t.flags = value->flags;
+    return fo4::set_navmesh_triangle(p, k, index, t);
+  });
+}
+
+radicle_status radicle_plugin_set_navmesh_door(radicle_plugin* plugin, radicle_form_key key,
+                                              size_t index, const radicle_navmesh_door_link* value) {
+  return edit(plugin, key, value, [&](auto& p, const auto& k) {
+    const auto door = to_form_key(value->door);
+    if (!door) throw fo4::schema::ScalarError("valid door key required");
+    return fo4::set_navmesh_door(p, k, index, {value->triangle, value->crc, *door});
+  });
+}
 
 radicle_status radicle_navmesh_decode(const radicle_env* env, const radicle_record* record,
                                       const radicle_navmesh** out_navmesh) {

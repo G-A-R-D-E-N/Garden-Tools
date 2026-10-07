@@ -1,6 +1,9 @@
 #include "fo4/c_api_navmesh.h"
 #include "fo4/environment/navmesh.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/plugin/mutation.hpp"
+#include "fo4/schema/scalar.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -128,6 +131,25 @@ TEST_F(NavmeshRead, RejectsUnsupportedTruncatedDuplicateAndOverflowPayloads) {
 TEST_F(NavmeshRead, MissingGeometryStaysAbsent) {
   write(ByteWriter{}, info(false)); const auto env = load();
   EXPECT_FALSE(fo4::env::decode_navmesh(env, record(env, 0x800)));
+}
+
+TEST_F(NavmeshRead, InfoPrefixWritesReparseAndMalformedLayoutsStayAbsent) {
+  write(geometry(false), info(true)); const auto env = load(); auto plugin = env.plugin(0);
+  const auto key = record(env, 0x801).record->form_key;
+  for (const auto* name : {"NAVI\\LocationX", "NAVI\\LocationY", "NAVI\\LocationZ", "NAVI\\Preferred"}) {
+    EXPECT_EQ(fo4::set_record_scalar(plugin, key, *fo4::schema::scalar_field_descriptor(name), 0, "1.25"), fo4::ScalarMutationStatus::updated);
+  }
+  const auto field = fo4::schema::formlink_field_descriptor("NAVI\\Navmeshes"); ASSERT_TRUE(field);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *field, 0, record(env, 0x800).record->form_key), fo4::FormLinkFieldMutationStatus::unchanged);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, *field, 0, key), fo4::schema::FormLinkFieldError);
+  fo4::write_plugin_file(plugin, path); const auto reread = load();
+  const auto values = fo4::env::decode_navmesh_info(reread, record(reread, 0x801)); ASSERT_EQ(values.size(), 1);
+  EXPECT_EQ(values[0].location, (std::array<float,3>{1.25f,1.25f,1.25f})); EXPECT_EQ(values[0].preferred, 1.25f);
+  EXPECT_EQ(values[0].island.size(), 50);
+  auto malformed = info(true); malformed.bytes.pop_back(); write(geometry(false), malformed);
+  const auto bad_env = load(); auto bad = bad_env.plugin(0); const auto before = fo4::write_plugin(bad);
+  EXPECT_EQ(fo4::set_record_scalar(bad, key, *fo4::schema::scalar_field_descriptor("NAVI\\Preferred"), 0, "1"), fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::write_plugin(bad), before);
 }
 
 TEST_F(NavmeshRead, LegacyFormVersionIsRejectedWithoutChangingBytes) {

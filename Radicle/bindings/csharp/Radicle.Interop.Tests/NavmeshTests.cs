@@ -8,6 +8,33 @@ namespace Radicle.Interop.Tests;
 
 public class NavmeshTests
 {
+    [Fact]
+    public void TypedEditsReparseAndRefuseUnknownChanges()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Navigation.esm", Build(1, Array.Empty<string>(),
+            Top("NAVM", new Rec("NAVM", 0x800, new[] { ("NVNM", Geometry(false)) })),
+            Top("REFR", new Rec("REFR", 0x813, Array.Empty<(string, byte[])>()))));
+        var key = new FormKey("Navigation.esm", 0x800);
+        using var plugin = PluginFile.Read(path);
+        Assert.True(plugin.SetNavmeshVertex(key, 0, new(9, 10, 11)));
+        Assert.True(plugin.SetNavmeshTriangle(key, 0, new(new ushort[] { 0, 0, 0 }, new short[] { -1, -2, -3 }, 6.5f, 0xAA, 0xABCD8052)));
+        Assert.True(plugin.SetNavmeshDoor(key, 0, new(0, 0x87654321, new("Navigation.esm", 0x813))));
+        Assert.False(plugin.SetNavmeshVertex(key, 1, new(1, 2, 3)));
+        var bytes = plugin.ToBytes();
+        Assert.Throws<RadicleException>(() => plugin.SetNavmeshVertex(key, 0, new(float.NaN, 2, 3)));
+        Assert.Throws<RadicleException>(() => plugin.SetNavmeshTriangle(key, 0, new(new ushort[] { 0, 0, 0 }, new short[3], 1, 0, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => plugin.SetNavmeshDoor(key, -1, new(0, 0, null)));
+        Assert.Equal(bytes, plugin.ToBytes());
+        var saved = temp.Write("Saved.esm", bytes);
+        using var env = RadicleEnvironment.Load(new[] { saved });
+        var mesh = env.Navmesh(env.Winner(new FormKey("Saved.esm", 0x800))!.Value)!;
+        Assert.Equal(new NavmeshVertex(9, 10, 11), Assert.Single(mesh.Vertices));
+        Assert.Equal(6.5f, Assert.Single(mesh.Triangles).Clearance);
+        Assert.Equal(0x87654321u, Assert.Single(mesh.Doors).Crc);
+        Assert.Equal(new byte[48], mesh.OpaqueTail);
+    }
+
     private static byte[] Payload(Action<BinaryWriter> write)
     {
         using var stream = new MemoryStream();
@@ -93,5 +120,26 @@ public class NavmeshTests
         Assert.Equal(new NaviDoorLink(0xDEADBEEF, new("Navigation.esm", 0x813)), Assert.Single(info.Doors));
         Assert.Equal(island, info.HasIsland); Assert.Equal(island ? 50 : 0, info.Island.Length);
         Assert.Equal(new NavmeshParent(0x87654321, null, new("Navigation.esm", 0x811), 0, 0), info.Parent);
+    }
+
+    [Fact]
+    public void InfoFieldsUseSharedWriterAndPreserveIsland()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Navigation.esm", Build(1, Array.Empty<string>(), Top("NAVI",
+            new Rec("NAVI", 0x801, new[] { ("NVER", U32(15)), ("NVMI", Info(true)) }))));
+        using var plugin = PluginFile.Read(path);
+        var key = new FormKey("Navigation.esm", 0x801);
+        foreach (var field in new[] { "NAVI\\LocationX", "NAVI\\LocationY", "NAVI\\LocationZ", "NAVI\\Preferred" })
+            Assert.True(plugin.SetScalar(key, field, "1.25"));
+        var bytes = plugin.ToBytes();
+        Assert.Throws<RadicleException>(() => plugin.RemoveSubrecord(key, "NVMI"));
+        Assert.Throws<RadicleException>(() => plugin.CreateRecord("NAVI", "new"));
+        Assert.Equal(bytes, plugin.ToBytes());
+        var saved = temp.Write("Saved.esm", bytes);
+        using var env = RadicleEnvironment.Load(new[] { saved });
+        var info = Assert.Single(env.NavmeshInfos(env.Winner(new FormKey("Saved.esm", 0x801))!.Value));
+        Assert.Equal(new NavmeshVertex(1.25f, 1.25f, 1.25f), info.Location);
+        Assert.Equal(1.25f, info.Preferred); Assert.Equal(50, info.Island.Length);
     }
 }

@@ -2,7 +2,11 @@
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from field_address_codegen import parse_address, render_address  # noqa: E402
 
 MUTATIONS = {"existing_only", "existing_neighbors", "appendable"}
 NESTED_MUTATIONS = {"terminated_group"}
@@ -164,6 +168,7 @@ def load_lists(schema_path: Path):
                 "subrecord": subrecord,
                 "offset": offset,
                 "nullable": nullable,
+                "address": parse_address(row, path, subrecord, True, 4),
                 "targets": parse_formlink_field_targets(row, path, union_targets),
             })
 
@@ -426,7 +431,8 @@ def render(lists, nested_lists, fields, unions) -> str:
             f"Signature::from_string({cpp_string(row['subrecord'])}), " +
             f"{row['offset']}, " +
             ("true" if row["nullable"] else "false") + ", " +
-            f"{first_target}, {target_count}" +
+            f"{first_target}, {target_count}, " +
+            render_address(row["address"]) +
             "},"
         )
     lines.append("};")

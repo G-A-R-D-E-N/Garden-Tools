@@ -86,6 +86,9 @@ RADICLE_API radicle_status radicle_navmesh_decode(const radicle_env* env, const 
 RADICLE_API void radicle_navmesh_free(const radicle_navmesh* navmesh);
 RADICLE_API radicle_status radicle_navi_decode(const radicle_env* env, const radicle_record* record, const radicle_navi** out_navi);
 RADICLE_API void radicle_navi_free(const radicle_navi* navi);
+RADICLE_API radicle_status radicle_plugin_set_navmesh_vertex(radicle_plugin* plugin, radicle_form_key key, size_t index, const radicle_navmesh_vertex* value);
+RADICLE_API radicle_status radicle_plugin_set_navmesh_triangle(radicle_plugin* plugin, radicle_form_key key, size_t index, const radicle_navmesh_triangle* value);
+RADICLE_API radicle_status radicle_plugin_set_navmesh_door(radicle_plugin* plugin, radicle_form_key key, size_t index, const radicle_navmesh_door_link* value);
 
 #ifdef __cplusplus
 }
