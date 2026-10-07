@@ -65,7 +65,8 @@ radicle_status radicle_package_decode(const radicle_env* env, const radicle_reco
       raw.bytes = reinterpret_cast<const std::uint8_t*>(sub.data.data()); raw.size = sub.data.size(); h->opaque.push_back(raw);
     }
     for (const auto& location : p.locations) h->locations.push_back({location.subrecord_index, location.type,
-        location.value, location.radius, location.item_index.has_value(), location.item_index.value_or(0), to_c_key(*env, location.form)});
+        location.value, location.radius.has_value(), location.radius.value_or(0),
+        location.item_index.has_value(), location.item_index.value_or(0), to_c_key(*env, location.form)});
     for (const auto& target : p.targets) h->targets.push_back({target.subrecord_index, target.type,
         target.value, target.count_or_distance, to_c_key(*env, target.form)});
     v.locations = h->locations.data(); v.location_count = h->locations.size();

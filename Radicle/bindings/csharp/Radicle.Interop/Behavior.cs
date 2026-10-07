@@ -8,11 +8,11 @@ namespace Radicle.Interop;
 public sealed record BehaviorCondition(byte FlagsByte, uint ComparisonRaw, ushort Function, ushort Unknown2,
     int Param1, int Param2, uint RunOn, uint Reference, int Unknown3, string? Parameter1String, string? Parameter2String);
 public sealed record PackageData(uint Flags, byte Type, byte InterruptOverride, byte PreferredSpeed, byte Unknown, ushort InterruptFlags, ushort TrailingValue);
-public sealed record PackageSchedule(sbyte Month, sbyte Weekday, sbyte Date, sbyte Hour, sbyte Minute, int DurationMinutes);
+public sealed record PackageSchedule(sbyte Month, sbyte Weekday, sbyte Date, sbyte Hour, sbyte Minute, uint DurationMinutes);
 public sealed record PackageCounter(uint InputCount, FormKey? TemplatePackage, uint Version);
 public sealed record PackagePayload(string Signature, byte[] Bytes);
-public sealed record PackageLocation(nuint SubrecordIndex, byte Type, uint Value, uint Radius, uint? ItemIndex, FormKey? Form);
-public sealed record PackageTarget(nuint SubrecordIndex, uint Type, uint Value, int CountOrDistance, FormKey? Form);
+public sealed record PackageLocation(nuint SubrecordIndex, int Type, uint Value, int? Radius, uint? ItemIndex, FormKey? Form);
+public sealed record PackageTarget(nuint SubrecordIndex, int Type, uint Value, int CountOrDistance, FormKey? Form);
 public sealed record Package(PackageData? Data, PackageSchedule? Schedule, PackageCounter? Counter,
     FormKey? CombatStyle, FormKey? OwnerQuest, FormKey? BeginIdle, FormKey? EndIdle, FormKey? ChangeIdle,
     IReadOnlyList<BehaviorCondition> Conditions, IReadOnlyList<PackagePayload> Opaque,
@@ -47,7 +47,7 @@ public sealed unsafe partial class RadicleEnvironment
                 BehaviorConditions(p->Conditions, p->ConditionCount),
                 Call.Copy<Native.PackagePayload>(p->Opaque, p->OpaqueCount).Select(PackagePayloadValue).ToArray(),
                 Call.Copy<Native.PackageLocation>(p->Locations, p->LocationCount).Select(l =>
-                    new PackageLocation(l.SubrecordIndex, l.Type, l.Value, l.Radius, l.HasItemIndex == 0 ? null : l.ItemIndex,
+                    new PackageLocation(l.SubrecordIndex, l.Type, l.Value, l.HasRadius == 0 ? null : l.Radius, l.HasItemIndex == 0 ? null : l.ItemIndex,
                         FormKey.FromNative(l.Form))).ToArray(),
                 Call.Copy<Native.PackageTarget>(p->Targets, p->TargetCount).Select(t =>
                     new PackageTarget(t.SubrecordIndex, t.Type, t.Value, t.CountOrDistance, FormKey.FromNative(t.Form))).ToArray());

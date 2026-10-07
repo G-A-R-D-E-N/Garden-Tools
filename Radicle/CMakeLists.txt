@@ -130,6 +130,8 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/field_writer.cpp
+  src/plugin/subrecord_authoring.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp
@@ -139,6 +141,7 @@ add_library(fo4
   src/schema/ctda.cpp
   src/schema/form_links.cpp
   src/schema/form_link_mixed.cpp
+  src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
   src/schema/nested_formlink_lists.cpp
@@ -146,6 +149,7 @@ add_library(fo4
   src/schema/preflight.cpp
   src/schema/non_formid_slots.cpp
   src/schema/scalar.cpp
+  src/schema/field_address.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
@@ -189,7 +193,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_seq.cpp src/c_api_quest.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_seq.cpp src/c_api_quest.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -199,8 +203,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_behavior.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp)
+target_sources(radicle_c PRIVATE src/c_api_behavior.cpp src/c_api_records.cpp src/c_api_authoring.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -315,6 +318,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_proj_expl_hazd_creation.cpp
     tests/test_proj_expl_hazd_reencode_real.cpp
     tests/test_scalar_embedded.cpp
+    tests/test_field_writer.cpp
+    tests/test_subrecord_authoring.cpp
+    tests/test_c_api_authoring.cpp
+    tests/test_c_api_fields.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
@@ -374,6 +381,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api.cpp
     tests/test_environment.cpp
     tests/test_behavior.cpp
+    tests/test_behavior_authoring.cpp
+    tests/test_behavior_writer_c_api.cpp
+    tests/test_behavior_writer_real.cpp
     tests/test_behavior_real.cpp
     tests/test_environment_world.cpp
     tests/test_environment_placed.cpp
@@ -413,6 +423,8 @@ if(RADICLE_BUILD_TESTS)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120)
+  add_test(NAME radicle_field_address_codegen
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_env_bench_non_ansi_data_dir
              COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>

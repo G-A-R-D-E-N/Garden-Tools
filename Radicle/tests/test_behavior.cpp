@@ -86,14 +86,15 @@ TEST_F(BehaviorRead, CombatStyleAcceptsMeasuredOptionalTailsAndKeepsIntegerSlot)
 TEST_F(BehaviorRead, LocationAndTargetViewsKeepVariantValuesAndOriginalPositions) {
   for (std::uint32_t type = 0; type <= 14; ++type) {
     for (const bool extended : {false, true}) {
-      auto location = words({type | 0xAABBCC00u, 0x810, 0xFFFFFFFFu});
+      auto location = words({type, 0x810, 0xFFFFFFFFu});
       if (extended) { const auto index = words({0x80000001}); location.insert(location.end(), index.begin(), index.end()); }
       write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"PLDT", location}, {"PTDA", words({type, 0x810, 0xFFFFFFFFu})}}}});
       const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
       ASSERT_EQ(p.locations.size(), 1); const auto& l = p.locations[0];
-      EXPECT_EQ(l.subrecord_index, 1u); EXPECT_EQ(l.type, type); EXPECT_EQ(l.value, 0x810u); EXPECT_EQ(l.radius, 0xFFFFFFFFu);
+      EXPECT_EQ(l.subrecord_index, 1u); EXPECT_EQ(l.type, type); EXPECT_EQ(l.value, 0x810u);
+      EXPECT_EQ(l.radius, -1);
       EXPECT_EQ(l.item_index.has_value(), extended); if (extended) { EXPECT_EQ(*l.item_index, 0x80000001u); }
-      EXPECT_EQ(l.form.has_value(), type == 0 || type == 1 || type == 6);
+      EXPECT_EQ(l.form.has_value(), type == 0 || type == 1 || type == 4 || type == 6);
       ASSERT_EQ(p.targets.size(), type <= 8 ? 1u : 0u);
       if (!p.targets.empty()) {
         const auto& t = p.targets[0]; EXPECT_EQ(t.subrecord_index, 2u); EXPECT_EQ(t.count_or_distance, -1);
@@ -105,6 +106,19 @@ TEST_F(BehaviorRead, LocationAndTargetViewsKeepVariantValuesAndOriginalPositions
   write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"PLDT", words({255, 1, 2})}, {"PTDA", words({99, 1, 2})}, {"PLDT", words({0})}}}});
   const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
   EXPECT_TRUE(p.locations.empty()); EXPECT_TRUE(p.targets.empty()); EXPECT_EQ(p.opaque.size(), 3u);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+}
+
+TEST_F(BehaviorRead, LocationRetainsEightBytePrefixAndRejectsUnknownFullWidthType) {
+  write({{"PACK", 0x800, {{"PLDT", words({4, 0x810})}, {"PLDT", words({0xAABBCC06, 0x811, 0})},
+    {"PLDT", words({0xFFFFFFFF, 0x812, 0})}, {"PTDA", words({0xFFFFFFFF, 0x813, 0})}}}});
+  const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
+  ASSERT_EQ(p.locations.size(), 1u);
+  EXPECT_EQ(p.locations[0].type, 4);
+  EXPECT_FALSE(p.locations[0].radius);
+  ASSERT_TRUE(p.locations[0].form);
+  EXPECT_EQ(p.locations[0].form->local().value(), 0x810u);
+  EXPECT_TRUE(p.targets.empty());
   EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
 }
 

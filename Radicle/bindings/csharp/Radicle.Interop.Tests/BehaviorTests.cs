@@ -26,7 +26,7 @@ public class BehaviorTests
         Package package;
         using (var env = RadicleEnvironment.Load(new[] { path })) package = env.Package(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
         Assert.Equal((byte)0xFE, package.Data!.Type); Assert.Equal((ushort)0x8001, package.Data.InterruptFlags);
-        Assert.Equal((sbyte)-1, package.Schedule!.Month); Assert.Equal((sbyte)-1, package.Schedule.Minute); Assert.Equal(-1, package.Schedule.DurationMinutes);
+        Assert.Equal((sbyte)-1, package.Schedule!.Month); Assert.Equal((sbyte)-1, package.Schedule.Minute); Assert.Equal(uint.MaxValue, package.Schedule.DurationMinutes);
         Assert.Equal((ushort)0xDEAD, package.Data.TrailingValue);
         Assert.Equal(new FormKey("Behavior.esm", 0x812), package.Counter!.TemplatePackage); Assert.Equal(new FormKey("Behavior.esm", 0x810), package.CombatStyle);
         Assert.Equal(new FormKey("Behavior.esm", 0x813), package.BeginIdle); Assert.Equal(new FormKey("Behavior.esm", 0x814), package.EndIdle); Assert.Null(package.ChangeIdle);
@@ -59,7 +59,7 @@ public class BehaviorTests
     public void PackageLocationAndTargetCopiesRetainIndicesRawValuesAndOpaqueBytes()
     {
         using var temp = new TempDirectory();
-        var location = U32(0xAABBCC06, 0x810, uint.MaxValue);
+        var location = U32(6, 0x810, uint.MaxValue);
         var path = temp.Write("Behavior.esm", Build(1, Array.Empty<string>(), Top("PACK", new Rec("PACK", 0x800, new[] {
             ("PKCU", U32(0, 0, 9)), ("PLDT", location), ("PLDT", U32(14, 99, 7, uint.MaxValue)),
             ("PTDA", U32(7, 0x811, uint.MaxValue)), ("PTDA", U32(4, 33, 0x80000000)), ("PLDT", U32(255, 1, 2)) }))));
@@ -67,7 +67,7 @@ public class BehaviorTests
         using (var env = RadicleEnvironment.Load(new[] { path })) package = env.Package(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
         Assert.Equal(2, package.Locations.Count); Assert.Equal((nuint)1, package.Locations[0].SubrecordIndex);
         Assert.Null(package.Locations[0].ItemIndex); Assert.Equal(new FormKey("Behavior.esm", 0x810), package.Locations[0].Form);
-        Assert.Equal(uint.MaxValue, package.Locations[0].Radius); Assert.Equal(uint.MaxValue, package.Locations[1].ItemIndex);
+        Assert.Equal(-1, package.Locations[0].Radius); Assert.Equal(uint.MaxValue, package.Locations[1].ItemIndex);
         Assert.Null(package.Locations[1].Form); Assert.Equal(99u, package.Locations[1].Value);
         Assert.Equal(2, package.Targets.Count); Assert.Equal(-1, package.Targets[0].CountOrDistance);
         Assert.Equal(new FormKey("Behavior.esm", 0x811), package.Targets[0].Form); Assert.Null(package.Targets[1].Form);

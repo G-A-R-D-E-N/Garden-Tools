@@ -58,7 +58,7 @@ Package decode_package(const Environment& env, const RecordRef& ref) {
       static_cast<std::int8_t>(std::to_integer<std::uint8_t>(sub->data[1])),
       static_cast<std::int8_t>(std::to_integer<std::uint8_t>(sub->data[2])),
       static_cast<std::int8_t>(std::to_integer<std::uint8_t>(sub->data[3])),
-      static_cast<std::int8_t>(std::to_integer<std::uint8_t>(sub->data[4])), Reader::i32(*sub, 8)};
+      static_cast<std::int8_t>(std::to_integer<std::uint8_t>(sub->data[4])), Reader::u32(*sub, 8)};
   std::size_t boundary = subs.size();
   if (const auto* sub = r.sized(sig("PKCU"), 12)) {
     boundary = static_cast<std::size_t>(sub - subs.data());
@@ -69,16 +69,17 @@ Package decode_package(const Environment& env, const RecordRef& ref) {
   out.conditions = conditions(r, 0, boundary);
   for (std::size_t i = 0; i < subs.size(); ++i) {
     const auto& sub = subs[i];
-    if (sub.signature == sig("PLDT") && (sub.data.size() == 12 || sub.data.size() == 16)) {
-      const auto type = std::to_integer<std::uint8_t>(sub.data[0]);
-      if (type > 14) continue;
-      PackageLocation location{i, type, Reader::u32(sub, 4), Reader::u32(sub, 8), {}, {}};
+    if (sub.signature == sig("PLDT") && (sub.data.size() == 8 || sub.data.size() == 12 || sub.data.size() == 16)) {
+      const auto type = Reader::i32(sub, 0);
+      if (type < 0 || type > 14) continue;
+      PackageLocation location{i, type, Reader::u32(sub, 4), {}, {}, {}};
+      if (sub.data.size() >= 12) location.radius = Reader::i32(sub, 8);
       if (sub.data.size() == 16) location.item_index = Reader::u32(sub, 12);
-      if (type == 0 || type == 1 || type == 6) location.form = r.link_at(sub, 4);
+      if (type == 0 || type == 1 || type == 4 || type == 6) location.form = r.link_at(sub, 4);
       out.locations.push_back(std::move(location));
     } else if (sub.signature == sig("PTDA") && sub.data.size() == 12) {
-      const auto type = Reader::u32(sub, 0);
-      if (type > 8) continue;
+      const auto type = Reader::i32(sub, 0);
+      if (type < 0 || type > 8) continue;
       PackageTarget target{i, type, Reader::u32(sub, 4), Reader::i32(sub, 8), {}};
       if (type == 0 || type == 1 || type == 3 || type == 7) target.form = r.link_at(sub, 4);
       out.targets.push_back(std::move(target));

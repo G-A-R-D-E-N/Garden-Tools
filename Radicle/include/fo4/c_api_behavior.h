@@ -28,9 +28,10 @@ typedef struct radicle_package_payload {
 
 typedef struct radicle_package_location {
   size_t subrecord_index;
-  uint8_t type;
+  int32_t type;
   uint32_t value;
-  uint32_t radius;
+  int32_t has_radius;
+  int32_t radius;
   int32_t has_item_index;
   uint32_t item_index;
   radicle_form_key form;
@@ -38,7 +39,7 @@ typedef struct radicle_package_location {
 
 typedef struct radicle_package_target {
   size_t subrecord_index;
-  uint32_t type;
+  int32_t type;
   uint32_t value;
   int32_t count_or_distance;
   radicle_form_key form;
@@ -59,7 +60,7 @@ typedef struct radicle_package_info {
   int8_t date;
   int8_t hour;
   int8_t minute;
-  int32_t duration_minutes;
+  uint32_t duration_minutes;
   int32_t has_counter;
   uint32_t input_count;
   uint32_t version;

@@ -16,19 +16,21 @@ struct PackageData {
 };
 struct PackageSchedule {
   std::int8_t month{0}, weekday{0}, date{0}, hour{0}, minute{0};
-  std::int32_t duration_minutes{0};
+  std::uint32_t duration_minutes{0};
 };
 struct PackageCounter { std::uint32_t input_count{0}, version{0}; FormKey template_package; };
 struct PackageLocation {
   std::size_t subrecord_index{0};
-  std::uint8_t type{0};
-  std::uint32_t value{0}, radius{0};
+  std::int32_t type{0};
+  std::uint32_t value{0};
+  std::optional<std::int32_t> radius;
   std::optional<std::uint32_t> item_index;
   std::optional<FormKey> form;
 };
 struct PackageTarget {
   std::size_t subrecord_index{0};
-  std::uint32_t type{0}, value{0};
+  std::int32_t type{0};
+  std::uint32_t value{0};
   std::int32_t count_or_distance{0};
   std::optional<FormKey> form;
 };
