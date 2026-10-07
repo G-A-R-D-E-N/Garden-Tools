@@ -1464,3 +1464,15 @@ The empty `catch` bodies are deliberate best-effort paths, and they carry no sou
 `src/errors.test.ts` pins that `errorText` produces the same text as the helper it replaced for `Error`s, message-carrying objects, empty messages, bare strings, `null`, `undefined` and numbers. `src/MainShellBridge.test.tsx` covers the startup `appInterop` wiring, the environment reload with its pending-changes prompt, and the batch-copy failure text.
 
 Validation: `vitest run` 122/122 in 15 files, `tsc -b` clean, `vite build` clean (the pre-existing 1.08 MB chunk warning only), `eslint .` 34 errors and 16 warnings, `git diff --check` clean. The 34 errors are the react-hooks and react-refresh findings the later tranches take; `no-explicit-any` and `no-empty` are 0. The 16th warning is the `NifPanel.tsx:onDrop` `exhaustive-deps` one above, which `main` also has and this tranche leaves in place.
+
+## Radicle/tests/test_pex_corpus.cpp:compareCode, Radicle/src/c_api_pex.cpp:CodeBuilder
+
+The ABI 9 corpus proof compares every exported row and field against the decoded C++ PEX model, including flattened ranges, property handlers, debug lines, flags, typed names, defaults and every operand. Floats compare by IEEE-754 bits so signed zero and NaN payloads are not hidden by approximate equality. Mismatch diagnostics include file, object, function and the differing field. Synthetic mutations must fail without changing aggregate counts.
+
+## Radicle/include/fo4/c_api_pex.h:radicle_pex_object_counts, Radicle/bindings/csharp/Radicle.Interop/PexFile.cs:PexObjectCounts
+
+The pre-ABI-9 snapshot function count remains state functions only for compatibility. The ABI 9 object-code function array includes those functions plus property getters and setters. Native and managed both-handler fixtures assert both counts and handler indexes; no native layout or ABI version changes.
+
+## Radicle/src/c_api_pex.cpp:CodeBuilder::str, Radicle/bindings/csharp/Radicle.Interop/PexCode.cs:PexValue
+
+The decoded C++ model retains string values rather than encoded reference indexes. The code-view contract therefore guarantees exact semantic bytes and selects the first equal string-table entry. It does not promise the original encoded index. Duplicate entries remain visible through the table API; native and managed fixtures explicitly encode a later duplicate and verify first-entry canonicalization. This matches Garden's PEX-to-IR need for semantic values without expanding the ABI.

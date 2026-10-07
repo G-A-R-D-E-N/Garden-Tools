@@ -37,7 +37,7 @@ typedef struct radicle_pex_object_counts {
   size_t variable_count;
   size_t property_count;
   size_t state_count;
-  size_t function_count;
+  size_t function_count; /* State functions only; property handlers are excluded. */
 } radicle_pex_object_counts;
 
 /*
@@ -104,6 +104,8 @@ RADICLE_API radicle_status radicle_pex_string_table_entry(const radicle_pex* pex
  */
 #define RADICLE_PEX_NO_STRING ((size_t)-1)
 #define RADICLE_PEX_NO_INDEX ((size_t)-1)
+
+/* Code string indexes select the first equal table entry, not the original encoded index. */
 
 typedef struct radicle_pex_value {
   uint8_t type;

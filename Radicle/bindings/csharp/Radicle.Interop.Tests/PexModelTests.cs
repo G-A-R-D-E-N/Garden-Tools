@@ -12,7 +12,7 @@ public class PexModelTests
 {
     private static readonly byte[] HighBytes = { 0x80, 0xA9, 0xFE, 0xFF };
 
-    private static byte[] SyntheticPex(bool withCode = false)
+    private static byte[] SyntheticPex(bool withCode = false, bool withHandlers = false, bool duplicateStrings = false)
     {
         var bytes = new List<byte>();
         void U8(byte value) => bytes.Add(value);
@@ -47,13 +47,18 @@ public class PexModelTests
         Text(string.Empty);
         Text(string.Empty);
 
-        U16(5);
+        U16(duplicateStrings ? (ushort)6 : (ushort)5);
         Text(string.Empty);
         Text("SyntheticObject");
         Text("ObjectReference");
         Text("Int");
         U16((ushort)HighBytes.Length);
         foreach (var value in HighBytes) U8(value);
+        if (duplicateStrings)
+        {
+            U16((ushort)HighBytes.Length);
+            foreach (var value in HighBytes) U8(value);
+        }
 
         U8(0);
         U16(0);
@@ -80,7 +85,30 @@ public class PexModelTests
         U32(42);
         U8(0);
 
-        U16(0);
+        U16(withHandlers ? (ushort)1 : (ushort)0);
+        if (withHandlers)
+        {
+            U16(1);
+            U16(3);
+            U16(0);
+            U32(0);
+            U8(3);
+            for (var handler = 0; handler < 2; ++handler)
+            {
+                U16(3);
+                U16(0);
+                U32(0);
+                U8(0);
+                U16((ushort)handler);
+                if (handler == 1)
+                {
+                    U16(3);
+                    U16(3);
+                }
+                U16(0);
+                U16(0);
+            }
+        }
 
         U16(1);
         U16(0);
@@ -112,7 +140,7 @@ public class PexModelTests
             U8(3);
             U32(1);
             U8(2);
-            U16(4);
+            U16(duplicateStrings ? (ushort)5 : (ushort)4);
         }
         else
         {
@@ -259,5 +287,33 @@ public class PexModelTests
         Assert.Equal(Status.InvalidArgument, error.Status);
         pex.Dispose();
         Assert.Throws<ObjectDisposedException>(() => pex.ReadCode(0));
+    }
+
+    [Fact]
+    public void SnapshotFunctionCountExcludesBothPropertyHandlers()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex(withHandlers: true));
+        var code = pex.ReadCode(0);
+        Assert.Equal(1, pex.Objects[0].Counts.FunctionCount);
+        Assert.Single(Assert.Single(code.States).Functions);
+        Assert.Equal(3, code.Functions.Count);
+        var property = Assert.Single(code.Properties);
+        Assert.Equal(1, property.ReadFunction);
+        Assert.Equal(2, property.WriteFunction);
+        Assert.Equal(-1, code.Functions[property.ReadFunction].State);
+        Assert.Equal(-1, code.Functions[property.WriteFunction].State);
+        Assert.Single(code.Functions[property.WriteFunction].Parameters);
+    }
+
+    [Fact]
+    public void DuplicateStringIndexesCanonicalizeWithoutChangingTheirBytes()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex(withCode: true, duplicateStrings: true));
+        Assert.Equal(HighBytes, pex.StringTable[4]);
+        Assert.Equal(HighBytes, pex.StringTable[5]);
+        var operand = pex.ReadCode(0).Functions[0].Instructions[1].Arguments[3];
+        Assert.Equal(PexValueType.String, operand.Type);
+        Assert.Equal(4, operand.String);
+        Assert.Equal(HighBytes, pex.StringTable[operand.String]);
     }
 }

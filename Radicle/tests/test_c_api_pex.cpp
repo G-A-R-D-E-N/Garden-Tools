@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -524,5 +525,49 @@ TEST(CApiPex, ObjectCodeRejectsBadArgumentsAndFreesZeroedStructs) {
   EXPECT_EQ(code.states, nullptr);
   radicle_pex_free_object_code(&code);
   radicle_pex_free_object_code(nullptr);
+  radicle_pex_destroy(pex);
+}
+
+TEST(CApiPex, SnapshotCountsExcludeBothPropertyHandlers) {
+  const auto bytes = codePex().toBytes();
+  radicle_pex* pex = nullptr;
+  ASSERT_EQ(radicle_pex_parse(bytes.data(), bytes.size(), &pex), RADICLE_STATUS_OK);
+  radicle_pex_object_counts counts{};
+  radicle_pex_object_code code{};
+  ASSERT_EQ(radicle_pex_object_get_counts(pex, 0, &counts), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_pex_object_code_get(pex, 0, &code), RADICLE_STATUS_OK);
+  EXPECT_EQ(counts.function_count, 2u);
+  EXPECT_EQ(code.function_count, 4u);
+  EXPECT_EQ(code.properties[0].read_function, 2u);
+  EXPECT_EQ(code.properties[0].write_function, 3u);
+  radicle_pex_free_object_code(&code);
+  radicle_pex_destroy(pex);
+}
+
+TEST(CApiPex, DuplicateStringsCanonicalizeToTheFirstMatchingEntry) {
+  auto model = syntheticPex();
+  model.objects[0].states[0].functions[0].instructions.push_back(
+      pexInstruction(26, {pexValue(fo4::pex::PexValueType::String, kHighBytes)}));
+  const auto first = model.stringTable.size() - 1;
+  const auto repeated = model.stringTable;
+  model.stringTable.insert(model.stringTable.end(), repeated.begin(), repeated.end());
+  const auto duplicate = model.stringTable.size() - 1;
+  auto bytes = model.toBytes();
+  bytes[bytes.size() - 2] = static_cast<uint8_t>(duplicate);
+  bytes.back() = static_cast<uint8_t>(duplicate >> 8);
+  ASSERT_EQ(fo4::pex::PexFile::fromBytes(bytes).objects[0].states[0].functions[0].instructions[0].args[0].str,
+            kHighBytes);
+  radicle_pex* pex = nullptr;
+  ASSERT_EQ(radicle_pex_parse(bytes.data(), bytes.size(), &pex), RADICLE_STATUS_OK);
+  radicle_pex_object_code code{};
+  ASSERT_EQ(radicle_pex_object_code_get(pex, 0, &code), RADICLE_STATUS_OK);
+  EXPECT_EQ(tableEntry(pex, duplicate), kHighBytes);
+  EXPECT_EQ(code.values[0].string, first);
+  EXPECT_NE(code.values[0].string, duplicate);
+  EXPECT_EQ(tableEntry(pex, code.values[0].string), kHighBytes);
+  EXPECT_EQ(code.functions[0].name,
+            static_cast<size_t>(std::find(model.stringTable.begin(), model.stringTable.end(), "Run") - model.stringTable.begin()));
+  EXPECT_EQ(tableEntry(pex, code.functions[0].name), "Run");
+  radicle_pex_free_object_code(&code);
   radicle_pex_destroy(pex);
 }
