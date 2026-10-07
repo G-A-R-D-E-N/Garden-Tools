@@ -1,5 +1,11 @@
 # Managed binding CI
 
+## Radicle/bindings/csharp/tools/run_managed_tests.py:main
+
+The clean restore rehearsal copies both managed projects without bin/obj, assigns empty package, HTTP and plugin caches, and clears all package sources and fallback folders except the repository package feed. The SDK is pinned in `Radicle/bindings/csharp/global.json`. Linux CI runs the rehearsal in a fresh user/network namespace with only loopback; an external connection must fail with ENETUNREACH before restore and the complete managed suite run. Missing packages or failed tests fail the native Linux job. This first rehearsal is expected to reproduce the missing offline feed; no offline acceptance is claimed until its packages are supplied and the new head passes.
+
+`.github/workflows/native-ci.yml:native-linux` and `native-windows-tests` publish the two exact contexts selected by the repository's new main protection rule. Direct main pushes are disabled and the rule is enforced for repository admins. The reopened saved form shows both contexts as Matched and admin enforcement checked; `build/evidence/pr426-protection-saved.txt` records that UI evidence because the API response omits the admin-enforcement field. Before this change, the repository reported zero branch protections. A live failing-check merge-gate proof remains pending.
+
 ## .github/workflows/native-ci.yml:native-linux, native-windows-tests
 
 The native test jobs explicitly install .NET 8 and configure `RADICLE_CSHARP_TESTS=ON`. Their existing required CTest steps execute `Radicle/CMakeLists.txt:radicle_csharp_bindings`, which passes the built native library, layout probe and ABI rejection stubs to the managed suite. Native cross-build jobs cannot execute those binaries and retain tests disabled.

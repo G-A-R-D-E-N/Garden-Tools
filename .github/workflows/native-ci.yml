@@ -107,7 +107,7 @@ jobs:
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '8.0.424'
 
       - name: Find ccache
         run: |
@@ -142,6 +142,9 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build/native --output-on-failure --parallel 4
+
+      - name: Prove clean managed tests without external networking
+        run: unshare --user --map-root-user --net python3 Radicle/bindings/csharp/tools/run_managed_tests.py --build-dir build/native --network-isolated
 
       - name: Upload logs and binaries on failure
         if: failure()
@@ -317,7 +320,7 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '8.0.424'
 
       - name: Set up MSVC, Ninja and ccache
         shell: powershell
