@@ -105,7 +105,7 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   return ScalarMutationStatus::updated;
 }
 
-}  // namespace
+}
 
 ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
@@ -216,4 +216,4 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
   throw schema::ScalarError("unknown field path: " + std::string(path));
 }
 
-}  // namespace fo4
+}

@@ -24,4 +24,4 @@ inline void mark_record_modified(Plugin& plugin, Record& record) {
   plugin.original_range.clear();
 }
 
-}  // namespace fo4::detail
+}

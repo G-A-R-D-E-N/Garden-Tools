@@ -42,7 +42,7 @@ bool record_discriminator_matches(const Record& record, const FieldDiscriminator
   return listed(when, read_discriminator(found->data, 0, when));
 }
 
-}  // namespace
+}
 
 std::size_t discriminator_width(DiscriminatorStorage storage) noexcept {
   switch (storage) {
@@ -122,4 +122,4 @@ FieldSlots resolve_field_slots(const Record& record,
   return out;
 }
 
-}  // namespace fo4::schema
+}

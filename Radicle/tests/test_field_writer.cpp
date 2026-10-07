@@ -153,7 +153,7 @@ fo4::schema::FormLinkFieldDescriptor link_field(std::string_view sub,
 const fo4::FormKey master_a = fo4::FormKey::parse("000801:Master.esm");
 const fo4::FormKey master_b = fo4::FormKey::parse("000900:Master.esm");
 
-}  // namespace
+}
 
 TEST(FieldWriterStorage, SignedByteBounds) {
   auto plugin = load({{"DATA", raw({0, 0, 0, 0})}});

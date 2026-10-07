@@ -1,5 +1,11 @@
 # Radicle field writer (W0a)
 
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
+
+The main integration at `1787a5f4` already uses ABI 9 for the PEX object-code layout. The field-writer exports must use ABI 10 so ABI-9 libraries cannot pass the generated binding guard while lacking these exports. `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTen` pins both the compiled header and exported version. Regenerate `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` and `Radicle/bindings/csharp/tests/abi_layout_probe.cpp` with `generate_interop.py`, preserving main's PEX layout and the field-writer declarations.
+
+`Radicle/include/fo4/plugin/mutation.hpp:set_record_conditions` retains main's `ConditionMutationStatus` outcomes; the added field-writer overloads precede that function. `.github/workflows/native-ci.yml:native-linux,native-windows-tests` and `docs/code-notes/radicle-managed-ci.md` retain current main's pinned SDK, offline feed, RID consumer and required-check behavior.
+
 One descriptor path now writes every fixed-layout stored field the open reader branches register. The
 descriptors live in `Radicle/schema/fallout4/fields.json`, are validated by the two codegen scripts, and
 are consumed by the native writers, the C ABI and `PluginFile`. Unknown or mismatched layouts make the
@@ -132,7 +138,7 @@ not only element 0, so the target-type check stays correct once a strided field 
 
 ## Radicle/src/c_api_fields.cpp:radicle_plugin_set_record_scalar_at
 
-New exports (ABI 9): `radicle_plugin_set_record_scalar` (in `Radicle/src/c_api_writeback.cpp`),
+New exports (ABI 10): `radicle_plugin_set_record_scalar` (in `Radicle/src/c_api_writeback.cpp`),
 `..._set_record_scalar_at`, `..._set_record_formlink`, `..._set_record_string`, `..._record_field_count` and
 `..._formlink_list_{size,insert,remove,set,clear}`. Status mapping: updated or unchanged is OK; record
 missing, field absent and index out of range are NOT_FOUND; null arguments, an unknown path, the wrong
@@ -154,8 +160,8 @@ reload.
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-Bumped from 8 to 9 for the new exports; no C struct layout changed, so the regenerated
-`Radicle/bindings/csharp/tests/abi_layout_probe.cpp` is content-identical. `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsNine`
+Bumped from current main's 9 to 10 for the new exports; no additional C struct layout changed, so the regenerated
+`Radicle/bindings/csharp/tests/abi_layout_probe.cpp` is content-identical. `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTen`
 pins the value.
 
 ## Not done

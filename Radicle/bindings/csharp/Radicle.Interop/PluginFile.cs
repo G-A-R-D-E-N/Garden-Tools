@@ -143,7 +143,6 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (s, key) => RadicleNative.PluginSetRecordString(Handle, key, path, at, value));
     }
 
-    /// <summary>Addressable occurrences or elements of a field; 0 when the field or the record is absent.</summary>
     public int FieldCount(FormKey record, string path)
     {
         ArgumentNullException.ThrowIfNull(path);
