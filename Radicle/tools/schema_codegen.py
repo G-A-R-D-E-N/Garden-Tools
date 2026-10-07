@@ -4,10 +4,11 @@ import argparse
 import json
 import math
 import sys
+from itertools import combinations
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from field_address_codegen import address_key, parse_address, render_address  # noqa: E402
+from field_address_codegen import parse_address, render_address  # noqa: E402
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
@@ -64,7 +65,6 @@ def load_fields(schema_path: Path):
 
     fields = []
     seen_paths = set()
-    seen_record_subrecords = set()
     for record in records:
         if not isinstance(record, dict):
             raise ValueError("schema record entries must be objects")
@@ -104,9 +104,6 @@ def load_fields(schema_path: Path):
             subrecord = field.get("subrecord", "")
             if not isinstance(subrecord, str) or not valid_signature(subrecord):
                 raise ValueError(f"subrecord signature must be four printable ASCII characters: {subrecord!r}")
-            # A struct payload holds many fields, so uniqueness is per byte
-            # offset, not per subrecord. Whole-payload fields have no offset and
-            # so remain one-per-subrecord as before.
             offset = field.get("offset")
             embedded = offset is not None
             if embedded:
@@ -126,12 +123,6 @@ def load_fields(schema_path: Path):
                 raise ValueError(f"unsupported scalar storage: {storage!r}")
 
             address = parse_address(field, path, subrecord, embedded, WIDTHS.get(storage, 0))
-            variant = address_key(address)
-            subrecord_key = (record_signature, subrecord, offset, variant)
-            if subrecord_key in seen_record_subrecords:
-                raise ValueError(
-                    f"duplicate scalar mapping for {record_signature}.{subrecord}+{offset}")
-            seen_record_subrecords.add(subrecord_key)
             if presentation not in PRESENTATIONS:
                 raise ValueError(f"unsupported scalar presentation: {presentation!r}")
             if insertion not in INSERTIONS:
@@ -186,23 +177,39 @@ def load_fields(schema_path: Path):
                 "can_insert": False,
             })
 
-    # Two embedded fields in one payload must not overlap. A transposed offset
-    # is otherwise invisible until a write corrupts the neighbouring field.
     by_payload = {}
     for field in fields:
-        if not field["embedded"]:
-            continue
-        variant = address_key(field["address"])
-        by_payload.setdefault((field["record"], field["subrecord"], variant), []).append(field)
-    for (record_signature, subrecord, _variant), group in by_payload.items():
-        group.sort(key=lambda item: item["offset"])
-        for earlier, later in zip(group, group[1:]):
-            end = earlier["offset"] + WIDTHS[earlier["storage"]]
-            if end > later["offset"]:
-                raise ValueError(
-                    f"overlapping scalar fields in {record_signature}.{subrecord}: "
-                    f"{earlier['path']!r} ends at {end}, {later['path']!r} starts at "
-                    f"{later['offset']}")
+        by_payload.setdefault((field["record"], field["subrecord"]), []).append(field)
+    for (record_signature, subrecord), group in by_payload.items():
+        for first, second in combinations(group, 2):
+            a, b = first["address"], second["address"]
+            different_layout = any(a[key] != b[key] for key in ("repeated", "stride", "array_offset"))
+            aw, bw = a["when"], b["when"]
+            if aw is None or bw is None:
+                exclusivity = "one or both fields are unguarded"
+            elif any(aw[key] != bw[key] for key in ("subrecord", "offset", "storage")):
+                exclusivity = "different when discriminators are not mutually exclusive"
+            elif set(aw["equals"]).isdisjoint(bw["equals"]):
+                if aw["subrecord"] or not different_layout:
+                    continue
+                exclusivity = "own-element discriminators use different layouts"
+            else:
+                exclusivity = "when.equals sets intersect"
+
+            if different_layout:
+                conflict = "conflicting repeated/stride/array_offset layouts"
+            elif not first["embedded"] or not second["embedded"]:
+                conflict = "whole-payload field covers the subrecord"
+            else:
+                start_a, start_b = first["offset"], second["offset"]
+                end_a = start_a + WIDTHS[first["storage"]]
+                end_b = start_b + WIDTHS[second["storage"]]
+                if start_a >= end_b or start_b >= end_a:
+                    continue
+                conflict = f"byte ranges [{start_a}, {end_a}) and [{start_b}, {end_b}) intersect"
+            raise ValueError(
+                f"overlapping scalar fields in {record_signature}.{subrecord}: "
+                f"{first['path']!r} and {second['path']!r}: {conflict}; {exclusivity}")
 
     fields.sort(key=lambda item: (item["record"], item["path"]))
     return fields

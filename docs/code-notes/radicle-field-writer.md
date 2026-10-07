@@ -114,9 +114,27 @@ for: `repeated` with `stride`, `stride` without an offset or not a positive inte
 `stride`, a field that does not fit inside one stride element, malformed `when` (unknown key, bad storage,
 empty, duplicate or oversized `equals`, values outside the storage range, `when.subrecord` equal to the
 field's own subrecord), `payload_size` that does not hold whole stride elements, and string fields carrying
-numeric keys, and a same-element `when` whose offset plus width runs past `stride` (or past `payload_size`). Two fields in one payload may overlap only if their addressing (including `when`) differs, so
-union variants can share bytes. The tests are `Radicle/tools/test_field_address_codegen.py`, run by
+numeric keys, and a same-element `when` whose offset plus width runs past `stride` (or past `payload_size`). The tests are `Radicle/tools/test_field_address_codegen.py`, run by
 CTest as `radicle_field_address_codegen`.
+
+## Radicle/tools/schema_codegen.py:load_fields
+
+Compare every pair of scalar or string fields sharing a record and subrecord. The only mutual-exclusion
+proof is two `when` guards reading the identical discriminator (`subrecord`, including both empty for
+the field's own element, `offset`, and `storage`) with disjoint `equals` sets. Own-element guards also
+require identical `repeated`, `stride`, and `array_offset` layouts because
+`Radicle/src/schema/field_address.cpp:resolve_field_slots` reads their discriminators relative to each
+element base. For example, offset 4 in stride 8 and offset 0 in stride 4 can both target bytes [4,8)
+while their own-element guards read different bytes. Disjoint external-subrecord guards may exempt
+different layouts. Otherwise different `repeated`, `stride`, or `array_offset` layouts conflict;
+matching layouts conflict when embedded byte ranges intersect. A non-embedded scalar or any string
+covers the entire payload and conflicts with every other field unless mutually exclusive.
+
+Grouping by identical addresses missed guarded/unguarded overlaps, intersecting discriminator values,
+different discriminators and different layouts. Skipping non-embedded fields also missed whole-payload
+conflicts. Pairwise checks retain non-overlapping embedded fields and report both paths and the conflict
+reason. `Radicle/tools/test_field_address_codegen.py:SchemaCodegenTests` exercises these boundaries.
+`Radicle/tools/formlink_schema_codegen.py:load_lists` still has no overlap check; that is a separate follow-up.
 
 ## Radicle/schema/fallout4/fields.json:RACE strings
 

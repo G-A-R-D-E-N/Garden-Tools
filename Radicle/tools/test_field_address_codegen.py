@@ -157,6 +157,84 @@ class SchemaCodegenTests(unittest.TestCase):
         plain = schema_codegen.render(self.load(scalar()))
         self.assertIn("FieldAddress{}", plain)
 
+    def test_guarded_and_unguarded_overlap_is_rejected(self):
+        self.rejects("overlapping scalar fields in TEST.DATA",
+                     scalar(when={"offset": 0, "storage": "u8", "equals": [1]}),
+                     scalar(path="TEST" + BS + "Other"))
+
+    def test_intersecting_discriminator_values_are_rejected(self):
+        self.rejects("overlapping scalar fields in TEST.DATA",
+                     scalar(when={"offset": 0, "storage": "u8", "equals": [1, 2]}),
+                     scalar(path="TEST" + BS + "Other",
+                            when={"offset": 0, "storage": "u8", "equals": [2, 3]}))
+
+    def test_disjoint_discriminator_values_are_accepted(self):
+        self.assertEqual(len(self.load(
+            scalar(when={"offset": 0, "storage": "u8", "equals": [1]}),
+            scalar(path="TEST" + BS + "Other",
+                   when={"offset": 0, "storage": "u8", "equals": [2]}))), 2)
+
+    def test_different_discriminators_are_not_exclusive(self):
+        for changes in ({"offset": 1}, {"storage": "u16"}, {"subrecord": "CNAM"}):
+            with self.subTest(changes=changes):
+                self.rejects("overlapping scalar fields in TEST.DATA",
+                             scalar(when={"offset": 0, "storage": "u8", "equals": [1]}),
+                             scalar(path="TEST" + BS + "Other",
+                                    when={"offset": 0, "storage": "u8", "equals": [2], **changes}))
+
+    def test_different_layouts_are_rejected(self):
+        for first, second in (({}, {"stride": 8}), ({}, {"repeated": True}),
+                              ({"stride": 8}, {"stride": 12}),
+                              ({"stride": 8}, {"stride": 8, "array_offset": 4})):
+            with self.subTest(first=first, second=second):
+                self.rejects("overlapping scalar fields in TEST.DATA",
+                             scalar(**first), scalar(path="TEST" + BS + "Other", **second))
+
+    def test_whole_payload_fields_conflict_with_embedded_fields(self):
+        for whole in (string(subrecord="DATA"), scalar(offset=None)):
+            with self.subTest(whole=whole):
+                self.rejects("overlapping scalar fields in TEST.DATA", whole,
+                             scalar(path="TEST" + BS + "Other"))
+
+    def test_non_overlapping_embedded_fields_are_accepted(self):
+        self.assertEqual(len(self.load(scalar(offset=0),
+                                       scalar(path="TEST" + BS + "Other", offset=4))), 2)
+
+    def test_exclusive_fields_may_use_different_layouts_or_whole_payloads(self):
+        for second in (scalar(path="TEST" + BS + "Other", stride=8), string(subrecord="DATA")):
+            with self.subTest(second=second):
+                when = {"subrecord": "CNAM", "offset": 0, "storage": "u8"}
+                self.assertEqual(len(self.load(
+                    scalar(when=dict(when, equals=[1])),
+                    dict(second, when=dict(when, equals=[2])))), 2)
+
+    def test_disjoint_own_element_guards_do_not_exempt_different_layouts(self):
+        self.rejects("conflicting.*layouts.*own-element",
+                     scalar(offset=4, stride=8,
+                            when={"offset": 0, "storage": "u8", "equals": [1]}),
+                     scalar(path="TEST" + BS + "Other", offset=0, stride=4,
+                            when={"offset": 0, "storage": "u8", "equals": [2]}))
+
+    def test_every_pair_is_compared(self):
+        self.rejects("overlapping scalar fields in TEST.DATA",
+                     scalar(offset=0),
+                     scalar(path="TEST" + BS + "Middle", offset=4),
+                     scalar(path="TEST" + BS + "Other", offset=2,
+                            when={"offset": 0, "storage": "u8", "equals": [1]}))
+
+    def test_overlap_diagnostics_name_both_paths_and_reason(self):
+        for second, reason in ((scalar(), "byte ranges"), (scalar(stride=8), "conflicting"),
+                               (string(subrecord="DATA"), "whole-payload")):
+            with self.subTest(second=second):
+                with self.assertRaises(ValueError) as caught:
+                    self.load(scalar(path="TEST" + BS + "First"),
+                              dict(second, path="TEST" + BS + "Second"))
+                message = str(caught.exception)
+                self.assertIn(repr("TEST" + BS + "First"), message)
+                self.assertIn(repr("TEST" + BS + "Second"), message)
+                self.assertIn(reason, message)
+                self.assertIn("unguarded", message)
+
     def test_formlink_fields_share_the_rules(self):
         rows, _nested, fields, _unions = self.link(link(repeated=True))[0:4]
         self.assertTrue(fields[0]["address"]["repeated"])
