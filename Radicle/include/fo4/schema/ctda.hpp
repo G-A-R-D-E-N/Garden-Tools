@@ -110,11 +110,6 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
                                         std::span<const CtdaCondition> conditions,
                                         std::optional<std::size_t> insert_anchor);
 
-// Replaces the record's CTDA run (contiguous CTDA/CIS1/CIS2 subrecords, with
-// an optional leading CITC count) in place with freshly serialized conditions.
-// Returns false when the record has no CTDA subrecords or more than one
-// separate condition list. When a CITC count
-// subrecord precedes the run it is updated; otherwise none is added.
 bool write_ctda_conditions(Record& record, std::span<const CtdaCondition> conditions);
 
 }  // namespace fo4

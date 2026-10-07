@@ -1,0 +1,149 @@
+{
+  "packages": [
+    {
+      "file": "microsoft.codecoverage.17.11.1.nupkg",
+      "sha256": "d5d2e52b734687cf0fb85619898a53fa2cc0f7a7adc61537052822c4381db460",
+      "bytes": 9139653,
+      "source": "https://api.nuget.org/v3-flatcontainer/microsoft.codecoverage/17.11.1/microsoft.codecoverage.17.11.1.nupkg",
+      "id": "Microsoft.CodeCoverage",
+      "version": "17.11.1",
+      "license": "MIT",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "projectUrl": "https://github.com/microsoft/vstest"
+    },
+    {
+      "file": "microsoft.net.test.sdk.17.11.1.nupkg",
+      "sha256": "d09504b9c43697368f824ae39bf3452c14dba94d5d7e1be13774e5de6a04ea62",
+      "bytes": 34301,
+      "source": "https://api.nuget.org/v3-flatcontainer/microsoft.net.test.sdk/17.11.1/microsoft.net.test.sdk.17.11.1.nupkg",
+      "id": "Microsoft.NET.Test.Sdk",
+      "version": "17.11.1",
+      "license": "MIT",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "projectUrl": "https://github.com/microsoft/vstest"
+    },
+    {
+      "file": "microsoft.testplatform.objectmodel.17.11.1.nupkg",
+      "sha256": "e6f5febc2cc56374bbc5f31522ff0e94c305b5d79d5bd50827373458473ebe6e",
+      "bytes": 1660096,
+      "source": "https://api.nuget.org/v3-flatcontainer/microsoft.testplatform.objectmodel/17.11.1/microsoft.testplatform.objectmodel.17.11.1.nupkg",
+      "id": "Microsoft.TestPlatform.ObjectModel",
+      "version": "17.11.1",
+      "license": "MIT",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "projectUrl": "https://github.com/microsoft/vstest"
+    },
+    {
+      "file": "microsoft.testplatform.testhost.17.11.1.nupkg",
+      "sha256": "c12918d07d5f400ab41f72dc293e2eed8e51ce10003daeb2b9e54df3883c1f15",
+      "bytes": 2882099,
+      "source": "https://api.nuget.org/v3-flatcontainer/microsoft.testplatform.testhost/17.11.1/microsoft.testplatform.testhost.17.11.1.nupkg",
+      "id": "Microsoft.TestPlatform.TestHost",
+      "version": "17.11.1",
+      "license": "MIT",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "projectUrl": "https://github.com/microsoft/vstest"
+    },
+    {
+      "file": "newtonsoft.json.13.0.1.nupkg",
+      "sha256": "2b6b52556e27e1b7913f33eedeb95568110c746bd64afff74357f1683878323a",
+      "bytes": 2065787,
+      "source": "https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.1/newtonsoft.json.13.0.1.nupkg",
+      "id": "Newtonsoft.Json",
+      "version": "13.0.1",
+      "license": "MIT",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "projectUrl": "https://www.newtonsoft.com/json"
+    },
+    {
+      "file": "system.reflection.metadata.1.6.0.nupkg",
+      "sha256": "2497e068f6afed47c4878c9101074684b645d5baebd2d5163e5eaa99f356abf1",
+      "bytes": 852113,
+      "source": "https://api.nuget.org/v3-flatcontainer/system.reflection.metadata/1.6.0/system.reflection.metadata.1.6.0.nupkg",
+      "id": "System.Reflection.Metadata",
+      "version": "1.6.0",
+      "licenseUrl": "https://github.com/dotnet/corefx/blob/master/LICENSE.TXT",
+      "projectUrl": "https://dot.net/"
+    },
+    {
+      "file": "xunit.2.9.3.nupkg",
+      "sha256": "04fae949b8e5201ecfa07fa8702baca8c0eb3198114194b3793789cc72bf23d7",
+      "bytes": 31659,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit/2.9.3/xunit.2.9.3.nupkg",
+      "id": "xunit",
+      "version": "2.9.3",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0"
+    },
+    {
+      "file": "xunit.abstractions.2.0.3.nupkg",
+      "sha256": "d03d72fc2df8880448f7a81bddb00e1bcb5c18f323c7e7cc69b4cfa727469403",
+      "bytes": 75155,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit.abstractions/2.0.3/xunit.abstractions.2.0.3.nupkg",
+      "id": "xunit.abstractions",
+      "version": "2.0.3",
+      "licenseUrl": "https://raw.githubusercontent.com/xunit/xunit/master/license.txt",
+      "projectUrl": "https://github.com/xunit/xunit"
+    },
+    {
+      "file": "xunit.analyzers.1.18.0.nupkg",
+      "sha256": "0ce81a98b9df8bd51ae480e6dc9566f4c68e15b4926e6ab997c8f634f3b7a9dd",
+      "bytes": 269902,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit.analyzers/1.18.0/xunit.analyzers.1.18.0.nupkg",
+      "id": "xunit.analyzers",
+      "version": "1.18.0",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0"
+    },
+    {
+      "file": "xunit.assert.2.9.3.nupkg",
+      "sha256": "bc760e75ef1b775d293a6afb89301836d3e5a87cec265e31dedd430ee61d0c20",
+      "bytes": 246078,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit.assert/2.9.3/xunit.assert.2.9.3.nupkg",
+      "id": "xunit.assert",
+      "version": "2.9.3",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0"
+    },
+    {
+      "file": "xunit.core.2.9.3.nupkg",
+      "sha256": "aa4550f09c3f2d95a6c62ae43cec22af2edbbd99f722e691ceefeca761fc6a7c",
+      "bytes": 33553,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit.core/2.9.3/xunit.core.2.9.3.nupkg",
+      "id": "xunit.core",
+      "version": "2.9.3",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0"
+    },
+    {
+      "file": "xunit.extensibility.core.2.9.3.nupkg",
+      "sha256": "99ca555fe9b447b1747aff426819db6a2f60b6ee0655caa28c4b91a9ef3d0f48",
+      "bytes": 298787,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit.extensibility.core/2.9.3/xunit.extensibility.core.2.9.3.nupkg",
+      "id": "xunit.extensibility.core",
+      "version": "2.9.3",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0"
+    },
+    {
+      "file": "xunit.extensibility.execution.2.9.3.nupkg",
+      "sha256": "dabc4cb360ede1c01c98e14cc0fe587774693f40679a22fc71794acac5d8d23c",
+      "bytes": 379849,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit.extensibility.execution/2.9.3/xunit.extensibility.execution.2.9.3.nupkg",
+      "id": "xunit.extensibility.execution",
+      "version": "2.9.3",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0"
+    },
+    {
+      "file": "xunit.runner.visualstudio.2.8.2.nupkg",
+      "sha256": "5257cadf8f2bf2426eadacb07dd0ada492711e4bf4e303cdce951acf850cffad",
+      "bytes": 595969,
+      "source": "https://api.nuget.org/v3-flatcontainer/xunit.runner.visualstudio/2.8.2/xunit.runner.visualstudio.2.8.2.nupkg",
+      "id": "xunit.runner.visualstudio",
+      "version": "2.8.2",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://licenses.nuget.org/Apache-2.0"
+    }
+  ]
+}

@@ -242,9 +242,9 @@ TEST(CtdaModel, SetRecordConditionsRoundTripsThroughWriter) {
   condition.reference = 0x01000800;
   condition.unknown3 = -1;
 
-  EXPECT_TRUE(fo4::set_record_conditions(
+  EXPECT_EQ(fo4::set_record_conditions(
       plugin, fo4::FormKey::parse("000800:Cond.esp"),
-      std::span<const fo4::CtdaCondition>{&condition, 1}));
+      std::span<const fo4::CtdaCondition>{&condition, 1}), fo4::ConditionMutationStatus::updated);
 
   const auto written = fo4::write_plugin(plugin);
   const auto reread = fo4::read_plugin(written, "Cond.esp");
@@ -260,7 +260,6 @@ TEST(CtdaModel, SetRecordConditionsRoundTripsThroughWriter) {
 
 namespace {
 
-// WEAP with the given subrecord signatures; CTDA gets a distinct function id each time.
 fo4::Plugin make_plugin_with_layout(const std::vector<std::string_view>& layout) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -304,7 +303,18 @@ std::vector<std::string> signatures_of(const fo4::Record& record) {
   return sigs;
 }
 
-}  // namespace
+}
+
+TEST(CtdaModel, SetRecordConditionsDistinguishesMissingRecordAndNoList) {
+  auto plugin = make_plugin_with_layout({"EDID", "NAM0"});
+  const auto before = fo4::write_plugin(plugin);
+  const std::vector<fo4::CtdaCondition> conditions{replacement_condition()};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000999:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::record_missing);
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::unchanged);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
 
 TEST(CtdaModel, WriteRefusesRecordWithSeveralConditionLists) {
   auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "CTDA"});
@@ -318,7 +328,8 @@ TEST(CtdaModel, WriteRefusesRecordWithSeveralConditionLists) {
                                           std::nullopt),
             fo4::CtdaScopeWrite::multiple_lists);
   EXPECT_FALSE(fo4::write_ctda_conditions(*record, span));
-  EXPECT_FALSE(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), span));
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), span),
+            fo4::ConditionMutationStatus::multiple_lists);
 
   record = find_record_mutable(plugin, "000800:Cond.esp");
   ASSERT_NE(record, nullptr);
