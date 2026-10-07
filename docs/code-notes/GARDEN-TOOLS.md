@@ -1471,8 +1471,16 @@ The ABI 9 corpus proof compares every exported row and field against the decoded
 
 ## Radicle/include/fo4/c_api_pex.h:radicle_pex_object_counts, Radicle/bindings/csharp/Radicle.Interop/PexFile.cs:PexObjectCounts
 
-The pre-ABI-9 snapshot function count remains state functions only for compatibility. The ABI 9 object-code function array includes those functions plus property getters and setters. Native and managed both-handler fixtures assert both counts and handler indexes; no native layout or ABI version changes.
+The pre-ABI-9 snapshot function count remains state functions only for compatibility. The ABI 9 object-code function array includes those functions plus property getters and setters. Native and managed both-handler fixtures assert both counts and handler indexes. This clarification changed no layout or ABI version beyond the ABI 9 bump that added the object-code view.
 
 ## Radicle/src/c_api_pex.cpp:CodeBuilder::str, Radicle/bindings/csharp/Radicle.Interop/PexCode.cs:PexValue
 
 The decoded C++ model retains string values rather than encoded reference indexes. The code-view contract therefore guarantees exact semantic bytes and selects the first equal string-table entry. It does not promise the original encoded index. Duplicate entries remain visible through the table API; native and managed fixtures explicitly encode a later duplicate and verify first-entry canonicalization. This matches Garden's PEX-to-IR need for semantic values without expanding the ABI.
+
+## Radicle/src/c_api_pex.cpp:CodeBuilder (variables), Radicle/bindings/csharp/Radicle.Interop/PexCode.cs:PexVariable
+
+The PEX parser reads a value for every object variable and struct member, so `has_default` is 1 for every parsed file and `PexVariable.DefaultValue` is never null on that path. "No initializer" arrives as a value of type NONE. The flag stays in the ABI because the C++ model holds the default as optional. Consumers check `Type == None`. Proof: `tests/test_c_api_pex.cpp` asserts `has_default == 1` for the fixture variable.
+
+## Radicle/bindings/csharp/Radicle.Interop/PexCode.cs, Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs
+
+The managed model types and the generated raw structs share names (`PexValue`, `PexFunction`, `PexState`, `PexObjectCode` and others), following `PexHeader` and `PexObjectCounts`. Code inside `Radicle.Interop` resolves to the model type. A consumer outside it that imports both `Radicle.Interop` and `Radicle.Interop.Native` gets CS0104, so it qualifies the raw structs as `Native.X` (as `PexCode.cs:ReadCode` does) or aliases them. Renaming the generated structs would change every existing `Native` type name, so the bindings README documents the rule instead. No GardenEngine file imports both namespaces today.

@@ -153,7 +153,7 @@ typedef struct radicle_pex_variable {
   size_t type;
   uint32_t user_flags;
   uint8_t is_const;
-  uint8_t has_default;
+  uint8_t has_default; /* Always 1 for a parsed file; no initializer is a NONE value. */
   radicle_pex_value default_value;
 } radicle_pex_variable;
 
