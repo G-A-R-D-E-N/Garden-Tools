@@ -23,7 +23,7 @@ struct SoundRateFile {
 };
 
 struct SoundDescriptorData {
-  std::uint32_t kind{0};
+  std::optional<std::uint32_t> kind;
   std::optional<FormKey> category;
   std::optional<FormKey> alternate;
   std::optional<FormKey> output_model;
@@ -31,7 +31,6 @@ struct SoundDescriptorData {
   std::vector<FormKey> descriptors;
   std::vector<std::string_view> files;
   std::optional<std::array<std::uint8_t, 4>> controls;
-  std::optional<std::uint32_t> legacy_flags;
   std::optional<SoundPlayback> playback;
   std::vector<SoundRateFile> rate_files;
 };

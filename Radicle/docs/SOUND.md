@@ -18,15 +18,16 @@ is `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/sound-399-340/READ
   priority/dB variance, and attenuation hundredths as u16. AutoWeapon BNAM
   is a four-byte base-descriptor link; the decider is FO4 lines 1556–1576.
   LNAM has four stored bytes; the loop byte is exposed raw, as are the
-  remaining control bytes. Repeated LNAM uses the last stored value. Standard
-  FNAM is a separate four-byte legacy flag word; it is not a rate filename.
-  No runtime remapping is applied to that raw legacy word.
-  ITMC and the ITMS/INTV/FNAM/ITME rate blocks
-  describe auto-weapon file alternatives.
+  remaining control bytes. Repeated LNAM uses the last stored value. FNAM
+  exists only inside the ITMS/INTV/FNAM/ITME rate blocks (counted by ITMC),
+  which describe auto-weapon file alternatives; a top-level FNAM is not an
+  xEdit field, never occurs in official data and fails closed. A missing CNAM
+  selects the values BNAM layout, as xEdit's decider does, and the kind is
+  reported as absent.
 - SOUN lines 11961–11970: SDSC is its SNDR link; REPT stores two floats
   and an optional stackable byte (`SetOptionalFrom(2)`): accept eight or nine
   bytes without inventing the missing byte's default. The optional byte is
-  exposed only for form versions above 0x70; older payload bytes stay preserved.
+  exposed whenever REPT is nine bytes (xEdit has no form-version gate).
 - MUSC lines 8665–8684: FNAM u32 flags, PNAM priority/ducking as two u16,
   WNAM float fade duration, TNAM packed four-byte MUST links.
 - FSTP lines 8686–8690: DATA is an IPDS link, ANAM a string tag.
@@ -55,9 +56,8 @@ The remaining runtime questions are tracked in
 The native environment read functions are in `environment/sound.hpp`; the
 separate `c_api_sound.h` exposes owned descriptor/music/footstep-set arrays and
 fixed marker/footstep views. The generator reads that header and C# copies the
-arrays before releasing their holders. ABI 9 was selected after checking main
-at 4, #383's reserved 5/6/7, and #398's 8. These independent PRs need ABI and
-generated-output reconciliation before merging.
+arrays before releasing their holders. With the W0 merge the ABI is 20
+(provisional); it needs reconciliation with main before merging.
 
 `test_sound_real.cpp` visits every sound-record version through both native
 and C ABI getters, then compares untouched serialization with the original
@@ -71,3 +71,43 @@ consumer or marker-to-descriptor conversion path. Record vocabulary and generic
 reference discovery are present; generic Godot audio commands do not consume
 these forms. Its #144 audio runtime must supply that path before the requested
 GardenEngine probe can exercise it.
+
+## Editing
+
+All edits go through the W0 schema surfaces: `radicle_plugin_set_record_scalar_at` / `PluginFile.SetScalar`,
+`radicle_plugin_set_record_string` / `SetString`, `radicle_plugin_set_record_formlink` / `SetFormLink`,
+`radicle_plugin_record_field_count` / `FieldCount`, `radicle_plugin_add_subrecord` / `AddSubrecord`,
+`radicle_plugin_remove_subrecord` / `RemoveSubrecord` and `radicle_plugin_create_record` / `CreateRecord`.
+Every WRITE is VALIDATE: values are range-checked on write and checked by `preflight_record`; links are
+type-checked against local targets on write and by the error check after save. OPAQUE means readable through the
+decoders but not writable per field.
+
+| Family | READ | WRITE | ADD | REMOVE | CREATE | REMAP |
+| --- | --- | --- | --- | --- | --- | --- |
+| SNDR NNAM notes | raw | `SNDR\Notes` | yes, empty string | yes | optional | none |
+| SNDR CNAM kind | `SoundDescriptor.Kind` (absent when missing) | OPAQUE (enum, selects the BNAM layout) | refused (coupled) | refused (coupled) | optional | none |
+| SNDR GNAM, SNAM, ONAM links | `Category`, `Alternate`, `OutputModel` | `SNDR\Category` (SNCT), `AlternateSoundFor` (SNDR), `OutputModel` (SOPM), not nullable | `no_default` | yes | optional | yes |
+| SNDR ANAM files | `Files` | `SNDR\Sounds` by occurrence | yes, empty string (uncounted) | yes | optional | none |
+| SNDR CTDA conditions | condition code | condition code | refused | refused | optional | condition code |
+| SNDR LNAM values | `Controls` | `ValuesUnknown`, `Looping`, `Sidechain`, `RumbleSendValue` (4-byte LNAM) | yes, zeroed | yes | optional | none |
+| SNDR BNAM values (Standard, Compound, no CNAM) | `Playback` | `FrequencyShift`, `FrequencyVariance` (i8), `Priority`, `DbVariance` (u8), `StaticAttenuation` (u16 hundredths); 6-byte BNAM | refused (coupled) | refused (coupled) | optional | none |
+| SNDR BNAM base descriptor (AutoWeapon) | `BaseDescriptor` | `SNDR\BaseDescriptor` (SNDR, not nullable) | refused (coupled) | refused (coupled) | optional | yes |
+| SNDR DNAM descriptors | `Descriptors` | `SNDR\Descriptors` (SNDR) by occurrence | `no_default` | yes (uncounted) | optional | yes |
+| SNDR ITMC and rate groups | `RateFiles` | `RateOfFireRpm`, `RateOfFireFile` by group, never re-sorted; ITMC OPAQUE | refused (count; group members unlisted) | refused | optional | none |
+| SNDR records | n/a | n/a | n/a | n/a | `CreateRecord("SNDR")`: EDID only | n/a |
+| SOUN OBND | raw | none | required | refused (required) | default zeroed | none |
+| SOUN SDSC | `Descriptor` | `SOUN\SoundDescriptor` (SNDR, not nullable) | required | refused (required) | no default | yes |
+| SOUN REPT | `Repeat` | `RepeatMinTime`, `RepeatMaxTime`, `RepeatStackable` (0..1, nine-byte REPT only) | yes, nine zero bytes | yes | optional | none |
+| SOUN records | n/a | n/a | n/a | n/a | refused (`no_default`) | n/a |
+| MUSC FNAM, PNAM, WNAM | `Flags`, `Priority`, `DuckingHundredths`, `FadeDuration` | `MUSC\Flags`, `Priority`, `Ducking`, `FadeDuration` | required | refused (required) | 0 / priority 50, ducking 0 / 0.0 | none |
+| MUSC TNAM tracks | `Tracks` | `MUSC\Tracks` (MUST, nullable) by element; single-track insert/remove OPAQUE | yes, one NULL track | yes | optional | yes |
+| MUSC records | n/a | n/a | n/a | n/a | EDID, FNAM, PNAM, WNAM | n/a |
+| FSTP DATA, ANAM | `ImpactSet`, `Tag` | `FSTP\ImpactDataSet` (IPDS, nullable), `FSTP\Tag` | required | refused (required) | NULL / empty string | yes |
+| FSTP records | n/a | n/a | n/a | n/a | EDID, DATA, ANAM | n/a |
+| FSTS XCNT counts | category sizes | OPAQUE | refused (coupled) | refused (coupled) | n/a | none |
+| FSTS DATA footsteps | five categories | `FSTS\Footsteps` (FSTP, not nullable) by stored element (reverse category order); no insert/remove | refused (coupled) | refused (coupled) | n/a | yes |
+| FSTS records | n/a | n/a | n/a | n/a | refused (`not_authorable`) | n/a |
+
+All official sound records follow the authoring order (0 violators); the 24 AutoWeapon SNDR carry the unlisted
+rate-group members, so add on them is refused with `unknown_order`. Field list, defaults provenance and refusal
+reasons are in `docs/code-notes/radicle-sound-writer.md`.

@@ -45,7 +45,7 @@ radicle_status radicle_sound_descriptor_decode(const radicle_env* env, const rad
     const auto data = fo4::env::decode_sound_descriptor(env->value, *to_ref(record));
     auto holder = std::make_unique<DescriptorHolder>();
     auto& v = holder->view;
-    v.kind = data.kind;
+    set_optional(data.kind, v.has_kind, v.kind);
     v.category = to_c_key(*env, data.category);
     v.alternate = to_c_key(*env, data.alternate);
     v.output_model = to_c_key(*env, data.output_model);
@@ -63,7 +63,6 @@ radicle_status radicle_sound_descriptor_decode(const radicle_env* env, const rad
       v.has_controls = 1;
       std::copy(data.controls->begin(), data.controls->end(), v.controls);
     }
-    set_optional(data.legacy_flags, v.has_legacy_flags, v.legacy_flags);
     if (data.playback) {
       v.has_playback = 1;
       const auto& p = *data.playback;

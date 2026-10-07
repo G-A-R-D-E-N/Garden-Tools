@@ -141,6 +141,13 @@ radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugin,
   });
 }
 
+radicle_status radicle_plugin_set_record_scalar(radicle_plugin* plugin,
+                                                radicle_form_key key,
+                                                const char* path,
+                                                const char* value) {
+  return radicle_plugin_set_record_scalar_at(plugin, key, path, 0, value);
+}
+
 radicle_status radicle_plugin_sort_masters(radicle_plugin* plugin, const radicle_env* env) {
   clear_error();
   if (plugin == nullptr || env == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and env are required");

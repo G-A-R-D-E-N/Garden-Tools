@@ -5,19 +5,20 @@
 The pinned loader record is
 `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/sound-399-340/README.md`
 at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 5.2–5.5 (OG
-RVAs 0x4C1C10, 0x2CB540 and 0x55A1E0). Standard FNAM stores a legacy u32
-flags value; AutoWeapon FNAM stores a rate-group filename. The read surface
-preserves legacy FNAM separately from raw LNAM controls, without applying
-runtime flag remaps. Repeated LNAM retains its last stored value. SOUN's
-ninth REPT byte is exposed only above form version 0x70. Playback selection,
+RVAs 0x4C1C10, 0x2CB540 and 0x55A1E0). The OG Standard loader would accept a
+top-level FNAM as legacy flags, but xEdit defines FNAM only inside rate groups
+and no official record has one, so the read surface no longer exposes it (see
+`docs/code-notes/radicle-sound-writer.md`). Repeated LNAM retains its last
+stored value. SOUN's ninth REPT byte is exposed whenever REPT is nine bytes. Playback selection,
 resource hashing and compound recursion remain outside these stored reads.
 
 ## src/environment/sound.cpp:decode_sound_descriptor
 
 `docs/SOUND.md` pins each stored layout and the independent official-master
 census. SNDR's CNAM controls the BNAM union; known kinds keep their stored
-links, raw controls and complete rate blocks. Unknown kinds, duplicate scalar
-fields other than last-value LNAM/Standard FNAM, wrong sizes and
+links, raw controls and complete rate blocks; a missing CNAM selects the values
+BNAM layout. Unknown kinds, duplicate scalar fields other than last-value LNAM,
+a top-level FNAM, wrong sizes and
 incomplete/count-mismatched rate groups fail closed. Static OG selection paths
 are documented in the newer record; category mixing and live playback remain
 outside this read surface.
@@ -32,8 +33,8 @@ only their evidenced fields; unknown container bytes are untouched.
 exports use owned array holders and existing environment string storage.
 `bindings/csharp/Radicle.Interop/SoundRecords.cs:RadicleEnvironment` copies
 every array before freeing its holder. The generated declaration/layout probe
-now includes `include/fo4/c_api_sound.h` at ABI 9: main is 4, PR #383 reserves
-5/6/7, and #398 reserves 8. Reconcile the independent branches before merging.
+includes `include/fo4/c_api_sound.h`; after the W0 merge the ABI is 20
+(provisional, see `docs/code-notes/radicle-sound-writer.md`).
 
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 

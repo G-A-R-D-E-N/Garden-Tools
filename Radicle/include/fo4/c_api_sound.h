@@ -24,6 +24,7 @@ typedef struct radicle_sound_rate_file {
 } radicle_sound_rate_file;
 
 typedef struct radicle_sound_descriptor {
+  int32_t has_kind;
   uint32_t kind;
   radicle_form_key category;
   radicle_form_key alternate;
@@ -35,8 +36,6 @@ typedef struct radicle_sound_descriptor {
   size_t file_count;
   int32_t has_controls;
   uint8_t controls[4];
-  int32_t has_legacy_flags;
-  uint32_t legacy_flags;
   int32_t has_playback;
   radicle_sound_playback playback;
   const radicle_sound_rate_file* rate_files;

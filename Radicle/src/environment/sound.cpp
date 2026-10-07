@@ -29,11 +29,11 @@ void links(const Reader& reader, const Subrecord& sub, std::vector<FormKey>& out
 SoundDescriptorData decode_sound_descriptor(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("SNDR"));
   SoundDescriptorData out;
-  const auto* kind = reader.sized(sig("CNAM"), 4);
-  if (!kind) reader.fail(sig("CNAM"), "descriptor kind is required");
-  out.kind = Reader::u32(*kind, 0);
-  if (out.kind != 0x1EEF540Au && out.kind != 0x54651A43u && out.kind != 0xED157AE3u) {
-    reader.fail(sig("CNAM"), "unsupported descriptor kind");
+  if (const auto* kind = reader.sized(sig("CNAM"), 4)) {
+    out.kind = Reader::u32(*kind, 0);
+    if (out.kind != 0x1EEF540Au && out.kind != 0x54651A43u && out.kind != 0xED157AE3u) {
+      reader.fail(sig("CNAM"), "unsupported descriptor kind");
+    }
   }
   out.category = reader.link(sig("GNAM"));
   out.alternate = reader.link(sig("SNAM"));
@@ -56,11 +56,7 @@ SoundDescriptorData decode_sound_descriptor(const Environment& env, const Record
       std::array<std::uint8_t, 4> bytes{};
       for (std::size_t i = 0; i < bytes.size(); ++i) bytes[i] = std::to_integer<std::uint8_t>(sub.data[i]);
       out.controls = bytes;
-    } else if (sub.signature == sig("FNAM") && out.kind == 0x1EEF540Au) {
-      if (sub.data.size() != 4) reader.fail(sub.signature, "legacy flags must be four bytes");
-      out.legacy_flags = Reader::u32(sub, 0);
-    }
-    else if (sub.signature == sig("DNAM")) {
+    } else if (sub.signature == sig("DNAM")) {
       if (sub.data.size() != 4) reader.fail(sub.signature, "must be one descriptor link");
       out.descriptors.push_back(reader.link_at(sub, 0));
     } else if (sub.signature == sig("ITMS")) {
@@ -93,8 +89,7 @@ SoundMarkerData decode_sound_marker(const Environment& env, const RecordRef& ref
   if (const auto* sub = reader.unique(sig("REPT"))) {
     if (sub->data.size() != 8 && sub->data.size() != 9) reader.fail(sub->signature, "must be eight or nine bytes");
     SoundRepeat repeat{Reader::f32(*sub, 0), Reader::f32(*sub, 4), std::nullopt};
-    if (sub->data.size() == 9 && ref.record->header.form_version > 0x70)
-      repeat.stackable = std::to_integer<std::uint8_t>(sub->data[8]);
+    if (sub->data.size() == 9) repeat.stackable = std::to_integer<std::uint8_t>(sub->data[8]);
     out.repeat = repeat;
   }
   return out;

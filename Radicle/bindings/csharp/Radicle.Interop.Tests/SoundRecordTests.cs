@@ -9,16 +9,19 @@ namespace Radicle.Interop.Tests;
 public class SoundRecordTests
 {
     [Fact]
-    public void StandardLegacyFlagsAreSeparateFromAutoWeaponFilenames()
+    public void MissingKindUsesValuesLayoutAndStrayFilenameFailsClosed()
     {
         using var temp = new TempDirectory();
         var path = temp.Write("Sound.esm", Build(1, Array.Empty<string>(), Top("SNDR",
-            new Rec("SNDR", 0x800, new[] { ("CNAM", U32(0x1EEF540A)), ("FNAM", U32(0x06000010)),
-                ("LNAM", U32(0)), ("LNAM", U32(0x44332211)), ("ANAM", Z(@"sound\one.xwm")) }))));
+            new Rec("SNDR", 0x800, new[] { ("LNAM", U32(0)), ("LNAM", U32(0x44332211)),
+                ("BNAM", new byte[] { 0xF6, 5, 200, 3, 0x10, 0x27 }) }),
+            new Rec("SNDR", 0x801, new[] { ("CNAM", U32(0x1EEF540A)), ("FNAM", U32(0x06000010)) }))));
         using var env = RadicleEnvironment.Load(new[] { path });
         var descriptor = env.SoundDescriptor(env.Winner(new FormKey("Sound.esm", 0x800))!.Value);
+        Assert.Null(descriptor.Kind);
         Assert.Equal(new byte[] { 0x11, 0x22, 0x33, 0x44 }, descriptor.Controls);
-        Assert.Equal(0x06000010u, descriptor.LegacyFlags);
+        Assert.Equal(new SoundPlayback(-10, 5, 200, 3, 10000), descriptor.Playback);
+        Assert.Throws<RadicleException>(() => env.SoundDescriptor(env.Winner(new FormKey("Sound.esm", 0x801))!.Value));
     }
 
     [Theory]
@@ -45,7 +48,7 @@ public class SoundRecordTests
         Assert.Equal(8f, marker.Repeat.MaxTime);
         Assert.Equal(stackable ? (byte?)0x80 : null, marker.Repeat.Stackable);
         var d = env.SoundDescriptor(env.Winner(marker.Descriptor!.Value)!.Value);
-        Assert.Equal(0x1EEF540Au, d.Kind);
+        Assert.Equal((uint?)0x1EEF540Au, d.Kind);
         Assert.Equal(new FormKey("Sound.esm", 0x810), d.Category);
         Assert.Equal(new FormKey("Sound.esm", 0x811), d.Alternate);
         Assert.Equal(new FormKey("Sound.esm", 0x812), d.OutputModel);

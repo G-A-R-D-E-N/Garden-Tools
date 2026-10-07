@@ -7,10 +7,10 @@ namespace Radicle.Interop;
 public sealed record SoundPlayback(sbyte FrequencyShift, sbyte FrequencyVariance, byte Priority,
                                    byte DbVariance, ushort AttenuationHundredths);
 public sealed record SoundRateFile(uint Rpm, string Path);
-public sealed record SoundDescriptor(uint Kind, FormKey? Category, FormKey? Alternate, FormKey? OutputModel,
+public sealed record SoundDescriptor(uint? Kind, FormKey? Category, FormKey? Alternate, FormKey? OutputModel,
                                      FormKey? BaseDescriptor, IReadOnlyList<FormKey?> Descriptors,
                                      IReadOnlyList<string> Files, byte[]? Controls, SoundPlayback? Playback,
-                                     IReadOnlyList<SoundRateFile> RateFiles, uint? LegacyFlags);
+                                     IReadOnlyList<SoundRateFile> RateFiles);
 public sealed record SoundRepeat(float MinTime, float MaxTime, byte? Stackable);
 public sealed record SoundMarker(FormKey? Descriptor, SoundRepeat? Repeat);
 public sealed record MusicType(uint? Flags, ushort? Priority, ushort? DuckingHundredths, float? FadeDuration,
@@ -31,14 +31,13 @@ public sealed unsafe partial class RadicleEnvironment
             var p = d->Playback;
             SoundPlayback? playback = d->HasPlayback == 0 ? null : new(p.FrequencyShift, p.FrequencyVariance,
                 p.Priority, p.DbVariance, p.AttenuationHundredths);
-            return new(d->Kind, FormKey.FromNative(d->Category), FormKey.FromNative(d->Alternate),
+            return new(d->HasKind == 0 ? null : d->Kind, FormKey.FromNative(d->Category), FormKey.FromNative(d->Alternate),
                 FormKey.FromNative(d->OutputModel), FormKey.FromNative(d->BaseDescriptor),
                 Call.Copy<Native.FormKey>(d->Descriptors, d->DescriptorCount).Select(FormKey.FromNative).ToArray(),
                 Call.Copy<Native.SoundFile>(d->Files, d->FileCount).Select(f => Utf8.Read(f.Path)!).ToArray(),
                 d->HasControls == 0 ? null : new[] { d->Controls[0], d->Controls[1], d->Controls[2], d->Controls[3] },
                 playback, Call.Copy<Native.SoundRateFile>(d->RateFiles, d->RateFileCount)
-                    .Select(f => new SoundRateFile(f.Rpm, Utf8.Read(f.Path)!)).ToArray(),
-                d->HasLegacyFlags == 0 ? null : d->LegacyFlags);
+                    .Select(f => new SoundRateFile(f.Rpm, Utf8.Read(f.Path)!)).ToArray());
         }
         finally { RadicleNative.SoundDescriptorFree(d); }
     }

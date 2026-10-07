@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""Shared parsing and rendering of field addressing keys (repeated, stride, array_offset, when)."""
+
+import json
+
+WHEN_STORAGES = {
+    "u8": (1, 0, 0xFF),
+    "u16": (2, 0, 0xFFFF),
+    "u32": (4, 0, 0xFFFFFFFF),
+    "i32": (4, -0x80000000, 0x7FFFFFFF),
+}
+MAX_WHEN_VALUES = 8
+
+
+def is_count(value, minimum):
+    return type(value) is int and value >= minimum
+
+
+def valid_signature(value):
+    return isinstance(value, str) and len(value) == 4 and all(0x20 <= ord(ch) <= 0x7E for ch in value)
+
+
+def parse_when(when, path, own_subrecord):
+    if not isinstance(when, dict):
+        raise ValueError(f"when must be an object: {path!r}")
+    unknown = set(when) - {"subrecord", "offset", "storage", "equals", "match_absent"}
+    if unknown:
+        raise ValueError(f"unknown when keys {sorted(unknown)} for {path!r}")
+    subrecord = when.get("subrecord", "")
+    if subrecord != "" and not valid_signature(subrecord):
+        raise ValueError(f"when.subrecord must be four printable ASCII characters: {path!r}")
+    if subrecord == own_subrecord:
+        raise ValueError(f"when.subrecord must be omitted to read the field's own subrecord: {path!r}")
+    match_absent = when.get("match_absent", False)
+    if not isinstance(match_absent, bool):
+        raise ValueError(f"when.match_absent must be boolean: {path!r}")
+    if match_absent and subrecord == "":
+        raise ValueError(f"when.match_absent requires when.subrecord: {path!r}")
+    offset = when.get("offset")
+    if not is_count(offset, 0):
+        raise ValueError(f"when.offset must be a non-negative integer: {path!r}")
+    storage = when.get("storage")
+    if storage not in WHEN_STORAGES:
+        raise ValueError(f"unsupported when.storage {storage!r} for {path!r}")
+    _width, low, high = WHEN_STORAGES[storage]
+    equals = when.get("equals")
+    if not isinstance(equals, list) or not equals:
+        raise ValueError(f"when.equals must be a non-empty array: {path!r}")
+    if len(equals) > MAX_WHEN_VALUES:
+        raise ValueError(f"when.equals supports at most {MAX_WHEN_VALUES} values: {path!r}")
+    for value in equals:
+        if type(value) is not int:
+            raise ValueError(f"when.equals values must be integers: {path!r}")
+        if value < low or value > high:
+            raise ValueError(f"when.equals value {value} exceeds {storage} storage for {path!r}")
+    if len(set(equals)) != len(equals):
+        raise ValueError(f"when.equals contains duplicate values: {path!r}")
+    return {"subrecord": subrecord, "offset": offset, "storage": storage, "equals": list(equals),
+            "match_absent": match_absent}
+
+
+def parse_address(row, path, subrecord, has_offset, width):
+    repeated = row.get("repeated", False)
+    if not isinstance(repeated, bool):
+        raise ValueError(f"repeated must be boolean: {path!r}")
+    stride = row.get("stride", 0)
+    array_offset = row.get("array_offset", 0)
+    if "stride" in row and not is_count(stride, 1):
+        raise ValueError(f"stride must be a positive integer: {path!r}")
+    if "array_offset" in row:
+        if "stride" not in row:
+            raise ValueError(f"array_offset requires stride: {path!r}")
+        if not is_count(array_offset, 0):
+            raise ValueError(f"array_offset must be a non-negative integer: {path!r}")
+    if repeated and stride:
+        raise ValueError(f"repeated and stride are mutually exclusive: {path!r}")
+    if stride:
+        if not has_offset:
+            raise ValueError(f"stride requires an offset: {path!r}")
+        if row.get("offset", 0) + width > stride:
+            raise ValueError(f"field does not fit inside one stride element: {path!r}")
+    when = parse_when(row["when"], path, subrecord) if "when" in row else None
+    if when is not None and not when["subrecord"]:
+        end = when["offset"] + WHEN_STORAGES[when["storage"]][0]
+        if stride and end > stride:
+            raise ValueError(f"when discriminator does not fit inside one stride element: {path!r}")
+        if not stride and row.get("payload_size") and end > row["payload_size"]:
+            raise ValueError(f"when discriminator does not fit inside payload_size: {path!r}")
+    return {"repeated": repeated, "stride": stride, "array_offset": array_offset, "when": when}
+
+
+def address_key(address):
+    return json.dumps(address, sort_keys=True)
+
+
+def render_address(address):
+    when = address["when"]
+    if not address["repeated"] and not address["stride"] and when is None:
+        return "FieldAddress{}"
+    if when is None:
+        rendered = "FieldDiscriminator{}"
+    else:
+        values = ", ".join(str(value) for value in when["equals"])
+        subrecord = (f"Signature::from_string({json.dumps(when['subrecord'])})"
+                     if when["subrecord"] else "Signature{}")
+        rendered = (f"FieldDiscriminator{{{subrecord}, {when['offset']}, "
+                    f"DiscriminatorStorage::{when['storage']}, {len(when['equals'])}, {{{{{values}}}}}"
+                    f"{', true' if when['match_absent'] else ', false'}}}")
+    return (f"FieldAddress{{{'true' if address['repeated'] else 'false'}, {address['stride']}, "
+            f"{address['array_offset']}, {rendered}}}")

@@ -87,18 +87,48 @@ TEST_F(SoundTest, CompoundAndAutoWeaponKeepTheirDistinctLinksAndRateFiles) {
   ASSERT_EQ(weapon.rate_files.size(), 1); EXPECT_EQ(weapon.rate_files[0].rpm, 750u); EXPECT_EQ(weapon.rate_files[0].file, "sound\\auto.xwm");
 }
 
-TEST_F(SoundTest, LegacyFlagsLastControlsAndRepeatVersionBoundaryStayDistinct) {
+TEST_F(SoundTest, LastControlsAndRepeatStackableFollowPayloadSizeNotFormVersion) {
   fo4::test::ByteWriter repeat; repeat.f32(2); repeat.f32(8); repeat.u8(0x80);
   for (const auto version : {112u, 113u}) {
-    write({{"SNDR", 0x800, {{"CNAM", words({0x1EEF540A})}, {"FNAM", words({0x06000010})},
-           {"LNAM", words({0})}, {"LNAM", words({0x44332211})}}},
+    write({{"SNDR", 0x800, {{"CNAM", words({0x1EEF540A})}, {"LNAM", words({0})}, {"LNAM", words({0x44332211})}}},
            {"SOUN", 0x801, {{"REPT", repeat.bytes}}, static_cast<std::uint16_t>(version)}});
     const auto env = load(); const auto d = fo4::env::decode_sound_descriptor(env, record(env, 0x800));
-    EXPECT_EQ(d.legacy_flags, 0x06000010u); ASSERT_TRUE(d.controls); EXPECT_EQ((*d.controls)[3], 0x44);
+    ASSERT_TRUE(d.controls); EXPECT_EQ((*d.controls)[3], 0x44);
     const auto m = fo4::env::decode_sound_marker(env, record(env, 0x801)); ASSERT_TRUE(m.repeat);
-    EXPECT_EQ(m.repeat->stackable.has_value(), version > 112);
+    ASSERT_TRUE(m.repeat->stackable.has_value()); EXPECT_EQ(*m.repeat->stackable, 0x80);
     EXPECT_EQ(record(env, 0x801).record->subrecords[0].data, repeat.bytes);
   }
+}
+
+TEST_F(SoundTest, MissingKindUsesTheValuesLayoutAndExposesNoKind) {
+  const std::vector<std::byte> bnam{std::byte{0xF6}, std::byte{0x05}, std::byte{0xC8}, std::byte{3}, std::byte{0x10}, std::byte{0x27}};
+  write({{"SNDR", 0x800, {{"EDID", text("NoKind")}, {"BNAM", bnam}}}, {"SNDR", 0x801, {{"EDID", text("Bare")}}}});
+  const auto env = load();
+  const auto d = fo4::env::decode_sound_descriptor(env, record(env, 0x800));
+  EXPECT_FALSE(d.kind.has_value());
+  ASSERT_TRUE(d.playback); EXPECT_EQ(d.playback->frequency_shift, -10); EXPECT_EQ(d.playback->frequency_variance, 5);
+  EXPECT_EQ(d.playback->priority, 200); EXPECT_EQ(d.playback->attenuation_hundredths, 10000);
+  EXPECT_FALSE(d.base_descriptor);
+  const auto bare = fo4::env::decode_sound_descriptor(env, record(env, 0x801));
+  EXPECT_FALSE(bare.kind.has_value()); EXPECT_FALSE(bare.playback);
+  const radicle_sound_descriptor* view = nullptr;
+  const auto name = path.string(); const char* names[] = {name.c_str()}; radicle_env* abi = nullptr;
+  ASSERT_EQ(radicle_env_load(names, 1, &abi), RADICLE_STATUS_OK);
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Sound.esm", 0x800}, &handle), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_sound_descriptor_decode(abi, handle, &view), RADICLE_STATUS_OK);
+  EXPECT_EQ(view->has_kind, 0); EXPECT_EQ(view->has_playback, 1); EXPECT_EQ(view->playback.frequency_shift, -10);
+  radicle_sound_descriptor_free(view); radicle_env_destroy(abi);
+}
+
+TEST_F(SoundTest, RateGroupFilenameIsNeverReadAsTopLevelFlags) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x1EEF540A})}, {"BNAM", std::vector<std::byte>(6)}, {"ITMC", words({1})},
+         {"ITMS", {}}, {"INTV", words({600})}, {"FNAM", text("abcd")}, {"ITME", {}}}},
+         {"SNDR", 0x801, {{"CNAM", words({0x1EEF540A})}, {"FNAM", words({0x06000010})}}}});
+  const auto env = load();
+  const auto d = fo4::env::decode_sound_descriptor(env, record(env, 0x800));
+  ASSERT_EQ(d.rate_files.size(), 1u); EXPECT_EQ(d.rate_files[0].rpm, 600u); EXPECT_EQ(d.rate_files[0].file, "abcd");
+  EXPECT_THROW(fo4::env::decode_sound_descriptor(env, record(env, 0x801)), fo4::env::WorldDecodeError);
 }
 
 TEST_F(SoundTest, UnknownKindsSizesAndIncompleteRateGroupsFailClosed) {

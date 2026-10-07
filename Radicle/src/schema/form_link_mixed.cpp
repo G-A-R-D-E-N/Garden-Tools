@@ -28,6 +28,9 @@ constexpr auto k_tnam = Signature::from_string("TNAM");
 constexpr auto k_omod = Signature::from_string("OMOD");
 constexpr auto k_equp = Signature::from_string("EQUP");
 constexpr auto k_musc = Signature::from_string("MUSC");
+constexpr auto k_fstp = Signature::from_string("FSTP");
+constexpr auto k_fsts = Signature::from_string("FSTS");
+constexpr auto k_data = Signature::from_string("DATA");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -294,7 +297,8 @@ std::optional<std::vector<std::size_t>> packed_formid_array_offsets(const Record
   const auto rec = record.header.signature;
   const auto sig = sub.signature;
   if (!((rec == k_omod && (sig == k_mnam || sig == k_fnam)) ||
-        (rec == k_equp && sig == k_pnam) || (rec == k_musc && sig == k_tnam))) {
+        (rec == k_equp && sig == k_pnam) || (rec == k_musc && sig == k_tnam) ||
+        ((rec == k_fstp || rec == k_fsts) && sig == k_data))) {
     return std::nullopt;
   }
   if (sub.data.size() % 4 != 0) {

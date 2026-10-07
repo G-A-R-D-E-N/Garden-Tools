@@ -14,12 +14,14 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           },
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -29,7 +31,8 @@
           {
             "signature": "MOD3",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO3T",
@@ -39,7 +42,8 @@
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -49,7 +53,8 @@
           {
             "signature": "MOD5",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO5T",
@@ -74,7 +79,8 @@
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -84,17 +90,20 @@
           {
             "signature": "ICON",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MICO",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -104,12 +113,14 @@
           {
             "signature": "ICO2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MIC2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DESC",
@@ -119,7 +130,8 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           }
         ]
       },
@@ -390,7 +402,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -436,12 +449,14 @@
           {
             "signature": "ICON",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           }
         ]
       },
@@ -621,7 +636,8 @@
           {
             "signature": "MODL",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -662,22 +678,26 @@
           {
             "signature": "LVLD",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLF",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LLCT",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLO",
@@ -978,7 +998,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -988,27 +1009,32 @@
           {
             "signature": "DEST",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTD",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDT",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTF",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DATA",
@@ -1191,7 +1217,38 @@
           "mutation": "terminated_group"
         }
       ],
-      "fields": [],
+      "fields": [
+        {
+          "path": "RACE\\BipedObjectNames",
+          "label": "Biped object name",
+          "kind": "string",
+          "subrecord": "NAME",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorExtendedLookupTexture",
+          "label": "Hair color extended lookup texture",
+          "kind": "string",
+          "subrecord": "HLTX",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorLookupTexture",
+          "label": "Hair color lookup texture",
+          "kind": "string",
+          "subrecord": "HNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\PhonemeTargetNames",
+          "label": "Phoneme target name",
+          "kind": "string",
+          "subrecord": "PHTN",
+          "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": [
         "FULL",
         "DESC"
@@ -1223,6 +1280,597 @@
           "insertion": "existing_only"
         }
       ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "SNDR",
+      "fields": [
+        {
+          "path": "SNDR\\Notes",
+          "label": "Notes",
+          "kind": "string",
+          "subrecord": "NNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\Sounds",
+          "label": "Sound file",
+          "kind": "string",
+          "subrecord": "ANAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\ValuesUnknown",
+          "label": "Values unknown byte",
+          "kind": "scalar",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\Looping",
+          "label": "Looping",
+          "kind": "scalar",
+          "subrecord": "LNAM",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\Sidechain",
+          "label": "Sidechain",
+          "kind": "scalar",
+          "subrecord": "LNAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\RumbleSendValue",
+          "label": "Rumble send value",
+          "kind": "scalar",
+          "subrecord": "LNAM",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\FrequencyShift",
+          "label": "Frequency shift (%)",
+          "kind": "scalar",
+          "subrecord": "BNAM",
+          "offset": 0,
+          "storage": "i8",
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "payload_size": 6,
+          "when": {
+            "subrecord": "CNAM",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [519001098, 1415912003],
+            "match_absent": true
+          },
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\FrequencyVariance",
+          "label": "Frequency variance (%)",
+          "kind": "scalar",
+          "subrecord": "BNAM",
+          "offset": 1,
+          "storage": "i8",
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "payload_size": 6,
+          "when": {
+            "subrecord": "CNAM",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [519001098, 1415912003],
+            "match_absent": true
+          },
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\Priority",
+          "label": "Priority",
+          "kind": "scalar",
+          "subrecord": "BNAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 6,
+          "when": {
+            "subrecord": "CNAM",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [519001098, 1415912003],
+            "match_absent": true
+          },
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\DbVariance",
+          "label": "dB variance",
+          "kind": "scalar",
+          "subrecord": "BNAM",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 6,
+          "when": {
+            "subrecord": "CNAM",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [519001098, 1415912003],
+            "match_absent": true
+          },
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\StaticAttenuation",
+          "label": "Static attenuation (dB x100)",
+          "kind": "scalar",
+          "subrecord": "BNAM",
+          "offset": 4,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 6,
+          "when": {
+            "subrecord": "CNAM",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [519001098, 1415912003],
+            "match_absent": true
+          },
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\RateOfFireRpm",
+          "label": "Rate of fire (RPM)",
+          "kind": "scalar",
+          "subrecord": "INTV",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\RateOfFireFile",
+          "label": "Rate of fire file",
+          "kind": "string",
+          "subrecord": "FNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SNDR\\Category",
+          "label": "Category",
+          "subrecord": "GNAM",
+          "offset": 0,
+          "targets": ["SNCT"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\AlternateSoundFor",
+          "label": "Alternate sound for",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\OutputModel",
+          "label": "Output model",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "targets": ["SOPM"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\BaseDescriptor",
+          "label": "Base descriptor",
+          "subrecord": "BNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "when": {
+            "subrecord": "CNAM",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [3977607907]
+          },
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\Descriptors",
+          "label": "Descriptor",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "GNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 0,
+            "maximum": 65535,
+            "uncounted": true,
+            "default": "00"
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "LNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "BNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 65535,
+            "uncounted": true
+          },
+          {
+            "signature": "ITMC",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "SOUN",
+      "fields": [
+        {
+          "path": "SOUN\\RepeatMinTime",
+          "label": "Repeat min time",
+          "kind": "scalar",
+          "subrecord": "REPT",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOUN\\RepeatMaxTime",
+          "label": "Repeat max time",
+          "kind": "scalar",
+          "subrecord": "REPT",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOUN\\RepeatStackable",
+          "label": "Repeat stackable",
+          "kind": "scalar",
+          "subrecord": "REPT",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 1,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SOUN\\SoundDescriptor",
+          "label": "Sound descriptor",
+          "subrecord": "SDSC",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "SDSC",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "REPT",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "000000000000000000"
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "MUSC",
+      "fields": [
+        {
+          "path": "MUSC\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUSC\\Priority",
+          "label": "Priority",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUSC\\Ducking",
+          "label": "Ducking (dB x100)",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUSC\\FadeDuration",
+          "label": "Fade duration",
+          "kind": "scalar",
+          "subrecord": "WNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "MUSC\\Tracks",
+          "label": "Music track",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "targets": ["MUST"],
+          "nullable": true,
+          "stride": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "32000000"
+          },
+          {
+            "signature": "WNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "TNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "FSTP",
+      "fields": [
+        {
+          "path": "FSTP\\Tag",
+          "label": "Tag",
+          "kind": "string",
+          "subrecord": "ANAM",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "FSTP\\ImpactDataSet",
+          "label": "Impact data set",
+          "subrecord": "DATA",
+          "offset": 0,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00"
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "FSTS",
+      "fields": [],
+      "formlink_fields": [
+        {
+          "path": "FSTS\\Footsteps",
+          "label": "Footstep",
+          "subrecord": "DATA",
+          "offset": 0,
+          "targets": ["FSTP"],
+          "nullable": false,
+          "stride": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XCNT",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      },
       "localized_subrecords": []
     },
     {

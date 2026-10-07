@@ -6,6 +6,7 @@
 #include "fo4/c_api_pex.h"
 #include "fo4/c_api_seq.h"
 #include "fo4/c_api_quest.h"
+#include "fo4/c_api_authoring.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -438,6 +439,7 @@ int main() {
   printf("SoundRateFile.Rpm %zu\n", offsetof(radicle_sound_rate_file, rpm));
   printf("SoundRateFile.Path %zu\n", offsetof(radicle_sound_rate_file, path));
   printf("SoundDescriptor %zu\n", sizeof(radicle_sound_descriptor));
+  printf("SoundDescriptor.HasKind %zu\n", offsetof(radicle_sound_descriptor, has_kind));
   printf("SoundDescriptor.Kind %zu\n", offsetof(radicle_sound_descriptor, kind));
   printf("SoundDescriptor.Category %zu\n", offsetof(radicle_sound_descriptor, category));
   printf("SoundDescriptor.Alternate %zu\n", offsetof(radicle_sound_descriptor, alternate));
@@ -449,8 +451,6 @@ int main() {
   printf("SoundDescriptor.FileCount %zu\n", offsetof(radicle_sound_descriptor, file_count));
   printf("SoundDescriptor.HasControls %zu\n", offsetof(radicle_sound_descriptor, has_controls));
   printf("SoundDescriptor.Controls %zu\n", offsetof(radicle_sound_descriptor, controls));
-  printf("SoundDescriptor.HasLegacyFlags %zu\n", offsetof(radicle_sound_descriptor, has_legacy_flags));
-  printf("SoundDescriptor.LegacyFlags %zu\n", offsetof(radicle_sound_descriptor, legacy_flags));
   printf("SoundDescriptor.HasPlayback %zu\n", offsetof(radicle_sound_descriptor, has_playback));
   printf("SoundDescriptor.Playback %zu\n", offsetof(radicle_sound_descriptor, playback));
   printf("SoundDescriptor.RateFiles %zu\n", offsetof(radicle_sound_descriptor, rate_files));
