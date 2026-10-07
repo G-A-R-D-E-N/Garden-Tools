@@ -70,11 +70,13 @@ def main():
             encoding='utf-8')
         print('RID consumer proof: restore and publish win-x64 without lock overrides', flush=True)
         subprocess.run([args.dotnet, 'restore', str(consumer), '--runtime', 'win-x64',
-                        '--configfile', str(config), '--no-cache', '-p:EnableRuntimePackDownload=false'],
+                        '--configfile', str(config), '--no-cache', '-p:EnableRuntimePackDownload=false',
+                        '-p:EnableAppHostPackDownload=false'],
                        cwd=fresh, env=env, check=True)
         subprocess.run([args.dotnet, 'publish', str(consumer), '--runtime', 'win-x64', '--no-restore',
                         '-p:EnableRuntimePackDownload=false', '-p:UseSharedCompilation=false',
-                        '--disable-build-servers', '--nologo'], cwd=fresh, env=env, check=True)
+                        '-p:EnableAppHostPackDownload=false', '--disable-build-servers', '--nologo'],
+                       cwd=fresh, env=env, check=True)
         if (fresh / 'Radicle.Interop' / 'packages.lock.json').exists():
             raise RuntimeError('The shipped library must not opt into a package lock')
         subprocess.run([args.dotnet, 'restore', project, '--configfile', str(config),
