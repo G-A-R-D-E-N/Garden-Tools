@@ -8,11 +8,6 @@ name: native-ci
 # pull_request trigger only; work-branch push runs are intentionally omitted so
 # one PR commit does not consume two self-hosted CI slots.
 
-# Paths that no native target or test reads skip this workflow: the C#/.NET
-# tools (BGS/, the FO4RecordEditor projects, Mutagen), the web frontend
-# (the native app only points at web/dist at runtime), F4LODGEN, and docs.
-# paths-ignore (not an explicit paths allowlist) is deliberate: a commit that
-# also touches anything else still runs the full build.
 on:
   push:
     branches:
@@ -28,16 +23,6 @@ on:
       - "docs/**"
       - "**/*.md"
   pull_request:
-    paths-ignore:
-      - "BGS/**"
-      - "F4LODGEN/**"
-      - "PluginEditTool/web/**"
-      - "PluginEditTool/FO4RecordEditor*/**"
-      - "PluginEditTool/Mutagen/**"
-      - "PluginEditTool/docs/**"
-      - "PluginEditTool/images/**"
-      - "docs/**"
-      - "**/*.md"
   workflow_dispatch:
 
 # A newer push supersedes a pull request or branch run, but main runs always
@@ -60,44 +45,11 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: "4"
 
 jobs:
-  # paths-ignore compares the whole pull request, so a docs-only follow-up push
-  # to a code PR still starts the full build. This job compares only the new push
-  # and skips the heavy jobs when it touched nothing but ignored paths. Any doubt
-  # (no before-sha, fetch failure) leaves run=true.
-  gate:
-    name: Gate (skip docs-only pushes)
-    runs-on: [self-hosted, Linux, X64, garden]
-    timeout-minutes: 10
-    outputs:
-      run: ${{ steps.decide.outputs.run }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Decide
-        id: decide
-        env:
-          EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          run=true
-          if [ "$EVENT" = pull_request ] && [ -n "$BEFORE" ] \
-             && git fetch --depth=1 origin "$BEFORE" 2>/dev/null; then
-            if ! git diff --name-only "$BEFORE" HEAD \
-               | grep -qvE '^(BGS|F4LODGEN|docs)/|^PluginEditTool/(web|FO4RecordEditor[^/]*|Mutagen|docs|images)/|\.md$'; then
-              run=false
-            fi
-          fi
-          echo "gate run=$run (before=${BEFORE:-none})"
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-
   # PluginEditTool/native builds Radicle as a subproject, so one build covers
   # both: Radicle's own tests, tools and warnings-as-errors are switched on here
   # instead of compiling Radicle a second time in a separate job.
   native-linux:
     name: Native (Linux, Debug)
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 60
     steps:
@@ -107,7 +59,7 @@ jobs:
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.424'
+          global-json-file: Radicle/bindings/csharp/global.json
 
       - name: Find ccache
         run: |
@@ -304,8 +256,6 @@ jobs:
   # never share a build directory.
   native-windows-tests:
     name: Native tests (Windows, MSVC)
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     defaults:
@@ -320,7 +270,7 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
         with:
-          dotnet-version: '8.0.424'
+          global-json-file: Radicle/bindings/csharp/global.json
 
       - name: Set up MSVC, Ninja and ccache
         shell: powershell
