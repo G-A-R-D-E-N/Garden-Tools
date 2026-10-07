@@ -1,4 +1,5 @@
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -40,7 +41,7 @@ def main():
             with socket.create_connection(('1.1.1.1', 443), timeout=1):
                 raise RuntimeError('External networking is available')
         except OSError as error:
-            if error.errno != 101:
+            if error.errno != errno.ENETUNREACH:
                 raise
         print('Network proof: loopback only; external connect returned ENETUNREACH', flush=True)
     with tempfile.TemporaryDirectory(prefix='radicle-managed-') as temporary:
@@ -48,8 +49,7 @@ def main():
         for name in ('Radicle.Interop', 'Radicle.Interop.Tests'):
             shutil.copytree(bindings / name, fresh / name,
                             ignore=shutil.ignore_patterns('bin', 'obj'))
-        for name in ('global.json', 'Directory.Build.props'):
-            shutil.copy2(bindings / name, fresh / name)
+        shutil.copy2(bindings / 'global.json', fresh / 'global.json')
         config = bindings / 'NuGet.Config'
         for key, name in [('DOTNET_CLI_HOME', 'cli'), ('NUGET_PACKAGES', 'packages'),
                           ('NUGET_HTTP_CACHE_PATH', 'http'), ('NUGET_PLUGINS_CACHE_PATH', 'plugins')]:
@@ -62,6 +62,21 @@ def main():
         project = str(fresh / 'Radicle.Interop.Tests' / 'Radicle.Interop.Tests.csproj')
         print('Fresh projects and empty package/HTTP/plugin caches; source: radicle-offline', flush=True)
         subprocess.run([args.dotnet, '--version'], cwd=fresh, env=env, check=True)
+        consumer = fresh / 'Consumer.csproj'
+        consumer.write_text(
+            '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework>'
+            '<EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup>'
+            '<ProjectReference Include="Radicle.Interop/Radicle.Interop.csproj" /></ItemGroup></Project>',
+            encoding='utf-8')
+        print('RID consumer proof: restore and publish win-x64 without lock overrides', flush=True)
+        subprocess.run([args.dotnet, 'restore', str(consumer), '--runtime', 'win-x64',
+                        '--configfile', str(config), '--no-cache', '-p:EnableRuntimePackDownload=false'],
+                       cwd=fresh, env=env, check=True)
+        subprocess.run([args.dotnet, 'publish', str(consumer), '--runtime', 'win-x64', '--no-restore',
+                        '-p:EnableRuntimePackDownload=false', '-p:UseSharedCompilation=false',
+                        '--disable-build-servers', '--nologo'], cwd=fresh, env=env, check=True)
+        if (fresh / 'Radicle.Interop' / 'packages.lock.json').exists():
+            raise RuntimeError('The shipped library must not opt into a package lock')
         subprocess.run([args.dotnet, 'restore', project, '--configfile', str(config),
                         '--locked-mode', '--no-cache', '--verbosity', 'minimal'],
                        cwd=fresh, env=env, check=True)
