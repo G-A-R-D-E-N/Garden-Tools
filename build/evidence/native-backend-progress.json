@@ -71,7 +71,7 @@
         "build/evidence/packages-official-focused.xml",
         "build/evidence/packages-final-official-full.log"
       ],
-      "review": "Luna read-only review found duplicate PKCU ownership remap gap. Red reproduced, guard added, green and independent recheck accepted; Lean already.",
+      "review": "Independent read-only review found duplicate PKCU ownership remap gap. Red reproduced, guard added, green and independent recheck accepted; Lean already.",
       "ci": "run 615 success",
       "branch": "nomad/radicle-345-packages"
     },
