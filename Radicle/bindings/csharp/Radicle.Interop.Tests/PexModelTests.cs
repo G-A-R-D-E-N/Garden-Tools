@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Radicle.Interop.Native;
 using Xunit;
@@ -11,7 +12,7 @@ public class PexModelTests
 {
     private static readonly byte[] HighBytes = { 0x80, 0xA9, 0xFE, 0xFF };
 
-    private static byte[] SyntheticPex()
+    private static byte[] SyntheticPex(bool withCode = false, bool withHandlers = false, bool duplicateStrings = false)
     {
         var bytes = new List<byte>();
         void U8(byte value) => bytes.Add(value);
@@ -46,13 +47,18 @@ public class PexModelTests
         Text(string.Empty);
         Text(string.Empty);
 
-        U16(5);
+        U16(duplicateStrings ? (ushort)6 : (ushort)5);
         Text(string.Empty);
         Text("SyntheticObject");
         Text("ObjectReference");
         Text("Int");
         U16((ushort)HighBytes.Length);
         foreach (var value in HighBytes) U8(value);
+        if (duplicateStrings)
+        {
+            U16((ushort)HighBytes.Length);
+            foreach (var value in HighBytes) U8(value);
+        }
 
         U8(0);
         U16(0);
@@ -79,7 +85,30 @@ public class PexModelTests
         U32(42);
         U8(0);
 
-        U16(0);
+        U16(withHandlers ? (ushort)1 : (ushort)0);
+        if (withHandlers)
+        {
+            U16(1);
+            U16(3);
+            U16(0);
+            U32(0);
+            U8(3);
+            for (var handler = 0; handler < 2; ++handler)
+            {
+                U16(3);
+                U16(0);
+                U32(0);
+                U8(0);
+                U16((ushort)handler);
+                if (handler == 1)
+                {
+                    U16(3);
+                    U16(3);
+                }
+                U16(0);
+                U16(0);
+            }
+        }
 
         U16(1);
         U16(0);
@@ -89,9 +118,36 @@ public class PexModelTests
         U16(0);
         U32(0);
         U8(0);
-        U16(0);
-        U16(0);
-        U16(0);
+        if (withCode)
+        {
+            U16(0);
+            U16(1);
+            U16(3);
+            U16(3);
+            U16(2);
+            U8(13);
+            U8(1);
+            U16(3);
+            U8(3);
+            U32(unchecked((uint)-7));
+            U8(25);
+            U8(1);
+            U16(2);
+            U8(1);
+            U16(1);
+            U8(1);
+            U16(3);
+            U8(3);
+            U32(1);
+            U8(2);
+            U16(duplicateStrings ? (ushort)5 : (ushort)4);
+        }
+        else
+        {
+            U16(0);
+            U16(0);
+            U16(0);
+        }
 
         var body = bytes.Count - bodyStart;
         var size = (uint)(body + sizeof(uint));
@@ -190,5 +246,74 @@ public class PexModelTests
         var error = Assert.Throws<RadicleException>(() =>
             PexFile.FromFile(Path.Combine(Path.GetTempPath(), "radicle_no_such_directory", "no_such_file.pex")));
         Assert.Equal(Status.IoError, error.Status);
+    }
+
+    [Fact]
+    public void ReadsAnObjectsCodeAsStringTableIndexes()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex(withCode: true));
+        var code = pex.ReadCode(0);
+
+        var state = Assert.Single(code.States);
+        Assert.Equal(0, state.Name);
+        var function = code.Functions[Assert.Single(state.Functions)];
+        Assert.Equal(0, function.State);
+        Assert.Empty(function.Parameters);
+        Assert.Equal(new PexTypedName(3, 3), Assert.Single(function.Locals));
+        Assert.Equal(2, function.Instructions.Count);
+
+        var assign = function.Instructions[0];
+        Assert.Equal(13, assign.Opcode);
+        Assert.Equal(new[] { new PexValue(PexValueType.Identifier, 3, 0, 0, false), new PexValue(PexValueType.Integer, -1, -7, 0, false) },
+            assign.Arguments);
+
+        var call = function.Instructions[1];
+        Assert.Equal(25, call.Opcode);
+        Assert.Equal(new[] { 2, 1, 3, 4 }, call.Arguments.Select(argument => argument.String));
+        Assert.Equal(PexValueType.String, call.Arguments[3].Type);
+        Assert.Equal(HighBytes, pex.StringTable[call.Arguments[3].String]);
+
+        var variable = Assert.Single(code.Variables);
+        Assert.Equal(new PexValue(PexValueType.Integer, -1, 42, 0, false), variable.DefaultValue);
+        Assert.Empty(code.Properties);
+        Assert.Empty(code.Structs);
+    }
+
+    [Fact]
+    public void ReadCodeRefusesAnUnknownObjectAndADisposedFile()
+    {
+        var pex = PexFile.FromBytes(SyntheticPex());
+        var error = Assert.Throws<RadicleException>(() => pex.ReadCode(1));
+        Assert.Equal(Status.InvalidArgument, error.Status);
+        pex.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => pex.ReadCode(0));
+    }
+
+    [Fact]
+    public void SnapshotFunctionCountExcludesBothPropertyHandlers()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex(withHandlers: true));
+        var code = pex.ReadCode(0);
+        Assert.Equal(1, pex.Objects[0].Counts.FunctionCount);
+        Assert.Single(Assert.Single(code.States).Functions);
+        Assert.Equal(3, code.Functions.Count);
+        var property = Assert.Single(code.Properties);
+        Assert.Equal(1, property.ReadFunction);
+        Assert.Equal(2, property.WriteFunction);
+        Assert.Equal(-1, code.Functions[property.ReadFunction].State);
+        Assert.Equal(-1, code.Functions[property.WriteFunction].State);
+        Assert.Single(code.Functions[property.WriteFunction].Parameters);
+    }
+
+    [Fact]
+    public void DuplicateStringIndexesCanonicalizeWithoutChangingTheirBytes()
+    {
+        using var pex = PexFile.FromBytes(SyntheticPex(withCode: true, duplicateStrings: true));
+        Assert.Equal(HighBytes, pex.StringTable[4]);
+        Assert.Equal(HighBytes, pex.StringTable[5]);
+        var operand = pex.ReadCode(0).Functions[0].Instructions[1].Arguments[3];
+        Assert.Equal(PexValueType.String, operand.Type);
+        Assert.Equal(4, operand.String);
+        Assert.Equal(HighBytes, pex.StringTable[operand.String]);
     }
 }
