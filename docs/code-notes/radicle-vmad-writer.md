@@ -1,0 +1,5 @@
+# Stored VMAD authoring
+
+`Radicle/src/schema/vmad.cpp:read_property` records value byte ranges while using the existing checked parser. `Radicle/src/plugin/vmad_writer.cpp:set_vmad_property` uses those ranges to patch known scalar types and existing simple array elements without changing property types, flags, counts, names, padding or fragment-tail bytes. Source: pinned xEdit 93cc0bc5 `wbDefinitionsFO4.pas:wbScriptProperty`, `wbScriptPropertyObject` and `wbVMAD` (lines 3724–3891), plus the existing reader grammar. Object formats 1/2 and writer versions 5/6 are explicitly supported; other layouts are refused.
+
+`Radicle/include/fo4/c_api_vmad.h` exposes the typed setters; `Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs` uses the same native mutations. Text follows the existing `Radicle/src/c_api_placed.cpp:build_view` Windows-1252/UTF-8 boundary. Unknown type 6, nonempty type 16, unparsed tails, property-list structure and recursive struct authoring remain preserved or refused. The existing verified variable-layout evidence remains in `Radicle/docs/VMAD_VARIABLE_EVIDENCE.md`; no new runtime behavior is asserted.

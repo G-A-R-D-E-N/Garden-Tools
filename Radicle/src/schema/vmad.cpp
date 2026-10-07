@@ -427,6 +427,11 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   property.name = slice.wstring();
   property.type = slice.u8();
   property.flags = slice.u8();
+  property.value_offset = slice.position();
+  const auto finish = [&] {
+    property.value_size = slice.position() - property.value_offset;
+    return property;
+  };
   switch (property.type) {
     case k_type_object:
       if (object_format == 2) {
@@ -440,23 +445,23 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
       } else {
         throw parse_error(slice.position(), "unknown VMAD object format");
       }
-      return property;
+      return finish();
     case k_type_string:
       property.text = slice.wstring();
-      return property;
+      return finish();
     case k_type_int:
       property.integer = static_cast<std::int32_t>(slice.u32());
-      return property;
+      return finish();
     case k_type_float: {
       const auto bits = slice.u32();
       float value = 0.0f;
       std::memcpy(&value, &bits, 4);
       property.real = value;
-      return property;
+      return finish();
     }
     case k_type_bool:
       property.boolean = slice.u8() != 0;
-      return property;
+      return finish();
     default:
       break;
   }
@@ -504,7 +509,7 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
     default:
       throw parse_error(slice.position(), "unknown VMAD property type");
   }
-  return property;
+  return finish();
 }
 
 }  // namespace

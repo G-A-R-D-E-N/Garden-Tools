@@ -78,6 +78,8 @@ struct VmadProperty {
   std::optional<bool> boolean;
   // Leading u32 count of struct and array properties.
   std::optional<std::uint32_t> element_count;
+  std::size_t value_offset{0};
+  std::size_t value_size{0};
 };
 
 struct VmadScript {
