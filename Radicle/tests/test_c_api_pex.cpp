@@ -349,6 +349,180 @@ TEST(CApiPex, PublicStructLayoutKeepsFieldOrderAndNaturalAlignment) {
 }
 
 TEST(CApiPex, AbiVersionIsAtLeastThePexExports) {
-  EXPECT_GE(radicle_abi_version(), 6u);
+  EXPECT_GE(radicle_abi_version(), 9u);
   EXPECT_EQ(RADICLE_ABI_VERSION, radicle_abi_version());
+}
+
+namespace {
+
+fo4::pex::PexValue pexValue(fo4::pex::PexValueType type, const std::string& text = {}, std::int32_t integer = 0,
+                            float real = 0.0F, bool flag = false) {
+  fo4::pex::PexValue value;
+  value.type = type;
+  value.str = text;
+  value.int_ = integer;
+  value.float_ = real;
+  value.bool_ = flag;
+  return value;
+}
+
+fo4::pex::PexInstruction pexInstruction(std::uint8_t opcode, std::vector<fo4::pex::PexValue> args) {
+  fo4::pex::PexInstruction instruction;
+  instruction.opCode = opcode;
+  instruction.args = std::move(args);
+  return instruction;
+}
+
+PexFile codePex() {
+  using fo4::pex::PexValueType;
+  PexFile pex = syntheticPex();
+  auto& object = pex.objects[0];
+  object.autoStateName = "";
+
+  auto& run = object.states[0].functions[0];
+  run.returnType = "Int";
+  run.isGlobal = true;
+  run.params.push_back({"akTarget", "ObjectReference"});
+  run.locals.push_back({"::temp0", "Int"});
+  run.locals.push_back({"::NoneVar", "None"});
+  run.instructions.push_back(pexInstruction(13, {pexValue(PexValueType::Identifier, "::temp0"),
+                                                 pexValue(PexValueType::Integer, {}, -7)}));
+  run.instructions.push_back(pexInstruction(23, {pexValue(PexValueType::Identifier, "Activate"),
+                                                 pexValue(PexValueType::Identifier, "akTarget"),
+                                                 pexValue(PexValueType::Identifier, "::NoneVar"),
+                                                 pexValue(PexValueType::Float, {}, 0, 1.5F),
+                                                 pexValue(PexValueType::Bool, {}, 0, 0.0F, true)}));
+  run.instructions.push_back(pexInstruction(25, {pexValue(PexValueType::Identifier, "Debug"),
+                                                 pexValue(PexValueType::Identifier, "Trace"),
+                                                 pexValue(PexValueType::Identifier, "::NoneVar"),
+                                                 pexValue(PexValueType::String, "hello")}));
+  run.instructions.push_back(pexInstruction(26, {pexValue(PexValueType::Identifier, "::temp0")}));
+
+  fo4::pex::PexFunction busy;
+  busy.name = "OnBusy";
+  fo4::pex::PexState waiting;
+  waiting.name = "Waiting";
+  waiting.functions.push_back(busy);
+  object.states.push_back(waiting);
+
+  object.variables[0].defaultValue = pexValue(PexValueType::Integer, {}, 3);
+  object.properties[0].flags = 0x03;
+  fo4::pex::PexFunction getter;
+  getter.name = "";
+  getter.returnType = "Int";
+  getter.instructions.push_back(pexInstruction(26, {pexValue(PexValueType::Integer, {}, 9)}));
+  object.properties[0].readHandler = getter;
+  fo4::pex::PexFunction setter;
+  setter.params.push_back({"value", "Int"});
+  object.properties[0].writeHandler = setter;
+
+  fo4::pex::PexStructMember member;
+  member.name = "X";
+  member.type = "Float";
+  member.defaultValue = pexValue(PexValueType::Float, {}, 0, 2.0F);
+  object.structs[0].members.push_back(member);
+
+  pex.rebuildStringTable();
+  return pex;
+}
+
+std::string tableEntry(const radicle_pex* pex, size_t index) {
+  if (index == RADICLE_PEX_NO_STRING) return "<none>";
+  uint8_t* bytes = nullptr;
+  size_t size = 0;
+  EXPECT_EQ(radicle_pex_string_table_entry(pex, index, &bytes, &size), RADICLE_STATUS_OK);
+  auto text = asString(bytes, size);
+  radicle_free_bytes(bytes);
+  return text;
+}
+
+}
+
+TEST(CApiPex, ObjectCodeFlattensStatesFunctionsAndInstructions) {
+  const auto bytes = codePex().toBytes();
+  radicle_pex* pex = nullptr;
+  ASSERT_EQ(radicle_pex_parse(bytes.data(), bytes.size(), &pex), RADICLE_STATUS_OK);
+
+  radicle_pex_object_code code{};
+  ASSERT_EQ(radicle_pex_object_code_get(pex, 0, &code), RADICLE_STATUS_OK);
+
+  ASSERT_EQ(code.state_count, 2u);
+  EXPECT_EQ(tableEntry(pex, code.states[1].name), "Waiting");
+  ASSERT_EQ(code.function_count, 4u);
+  EXPECT_EQ(code.states[0].first_function, 0u);
+  EXPECT_EQ(code.states[1].first_function, 1u);
+
+  const auto& run = code.functions[0];
+  EXPECT_EQ(run.state, 0u);
+  EXPECT_EQ(tableEntry(pex, run.name), "Run");
+  EXPECT_EQ(tableEntry(pex, run.return_type), "Int");
+  EXPECT_EQ(run.is_global, 1);
+  ASSERT_EQ(run.parameter_count, 1u);
+  EXPECT_EQ(tableEntry(pex, code.typed_names[run.first_parameter].name), "akTarget");
+  EXPECT_EQ(tableEntry(pex, code.typed_names[run.first_parameter].type), "ObjectReference");
+  ASSERT_EQ(run.local_count, 2u);
+  EXPECT_EQ(tableEntry(pex, code.typed_names[run.first_local + 1].name), "::NoneVar");
+  ASSERT_EQ(run.instruction_count, 4u);
+
+  const auto& assign = code.instructions[run.first_instruction];
+  EXPECT_EQ(assign.opcode, 13);
+  ASSERT_EQ(assign.argument_count, 2u);
+  EXPECT_EQ(code.values[assign.first_argument + 1].type, 3);
+  EXPECT_EQ(code.values[assign.first_argument + 1].integer, -7);
+
+  const auto& callmethod = code.instructions[run.first_instruction + 1];
+  EXPECT_EQ(callmethod.opcode, 23);
+  ASSERT_EQ(callmethod.argument_count, 5u);
+  const auto* args = &code.values[callmethod.first_argument];
+  EXPECT_EQ(tableEntry(pex, args[0].string), "Activate");
+  EXPECT_EQ(tableEntry(pex, args[1].string), "akTarget");
+  EXPECT_EQ(args[3].type, 4);
+  EXPECT_FLOAT_EQ(args[3].real, 1.5F);
+  EXPECT_EQ(args[4].type, 5);
+  EXPECT_EQ(args[4].boolean, 1);
+
+  const auto& callstatic = code.instructions[run.first_instruction + 2];
+  EXPECT_EQ(callstatic.opcode, 25);
+  ASSERT_EQ(callstatic.argument_count, 4u);
+  EXPECT_EQ(code.values[callstatic.first_argument + 3].type, 2);
+  EXPECT_EQ(tableEntry(pex, code.values[callstatic.first_argument + 3].string), "hello");
+
+  EXPECT_EQ(code.functions[1].state, 1u);
+  EXPECT_EQ(tableEntry(pex, code.functions[1].name), "OnBusy");
+
+  ASSERT_EQ(code.property_count, 1u);
+  const auto& property = code.properties[0];
+  EXPECT_EQ(property.flags, 0x03);
+  ASSERT_EQ(property.read_function, 2u);
+  ASSERT_EQ(property.write_function, 3u);
+  EXPECT_EQ(code.functions[2].state, RADICLE_PEX_NO_INDEX);
+  EXPECT_EQ(code.functions[2].instruction_count, 1u);
+  EXPECT_EQ(code.functions[3].parameter_count, 1u);
+
+  ASSERT_EQ(code.variable_count, 1u);
+  EXPECT_EQ(code.variables[0].has_default, 1);
+  EXPECT_EQ(code.variables[0].default_value.integer, 3);
+  ASSERT_EQ(code.struct_count, 1u);
+  ASSERT_EQ(code.structs[0].member_count, 1u);
+  EXPECT_EQ(tableEntry(pex, code.struct_members[0].name), "X");
+  EXPECT_FLOAT_EQ(code.struct_members[0].default_value.real, 2.0F);
+
+  radicle_pex_free_object_code(&code);
+  EXPECT_EQ(code.functions, nullptr);
+  EXPECT_EQ(code.function_count, 0u);
+  radicle_pex_destroy(pex);
+}
+
+TEST(CApiPex, ObjectCodeRejectsBadArgumentsAndFreesZeroedStructs) {
+  const auto bytes = syntheticBytes();
+  radicle_pex* pex = nullptr;
+  ASSERT_EQ(radicle_pex_parse(bytes.data(), bytes.size(), &pex), RADICLE_STATUS_OK);
+  radicle_pex_object_code code{};
+  EXPECT_EQ(radicle_pex_object_code_get(nullptr, 0, &code), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_pex_object_code_get(pex, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_pex_object_code_get(pex, 1, &code), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(code.states, nullptr);
+  radicle_pex_free_object_code(&code);
+  radicle_pex_free_object_code(nullptr);
+  radicle_pex_destroy(pex);
 }

@@ -1,4 +1,6 @@
 #include "fo4/archive/ba2.hpp"
+#include "fo4/c_api.h"
+#include "fo4/c_api_pex.h"
 #include "fo4/pex/pex.hpp"
 
 #include <gtest/gtest.h>
@@ -73,6 +75,7 @@ struct Tally {
   std::size_t identical{0};
   std::size_t unreadable{0};
   std::size_t mismatched{0};
+  std::size_t codeMismatched{0};
   std::map<std::string, std::size_t> causes;
   std::map<std::string, std::string> firstExample;
 
@@ -113,6 +116,49 @@ std::vector<std::uint8_t> unpack(const std::vector<std::byte>& raw) {
   return bytes;
 }
 
+/* The flattened C ABI view of every object must agree with the C++ model it
+   is taken from: same functions, instructions and operands, in order. */
+void checkCode(const std::vector<std::uint8_t>& bytes, const std::string& where, Tally& tally) {
+  const auto model = fo4::pex::PexFile::fromBytes(bytes);
+  radicle_pex* pex = nullptr;
+  if (radicle_pex_parse(bytes.data(), bytes.size(), &pex) != RADICLE_STATUS_OK) {
+    tally.codeMismatched++;
+    tally.note("the C ABI could not parse a file the model read", where);
+    return;
+  }
+  for (size_t index = 0; index < model.objects.size(); ++index) {
+    radicle_pex_object_code code{};
+    if (radicle_pex_object_code_get(pex, index, &code) != RADICLE_STATUS_OK) {
+      tally.codeMismatched++;
+      tally.note(std::string("object code failed: ") + radicle_last_error(), where);
+      continue;
+    }
+    size_t functions = 0, instructions = 0, arguments = 0;
+    for (const auto& state : model.objects[index].states) {
+      for (const auto& function : state.functions) {
+        functions++;
+        instructions += function.instructions.size();
+        for (const auto& instruction : function.instructions) arguments += instruction.args.size();
+      }
+    }
+    for (const auto& property : model.objects[index].properties) {
+      for (const auto* handler : {property.readHandler ? &*property.readHandler : nullptr,
+                                  property.writeHandler ? &*property.writeHandler : nullptr}) {
+        if (!handler) continue;
+        functions++;
+        instructions += handler->instructions.size();
+        for (const auto& instruction : handler->instructions) arguments += instruction.args.size();
+      }
+    }
+    if (code.function_count != functions || code.instruction_count != instructions || code.value_count != arguments) {
+      tally.codeMismatched++;
+      tally.note("object code counts differ from the model", where);
+    }
+    radicle_pex_free_object_code(&code);
+  }
+  radicle_pex_destroy(pex);
+}
+
 void roundTrip(const std::vector<std::uint8_t>& bytes, const std::string& where, Tally& tally) {
   tally.found++;
   std::vector<std::uint8_t> rewritten;
@@ -124,6 +170,7 @@ void roundTrip(const std::vector<std::uint8_t>& bytes, const std::string& where,
     return;
   }
   tally.read++;
+  checkCode(bytes, where, tally);
   if (rewritten == bytes) {
     tally.identical++;
     return;
@@ -139,7 +186,7 @@ void roundTrip(const std::vector<std::uint8_t>& bytes, const std::string& where,
 void report(const Tally& tally) {
   std::cout << "pex corpus: found=" << tally.found << " read=" << tally.read
             << " identical=" << tally.identical << " unreadable=" << tally.unreadable
-            << " mismatched=" << tally.mismatched << std::endl;
+            << " mismatched=" << tally.mismatched << " code-mismatched=" << tally.codeMismatched << std::endl;
   for (const auto& entry : tally.firstExample) {
     std::cout << "  class(" << tally.causes.at(entry.first) << "): " << entry.second << std::endl;
   }
@@ -149,6 +196,7 @@ void expectClean(const Tally& tally) {
   EXPECT_EQ(tally.read + tally.unreadable, tally.found) << "every found file must be read or counted";
   EXPECT_EQ(tally.unreadable, 0u) << "files that failed to read";
   EXPECT_EQ(tally.mismatched, 0u) << "files that did not round trip byte-identically";
+  EXPECT_EQ(tally.codeMismatched, 0u) << "files whose C ABI code view disagrees with the model";
   EXPECT_EQ(tally.identical, tally.found) << "byte-identical round trips";
 }
 

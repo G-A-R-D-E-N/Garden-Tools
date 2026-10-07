@@ -84,6 +84,121 @@ RADICLE_API radicle_status radicle_pex_string_table_entry(const radicle_pex* pex
                                                            uint8_t** out_bytes,
                                                            size_t* out_size);
 
+/*
+ * One object's code: its states, functions, typed names, instructions and values, flattened
+ * into arrays the caller walks by index.
+ *
+ * Every name, type and string value is a string-table index (radicle_pex_string_table_entry),
+ * so this layer hands back no string bytes of its own. RADICLE_PEX_NO_STRING marks an empty
+ * name the table does not hold. Ranges are (first, count) pairs into the arrays of the same
+ * radicle_pex_object_code. Instruction arguments are the decoded operands in file order with
+ * the variable-argument count removed: a call opcode's fixed operands come first and its
+ * variable arguments follow. What any operand means is the caller's business; this layer
+ * names no operand roles.
+ *
+ * Functions are listed state by state, then each property's getter and setter. A function's
+ * `state` is its state index for a state function and RADICLE_PEX_NO_INDEX for a property
+ * handler; a property's `read_function` and `write_function` are function indexes or
+ * RADICLE_PEX_NO_INDEX. The arrays are owned by the caller and released with
+ * radicle_pex_free_object_code; releasing a zeroed struct is a no-op.
+ */
+#define RADICLE_PEX_NO_STRING ((size_t)-1)
+#define RADICLE_PEX_NO_INDEX ((size_t)-1)
+
+typedef struct radicle_pex_value {
+  uint8_t type;
+  uint8_t boolean;
+  int32_t integer;
+  float real;
+  size_t string;
+} radicle_pex_value;
+
+typedef struct radicle_pex_typed_name {
+  size_t name;
+  size_t type;
+} radicle_pex_typed_name;
+
+typedef struct radicle_pex_instruction {
+  uint8_t opcode;
+  int32_t line;
+  size_t first_argument;
+  size_t argument_count;
+} radicle_pex_instruction;
+
+typedef struct radicle_pex_function {
+  size_t state;
+  size_t name;
+  size_t return_type;
+  uint32_t user_flags;
+  uint8_t is_global;
+  uint8_t is_native;
+  size_t first_parameter;
+  size_t parameter_count;
+  size_t first_local;
+  size_t local_count;
+  size_t first_instruction;
+  size_t instruction_count;
+} radicle_pex_function;
+
+typedef struct radicle_pex_state {
+  size_t name;
+  size_t first_function;
+  size_t function_count;
+} radicle_pex_state;
+
+typedef struct radicle_pex_variable {
+  size_t name;
+  size_t type;
+  uint32_t user_flags;
+  uint8_t is_const;
+  uint8_t has_default;
+  radicle_pex_value default_value;
+} radicle_pex_variable;
+
+typedef struct radicle_pex_property {
+  size_t name;
+  size_t type;
+  uint32_t user_flags;
+  uint8_t flags;
+  size_t auto_var_name;
+  size_t read_function;
+  size_t write_function;
+} radicle_pex_property;
+
+typedef struct radicle_pex_struct {
+  size_t name;
+  size_t first_member;
+  size_t member_count;
+} radicle_pex_struct;
+
+typedef struct radicle_pex_object_code {
+  size_t auto_state_name;
+  radicle_pex_state* states;
+  size_t state_count;
+  radicle_pex_function* functions;
+  size_t function_count;
+  radicle_pex_typed_name* typed_names;
+  size_t typed_name_count;
+  radicle_pex_instruction* instructions;
+  size_t instruction_count;
+  radicle_pex_value* values;
+  size_t value_count;
+  radicle_pex_variable* variables;
+  size_t variable_count;
+  radicle_pex_property* properties;
+  size_t property_count;
+  radicle_pex_struct* structs;
+  size_t struct_count;
+  radicle_pex_variable* struct_members;
+  size_t struct_member_count;
+} radicle_pex_object_code;
+
+RADICLE_API radicle_status radicle_pex_object_code_get(const radicle_pex* pex,
+                                                       size_t index,
+                                                       radicle_pex_object_code* out_code);
+
+RADICLE_API void radicle_pex_free_object_code(radicle_pex_object_code* code);
+
 #ifdef __cplusplus
 }
 #endif

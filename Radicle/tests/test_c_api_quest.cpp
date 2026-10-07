@@ -405,7 +405,7 @@ TEST(CApiQuest, MalformedFormKeyReturnsInvalidArgument) {
   radicle_plugin_destroy(plugin);
 }
 
-TEST(CApiQuest, AbiVersionIsEight) {
-  EXPECT_EQ(radicle_abi_version(), 8u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 8u);
+TEST(CApiQuest, AbiVersionIsAtLeastTheQuestExports) {
+  EXPECT_GE(radicle_abi_version(), 8u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, radicle_abi_version());
 }
