@@ -50,6 +50,9 @@ def main():
             shutil.copytree(bindings / name, fresh / name,
                             ignore=shutil.ignore_patterns('bin', 'obj'))
         shutil.copy2(bindings / 'global.json', fresh / 'global.json')
+        for path in [*bindings.glob('Directory.Build.*'), bindings / 'NuGet.Config']:
+            if path.is_file():
+                shutil.copy2(path, fresh / path.name)
         config = bindings / 'Radicle.Interop.Tests' / 'NuGet.Config'
         for key, name in [('DOTNET_CLI_HOME', 'cli'), ('NUGET_PACKAGES', 'packages'),
                           ('NUGET_HTTP_CACHE_PATH', 'http'), ('NUGET_PLUGINS_CACHE_PATH', 'plugins')]:

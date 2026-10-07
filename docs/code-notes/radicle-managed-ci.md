@@ -14,6 +14,8 @@ The same offline RID regression returned NU1004 with the old shared settings and
 
 ## Radicle/bindings/csharp/tools/run_managed_tests.py:main
 
+The fresh tree also copies parent `Directory.Build.*` files and `NuGet.Config` when present. Consumer checks inherit the library's parent build settings; injecting parent-wide locked mode previously passed unnoticed and is now rejected. The copied NuGet config preserves the parent file layout, while explicit `--configfile` continues selecting only the verified test feed for offline restores.
+
 Every managed CTest execution copies both projects without bin/obj and assigns empty package, HTTP and plugin caches. It verifies the complete feed inventory and SHA-256 hashes against `Radicle/bindings/csharp/packages/manifest.json`, then restores in locked mode using the single local source in `Radicle/bindings/csharp/Radicle.Interop.Tests/NuGet.Config`. The test project's lock file pins the transitive graph and package content hashes. `Radicle/bindings/csharp/global.json` pins SDK 8.0.424; setup uses that same file. No package download or warm-cache fallback exists.
 
 `.github/workflows/native-ci.yml:native-linux` additionally executes this complete managed suite inside a fresh user/network namespace with only loopback enabled for VSTest. An external connection must fail with ENETUNREACH before restore/tests. The SDK, actions and native build are provisioned before this isolated phase; fully offline runner bootstrap is outside this proof. Windows CTest uses the same checked-in feed and empty-cache execution, but OS-level network isolation is proved on Linux.
