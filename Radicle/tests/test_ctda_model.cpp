@@ -148,6 +148,20 @@ TEST(CtdaModel, TruncatedPayloadThrows) {
                std::out_of_range);
 }
 
+TEST(CtdaModel, OpaquePrefixBytesSurviveRoundTripAndScalarEdit) {
+  for (auto bytes : {make_ctda(0, 0, 74, 0, 1, 0, 0, 0, -1).bytes,
+                     make_event_data(0, 0x314F, 1, 7, 0, -1).bytes}) {
+    bytes[1] = std::byte{0xAC};
+    bytes[2] = std::byte{0x93};
+    bytes[3] = std::byte{0x13};
+    auto condition = fo4::parse_ctda_condition(bytes);
+    EXPECT_EQ(fo4::serialize_ctda_condition(condition), bytes);
+    condition.param1 = 2;
+    bytes[12] = std::byte{2};
+    EXPECT_EQ(fo4::serialize_ctda_condition(condition), bytes);
+  }
+}
+
 TEST(CtdaModel, ReadAttachesCisStringsToPrecedingCondition) {
   auto plugin = make_plugin_with_conditions();
   const auto* record = find_cond_record(plugin);

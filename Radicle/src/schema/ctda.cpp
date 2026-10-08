@@ -90,6 +90,7 @@ CtdaCondition parse_ctda_condition(std::span<const std::byte> payload) {
   }
   CtdaCondition condition;
   condition.flags_byte = std::to_integer<std::uint8_t>(payload[k_ctda_flags]);
+  std::copy_n(payload.begin() + 1, condition.opaque_prefix.size(), condition.opaque_prefix.begin());
   condition.function = read_u16(payload, k_ctda_function);
   if (condition.is_event_data()) {
     if (payload.size() < k_event_data_size) {
@@ -119,6 +120,7 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) 
   if (condition.is_event_data()) {
     std::vector<std::byte> out(k_event_data_size);
     out[k_ctda_flags] = std::byte{condition.flags_byte};
+    std::copy(condition.opaque_prefix.begin(), condition.opaque_prefix.end(), out.begin() + 1);
     write_u16(out, k_ctda_function, condition.function);
     write_u16(out, k_ctda_unknown2, condition.unknown2);
     write_i32(out, k_ctda_param1, condition.param1);
@@ -129,6 +131,7 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) 
   }
   std::vector<std::byte> out(k_ctda_size);
   out[k_ctda_flags] = std::byte{condition.flags_byte};
+  std::copy(condition.opaque_prefix.begin(), condition.opaque_prefix.end(), out.begin() + 1);
   write_u32(out, k_ctda_compare, condition.comparison_raw);
   write_u16(out, k_ctda_function, condition.function);
   write_u16(out, k_ctda_unknown2, condition.unknown2);

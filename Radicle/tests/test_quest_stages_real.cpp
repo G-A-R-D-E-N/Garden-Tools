@@ -98,3 +98,31 @@ TEST(QuestStagesRealData, DecodesEveryShippedQuest) {
   EXPECT_GT(empty_stages, 50u);
   EXPECT_GT(multi_entry, 200u);
 }
+
+TEST(QuestStagesRealData, MQ101ConditionsRoundTripOpaqueBytes) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run this";
+  }
+  const auto path = std::filesystem::path{dir} / "Fallout4.esm";
+  ASSERT_TRUE(std::filesystem::exists(path));
+  const auto plugin = fo4::read_plugin_file(path);
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("01ED86:Fallout4.esm"));
+  ASSERT_NE(record, nullptr);
+  std::size_t conditions = 0;
+  std::size_t opaque = 0;
+  for (const auto& member : record->subrecords) {
+    if (member.signature != fo4::sig_ctda) continue;
+    SCOPED_TRACE("MQ101 CTDA ordinal " + std::to_string(conditions));
+    ++conditions;
+    const auto condition = fo4::parse_ctda_condition(member.data);
+    EXPECT_EQ(fo4::serialize_ctda_condition(condition), member.data);
+    ASSERT_GE(member.data.size(), 4u);
+    if (member.data[1] != std::byte{0} || member.data[2] != std::byte{0} ||
+        member.data[3] != std::byte{0}) ++opaque;
+  }
+  EXPECT_GT(conditions, 0u);
+  EXPECT_GT(opaque, 0u);
+  RecordProperty("ConditionCount", conditions);
+  RecordProperty("OpaquePrefixCount", opaque);
+}

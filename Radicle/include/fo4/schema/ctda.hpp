@@ -3,6 +3,7 @@
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -36,6 +37,7 @@ struct CtdaCondition {
   // operator (EqualTo=0, NotEqualTo=1, GreaterThan=2, GreaterThanOrEqualTo=3,
   // LessThan=4, LessThanOrEqualTo=5).
   std::uint8_t flags_byte{0};
+  std::array<std::byte, 3> opaque_prefix{};
 
   // Comparison value: float bits for float conditions, a raw FormID for
   // UseGlobal conditions. Interpretation is the caller's (the JSON contract
