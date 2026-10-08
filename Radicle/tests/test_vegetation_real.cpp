@@ -36,7 +36,9 @@ void expect_harvest(const fo4::env::HarvestData& native, const radicle_harvest_i
                     const fo4::Record& record) {
   expect_key(native.ingredient, value.ingredient, "PFIG"); expect_key(native.sound, value.sound, "SNAM");
   EXPECT_EQ(value.has_seasons, native.seasons.has_value() ? 1 : 0);
-  if (native.seasons) for (std::size_t j = 0; j < 4; ++j) EXPECT_EQ(value.seasons[j], (*native.seasons)[j]);
+  if (native.seasons) {
+    for (std::size_t j = 0; j < 4; ++j) EXPECT_EQ(value.seasons[j], (*native.seasons)[j]);
+  }
   for (const auto& sub : record.subrecords) {
     if (sub.signature.to_string() != "PFPC") continue;
     ASSERT_EQ(sub.data.size(), 4u);
@@ -81,7 +83,9 @@ TEST_P(VegetationReal, EveryOfficialVegetationRecordDecodesAndMasterIsByteIdenti
       ASSERT_NO_THROW(native = fo4::env::decode_grass(env, *refs[i]));
       ASSERT_EQ(radicle_grass_get_info(abi, records[i], &value), RADICLE_STATUS_OK);
       EXPECT_EQ(value.has_data, native.has_value() ? 1 : 0);
-      for (const auto& sub : record.subrecords) if (sub.signature.to_string() == "DATA") EXPECT_EQ(value.has_data, 1);
+      for (const auto& sub : record.subrecords) {
+        if (sub.signature.to_string() == "DATA") { EXPECT_EQ(value.has_data, 1); }
+      }
       if (native) {
         EXPECT_EQ(value.density, native->density); EXPECT_EQ(value.min_slope, native->min_slope);
         EXPECT_EQ(value.max_slope, native->max_slope); EXPECT_EQ(value.units_from_water, native->units_from_water);
@@ -115,7 +119,7 @@ TEST_P(VegetationReal, EveryOfficialVegetationRecordDecodesAndMasterIsByteIdenti
       ASSERT_EQ(radicle_flora_get_info(abi, records[i], &value), RADICLE_STATUS_OK);
       expect_harvest(native.harvest, value.harvest, record);
       EXPECT_EQ(value.has_flags, native.flags.has_value() ? 1 : 0);
-      if (native.flags) EXPECT_EQ(value.flags, *native.flags);
+      if (native.flags) { EXPECT_EQ(value.flags, *native.flags); }
       for (const auto& sub : record.subrecords) {
         if (sub.signature.to_string() != "FNAM") continue;
         ASSERT_EQ(sub.data.size(), 2u); EXPECT_EQ(value.has_flags, 1);

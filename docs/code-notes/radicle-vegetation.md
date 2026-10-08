@@ -54,6 +54,8 @@ in both environments. Load the selected file's declared masters, in declaration
 order, before that file so cross-master links can resolve; enumerate and serialize only the
 selected master. Keep the family totals and byte-identity assertions, and include
 record keys and raw subrecord bytes in failure traces. No decoder behavior changes.
+Brace conditionals containing GoogleTest assertion macros so GCC's
+`-Werror=dangling-else` check accepts the same assertions as MSVC.
 
 ## Radicle/tests/test_c_api_quest.cpp:findProperty
 
