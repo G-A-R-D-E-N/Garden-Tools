@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fo4/plugin/container.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 
 namespace fo4::detail {
@@ -23,6 +24,12 @@ inline Record* find_mutable_record(Plugin& plugin, const FormKey& record_key) {
   return nullptr;
 }
 
+inline Record* locate_mutable_record(Plugin& plugin, const FormKey& record_key) {
+  if (auto* found = find_mutable_record(plugin, record_key)) return found;
+  assign_record_form_keys(plugin);
+  return find_mutable_record(plugin, record_key);
+}
+
 inline void mark_record_modified(Plugin& plugin, Record& record) {
   record.original_range.clear();
   record.decompressed_payload.clear();
@@ -31,4 +38,4 @@ inline void mark_record_modified(Plugin& plugin, Record& record) {
   plugin.original_range.clear();
 }
 
-}  // namespace fo4::detail
+}

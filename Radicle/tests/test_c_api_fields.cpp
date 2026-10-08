@@ -112,7 +112,7 @@ protected:
   radicle_plugin* plugin_{nullptr};
 };
 
-}  // namespace
+}
 
 TEST_F(CApiFields, ScalarExportsMapStatusesAndSurviveSaveReload) {
   EXPECT_EQ(radicle_plugin_set_record_scalar(plugin_, key(k_refr), "REFR\\HealthPercent", "75"), RADICLE_STATUS_OK);

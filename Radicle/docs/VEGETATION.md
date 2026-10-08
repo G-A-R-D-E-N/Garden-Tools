@@ -7,8 +7,8 @@ GRAS DATA is 32 bytes: density/min/max slope bytes, one unused byte,
 u16 distance from water, two unused bytes, u32 water-distance discriminator,
 four f32 placement/color/wave values and one flag byte plus three unused bytes.
 The [verified loader record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md)
-and local copy `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/vegetation-403-342/README.md`
-stamp `TESGrass::Load` at OG RVA 0x304DB0. Present DATA is copied into a
+and local copy `build/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`
+stamp `TESGrass::Load` at OG RVA 0x31AA00. Present DATA is copied into a
 zero-filled 32-byte prefix, including short or oversized fields. The read
 surface keeps absent DATA distinct from present zero-length DATA. Untouched
 original bytes, including surplus bytes and padding, remain in the container.
@@ -50,10 +50,13 @@ master through native and C ABI getters and checks unchanged whole-file byte
 identity. It skips without FO4_DATA_DIR. Local and CI validation are recorded
 separately for each published head.
 
-GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` consumes LAND/LTEX
-diffuse textures through `CellService` and `LandscapeTextureCatalog`, but has no
-LTEX GNAM or GRAS/TREE/FLOR vegetation consumer. GardenEngine #148 must add that
-consumer before a meaningful vegetation probe can run.
+GardenEngine main `5cb5e18131a53e3c7c6fa049ce8fde6a9ad9f742` pins Radicle
+`34d16d50de68e7da079745240fd247310ea730f6`, before these getters, and has no
+LTEX GNAM or GRAS/TREE/FLOR getter consumer. GardenEngine #148 must add that
+consumer and update its pin before the probe required by GARDEN-TOOLS #342 can
+run. Existing foliage HLOD support does not establish that grass-reader proof.
+The audit and ABI 12 integration are recorded in
+`docs/code-notes/radicle-vegetation.md` at the repository root.
 
 ## Editing
 
@@ -65,7 +68,7 @@ consumer before a meaningful vegetation probe can run.
 | FLOR FNAM flags | `decode_flora` | `SetScalar` `FLOR\Flags` (2-byte FNAM only) | zero default | yes | optional, not created by default | none |
 | TREE PFIG, SNAM | `HarvestData` ingredient, sound | `SetFormLink` `TREE\Ingredient` (base objects plus ENCH, nullable), `TREE\HarvestSound` (SNDR, nullable) | null default | yes | optional, not created by default | PFIG and SNAM payload remap |
 | FLOR PFIG, SNAM | same | `FLOR\Ingredient` (ALCH, AMMO, ARMO, BOOK, INGR, KEYM, LIGH, LVLI, MISC, NOTE, WEAP, nullable), `FLOR\HarvestSound` (SNDR, not nullable) | PFIG null default, SNAM no default | yes | optional, not created by default | same |
-| LTEX GNAM | `decode_landscape_grasses`, `LandscapeGrasses` | `SetFormLink` `LTEX\Grass` index n (GRAS, not nullable), `FieldCount` | `FormLinkListInsert` `LTEX\Grasses` with a GRAS target (`AddSubrecord GNAM` is refused: no default) | `RemoveSubrecord GNAM n` or `FormLinkListRemove` | optional | GNAM payload remap |
+| LTEX GNAM | `decode_landscape_grasses`, `LandscapeGrasses` | `FormLinkListSet` `LTEX\Grasses` index n (GRAS, not nullable), `FormLinkListCount` | `FormLinkListInsert` `LTEX\Grasses` with a GRAS target (`AddSubrecord GNAM` is refused: no default) | `RemoveSubrecord GNAM n` or `FormLinkListRemove` | optional | GNAM payload remap |
 | LTEX required MNAM, HNAM, SNAM | n/a | n/a | defaults null, 30/30, 30 | refused (required) | LTEX | none |
 | Records | n/a | n/a | n/a | n/a | GRAS, TREE, LTEX, FLOR (non-localized plugins) via `radicle_plugin_create_record` / `PluginFile.CreateRecord` | n/a |
 

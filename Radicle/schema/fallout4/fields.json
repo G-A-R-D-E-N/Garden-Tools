@@ -540,6 +540,7 @@
           "label": "Ingredient",
           "subrecord": "PFIG",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["ALCH", "AMMO", "ARMO", "BOOK", "INGR", "KEYM", "LIGH", "LVLI", "MISC", "NOTE", "WEAP"],
           "nullable": true,
           "insertion": "existing_only"
@@ -549,6 +550,7 @@
           "label": "Harvest sound",
           "subrecord": "SNAM",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SNDR"],
           "nullable": false,
           "insertion": "existing_only"
@@ -939,18 +941,6 @@
           "targets": ["GRAS"],
           "nullable": false,
           "mutation": "appendable"
-        }
-      ],
-      "formlink_fields": [
-        {
-          "path": "LTEX\\Grass",
-          "label": "Grass",
-          "subrecord": "GNAM",
-          "offset": 0,
-          "repeated": true,
-          "targets": ["GRAS"],
-          "nullable": false,
-          "insertion": "existing_only"
         }
       ],
       "authoring": {
@@ -1806,6 +1796,7 @@
           "label": "Ingredient",
           "subrecord": "PFIG",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["ACTI", "ADDN", "ALCH", "AMMO", "ARMO", "ARTO", "ASPC", "BNDS", "BOOK", "CMPO", "COBJ", "CONT", "DEBR", "DOOR", "EXPL", "FLST", "FLOR", "FURN", "HAZD", "IDLM", "INGR", "KEYM", "LIGH", "LVLI", "LVLN", "LVSP", "MISC", "MSTT", "NOTE", "NPC_", "OMOD", "PROJ", "SCOL", "SCRL", "SOUN", "SPEL", "STAT", "TACT", "TERM", "TREE", "TXST", "WATR", "WEAP", "ENCH"],
           "nullable": true,
           "insertion": "existing_only"
@@ -1815,6 +1806,7 @@
           "label": "Harvest sound",
           "subrecord": "SNAM",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SNDR"],
           "nullable": true,
           "insertion": "existing_only"

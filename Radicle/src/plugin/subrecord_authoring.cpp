@@ -62,10 +62,10 @@ bool local_layout_valid(Rules rules, const Record& record) {
   return true;
 }
 
-bool layout_valid(Rules rules, bool generated, const Record& record) {
+bool layout_valid(Rules rules, bool generated, const Record& record, bool localized) {
   if (!local_layout_valid(rules, record)) return false;
   if (!generated) return true;
-  for (const auto& issue : schema::preflight_record(record)) {
+  for (const auto& issue : schema::preflight_record(record, localized)) {
     if (issue.severity == schema::PreflightSeverity::error) return false;
   }
   return true;
@@ -75,18 +75,12 @@ bool editable(const schema::SubrecordAuthoringConstraint& rule) {
   return !rule.coupled && (rule.maximum == 1 || (rule.maximum > 1 && rule.uncounted));
 }
 
-Record* locate(Plugin& plugin, const FormKey& key) {
-  if (auto* found = detail::find_mutable_record(plugin, key)) return found;
-  assign_record_form_keys(plugin);
-  return detail::find_mutable_record(plugin, key);
-}
-
 SubrecordAddStatus add_with_rules(Plugin& plugin,
                                   const FormKey& key,
                                   Signature subrecord,
                                   Rules explicit_rules,
                                   bool explicit_given) {
-  auto* record = locate(plugin, key);
+  auto* record = detail::locate_mutable_record(plugin, key);
   if (record == nullptr) return SubrecordAddStatus::record_missing;
 
   const auto rules = explicit_given ? explicit_rules : generated_rules(record->header.signature);
@@ -121,7 +115,9 @@ SubrecordAddStatus add_with_rules(Plugin& plugin,
   Record candidate = *record;
   candidate.subrecords.insert(candidate.subrecords.begin() + static_cast<std::ptrdiff_t>(position),
                               Subrecord{subrecord, default_payload(rules[*target]), false});
-  if (!layout_valid(rules, !explicit_given, candidate)) return SubrecordAddStatus::unknown_order;
+  if (!layout_valid(rules, !explicit_given, candidate, plugin.header.tes4_flags.is_localized())) {
+    return SubrecordAddStatus::unknown_order;
+  }
 
   *record = std::move(candidate);
   detail::mark_record_modified(plugin, *record);
@@ -134,7 +130,7 @@ SubrecordRemoveStatus remove_with_rules(Plugin& plugin,
                                         std::size_t occurrence,
                                         Rules explicit_rules,
                                         bool explicit_given) {
-  auto* record = locate(plugin, key);
+  auto* record = detail::locate_mutable_record(plugin, key);
   if (record == nullptr) return SubrecordRemoveStatus::record_missing;
 
   const auto rules = explicit_given ? explicit_rules : generated_rules(record->header.signature);
@@ -163,6 +159,10 @@ RecordCreateResult create_with_rules(Plugin& plugin,
                                      bool explicit_given) {
   const auto rules = explicit_given ? explicit_rules : generated_rules(signature);
   if (rules.empty()) return {RecordCreateStatus::not_authorable, {}};
+  const auto constraint = schema::record_authoring_constraint(signature);
+  if (constraint && constraint->placement != schema::RecordPlacement::top_level) {
+    return {RecordCreateStatus::not_authorable, {}};
+  }
   if (editor_id.find('\0') != std::string_view::npos) {
     return {RecordCreateStatus::invalid_editor_id, {}};
   }
@@ -191,7 +191,7 @@ RecordCreateResult create_with_rules(Plugin& plugin,
     }
   }
 
-  if (!layout_valid(rules, !explicit_given, built)) {
+  if (!layout_valid(rules, !explicit_given, built, plugin.header.tes4_flags.is_localized())) {
     return {RecordCreateStatus::preflight_failed, {}};
   }
   const auto key = create_local_record(plugin, signature, std::move(built.subrecords));

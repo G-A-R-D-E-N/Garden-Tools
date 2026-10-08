@@ -617,6 +617,165 @@ public unsafe struct MaterialSwap
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexHeader
+{
+    public byte MajorVersion;
+    public byte MinorVersion;
+    public ushort GameId;
+    public long CompilationTime;
+    public nuint StringCount;
+    public nuint ObjectCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexObjectCounts
+{
+    public nuint StructCount;
+    public nuint VariableCount;
+    public nuint PropertyCount;
+    public nuint StateCount;
+    public nuint FunctionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexValue
+{
+    public byte Type;
+    public byte Boolean;
+    public int Integer;
+    public float Real;
+    public nuint String;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexTypedName
+{
+    public nuint Name;
+    public nuint Type;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexInstruction
+{
+    public byte Opcode;
+    public int Line;
+    public nuint FirstArgument;
+    public nuint ArgumentCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexFunction
+{
+    public nuint State;
+    public nuint Name;
+    public nuint ReturnType;
+    public uint UserFlags;
+    public byte IsGlobal;
+    public byte IsNative;
+    public nuint FirstParameter;
+    public nuint ParameterCount;
+    public nuint FirstLocal;
+    public nuint LocalCount;
+    public nuint FirstInstruction;
+    public nuint InstructionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexState
+{
+    public nuint Name;
+    public nuint FirstFunction;
+    public nuint FunctionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexVariable
+{
+    public nuint Name;
+    public nuint Type;
+    public uint UserFlags;
+    public byte IsConst;
+    public byte HasDefault;
+    public PexValue DefaultValue;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexProperty
+{
+    public nuint Name;
+    public nuint Type;
+    public uint UserFlags;
+    public byte Flags;
+    public nuint AutoVarName;
+    public nuint ReadFunction;
+    public nuint WriteFunction;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexStruct
+{
+    public nuint Name;
+    public nuint FirstMember;
+    public nuint MemberCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexObjectCode
+{
+    public nuint AutoStateName;
+    public IntPtr States;
+    public nuint StateCount;
+    public IntPtr Functions;
+    public nuint FunctionCount;
+    public IntPtr TypedNames;
+    public nuint TypedNameCount;
+    public IntPtr Instructions;
+    public nuint InstructionCount;
+    public IntPtr Values;
+    public nuint ValueCount;
+    public IntPtr Variables;
+    public nuint VariableCount;
+    public IntPtr Properties;
+    public nuint PropertyCount;
+    public IntPtr Structs;
+    public nuint StructCount;
+    public IntPtr StructMembers;
+    public nuint StructMemberCount;
+}
+
+public enum QuestPropertyOwner : int
+{
+    Script = 0,
+    Fragment = 1,
+    AliasScript = 2,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestProperty
+{
+    public QuestPropertyOwner Owner;
+    public int Alias;
+    public IntPtr Script;
+    public IntPtr Name;
+    public byte Type;
+    public byte Flags;
+    public byte HasInteger;
+    public int Integer;
+    public byte HasReal;
+    public float Real;
+    public byte HasBoolean;
+    public byte Boolean;
+    public IntPtr Text;
+    public nuint TextSize;
+    public byte HasObject;
+    public uint ObjectFormId;
+    public byte HasPropertyAlias;
+    public short PropertyAlias;
+    public byte HasElementCount;
+    public uint ElementCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct GrassInfo
 {
     public int HasData;
@@ -665,63 +824,10 @@ public unsafe struct GrassLinks
     public IntPtr Internal;
 }
 
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct PexHeader
-{
-    public byte MajorVersion;
-    public byte MinorVersion;
-    public ushort GameId;
-    public long CompilationTime;
-    public nuint StringCount;
-    public nuint ObjectCount;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct PexObjectCounts
-{
-    public nuint StructCount;
-    public nuint VariableCount;
-    public nuint PropertyCount;
-    public nuint StateCount;
-    public nuint FunctionCount;
-}
-
-public enum QuestPropertyOwner : int
-{
-    Script = 0,
-    Fragment = 1,
-    AliasScript = 2,
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct QuestProperty
-{
-    public QuestPropertyOwner Owner;
-    public int Alias;
-    public IntPtr Script;
-    public IntPtr Name;
-    public byte Type;
-    public byte Flags;
-    public byte HasInteger;
-    public int Integer;
-    public byte HasReal;
-    public float Real;
-    public byte HasBoolean;
-    public byte Boolean;
-    public IntPtr Text;
-    public nuint TextSize;
-    public byte HasObject;
-    public uint ObjectFormId;
-    public byte HasPropertyAlias;
-    public short PropertyAlias;
-    public byte HasElementCount;
-    public uint ElementCount;
-}
-
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 17u;
+    public const uint CompiledAbiVersion = 12u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1068,21 +1174,6 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
     public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_grass_get_info")]
-    public static extern Status GrassGetInfo(IntPtr env, IntPtr record, GrassInfo* out_info);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_tree_get_info")]
-    public static extern Status TreeGetInfo(IntPtr env, IntPtr record, TreeInfo* out_info);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_flora_get_info")]
-    public static extern Status FloraGetInfo(IntPtr env, IntPtr record, FloraInfo* out_info);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_decode")]
-    public static extern Status LandscapeGrassesDecode(IntPtr env, IntPtr record, GrassLinks** out_links);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_free")]
-    public static extern void LandscapeGrassesFree(GrassLinks* links);
-
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
     public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);
 
@@ -1109,6 +1200,12 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_string_table_entry")]
     public static extern Status PexStringTableEntry(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_code_get")]
+    public static extern Status PexObjectCodeGet(IntPtr pex, nuint index, PexObjectCode* out_code);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_free_object_code")]
+    public static extern void PexFreeObjectCode(PexObjectCode* code);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_parse")]
     public static extern Status SeqParse(byte* bytes, nuint size, IntPtr* out_seq);
@@ -1145,5 +1242,20 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_record")]
     public static extern Status PluginCreateRecord(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, [MarshalAs(UnmanagedType.LPUTF8Str)] string? editor_id_utf8, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_grass_get_info")]
+    public static extern Status GrassGetInfo(IntPtr env, IntPtr record, GrassInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_tree_get_info")]
+    public static extern Status TreeGetInfo(IntPtr env, IntPtr record, TreeInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_flora_get_info")]
+    public static extern Status FloraGetInfo(IntPtr env, IntPtr record, FloraInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_decode")]
+    public static extern Status LandscapeGrassesDecode(IntPtr env, IntPtr record, GrassLinks** out_links);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_free")]
+    public static extern void LandscapeGrassesFree(GrassLinks* links);
 
 }

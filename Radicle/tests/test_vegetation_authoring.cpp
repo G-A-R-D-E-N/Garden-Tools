@@ -242,23 +242,68 @@ TEST_F(VegetationAuthoring, TreeLinksAcceptBaseObjectsAndNull) {
   EXPECT_EQ(order(plugin, k_tree_bare), (Order{"EDID", "OBND", "MODL", "SNAM", "CNAM"}));
 }
 
-TEST_F(VegetationAuthoring, LandscapeGrassesAreARepeatedLinkFieldAndAnUncountedList) {
+TEST_F(VegetationAuthoring, MalformedLinkPayloadsRefuseWithoutChangingBytes) {
+  struct Case { std::uint32_t record; const char* path; const char* subrecord; std::uint32_t target; };
+  const Case cases[] = {
+      {k_tree, "TREE\\Ingredient", "PFIG", k_misc},
+      {k_tree, "TREE\\HarvestSound", "SNAM", k_sndr},
+      {k_flor, "FLOR\\Ingredient", "PFIG", k_misc},
+      {k_flor, "FLOR\\HarvestSound", "SNAM", k_sndr},
+      {k_ltex, "LTEX\\Grasses", "GNAM", k_gras_no_data},
+  };
+  for (const auto& item : cases) {
+    for (const auto size : {0u, 3u, 5u, 8u}) {
+      SCOPED_TRACE(std::string(item.path) + " size=" + std::to_string(size));
+      auto entries = fixture(false);
+      auto& record = *std::find_if(entries.begin(), entries.end(), [&](const auto& entry) { return entry.id == item.record; });
+      std::erase_if(record.subs, [&](const auto& sub) { return sub.first == item.subrecord; });
+      record.subs.emplace_back(item.subrecord, filled(size, 0));
+      const auto original = build(entries, false);
+      auto plugin = read(original);
+      if (item.record == k_ltex) {
+        const auto list = fo4::schema::formlink_list_descriptor(sig("LTEX"), item.path);
+        ASSERT_TRUE(list.has_value());
+        EXPECT_THROW(fo4::schema::set_record_formlink_list_element(plugin, key(item.record), *list, 0, key(item.target)), fo4::schema::FormLinkListError);
+      } else {
+        EXPECT_THROW(link(plugin, item.record, item.path, 0, key(item.target)), fo4::schema::FormLinkFieldError);
+      }
+      EXPECT_EQ(fo4::write_plugin(plugin), original);
+
+      const auto path = save(original).string();
+      radicle_plugin* handle = nullptr;
+      ASSERT_EQ(radicle_plugin_read_file(path.c_str(), &handle), RADICLE_STATUS_OK);
+      const radicle_form_key target{k_plugin, item.target};
+      const auto status = item.record == k_ltex
+          ? radicle_plugin_formlink_list_set(handle, {k_plugin, item.record}, item.path, 0, &target)
+          : radicle_plugin_set_record_formlink(handle, {k_plugin, item.record}, item.path, 0, &target);
+      EXPECT_EQ(status, RADICLE_STATUS_INVALID_ARGUMENT);
+      const auto saved = (root / "unchanged.esp").string();
+      EXPECT_EQ(radicle_plugin_write_file(handle, saved.c_str()), RADICLE_STATUS_OK);
+      radicle_plugin_destroy(handle);
+      EXPECT_EQ(fo4::write_plugin(fo4::read_plugin_file(saved)), original);
+    }
+  }
+}
+
+TEST_F(VegetationAuthoring, LandscapeGrassesAreAnUncountedList) {
   auto plugin = read(build(fixture(), true));
-  const auto count = [&](std::uint32_t id) { return fo4::record_field_count(plugin, key(id), "LTEX\\Grass"); };
+  const auto list = fo4::schema::formlink_list_descriptor(sig("LTEX"), "LTEX\\Grasses");
+  ASSERT_TRUE(list.has_value());
+  const auto count = [&](std::uint32_t id) { return fo4::schema::record_formlink_list_size(plugin, key(id), *list); };
   EXPECT_EQ(count(k_ltex), std::optional<std::size_t>{2});
   EXPECT_EQ(count(k_ltex_bare), std::optional<std::size_t>{0});
   EXPECT_EQ(count(0x999), std::nullopt);
 
   const auto second_grass = key(k_gras_no_data);
-  EXPECT_EQ(link(plugin, k_ltex, "LTEX\\Grass", 1, second_grass), fo4::FormLinkFieldMutationStatus::updated);
-  EXPECT_EQ(link(plugin, k_ltex, "LTEX\\Grass", 0, key(k_gras)), fo4::FormLinkFieldMutationStatus::unchanged);
-  EXPECT_EQ(link(plugin, k_ltex, "LTEX\\Grass", 2, key(k_gras)), fo4::FormLinkFieldMutationStatus::subrecord_missing);
-  EXPECT_TRUE(refused(plugin, k_ltex, "LTEX\\Grass", 0, fo4::FormKey{}));
-  EXPECT_TRUE(refused(plugin, k_ltex, "LTEX\\Grass", 0, key(k_stat)));
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key(k_ltex), *list, 1, second_grass), fo4::schema::FormLinkListMutationStatus::updated);
+  const auto settled = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key(k_ltex), *list, 0, key(k_gras)), fo4::schema::FormLinkListMutationStatus::unchanged);
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key(k_ltex), *list, 2, key(k_gras)), fo4::schema::FormLinkListMutationStatus::index_out_of_range);
+  EXPECT_THROW(fo4::schema::set_record_formlink_list_element(plugin, key(k_ltex), *list, 0, fo4::FormKey{}), fo4::schema::FormLinkListError);
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key(k_ltex), *list, 0, key(k_stat)), fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
+  EXPECT_EQ(fo4::write_plugin(plugin), settled);
   EXPECT_EQ(payloads(plugin, key(k_ltex), "GNAM"), (std::vector<Bytes>{words({k_master_local | k_gras}), words({k_master_local | k_gras_no_data})}));
 
-  const auto list = fo4::schema::formlink_list_descriptor(sig("LTEX"), "LTEX\\Grasses");
-  ASSERT_TRUE(list.has_value());
   EXPECT_EQ(fo4::schema::record_formlink_list_size(plugin, key(k_ltex), *list), std::optional<std::size_t>{2});
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, key(k_ltex), *list, 2, key(k_gras)), fo4::schema::FormLinkListMutationStatus::updated);
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, key(k_ltex), *list, 1, key(k_stat)), fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
@@ -421,18 +466,25 @@ TEST_F(VegetationAuthoring, CAbiMapsLinkAuthoringAndCreateStatusesAndSurvivesRel
   EXPECT_EQ(radicle_plugin_remove_subrecord(plugin, rkey(k_tree), "PFPC", 0), RADICLE_STATUS_NOT_FOUND);
 
   size_t count = 0;
-  EXPECT_EQ(radicle_plugin_record_field_count(plugin, rkey(k_ltex), "LTEX\\Grass", &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_formlink_list_size(plugin, rkey(k_ltex), "LTEX\\Grasses", &count), RADICLE_STATUS_OK);
   EXPECT_EQ(count, 2u);
-  EXPECT_EQ(radicle_plugin_set_record_formlink(plugin, rkey(k_ltex), "LTEX\\Grass", 1, &grass), RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_plugin_set_record_formlink(plugin, rkey(k_ltex), "LTEX\\Grass", 2, &grass), RADICLE_STATUS_NOT_FOUND);
-  EXPECT_EQ(radicle_plugin_set_record_formlink(plugin, rkey(k_ltex), "LTEX\\Grass", 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_formlink_list_size(plugin, rkey(k_ltex_bare), "LTEX\\Grasses", &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 0u);
+  count = 99;
+  EXPECT_EQ(radicle_plugin_formlink_list_size(plugin, rkey(0x999), "LTEX\\Grasses", &count), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(count, 0u);
+  EXPECT_EQ(radicle_plugin_formlink_list_set(plugin, rkey(k_ltex), "LTEX\\Grasses", 1, &grass), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_formlink_list_set(plugin, rkey(k_ltex), "LTEX\\Grasses", 1, &grass), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_formlink_list_set(plugin, rkey(k_ltex), "LTEX\\Grasses", 0, &stat), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_formlink_list_set(plugin, rkey(k_ltex), "LTEX\\Grasses", 2, &grass), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_formlink_list_set(plugin, rkey(k_ltex), "LTEX\\Grasses", 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_formlink_list_insert(plugin, rkey(k_ltex), "LTEX\\Grasses", 2, &grass), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_formlink_list_insert(plugin, rkey(k_ltex), "LTEX\\Grasses", 0, &stat), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_formlink_list_size(plugin, rkey(k_ltex), "LTEX\\Grasses", &count), RADICLE_STATUS_OK);
   EXPECT_EQ(count, 3u);
   EXPECT_EQ(radicle_plugin_formlink_list_remove(plugin, rkey(k_ltex), "LTEX\\Grasses", 0), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_remove_subrecord(plugin, rkey(k_ltex), "GNAM", 0), RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_plugin_record_field_count(plugin, rkey(k_ltex), "LTEX\\Grass", &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_formlink_list_size(plugin, rkey(k_ltex), "LTEX\\Grasses", &count), RADICLE_STATUS_OK);
   EXPECT_EQ(count, 1u);
 
   radicle_form_key created_gras{}, created_tree{}, created_flor{}, created_ltex{}, refused_key{};

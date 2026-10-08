@@ -2,11 +2,11 @@
 #include "fo4/c_api_records.h"
 #include "fo4/c_api_materials.h"
 #include "fo4/c_api_maintenance.h"
-#include "fo4/c_api_vegetation.h"
 #include "fo4/c_api_pex.h"
 #include "fo4/c_api_seq.h"
 #include "fo4/c_api_quest.h"
 #include "fo4/c_api_authoring.h"
+#include "fo4/c_api_vegetation.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -427,6 +427,110 @@ int main() {
   printf("MaterialSwap.Substitutions %zu\n", offsetof(radicle_material_swap, substitutions));
   printf("MaterialSwap.SubstitutionCount %zu\n", offsetof(radicle_material_swap, substitution_count));
   printf("MaterialSwap.Internal %zu\n", offsetof(radicle_material_swap, internal));
+  printf("PexHeader %zu\n", sizeof(radicle_pex_header));
+  printf("PexHeader.MajorVersion %zu\n", offsetof(radicle_pex_header, major_version));
+  printf("PexHeader.MinorVersion %zu\n", offsetof(radicle_pex_header, minor_version));
+  printf("PexHeader.GameId %zu\n", offsetof(radicle_pex_header, game_id));
+  printf("PexHeader.CompilationTime %zu\n", offsetof(radicle_pex_header, compilation_time));
+  printf("PexHeader.StringCount %zu\n", offsetof(radicle_pex_header, string_count));
+  printf("PexHeader.ObjectCount %zu\n", offsetof(radicle_pex_header, object_count));
+  printf("PexObjectCounts %zu\n", sizeof(radicle_pex_object_counts));
+  printf("PexObjectCounts.StructCount %zu\n", offsetof(radicle_pex_object_counts, struct_count));
+  printf("PexObjectCounts.VariableCount %zu\n", offsetof(radicle_pex_object_counts, variable_count));
+  printf("PexObjectCounts.PropertyCount %zu\n", offsetof(radicle_pex_object_counts, property_count));
+  printf("PexObjectCounts.StateCount %zu\n", offsetof(radicle_pex_object_counts, state_count));
+  printf("PexObjectCounts.FunctionCount %zu\n", offsetof(radicle_pex_object_counts, function_count));
+  printf("PexValue %zu\n", sizeof(radicle_pex_value));
+  printf("PexValue.Type %zu\n", offsetof(radicle_pex_value, type));
+  printf("PexValue.Boolean %zu\n", offsetof(radicle_pex_value, boolean));
+  printf("PexValue.Integer %zu\n", offsetof(radicle_pex_value, integer));
+  printf("PexValue.Real %zu\n", offsetof(radicle_pex_value, real));
+  printf("PexValue.String %zu\n", offsetof(radicle_pex_value, string));
+  printf("PexTypedName %zu\n", sizeof(radicle_pex_typed_name));
+  printf("PexTypedName.Name %zu\n", offsetof(radicle_pex_typed_name, name));
+  printf("PexTypedName.Type %zu\n", offsetof(radicle_pex_typed_name, type));
+  printf("PexInstruction %zu\n", sizeof(radicle_pex_instruction));
+  printf("PexInstruction.Opcode %zu\n", offsetof(radicle_pex_instruction, opcode));
+  printf("PexInstruction.Line %zu\n", offsetof(radicle_pex_instruction, line));
+  printf("PexInstruction.FirstArgument %zu\n", offsetof(radicle_pex_instruction, first_argument));
+  printf("PexInstruction.ArgumentCount %zu\n", offsetof(radicle_pex_instruction, argument_count));
+  printf("PexFunction %zu\n", sizeof(radicle_pex_function));
+  printf("PexFunction.State %zu\n", offsetof(radicle_pex_function, state));
+  printf("PexFunction.Name %zu\n", offsetof(radicle_pex_function, name));
+  printf("PexFunction.ReturnType %zu\n", offsetof(radicle_pex_function, return_type));
+  printf("PexFunction.UserFlags %zu\n", offsetof(radicle_pex_function, user_flags));
+  printf("PexFunction.IsGlobal %zu\n", offsetof(radicle_pex_function, is_global));
+  printf("PexFunction.IsNative %zu\n", offsetof(radicle_pex_function, is_native));
+  printf("PexFunction.FirstParameter %zu\n", offsetof(radicle_pex_function, first_parameter));
+  printf("PexFunction.ParameterCount %zu\n", offsetof(radicle_pex_function, parameter_count));
+  printf("PexFunction.FirstLocal %zu\n", offsetof(radicle_pex_function, first_local));
+  printf("PexFunction.LocalCount %zu\n", offsetof(radicle_pex_function, local_count));
+  printf("PexFunction.FirstInstruction %zu\n", offsetof(radicle_pex_function, first_instruction));
+  printf("PexFunction.InstructionCount %zu\n", offsetof(radicle_pex_function, instruction_count));
+  printf("PexState %zu\n", sizeof(radicle_pex_state));
+  printf("PexState.Name %zu\n", offsetof(radicle_pex_state, name));
+  printf("PexState.FirstFunction %zu\n", offsetof(radicle_pex_state, first_function));
+  printf("PexState.FunctionCount %zu\n", offsetof(radicle_pex_state, function_count));
+  printf("PexVariable %zu\n", sizeof(radicle_pex_variable));
+  printf("PexVariable.Name %zu\n", offsetof(radicle_pex_variable, name));
+  printf("PexVariable.Type %zu\n", offsetof(radicle_pex_variable, type));
+  printf("PexVariable.UserFlags %zu\n", offsetof(radicle_pex_variable, user_flags));
+  printf("PexVariable.IsConst %zu\n", offsetof(radicle_pex_variable, is_const));
+  printf("PexVariable.HasDefault %zu\n", offsetof(radicle_pex_variable, has_default));
+  printf("PexVariable.DefaultValue %zu\n", offsetof(radicle_pex_variable, default_value));
+  printf("PexProperty %zu\n", sizeof(radicle_pex_property));
+  printf("PexProperty.Name %zu\n", offsetof(radicle_pex_property, name));
+  printf("PexProperty.Type %zu\n", offsetof(radicle_pex_property, type));
+  printf("PexProperty.UserFlags %zu\n", offsetof(radicle_pex_property, user_flags));
+  printf("PexProperty.Flags %zu\n", offsetof(radicle_pex_property, flags));
+  printf("PexProperty.AutoVarName %zu\n", offsetof(radicle_pex_property, auto_var_name));
+  printf("PexProperty.ReadFunction %zu\n", offsetof(radicle_pex_property, read_function));
+  printf("PexProperty.WriteFunction %zu\n", offsetof(radicle_pex_property, write_function));
+  printf("PexStruct %zu\n", sizeof(radicle_pex_struct));
+  printf("PexStruct.Name %zu\n", offsetof(radicle_pex_struct, name));
+  printf("PexStruct.FirstMember %zu\n", offsetof(radicle_pex_struct, first_member));
+  printf("PexStruct.MemberCount %zu\n", offsetof(radicle_pex_struct, member_count));
+  printf("PexObjectCode %zu\n", sizeof(radicle_pex_object_code));
+  printf("PexObjectCode.AutoStateName %zu\n", offsetof(radicle_pex_object_code, auto_state_name));
+  printf("PexObjectCode.States %zu\n", offsetof(radicle_pex_object_code, states));
+  printf("PexObjectCode.StateCount %zu\n", offsetof(radicle_pex_object_code, state_count));
+  printf("PexObjectCode.Functions %zu\n", offsetof(radicle_pex_object_code, functions));
+  printf("PexObjectCode.FunctionCount %zu\n", offsetof(radicle_pex_object_code, function_count));
+  printf("PexObjectCode.TypedNames %zu\n", offsetof(radicle_pex_object_code, typed_names));
+  printf("PexObjectCode.TypedNameCount %zu\n", offsetof(radicle_pex_object_code, typed_name_count));
+  printf("PexObjectCode.Instructions %zu\n", offsetof(radicle_pex_object_code, instructions));
+  printf("PexObjectCode.InstructionCount %zu\n", offsetof(radicle_pex_object_code, instruction_count));
+  printf("PexObjectCode.Values %zu\n", offsetof(radicle_pex_object_code, values));
+  printf("PexObjectCode.ValueCount %zu\n", offsetof(radicle_pex_object_code, value_count));
+  printf("PexObjectCode.Variables %zu\n", offsetof(radicle_pex_object_code, variables));
+  printf("PexObjectCode.VariableCount %zu\n", offsetof(radicle_pex_object_code, variable_count));
+  printf("PexObjectCode.Properties %zu\n", offsetof(radicle_pex_object_code, properties));
+  printf("PexObjectCode.PropertyCount %zu\n", offsetof(radicle_pex_object_code, property_count));
+  printf("PexObjectCode.Structs %zu\n", offsetof(radicle_pex_object_code, structs));
+  printf("PexObjectCode.StructCount %zu\n", offsetof(radicle_pex_object_code, struct_count));
+  printf("PexObjectCode.StructMembers %zu\n", offsetof(radicle_pex_object_code, struct_members));
+  printf("PexObjectCode.StructMemberCount %zu\n", offsetof(radicle_pex_object_code, struct_member_count));
+  printf("QuestProperty %zu\n", sizeof(radicle_quest_property));
+  printf("QuestProperty.Owner %zu\n", offsetof(radicle_quest_property, owner));
+  printf("QuestProperty.Alias %zu\n", offsetof(radicle_quest_property, alias));
+  printf("QuestProperty.Script %zu\n", offsetof(radicle_quest_property, script));
+  printf("QuestProperty.Name %zu\n", offsetof(radicle_quest_property, name));
+  printf("QuestProperty.Type %zu\n", offsetof(radicle_quest_property, type));
+  printf("QuestProperty.Flags %zu\n", offsetof(radicle_quest_property, flags));
+  printf("QuestProperty.HasInteger %zu\n", offsetof(radicle_quest_property, has_integer));
+  printf("QuestProperty.Integer %zu\n", offsetof(radicle_quest_property, integer));
+  printf("QuestProperty.HasReal %zu\n", offsetof(radicle_quest_property, has_real));
+  printf("QuestProperty.Real %zu\n", offsetof(radicle_quest_property, real));
+  printf("QuestProperty.HasBoolean %zu\n", offsetof(radicle_quest_property, has_boolean));
+  printf("QuestProperty.Boolean %zu\n", offsetof(radicle_quest_property, boolean));
+  printf("QuestProperty.Text %zu\n", offsetof(radicle_quest_property, text));
+  printf("QuestProperty.TextSize %zu\n", offsetof(radicle_quest_property, text_size));
+  printf("QuestProperty.HasObject %zu\n", offsetof(radicle_quest_property, has_object));
+  printf("QuestProperty.ObjectFormId %zu\n", offsetof(radicle_quest_property, object_form_id));
+  printf("QuestProperty.HasPropertyAlias %zu\n", offsetof(radicle_quest_property, has_property_alias));
+  printf("QuestProperty.PropertyAlias %zu\n", offsetof(radicle_quest_property, property_alias));
+  printf("QuestProperty.HasElementCount %zu\n", offsetof(radicle_quest_property, has_element_count));
+  printf("QuestProperty.ElementCount %zu\n", offsetof(radicle_quest_property, element_count));
   printf("GrassInfo %zu\n", sizeof(radicle_grass_info));
   printf("GrassInfo.HasData %zu\n", offsetof(radicle_grass_info, has_data));
   printf("GrassInfo.Density %zu\n", offsetof(radicle_grass_info, density));
@@ -456,39 +560,5 @@ int main() {
   printf("GrassLinks.Grasses %zu\n", offsetof(radicle_grass_links, grasses));
   printf("GrassLinks.GrassCount %zu\n", offsetof(radicle_grass_links, grass_count));
   printf("GrassLinks.Internal %zu\n", offsetof(radicle_grass_links, internal));
-  printf("PexHeader %zu\n", sizeof(radicle_pex_header));
-  printf("PexHeader.MajorVersion %zu\n", offsetof(radicle_pex_header, major_version));
-  printf("PexHeader.MinorVersion %zu\n", offsetof(radicle_pex_header, minor_version));
-  printf("PexHeader.GameId %zu\n", offsetof(radicle_pex_header, game_id));
-  printf("PexHeader.CompilationTime %zu\n", offsetof(radicle_pex_header, compilation_time));
-  printf("PexHeader.StringCount %zu\n", offsetof(radicle_pex_header, string_count));
-  printf("PexHeader.ObjectCount %zu\n", offsetof(radicle_pex_header, object_count));
-  printf("PexObjectCounts %zu\n", sizeof(radicle_pex_object_counts));
-  printf("PexObjectCounts.StructCount %zu\n", offsetof(radicle_pex_object_counts, struct_count));
-  printf("PexObjectCounts.VariableCount %zu\n", offsetof(radicle_pex_object_counts, variable_count));
-  printf("PexObjectCounts.PropertyCount %zu\n", offsetof(radicle_pex_object_counts, property_count));
-  printf("PexObjectCounts.StateCount %zu\n", offsetof(radicle_pex_object_counts, state_count));
-  printf("PexObjectCounts.FunctionCount %zu\n", offsetof(radicle_pex_object_counts, function_count));
-  printf("QuestProperty %zu\n", sizeof(radicle_quest_property));
-  printf("QuestProperty.Owner %zu\n", offsetof(radicle_quest_property, owner));
-  printf("QuestProperty.Alias %zu\n", offsetof(radicle_quest_property, alias));
-  printf("QuestProperty.Script %zu\n", offsetof(radicle_quest_property, script));
-  printf("QuestProperty.Name %zu\n", offsetof(radicle_quest_property, name));
-  printf("QuestProperty.Type %zu\n", offsetof(radicle_quest_property, type));
-  printf("QuestProperty.Flags %zu\n", offsetof(radicle_quest_property, flags));
-  printf("QuestProperty.HasInteger %zu\n", offsetof(radicle_quest_property, has_integer));
-  printf("QuestProperty.Integer %zu\n", offsetof(radicle_quest_property, integer));
-  printf("QuestProperty.HasReal %zu\n", offsetof(radicle_quest_property, has_real));
-  printf("QuestProperty.Real %zu\n", offsetof(radicle_quest_property, real));
-  printf("QuestProperty.HasBoolean %zu\n", offsetof(radicle_quest_property, has_boolean));
-  printf("QuestProperty.Boolean %zu\n", offsetof(radicle_quest_property, boolean));
-  printf("QuestProperty.Text %zu\n", offsetof(radicle_quest_property, text));
-  printf("QuestProperty.TextSize %zu\n", offsetof(radicle_quest_property, text_size));
-  printf("QuestProperty.HasObject %zu\n", offsetof(radicle_quest_property, has_object));
-  printf("QuestProperty.ObjectFormId %zu\n", offsetof(radicle_quest_property, object_form_id));
-  printf("QuestProperty.HasPropertyAlias %zu\n", offsetof(radicle_quest_property, has_property_alias));
-  printf("QuestProperty.PropertyAlias %zu\n", offsetof(radicle_quest_property, property_alias));
-  printf("QuestProperty.HasElementCount %zu\n", offsetof(radicle_quest_property, has_element_count));
-  printf("QuestProperty.ElementCount %zu\n", offsetof(radicle_quest_property, element_count));
   return 0;
 }

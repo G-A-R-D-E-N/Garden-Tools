@@ -205,7 +205,7 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
     const auto* loaded = findPlugin(sourceWinner->plugin.filename());
     const auto* record = loaded == nullptr ? nullptr : fo4::find_record(loaded->plugin, key);
     if (record != nullptr) {
-        for (const auto& issue : fo4::schema::preflight_record(*record)) {
+        for (const auto& issue : fo4::schema::preflight_record(*record, loaded->plugin.header.tes4_flags.is_localized())) {
             rows.push_back({
                 {"Severity", issue.severity == fo4::schema::PreflightSeverity::error
                                      ? "critical"

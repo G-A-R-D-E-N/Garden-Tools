@@ -121,4 +121,3 @@ TEST_F(VegetationRead, PresentGrassDataUsesZeroFilledPrefixAndTreeKeepsOtherLeng
 }
 
 }
-

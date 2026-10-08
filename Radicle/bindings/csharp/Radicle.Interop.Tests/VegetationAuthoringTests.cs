@@ -45,6 +45,30 @@ public class VegetationAuthoringTests
 
     private static Status Refusal(Action action) => Assert.Throws<RadicleException>(action).Status;
 
+    [Theory]
+    [InlineData("TREE", "TREE\\Ingredient", "PFIG", "MISC")]
+    [InlineData("TREE", "TREE\\HarvestSound", "SNAM", "SNDR")]
+    [InlineData("FLOR", "FLOR\\Ingredient", "PFIG", "MISC")]
+    [InlineData("FLOR", "FLOR\\HarvestSound", "SNAM", "SNDR")]
+    [InlineData("LTEX", "LTEX\\Grasses", "GNAM", "GRAS")]
+    public void MalformedLinkPayloadsRefuseWithoutChangingBytes(string record, string field, string subrecord, string targetType)
+    {
+        foreach (var size in new[] { 0, 3, 5, 8 })
+        {
+            using var temp = new TempDirectory();
+            var source = Build(1, Array.Empty<string>(),
+                Top(record, new Rec(record, 0x820, new[] { (subrecord, new byte[size]) })),
+                Top(targetType, new Rec(targetType, 0x821, new[] { ("EDID", Z("Target")) })));
+            using var plugin = PluginFile.Read(temp.Write(Plugin, source));
+            Assert.Equal(Status.InvalidArgument, Refusal(() =>
+            {
+                if (record == "LTEX") plugin.FormLinkListSet(K(0x820), field, 0, K(0x821));
+                else plugin.SetFormLink(K(0x820), field, K(0x821));
+            }));
+            Assert.Equal(source, plugin.ToBytes());
+        }
+    }
+
     [Fact]
     public void LinkEditsEnforceTargetTypesAndNullabilityAndSurviveReload()
     {
@@ -92,18 +116,21 @@ public class VegetationAuthoringTests
         using var plugin = PluginFile.Read(path);
         var grass2 = K(0x806);
 
-        Assert.Equal(2, plugin.FieldCount(Ltex, "LTEX\\Grass"));
-        Assert.Equal(0, plugin.FieldCount(LtexBare, "LTEX\\Grass"));
-        Assert.Equal(0, plugin.FieldCount(K(0x999), "LTEX\\Grass"));
-        Assert.True(plugin.SetFormLink(Ltex, "LTEX\\Grass", Gras, 1));
-        Assert.False(plugin.SetFormLink(Ltex, "LTEX\\Grass", Gras, 2));
-        Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.SetFormLink(Ltex, "LTEX\\Grass", null, 0)));
-        Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.SetFormLink(Ltex, "LTEX\\Grass", Stat, 0)));
+        Assert.Equal(2, plugin.FormLinkListCount(Ltex, "LTEX\\Grasses"));
+        Assert.Equal(0, plugin.FormLinkListCount(LtexBare, "LTEX\\Grasses"));
+        Assert.Equal(0, plugin.FormLinkListCount(K(0x999), "LTEX\\Grasses"));
+        Assert.True(plugin.FormLinkListSet(Ltex, "LTEX\\Grasses", 1, Gras));
+        var settled = plugin.ToBytes();
+        Assert.True(plugin.FormLinkListSet(Ltex, "LTEX\\Grasses", 1, Gras));
+        Assert.Equal(settled, plugin.ToBytes());
+        Assert.False(plugin.FormLinkListSet(Ltex, "LTEX\\Grasses", 2, Gras));
+        Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.FormLinkListSet(Ltex, "LTEX\\Grasses", 0, null)));
+        Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.FormLinkListSet(Ltex, "LTEX\\Grasses", 0, Stat)));
+        Assert.Equal(settled, plugin.ToBytes());
         Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.AddSubrecord(Ltex, "GNAM")));
 
         Assert.True(plugin.FormLinkListInsert(Ltex, "LTEX\\Grasses", 2, Gras));
         Assert.Equal(3, plugin.FormLinkListCount(Ltex, "LTEX\\Grasses"));
-        Assert.Equal(3, plugin.FieldCount(Ltex, "LTEX\\Grass"));
         Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.FormLinkListInsert(Ltex, "LTEX\\Grasses", 0, Stat)));
         Assert.True(plugin.RemoveSubrecord(Ltex, "GNAM", 0));
         Assert.False(plugin.RemoveSubrecord(Ltex, "GNAM", 2));
