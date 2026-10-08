@@ -48,6 +48,7 @@ bool hasRow(char** rows, size_t count, const std::string& expected) {
   }
   return false;
 }
+
 const radicle_quest_property* findProperty(const radicle_quest_property* properties, size_t count,
                                            const std::string& name) {
   for (size_t index = 0; index < count; ++index) {
@@ -404,7 +405,7 @@ TEST(CApiQuest, MalformedFormKeyReturnsInvalidArgument) {
   radicle_plugin_destroy(plugin);
 }
 
-TEST(CApiQuest, AbiVersionIsTwentyOne) {
-  EXPECT_EQ(radicle_abi_version(), 21u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 21u);
+TEST(CApiQuest, AbiVersionIsTwelve) {
+  EXPECT_EQ(radicle_abi_version(), 12u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, 12u);
 }

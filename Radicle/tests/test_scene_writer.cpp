@@ -12,7 +12,7 @@ Scalar set(fo4::Plugin& plugin, const char* path, std::size_t group, const char*
   return fo4::set_scene_scalar(plugin, key(id), path, group, value);
 }
 
-}  // namespace
+}
 
 TEST(SceneWriter, GroupFieldsAreAddressedByExplicitGroupIndex) {
   auto plugin = read(build());

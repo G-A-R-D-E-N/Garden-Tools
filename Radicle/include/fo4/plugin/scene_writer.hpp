@@ -27,4 +27,4 @@ FormLinkFieldMutationStatus set_scene_formlink(Plugin& plugin,
 
 std::optional<std::size_t> scene_group_count(const Plugin& plugin, const FormKey& scene, ScenePart part);
 
-}  // namespace fo4
+}

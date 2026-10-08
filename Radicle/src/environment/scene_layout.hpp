@@ -34,4 +34,4 @@ public:
 
 SceneLayout scene_layout(std::span<const Subrecord> subs);
 
-}  // namespace fo4::env::detail
+}

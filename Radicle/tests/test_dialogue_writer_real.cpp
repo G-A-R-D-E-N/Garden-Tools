@@ -107,15 +107,15 @@ std::map<fo4::FormKey, Bytes> snapshot(const fo4::Plugin& plugin) {
   return out;
 }
 
-}  // namespace
+}
 
 TEST_P(DialogueWriterReal, EveryOfficialRecordFollowsTheAuthoringOrderPlacementAndResponseShape) {
   bool skip = false;
   const auto path = official(GetParam(), skip);
-  if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   auto plugin = fo4::read_plugin_file(path);
   fo4::assign_record_form_keys(plugin);
-  std::map<std::string, int> totals, unlisted, sampled;
+  std::map<std::string, int> totals{{"DIAL", 0}, {"INFO", 0}, {"SCEN", 0}}, unlisted, sampled;
   std::vector<std::string> violators, incomplete, preflight;
   for (const auto& group : plugin.groups) {
     walk(group, [&](const fo4::Record& record, std::int32_t parent) {
@@ -155,7 +155,7 @@ TEST_P(DialogueWriterReal, EveryOfficialRecordFollowsTheAuthoringOrderPlacementA
 TEST_P(DialogueWriterReal, CappedFieldSceneAndSubrecordEditsKeepEveryOtherRecordByteIdentical) {
   bool skip = false;
   const auto path = official(GetParam(), skip);
-  if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   auto plugin = fo4::read_plugin_file(path);
   fo4::assign_record_form_keys(plugin);
   const auto original = snapshot(plugin);
@@ -168,7 +168,6 @@ TEST_P(DialogueWriterReal, CappedFieldSceneAndSubrecordEditsKeepEveryOtherRecord
     first_of.emplace(record.header.signature, record.form_key);
     if (is_dialogue(record.header.signature)) { records.push_back(&record); }
   });
-  if (records.empty()) GTEST_SKIP() << "master has no dialogue records";
 
   std::map<fo4::FormKey, std::vector<Bytes>> expected;
   std::map<std::string, int> per_path;

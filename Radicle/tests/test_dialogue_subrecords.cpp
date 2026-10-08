@@ -27,7 +27,7 @@ bool has_issue(const fo4::Plugin& plugin, std::uint32_t id, const std::string& c
   return false;
 }
 
-}  // namespace
+}
 
 TEST(DialogueSubrecords, TopicOptionalSubrecordsFollowTheXEditOrder) {
   auto plugin = read(build());

@@ -51,6 +51,33 @@ public class DialogueAuthoringTests
 
     private static Status Refusal(Action action) => Assert.Throws<RadicleException>(action).Status;
 
+    [Theory]
+    [InlineData("DIAL", "BNAM", "DIAL\\Branch", "DLBR")]
+    [InlineData("DIAL", "QNAM", "DIAL\\Quest", "QUST")]
+    [InlineData("DIAL", "KNAM", "DIAL\\Keyword", "KYWD")]
+    [InlineData("INFO", "TPIC", "INFO\\PreviousTopic", "DIAL")]
+    [InlineData("INFO", "PNAM", "INFO\\PreviousInfo", "INFO")]
+    [InlineData("INFO", "DNAM", "INFO\\SharedInfo", "INFO")]
+    [InlineData("INFO", "GNAM", "INFO\\InfoGroup", "INFO")]
+    [InlineData("INFO", "ANAM", "INFO\\Speaker", "NPC_")]
+    [InlineData("INFO", "TSCE", "INFO\\StartScene", "SCEN")]
+    [InlineData("INFO", "ONAM", "INFO\\AudioOutputOverride", "SOPM")]
+    [InlineData("INFO", "MODQ", "INFO\\ResetGlobal", "GLOB")]
+    public void MalformedTopLevelLinksRefuseWithoutChangingBytes(string record, string subrecord, string field, string target)
+    {
+        foreach (var size in new[] { 0, 3, 5, 8 })
+        {
+            using var temp = new TempDirectory();
+            var source = Build(1, Array.Empty<string>(),
+                Top(record, new Rec(record, 0x800, new[] { (subrecord, Enumerable.Repeat((byte)0x55, size).ToArray()) })),
+                Top(target, new Rec(target, 0x801, new[] { ("EDID", Z("Target")) })));
+            using var plugin = PluginFile.Read(temp.Write(Plugin, source));
+            var before = plugin.ToBytes();
+            Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.SetFormLink(K(0x800), field, K(0x801))));
+            Assert.Equal(before, plugin.ToBytes());
+        }
+    }
+
     [Fact]
     public void TopicAndInfoFieldsAndAuthoringSurviveReload()
     {

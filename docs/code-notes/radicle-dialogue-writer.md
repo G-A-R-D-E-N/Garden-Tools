@@ -16,7 +16,7 @@ shares the existing lookup/reassign fallback used by scene and subrecord writers
 presence for every official action through native and C ABI decoders.
 
 Source for every layout, order, default and required flag: pinned TES5Edit `wbDefinitionsFO4.pas` at
-`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `radicle-339-20261004/build/wbDefinitionsFO4.pas`: DIAL 6309-6475,
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `build/xedit/wbDefinitionsFO4.pas`: DIAL 6309-6475,
 SCEN 8879-9133, INFO 9672-9786) and `wbDefinitionsCommon.pas` (`wbINOM`/`wbINOA` 8604-8624). Official measurements are
 over the seven shipped masters: 46,427 DIAL, 102,462 INFO, 4,778 SCEN (DLCworkshop02.esm has none).
 
@@ -28,8 +28,8 @@ over the seven shipped masters: 46,427 DIAL, 102,462 INFO, 4,778 SCEN (DLCworksh
   `c_api.h` (ABI), `Radicle/tests/test_c_api_quest.cpp` (ABI pin) and the generated `RadicleNative.g.cs`. Every generated
   file (scalar, record, lstring, FormLink and condition-scope tables, `RadicleNative.g.cs`, `abi_layout_probe.cpp`) was
   regenerated with its tool.
-- ABI 21 is provisional (#406 had 12, W0 10, sound 20); `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwentyOne` pins
-  it. The bump also covers the three scene-writer exports below. Reassign from current main before merging.
+- ABI 12 advances current main ABI 11 by one; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwelve` pins it.
+  The bump also covers the three scene-writer exports below. Re-bump if another additive ABI PR merges first.
 
 ## Radicle/src/environment/scene_layout.cpp:scene_layout (reader fix)
 
@@ -91,8 +91,8 @@ All `existing_only`, `presentation: identity`, f32 bounds +-1e9, enum bounds onl
 - Occurrence index equals response index for TRDA and NAM1-NAM4 only. Evidence: every one of the 96,768 official TRDA is
   20 bytes and is immediately followed by NAM1, NAM2, NAM3, NAM4 in that order, and each INFO has equal TRDA/NAM1-4 counts;
   none of those signatures occurs outside a response. `Radicle/tests/test_dialogue_writer_real.cpp:responses_are_complete`
-  re-checks this on every official INFO. The writer itself does not re-validate the group structure: on a malformed
-  third-party INFO with a missing NAM2 the index would drift (same known limit as the SNDR rate-group writers).
+  re-checks this on every official INFO. `Radicle/src/plugin/field_writer.cpp:response_shape_valid` validates the
+  group structure before repeated field counts or writes, preventing index drift on malformed third-party INFO.
 - SoundFile sits at the unaligned offset 5. W0 slots are byte offsets and the encode is a `memcpy`, so no alignment is
   assumed; `Radicle/src/schema/form_links.cpp` already visits TRDA 0 and 5 for remapping and `check_errors.cpp:slot_targets`
   matches offset 5. Test: `Radicle/tests/test_dialogue_writer.cpp:ResponsesAddressByResponseIndexIncludingTheUnalignedSoundFile`
@@ -114,14 +114,7 @@ master table) and removes the throw; target validation is unchanged.
 
 ## Radicle/src/schema/preflight.cpp:preflight_record (W0 change)
 
-A registered localized string field with a four-byte payload is no longer decoded as an inline string. `preflight_record`
-sees only the record, not the plugin's localized flag, and a string ID with a zero byte inside (0x00010045) or a high byte
-set (DLC IDs) is not a single NUL-terminated string. Before this, the official masters produced 26,544
-`invalid_scalar_storage` errors on INFO NAM1/RNAM and DIAL FULL (Fallout4.esm 792, DLCRobot 2,967, DLCworkshop01 3,
-DLCCoast 11,733, DLCworkshop03 1,055, DLCNukaWorld 9,994), and every add on such a record failed `layout_valid` as
-`unknown_order`. The writer
-still refuses strings on localized fields in localized plugins (`field_writer.cpp:write_scalar`). Test:
-`Radicle/tests/test_dialogue_subrecords.cpp:LocalizedTopicCannotAddAnInlineName`.
+Localized string IDs are validated using the owning plugin flag passed explicitly to `preflight_record`, rather than inferred from payload width. Four-byte inline strings remain subject to inline validation in nonlocalized plugins. The writer refuses inline edits on localized fields in localized plugins. Regressions: `Radicle/tests/test_dialogue_writer.cpp:PreflightUsesThePluginLocalizedFlagInsteadOfGuessingFromFourBytePayloads` and `Radicle/tests/test_dialogue_subrecords.cpp:LocalizedTopicCannotAddAnInlineName`.
 
 ## Radicle/include/fo4/schema/record_constraints.hpp:RecordPlacement (W0 change)
 
@@ -207,3 +200,19 @@ passes). The TRDA emotion sentinel is skipped as none.
   of the master is byte-identical after save and reparse and that every edited record still decodes. The caps keep the
   Fallout4.esm case near 75 s; every field write walks the whole master to assign form keys and find the record, so an
   uncapped INFO sweep over 78,087 records would take hours.
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION; .github/workflows/native-ci.yml:native-linux,native-windows-tests
+
+The main integration preserves the existing exports, generated PEX additions, strict offline managed restore, and both required pull-request checks. Dialogue uses ABI 12 over main ABI 11; another additive ABI merge requires a re-bump. The manual Radicle-only cross lane and Windows Release artifact remain available.
+
+## Radicle/src/plugin/field_writer.cpp:formlink_slots; Radicle/schema/fallout4/fields.json:DIAL,INFO
+
+The eleven top-level DIAL/INFO FormIDs require exactly four-byte payloads, matching xEdit 93cc0bc5 lines 6318-6320 and 9724-9786 and the native decoder. Previously the shared writer accepted five- or eight-byte payloads and overwrote the first four bytes. The existing payload_sizes mechanism from the climate/weather writer is reused to fail closed before any mutation or field count. INFO TRDA keeps its existing complete-response guard. `Radicle/tests/test_dialogue_writer_c_api.cpp:MalformedTopLevelLinksRefuseNativeAndCApiWritesWithoutChangingBytes` covers all eleven paths at sizes 0, 3, 5 and 8 through native and C ABI writers.
+
+## Radicle/tests/test_dialogue_real.cpp:EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentical; Radicle/tests/test_dialogue_writer_real.cpp:CappedFieldSceneAndSubrecordEditsKeepEveryOtherRecordByteIdentical
+
+The seven-master reader sweep compares all native/C values, optional flags, resolved links, UTF-8 text, raw condition operands, scoped arrays and opaque action payload bytes; priorities compare by float bits. Record totals and unchanged master identity remain asserted. Empty dialogue families still execute the identity and zero-count checks and complete without a skip; the writer sweep similarly validates every unchanged record on empty masters.
+
+## Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:SetSceneScalar; Radicle/bindings/csharp/Radicle.Interop.Tests/DialogueAuthoringTests.cs:MalformedTopLevelLinksRefuseWithoutChangingBytes
+
+The scene setter addresses the scene, phase, actor or action scope by explicit group index and returns false when the selected record, group or subrecord is absent. Managed malformed-link regressions cover all eleven top-level paths with the same 0, 3, 5 and 8-byte payloads and assert unchanged serialized bytes.

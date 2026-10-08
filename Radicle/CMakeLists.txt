@@ -491,12 +491,12 @@ if(RADICLE_BUILD_TESTS)
                      -P ${_interop_dir}/tools/check_generated_eol.cmake)
   endif()
 
-  option(RADICLE_CSHARP_TESTS "Run the C# binding tests with dotnet (needs the .NET 8 SDK and NuGet access)" OFF)
+  option(RADICLE_CSHARP_TESTS "Run the C# binding tests with the .NET 8 SDK and checked-in package feed" OFF)
   if(RADICLE_CSHARP_TESTS)
     find_program(DOTNET_EXECUTABLE dotnet REQUIRED)
     add_test(NAME radicle_csharp_bindings
-             COMMAND ${DOTNET_EXECUTABLE} test ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/Radicle.Interop.Tests
-                     --nologo -v q)
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/tools/run_managed_tests.py
+                     --dotnet ${DOTNET_EXECUTABLE})
     set_tests_properties(radicle_csharp_bindings PROPERTIES
       ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>;RADICLE_ABI_STUB_V4=$<TARGET_FILE:radicle_abi_stub_v4>")
   endif()

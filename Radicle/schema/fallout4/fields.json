@@ -1377,6 +1377,7 @@
       "formlink_fields": [
         {
           "path": "DIAL\\Branch",
+          "payload_sizes": [4],
           "label": "Branch",
           "subrecord": "BNAM",
           "offset": 0,
@@ -1388,6 +1389,7 @@
         },
         {
           "path": "DIAL\\Quest",
+          "payload_sizes": [4],
           "label": "Quest",
           "subrecord": "QNAM",
           "offset": 0,
@@ -1399,6 +1401,7 @@
         },
         {
           "path": "DIAL\\Keyword",
+          "payload_sizes": [4],
           "label": "Keyword",
           "subrecord": "KNAM",
           "offset": 0,
@@ -1702,6 +1705,7 @@
       "formlink_fields": [
         {
           "path": "INFO\\PreviousTopic",
+          "payload_sizes": [4],
           "label": "Previous topic",
           "subrecord": "TPIC",
           "offset": 0,
@@ -1713,6 +1717,7 @@
         },
         {
           "path": "INFO\\PreviousInfo",
+          "payload_sizes": [4],
           "label": "Previous INFO",
           "subrecord": "PNAM",
           "offset": 0,
@@ -1724,6 +1729,7 @@
         },
         {
           "path": "INFO\\SharedInfo",
+          "payload_sizes": [4],
           "label": "Shared INFO",
           "subrecord": "DNAM",
           "offset": 0,
@@ -1735,6 +1741,7 @@
         },
         {
           "path": "INFO\\InfoGroup",
+          "payload_sizes": [4],
           "label": "INFO group",
           "subrecord": "GNAM",
           "offset": 0,
@@ -1770,6 +1777,7 @@
         },
         {
           "path": "INFO\\Speaker",
+          "payload_sizes": [4],
           "label": "Speaker",
           "subrecord": "ANAM",
           "offset": 0,
@@ -1781,6 +1789,7 @@
         },
         {
           "path": "INFO\\StartScene",
+          "payload_sizes": [4],
           "label": "Start scene",
           "subrecord": "TSCE",
           "offset": 0,
@@ -1792,6 +1801,7 @@
         },
         {
           "path": "INFO\\AudioOutputOverride",
+          "payload_sizes": [4],
           "label": "Audio output override",
           "subrecord": "ONAM",
           "offset": 0,
@@ -1803,6 +1813,7 @@
         },
         {
           "path": "INFO\\ResetGlobal",
+          "payload_sizes": [4],
           "label": "Reset global",
           "subrecord": "MODQ",
           "offset": 0,

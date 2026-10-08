@@ -8,11 +8,6 @@ name: native-ci
 # pull_request trigger only; work-branch push runs are intentionally omitted so
 # one PR commit does not consume two self-hosted CI slots.
 
-# Paths that no native target or test reads skip this workflow: the C#/.NET
-# tools (BGS/, the FO4RecordEditor projects, Mutagen), the web frontend
-# (the native app only points at web/dist at runtime), F4LODGEN, and docs.
-# paths-ignore (not an explicit paths allowlist) is deliberate: a commit that
-# also touches anything else still runs the full build.
 on:
   push:
     branches:
@@ -28,16 +23,6 @@ on:
       - "docs/**"
       - "**/*.md"
   pull_request:
-    paths-ignore:
-      - "BGS/**"
-      - "F4LODGEN/**"
-      - "PluginEditTool/web/**"
-      - "PluginEditTool/FO4RecordEditor*/**"
-      - "PluginEditTool/Mutagen/**"
-      - "PluginEditTool/docs/**"
-      - "PluginEditTool/images/**"
-      - "docs/**"
-      - "**/*.md"
   workflow_dispatch:
     inputs:
       lane:
@@ -68,45 +53,12 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: "4"
 
 jobs:
-  # paths-ignore compares the whole pull request, so a docs-only follow-up push
-  # to a code PR still starts the full build. This job compares only the new push
-  # and skips the heavy jobs when it touched nothing but ignored paths. Any doubt
-  # (no before-sha, fetch failure) leaves run=true.
-  gate:
-    name: Gate (skip docs-only pushes)
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.lane != 'radicle-cross'
-    runs-on: [self-hosted, Linux, X64, garden]
-    timeout-minutes: 10
-    outputs:
-      run: ${{ steps.decide.outputs.run }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Decide
-        id: decide
-        env:
-          EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          run=true
-          if [ "$EVENT" = pull_request ] && [ -n "$BEFORE" ] \
-             && git fetch --depth=1 origin "$BEFORE" 2>/dev/null; then
-            if ! git diff --name-only "$BEFORE" HEAD \
-               | grep -qvE '^(BGS|F4LODGEN|docs)/|^PluginEditTool/(web|FO4RecordEditor[^/]*|Mutagen|docs|images)/|\.md$'; then
-              run=false
-            fi
-          fi
-          echo "gate run=$run (before=${BEFORE:-none})"
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-
   # PluginEditTool/native builds Radicle as a subproject, so one build covers
   # both: Radicle's own tests, tools and warnings-as-errors are switched on here
   # instead of compiling Radicle a second time in a separate job.
   native-linux:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.lane != 'radicle-cross'
     name: Native (Linux, Debug)
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 60
     steps:
@@ -116,7 +68,13 @@ jobs:
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          global-json-file: Radicle/bindings/csharp/global.json
+
+      - name: Restore RID consumer (linux-x64)
+        run: |
+          python3 -c 'import os, pathlib, shutil; root = pathlib.Path.cwd(); temp = pathlib.Path(os.environ["RUNNER_TEMP"]) / "radicle-consumer"; temp.mkdir(exist_ok=True); shutil.copy2(root / "Radicle/bindings/csharp/global.json", temp / "global.json"); (temp / "Consumer.csproj").write_text("<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><ProjectReference Include=\"" + str(root / "Radicle/bindings/csharp/Radicle.Interop/Radicle.Interop.csproj") + "\" /></ItemGroup></Project>")'
+          cd "$RUNNER_TEMP/radicle-consumer"
+          dotnet restore Consumer.csproj -r linux-x64
 
       - name: Find ccache
         run: |
@@ -151,6 +109,9 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build/native --output-on-failure --parallel 4
+
+      - name: Prove clean managed tests without external networking
+        run: unshare --user --map-root-user --net python3 Radicle/bindings/csharp/tools/run_managed_tests.py --build-dir build/native --network-isolated
 
       - name: Upload logs and binaries on failure
         if: failure()
@@ -309,9 +270,8 @@ jobs:
   # Builds in the job's own workspace with Ninja + ccache, so concurrent jobs
   # never share a build directory.
   native-windows-tests:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.lane != 'radicle-cross'
     name: Native tests (Windows, MSVC)
-    needs: gate
-    if: needs.gate.outputs.run == 'true'
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     defaults:
@@ -326,7 +286,19 @@ jobs:
         env:
           DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
         with:
-          dotnet-version: '8.0.x'
+          global-json-file: Radicle/bindings/csharp/global.json
+
+      - name: Restore RID consumer (win-x64)
+        shell: powershell
+        run: |
+          $consumer = Join-Path $env:RUNNER_TEMP 'radicle-consumer'
+          New-Item -ItemType Directory -Force $consumer | Out-Null
+          Copy-Item Radicle/bindings/csharp/global.json "$consumer/global.json"
+          $library = [Security.SecurityElement]::Escape((Resolve-Path Radicle/bindings/csharp/Radicle.Interop/Radicle.Interop.csproj).Path)
+          "<Project Sdk=`"Microsoft.NET.Sdk`"><PropertyGroup><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><ProjectReference Include=`"$library`" /></ItemGroup></Project>" | Set-Content "$consumer/Consumer.csproj"
+          Set-Location $consumer
+          dotnet restore Consumer.csproj -r win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Set up MSVC, Ninja and ccache
         shell: powershell

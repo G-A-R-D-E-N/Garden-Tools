@@ -146,7 +146,7 @@ std::optional<std::size_t> find_in(const Record& record, Range range, Signature 
   return found;
 }
 
-}  // namespace
+}
 
 ScalarMutationStatus set_scene_scalar(Plugin& plugin,
                                       const FormKey& scene,
@@ -223,4 +223,4 @@ std::optional<std::size_t> scene_group_count(const Plugin& plugin, const FormKey
   return std::nullopt;
 }
 
-}  // namespace fo4
+}

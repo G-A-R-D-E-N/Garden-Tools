@@ -74,6 +74,15 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
       !response_shape_valid(record)) {
     throw schema::FormLinkFieldError("INFO response fields require complete TRDA,NAM1..NAM4 groups");
   }
+  if (field.payload_sizes[0] != 0) {
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == field.subrecord &&
+          subrecord.data.size() != field.payload_sizes[0] &&
+          (field.payload_sizes[1] == 0 || subrecord.data.size() != field.payload_sizes[1])) {
+        throw schema::FormLinkFieldError(std::string(field.path) + " has unexpected payload size");
+      }
+    }
+  }
   schema::FieldShape shape;
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;
@@ -135,7 +144,7 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   return ScalarMutationStatus::updated;
 }
 
-}  // namespace
+}
 
 ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
@@ -243,4 +252,4 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
   throw schema::ScalarError("unknown field path: " + std::string(path));
 }
 
-}  // namespace fo4
+}

@@ -27,7 +27,7 @@ std::map<fo4::FormKey, Bytes> others(const fo4::Plugin& plugin, std::uint32_t ed
   return out;
 }
 
-}  // namespace
+}
 
 TEST(DialogueWriter, TopicFieldsAndLinksWriteInPlaceAndKeepOtherRecords) {
   const auto source = read(build());

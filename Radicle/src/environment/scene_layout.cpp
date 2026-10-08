@@ -25,7 +25,7 @@ std::size_t action_header_end(std::span<const Subrecord> subs, std::size_t open,
   return at;
 }
 
-}  // namespace
+}
 
 SceneLayout scene_layout(std::span<const Subrecord> subs) {
   SceneLayout out;
@@ -79,4 +79,4 @@ SceneLayout scene_layout(std::span<const Subrecord> subs) {
   return out;
 }
 
-}  // namespace fo4::env::detail
+}

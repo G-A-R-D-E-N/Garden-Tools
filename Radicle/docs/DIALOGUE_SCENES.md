@@ -4,7 +4,7 @@ This slice addresses the stored-layout part of #344. It does not execute dialogu
 
 ## Evidence and validity
 
-The compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas), commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`: DIAL lines 6309–6474, INFO 9672–9791, SCEN 8879–9165. This source describes storage; it is not a runtime specification. The [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/dialogue-scenes-405-344/README.md) stamps the OG scene loader at RVA 0x5975E0 and its 16-bit runtime action storage/range consumer. That runtime representation is separate from the four-byte stored SNAM/ENAM fields defined by xEdit and exercised by official plugins. Verified local copy: `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/dialogue-scenes-405-344/README.md`. Runtime scene execution remains outside this reader.
+The compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas), commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`: DIAL lines 6309–6474, INFO 9672–9791, SCEN 8879–9165. This source describes storage; it is not a runtime specification. The [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/dialogue-scenes-405-344/README.md) stamps the OG scene action loader at RVA 0x5975E0 (section 3) and its 16-bit runtime action storage/range consumer. That runtime representation is separate from the four-byte stored SNAM/ENAM fields defined by xEdit and exercised by official plugins. Verified local copy: `build/RE-Work/6916afb/dialogue-scenes-405-344/README.md`. Runtime scene execution remains outside this reader.
 
 Metadata-only measurement on the seven installed official masters on 2026-10-04:
 
@@ -47,9 +47,9 @@ Record FNAM is u32 flags in the prelude; PNAM after the groups is the parent que
 
 ## Validation and consumer boundary
 
-Native synthetic tests cover grouping, localization descriptors, raw conditions, opaque payloads and malformed input. Each new C ABI getter has a managed test. The seven-master corpus test sweeps native and C ABI getters and verifies unchanged master byte identity; it skips without `FO4_DATA_DIR`. Local and CI validation are recorded separately for each published head.
+Native synthetic tests cover grouping, localization descriptors, raw conditions, opaque payloads and malformed input. Each new C ABI getter has a managed test. The seven-master corpus test compares every native/C exported value, condition and opaque payload and verifies unchanged master byte identity; it skips without `FO4_DATA_DIR`. Local and CI validation are recorded separately for each published head.
 
-GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has DIAL/INFO/SCEN names only in `Services/RecordVocabulary.cs`, and no dialogue/scene consumer. GardenEngine #150 needs that consumer before a meaningful probe. With the W0 field writer merged and the scene writer exports added the ABI is 21 (provisional); it needs reconciliation with main and the other independent ABI branches before merging.
+Historical GardenEngine main observation at `10ea81f1590b06dad962ff86721c0a55f00ef173` has DIAL/INFO/SCEN names only in `Services/RecordVocabulary.cs`, and no dialogue/scene consumer. GardenEngine #150 needs that consumer before a meaningful probe. With the W0 field writer merged and the scene writer exports added the ABI is 12 over current main ABI 11; re-bump if another additive ABI PR merges first. The consumer probe has not been rerun.
 
 ## Editing
 

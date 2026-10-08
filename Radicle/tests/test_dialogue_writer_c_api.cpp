@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 
@@ -29,7 +30,7 @@ protected:
   std::filesystem::path path;
 };
 
-}  // namespace
+}
 
 TEST_F(DialogueWriterCApi, FieldSceneAndAuthoringStatusesMapAndSurviveReload) {
   radicle_plugin* plugin = nullptr;
@@ -125,4 +126,46 @@ TEST_F(DialogueWriterCApi, FieldSceneAndAuthoringStatusesMapAndSurviveReload) {
   EXPECT_STREQ(decoded_scene->actions[1].payload[0].signature, "SNAM");
   radicle_scene_free(decoded_scene);
   radicle_env_destroy(env);
+}
+
+TEST_F(DialogueWriterCApi, MalformedTopLevelLinksRefuseNativeAndCApiWritesWithoutChangingBytes) {
+  struct Case { std::uint32_t record; const char* path; std::uint32_t target; };
+  const Case cases[] = {
+      {k_topic, "DIAL\\Branch", k_dlbr}, {k_topic, "DIAL\\Quest", k_quest},
+      {k_topic, "DIAL\\Keyword", k_kywd}, {k_info, "INFO\\PreviousTopic", k_topic},
+      {k_info, "INFO\\PreviousInfo", k_group}, {k_info, "INFO\\SharedInfo", k_group},
+      {k_info, "INFO\\InfoGroup", k_group}, {k_info, "INFO\\Speaker", k_npc},
+      {k_info, "INFO\\StartScene", k_scene}, {k_info, "INFO\\AudioOutputOverride", k_sopm},
+      {k_info, "INFO\\ResetGlobal", k_glob}};
+  for (const auto& item : cases) {
+    for (const std::size_t size : {0u, 3u, 5u, 8u}) {
+      SCOPED_TRACE(std::string(item.path) + " size=" + std::to_string(size));
+      auto native = read(build());
+      const auto field = fo4::schema::formlink_field_descriptor(item.path).value();
+      fo4::visit_records(native, [&](fo4::Record& record) {
+        if (record.form_key != key(item.record)) { return; }
+        std::erase_if(record.subrecords, [&](const fo4::Subrecord& sub) { return sub.signature == field.subrecord; });
+        record.subrecords.push_back({field.subrecord, Bytes(size, std::byte{0x55}), false});
+        record.original_range.clear();
+        record.decompressed_payload.clear();
+        native.original_range.clear();
+      });
+      const auto before = fo4::write_plugin(native);
+      fo4::write_plugin_file(native, path);
+      EXPECT_THROW(link(native, item.record, item.path, 0, key(item.target)), fo4::schema::FormLinkFieldError);
+      EXPECT_EQ(fo4::write_plugin(native), before);
+      radicle_plugin* plugin = nullptr;
+      ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+      const auto target = rkey(item.target);
+      EXPECT_EQ(radicle_plugin_set_record_formlink(plugin, rkey(item.record), item.path, 0, &target),
+                RADICLE_STATUS_INVALID_ARGUMENT);
+      std::uint8_t* bytes = nullptr;
+      std::size_t count = 0;
+      ASSERT_EQ(radicle_plugin_write_bytes(plugin, &bytes, &count), RADICLE_STATUS_OK);
+      EXPECT_EQ(count, before.size());
+      if (count == before.size()) { EXPECT_EQ(std::memcmp(bytes, before.data(), count), 0); }
+      radicle_free_bytes(bytes);
+      radicle_plugin_destroy(plugin);
+    }
+  }
 }
