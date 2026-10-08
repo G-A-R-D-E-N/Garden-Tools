@@ -6,6 +6,7 @@
 #include <cstring>
 #include <exception>
 
+#include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/localized_fields.hpp>
@@ -49,10 +50,15 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
                                                          const fo4::Record& record) {
     std::vector<SemanticFieldCell> cells;
     for (const auto& field : fo4::schema::scalar_fields(record.header.signature)) {
+        try {
+            static_cast<void>(fo4::record_field_count(plugin, record.form_key, field));
+        } catch (const fo4::schema::ScalarError& error) {
+            return std::unexpected(Error{"ScalarReadFailed", error.what()});
+        }
         const auto& scalar = field.scalar;
         const auto resolved = fo4::schema::resolve_field_slots(
             record, fo4::schema::scalar_field_shape(scalar), scalar.address);
-        if (resolved.duplicate || resolved.malformed) {
+        if (resolved.misaligned) {
             return std::unexpected(Error{"ScalarReadFailed",
                 record.form_key.to_string() + ": invalid " + std::string(field.path) + " storage"});
         }
@@ -86,11 +92,16 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
         }
     }
     for (const auto& field : fo4::schema::formlink_fields(record.header.signature)) {
+        try {
+            static_cast<void>(fo4::record_field_count(plugin, record.form_key, field));
+        } catch (const fo4::schema::FormLinkFieldError& error) {
+            return std::unexpected(Error{"FormLinkReadFailed", error.what()});
+        }
         const fo4::schema::FieldShape shape{field.subrecord, field.offset, sizeof(std::uint32_t), 0, false};
         const auto resolved = fo4::schema::resolve_field_slots(record, shape, field.address);
-        if (resolved.duplicate) {
+        if (resolved.misaligned) {
             return std::unexpected(Error{"FormLinkReadFailed",
-                record.form_key.to_string() + ": duplicate " + std::string(field.path) + " storage"});
+                record.form_key.to_string() + ": invalid " + std::string(field.path) + " storage"});
         }
         if (std::any_of(resolved.slots.begin(), resolved.slots.end(), [](const auto& slot) {
                 return slot.misfit;

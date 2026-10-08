@@ -353,6 +353,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
             }
         }
 
+        if (!isEditable(*loaded)) std::fill(editable.begin(), editable.end(), false);
         rows.push_back({
             {"formKey", record->form_key.to_string()},
             {"editorId", editor},
