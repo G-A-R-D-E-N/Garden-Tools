@@ -92,6 +92,29 @@ class PapyrusDumpTests(unittest.TestCase):
         result, _ = self.run_dump([("ACTI", 0x800, vmad(), 0)], block_output=True)
         self.assertEqual(1, result.returncode, result.stderr)
 
+    def test_missing_order_cannot_be_an_empty_measurement(self):
+        with tempfile.TemporaryDirectory(prefix="radicle-order-") as directory:
+            root = pathlib.Path(directory)
+            for mode in ("papyrus", "versions"):
+                with self.subTest(mode=mode):
+                    output = root / mode
+                    result = subprocess.run([str(EXE), mode, str(root / "missing.tsv"), str(output)],
+                                            capture_output=True, text=True)
+                    self.assertEqual(1, result.returncode, result.stderr)
+                    self.assertFalse(output.exists())
+
+    def test_malformed_order_rows_cannot_be_silently_dropped(self):
+        with tempfile.TemporaryDirectory(prefix="radicle-order-") as directory:
+            root = pathlib.Path(directory)
+            order = root / "order.tsv"
+            for index, row in enumerate(("missing separator", "0\t")):
+                with self.subTest(row=row):
+                    order.write_text(row + "\n", encoding="utf-8")
+                    output = root / f"measurement-{index}"
+                    result = subprocess.run([str(EXE), "papyrus", str(order), str(output)], capture_output=True, text=True)
+                    self.assertEqual(1, result.returncode, result.stderr)
+                    self.assertFalse(output.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
