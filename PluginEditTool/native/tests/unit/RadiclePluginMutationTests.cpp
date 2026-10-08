@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -53,6 +54,43 @@ std::vector<std::byte> makePlugin() {
     const auto record = fo4::test::begin_record(out, "MISC", 0, 0x00000800);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"OldEditorId\0", 12});
     fo4::test::write_subrecord(out, "FULL", std::string_view{"KeepMe\0", 7});
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
+std::vector<std::byte> makeMultipleConditionListsPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    const auto group = fo4::test::begin_group(out, "QUST", 0);
+    const auto record = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+    fo4::test::ByteWriter number;
+    number.u32(1);
+    fo4::test::write_subrecord(out, "ANAM", number.bytes);
+    number.bytes.clear();
+    number.u32(0);
+    fo4::test::write_subrecord(out, "ALST", number.bytes);
+    fo4::test::write_subrecord(out, "ALID", std::string_view{"Alias\0", 6});
+    fo4::test::ByteWriter condition;
+    condition.u32(0);
+    condition.f32(1.0f);
+    condition.u16(24);
+    condition.u16(0);
+    condition.u32(0);
+    condition.u32(0);
+    condition.u32(0);
+    condition.u32(0);
+    condition.u32(0xFFFFFFFFu);
+    fo4::test::write_subrecord(out, "CTDA", condition.bytes);
+    fo4::test::write_subrecord(out, "ALFA", number.bytes);
+    fo4::test::write_subrecord(out, "CTDA", condition.bytes);
+    fo4::test::write_subrecord(out, "ALED", std::span<const std::byte>{});
     fo4::test::end_record(out, record);
     fo4::test::end_group(out, group);
     return out.bytes;
@@ -192,6 +230,45 @@ TEST_CASE("Native SetField persists EDID and refreshes the record matrix") {
     CHECK(editorId(*record) == "NewEditorId");
     REQUIRE(record->subrecords.size() == 2);
     CHECK(record->subrecords[1].signature.to_string() == "FULL");
+}
+
+TEST_CASE("Native SetConditions reports multiple lists without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makeMultipleConditionListsPlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto result = backend.invokeBackend(
+        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "[]"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ConditionScopeMultipleLists");
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
+TEST_CASE("Native SetConditionsAtPath reports multiple lists without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makeMultipleConditionListsPlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto result = backend.invokeBackend(
+        "SetConditionsAtPath",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Aliases[0].Conditions", "[]"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ConditionScopeMultipleLists");
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
 TEST_CASE("Native SetField rejects opaque raw fields without touching disk") {

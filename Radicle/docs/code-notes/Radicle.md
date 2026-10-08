@@ -26,8 +26,8 @@ individual link. Unknown payloads stay untouched in the container.
 `src/c_api_vegetation.cpp:radicle_landscape_grasses_decode` owns its key array
 until free; fixed record getters reuse environment-owned strings. C#
 `Vegetation.cs:RadicleEnvironment` copies arrays and releases the holder.
-ABI 11 avoids main4, PR383's5/6/7 and PR398/400/402's8/9/10; reconcile the
-independent branches before merge. `CMakeLists.txt:RADICLE_CSHARP_TESTS` is
+ABI 12 follows merged main's ABI 11 and preserves its existing exports.
+`CMakeLists.txt:RADICLE_CSHARP_TESTS` is
 enabled in native CI with a writable runner-local .NET install directory.
 
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren

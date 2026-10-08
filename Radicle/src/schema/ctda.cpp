@@ -199,6 +199,7 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
   std::size_t first = end;
   std::size_t last = end;
   std::size_t citc = end;
+  bool run_open = true;
   for (std::size_t i = begin; i < end; ++i) {
     const auto& sub = record.subrecords[i];
     if (sub.signature == sig_ctda) {
@@ -208,11 +209,15 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
             record.subrecords[i - 1].data.size() == 4) {
           citc = i - 1;
         }
+      } else if (!run_open) {
+        return CtdaScopeWrite::multiple_lists;
       }
       last = i;
-    } else if (last != end &&
+    } else if (first != end && run_open &&
                (sub.signature == sig_cis1 || sub.signature == sig_cis2)) {
       last = i;
+    } else if (first != end) {
+      run_open = false;
     }
   }
 
