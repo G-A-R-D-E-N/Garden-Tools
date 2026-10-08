@@ -126,3 +126,60 @@ TEST(QuestStagesRealData, MQ101ConditionsRoundTripOpaqueBytes) {
   RecordProperty("ConditionCount", conditions);
   RecordProperty("OpaquePrefixCount", opaque);
 }
+
+namespace {
+
+class QuestConditionCorpus : public testing::TestWithParam<const char*> {};
+
+TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
+  const auto* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) {
+    GTEST_SKIP() << "set FO4_DATA_DIR to run this";
+  }
+  const auto path = std::filesystem::path{dir} / GetParam();
+  ASSERT_TRUE(std::filesystem::is_regular_file(path));
+  const auto plugin = fo4::read_plugin_file(path);
+  const auto cis1 = fo4::Signature::from_string("CIS1");
+  const auto cis2 = fo4::Signature::from_string("CIS2");
+  const auto condition_member = [&](const auto& member) {
+    return member.signature == fo4::sig_ctda || member.signature == cis1 || member.signature == cis2;
+  };
+  std::size_t quests = 0, conditions = 0, opaque = 0, runs = 0;
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->header.signature != k_qust) continue;
+    ++quests;
+    SCOPED_TRACE(record->form_key.to_string());
+    for (std::size_t i = 0; i < record->subrecords.size();) {
+      if (!condition_member(record->subrecords[i])) { ++i; continue; }
+      const auto begin = i;
+      std::size_t raw_count = 0;
+      while (i < record->subrecords.size() && condition_member(record->subrecords[i])) {
+        const auto& member = record->subrecords[i++];
+        if (member.signature != fo4::sig_ctda) continue;
+        ++raw_count;
+        ASSERT_GE(member.data.size(), 4u);
+        opaque += member.data[1] != std::byte{0} || member.data[2] != std::byte{0} || member.data[3] != std::byte{0};
+      }
+      SCOPED_TRACE("condition run at member " + std::to_string(begin));
+      const auto run = std::span<const fo4::Subrecord>(record->subrecords).subspan(begin, i - begin);
+      std::vector<fo4::CtdaCondition> parsed;
+      std::size_t consumed = 0;
+      ASSERT_TRUE(fo4::forms::lossless_quest_log_entry_conditions(run, parsed, consumed));
+      EXPECT_EQ(consumed, run.size());
+      EXPECT_EQ(parsed.size(), raw_count);
+      conditions += raw_count;
+      ++runs;
+    }
+  }
+  EXPECT_GT(quests, 0u);
+  RecordProperty("QuestCount", quests);
+  RecordProperty("ConditionCount", conditions);
+  RecordProperty("ConditionRunCount", runs);
+  RecordProperty("OpaquePrefixCount", opaque);
+}
+
+INSTANTIATE_TEST_SUITE_P(OfficialMasters, QuestConditionCorpus, testing::Values(
+    "Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
+    "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"));
+
+}
