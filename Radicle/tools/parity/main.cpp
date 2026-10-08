@@ -236,6 +236,7 @@ int dump_ba2(const std::filesystem::path& list, const std::filesystem::path& out
 
 int dump_papyrus(const Environment& env, const std::filesystem::path& out) {
   std::vector<std::string> rows;
+  std::vector<std::string> fragment_rows;
   std::vector<std::string> failures;
   const auto signature = fo4::Signature::from_string("VMAD");
   for (const auto& form : keys_of(env, "")) {
@@ -253,7 +254,8 @@ int dump_papyrus(const Environment& env, const std::filesystem::path& out) {
     }
     try {
       const auto scripts = fo4::read_vmad_scripts(vmad->data);
-      if (scripts.unsupported || !fo4::vmad_coverage(vmad->data, ref->record->header.signature).complete()) {
+      const auto coverage = fo4::vmad_coverage(vmad->data, ref->record->header.signature);
+      if (scripts.unsupported || !coverage.complete()) {
         failures.push_back(id + "\tincomplete-vmad");
         continue;
       }
@@ -273,6 +275,8 @@ int dump_papyrus(const Environment& env, const std::filesystem::path& out) {
       }
       rows.push_back(std::format("{}\t{}\t{}\t{}\t{}\t{}", id, ref->record->header.signature.view(),
                                  scripts.scripts.size(), fragments, aliases, alias_scripts));
+      fragment_rows.push_back(std::format("{}\t{}\t{}\t{}", id, ref->record->header.signature.view(),
+                                          coverage.fragment_count, coverage.fragment_script_count));
     } catch (const std::exception& error) {
       failures.push_back(id + "\tmalformed-vmad");
       std::cerr << id << ": " << error.what() << '\n';
@@ -280,6 +284,7 @@ int dump_papyrus(const Environment& env, const std::filesystem::path& out) {
   }
   const bool complete = failures.empty();
   write(out, "papyrus.tsv", std::move(rows));
+  write(out, "papyrus_fragments.tsv", std::move(fragment_rows));
   write(out, "papyrus_failures.tsv", std::move(failures));
   return complete ? 0 : 1;
 }

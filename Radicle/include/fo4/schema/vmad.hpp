@@ -20,6 +20,8 @@ struct VmadCoverage {
   bool failed{false};
   bool trailing_data{false};
   bool fully_consumed{false};
+  std::uint32_t fragment_count{0};
+  std::uint32_t fragment_script_count{0};
 
   bool complete() const {
     return !unsupported && !failed && !trailing_data && fully_consumed;

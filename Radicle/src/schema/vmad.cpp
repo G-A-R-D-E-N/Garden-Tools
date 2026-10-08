@@ -80,6 +80,8 @@ struct VmadScan {
   std::int16_t object_format{0};
   std::uint16_t quest_fragment_count{0};
   std::uint16_t quest_alias_count{0};
+  std::uint32_t fragment_count{0};
+  std::uint32_t fragment_script_count{0};
   std::vector<QuestVmadFragmentBinding> quest_fragments;
   std::vector<QuestVmadAliasBinding> quest_aliases;
 };
@@ -195,15 +197,16 @@ void walk_property(Slice& slice, std::int16_t object_format,
   }
 }
 
-void walk_script_entry(Slice& slice, std::int16_t object_format,
+bool walk_script_entry(Slice& slice, std::int16_t object_format,
                        std::vector<std::size_t>& offsets) {
   const auto name_len = slice.u16();
   slice.skip(name_len);
   if (name_len == 0) {
-    return;
+    return false;
   }
   slice.u8();
   walk_properties(slice, object_format, slice.u16(), offsets);
+  return true;
 }
 
 void walk_scripts(Slice& slice, std::int16_t object_format, std::uint16_t count,
@@ -237,6 +240,8 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
   }
   const auto alias_count = slice.u16();
   result.quest_fragment_count = fragment_count;
+  result.fragment_count = fragment_count;
+  result.fragment_script_count = script_name_len != 0 ? 1u : 0u;
   result.quest_alias_count = alias_count;
   result.quest_aliases.reserve(alias_count);
   for (std::uint16_t i = 0; i < alias_count; ++i) {
@@ -264,10 +269,11 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
 }
 
 void walk_indexed_fragments(Slice& slice, std::int16_t object_format,
-                            std::vector<std::size_t>& offsets) {
+                            VmadScan& result) {
   slice.u8();
-  walk_script_entry(slice, object_format, offsets);
+  result.fragment_script_count = walk_script_entry(slice, object_format, result.offsets) ? 1u : 0u;
   const auto n = slice.u16();
+  result.fragment_count = n;
   for (std::uint16_t i = 0; i < n; ++i) {
     slice.u16();
     slice.u16();
@@ -278,10 +284,10 @@ void walk_indexed_fragments(Slice& slice, std::int16_t object_format,
 }
 
 void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
-                            std::vector<std::size_t>& offsets, bool scene) {
+                            VmadScan& result, bool scene) {
   slice.u8();  // extra bind
   const auto flags = slice.u8();
-  walk_script_entry(slice, object_format, offsets);
+  result.fragment_script_count = walk_script_entry(slice, object_format, result.offsets) ? 1u : 0u;
   unsigned count = 0;
   auto bits = flags;
   for (int i = 0; i < 8; ++i) {
@@ -290,6 +296,7 @@ void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
     }
     bits = static_cast<std::uint8_t>(bits >> 1);
   }
+  result.fragment_count = count;
   for (unsigned i = 0; i < count; ++i) {
     slice.u8();
     slice.skip_wstring();
@@ -297,6 +304,7 @@ void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
   }
   if (scene && !slice.at_end()) {
     const auto phases = slice.u16();
+    result.fragment_count += phases;
     for (std::uint16_t i = 0; i < phases; ++i) {
       slice.u8();
       slice.u8();
@@ -325,11 +333,11 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
       if (record_signature == sig_qust) {
         walk_quest_extra(slice, object_format, result);
       } else if (record_signature == sig_perk || record_signature == sig_term) {
-        walk_indexed_fragments(slice, object_format, result.offsets);
+        walk_indexed_fragments(slice, object_format, result);
       } else if (record_signature == sig_pack || record_signature == sig_info) {
-        walk_flagged_fragments(slice, object_format, result.offsets, false);
+        walk_flagged_fragments(slice, object_format, result, false);
       } else if (record_signature == sig_scen) {
-        walk_flagged_fragments(slice, object_format, result.offsets, true);
+        walk_flagged_fragments(slice, object_format, result, true);
       }
     }
     result.fully_consumed = slice.at_end();
@@ -364,6 +372,10 @@ VmadCoverage vmad_coverage(std::span<const std::byte> data,
   coverage.failed = scan.failed;
   coverage.trailing_data = scan.trailing_data;
   coverage.fully_consumed = scan.fully_consumed;
+  if (coverage.complete()) {
+    coverage.fragment_count = scan.fragment_count;
+    coverage.fragment_script_count = scan.fragment_script_count;
+  }
   return coverage;
 }
 

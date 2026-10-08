@@ -53,7 +53,7 @@ class PapyrusDumpTests(unittest.TestCase):
         self.assertEqual(0, control.returncode, control.stderr)
         output = root / "measurement"
         if block_output:
-            (output / "papyrus.tsv").mkdir(parents=True)
+            (output / block_output).mkdir(parents=True)
         result = subprocess.run([str(EXE), "papyrus", str(order), str(output)], capture_output=True, text=True)
         return result, output
 
@@ -74,6 +74,51 @@ class PapyrusDumpTests(unittest.TestCase):
         result, output = self.run_dump([("QUST", 0x800, vmad() + extras, 0)])
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("000800:first.esp\tQUST\t1\t1\t1\t1\n", (output / "papyrus.tsv").read_text(encoding="utf-8"))
+        self.assertTrue((output / "papyrus_fragments.tsv").is_file())
+        self.assertEqual("000800:first.esp\tQUST\t1\t1\n", (output / "papyrus_fragments.tsv").read_text(encoding="utf-8"))
+
+    def test_indexed_fragment_counts_and_empty_header_script(self):
+        for signature in ("PERK", "TERM"):
+            for header in ("Fragments", ""):
+                with self.subTest(signature=signature, header=header):
+                    extras = bytes([3]) + text(header) + (struct.pack("<BH", 0, 0) if header else b"")
+                    extras += struct.pack("<H", 2)
+                    extras += b"".join(struct.pack("<HHB", index, 0, 0) + text("Fragments") + text(f"Fragment_{index}")
+                                       for index in range(2))
+                    result, output = self.run_dump([(signature, 0x800, vmad() + extras, 0)])
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertTrue((output / "papyrus_fragments.tsv").is_file())
+                    self.assertEqual(f"000800:first.esp\t{signature}\t2\t{int(bool(header))}\n",
+                                     (output / "papyrus_fragments.tsv").read_text(encoding="utf-8"))
+                    self.assertEqual(f"000800:first.esp\t{signature}\t1\t0\t0\t0\n",
+                                     (output / "papyrus.tsv").read_text(encoding="utf-8"))
+
+    def test_flagged_fragments_and_scene_phase_entries(self):
+        for signature in ("PACK", "INFO", "SCEN"):
+            with self.subTest(signature=signature):
+                extras = bytes([3, 0b10000001]) + text("Fragments") + struct.pack("<BH", 0, 0)
+                extras += (bytes([0]) + text("Fragments") + text("Fragment")) * 2
+                if signature == "SCEN":
+                    extras += struct.pack("<H", 3)
+                    extras += (struct.pack("<BBHBB", 0, 0, 0, 0, 0) + text("Fragments") + text("Phase")) * 3
+                result, output = self.run_dump([(signature, 0x800, vmad() + extras, 0), ("ACTI", 0x801, vmad(), 0)])
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertTrue((output / "papyrus_fragments.tsv").is_file())
+                self.assertEqual(f"000800:first.esp\t{signature}\t{5 if signature == 'SCEN' else 2}\t1\n"
+                                 "000801:first.esp\tACTI\t0\t0\n",
+                                 (output / "papyrus_fragments.tsv").read_text(encoding="utf-8"))
+
+    def test_partial_fragment_walk_never_exports_counts(self):
+        for signature in ("PERK", "TERM", "PACK", "INFO", "SCEN"):
+            with self.subTest(signature=signature):
+                header = bytes([3]) + (bytes([1]) if signature in ("PACK", "INFO", "SCEN") else b"")
+                extras = header + text("Fragments") + struct.pack("<BH", 0, 0)
+                extras += struct.pack("<HHHB", 1, 0, 0, 0) if signature in ("PERK", "TERM") else bytes([0])
+                extras += text("Fragments") + text("Fragment")[:-1]
+                result, output = self.run_dump([(signature, 0x800, vmad() + extras, 0)])
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertTrue((output / "papyrus_fragments.tsv").is_file())
+                self.assertEqual("", (output / "papyrus_fragments.tsv").read_text(encoding="utf-8"))
 
     def test_incomplete_vmad_is_not_a_complete_measurement(self):
         variable = struct.pack("<HHH", 5, 2, 1) + text("Partial") + struct.pack("<BH", 0, 1) + text("Unknown") + bytes([6, 0])
@@ -89,8 +134,10 @@ class PapyrusDumpTests(unittest.TestCase):
         self.assertIn("000800:first.esp", (output / "papyrus_failures.tsv").read_text(encoding="utf-8"))
 
     def test_an_output_failure_refuses_the_measurement(self):
-        result, _ = self.run_dump([("ACTI", 0x800, vmad(), 0)], block_output=True)
-        self.assertEqual(1, result.returncode, result.stderr)
+        for filename in ("papyrus.tsv", "papyrus_fragments.tsv"):
+            with self.subTest(filename=filename):
+                result, _ = self.run_dump([("ACTI", 0x800, vmad(), 0)], block_output=filename)
+                self.assertEqual(1, result.returncode, result.stderr)
 
     def test_missing_order_cannot_be_an_empty_measurement(self):
         with tempfile.TemporaryDirectory(prefix="radicle-order-") as directory:

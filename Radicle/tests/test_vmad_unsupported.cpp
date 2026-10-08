@@ -1,6 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "fo4/schema/vmad.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -102,4 +103,35 @@ TEST(Vmad, VariablePropertyFailsClosedForMasterRemap) {
 
 TEST(Vmad, VariableArrayPropertyFailsClosedForMasterRemap) {
   expect_remap_refused(16);
+}
+
+TEST(Vmad, FragmentCountsArePublishedOnlyForCompleteCoverage) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(0);
+  vmad.u8(3);
+  wstring(vmad, "Fragments");
+  vmad.u8(0);
+  vmad.u16(0);
+  vmad.u16(1);
+  vmad.u16(0);
+  vmad.u16(0);
+  vmad.u8(0);
+  wstring(vmad, "Fragments");
+  wstring(vmad, "Fragment");
+  const auto complete = fo4::vmad_coverage(vmad.bytes, fo4::sig_term);
+  ASSERT_TRUE(complete.complete());
+  EXPECT_EQ(complete.fragment_count, 1u);
+  EXPECT_EQ(complete.fragment_script_count, 1u);
+  auto truncated = vmad.bytes;
+  truncated.pop_back();
+  auto trailing = vmad.bytes;
+  trailing.push_back(std::byte{0});
+  for (const auto& data : {truncated, trailing}) {
+    const auto incomplete = fo4::vmad_coverage(data, fo4::sig_term);
+    EXPECT_FALSE(incomplete.complete());
+    EXPECT_EQ(incomplete.fragment_count, 0u);
+    EXPECT_EQ(incomplete.fragment_script_count, 0u);
+  }
 }
