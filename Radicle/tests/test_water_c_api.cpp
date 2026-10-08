@@ -25,7 +25,7 @@ void write_file(const std::filesystem::path& path, const Bytes& bytes) {
   file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
 
-}  // namespace
+}
 
 TEST(WaterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) {
   const TempDir dir;

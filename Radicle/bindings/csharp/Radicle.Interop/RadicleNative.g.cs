@@ -647,6 +647,112 @@ public unsafe struct PexObjectCounts
     public nuint FunctionCount;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexValue
+{
+    public byte Type;
+    public byte Boolean;
+    public int Integer;
+    public float Real;
+    public nuint String;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexTypedName
+{
+    public nuint Name;
+    public nuint Type;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexInstruction
+{
+    public byte Opcode;
+    public int Line;
+    public nuint FirstArgument;
+    public nuint ArgumentCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexFunction
+{
+    public nuint State;
+    public nuint Name;
+    public nuint ReturnType;
+    public uint UserFlags;
+    public byte IsGlobal;
+    public byte IsNative;
+    public nuint FirstParameter;
+    public nuint ParameterCount;
+    public nuint FirstLocal;
+    public nuint LocalCount;
+    public nuint FirstInstruction;
+    public nuint InstructionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexState
+{
+    public nuint Name;
+    public nuint FirstFunction;
+    public nuint FunctionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexVariable
+{
+    public nuint Name;
+    public nuint Type;
+    public uint UserFlags;
+    public byte IsConst;
+    public byte HasDefault;
+    public PexValue DefaultValue;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexProperty
+{
+    public nuint Name;
+    public nuint Type;
+    public uint UserFlags;
+    public byte Flags;
+    public nuint AutoVarName;
+    public nuint ReadFunction;
+    public nuint WriteFunction;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexStruct
+{
+    public nuint Name;
+    public nuint FirstMember;
+    public nuint MemberCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PexObjectCode
+{
+    public nuint AutoStateName;
+    public IntPtr States;
+    public nuint StateCount;
+    public IntPtr Functions;
+    public nuint FunctionCount;
+    public IntPtr TypedNames;
+    public nuint TypedNameCount;
+    public IntPtr Instructions;
+    public nuint InstructionCount;
+    public IntPtr Values;
+    public nuint ValueCount;
+    public IntPtr Variables;
+    public nuint VariableCount;
+    public IntPtr Properties;
+    public nuint PropertyCount;
+    public IntPtr Structs;
+    public nuint StructCount;
+    public IntPtr StructMembers;
+    public nuint StructMemberCount;
+}
+
 public enum QuestPropertyOwner : int
 {
     Script = 0,
@@ -682,7 +788,7 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 19u;
+    public const uint CompiledAbiVersion = 12u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1058,6 +1164,12 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_string_table_entry")]
     public static extern Status PexStringTableEntry(IntPtr pex, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_object_code_get")]
+    public static extern Status PexObjectCodeGet(IntPtr pex, nuint index, PexObjectCode* out_code);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_free_object_code")]
+    public static extern void PexFreeObjectCode(PexObjectCode* code);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_parse")]
     public static extern Status SeqParse(byte* bytes, nuint size, IntPtr* out_seq);

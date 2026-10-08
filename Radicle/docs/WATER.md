@@ -6,15 +6,15 @@
 
 The field-layout evidence is TES5Edit/TES5Edit commit
 `93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
-[`Core/wbDefinitionsFO4.pas`](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L12342).
+[`Core/wbDefinitionsFO4.pas`](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L12788).
 This is a pinned compatibility oracle, not proof of runtime selection behavior.
 
 | Subrecord | Layout evidence | Decoder surface |
 |---|---|---|
-| FNAM | lines 12346–12350, one byte | raw flags |
-| DNAM | lines 12357–12422 | visual fields below |
-| NAM0 / NAM1 | lines 12424–12425, three floats each | linear / angular velocity |
-| NAM2 / NAM3 / NAM4 | lines 12426–12428, NUL-terminated paths | three noise textures |
+| FNAM | lines 12792–12796, one byte | raw flags |
+| DNAM | lines 12803–12868 | visual fields below |
+| NAM0 / NAM1 | lines 12870–12871, three floats each | linear / angular velocity |
+| NAM2 / NAM3 / NAM4 | lines 12872–12874, NUL-terminated paths | three noise textures |
 
 DNAM stores Fog Depth Amount at byte 0; shallow/deep RGBA colors at 4/8;
 six range/alpha floats at 12–32; underwater color at 36; underwater
@@ -67,8 +67,9 @@ generic W0 field writer and subrecord authoring (`PluginFile.SetScalar`,
 | DATA, GNAM | n/a | n/a | refused (`no_default`) | yes | not created | none |
 | Records | n/a | n/a | n/a | n/a | `CreateRecord("WATR", ...)`: EDID, FNAM, DNAM | n/a |
 
-A non-standard 189–199-byte DNAM has no silt in the reader, but the generic
-writer still edits the silt bytes that fit (no official record has that size).
+A 189–199-byte DNAM has no complete silt member. Native field reads and the
+generic writer refuse all seven silt paths until 200 bytes; refused writes
+leave the serialized plugin unchanged. No official record has a partial silt member.
 
 Stays opaque: DATA and GNAM payloads (GNAM is 12 bytes of unknown data in
 every official record), the colour pad bytes (byte 195 is 0xFF in four
@@ -79,11 +80,11 @@ list, defaults provenance and refusal rules are in
 
 ## Cell/worldspace resolution
 
-The same pinned FO4 source defines CELL XCLW as a float (lines 5789–5790)
-and XCWT as a WATR link (5809). WRLD PNAM bit 3 is named Use Water Data
-(12675–12686), and NAM2 is its WATR link (12692–12694). The pinned
-[`Core/wbDefinitionsCommon.pas`](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsCommon.pas#L9121)
-defines NAM3/NAM4 LOD water and DNAM default land/water heights at 9121–9131.
+The same pinned FO4 source defines CELL XCLW as a float (line 6045)
+and XCWT as a WATR link (6064). WRLD PNAM bit 3 is named Use Water Data
+(13127–13136), and NAM2 is its WATR link (13141–13143). The pinned
+[`Core/wbDefinitionsCommon.pas`](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsCommon.pas#L9718)
+defines NAM3/NAM4 LOD water and DNAM default land/water heights at 9718–9728.
 Radicle exposes these raw links/heights and load-order winners already.
 
 The [selection record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)
@@ -103,7 +104,8 @@ one half, negative fractions truncate, and NaN/below-range values become
 -2^31. Values at least +2^31 select the world's default height: **-2^31 is
 a real height**, not a default sentinel. The original XCLW bytes remain intact.
 Interior height volumes and live rendering are outside this selection query.
-The selection result uses a provisional ABI (19 on this branch); see `docs/code-notes/radicle-water-writer.md`.
+The selection result uses ABI 12 after integrating main ABI 11; re-bump if
+another ABI PR merges first. See `docs/code-notes/radicle-water-writer.md`.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has the consumer
 `opencw/Services/WaterBuild/WaterBuilder.cs:Build`, `ReadWorld`, and `Material`,

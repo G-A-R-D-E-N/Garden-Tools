@@ -235,4 +235,4 @@ void with_saved_water(const fo4::Plugin& plugin, std::uint32_t id, Check check) 
   check(fo4::env::decode_water(env, *env.winner(key(id))));
 }
 
-}  // namespace fo4::test::water
+}

@@ -33,7 +33,7 @@ bool link_refused(fo4::Plugin& plugin, std::uint32_t id, const char* path, const
   return refused(plugin, [&] { link(plugin, id, path, target); });
 }
 
-}  // namespace
+}
 
 TEST(WaterAuthoring, VisualFloatsAndColourBytesWriteOnlyTheirBytes) {
   auto plugin = read(build(fixture()));
@@ -115,6 +115,34 @@ TEST(WaterAuthoring, TailFieldsFollowThePrefixRuleOnA188ByteVisualBlock) {
   put_f32(want, 0, 1.0f);
   EXPECT_EQ(payload(plugin, k_short, "DNAM"), want);
   EXPECT_EQ(payload(plugin, k_short, "DNAM").size(), 188u);
+}
+
+TEST(WaterAuthoring, SiltFieldsRequireTheCompleteOptionalStruct) {
+  for (std::size_t size = 188; size <= 201; ++size) {
+    auto entries = fixture();
+    for (auto& [name, data] : entries[2].subs) {
+      if (name == "DNAM") { data = visual(size); }
+    }
+    auto plugin = read(build(entries));
+    const auto original = fo4::write_plugin(plugin);
+    for (const char* path : {"WATR\\SiltAmount", "WATR\\LightColorRed", "WATR\\LightColorGreen",
+                            "WATR\\LightColorBlue", "WATR\\DarkColorRed", "WATR\\DarkColorGreen",
+                            "WATR\\DarkColorBlue"}) {
+      SCOPED_TRACE(std::to_string(size) + ' ' + path);
+      EXPECT_EQ(scalar(plugin, k_bare, path, "1"), size < 200 ? k_missing : k_updated);
+      const auto field = fo4::schema::scalar_field_descriptor(path);
+      ASSERT_TRUE(field.has_value());
+      EXPECT_EQ(fo4::schema::scalar_field_bytes(payload(plugin, k_bare, "DNAM"), field->scalar).empty(), size < 200);
+      if (size < 200) {
+        EXPECT_EQ(fo4::write_plugin(plugin), original);
+        auto raw = payload(plugin, k_bare, "DNAM");
+        const auto before = raw;
+        EXPECT_THROW(fo4::schema::patch_scalar_field(raw, field->scalar,
+                     fo4::schema::encode_scalar("1", field->scalar)), fo4::schema::ScalarError);
+        EXPECT_EQ(raw, before);
+      }
+    }
+  }
 }
 
 TEST(WaterAuthoring, StringsWriteAndTheLocalizedNameIsRefusedInALocalizedPlugin) {

@@ -205,7 +205,6 @@ TEST_P(WaterRealData, EveryScalarAndStringPathEditsWithoutTouchingOtherBytes) {
       ++edits;
     }
   });
-  if (expected.empty()) GTEST_SKIP() << "master has no WATR";
   auto reread = fo4::read_plugin(fo4::write_plugin(plugin), path_);
   fo4::assign_record_form_keys(reread);
   for (const auto& [key, want] : expected) {
@@ -241,7 +240,6 @@ TEST_P(WaterRealData, LinksAndOptionalSubrecordsEditAndKeepEveryOtherRecordByteI
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (record.header.signature == k_watr) { targets.push_back(record.form_key); }
   });
-  if (targets.empty()) GTEST_SKIP() << "master has no WATR";
   int edits = 0, added = 0;
   const std::pair<const char*, const char*> links[] = {
       {"WATR\\MaterialUnused", "MATT"}, {"WATR\\ConsumeSpell", "SPEL"}, {"WATR\\ContactSpell", "SPEL"}, {"WATR\\ImageSpace", "IMGS"}};
@@ -301,4 +299,4 @@ TEST_P(WaterRealData, LinksAndOptionalSubrecordsEditAndKeepEveryOtherRecordByteI
   RecordProperty("records_edited", static_cast<int>(targets.size()));
 }
 
-}  // namespace
+}

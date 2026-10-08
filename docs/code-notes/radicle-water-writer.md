@@ -13,8 +13,11 @@ are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DL
   `generated_formlink_lists.inc`, `generated_condition_scopes.inc`, `RadicleNative.g.cs`, `abi_layout_probe.cpp`) was
   regenerated with its tool. `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` is the W0 list, which already
   contains every header #396 exports from (`c_api_records.h` holds `radicle_water_resolve`).
-- ABI 19 is provisional (#396 had 14, W0 had 10, vegetation 17 and climate 18 are taken by sibling tranches);
-  `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsNineteen` pins it. Reassign from current main before merging.
+- Main `c50ad4d5405e1571113019654b10e3d4a05ca0f1` uses ABI 11. Integrating it
+  advances this additive surface to ABI 12, pinned by
+  `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwelve`. Regenerate the C#
+  declarations and layout probe with `generate_interop.py`; preserve both
+  sides' exports. Re-bump from main if another ABI PR merges first.
 
 ## Reader fix (`Radicle/src/environment/base_records.cpp:decode_water`)
 
@@ -35,6 +38,17 @@ are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DL
 
 ## Registered fields (`Radicle/schema/fallout4/fields.json`, record WATR)
 
+`Radicle/tests/test_water_authoring.cpp:WaterAuthoring.SiltFieldsRequireTheCompleteOptionalStruct`
+covers every silt field at DNAM sizes 188 through 201. At pinned xEdit commit
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
+`Core/wbDefinitionsFO4.pas:12861-12868` declares the 12-byte silt struct as
+one optional member. `Core/wbImplementation.pas:22589-22604` replaces an
+optional member with an empty value when its full size does not fit. The
+writer must therefore refuse all seven silt scalar paths below 200 bytes,
+preserving the complete serialized plugin; 200- and 201-byte DNAMs retain
+their existing authoring support. This is stored-field grammar evidence,
+not a claim about live water rendering.
+
 All paths are `existing_only`, `presentation: identity`; f32 bounds are +-1e9 like the other registered records.
 
 - Scalars outside DNAM: `WATR\OpacityUnused` (ANAM u8, whole payload), `WATR\Flags` (FNAM u8, whole payload, 0..255 so
@@ -54,9 +68,9 @@ All paths are `existing_only`, `presentation: identity`; f32 bounds are +-1e9 li
   `Displacement` prefix so `WATR\Velocity` cannot be confused with the NAM0/NAM1 velocities.
 - Size rule. A field that does not fit in the stored DNAM is absent (NOT_FOUND, no byte change): a 188-byte DNAM (the
   two official records at form version 122 and 123) has no silt or reflection fields, a 200-byte one has no reflection
-  byte. W0 has one `payload_size` per path, so the prefix rule cannot express silt all-or-nothing: on a non-xEdit
-  189-199-byte DNAM the silt bytes that fit are writable in place (no resize) although the decoder and xEdit show no silt.
-  No official record has such a size.
+  byte. All seven silt fields require `minimum_payload_size: 200`, so a
+  189-199-byte DNAM exposes none of the optional silt member, even where an
+  individual scalar would fit. Refused edits preserve the complete plugin.
 - Strings: `WATR\Name` (FULL, registered in `localized_subrecords`, so a localized plugin refuses it, see
   `Radicle/src/plugin/field_writer.cpp:write_scalar`), `WATR\Layer1NoiseTexture`, `Layer2NoiseTexture`,
   `Layer3NoiseTexture` (NAM2, NAM3, NAM4).
@@ -114,6 +128,18 @@ FNAM, INAM, DATA, DNAM, GNAM, NAM0-NAM4.
 
 ## Tests
 
+`Radicle/include/fo4/schema/scalar.hpp:ScalarDescriptor`,
+`Radicle/src/schema/scalar.cpp:scalar_field_bytes`, `patch_scalar_field`,
+`scalar_field_shape` and `Radicle/src/schema/field_address.cpp:resolve_field_slots`
+share the minimum-payload bound. This keeps generic reads, direct scalar
+patches, field writes and preflight consistent. Zero retains existing behavior;
+the seven WATR silt fields use 200. `Radicle/tools/schema_codegen.py:load_fields`
+accepts only positive integer bounds on embedded scalars, at least their field
+end and no larger than an exact `payload_size` when present. Its generator
+emits the bound only when configured, leaving other generated descriptors
+unchanged. `Radicle/tools/test_field_address_codegen.py:SchemaCodegenTests.test_minimum_payload_size_for_optional_struct_members`
+covers valid metadata and malformed bounds.
+
 - `Radicle/tests/test_water_authoring.cpp` (fixture `Radicle/tests/water_fixture.hpp`): field and colour edits with exact
   DNAM bytes, bounds, prefix-rule absence at 188 bytes, strings and the localized refusal, links (null, wrong type,
   unknown master), add/remove order, unknown-order refusal, create and decode, reader fix.
@@ -127,3 +153,9 @@ FNAM, INAM, DATA, DNAM, GNAM, NAM0-NAM4.
   `LinksAndOptionalSubrecordsEditAndKeepEveryOtherRecordByteIdentical` sets every present link to an official target,
   replaces or adds SNAM with an official SNDR, checks the required and `no_default` refusals and keeps every other record
   byte-identical after save and reparse.
+
+`Radicle/tests/test_water_real.cpp:WaterRealData.EveryScalarAndStringPathEditsWithoutTouchingOtherBytes`
+and `LinksAndOptionalSubrecordsEditAndKeepEveryOtherRecordByteIdentical` also
+save and reparse masters containing no WATR records. Their zero-record totals
+are reported and the unchanged-record comparisons still run; only missing
+official data triggers the fixture's skip.
