@@ -1,11 +1,14 @@
 #include "fo4/schema/preflight.hpp"
+#include "fo4/schema/field_address.hpp"
 
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/localized_fields.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -60,6 +63,7 @@ struct RecordLocation {
   const Record* record{nullptr};
   bool direct_top_level{false};
   bool top_label_matches{false};
+  std::int32_t parent_group_type{-1};
 };
 
 void locate_record_in_group(const Group& group,
@@ -75,6 +79,7 @@ void locate_record_in_group(const Group& group,
       result.record = record;
       result.direct_top_level = top_level_group && depth == 0;
       result.top_label_matches = top_label == record->header.signature;
+      result.parent_group_type = group.header.group_type;
       return;
     }
     locate_record_in_group(
@@ -111,22 +116,14 @@ bool first_nested_terminator_descriptor(std::size_t descriptor_index) {
 
 }  // namespace
 
-std::vector<PreflightIssue> preflight_record(const Record& record) {
+std::vector<PreflightIssue> preflight_record(const Record& record, bool localized) {
   std::vector<PreflightIssue> issues;
 
   for (const auto& field : scalar_fields(record.header.signature)) {
-    const Subrecord* found = nullptr;
-    bool duplicate = false;
-    for (const auto& subrecord : record.subrecords) {
-      if (subrecord.signature != field.scalar.subrecord) continue;
-      if (found != nullptr) {
-        duplicate = true;
-        break;
-      }
-      found = &subrecord;
-    }
+    const auto resolved = resolve_field_slots(record, scalar_field_shape(field.scalar),
+                                              field.scalar.address);
 
-    if (duplicate) {
+    if (resolved.duplicate) {
       issues.push_back(issue_for(
           record,
           field,
@@ -138,41 +135,55 @@ std::vector<PreflightIssue> preflight_record(const Record& record) {
       continue;
     }
 
-    // The current schema only permits existing_only insertion policy. Absence
-    // is therefore legal and must remain read-only rather than being treated
-    // as a required-field failure.
-    if (found == nullptr) continue;
-
-    std::string decoded;
-    try {
-      // An embedded field past the end of a legitimately shorter payload is
-      // absent, not malformed -- EXPL DATA ships at 52/56/60/64 bytes as well
-      // as 84, and the short shapes are clean prefixes.
-      const auto bytes = scalar_field_bytes(found->data, field.scalar);
-      if (bytes.empty()) continue;
-      decoded = decode_scalar(bytes, field.scalar);
-    } catch (const ScalarError& error) {
+    if (resolved.malformed) {
       issues.push_back(issue_for(
           record,
           field,
           "invalid_scalar_storage",
-          error.what(),
+          std::string(field.scalar.field_name) + " has unexpected binary width",
           PreflightSeverity::error));
       continue;
     }
 
-    // Reading is deliberately more permissive than writing so odd legacy
-    // values are preserved. Re-running the decoded value through the encoder
-    // is a non-mutating way to report current write-constraint violations.
-    try {
-      static_cast<void>(encode_scalar(decoded, field.scalar));
-    } catch (const ScalarError& error) {
+    if (resolved.misaligned) {
       issues.push_back(issue_for(
           record,
           field,
-          "scalar_value_out_of_range",
-          error.what(),
-          PreflightSeverity::warning));
+          "invalid_scalar_storage",
+          std::string(field.scalar.field_name) + " packed array is not a whole number of elements",
+          PreflightSeverity::error));
+    }
+
+    for (const auto& slot : resolved.slots) {
+      if (!slot.valid) continue;
+      if (localized && field.scalar.storage == ScalarStorage::zstring && record.subrecords[slot.subrecord].data.size() == 4 &&
+          is_localized_field(field.record, field.scalar.subrecord)) {
+        continue;
+      }
+      std::string decoded;
+      try {
+        const auto bytes = scalar_slot_bytes(record.subrecords[slot.subrecord].data, slot, field.scalar);
+        decoded = decode_scalar(bytes, field.scalar);
+      } catch (const ScalarError& error) {
+        issues.push_back(issue_for(
+            record,
+            field,
+            "invalid_scalar_storage",
+            error.what(),
+            PreflightSeverity::error));
+        continue;
+      }
+
+      try {
+        static_cast<void>(encode_scalar(decoded, field.scalar));
+      } catch (const ScalarError& error) {
+        issues.push_back(issue_for(
+            record,
+            field,
+            "scalar_value_out_of_range",
+            error.what(),
+            PreflightSeverity::warning));
+      }
     }
   }
 
@@ -264,7 +275,7 @@ std::vector<PreflightIssue> preflight_record(const Record& record) {
 std::vector<PreflightIssue> preflight_plugin(const Plugin& plugin) {
   std::vector<PreflightIssue> issues;
   visit_records(plugin, [&](const Record& record) {
-    auto record_issues = preflight_record(record);
+    auto record_issues = preflight_record(record, plugin.header.tes4_flags.is_localized());
     issues.insert(issues.end(),
                   std::make_move_iterator(record_issues.begin()),
                   std::make_move_iterator(record_issues.end()));
@@ -304,6 +315,19 @@ std::vector<PreflightIssue> preflight_authoring_record(
         location.record->header.signature.to_string(),
         "record_placement_invalid",
         "record must be a direct child of its matching top-level GRUP"));
+  }
+  const std::int32_t required_parent =
+      constraint->placement == RecordPlacement::quest_children   ? static_cast<std::int32_t>(GroupType::quest_children)
+      : constraint->placement == RecordPlacement::topic_children ? static_cast<std::int32_t>(GroupType::topic_children)
+                                                                 : -1;
+  if (required_parent >= 0 && location.parent_group_type != required_parent) {
+    issues.push_back(authoring_issue(
+        record_key,
+        location.record->header.signature.to_string(),
+        "record_placement_invalid",
+        constraint->placement == RecordPlacement::quest_children
+            ? "record must be a direct child of a quest children GRUP"
+            : "record must be a direct child of a topic children GRUP"));
   }
 
   const auto rules = authoring_subrecords(*constraint);
@@ -356,7 +380,7 @@ std::vector<PreflightIssue> preflight_authoring_record(
     }
   }
 
-  auto scalar_issues = preflight_record(*location.record);
+  auto scalar_issues = preflight_record(*location.record, plugin.header.tes4_flags.is_localized());
   issues.insert(issues.end(),
                 std::make_move_iterator(scalar_issues.begin()),
                 std::make_move_iterator(scalar_issues.end()));
