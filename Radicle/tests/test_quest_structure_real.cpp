@@ -379,7 +379,9 @@ TEST_P(QuestStructureReal, EveryStoredQuestAgreesAndRoundTrips) {
   RecordProperty("FailedFamilies", failed_families);
   RecordProperty("FailedLists", failed_lists);
   EXPECT_GT(quests, 0u);
-  if (std::string_view(GetParam()) == "Fallout4.esm") EXPECT_TRUE(found_mq101);
+  if (std::string_view(GetParam()) == "Fallout4.esm") {
+    EXPECT_TRUE(found_mq101);
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, QuestStructureReal, testing::Values(
