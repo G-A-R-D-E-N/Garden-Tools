@@ -19,11 +19,11 @@ Speculative answers must not be hardcoded as facts.
    Each symbol table matches its own image byte-for-byte. An earlier note here
    claimed a `0x10` symbol-table shift; that was this cross-build mix-up, not a
    shift. Check the PE timestamp before trusting an address.
-   Verified source: `E:/GardenEngine/git/garden-tools/git/gt-stack/git/commonlib_NonVR/RE-Work/docs/26-RE-TARGETS.md`,
+   Verified source: `build/RE-Work/docs/26-RE-TARGETS.md`,
    the section-aware predicate bytes and build-stamp table; inspected read-only.
 3. Exact bytes of `TESFile::AdjustFormIDFileIndex`. **Answered for OG 1.10.163**
    (PE timestamp `0x5ddc40fa`, RVA `0x131fa0`, 55 bytes); see `ESL_FORMIDS.md`
-   and `E:/GardenEngine/git/garden-tools/git/gt-stack/git/commonlib_NonVR/RE-Work/Runtime/03-FINDINGS.md` "Exact runtime FormID
+   and `build/RE-Work/Runtime/03-FINDINGS.md` "Exact runtime FormID
    stamping" (`0x131fa0`). The timestamp `0x5dac778e` build uses `0x131f90`.
 4. **Answered.** `TESFile::AdjustFormIDFileIndex` (OG 1.10.163 RVA `0x131fa0`, 55 bytes) masks a light plugin's local to 12 bits *destructively* before OR-ing in the slot, so anything above `0xFFF` silently aliases onto another record. Usable range is `0x001`–`0xFFF` — the `0x800` floor belongs to the full-plugin encoding only. Six of the nine shipped ESLs allocate below `0x800`, and `ccFSVFO4007-Halloween.esl` has 2078 own records, disproving the `0x800`–`0xFFF`/2048 folklore. See `ESL_FORMIDS.md`.
 5. How next-gen 1.11.x assigns `smallFileCompileIndex` vs OG 1.10.163. Still open in [#28](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/28).

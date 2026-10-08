@@ -30,9 +30,9 @@ full:
 140131fd6:  ret
 ```
 
-Verified records: `E:/GardenEngine/git/garden-tools/git/gt-stack/git/commonlib_NonVR/RE-Work/Runtime/03-FINDINGS.md`,
+Verified records: `build/RE-Work/Runtime/03-FINDINGS.md`,
 "Exact runtime FormID stamping" (`0x131fa0`), and
-`E:/GardenEngine/git/garden-tools/git/gt-stack/git/commonlib_NonVR/RE-Work/docs/26-RE-TARGETS.md`, "The +/-0x10 drift explained".
+`build/RE-Work/docs/26-RE-TARGETS.md`, "The +/-0x10 drift explained".
 Both were inspected read-only in the local reference checkout. The timestamp
 `0x5dac778e` image has the same routine at `0x131f90`; mixing builds caused
 the earlier apparent symbol-table shift.
