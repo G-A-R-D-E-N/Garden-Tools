@@ -143,6 +143,29 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (s, key) => RadicleNative.PluginSetRecordString(Handle, key, path, at, value));
     }
 
+    public bool AddSubrecord(FormKey record, string signature)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return Edit(record, (s, key) => RadicleNative.PluginAddSubrecord(Handle, key, signature));
+    }
+
+    public bool RemoveSubrecord(FormKey record, string signature, int occurrence = 0)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        var at = Index(occurrence);
+        return Edit(record, (s, key) => RadicleNative.PluginRemoveSubrecord(Handle, key, signature, at));
+    }
+
+    public FormKey CreateRecord(string signature, string editorId)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        ArgumentNullException.ThrowIfNull(editorId);
+        if (editorId.Contains('\0')) throw new ArgumentException("An editor ID cannot hold an embedded NUL.", nameof(editorId));
+        Native.FormKey key;
+        Call.Check(RadicleNative.PluginCreateRecord(Handle, signature, editorId, &key));
+        return FormKey.FromNative(key)!.Value;
+    }
+
     public int FieldCount(FormKey record, string path)
     {
         ArgumentNullException.ThrowIfNull(path);

@@ -121,7 +121,8 @@ CTest as `radicle_field_address_codegen`.
 
 Compare every pair of scalar or string fields sharing a record and subrecord. The only mutual-exclusion
 proof is two `when` guards reading the identical discriminator (`subrecord`, including both empty for
-the field's own element, `offset`, and `storage`) with disjoint `equals` sets. Own-element guards also
+the field's own element, `offset`, and `storage`) with disjoint `equals` sets, provided both guards cannot
+match an absent discriminator. Own-element guards also
 require identical `repeated`, `stride`, and `array_offset` layouts because
 `Radicle/src/schema/field_address.cpp:resolve_field_slots` reads their discriminators relative to each
 element base. For example, offset 4 in stride 8 and offset 0 in stride 4 can both target bytes [4,8)
@@ -140,7 +141,7 @@ reason. `Radicle/tools/test_field_address_codegen.py:SchemaCodegenTests` exercis
 Shared pairwise validation consumes normalized record, subrecord, path, offset, width, embedded and
 address entries. Scalar-only conflicts retain the `overlapping scalar fields` diagnostic and the same
 exclusivity rules: identical discriminator metadata and disjoint values, with matching layouts required
-for own-element guards. Width zero or a non-embedded entry owns the whole payload. Errors name both
+for own-element guards and no shared absent-match case. Width zero or a non-embedded entry owns the whole payload. Errors name both
 paths, the affected family and why the fields conflict.
 
 ## Radicle/tools/formlink_schema_codegen.py:load_lists
@@ -196,15 +197,18 @@ reload.
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
 Bumped from current main's 9 to 10 for the new exports; no additional C struct layout changed, so the regenerated
-`Radicle/bindings/csharp/tests/abi_layout_probe.cpp` is content-identical. `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTen`
-pins the value.
+`Radicle/bindings/csharp/tests/abi_layout_probe.cpp` retains the existing layouts. W0b's three additive authoring exports
+subsequently advance the version to 11; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsEleven` pins that integrated value.
 
 ## Not done
 
-Adding or removing subrecords, creating records and default payloads (W0b). Per-PR field registration
-for the reader branches. A real registered `stride` or `when`
+Per-PR field registration for the reader branches. A real registered `stride` or `when`
 field. Nested terminator-scoped FormLink lists in the C ABI.
 
 ## Radicle/src/plugin/record_edit.hpp:find_mutable_record
 
 Shared by `Radicle/src/plugin/mutation.cpp` and `Radicle/src/plugin/field_writer.cpp`; `mark_record_modified` clears the record and plugin original-byte caches only after bytes change.
+
+## Shared writer follow-up
+
+`Radicle/src/plugin/field_writer.cpp:set_record_formlink_field` compares the stored raw value with the encoded requested target, byte-identical to #406 e1c99ccb. A requested replacement does not need to resolve the old raw index. `Radicle/include/fo4/schema/field_address.hpp:FieldDiscriminator`, `Radicle/src/schema/field_address.cpp:record_discriminator_matches` and `Radicle/tools/field_address_codegen.py:parse_when` carry sound #400's exact `match_absent` machinery; absent matching is explicit and duplicate/malformed discriminator payloads remain refused.

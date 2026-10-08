@@ -131,6 +131,7 @@ add_library(fo4
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
   src/plugin/field_writer.cpp
+  src/plugin/subrecord_authoring.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp
@@ -200,7 +201,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -316,6 +317,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_proj_expl_hazd_reencode_real.cpp
     tests/test_scalar_embedded.cpp
     tests/test_field_writer.cpp
+    tests/test_subrecord_authoring.cpp
+    tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
