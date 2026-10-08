@@ -157,7 +157,7 @@ TEST_P(ClimateWeatherReal, EveryScalarAndStringPathEditsFirstAndLastSlotsWithout
     }
   });
   const auto reread = fo4::read_plugin(fo4::write_plugin(sample), path);
-  if (expected.empty()) EXPECT_EQ(fo4::write_plugin(sample), fo4::write_plugin(original));
+  if (expected.empty()) { EXPECT_EQ(fo4::write_plugin(sample), fo4::write_plugin(original)); }
   int checked = 0;
   for (const auto& [key, want] : expected) {
     SCOPED_TRACE(key.to_string());
@@ -244,7 +244,7 @@ TEST_P(ClimateWeatherReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepE
   }
 
   const auto bytes = fo4::write_plugin(plugin);
-  if (targets.empty()) EXPECT_EQ(bytes, untouched_bytes);
+  if (targets.empty()) { EXPECT_EQ(bytes, untouched_bytes); }
   auto reread = fo4::read_plugin(bytes, path);
   fo4::assign_record_form_keys(reread);
   const auto after = snapshot(reread);
