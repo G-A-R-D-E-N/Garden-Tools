@@ -63,4 +63,4 @@ FieldSlots resolve_field_slots(const Record& record,
                                const FieldShape& shape,
                                const FieldAddress& address);
 
-}  // namespace fo4::schema
+}

@@ -81,7 +81,7 @@ NOT_FOUND; not authorable, unknown order, no default, below minimum, a bad four-
 argument and an editor ID that is not valid UTF-8 or not representable in Windows-1252 are INVALID_ARGUMENT.
 `radicle_plugin_create_record` zeroes `out_key` first and, on success, points `out_key->plugin` at the plugin's
 own filename, the same ownership as `radicle_plugin_copy_placed_ref_new`. These exports moved
-`RADICLE_ABI_VERSION` from 9 to 10; `RadicleNative.g.cs` and `abi_layout_probe.cpp` were regenerated with
+`RADICLE_ABI_VERSION` from main's 10 to 11; `RadicleNative.g.cs` and `abi_layout_probe.cpp` were regenerated with
 `Radicle/bindings/csharp/tools/generate_interop.py`, which now also reads `fo4/c_api_authoring.h`.
 
 ## Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:AddSubrecord
@@ -106,3 +106,24 @@ An authoring entry may carry `"coupled": true` (boolean, default false). `Radicl
 ## Shared dialogue follow-up
 
 `Radicle/include/fo4/schema/record_constraints.hpp:RecordPlacement`, `Radicle/tools/record_schema_codegen.py:PLACEMENTS`, `Radicle/include/fo4/flags.hpp:GroupType` and `Radicle/src/schema/preflight.cpp:preflight_authoring_record` carry #406's byte-identical quest/topic child placement support. `Radicle/src/schema/preflight.cpp:preflight_record` and all plugin-aware callers pass the actual localized flag. `Radicle/src/plugin/subrecord_authoring.cpp:create_with_rules` refuses non-top-level placement even with explicit rules; `Radicle/src/plugin/record_edit.hpp:locate_mutable_record` is shared by authoring. The source bodies were copied from e1c99ccb; this does not register dialogue fields or imply safe generic creation of child records.
+
+## Radicle/tools/field_address_codegen.py:reject_overlaps
+
+The integration retains main's shared scalar/FormLink overlap validation. External guards with disjoint
+`equals` values are exclusive only when they cannot both match a missing discriminator. Two guards with
+`match_absent: true` both become active when that subrecord is absent, so overlapping fields must be refused.
+One absent-matching guard paired with a strict guard remains exclusive. Own-element guards still require
+the same layout. `Radicle/tools/test_field_address_codegen.py` covers scalar, FormLink and mixed collisions.
+
+## Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:AddSubrecord (main integration)
+
+The merge retains the add/remove/create wrappers alongside main's PEX wrappers and ABI 10 declarations.
+The authoring exports are additive at ABI 11; existing C signatures and structures remain unchanged.
+All schema tables and interop outputs are regenerated from their merged inputs. The required native CI
+and offline managed/RID consumer checks from main remain enabled.
+
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getProblems
+
+Pass the loaded plugin's localized flag to the merged `preflight_record` API, as the Radicle plugin-aware
+callers do. The current scalar string registrations do not overlap localized fields; this aligns the caller
+for subsequent reader registrations without adding a new field or claiming a current localized-data failure.

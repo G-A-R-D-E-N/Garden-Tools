@@ -63,7 +63,7 @@ bool target_valid(const radicle_form_key* target) {
   return target == nullptr || to_form_key(*target).has_value();
 }
 
-}  // namespace
+}
 
 extern "C" {
 
@@ -286,4 +286,4 @@ radicle_status radicle_plugin_formlink_list_clear(radicle_plugin* plugin,
   });
 }
 
-}  // extern "C"
+}

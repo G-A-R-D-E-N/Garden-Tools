@@ -624,3 +624,25 @@ TEST(ConditionScopes, MalformedAliasStructureFailsClosed) {
               fo4::schema::ScopedConditionStatus::alias_structure_invalid);
   }
 }
+
+TEST(ConditionScopes, RefusesScopeHoldingSeveralConditionLists) {
+  auto plugin = make_quest_raw({
+      {"ANAM", u32_bytes(1)},
+      {"ALST", u32_bytes(0)},
+      {"ALID", {std::byte{'A'}, std::byte{0}}},
+      {"CTDA", make_ctda(1, 0).bytes},
+      {"ALFA", u32_bytes(0)},
+      {"CTDA", make_ctda(2, 0).bytes},
+      {"ALED", {}},
+      {"NNAM", {std::byte{0}}},
+  });
+  const auto before = plugin;
+  fo4::CtdaCondition replacement;
+  replacement.function = 42;
+  const std::vector<fo4::CtdaCondition> conditions{replacement};
+
+  EXPECT_EQ(fo4::schema::set_record_scoped_conditions(
+                plugin, fo4::FormKey::parse("000800:Cond.esp"), qust_descriptor(), 0, conditions),
+            fo4::schema::ScopedConditionStatus::multiple_lists);
+  EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(before));
+}

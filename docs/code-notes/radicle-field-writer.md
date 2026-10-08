@@ -1,5 +1,11 @@
 # Radicle field writer (W0a)
 
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
+
+The main integration at `1787a5f4` already uses ABI 9 for the PEX object-code layout. The field-writer exports must use ABI 10 so ABI-9 libraries cannot pass the generated binding guard while lacking these exports. `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTen` pins both the compiled header and exported version. Regenerate `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` and `Radicle/bindings/csharp/tests/abi_layout_probe.cpp` with `generate_interop.py`, preserving main's PEX layout and the field-writer declarations.
+
+`Radicle/include/fo4/plugin/mutation.hpp:set_record_conditions` retains main's `ConditionMutationStatus` outcomes; the added field-writer overloads precede that function. `.github/workflows/native-ci.yml:native-linux,native-windows-tests` and `docs/code-notes/radicle-managed-ci.md` retain current main's pinned SDK, offline feed, RID consumer and required-check behavior.
+
 One descriptor path now writes every fixed-layout stored field the open reader branches register. The
 descriptors live in `Radicle/schema/fallout4/fields.json`, are validated by the two codegen scripts, and
 are consumed by the native writers, the C ABI and `PluginFile`. Unknown or mismatched layouts make the
@@ -108,9 +114,45 @@ for: `repeated` with `stride`, `stride` without an offset or not a positive inte
 `stride`, a field that does not fit inside one stride element, malformed `when` (unknown key, bad storage,
 empty, duplicate or oversized `equals`, values outside the storage range, `when.subrecord` equal to the
 field's own subrecord), `payload_size` that does not hold whole stride elements, and string fields carrying
-numeric keys, and a same-element `when` whose offset plus width runs past `stride` (or past `payload_size`). Two fields in one payload may overlap only if their addressing (including `when`) differs, so
-union variants can share bytes. The tests are `Radicle/tools/test_field_address_codegen.py`, run by
+numeric keys, and a same-element `when` whose offset plus width runs past `stride` (or past `payload_size`). The tests are `Radicle/tools/test_field_address_codegen.py`, run by
 CTest as `radicle_field_address_codegen`.
+
+## Radicle/tools/schema_codegen.py:load_fields
+
+Compare every pair of scalar or string fields sharing a record and subrecord. The only mutual-exclusion
+proof is two `when` guards reading the identical discriminator (`subrecord`, including both empty for
+the field's own element, `offset`, and `storage`) with disjoint `equals` sets, provided both guards cannot
+match an absent discriminator. Own-element guards also
+require identical `repeated`, `stride`, and `array_offset` layouts because
+`Radicle/src/schema/field_address.cpp:resolve_field_slots` reads their discriminators relative to each
+element base. For example, offset 4 in stride 8 and offset 0 in stride 4 can both target bytes [4,8)
+while their own-element guards read different bytes. Disjoint external-subrecord guards may exempt
+different layouts. Otherwise different `repeated`, `stride`, or `array_offset` layouts conflict;
+matching layouts conflict when embedded byte ranges intersect. A non-embedded scalar or any string
+covers the entire payload and conflicts with every other field unless mutually exclusive.
+
+Grouping by identical addresses missed guarded/unguarded overlaps, intersecting discriminator values,
+different discriminators and different layouts. Skipping non-embedded fields also missed whole-payload
+conflicts. Pairwise checks retain non-overlapping embedded fields and report both paths and the conflict
+reason. `Radicle/tools/test_field_address_codegen.py:SchemaCodegenTests` exercises these boundaries.
+
+## Radicle/tools/field_address_codegen.py:reject_overlaps
+
+Shared pairwise validation consumes normalized record, subrecord, path, offset, width, embedded and
+address entries. Scalar-only conflicts retain the `overlapping scalar fields` diagnostic and the same
+exclusivity rules: identical discriminator metadata and disjoint values, with matching layouts required
+for own-element guards and no shared absent-match case. Width zero or a non-embedded entry owns the whole payload. Errors name both
+paths, the affected family and why the fields conflict.
+
+## Radicle/tools/formlink_schema_codegen.py:load_lists
+
+Validate four-byte FormLink fields against one another and against scalars and strings loaded through
+`Radicle/tools/schema_codegen.py:load_fields`. Per-subrecord FormLink lists, packed keyword KWDA lists,
+and nested terminated-group members own their entire subrecord payload and are unguarded. Their
+normalized addresses are repeated subrecords or unique packed four-byte elements for KWDA. List
+ownership conflicts with any other field or list using that payload; disjoint guard exemptions cannot
+apply to an unguarded list. The shared validator lives in `field_address_codegen.py`, which imports
+neither schema loader, so the FormLink loader can reuse scalar parsing without a circular import.
 
 ## Radicle/schema/fallout4/fields.json:RACE strings
 
@@ -132,7 +174,7 @@ not only element 0, so the target-type check stays correct once a strided field 
 
 ## Radicle/src/c_api_fields.cpp:radicle_plugin_set_record_scalar_at
 
-New exports (ABI 9): `radicle_plugin_set_record_scalar` (in `Radicle/src/c_api_writeback.cpp`),
+New exports (ABI 10): `radicle_plugin_set_record_scalar` (in `Radicle/src/c_api_writeback.cpp`),
 `..._set_record_scalar_at`, `..._set_record_formlink`, `..._set_record_string`, `..._record_field_count` and
 `..._formlink_list_{size,insert,remove,set,clear}`. Status mapping: updated or unchanged is OK; record
 missing, field absent and index out of range are NOT_FOUND; null arguments, an unknown path, the wrong
@@ -154,14 +196,13 @@ reload.
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-Bumped from 8 to 9 for the new exports; no C struct layout changed, so the regenerated
-`Radicle/bindings/csharp/tests/abi_layout_probe.cpp` is content-identical. `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsNine`
-pins the value.
+Bumped from current main's 9 to 10 for the new exports; no additional C struct layout changed, so the regenerated
+`Radicle/bindings/csharp/tests/abi_layout_probe.cpp` retains the existing layouts. W0b's three additive authoring exports
+subsequently advance the version to 11; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsEleven` pins that integrated value.
 
 ## Not done
 
-Adding or removing subrecords, creating records and default payloads (W0b). Per-PR field registration
-for the reader branches. A real registered `stride` or `when`
+Per-PR field registration for the reader branches. A real registered `stride` or `when`
 field. Nested terminator-scoped FormLink lists in the C ABI.
 
 ## Radicle/src/plugin/record_edit.hpp:find_mutable_record
