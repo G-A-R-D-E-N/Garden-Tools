@@ -14,12 +14,14 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           },
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -29,7 +31,8 @@
           {
             "signature": "MOD3",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO3T",
@@ -39,7 +42,8 @@
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -49,7 +53,8 @@
           {
             "signature": "MOD5",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO5T",
@@ -74,7 +79,8 @@
           {
             "signature": "MOD2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO2T",
@@ -84,17 +90,20 @@
           {
             "signature": "ICON",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MICO",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MOD4",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MO4T",
@@ -104,12 +113,14 @@
           {
             "signature": "ICO2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "MIC2",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DESC",
@@ -119,7 +130,8 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           }
         ]
       },
@@ -390,7 +402,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -436,12 +449,14 @@
           {
             "signature": "ICON",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           }
         ]
       },
@@ -621,7 +636,8 @@
           {
             "signature": "MODL",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -662,22 +678,26 @@
           {
             "signature": "LVLD",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLF",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LLCT",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "LVLO",
@@ -978,7 +998,8 @@
           {
             "signature": "MODL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "MODT",
@@ -988,27 +1009,32 @@
           {
             "signature": "DEST",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTD",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDL",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DMDT",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DSTF",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "DATA",
@@ -1191,7 +1217,38 @@
           "mutation": "terminated_group"
         }
       ],
-      "fields": [],
+      "fields": [
+        {
+          "path": "RACE\\BipedObjectNames",
+          "label": "Biped object name",
+          "kind": "string",
+          "subrecord": "NAME",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorExtendedLookupTexture",
+          "label": "Hair color extended lookup texture",
+          "kind": "string",
+          "subrecord": "HLTX",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorLookupTexture",
+          "label": "Hair color lookup texture",
+          "kind": "string",
+          "subrecord": "HNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\PhonemeTargetNames",
+          "label": "Phoneme target name",
+          "kind": "string",
+          "subrecord": "PHTN",
+          "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": [
         "FULL",
         "DESC"

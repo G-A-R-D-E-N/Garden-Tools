@@ -2,7 +2,7 @@
 
 Partial work for [#30](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/30); remaining research [#391](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/391).
 
-Verified source: [versioned inflater and chunk record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a/RE-Work/subsystems/plugin-io-garden-tools/decompress-current-form-391/README.md), read 2026-10-04. Private copy: `E:/GardenEngine/git/garden-tools/git/radicle-30-20261004/build/RE-Work/decompress-current-form-391.md`, SHA256 `b5a3f11f90134f49699b8cc1f056d13e562eb2b06ba01cbc55901c2463c6a8c5`. It carries real Ghidra 12.1.3 OG 1.10.163 decompiles; older PDB names are naming evidence only.
+Verified source: [versioned inflater and chunk record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a/RE-Work/subsystems/plugin-io-garden-tools/decompress-current-form-391/README.md), read 2026-10-04. Private copy: `build/RE-Work/decompress-current-form-391.md`, SHA256 `b5a3f11f90134f49699b8cc1f056d13e562eb2b06ba01cbc55901c2463c6a8c5`. It carries real Ghidra 12.1.3 OG 1.10.163 decompiles; older PDB names are naming evidence only.
 
 | OG RVA | Verified operation |
 |---|---|
@@ -21,7 +21,7 @@ Tests reject a raw stream stripped from a valid zlib frame, a gzip-wrapped copy 
 
 The OG chunk-header path hides `XXXX` from logical runtime readers. Radicle's low-level physical subrecord list intentionally retains it for byte preservation and marks the following subrecord as extended. No API change or guessed runtime emulation is needed.
 
-The 6916afb follow-up is available locally at `E:/GardenEngine/git/garden-tools/git/radicle-341-re-followup-20261005/build/RE-Work/6916afb/compression-391-30/README.md`. AE 1.11.240 `0x2f97b0` / `0x9340` establish window bits 15 with bytes and decompile. AE 1.11.221 and VR 1.2.72 have byte-level confirmation of their decompressor/init wrappers. NG remains decompile-only and its window bits are unresolved.
+The 6916afb follow-up is available locally at `build/RE-Work/6916afb/compression-391-30/README.md`. AE 1.11.240 `0x2f97b0` / `0x9340` establish window bits 15 with bytes and decompile. AE 1.11.221 and VR 1.2.72 have byte-level confirmation of their decompressor/init wrappers. NG remains decompile-only and its window bits are unresolved.
 
 OG/AE decompressor records establish four gates statically: nonzero record size, non-GRUP type, compression flag, and recognized type-table entry. They do not compare total output with the declared size or reject trailing input after stream end. Failure clears the decompressed buffer/size; the traced header/advance paths then deliver no subrecords. The earlier claim that malformed streams necessarily crash is withdrawn: no such execution was observed. Stock-zlib models support the stream-boundary analysis but are not game execution.
 
