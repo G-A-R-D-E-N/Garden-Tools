@@ -207,4 +207,4 @@ inline std::map<fo4::FormKey, Bytes> snapshot(const fo4::Plugin& plugin) {
   return out;
 }
 
-}  // namespace fo4::test::sky
+}

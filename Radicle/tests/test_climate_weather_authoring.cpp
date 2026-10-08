@@ -49,7 +49,7 @@ constexpr auto k_missing = fo4::ScalarMutationStatus::subrecord_missing;
 constexpr auto k_link_updated = fo4::FormLinkFieldMutationStatus::updated;
 constexpr auto k_link_missing = fo4::FormLinkFieldMutationStatus::subrecord_missing;
 
-}  // namespace
+}
 
 TEST(ClimateWeatherAuthoring, ClimateScalarsStridedChanceAndStringsWriteOnlyTheirBytes) {
   auto plugin = read(build(fixture(), true));
@@ -162,6 +162,29 @@ TEST(ClimateWeatherAuthoring, WeatherFixedFieldsFollowTheirPayloadSizeAndPrefixR
   EXPECT_FLOAT_EQ(model.vnam.value_or(0.0f), 5.0f);
 }
 
+TEST(ClimateWeatherAuthoring, PartialOptionalSpecularColorsStayAbsentAndUnchanged) {
+  for (const std::size_t size : {24u, 25u, 26u, 27u}) {
+    auto entries = fixture();
+    for (auto& [name, data] : entries[2].subs) {
+      if (name == "DALC") { data = filled(size, 0); }
+    }
+    for (const char* path : {"WTHR\\AmbientSpecularRed", "WTHR\\AmbientSpecularGreen", "WTHR\\AmbientSpecularBlue"}) {
+      SCOPED_TRACE(std::to_string(size) + ' ' + path);
+      auto plugin = read(build(entries, true));
+      const auto before = fo4::write_plugin(plugin);
+      EXPECT_EQ(scalar(plugin, k_wthr, path, 0, "5"), k_missing);
+      EXPECT_EQ(fo4::write_plugin(plugin), before);
+      const auto field = fo4::schema::scalar_field_descriptor(path);
+      ASSERT_TRUE(field.has_value());
+      auto payload = filled(size, 0);
+      EXPECT_TRUE(fo4::schema::scalar_field_bytes(payload, field->scalar).empty());
+      EXPECT_THROW(fo4::schema::patch_scalar_field(payload, field->scalar,
+          fo4::schema::encode_scalar("5", field->scalar)), fo4::schema::ScalarError);
+      EXPECT_EQ(payload, filled(size, 0));
+    }
+  }
+}
+
 TEST(ClimateWeatherAuthoring, LinksCheckTargetsNullabilityStrideAndOccurrence) {
   auto plugin = read(build(fixture(), true));
   EXPECT_EQ(link(plugin, k_clmt, "CLMT\\Weather", 1, key(k_wthr)), k_link_updated);
@@ -210,6 +233,40 @@ TEST(ClimateWeatherAuthoring, LinksCheckTargetsNullabilityStrideAndOccurrence) {
   EXPECT_EQ(fo4::forms::decode_weather(reloaded, key(k_wthr)).tnam.at(0), std::nullopt);
   EXPECT_EQ(fo4::forms::decode_weather(reloaded, key(k_wthr)).imsp[7], key(k_imgs));
   EXPECT_TRUE(authoring_clean(reloaded, key(k_clmt)));
+}
+
+TEST(ClimateWeatherAuthoring, UnknownWeatherLinkShapesRefuseWithoutChangingBytes) {
+  struct Case {
+    const char* subrecord;
+    const char* path;
+    std::size_t size;
+    std::size_t index;
+    std::uint32_t target;
+  };
+  for (const auto& test : {
+      Case{"IMSP", "WTHR\\ImageSpace", 36, 8, k_imgs},
+      Case{"IMSP", "WTHR\\ImageSpace", 20, 0, k_imgs},
+      Case{"WGDR", "WTHR\\GodRays", 36, 8, k_gdry},
+      Case{"WGDR", "WTHR\\GodRays", 28, 0, k_gdry},
+      Case{"UNAM", "WTHR\\LightningSpell", 16, 0, k_spel},
+      Case{"UNAM", "WTHR\\ActivateSpell", 28, 0, k_spel},
+      Case{"MNAM", "WTHR\\Precipitation", 8, 0, k_spgd},
+      Case{"NNAM", "WTHR\\VisualEffect", 8, 0, k_rfct},
+      Case{"SNAM", "WTHR\\Sound", 12, 0, k_sndr},
+      Case{"TNAM", "WTHR\\SkyStatic", 8, 0, k_stat},
+      Case{"GNAM", "WTHR\\SunGlareLensFlare", 8, 0, k_lens}}) {
+    SCOPED_TRACE(std::string(test.path) + ' ' + std::to_string(test.size));
+    auto entries = fixture();
+    for (auto& [name, data] : entries[2].subs) {
+      if (name == test.subrecord) { data = filled(test.size, 0); }
+    }
+    auto plugin = read(build(entries, true));
+    const auto before = fo4::write_plugin(plugin);
+    EXPECT_THROW(link(plugin, k_wthr, test.path, test.index, key(test.target)),
+                 fo4::schema::FormLinkFieldError);
+    EXPECT_EQ(fo4::write_plugin(plugin), before);
+    EXPECT_THROW(count(plugin, k_wthr, test.path), fo4::schema::FormLinkFieldError);
+  }
 }
 
 TEST(ClimateWeatherAuthoring, OptionalSubrecordsAddAndRemoveAtTheirSchemaPosition) {
@@ -346,6 +403,20 @@ TEST(ClimateWeatherReader, NullSkyStaticsAndShortAmbientColorsDecode) {
       if (name == "DALC") { data = filled(size, 0); }
     }
     EXPECT_THROW(fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr_old)), fo4::forms::WeatherError) << size;
+  }
+}
+
+TEST(ClimateWeatherReader, CloudColorLayerCountsMatchTheStoredLayouts) {
+  for (const std::size_t size : {64u, 512u, 1024u}) {
+    SCOPED_TRACE(size);
+    auto entries = fixture();
+    entries[3].version = size == 64 ? 34 : size == 512 ? 110 : 131;
+    for (auto& [name, data] : entries[3].subs) {
+      if (name == "PNAM") { data = filled(size, 1); }
+      if (name == "JNAM") { data = filled(size == 64 ? 512 : size, 0); }
+    }
+    const auto model = fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr_old));
+    EXPECT_EQ(model.cloud_color_layer_count, size == 64 ? 4u : 32u);
   }
 }
 

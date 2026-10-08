@@ -44,6 +44,15 @@ schema::FieldSlots scalar_slots(const Record& record, const schema::ScalarFieldD
 }
 
 schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFieldDescriptor& field) {
+  if (field.payload_sizes[0] != 0) {
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == field.subrecord &&
+          subrecord.data.size() != field.payload_sizes[0] &&
+          (field.payload_sizes[1] == 0 || subrecord.data.size() != field.payload_sizes[1])) {
+        throw schema::FormLinkFieldError(std::string(field.path) + " has unexpected payload size");
+      }
+    }
+  }
   schema::FieldShape shape;
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;
@@ -105,7 +114,7 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   return ScalarMutationStatus::updated;
 }
 
-}  // namespace
+}
 
 ScalarMutationStatus set_record_scalar(Plugin& plugin,
                                        const FormKey& record_key,
@@ -172,12 +181,9 @@ FormLinkFieldMutationStatus set_record_formlink_field(
 
   std::uint32_t current_raw = 0;
   std::memcpy(&current_raw, data.data() + slot.offset, sizeof(current_raw));
-  const auto context = plugin_form_id_context(plugin);
-  const auto current = resolve_plugin_form_id(RawFormId{current_raw}, context);
-  const auto encoded = encode_plugin_form_id(target, context);
-  if (current == target) return FormLinkFieldMutationStatus::unchanged;
+  const auto encoded_value = encode_plugin_form_id(target, plugin_form_id_context(plugin)).value();
+  if (current_raw == encoded_value) return FormLinkFieldMutationStatus::unchanged;
 
-  const auto encoded_value = encoded.value();
   std::memcpy(data.data() + slot.offset, &encoded_value, sizeof(encoded_value));
   mark_record_modified(plugin, *record);
   return FormLinkFieldMutationStatus::updated;
@@ -216,4 +222,4 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
   throw schema::ScalarError("unknown field path: " + std::string(path));
 }
 
-}  // namespace fo4
+}

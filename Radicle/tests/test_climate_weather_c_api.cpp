@@ -37,7 +37,7 @@ protected:
 
 radicle_form_key rkey(std::uint32_t id) { return radicle_form_key{k_plugin, id}; }
 
-}  // namespace
+}
 
 TEST_F(ClimateWeatherCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) {
   radicle_plugin* plugin = nullptr;

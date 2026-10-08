@@ -76,9 +76,19 @@ TEST_P(SkyRealData, DecodesSkyAndEditsOfficialClimateSamplesWithoutLosingData) {
     } else if (signature == fo4::Signature::from_string("WTHR")) {
       const auto weather = fo4::env::decode_weather(env, *ref);
       EXPECT_TRUE(weather.parameters.has_value());
-      EXPECT_NO_THROW(fo4::forms::decode_weather(env.plugin(0), ref->record->form_key));
+      const auto model = fo4::forms::decode_weather(env.plugin(0), ref->record->form_key);
+      EXPECT_EQ(model.cloud_color_layer_count, ref->record->header.form_version < 35 ? 4u : 32u);
       for (const auto& sub : ref->record->subrecords) {
         if (sub.signature == fo4::Signature::from_string("DATA")) ++sizes[sub.data.size()];
+        if (sub.signature == fo4::Signature::from_string("RNAM") ||
+            sub.signature == fo4::Signature::from_string("QNAM")) {
+          ASSERT_EQ(sub.data.size(), fo4::forms::k_weather_cloud_layer_slots);
+          const auto& speeds = sub.signature == fo4::Signature::from_string("RNAM")
+              ? model.cloud_speed_y : model.cloud_speed_x;
+          for (std::size_t i = 0; i < speeds.size(); ++i) {
+            EXPECT_EQ(speeds[i], static_cast<std::uint8_t>(sub.data[i])) << i;
+          }
+        }
       }
       ++weathers;
     }

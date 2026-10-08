@@ -142,8 +142,7 @@ void decode_cloud_colors(Weather& result, const Subrecord& sub) {
   if (sub.data.size() != 512 && sub.data.size() != 1024 && !legacy) {
     throw WeatherError("PNAM size must be 512 or 1024 (64 before form version 35)");
   }
-  result.cloud_color_layer_count =
-      static_cast<std::uint32_t>(sub.data.size() / (k_weather_time_slots * 4));
+  result.cloud_color_layer_count = legacy ? 4u : static_cast<std::uint32_t>(k_weather_cloud_layer_slots);
   result.cloud_colors.resize(sub.data.size() / 4);
   for (std::size_t i = 0; i < result.cloud_colors.size(); ++i) {
     result.cloud_colors[i] = read_u32(sub.data, i * 4);
@@ -154,8 +153,7 @@ void decode_cloud_alphas(Weather& result, const Subrecord& sub) {
   if (sub.data.size() != 512 && sub.data.size() != 1024) {
     throw WeatherError("JNAM size must be 512 or 1024");
   }
-  const auto pnam_layers = result.cloud_colors.size() * 4 == k_weather_legacy_cloud_color_size ? 4u : k_weather_cloud_layer_slots;
-  if (sub.data.size() / k_weather_cloud_layer_slots != result.cloud_colors.size() * 4 / pnam_layers) {
+  if (sub.data.size() / k_weather_cloud_layer_slots != result.cloud_colors.size() * 4 / result.cloud_color_layer_count) {
     throw WeatherError("JNAM times per layer do not match PNAM");
   }
   result.cloud_alphas.resize(sub.data.size() / 4);

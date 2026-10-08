@@ -49,6 +49,7 @@ struct ScalarDescriptor {
   bool embedded{false};
   std::size_t payload_size{0};
   FieldAddress address{};
+  std::size_t minimum_payload_size{0};
 };
 
 struct ScalarFieldDescriptor {

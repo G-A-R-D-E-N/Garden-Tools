@@ -32,6 +32,8 @@ single NUL (empty string) for the optional string subrecords ARMO ICON, MICO, IC
 other localized or model path subrecord have no default on purpose; a default is also never used for a
 localized field in a localized plugin (`subrecord_authoring.cpp:default_usable`).
 
+`Radicle/schema/fallout4/fields.json:ARMO.authoring` keeps ICON, MICO, ICO2 and MIC2 independent: the cited `build/xedit/wbDefinitionsFO4.pas` copy (SHA256 `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`) matches TES5Edit commit `e6d203a4f676682ff0e53d2e0ded7054710d4bf6`. Its male struct declares `wbString(ICON, 'Icon Image'),` at line 5801 and `wbString(MICO, 'Message Icon')` at 5802, followed by `]).IncludeFlag(dfAllowAnyMember)` at 5803 and `.IncludeFlag(dfStructFirstNotRequired),` at 5804; the female struct repeats those declarations for ICO2/MIC2 at 5807/5808 and the same flags at 5809/5810. At that pin, `Core/wbInterface.pas:wbString` defaults `aRequired` to false (3397-3402), `TwbSubRecordStructDef.CanHandle` accepts any contained member with `dfAllowAnyMember` (11555-11564), and `Core/wbImplementation.pas:TwbSubRecordStruct.AddRequiredElements` does not require the first member with `dfStructFirstNotRequired` (21258-21269). ICON/ICO2 are therefore not required, and MICO/MIC2 may exist without them under these definitions; no coupled flag or default change is justified. `Radicle/src/forms/armor.cpp:create_armor` likewise appends each optional icon independently, so it can emit MICO without ICON; this agrees with the verified definition and is not a coupling defect. This is xEdit definition evidence, not an in-game acceptance claim.
+
 ## Radicle/src/plugin/subrecord_authoring.cpp:add_with_rules
 
 Order of refusals: record missing, signature not listed or not `editable` is `not_authorable`, the occurrence count
@@ -81,7 +83,7 @@ NOT_FOUND; not authorable, unknown order, no default, below minimum, a bad four-
 argument and an editor ID that is not valid UTF-8 or not representable in Windows-1252 are INVALID_ARGUMENT.
 `radicle_plugin_create_record` zeroes `out_key` first and, on success, points `out_key->plugin` at the plugin's
 own filename, the same ownership as `radicle_plugin_copy_placed_ref_new`. These exports moved
-`RADICLE_ABI_VERSION` from 9 to 10; `RadicleNative.g.cs` and `abi_layout_probe.cpp` were regenerated with
+`RADICLE_ABI_VERSION` from main's 10 to 11; `RadicleNative.g.cs` and `abi_layout_probe.cpp` were regenerated with
 `Radicle/bindings/csharp/tools/generate_interop.py`, which now also reads `fo4/c_api_authoring.h`.
 
 ## Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:AddSubrecord
@@ -102,3 +104,28 @@ the refusal path; the positive paths run on hand-built records with the shipped 
 ## Radicle/tools/record_schema_codegen.py:load_constraints (coupled)
 
 An authoring entry may carry `"coupled": true` (boolean, default false). `Radicle/src/plugin/subrecord_authoring.cpp:editable` returns false for it, so add and remove are `not_authorable` regardless of `maximum`, while the entry still takes part in `local_layout_valid` (order, minimum, maximum) and in create (a required coupled entry is `not_authorable`). It exists for single subrecords whose presence is tied to a count or to siblings and that `maximum 1` would otherwise make freely removable (W0b: EXPL, HAZD and PROJ MODL; ARMA MOD2, MOD3, MOD4, MOD5; ARMO MOD2, MOD4; PROJ DEST, DSTD, DMDL, DMDT, DSTF in `Radicle/schema/fallout4/fields.json`; each owns a MODT/MO2T-MO5T texture hash or the destruction stage data that follows it). `Radicle/include/fo4/schema/record_constraints.hpp:SubrecordAuthoringConstraint::coupled` carries it; the generated initializer gained one trailing bool.
+
+## Shared dialogue follow-up
+
+`Radicle/include/fo4/schema/record_constraints.hpp:RecordPlacement`, `Radicle/tools/record_schema_codegen.py:PLACEMENTS`, `Radicle/include/fo4/flags.hpp:GroupType` and `Radicle/src/schema/preflight.cpp:preflight_authoring_record` carry #406's byte-identical quest/topic child placement support. `Radicle/src/schema/preflight.cpp:preflight_record` and all plugin-aware callers pass the actual localized flag. `Radicle/src/plugin/subrecord_authoring.cpp:create_with_rules` refuses non-top-level placement even with explicit rules; `Radicle/src/plugin/record_edit.hpp:locate_mutable_record` is shared by authoring. The source bodies were copied from e1c99ccb; this does not register dialogue fields or imply safe generic creation of child records.
+
+## Radicle/tools/field_address_codegen.py:reject_overlaps
+
+The integration retains main's shared scalar/FormLink overlap validation. External guards with disjoint
+`equals` values are exclusive only when they cannot both match a missing discriminator. Two guards with
+`match_absent: true` both become active when that subrecord is absent, so overlapping fields must be refused.
+One absent-matching guard paired with a strict guard remains exclusive. Own-element guards still require
+the same layout. `Radicle/tools/test_field_address_codegen.py` covers scalar, FormLink and mixed collisions.
+
+## Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:AddSubrecord (main integration)
+
+The merge retains the add/remove/create wrappers alongside main's PEX wrappers and ABI 10 declarations.
+The authoring exports are additive at ABI 11; existing C signatures and structures remain unchanged.
+All schema tables and interop outputs are regenerated from their merged inputs. The required native CI
+and offline managed/RID consumer checks from main remain enabled.
+
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getProblems
+
+Pass the loaded plugin's localized flag to the merged `preflight_record` API, as the Radicle plugin-aware
+callers do. The current scalar string registrations do not overlap localized fields; this aligns the caller
+for subsequent reader registrations without adding a new field or claiming a current localized-data failure.

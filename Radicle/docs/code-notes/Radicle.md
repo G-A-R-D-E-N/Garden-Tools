@@ -4,15 +4,15 @@
 
 The pinned private RE record at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
 `RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/README.md`,
-is saved locally under the water follow-up's `build/RE-Work/6916afb/` directory.
+is saved locally as `build/RE-Work/6916afb/weather-climate-397-343/README.md`.
 Its sections 3.2 and 3.4 verify the unsigned four timing bytes multiplied by
 the float32 one-sixth constant (OG getter RVAs 0x648A50–0x648B40), plus the
 moon byte's low six phase-day bits and Secunda/Masser bits 6/7 (0x648A10,
 0x658B00 and 0x658B10). `ClimateTiming` exposes these interpretations alongside
 the raw bytes, without clock clamping or wrapping. The existing climate C ABI
-getter carries the same values; its unreleased batch moves to ABI 15 because
-current main and merged #383 now use ABI 8. Batches 9–14 remain reserved for
-the other independent decoder follow-ups. Native and managed boundary checks
+getter carries the same values; integrating main
+`c50ad4d5405e1571113019654b10e3d4a05ca0f1` advances ABI 11 to 12.
+Re-bump if another ABI PR merges first. Native and managed boundary checks
 include unsigned values 128/255 and moon byte 0xFF. Volatility and weather
 execution remain raw; no transition simulation or assumed GMST override is added.
 
@@ -22,7 +22,7 @@ execution remain raw; no transition simulation or assumed GMST override is added
 TNAM and `decode_weather` decodes the measured 19/20-byte WTHR DATA variants.
 `docs/CLIMATE_WEATHER.md` pins the field-layout evidence and explicitly limits
 interpretation to stored bytes. `src/c_api_base_records.cpp:radicle_climate_decode`
-and `radicle_weather_decode` expose them in ABI 15; managed properties preserve
+and `radicle_weather_decode` expose them in ABI 12; managed properties preserve
 the raw encoding. `include/fo4/forms/weather.hpp:Weather` provides a stable
 include name while `weather_concept.hpp` keeps existing consumers building.
 
@@ -39,10 +39,25 @@ The reflection call is confined to this integration probe because the
 existing consumer is private. The probe does not validate live transitions.
 
 `src/environment/base_records.cpp:decode_weather` keeps transition delta
-encoded. The private stamped record
-`E:/GardenEngine/git/garden-tools/git/gt-stack/git/F4RR/RE-Work/Runtime/Organized/1.10.163/README-Weather.md`
-confirms DATA byte 3 in `Sky::UpdateWeather` (RVA `0x64E530`) but leaves the
-duration bounds unnamed. The decoder therefore supplies no guessed hours.
+encoded. The private record pinned above, section 3.5, confirms DATA byte 3
+in `Sky::UpdateWeather` (RVA `0x64E530`) and names the two transition settings.
+Its sections 5–6 retain GMST override and live-simulation uncertainty; the
+decoder supplies stored bytes without adding a duration formula.
+
+## include/fo4/forms/weather.hpp:Weather.cloud_speed_y / Weather.cloud_speed_x
+
+At pinned xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
+`Core/wbDefinitionsCommon.pas:9366–9376` declares RNAM and QNAM as
+32-element `itU8` arrays. `src/forms/weather.cpp:decode_speed_bytes` must
+return their unsigned stored values: its signed arrays turned 128–255 into
+negative values. The shared helper and both arrays use `uint8_t`, without
+adding a physical scroll-rate conversion. The editor callback at lines
+4370–4376 is compatibility evidence, not a runtime rate specification.
+`tests/test_weather_concept.cpp:CloudSpeedsPreserveUnsignedStoredBytes`
+covers 0, 127, 128, 254 and 255 on both axes. These fields have no C ABI or
+managed exposure; the climate/weather C containers' separately added fields
+remain governed by ABI 12.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children

@@ -19,9 +19,42 @@ Official measurements are over the seven shipped masters (11 CLMT, 107 WTHR).
 
 ## W0 merge (`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION`)
 
-- The W0 field writer and subrecord authoring branch (f7b56842) was merged onto #427. Conflicts: `c_api.h` (ABI number), `PluginFile.cs` (both sides added methods; kept `SetClimateTiming` and every W0 method), `test_c_api_quest.cpp` (ABI pin) and the generated `RadicleNative.g.cs`. Every generated file (`generated_scalar_fields.inc`, `generated_record_constraints.inc`, `generated_lstring_fields.inc`, `generated_formlink_lists.inc`, `generated_condition_scopes.inc`, `RadicleNative.g.cs`, `abi_layout_probe.cpp`) was regenerated with its tool; `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` is the W0 list (it already contains every header #427 exports from). ABI 18 is provisional; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsEighteen` pins it. Reassign from current main before merging.
+- The W0 field writer and subrecord authoring branch (f7b56842) was merged onto #427. Conflicts: `c_api.h` (ABI number), `PluginFile.cs` (both sides added methods; kept `SetClimateTiming` and every W0 method), `test_c_api_quest.cpp` (ABI pin) and the generated `RadicleNative.g.cs`. Every generated file (`generated_scalar_fields.inc`, `generated_record_constraints.inc`, `generated_lstring_fields.inc`, `generated_formlink_lists.inc`, `generated_condition_scopes.inc`, `RadicleNative.g.cs`, `abi_layout_probe.cpp`) was regenerated with its tool; `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` is the W0 list (it already contains every header #427 exports from). The updated reader branch at `429a1195b45ff7448c184891c2c2326767b671be` imports main `c50ad4d5405e1571113019654b10e3d4a05ca0f1` (ABI 11). This writer uses ABI 12 and `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwelve` pins it; every existing export is retained. Re-bump from then-current main after the reader or another ABI PR merges first.
 
 ## Reader fixes (`Radicle/src/forms/weather.cpp:decode_weather`)
+
+`Radicle/src/forms/weather.cpp:decode_cloud_colors` reports cloud layers independently
+of time-slot count. At the pinned xEdit commit above,
+`Core/wbDefinitionsCommon.pas:1764–1781` gives four layers before form version 35
+and 32 from version 35; lines 8335–8370 give four color times before version 111
+and eight thereafter. The previous fixed eight-time divisor reported two layers
+for 64-byte PNAM and 16 for 512 bytes. The layer count now follows those proven
+layouts, and `decode_cloud_alphas` reuses it for the per-layer comparison.
+`Radicle/tests/test_climate_weather_authoring.cpp:CloudColorLayerCountsMatchTheStoredLayouts`
+records the failing 2/16 values and covers the corrected 4/32/32 counts.
+
+## Partial optional color preservation
+
+`Radicle/schema/fallout4/fields.json:WTHR\\AmbientSpecularRed`, Green and Blue
+require the complete optional Specular color member. At the pinned xEdit commit,
+`Core/wbDefinitionsCommon.pas:6635–6655` makes Specular optional after the
+24-byte Directional group; `wbByteColors` at lines 6680–6710 stores RGB plus
+one padding byte. `Core/wbImplementation.pas:22589–22604` replaces an optional
+member with an empty value when its complete size does not fit. DALC sizes
+25–27 must therefore leave all three Specular channels absent, rather than
+expose whichever individual byte happens to fit.
+
+`Radicle/include/fo4/schema/scalar.hpp:ScalarDescriptor.minimum_payload_size`
+and `Radicle/include/fo4/schema/field_address.hpp:FieldShape.minimum_payload_size`
+carry the 28-byte group boundary. `Radicle/src/schema/scalar.cpp:scalar_field_bytes`,
+`patch_scalar_field` and `scalar_field_shape`, plus
+`Radicle/src/schema/field_address.cpp:resolve_field_slots`, enforce it on the
+shared read/write paths. This reuses the same default-zero metadata and guard
+reviewed for optional water colors; unrelated descriptors remain unchanged.
+`Radicle/tools/schema_codegen.py:load_fields` validates the bound and `render`
+emits it. `Radicle/tests/test_climate_weather_authoring.cpp:PartialOptionalSpecularColorsStayAbsentAndUnchanged`
+proves high-level and direct-payload refusal without changed bytes; complete
+28/32-byte members retain the existing edit coverage.
 
 - `Radicle/include/fo4/forms/weather.hpp:Weather::cloud_speed_y` and `cloud_speed_x` are now `uint8_t`. xEdit stores RNAM/QNAM as `itU8` with `wbWeatherCloudSpeedToStr` (bias 127, display `(v-127)/1270`); the official corpus holds 62..216 with 127 dominant, so the old `int8_t` view turned every value above 127 negative. The raw byte is exposed; no bias is applied. Test: `Radicle/tests/test_climate_weather_authoring.cpp:ClimateWeatherReader.CloudSpeedsAreUnsignedBytesWithTheirStoredBias`.
 - `Weather::tnam` is now `std::vector<std::optional<FormKey>>`; a NULL TNAM decodes as `nullopt` (xEdit `wbFormIDCk(TNAM, 'Static', [STAT, NULL])`). No official TNAM is NULL, so official decode results are unchanged.
@@ -53,10 +86,14 @@ All paths are `existing_only`, `presentation: identity`; f32 bounds are +-1e9 li
 
 ## Stays opaque
 
-- PNAM/JNAM at 512 bytes (versions 35-110) and 64 bytes (before 35), NAM0 at 272 and 544 bytes: no field is registered for those sizes because one path can carry only one `payload_size`. They are preserved and readable through `forms::Weather`, but not writable per field.
+- PNAM/JNAM at 512 bytes (versions 35-110) and PNAM at 64 bytes (before 35), NAM0 at 272 and 544 bytes: no field is registered for those sizes because one path can carry only one `payload_size`. They are preserved and readable through `forms::Weather`, but not writable per field.
 - DATA bytes 1-2, UNAM bytes 16-23, the colour pad bytes in PNAM/NAM0/DALC, MODT/MODC/MODS/MODF payloads, WLST add/remove of individual entries (W0 FormLink lists are u32-packed or per-subrecord; a 12-byte packed struct list is not supported, so entries can be edited and counted but not inserted or removed), and DALC count changes.
 
 ## Tests
 
 - `Radicle/tests/test_climate_weather_authoring.cpp` (native fields, links, add/remove, create and refusal, reader fixes) with the fixture in `Radicle/tests/climate_weather_fixture.hpp`; `Radicle/tests/test_climate_weather_c_api.cpp:ClimateWeatherCApi` (status mapping, save, environment decode); `Radicle/bindings/csharp/Radicle.Interop.Tests/ClimateWeatherAuthoringTests.cs`.
 - `Radicle/tests/test_climate_weather_real.cpp:ClimateWeatherReal.EveryScalarAndStringPathEditsFirstAndLastSlotsWithoutTouchingOtherBytes` edits the first and last slot of every registered scalar and string path on every official CLMT/WTHR and compares every subrecord after reparse against an independently patched copy (Fallout4.esm 78 records, 160 paths, 14440 edits; DLCCoast 19/151/3507; DLCworkshop02 3/141/655; DLCNukaWorld 18/150/3695). `LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEveryOtherRecordByteIdentical` sets links, adds and removes TNAM, adds SNAM with a sound and type, adds FNAM to the one CLMT without it and checks refusals; after save and reparse every other record is byte-identical (Fallout4.esm 78 records, 206 link edits, 71 subrecords added; DLCCoast 19/53/17; DLCworkshop02 3/9/3; DLCNukaWorld 18/53/17).
+
+## Weather FormLink payload boundaries
+
+`Radicle/src/plugin/field_writer.cpp:formlink_slots` and `Radicle/schema/fallout4/fields.json:WTHR.formlink_fields` must restrict edits to proven payload shapes. TES5Edit pin `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `wbDefinitionsCommon.pas:wbWeatherGodRays` (9574–9586), `wbWeatherImageSpaces` (9589–9609), `wbWeatherMagic` (9623–9636), and `wbWeatherSounds` (9639–9654) define WGDR as eight links, IMSP as four or eight links, UNAM as 12 or 24 bytes, and SNAM as eight bytes. `wbDefinitionsFO4.pas:WTHR` (13034–13108) defines MNAM/NNAM/GNAM and each TNAM as one four-byte link. A generic stride must not make a ninth weather-time slot editable in an unknown 36-byte IMSP/WGDR payload. `Radicle/tests/test_climate_weather_authoring.cpp:UnknownWeatherLinkShapesRefuseWithoutChangingBytes` exercises these refusals and preserves the original serialized bytes; existing link tests cover the accepted shapes.

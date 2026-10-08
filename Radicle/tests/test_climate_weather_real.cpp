@@ -71,7 +71,7 @@ const std::map<std::string, fo4::FormKey>& base_targets(const std::filesystem::p
   return targets;
 }
 
-}  // namespace
+}
 
 TEST_P(ClimateWeatherReal, EveryOfficialRecordIsListedOrderedAndPreflightClean) {
   bool skip = false;
@@ -118,7 +118,6 @@ TEST_P(ClimateWeatherReal, EveryScalarAndStringPathEditsFirstAndLastSlotsWithout
                           std::byte{static_cast<unsigned char>(type[2])}, std::byte{static_cast<unsigned char>(type[3])}};
     group.children.emplace_back(record);
   });
-  if (groups.empty()) GTEST_SKIP() << "master has no CLMT or WTHR";
   for (auto& [type, group] : groups) { sample.groups.push_back(std::move(group)); }
   sample = fo4::read_plugin(fo4::write_plugin(sample), path);
   fo4::assign_record_form_keys(sample);
@@ -158,6 +157,7 @@ TEST_P(ClimateWeatherReal, EveryScalarAndStringPathEditsFirstAndLastSlotsWithout
     }
   });
   const auto reread = fo4::read_plugin(fo4::write_plugin(sample), path);
+  if (expected.empty()) EXPECT_EQ(fo4::write_plugin(sample), fo4::write_plugin(original));
   int checked = 0;
   for (const auto& [key, want] : expected) {
     SCOPED_TRACE(key.to_string());
@@ -195,7 +195,7 @@ TEST_P(ClimateWeatherReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepE
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     if (is_sky(record.header.signature)) { targets.emplace_back(record.header.signature.to_string(), record.form_key); }
   });
-  if (targets.empty()) GTEST_SKIP() << "master has no CLMT or WTHR";
+  const auto untouched_bytes = targets.empty() ? fo4::write_plugin(plugin) : Bytes{};
   const auto changed = [](fo4::FormLinkFieldMutationStatus status) {
     return status == fo4::FormLinkFieldMutationStatus::updated || status == fo4::FormLinkFieldMutationStatus::unchanged;
   };
@@ -244,6 +244,7 @@ TEST_P(ClimateWeatherReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepE
   }
 
   const auto bytes = fo4::write_plugin(plugin);
+  if (targets.empty()) EXPECT_EQ(bytes, untouched_bytes);
   auto reread = fo4::read_plugin(bytes, path);
   fo4::assign_record_form_keys(reread);
   const auto after = snapshot(reread);

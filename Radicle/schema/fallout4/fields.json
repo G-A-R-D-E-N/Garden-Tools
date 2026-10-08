@@ -2982,6 +2982,7 @@
           "kind": "scalar",
           "subrecord": "DALC",
           "offset": 24,
+          "minimum_payload_size": 28,
           "storage": "u8",
           "presentation": "identity",
           "minimum": 0,
@@ -2995,6 +2996,7 @@
           "kind": "scalar",
           "subrecord": "DALC",
           "offset": 25,
+          "minimum_payload_size": 28,
           "storage": "u8",
           "presentation": "identity",
           "minimum": 0,
@@ -3008,6 +3010,7 @@
           "kind": "scalar",
           "subrecord": "DALC",
           "offset": 26,
+          "minimum_payload_size": 28,
           "storage": "u8",
           "presentation": "identity",
           "minimum": 0,
@@ -3319,6 +3322,7 @@
           "targets": [
             "SPGD"
           ],
+          "payload_sizes": [4],
           "nullable": true,
           "insertion": "existing_only"
         },
@@ -3330,6 +3334,7 @@
           "targets": [
             "RFCT"
           ],
+          "payload_sizes": [4],
           "nullable": true,
           "insertion": "existing_only"
         },
@@ -3343,6 +3348,7 @@
             "SNDR",
             "SOUN"
           ],
+          "payload_sizes": [8],
           "nullable": true,
           "insertion": "existing_only"
         },
@@ -3355,6 +3361,7 @@
           "targets": [
             "STAT"
           ],
+          "payload_sizes": [4],
           "nullable": true,
           "insertion": "existing_only"
         },
@@ -3367,6 +3374,7 @@
           "targets": [
             "IMGS"
           ],
+          "payload_sizes": [16, 32],
           "nullable": true,
           "insertion": "existing_only"
         },
@@ -3379,6 +3387,7 @@
           "targets": [
             "GDRY"
           ],
+          "payload_sizes": [32],
           "nullable": true,
           "insertion": "existing_only"
         },
@@ -3390,6 +3399,7 @@
           "targets": [
             "LENS"
           ],
+          "payload_sizes": [4],
           "nullable": false,
           "insertion": "existing_only"
         },
@@ -3401,6 +3411,7 @@
           "targets": [
             "SPEL"
           ],
+          "payload_sizes": [12, 24],
           "nullable": true,
           "insertion": "existing_only"
         },
@@ -3412,6 +3423,7 @@
           "targets": [
             "SPEL"
           ],
+          "payload_sizes": [12, 24],
           "nullable": true,
           "insertion": "existing_only"
         }
