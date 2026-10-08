@@ -1487,9 +1487,9 @@ The managed model types and the generated raw structs share names (`PexValue`, `
 
 ## .github/workflows/native-ci.yml:workflow_dispatch, native-windows-tests
 
-The optional `lane=radicle-cross` dispatch runs the existing Radicle clang-cl/xwin build while skipping the Linux/MSVC suites and the PluginEditTool cross build. The default remains `full`. Every pull request retains the required full Linux Debug and Windows MSVC jobs, including documentation-only updates.
+The branch previously provided an optional `lane=radicle-cross` dispatch. Integration with main supersedes that dispatch: the current workflow has no lane input or path gate, and every pull request runs the required Linux Debug and Windows MSVC suites, including documentation-only changes. The cross builds remain limited to main and manual runs.
 
-The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency as `radicle-msvc-release-tests` for seven days. This permits official-data tests on the machine with Fallout 4 installed without rebuilding there. Artifact metadata must identify the tested commit; downloading a binary is not a test result. No game payloads or debug symbols are uploaded.
+The earlier branch workflow retained a Windows Release test artifact for seven days. The current main workflow has no successful-run MSVC test artifact upload. Official-data validation therefore uses a fresh local build at the recorded head; downloading a binary is not a test result.
 
 ## Radicle/CMakeLists.txt:FO4_TESTDATA_DIR, gtest_discover_tests
 
