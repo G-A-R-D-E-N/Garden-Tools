@@ -134,7 +134,24 @@ Grouping by identical addresses missed guarded/unguarded overlaps, intersecting 
 different discriminators and different layouts. Skipping non-embedded fields also missed whole-payload
 conflicts. Pairwise checks retain non-overlapping embedded fields and report both paths and the conflict
 reason. `Radicle/tools/test_field_address_codegen.py:SchemaCodegenTests` exercises these boundaries.
-`Radicle/tools/formlink_schema_codegen.py:load_lists` still has no overlap check; that is a separate follow-up.
+
+## Radicle/tools/field_address_codegen.py:reject_overlaps
+
+Shared pairwise validation consumes normalized record, subrecord, path, offset, width, embedded and
+address entries. Scalar-only conflicts retain the `overlapping scalar fields` diagnostic and the same
+exclusivity rules: identical discriminator metadata and disjoint values, with matching layouts required
+for own-element guards. Width zero or a non-embedded entry owns the whole payload. Errors name both
+paths, the affected family and why the fields conflict.
+
+## Radicle/tools/formlink_schema_codegen.py:load_lists
+
+Validate four-byte FormLink fields against one another and against scalars and strings loaded through
+`Radicle/tools/schema_codegen.py:load_fields`. Per-subrecord FormLink lists, packed keyword KWDA lists,
+and nested terminated-group members own their entire subrecord payload and are unguarded. Their
+normalized addresses are repeated subrecords or unique packed four-byte elements for KWDA. List
+ownership conflicts with any other field or list using that payload; disjoint guard exemptions cannot
+apply to an unguarded list. The shared validator lives in `field_address_codegen.py`, which imports
+neither schema loader, so the FormLink loader can reuse scalar parsing without a circular import.
 
 ## Radicle/schema/fallout4/fields.json:RACE strings
 

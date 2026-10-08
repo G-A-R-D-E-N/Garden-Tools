@@ -57,10 +57,13 @@ def link(**overrides):
     return row
 
 
-def write_schema(directory, fields=(), formlink_fields=()):
+def write_schema(directory, fields=(), formlink_fields=(), formlink_lists=(),
+                 nested_formlink_lists=(), keyword_records=()):
     document = {
         "version": 1,
-        "records": [{"signature": "TEST", "fields": list(fields), "formlink_fields": list(formlink_fields)}],
+        "records": [{"signature": "TEST", "fields": list(fields), "formlink_fields": list(formlink_fields),
+                     "formlink_lists": list(formlink_lists), "nested_formlink_lists": list(nested_formlink_lists)}],
+        "keyword_records": list(keyword_records),
         "target_unions": [{"name": "sigBaseObjects", "targets": ["STAT"]}],
     }
     path = Path(directory) / "fields.json"
@@ -76,6 +79,10 @@ class SchemaCodegenTests(unittest.TestCase):
     def link(self, *fields):
         with tempfile.TemporaryDirectory() as directory:
             return formlink_schema_codegen.load_lists(write_schema(directory, formlink_fields=fields))
+
+    def link_schema(self, **schema):
+        with tempfile.TemporaryDirectory() as directory:
+            return formlink_schema_codegen.load_lists(write_schema(directory, **schema))
 
     def rejects(self, message, *fields):
         with self.assertRaisesRegex(ValueError, message):
@@ -247,6 +254,49 @@ class SchemaCodegenTests(unittest.TestCase):
         rendered = formlink_schema_codegen.render(*self.link(link(stride=8, array_offset=4)))
         self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{}}", rendered)
         self.assertEqual(rows, [])
+
+    def test_overlapping_formlink_fields_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "overlapping FormLink fields in TEST.DATA"):
+            self.link(link(), link(path="TEST" + BS + "OtherLink", offset=2))
+
+    def test_formlink_and_scalar_overlap_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "overlapping FormLink/scalar fields in TEST.DATA"):
+            self.link_schema(fields=[scalar(offset=0)], formlink_fields=[link()])
+
+    def test_formlink_and_string_overlap_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "overlapping FormLink/scalar fields in TEST.DATA"):
+            self.link_schema(fields=[string(subrecord="DATA")], formlink_fields=[link()])
+
+    def test_formlink_list_owned_payload_is_rejected(self):
+        lists = [{"path": "TEST" + BS + "Items", "label": "Items", "subrecord": "DATA",
+                  "nullable": True, "mutation": "existing_neighbors", "targets": ["STAT"]}]
+        nested = [{"container_path": "TEST" + BS + "Groups", "member": "Items", "label": "Items",
+                   "subrecord": "DATA", "terminator": "STOP", "terminator_size": 0,
+                   "nullable": True, "mutation": "terminated_group", "targets": ["STAT"]}]
+        for schema in ({"formlink_lists": lists}, {"nested_formlink_lists": nested}):
+            with self.subTest(schema=schema):
+                with self.assertRaisesRegex(ValueError, "overlapping FormLink fields in TEST.DATA"):
+                    self.link_schema(formlink_fields=[link()], **schema)
+
+    def test_scalar_on_keyword_list_payload_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "overlapping FormLink/scalar fields in TEST.KWDA"):
+            self.link_schema(fields=[scalar(subrecord="KWDA")], keyword_records=[{"record": "TEST"}])
+
+    def test_guarded_formlink_and_unguarded_scalar_overlap_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "overlapping FormLink/scalar fields in TEST.DATA"):
+            self.link_schema(fields=[scalar(offset=0)], formlink_fields=[
+                link(when={"subrecord": "CNAM", "offset": 0, "storage": "u8", "equals": [1]})])
+
+    def test_exclusive_formlink_and_scalar_overlap_is_accepted(self):
+        when = {"subrecord": "CNAM", "offset": 0, "storage": "u8"}
+        _lists, _nested, fields, _unions = self.link_schema(
+            fields=[scalar(offset=0, when=dict(when, equals=[1]))],
+            formlink_fields=[link(when=dict(when, equals=[2]))])
+        self.assertEqual(len(fields), 1)
+
+    def test_adjacent_formlink_and_scalar_fields_are_accepted(self):
+        _lists, _nested, fields, _unions = self.link_schema(fields=[scalar(offset=4)], formlink_fields=[link()])
+        self.assertEqual(len(fields), 1)
 
 
 if __name__ == "__main__":

@@ -4,11 +4,10 @@ import argparse
 import json
 import math
 import sys
-from itertools import combinations
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from field_address_codegen import parse_address, render_address  # noqa: E402
+from field_address_codegen import parse_address, reject_overlaps, render_address  # noqa: E402
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
@@ -177,39 +176,7 @@ def load_fields(schema_path: Path):
                 "can_insert": False,
             })
 
-    by_payload = {}
-    for field in fields:
-        by_payload.setdefault((field["record"], field["subrecord"]), []).append(field)
-    for (record_signature, subrecord), group in by_payload.items():
-        for first, second in combinations(group, 2):
-            a, b = first["address"], second["address"]
-            different_layout = any(a[key] != b[key] for key in ("repeated", "stride", "array_offset"))
-            aw, bw = a["when"], b["when"]
-            if aw is None or bw is None:
-                exclusivity = "one or both fields are unguarded"
-            elif any(aw[key] != bw[key] for key in ("subrecord", "offset", "storage")):
-                exclusivity = "different when discriminators are not mutually exclusive"
-            elif set(aw["equals"]).isdisjoint(bw["equals"]):
-                if aw["subrecord"] or not different_layout:
-                    continue
-                exclusivity = "own-element discriminators use different layouts"
-            else:
-                exclusivity = "when.equals sets intersect"
-
-            if different_layout:
-                conflict = "conflicting repeated/stride/array_offset layouts"
-            elif not first["embedded"] or not second["embedded"]:
-                conflict = "whole-payload field covers the subrecord"
-            else:
-                start_a, start_b = first["offset"], second["offset"]
-                end_a = start_a + WIDTHS[first["storage"]]
-                end_b = start_b + WIDTHS[second["storage"]]
-                if start_a >= end_b or start_b >= end_a:
-                    continue
-                conflict = f"byte ranges [{start_a}, {end_a}) and [{start_b}, {end_b}) intersect"
-            raise ValueError(
-                f"overlapping scalar fields in {record_signature}.{subrecord}: "
-                f"{first['path']!r} and {second['path']!r}: {conflict}; {exclusivity}")
+    reject_overlaps([dict(field, width=WIDTHS.get(field["storage"], 0)) for field in fields], "scalar")
 
     fields.sort(key=lambda item: (item["record"], item["path"]))
     return fields

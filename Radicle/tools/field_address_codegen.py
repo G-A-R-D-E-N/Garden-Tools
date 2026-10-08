@@ -2,6 +2,7 @@
 """Shared parsing and rendering of field addressing keys (repeated, stride, array_offset, when)."""
 
 import json
+from itertools import combinations
 
 WHEN_STORAGES = {
     "u8": (1, 0, 0xFF),
@@ -85,6 +86,42 @@ def parse_address(row, path, subrecord, has_offset, width):
 
 def address_key(address):
     return json.dumps(address, sort_keys=True)
+
+
+def reject_overlaps(entries, kind_label):
+    by_payload = {}
+    for field in entries:
+        by_payload.setdefault((field["record"], field["subrecord"]), []).append(field)
+    for (record_signature, subrecord), group in by_payload.items():
+        for first, second in combinations(group, 2):
+            a, b = first["address"], second["address"]
+            different_layout = any(a[key] != b[key] for key in ("repeated", "stride", "array_offset"))
+            aw, bw = a["when"], b["when"]
+            if aw is None or bw is None:
+                exclusivity = "one or both fields are unguarded"
+            elif any(aw[key] != bw[key] for key in ("subrecord", "offset", "storage")):
+                exclusivity = "different when discriminators are not mutually exclusive"
+            elif set(aw["equals"]).isdisjoint(bw["equals"]):
+                if aw["subrecord"] or not different_layout:
+                    continue
+                exclusivity = "own-element discriminators use different layouts"
+            else:
+                exclusivity = "when.equals sets intersect"
+
+            if different_layout:
+                conflict = "conflicting repeated/stride/array_offset layouts"
+            elif not first["embedded"] or not second["embedded"] or not first["width"] or not second["width"]:
+                conflict = "whole-payload field covers the subrecord"
+            else:
+                start_a, start_b = first["offset"], second["offset"]
+                end_a = start_a + first["width"]
+                end_b = start_b + second["width"]
+                if start_a >= end_b or start_b >= end_a:
+                    continue
+                conflict = f"byte ranges [{start_a}, {end_a}) and [{start_b}, {end_b}) intersect"
+            raise ValueError(
+                f"overlapping {kind_label} fields in {record_signature}.{subrecord}: "
+                f"{first['path']!r} and {second['path']!r}: {conflict}; {exclusivity}")
 
 
 def render_address(address):
