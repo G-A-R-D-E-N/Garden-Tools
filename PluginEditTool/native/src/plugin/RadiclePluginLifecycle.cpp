@@ -1,5 +1,8 @@
 #include "RadiclePluginLifecycleFields.hpp"
 
+#include <fo4/plugin/subrecord_authoring.hpp>
+#include <fo4/text/encoding.hpp>
+
 namespace fo4ide::plugin {
 
 using namespace lifecycle;
@@ -17,7 +20,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             "Record signature must contain exactly four characters"
         });
     }
-    if (signatureText != "ARMA" && signatureText != "ARMO" &&
+    const bool schemaCreation = payload != nullptr && payload->contains("schema") &&
+        payload->at("schema").is_boolean() && payload->at("schema").get<bool>();
+    if (!schemaCreation && signatureText != "ARMA" && signatureText != "ARMO" &&
         signatureText != "CELL" && signatureText != "EXPL" &&
         signatureText != "EYES" && signatureText != "HAZD" &&
         signatureText != "LVSP" && signatureText != "PROJ" &&
@@ -49,7 +54,27 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         auto mutated = loaded->plugin;
         fo4::FormKey key;
 
-        if (signatureText == "CELL") {
+        if (schemaCreation) {
+            const auto editor = payload->find("editorId");
+            if (editor != payload->end() && !editor->is_string()) {
+                return std::unexpected(Error{"InvalidRecordCreationPayload", "Schema editorId must be a string"});
+            }
+            const auto editorId = editor == payload->end() ? std::optional<std::string>{std::string{}} :
+                fo4::text::utf8_to_windows1252(editor->get_ref<const std::string&>());
+            if (!editorId) return std::unexpected(Error{"InvalidEditorId", "Editor ID cannot be encoded as Windows-1252"});
+            const auto created = fo4::create_record(mutated, fo4::Signature::from_string(signatureText), *editorId);
+            switch (created.status) {
+                case fo4::RecordCreateStatus::created: key = created.key; break;
+                case fo4::RecordCreateStatus::not_authorable:
+                    return std::unexpected(Error{"RecordNotAuthorable", "Record has no independent schema creation rule"});
+                case fo4::RecordCreateStatus::no_default:
+                    return std::unexpected(Error{"RecordNoDefault", "Required subrecords have no usable default"});
+                case fo4::RecordCreateStatus::invalid_editor_id:
+                    return std::unexpected(Error{"InvalidEditorId", "Editor ID is not valid for this record"});
+                case fo4::RecordCreateStatus::preflight_failed:
+                    return std::unexpected(Error{"RecordPreflightFailed", "Generated record failed schema validation"});
+            }
+        } else if (signatureText == "CELL") {
             const auto worldspace = payload->find("worldspace");
             if (worldspace == payload->end() || !worldspace->is_string() ||
                 !payload->contains("x") || !payload->contains("y")) {

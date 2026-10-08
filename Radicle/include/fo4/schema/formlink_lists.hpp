@@ -11,6 +11,7 @@
 #include <span>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 namespace fo4::schema {
 
@@ -143,6 +144,11 @@ bool formlink_list_target_allowed(const FormLinkListDescriptor& descriptor,
                                   Signature signature) noexcept;
 
 std::optional<std::size_t> record_formlink_list_size(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor);
+
+std::optional<std::vector<FormKey>> record_formlink_list_values(
     const Plugin& plugin,
     const FormKey& record_key,
     const FormLinkListDescriptor& descriptor);

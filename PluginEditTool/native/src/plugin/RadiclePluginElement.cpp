@@ -14,6 +14,7 @@
 #include <utility>
 
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/subrecord_authoring.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/formlink_lists.hpp>
 
@@ -37,6 +38,63 @@ bool parseIndex(std::string_view text, std::size_t& value) {
     const auto* end = begin + text.size();
     const auto [ptr, error] = std::from_chars(begin, end, value, 10);
     return error == std::errc{} && ptr == end;
+}
+
+struct AuthoringPath {
+    fo4::Signature signature{};
+    std::optional<std::size_t> occurrence;
+};
+
+std::optional<AuthoringPath> authoringPath(const fo4::Record& record, std::string_view path) {
+    constexpr std::string_view prefix = "Authoring\\";
+    if (!path.starts_with(prefix)) return std::nullopt;
+    path.remove_prefix(prefix.size());
+    if (path.size() < 4) return std::nullopt;
+    AuthoringPath result{fo4::Signature::from_string(path.substr(0, 4)), std::nullopt};
+    if (path.size() > 4) {
+        if (path[4] != '[' || path.back() != ']') return std::nullopt;
+        std::size_t index = 0;
+        if (!parseIndex(path.substr(5, path.size() - 6), index)) return std::nullopt;
+        result.occurrence = index;
+    }
+    const auto constraint = fo4::schema::record_authoring_constraint(record.header.signature);
+    if (!constraint) return std::nullopt;
+    const auto rules = fo4::schema::authoring_subrecords(*constraint);
+    if (std::none_of(rules.begin(), rules.end(), [&](const auto& rule) {
+            return rule.signature == result.signature;
+        })) return std::nullopt;
+    return result;
+}
+
+std::optional<Error> authoringStatusError(fo4::SubrecordAddStatus status) {
+    switch (status) {
+        case fo4::SubrecordAddStatus::added:
+        case fo4::SubrecordAddStatus::already_present: return std::nullopt;
+        case fo4::SubrecordAddStatus::record_missing:
+            return Error{"RecordNotFound", "Record is not present"};
+        case fo4::SubrecordAddStatus::not_authorable:
+            return Error{"ElementNotAuthorable", "Subrecord is coupled or has no independent authoring rule"};
+        case fo4::SubrecordAddStatus::unknown_order:
+            return Error{"ElementUnknownOrder", "A valid insertion order cannot be established"};
+        case fo4::SubrecordAddStatus::no_default:
+            return Error{"ElementNoDefault", "No usable default is proven for this subrecord"};
+    }
+    return Error{"ElementAddFailed", "Unknown authoring status"};
+}
+
+std::optional<Error> authoringStatusError(fo4::SubrecordRemoveStatus status) {
+    switch (status) {
+        case fo4::SubrecordRemoveStatus::removed: return std::nullopt;
+        case fo4::SubrecordRemoveStatus::record_missing:
+            return Error{"RecordNotFound", "Record is not present"};
+        case fo4::SubrecordRemoveStatus::absent:
+            return Error{"ElementIndexOutOfRange", "Subrecord occurrence is not present"};
+        case fo4::SubrecordRemoveStatus::below_minimum:
+            return Error{"ElementBelowMinimum", "Removal would violate the required subrecord count"};
+        case fo4::SubrecordRemoveStatus::not_authorable:
+            return Error{"ElementNotAuthorable", "Subrecord is coupled or has no independent authoring rule"};
+    }
+    return Error{"ElementRemoveFailed", "Unknown authoring status"};
 }
 
 std::string normaliseElementPath(fo4::Signature recordSignature, std::string_view input) {
@@ -164,7 +222,8 @@ std::optional<ResolvedElementList> resolveElementPath(
     const fo4::Record& record,
     std::string_view input,
     std::string& error) {
-    const auto path = normaliseElementPath(record.header.signature, input);
+    auto path = normaliseElementPath(record.header.signature, input);
+    if (path.ends_with("\\Count")) path.resize(path.size() - 6);
     if (const auto raw = rawSubrecordPath(path); raw.has_value()) {
         return resolveRawElementPath(record, *raw, error);
     }
@@ -314,6 +373,32 @@ Result<nlohmann::json> RadiclePluginBackend::describeElement(
     }
 
     try {
+        if (const auto path = authoringPath(*record, requestedPath)) {
+            const auto count = std::count_if(record->subrecords.begin(), record->subrecords.end(),
+                [&](const auto& subrecord) { return subrecord.signature == path->signature; });
+            bool canAdd = false;
+            bool canRemove = false;
+            bool canCreate = false;
+            if (!writeGuard(*loaded)) {
+                auto probe = loaded->plugin;
+                canAdd = fo4::add_record_subrecord(probe, *keyResult, path->signature) ==
+                    fo4::SubrecordAddStatus::added;
+                if (path->occurrence) {
+                    probe = loaded->plugin;
+                    canRemove = fo4::remove_record_subrecord(probe, *keyResult, path->signature,
+                        *path->occurrence) == fo4::SubrecordRemoveStatus::removed;
+                }
+                probe = loaded->plugin;
+                canCreate = fo4::create_record(probe, record->header.signature, "").status ==
+                    fo4::RecordCreateStatus::created;
+            }
+            return nlohmann::json(nlohmann::json{
+                {"canAdd", canAdd}, {"canRemove", canRemove}, {"canCreate", canCreate},
+                {"templates", canAdd ? nlohmann::json::array({path->signature.to_string()}) : nlohmann::json::array()},
+                {"elementType", "Subrecord"}, {"canMoveUp", false}, {"canMoveDown", false},
+                {"canClear", false}, {"count", count}
+            }.dump());
+        }
         std::string error;
         const auto resolved = resolveElementPath(*record, requestedPath, error);
         if (!resolved.has_value()) {
@@ -327,13 +412,18 @@ Result<nlohmann::json> RadiclePluginBackend::describeElement(
             return nlohmann::json(nlohmann::json{{"error", "List element index is out of range."}}.dump());
         }
 
-        // The old reflection layer manufactured FormKey.Null placeholders for
-        // any FormLink list. Native code only does that when the generated
-        // schema explicitly marks the list nullable. Simple empty lists also
-        // need an existing binary neighbor until their insertion anchors are
-        // encoded in the schema.
-        const bool insertionBoundary = resolved->nested || *count > 0;
-        const bool canAdd = elementCanInsert(*resolved) && elementNullable(*resolved) && insertionBoundary;
+        const bool writable = !writeGuard(*loaded).has_value();
+        bool canAdd = false;
+        if (writable && elementCanInsert(*resolved) && elementNullable(*resolved)) {
+            auto probe = loaded->plugin;
+            const auto insertion = resolved->index.value_or(*count);
+            const auto status = resolved->nested
+                ? fo4::schema::insert_record_nested_formlink_list_null_element(
+                    probe, *keyResult, resolved->nestedDescriptor, resolved->containerIndex, insertion)
+                : fo4::schema::insert_record_formlink_list_null_element(
+                    probe, *keyResult, resolved->simple, insertion);
+            canAdd = status == fo4::schema::FormLinkListMutationStatus::updated;
+        }
         nlohmann::json templates = nlohmann::json::array();
         if (canAdd) templates.push_back(elementTemplate(*resolved));
 
@@ -343,10 +433,10 @@ Result<nlohmann::json> RadiclePluginBackend::describeElement(
             {"canAdd", canAdd},
             {"templates", std::move(templates)},
             {"elementType", "FormLink"},
-            {"canRemove", indexed},
-            {"canMoveUp", indexed && index > 0},
-            {"canMoveDown", indexed && index + 1 < *count},
-            {"canClear", !indexed && *count > 0},
+            {"canRemove", writable && indexed},
+            {"canMoveUp", writable && indexed && index > 0},
+            {"canMoveDown", writable && indexed && index + 1 < *count},
+            {"canClear", writable && !indexed && *count > 0},
             {"count", *count}
         }.dump());
     } catch (const std::exception& error) {
@@ -370,6 +460,14 @@ Result<nlohmann::json> RadiclePluginBackend::addElement(
     if (record == nullptr) return std::unexpected(Error{"RecordNotFound", "Record is not present: " + recordText});
 
     try {
+        if (const auto path = authoringPath(*record, requestedPath)) {
+            auto mutated = loaded->plugin;
+            const auto status = fo4::add_record_subrecord(mutated, *keyResult, path->signature);
+            if (const auto error = authoringStatusError(status)) return std::unexpected(*error);
+            if (status == fo4::SubrecordAddStatus::already_present) return nlohmann::json("Subrecord is already present.");
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+            return nlohmann::json("Added " + path->signature.to_string() + " in " + pluginName + ".");
+        }
         std::string error;
         const auto resolved = resolveElementPath(*record, requestedPath, error);
         if (!resolved.has_value()) return std::unexpected(Error{"ElementPathUnsupported", std::move(error)});
@@ -422,6 +520,14 @@ Result<nlohmann::json> RadiclePluginBackend::removeElement(
     if (record == nullptr) return std::unexpected(Error{"RecordNotFound", "Record is not present: " + recordText});
 
     try {
+        if (const auto path = authoringPath(*record, requestedPath)) {
+            if (!path->occurrence) return std::unexpected(Error{"ElementIndexRequired", "Removal requires a subrecord occurrence"});
+            auto mutated = loaded->plugin;
+            const auto status = fo4::remove_record_subrecord(mutated, *keyResult, path->signature, *path->occurrence);
+            if (const auto error = authoringStatusError(status)) return std::unexpected(*error);
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+            return nlohmann::json("Removed " + path->signature.to_string() + " in " + pluginName + ".");
+        }
         std::string error;
         const auto resolved = resolveElementPath(*record, requestedPath, error);
         if (!resolved.has_value()) return std::unexpected(Error{"ElementPathUnsupported", std::move(error)});
