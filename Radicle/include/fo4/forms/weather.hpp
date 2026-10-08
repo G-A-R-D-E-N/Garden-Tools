@@ -43,8 +43,8 @@ struct Weather {
   std::optional<std::string> editor_id;
 
   std::array<std::optional<std::string>, k_weather_cloud_layer_slots> cloud_textures{};
-  std::array<std::int8_t, k_weather_cloud_layer_slots> cloud_speed_y{};
-  std::array<std::int8_t, k_weather_cloud_layer_slots> cloud_speed_x{};
+  std::array<std::uint8_t, k_weather_cloud_layer_slots> cloud_speed_y{};
+  std::array<std::uint8_t, k_weather_cloud_layer_slots> cloud_speed_x{};
   std::uint32_t cloud_color_layer_count{0};
   std::vector<std::uint32_t> cloud_colors;
   std::vector<float> cloud_alphas;

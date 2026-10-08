@@ -8,6 +8,8 @@
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
 
+#include <cstddef>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -27,6 +29,13 @@ enum class ScalarMutationStatus {
   unchanged,
   record_missing,
   subrecord_missing,
+};
+
+enum class ConditionMutationStatus {
+  updated,
+  unchanged,
+  record_missing,
+  multiple_lists,
 };
 
 enum class FormLinkFieldMutationStatus {
@@ -73,6 +82,10 @@ FormKey reserve_local_form_key(Plugin& plugin);
 
 FormKey create_local_record(Plugin& plugin, Signature signature);
 
+FormKey create_local_record(Plugin& plugin,
+                            Signature signature,
+                            std::vector<Subrecord> subrecords);
+
 // Refuses deletion when any schema-proven in-plugin FormLink still targets the
 // record. Unsupported remap surfaces fail closed before mutation. nextFormID
 // is never decremented or recycled.
@@ -103,35 +116,71 @@ FormLinkFieldMutationStatus set_record_formlink_field(
     const schema::FormLinkFieldDescriptor& field,
     const FormKey& target);
 
-// Replaces the record's CTDA condition list with freshly serialized
-// conditions (see write_ctda_conditions for the subrecord-level contract).
-// Returns false when the record is missing. When the record exists, an
-// unchanged/empty CTDA list remains a successful no-op. Any mutation clears
-// the current Radicle original-range caches so the writer serializes the new
-// subrecords instead of reusing stale bytes.
-inline bool set_record_conditions(Plugin& plugin,
+ScalarMutationStatus set_record_scalar(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       const schema::ScalarFieldDescriptor& field,
+                                       std::size_t index,
+                                       std::string_view value);
+
+ScalarMutationStatus set_record_string(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       const schema::ScalarFieldDescriptor& field,
+                                       std::size_t index,
+                                       std::string_view value);
+
+ScalarMutationStatus set_record_string(Plugin& plugin,
+                                       const FormKey& record_key,
+                                       std::string_view path,
+                                       std::size_t index,
+                                       std::string_view value);
+
+FormLinkFieldMutationStatus set_record_formlink_field(
+    Plugin& plugin,
+    const FormKey& record_key,
+    const schema::FormLinkFieldDescriptor& field,
+    std::size_t index,
+    const FormKey& target);
+
+std::optional<std::size_t> record_field_count(const Plugin& plugin,
+                                              const FormKey& record_key,
+                                              const schema::ScalarFieldDescriptor& field);
+
+std::optional<std::size_t> record_field_count(const Plugin& plugin,
+                                              const FormKey& record_key,
+                                              const schema::FormLinkFieldDescriptor& field);
+
+std::optional<std::size_t> record_field_count(const Plugin& plugin,
+                                              const FormKey& record_key,
+                                              std::string_view path);
+
+inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
                                   const FormKey& record_key,
                                   std::span<const CtdaCondition> conditions) {
   assign_record_form_keys(plugin);
-  bool found = false;
-  bool changed = false;
+  auto status = ConditionMutationStatus::record_missing;
 
   visit_records(plugin, [&](Record& record) {
-    if (found || record.header.signature == sig_tes4 || record.form_key != record_key) {
+    if (status != ConditionMutationStatus::record_missing ||
+        record.header.signature == sig_tes4 || record.form_key != record_key) {
       return;
     }
-    found = true;
-    if (!write_ctda_conditions(record, conditions)) return;
+    status = ConditionMutationStatus::unchanged;
+    const auto result = write_ctda_conditions_in(record, 0, record.subrecords.size(),
+                                                 conditions, std::nullopt);
+    if (result == CtdaScopeWrite::multiple_lists) {
+      status = ConditionMutationStatus::multiple_lists;
+      return;
+    }
+    if (result != CtdaScopeWrite::replaced) return;
     record.original_range.clear();
     record.decompressed_payload.clear();
     record.header.data_size = 0;
     record.uncompressed_size = 0;
-    changed = true;
+    status = ConditionMutationStatus::updated;
   });
 
-  if (!found) return false;
-  if (changed) plugin.original_range.clear();
-  return true;
+  if (status == ConditionMutationStatus::updated) plugin.original_range.clear();
+  return status;
 }
 
 RecordCopyStatus copy_record_as_override(Plugin& destination,

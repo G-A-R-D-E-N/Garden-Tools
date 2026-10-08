@@ -124,14 +124,14 @@ const Subrecord* unique_optional(const Record& record, Signature signature, std:
   return found;
 }
 
-void decode_speed_bytes(std::array<std::int8_t, k_weather_cloud_layer_slots>& out,
+void decode_speed_bytes(std::array<std::uint8_t, k_weather_cloud_layer_slots>& out,
                         const Subrecord& sub,
                         std::string_view name) {
   if (sub.data.size() != k_weather_cloud_layer_slots) {
     throw WeatherError(std::string(name) + " must be exactly 32 bytes");
   }
   for (std::size_t i = 0; i < k_weather_cloud_layer_slots; ++i) {
-    out[i] = static_cast<std::int8_t>(sub.data[i]);
+    out[i] = static_cast<std::uint8_t>(sub.data[i]);
   }
 }
 

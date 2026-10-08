@@ -322,6 +322,28 @@ TEST(WeatherConcept, RejectsMalformedPnamSize) {
   EXPECT_THROW(fo4::forms::decode_weather(plugin, key), fo4::forms::WeatherError);
 }
 
+TEST(WeatherConcept, CloudSpeedsPreserveUnsignedStoredBytes) {
+  auto plugin = fo4::read_plugin(make_weather_plugin(), "WeatherPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  auto* record = find_mutable_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  constexpr std::array<std::uint8_t, 5> values{0, 127, 128, 254, 255};
+  for (auto& sub : record->subrecords) {
+    if (sub.signature == fo4::Signature::from_string("RNAM") ||
+        sub.signature == fo4::Signature::from_string("QNAM")) {
+      for (std::size_t i = 0; i < sub.data.size(); ++i) {
+        sub.data[i] = std::byte{values[i % values.size()]};
+      }
+    }
+  }
+  const auto model = fo4::forms::decode_weather(plugin, key);
+  for (std::size_t i = 0; i < fo4::forms::k_weather_cloud_layer_slots; ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(model.cloud_speed_y[i], values[i % values.size()]);
+    EXPECT_EQ(model.cloud_speed_x[i], values[i % values.size()]);
+  }
+}
+
 class WeatherLayoutFamily : public testing::TestWithParam<WeatherLayoutCase> {};
 
 TEST_P(WeatherLayoutFamily, LayoutFamiliesDecode) {
