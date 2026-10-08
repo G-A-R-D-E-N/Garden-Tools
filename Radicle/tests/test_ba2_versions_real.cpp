@@ -73,4 +73,4 @@ INSTANTIATE_TEST_SUITE_P(
         NamedArchive{"ccBGSFO4001-PipBoy(Black) - Main.ba2", 8, fo4::archive::Ba2Kind::general, 41},
         NamedArchive{"ccBGSFO4001-PipBoy(Black) - Textures.ba2", 8, fo4::archive::Ba2Kind::texture, 4}));
 
-}  // namespace
+}
