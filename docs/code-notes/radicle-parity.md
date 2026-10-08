@@ -63,3 +63,7 @@ A Mutagen capture of the same edits, written with GardenEngine's logic, decodes 
 `Radicle/tools/parity/common.hpp:dds_payload` returns `-` when a DDS is shorter than its header. A 128 to 147-byte entry with a DX10 FourCC used to take `subspan(148)` past the end and hash out-of-bounds memory. Regression: `Radicle/tests/test_parity_dds.cpp:Dx10HeaderLongerThanTheFileIsNotAPayload`, which crashed with 0xC0000005 before the fix.
 
 `Radicle/tools/parity/writeback.cpp:read_edits` and `Radicle/tools/parity/main.cpp:dump_ba2` strip a trailing CR, the same as `read_order`. `dump_ba2` used to keep it, so every archive in a CRLF list failed to open with the CR in its path; `radicle_parity_tools` checks the `ba2_index.tsv` name column.
+
+## Parity report integration
+
+`Radicle/docs/FO4_PARITY.md:Baseline and legend` and `build/evidence/native-backend-progress.json:as_of` preserve the 2026-10-05 inventory and 2026-10-07 delivery evidence as historical snapshots. The documentation changes add no stored-format behavior or public exports beyond main `c50ad4d5405e1571113019654b10e3d4a05ca0f1`, so this PR retains that main's ABI 11. Exact-head validation is recorded on PR #424; historical green runs do not establish readiness of subsequently updated branches or resolve #428's LTEX ownership conflict. Full field/helper parity and issue #287 remain open.

@@ -14,7 +14,7 @@ xEdit definitions, official plugin measurements, existing typed implementations,
 
 ## Baseline and legend
 
-Native baseline: main `cca4b080309053cff127b7202d388df00060388a`, inspected 2026-10-05. Open PR work is listed separately; it is not main coverage.
+Historical inventory baseline: main `cca4b080309053cff127b7202d388df00060388a`, inspected 2026-10-05. The record and named-field matrices below retain that snapshot; they are not a fresh inventory of current main. PR #424 now includes main `c50ad4d5405e1571113019654b10e3d4a05ca0f1` (ABI 11) through a merge without rewriting history. Current validation belongs to the exact documentation head reported on the PR, separately from the historical branch ledgers below.
 
 Definition inventory from the documentation in [TES5Edit 93cc0bc5a1251936c3c7859eee3150eda12a62d7, Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas). SHA-256: `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`.
 
@@ -204,7 +204,7 @@ These are existing test sources, not a new claim that this documentation head ha
 
 ## Named schema fields
 
-All 41 fields currently declared under records[].fields in schema/fallout4/fields.json are listed below. This grades the generic descriptor path only: plugin/mutation.cpp:set_record_scalar and set_record_formlink_field require existing storage. The separate typed XSCL optional insertion/removal remains credited in REFR writeback above. CREATE is record-level, not a descriptor operation.
+All 41 fields declared under records[].fields in schema/fallout4/fields.json at the historical inventory baseline are listed below. This grades the generic descriptor path only: plugin/mutation.cpp:set_record_scalar and set_record_formlink_field require existing storage. The separate typed XSCL optional insertion/removal remains credited in REFR writeback above. CREATE is record-level, not a descriptor operation.
 
 I is deliberately weaker than complete acceptance: generated offsets and setters alone do not prove every value against corpus, every edited round-trip, or managed mutation coverage. FormLink setters validate local target types and existing master encoding; they do not supply automatic master insertion or complete external target validation.
 
@@ -301,11 +301,11 @@ On 2026-10-05, #426 was merged into each branch below. Local MSVC Release full c
 
 The official-corpus run for the package reader was at its pre-merge head `557718ef` (785 of 796 passed, 11 opt-in corpus skips, 0 failed, including the seven official-master package cases).
 
-Provisional ABI versions in parallel parser branches are not a merge plan. Main is ABI 8 at this baseline. Before any approved merge, rebase in dependency order, allocate the next actual version from then-current main, regenerate C# bindings and layout probes, and rerun exact-head CI.
+Provisional ABI versions in parallel parser branches are not a merge plan. Main was ABI 8 at this historical baseline. Before any approved merge, merge current main in dependency order without rewriting published history, allocate the next actual version from then-current main, regenerate C# bindings and layout probes, and rerun exact-head CI.
 
-### Native writer branch delivery (2026-10-07)
+### Historical native writer branch delivery (2026-10-07)
 
-This replaces the earlier pending CLMT/vegetation writer snapshots. Coverage below belongs to the named PR heads; nothing was merged and the main-baseline matrix above is unchanged. READ and WRITE refer to the supported stored fields in each tranche, not every xEdit field. Each operation preserves unedited/unknown data or refuses unsupported mutation. Public writer paths have native, C ABI and managed save/reparse proof.
+This replaced the earlier pending CLMT/vegetation writer snapshots on 2026-10-07. Coverage below belongs only to the named historical PR heads and CI runs; it does not establish current-head readiness. READ and WRITE refer to the supported stored fields in each tranche, not every xEdit field. Each operation preserves unedited/unknown data or refuses unsupported mutation. Public writer paths have native, C ABI and managed save/reparse proof at those heads. The current #428 integration is blocked on overlapping LTEX Grass/Grasses FormLink ownership; its previous green run does not resolve that decision. Current audit results and consumer/runtime gaps are recorded on each PR.
 
 | Tranche | READ | WRITE | ADD | REMOVE | CREATE | REMAP | OPAQUE / refusal boundary |
 |---|---|---|---|---|---|---|---|
@@ -321,7 +321,7 @@ This replaces the earlier pending CLMT/vegetation writer snapshots. Coverage bel
 
 The shared #432 follow-up carries the byte-identical dialogue quest/topic placement taxonomy, raw-value link comparison and actual localized-flag preflight, plus sound's explicit `when.match_absent` handling. Generic creation refuses non-top-level placement even with explicit rules. Missing-discriminator matching does not accept malformed or duplicate discriminator data. The shared infrastructure itself adds no record registrations or public C ABI exports.
 
-| PR | Exact writer head | Provisional ABI | Current-head CI |
+| PR | Historical writer head | Historical provisional ABI | Historical exact-head CI |
 |---|---|---:|---|
 | [#428](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/428) | `634f4ee8293eae3a912d05b98e3b13fd67d1ceba` | 17 | [run 609](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/609) success |
 | [#427](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/427) | `21edf3e502152aad7112b3b30ee6cda63f482d3e` | 18 | [run 610](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/610) success |
@@ -333,7 +333,7 @@ The shared #432 follow-up carries the byte-identical dialogue quest/topic placem
 | [#409](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/409) | `b2bc9579855152e17419560a0447744e6f6b8579` | 24 | [run 617](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/617) success |
 | [#432](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/pulls/432) | `0e9f30ac5a7578056a19aa6f2c13a582c72ed996` | 10 | [run 618](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/actions/runs/618) success |
 
-Local final validation for the newly completed tranches (registered CTest checks include skips and the managed-suite entry):
+Historical local final validation for those tranches (registered CTest checks include skips and the managed-suite entry):
 
 | PR | Registered checks, zero failures | Official passes / skips | Managed passes | Proof in the single task worktree |
 |---|---:|---:|---:|---|
@@ -343,9 +343,9 @@ Local final validation for the newly completed tranches (registered CTest checks
 | #409 | 857 | 846 / 11 | 80 | `build/evidence/vmad-final-full.log`, `vmad-official-full.log`, `vmad-push-guard.log` |
 | #432 | 843 | 832 / 11 | 75 | `build/evidence/w0-port-full.log`, `w0-port-official-full.log`, `w0-port-push-guard.log` |
 
-Official data was read-only at `D:/SteamLibrary/steamapps/common/Fallout 4/Data`. The tranche tests inspect official order/grammar and cap mutation work, then save/reparse and compare all untouched body records. The last four full MSVC warning-as-error builds and full suites passed; independent read-only reviews were completed and findings applied. The registered check count is not a runtime-acceptance count. Local corpus proof and runner CI are separate evidence. Existing optional third-party/archive/compiler corpora remain skipped where unavailable.
+Official data was read-only through `FO4_DATA_DIR`. The tranche tests inspect official order/grammar and cap mutation work, then save/reparse and compare all untouched body records. The last four full MSVC warning-as-error builds and full suites passed at the historical heads above; independent read-only reviews were completed and findings applied. The registered check count is not a runtime-acceptance count. Local corpus proof and runner CI are separate evidence. Existing optional third-party/archive/compiler corpora remain skipped where unavailable.
 
-The single task checkout is `E:/GardenEngine/git/garden-tools/git/radicle-parity-287-20261005/git/radicle-345-ci426`. `build/evidence/native-backend-progress.json` records branch heads, validation, proof paths and the remaining integration decision; evidence logs are local ignored artifacts. CI links and committed regression tests provide the remote reproducible checks.
+`build/evidence/native-backend-progress.json` retains the historical branch heads, validation, relative proof paths and integration decision. Evidence logs are local ignored artifacts from the original task checkout. CI links and committed regression tests provide the remote reproducible checks; current PR descriptions report subsequent validation.
 
 Before any future approved integration, renumber provisional ABIs in dependency merge order against then-current main, regenerate bindings/probes, resolve schema unions and placement-enum extensions, then rerun exact-head CI. No merge is authorized by this delivery. The VMAD variable-layout follow-up still relies on the existing verified private evidence recorded on #409 in `Radicle/docs/VMAD_VARIABLE_EVIDENCE.md`; no nonempty variable or runtime-binding behavior is inferred.
 
@@ -376,7 +376,7 @@ The refreshed 2026-10-05 inventory contains 85 open repository issues (both API 
 
 ## Ordered follow-ups
 
-1. Reconcile the provisional ABI series and schema unions only when integration is authorized; regenerate bindings/layout probes and rerun exact-head validation after rebasing.
+1. Reconcile the provisional ABI series and schema unions only when integration is authorized; merge current main without rewriting published history, regenerate bindings/layout probes and rerun exact-head validation.
 2. Continue field-by-field xEdit/helper audits outside the named writer scopes. Unexamined U entries remain pending.
 3. Keep variable VMAD layouts, navigation derivation and scope-specific grouped authoring refused until their ownership and safe mutation are proven.
 4. Complete independent runtime/consumer acceptance in the owning projects; stored edit/reparse and CI do not establish game execution behavior.

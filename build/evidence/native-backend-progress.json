@@ -1,8 +1,8 @@
 {
   "as_of": "2026-10-07",
   "supersedes": "this file at 2026-10-05 21:28 UTC",
-  "scope": "Native editable plugin backend; branch evidence only; no merge authorization",
-  "taskWorktree": "E:/GardenEngine/git/garden-tools/git/radicle-parity-287-20261005/git/radicle-345-ci426 (single task worktree; detached HEADs; build/radbuild.cmd, build/guard.cmd)",
+  "scope": "Historical 2026-10-07 native writer delivery snapshot; not current-head readiness or merge authorization",
+  "taskWorktree": "Original task checkout; proof paths below are relative local artifacts",
   "pushedThisSession": {
     "432_W0b": {
       "branch": "nomad/radicle-subrecord-authoring-20261005",
@@ -104,21 +104,27 @@
   },
   "remaining": [],
   "notes": [
-    "climate branch is also checked out in worktree E:/GardenEngine/git/garden-tools/git/radicle-climate-writer-425-20261005 (now stale vs origin)",
+    "The original climate checkout was stale relative to its published branch at this historical snapshot.",
     "Earlier completed tranche validation is retained from the task handoff; this follow-up separately verifies exact-head CI.",
-    "All nine writer/infrastructure exact heads have successful CI; no PR was merged."
+    "All nine named historical writer/infrastructure heads had successful CI at this snapshot; this does not establish current-head readiness."
   ],
   "inProgress": {},
   "documentationDelivery": {
     "pr": 424,
     "branch": "nomad/radicle-parity-287-20261005",
-    "scope": "Per-tranche operation matrix and this progress file; main baseline unchanged",
+    "scope": "Historical documentation delivery before the current-main integration",
     "validation": "785 registered baseline checks with zero failures; managed65 passed; JSON parse and independent read-only review clear",
     "proof": "build/evidence/parity-doc-full.log"
   },
   "futureIntegration": {
-    "abiDecision": "Renumber provisional ABIs in dependency merge order against then-current main; regenerate bindings/probes and rerun exact-head CI after rebasing",
+    "abiDecision": "Renumber provisional ABIs in dependency merge order against then-current main; merge main without rewriting published history, regenerate bindings/probes and rerun exact-head CI",
     "authorization": "No merge authorized; no work was merged"
   },
-  "deliveryStatus": "All requested writer/infrastructure branch heads pushed with green exact-head CI; operation report and this progress file are published by this documentation revision"
+  "deliveryStatus": "Historical delivery only: the named 2026-10-07 writer/infrastructure heads had successful exact-head CI. Subsequent audit results belong to their PR descriptions; #428 integration is blocked on overlapping LTEX Grass/Grasses FormLink ownership.",
+  "mainIntegration": {
+    "main": "c50ad4d5405e1571113019654b10e3d4a05ca0f1",
+    "abi": 11,
+    "scope": "Documentation only; historical operation inventories retained, no public export changes",
+    "validation": "Current documentation-head validation is recorded on PR #424; old counts above remain historical"
+  }
 }
