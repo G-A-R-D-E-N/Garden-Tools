@@ -48,6 +48,7 @@ bool hasRow(char** rows, size_t count, const std::string& expected) {
   }
   return false;
 }
+
 const radicle_quest_property* findProperty(const radicle_quest_property* properties, size_t count,
                                            const std::string& name) {
   for (size_t index = 0; index < count; ++index) {

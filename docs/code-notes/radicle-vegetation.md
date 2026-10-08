@@ -42,3 +42,20 @@ The required GardenEngine vegetation probe and its Radicle pin update are missin
 Radicle native/C ABI and managed tests do not substitute for that consumer proof.
 Report the missing integration under #148/#342 rather than expanding #404 into
 GardenEngine rendering work or closing either issue.
+
+## Radicle/tests/test_vegetation_real.cpp:EveryOfficialVegetationRecordDecodesAndMasterIsByteIdentical
+
+The official-master regression compares each native decoded value with its C ABI
+view, including optional presence and resolved harvest keys. Raw CNAM floats,
+FNAM flags and PFPC bytes independently check the payload values. Float agreement
+uses exact IEEE bit patterns so signed zero and NaN payloads are compared too.
+Each LTEX GNAM retains its physical order and must be non-null and resolve to GRAS
+in both environments. Load the selected file's declared masters, in declaration
+order, before that file so cross-master links can resolve; enumerate and serialize only the
+selected master. Keep the family totals and byte-identity assertions, and include
+record keys and raw subrecord bytes in failure traces. No decoder behavior changes.
+
+## Radicle/tests/test_c_api_quest.cpp:findProperty
+
+Restore the blank line after `hasRow` removed by merge conflict resolution; the
+diff against main then contains only the ABI 12 test update in this file.
