@@ -25,7 +25,7 @@ public sealed record PexObjectInfo(
     byte[] ParentClassName,
     PexObjectCounts Counts);
 
-public sealed class PexFile : IDisposable
+public sealed partial class PexFile : IDisposable
 {
     private IntPtr _handle;
 

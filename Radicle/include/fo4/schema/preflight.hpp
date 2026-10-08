@@ -24,7 +24,7 @@ struct PreflightIssue {
 // how to prove. Missing existing_only fields are legal. Duplicate or malformed
 // scalar storage is an error; readable legacy values outside current write
 // constraints are warnings so inspection remains lossless and non-destructive.
-std::vector<PreflightIssue> preflight_record(const Record& record);
+std::vector<PreflightIssue> preflight_record(const Record& record, bool localized = false);
 std::vector<PreflightIssue> preflight_plugin(const Plugin& plugin);
 
 // Validates a newly authored record against the generated creation contract:
