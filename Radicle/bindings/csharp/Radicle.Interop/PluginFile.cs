@@ -179,14 +179,12 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (s, key) => RadicleNative.PluginSetRecordString(Handle, key, path, at, value));
     }
 
-    /// <summary>Ensures the subrecord is present, adding its schema default at the schema-ordered position (returns true if added or already present; false when the record is absent).</summary>
     public bool AddSubrecord(FormKey record, string signature)
     {
         ArgumentNullException.ThrowIfNull(signature);
         return Edit(record, (s, key) => RadicleNative.PluginAddSubrecord(Handle, key, signature));
     }
 
-    /// <summary>Removes one physical occurrence of a schema-listed subrecord; false when the record or occurrence is absent.</summary>
     public bool RemoveSubrecord(FormKey record, string signature, int occurrence = 0)
     {
         ArgumentNullException.ThrowIfNull(signature);
@@ -194,7 +192,6 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(record, (s, key) => RadicleNative.PluginRemoveSubrecord(Handle, key, signature, at));
     }
 
-    /// <summary>Creates a local record holding the editor ID and every required subrecord at its registered default.</summary>
     public FormKey CreateRecord(string signature, string editorId)
     {
         ArgumentNullException.ThrowIfNull(signature);
@@ -205,7 +202,6 @@ public sealed unsafe class PluginFile : IDisposable
         return FormKey.FromNative(key)!.Value;
     }
 
-    /// <summary>Addressable occurrences or elements of a field; 0 when the field or the record is absent.</summary>
     public int FieldCount(FormKey record, string path)
     {
         ArgumentNullException.ThrowIfNull(path);

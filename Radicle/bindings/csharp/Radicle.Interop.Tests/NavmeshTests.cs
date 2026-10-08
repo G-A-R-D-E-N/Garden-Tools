@@ -18,12 +18,15 @@ public class NavmeshTests
         var key = new FormKey("Navigation.esm", 0x800);
         using var plugin = PluginFile.Read(path);
         Assert.True(plugin.SetNavmeshVertex(key, 0, new(9, 10, 11)));
-        Assert.True(plugin.SetNavmeshTriangle(key, 0, new(new ushort[] { 0, 0, 0 }, new short[] { -1, -2, -3 }, 6.5f, 0xAA, 0xABCD8052)));
+        Assert.True(plugin.SetNavmeshTriangle(key, 0, new(new ushort[] { 0, 0, 0 }, new short[] { -1, -2, -3 }, 6.5f, 0xAA, 0xABCD8012)));
         Assert.True(plugin.SetNavmeshDoor(key, 0, new(0, 0x87654321, new("Navigation.esm", 0x813))));
         Assert.False(plugin.SetNavmeshVertex(key, 1, new(1, 2, 3)));
         var bytes = plugin.ToBytes();
         Assert.Throws<RadicleException>(() => plugin.SetNavmeshVertex(key, 0, new(float.NaN, 2, 3)));
         Assert.Throws<RadicleException>(() => plugin.SetNavmeshTriangle(key, 0, new(new ushort[] { 0, 0, 0 }, new short[3], 1, 0, 0)));
+        for (var bit = 0; bit < 32; ++bit)
+            Assert.Throws<RadicleException>(() => plugin.SetNavmeshTriangle(key, 0,
+                new(new ushort[] { 0, 0, 0 }, new short[] { -1, -2, -3 }, 6.5f, 0xAA, 0xABCD8012u ^ (1u << bit))));
         Assert.Throws<ArgumentOutOfRangeException>(() => plugin.SetNavmeshDoor(key, -1, new(0, 0, null)));
         Assert.Equal(bytes, plugin.ToBytes());
         var saved = temp.Write("Saved.esm", bytes);

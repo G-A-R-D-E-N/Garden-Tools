@@ -4,7 +4,7 @@
 
 `docs/NAVM_NAVI.md` records the measured version-15 disk grammar and the
 resolved CK reader discrepancy. The pinned private record is
-`../radicle-341-re-followup-20261005/build/RE-Work/6916afb/navigation-401-339/README.md`
+`build/RE-Work/6916afb/navigation-401-339/README.md`
 at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 (OG readers
 @0x14250FCD0 and @0x14250FFB0; independently matched AE readers). Triangles
 store f32 clearance, a raw traversal byte and one u32 flags word; splitting
@@ -14,13 +14,15 @@ Both decoders reuse the existing full
 payload validator before reading counted data. Geometry, adjacency values
 and links are stored reads; flag meanings and runtime pathfinding remain
 unverified. Cover/grid and optional island bytes stay opaque and borrowed
-from the immutable environment. No writer behavior changes.
+from the immutable environment. Stored writer constraints are documented in
+`docs/code-notes/radicle-navmesh-writer.md:Radicle/src/plugin/navmesh_writer.cpp`.
 
 `src/c_api_navmesh.cpp:radicle_navmesh_decode` and `radicle_navi_decode`
 own their array views until the paired free call; strings and opaque bytes
 remain borrowed from the environment. `bindings/csharp/Radicle.Interop/Navmesh.cs`
-copies every array before freeing. ABI 10 avoids main 4, PR #383's 5/6/7,
-PR #398's 8 and PR #400's 9. Reconcile those independent branches before merge.
+copies every array before freeing. ABI 12 advances main's ABI 11 once;
+re-bump if another additive ABI PR merges first. Existing exported signatures
+and layouts are retained.
 
 `CMakeLists.txt:RADICLE_CSHARP_TESTS` is enabled in the two native jobs of
 `.github/workflows/native-ci.yml` so the new getters and their ownership are

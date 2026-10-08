@@ -2,7 +2,7 @@
 
 Compatibility evidence is pinned to TES5Edit/TES5Edit commit
 `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas`:
-`wbNVNM` lines 4360–4482, NAVM 7212–7238 and NAVI 7240–7350.
+`wbNVNM` lines 4360–4482, NAVM 7212–7238 and NAVI 7240–7332.
 The existing checked grammar is `src/schema/form_link_mixed.cpp`:
 `navmesh_mixed_formid_offsets`. It validates every counted section and the
 complete payload before the new read surface exposes fields.
@@ -71,10 +71,11 @@ inferred semantic names. Pathfinding remains outside stored-data authoring.
 | REMAP | Existing checked mixed-link grammar; numeric topology and opaque bytes preserved |
 | OPAQUE | Unknown triangle traversal byte, cover/waypoint/grid tails, island bytes and unsupported layouts preserved or edits refused |
 
-Edits preserve array sizes. Triangle vertex indices must fit the existing vertex array; the unknown traversal byte, unnamed triangle bits and uncertain cover-flags word must remain identical. Vertex and height values must be finite. Door references must be non-null, use an existing master, and resolve to REFR when local. These are stored-data edits; no derived navigation rebuild is implied.
+Edits preserve array sizes. Triangle vertex indices must fit the existing vertex array; the unknown traversal byte and complete raw flags word must remain identical. Vertex and height values must be finite. Door references must be non-null, use an existing master, and resolve to REFR when local. These are stored-data edits; no derived navigation rebuild is implied.
 
-ABI 23 is provisional and must be reconciled in dependency merge order. Local MSVC warnings-as-errors validation: 865 registered checks, zero failures; managed 81 passed. The final official seven-master run passed 854 checks, skipped 11 and had zero failures in 215.95 seconds. All seven writer order/mutation cases passed; proof is `build/evidence/navmesh-final-full.log` and `build/evidence/navmesh-final-official-full.log`. Untouched body records are byte-identical; TES4 checks allow the existing serializer's regenerated ONAM metadata and size markers.
+ABI 12 advances main's ABI 11 once while retaining main and published exports and layouts. A re-bump is expected if another additive ABI PR merges first. Current validation and exact-head CI counts belong in the PR description, with local proof under `build/evidence/`. `tests/test_navmesh_real.cpp:expect_geometry` and `expect_info` check native/C value agreement, including opaque bytes and resolved keys. Untouched body records are byte-identical; TES4 checks allow the existing serializer's regenerated ONAM metadata and size markers.
 
-GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has vocabulary
-entries but no NAVM/NAVI geometry consumer. Issue #146 must supply that
-consumer before a real GardenEngine probe can exercise these getters.
+The earlier GardenEngine audit at `10ea81f1590b06dad962ff86721c0a55f00ef173`
+found vocabulary entries without a NAVM/NAVI geometry consumer. That audit
+was not rerun during this follow-up. Current consumer adoption and the
+GardenEngine #146 C ABI probe remain separate, unverified acceptance work.

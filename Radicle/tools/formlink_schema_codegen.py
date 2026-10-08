@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from field_address_codegen import parse_address, render_address  # noqa: E402
+from field_address_codegen import parse_address, reject_overlaps, render_address  # noqa: E402
+from schema_codegen import WIDTHS, load_fields  # noqa: E402
 
 MUTATIONS = {"existing_only", "existing_neighbors", "appendable"}
 NESTED_MUTATIONS = {"terminated_group"}
@@ -294,6 +295,22 @@ def load_lists(schema_path: Path):
             "anchor_predecessors": anchors["predecessors"],
             "anchor_successors": anchors["successors"],
         })
+
+    scalar_entries = [dict(field, width=WIDTHS.get(field["storage"], 0)) for field in load_fields(schema_path)]
+    entries = [dict(field, width=4, embedded=True) for field in fields]
+    for row in lists + nested_lists:
+        packed = row.get("storage") == "packed_array"
+        entries.append({
+            "record": row["record"],
+            "subrecord": row["subrecord"],
+            "path": row["path"] if "path" in row else row["container_path"] + "\\" + row["member"],
+            "offset": 0,
+            "width": 0,
+            "embedded": False,
+            "address": {"repeated": not packed, "stride": 4 if packed else 0, "array_offset": 0, "when": None},
+        })
+    reject_overlaps(entries, "FormLink")
+    reject_overlaps(scalar_entries + entries, "FormLink/scalar")
 
     lists.sort(key=lambda item: (item["record"], item["path"]))
     nested_lists.sort(key=lambda item: (item["record"], item["container_path"], item["member"]))

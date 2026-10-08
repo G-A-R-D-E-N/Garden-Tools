@@ -59,7 +59,7 @@ Speculative answers must not be hardcoded as facts.
 17. VMAD fragment layouts for PACK/INFO/SCEN phase extras are walked from xEdit counters; Variable property payloads (type 6/16) are skipped as empty/count-only. Encoding of VMAD strings is UTF-8 per xEdit `wbEncodingVMAD`.
 18. CTDA CIS1/CIS2 string params. Use Global comparison FormID remap is implemented (type bit 2). ESP flagged light can be stamped via `apply_master_kinds` / `remap_plugin_masters(MasterDescriptor)`; the library still cannot read SmallFile off a master that is only a MAST name.
 19. PERK Add Activate Choice
-20. NAVM / NAVI
+20. NAVM / NAVI: stored modern version-15 grammar and native/C read surface are documented in `NAVM_NAVI.md` (`src/environment/navmesh.cpp:decode_navmesh` / `decode_navmesh_info`). Remaining traversal/flag, cover/waypoint and NG semantics stay open in #401; GardenEngine #146 consumer/probe acceptance remains separate.
 21. Persistent vs temporary REFR grouping rules on save
 
 ## BA2

@@ -21,7 +21,7 @@ TEST(NavmeshAuthoring, TypedEditsPatchOnlyTheirBytesAndReparse) {
   const auto sibling = record_original_bytes(plugin, *find_record(plugin, test::navmesh_key(0x811)));
   const std::vector<std::byte> original(sibling.begin(), sibling.end());
   EXPECT_EQ(set_navmesh_vertex(plugin, test::navmesh_key(), 2, {9, 10, 11}), ScalarMutationStatus::updated);
-  env::NavmeshTriangle triangle{{2, 1, 0}, {-1, -1, -1}, 6.5f, 0xAA, 0xABCD8052};
+  env::NavmeshTriangle triangle{{2, 1, 0}, {-1, -1, -1}, 6.5f, 0xAA, 0xABCD8012};
   EXPECT_EQ(set_navmesh_triangle(plugin, test::navmesh_key(), 0, triangle), ScalarMutationStatus::updated);
   EXPECT_EQ(set_navmesh_door(plugin, test::navmesh_key(), 0, {0, 0x87654321, test::navmesh_key(0x812)}), ScalarMutationStatus::updated);
   const auto bytes = write_plugin(plugin);
@@ -31,7 +31,7 @@ TEST(NavmeshAuthoring, TypedEditsPatchOnlyTheirBytesAndReparse) {
   binary::Cursor cursor(data);
   cursor.read_bytes(44); EXPECT_EQ(cursor.read_f32(), 9); EXPECT_EQ(cursor.read_f32(), 10); EXPECT_EQ(cursor.read_f32(), 11);
   cursor.read_u32(); EXPECT_EQ(cursor.read_u16(), 2); EXPECT_EQ(cursor.read_u16(), 1); EXPECT_EQ(cursor.read_u16(), 0);
-  cursor.read_bytes(6); EXPECT_EQ(cursor.read_f32(), 6.5f); EXPECT_EQ(cursor.read_u8(), 0xAA); EXPECT_EQ(cursor.read_u32(), 0xABCD8052u);
+  cursor.read_bytes(6); EXPECT_EQ(cursor.read_f32(), 6.5f); EXPECT_EQ(cursor.read_u8(), 0xAA); EXPECT_EQ(cursor.read_u32(), 0xABCD8012u);
   cursor.read_bytes(8); EXPECT_EQ(cursor.read_u16(), 0); EXPECT_EQ(cursor.read_u32(), 0x87654321u); EXPECT_EQ(cursor.read_u32(), 0x812u);
   EXPECT_TRUE(std::equal(data.end() - 48, data.end(), before.subrecords[0].data.end() - 48));
   EXPECT_EQ(after->subrecords[1].data, before.subrecords[1].data);
@@ -54,6 +54,18 @@ TEST(NavmeshAuthoring, RefusalsKeepSerializedBytesIdentical) {
   EXPECT_THROW(set_navmesh_door(plugin, test::navmesh_key(), 0, {0, 1, {}}), schema::ScalarError);
   EXPECT_THROW(set_navmesh_door(plugin, test::navmesh_key(), 0, {0, 1, FormKey::parse("Missing.esm|00000800")}), FormIdError);
   EXPECT_EQ(write_plugin(plugin), before);
+}
+
+TEST(NavmeshAuthoring, TriangleFlagChangesRefuseWithoutChangingBytes) {
+  for (std::uint32_t bit = 0; bit < 32; ++bit) {
+    SCOPED_TRACE(bit);
+    auto plugin = test::navmesh_writer_fixture();
+    const auto before = write_plugin(plugin);
+    env::NavmeshTriangle triangle{{0, 1, 2}, {-1, -1, -1}, 4.5f, 0xAA,
+                                  0xABCD8012u ^ (std::uint32_t{1} << bit)};
+    EXPECT_THROW(set_navmesh_triangle(plugin, test::navmesh_key(), 0, triangle), schema::ScalarError);
+    EXPECT_EQ(write_plugin(plugin), before);
+  }
 }
 
 TEST(NavmeshAuthoring, MalformedDuplicateAndUnsupportedGeometryFailsClosed) {
@@ -91,16 +103,26 @@ TEST(NavmeshAuthoring, CAbiExportsValidateInputsAndRoundtrip) {
   const radicle_form_key key{"Navigation.esp", 0x800};
   const radicle_navmesh_vertex vertex{9, 10, 11};
   EXPECT_EQ(radicle_plugin_set_navmesh_vertex(plugin, key, 2, &vertex), RADICLE_STATUS_OK);
-  radicle_navmesh_triangle triangle{{2, 1, 0}, {-1, -1, -1}, 6.5f, 0xAA, 0xABCD8052};
+  radicle_navmesh_triangle triangle{{2, 1, 0}, {-1, -1, -1}, 6.5f, 0xAA, 0xABCD8012};
   EXPECT_EQ(radicle_plugin_set_navmesh_triangle(plugin, key, 0, &triangle), RADICLE_STATUS_OK);
   const radicle_navmesh_door_link door{0, 0x87654321, {"Navigation.esp", 0x812}};
   EXPECT_EQ(radicle_plugin_set_navmesh_door(plugin, key, 0, &door), RADICLE_STATUS_OK);
+  std::uint8_t* snapshot = nullptr; std::size_t snapshot_size = 0;
+  ASSERT_EQ(radicle_plugin_write_bytes(plugin, &snapshot, &snapshot_size), RADICLE_STATUS_OK);
+  const std::vector<std::uint8_t> expected(snapshot, snapshot + snapshot_size);
+  radicle_free_bytes(snapshot);
+  for (std::uint32_t bit = 0; bit < 32; ++bit) {
+    SCOPED_TRACE(bit);
+    triangle.flags = 0xABCD8012u ^ (std::uint32_t{1} << bit);
+    EXPECT_EQ(radicle_plugin_set_navmesh_triangle(plugin, key, 0, &triangle), RADICLE_STATUS_INVALID_ARGUMENT);
+  }
   EXPECT_EQ(radicle_plugin_set_navmesh_vertex(plugin, key, 3, &vertex), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_navmesh_vertex(plugin, key, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
   triangle.traversal = 0;
   EXPECT_EQ(radicle_plugin_set_navmesh_triangle(plugin, key, 0, &triangle), RADICLE_STATUS_INVALID_ARGUMENT);
   std::uint8_t* bytes = nullptr; std::size_t size = 0;
   ASSERT_EQ(radicle_plugin_write_bytes(plugin, &bytes, &size), RADICLE_STATUS_OK);
+  EXPECT_EQ(std::vector<std::uint8_t>(bytes, bytes + size), expected);
   const auto parsed = read_plugin(std::as_bytes(std::span{bytes, size}), "Navigation.esp");
   const auto& data = find_record(parsed, test::navmesh_key())->subrecords[0].data;
   binary::Cursor c(data); c.read_bytes(44); EXPECT_EQ(c.read_f32(), 9);

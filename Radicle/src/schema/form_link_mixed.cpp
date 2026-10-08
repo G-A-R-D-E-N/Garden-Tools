@@ -183,6 +183,9 @@ std::optional<std::vector<std::size_t>> mnam_formid_offsets(
 std::optional<std::vector<std::size_t>> navmesh_mixed_formid_offsets(
     const Record& record, const Subrecord& sub) {
   if (record.header.signature == k_navm && sub.signature == k_nvnm) {
+    if (record.header.form_version < 128 || sub.data.size() < 4 || read_u32(sub.data, 0) != 15) {
+      return std::nullopt;
+    }
     return nvnm_formid_offsets(sub.data);
   }
   if (record.header.signature == k_navm && sub.signature == k_mnam) {

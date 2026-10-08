@@ -1020,7 +1020,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("HAZD"), "HAZD\\Light", "Light", Signature::from_string("DNAM"), 28, true, 49, 1, FieldAddress{}},
   {Signature::from_string("HAZD"), "HAZD\\Sound", "Sound", Signature::from_string("DNAM"), 36, true, 50, 1, FieldAddress{}},
   {Signature::from_string("HAZD"), "HAZD\\Spell", "Spell", Signature::from_string("DNAM"), 24, true, 51, 2, FieldAddress{}},
-  {Signature::from_string("NAVI"), "NAVI\\Navmeshes", "Navmeshes", Signature::from_string("NVMI"), 0, false, 53, 1, FieldAddress{true, 0, 0, FieldDiscriminator{Signature::from_string("NVER"), 0, DiscriminatorStorage::u32, 1, {{15}}}}},
+  {Signature::from_string("NAVI"), "NAVI\\Navmeshes", "Navmeshes", Signature::from_string("NVMI"), 0, false, 53, 1, FieldAddress{true, 0, 0, FieldDiscriminator{Signature::from_string("NVER"), 0, DiscriminatorStorage::u32, 1, {{15}}, false}}},
   {Signature::from_string("PROJ"), "PROJ\\ActiveSoundLoop", "Active sound loop", Signature::from_string("DNAM"), 36, true, 54, 1, FieldAddress{}},
   {Signature::from_string("PROJ"), "PROJ\\CollisionLayer", "Collision layer", Signature::from_string("DNAM"), 84, true, 55, 1, FieldAddress{}},
   {Signature::from_string("PROJ"), "PROJ\\CountdownSound", "Countdown sound", Signature::from_string("DNAM"), 52, true, 56, 1, FieldAddress{}},

@@ -153,7 +153,7 @@ fo4::schema::FormLinkFieldDescriptor link_field(std::string_view sub,
 const fo4::FormKey master_a = fo4::FormKey::parse("000801:Master.esm");
 const fo4::FormKey master_b = fo4::FormKey::parse("000900:Master.esm");
 
-}  // namespace
+}
 
 TEST(FieldWriterStorage, SignedByteBounds) {
   auto plugin = load({{"DATA", raw({0, 0, 0, 0})}});
@@ -661,4 +661,37 @@ TEST(FieldWriterRealData, RegisteredRaceStringsMatchEveryShippedRace) {
   std::cout << "RACE records " << races << ", biped names " << biped_names << ", phoneme names "
             << phoneme_names << ", lookup textures " << lookups << "\n";
   EXPECT_GT(races, 0u);
+}
+
+TEST(FieldWriterFormLink, RequestedReplacementDoesNotResolveOldRawValue) {
+  auto plugin = load({{"LINK", u32s({0x04001234})}, {"ZZZZ", raw({1, 2, 3})}});
+  const auto field = link_field("LINK", 0, true);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), field, 0, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), field, 0, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::unchanged);
+  const auto saved = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(snapshot(saved), 0), u32s({0}));
+  EXPECT_EQ(payload(snapshot(saved), 1), raw({1, 2, 3}));
+}
+
+TEST(FieldWriterScalar, MissingDiscriminatorMatchesOnlyWhenExplicitlyEnabled) {
+  auto address = with_when({}, "CNAM", 0, DiscriminatorStorage::u32, {7});
+  address.when.match_absent = true;
+  const auto field = scalar_field("DATA", ScalarStorage::u32, 0, 1000, 0, false, address);
+  auto absent = load({{"DATA", u32s({1})}});
+  EXPECT_EQ(fo4::set_record_scalar(absent, record_key(), field, 0, "2"), fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(payload(snapshot(absent), 0), u32s({2}));
+  for (const auto& subs : std::vector<std::vector<Sub>>{
+         {{"CNAM", u32s({8})}, {"DATA", u32s({1})}},
+         {{"CNAM", raw({7})}, {"DATA", u32s({1})}},
+         {{"CNAM", u32s({7})}, {"CNAM", u32s({7})}, {"DATA", u32s({1})}}}) {
+    auto refused = load(subs);
+    const auto before = fo4::write_plugin(refused);
+    EXPECT_EQ(fo4::set_record_scalar(refused, record_key(), field, 0, "2"), fo4::ScalarMutationStatus::subrecord_missing);
+    EXPECT_EQ(fo4::write_plugin(refused), before);
+  }
+  address.when.match_absent = false;
+  const auto strict = scalar_field("DATA", ScalarStorage::u32, 0, 1000, 0, false, address);
+  EXPECT_EQ(fo4::set_record_scalar(absent, record_key(), strict, 0, "3"), fo4::ScalarMutationStatus::subrecord_missing);
 }

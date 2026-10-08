@@ -83,14 +83,14 @@ ScalarMutationStatus set_navmesh_triangle(Plugin& plugin, const FormKey& key, st
     }
     std::uint32_t old_flags = 0;
     std::memcpy(&old_flags, data.data() + 17, 4);
-    if (((old_flags ^ value.flags) & ~std::uint32_t{0x0E7F}) != 0) {
-      throw schema::ScalarError("unknown triangle and cover flags must be preserved");
+    if (old_flags != value.flags) {
+      throw schema::ScalarError("triangle and cover flags must be preserved");
     }
     for (std::size_t i = 0; i < 3; ++i) {
       if (value.vertices[i] >= vertices) throw schema::ScalarError("triangle vertex is out of range");
       store(data, i * 2, value.vertices[i]); store(data, 6 + i * 2, value.edges[i]);
     }
-    store(data, 12, value.clearance); store(data, 17, value.flags);
+    store(data, 12, value.clearance);
   });
 }
 
