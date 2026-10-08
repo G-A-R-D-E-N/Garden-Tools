@@ -106,6 +106,8 @@ add_executable(
     unit/RadiclePluginMasterOverrideTests.cpp
     unit/RadiclePluginScalarTests.cpp
     unit/RadiclePluginSchemaGridTests.cpp
+    unit/RadiclePluginW0Tests.cpp
+    unit/RadiclePluginSchemaAuthoringTests.cpp
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp

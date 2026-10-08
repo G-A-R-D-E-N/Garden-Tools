@@ -151,14 +151,18 @@ TEST_CASE("Native Spreadsheet grid exposes only safe EDID writes") {
 
     const auto grid = parseResult(backend.invokeBackend(
         "GetRecordsGrid", nlohmann::json::array({"Base.esp", "MISC", 200, 0})));
-    REQUIRE(grid.at("columns").size() == 1);
+    REQUIRE(grid.at("columns").size() == 2);
     CHECK(grid.at("columns")[0] == "EDID");
+    CHECK(grid.at("columns")[1] == "MISC\\Keywords\\Count");
     CHECK(grid.at("total") == 1);
     CHECK(grid.at("offset") == 0);
     REQUIRE(grid.at("rows").size() == 1);
     CHECK(grid.at("rows")[0].at("formKey") == "000800:Base.esp");
     CHECK(grid.at("rows")[0].at("editorId") == "BaseMisc");
     CHECK(grid.at("rows")[0].at("cells")[0] == "BaseMisc");
+    CHECK(grid.at("rows")[0].at("cells")[1] == "0");
+    CHECK(grid.at("rows")[0].at("editable")[0] == true);
+    CHECK(grid.at("rows")[0].at("editable")[1] == false);
 }
 
 TEST_CASE("Native records-of-type returns winning load-order version") {
