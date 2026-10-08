@@ -3,7 +3,7 @@
 ## src/environment/sound.cpp:decode_sound_descriptor and decode_sound_marker
 
 The pinned loader record is
-`../radicle-341-re-followup-20261005/build/RE-Work/6916afb/sound-399-340/README.md`
+`build/RE-Work/6916afb/sound-399-340/README.md`
 at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 5.2–5.5 (OG
 RVAs 0x4C1C10, 0x2CB540 and 0x55A1E0). The OG Standard loader would accept a
 top-level FNAM as legacy flags, but xEdit defines FNAM only inside rate groups
@@ -33,8 +33,8 @@ only their evidenced fields; unknown container bytes are untouched.
 exports use owned array holders and existing environment string storage.
 `bindings/csharp/Radicle.Interop/SoundRecords.cs:RadicleEnvironment` copies
 every array before freeing its holder. The generated declaration/layout probe
-includes `include/fo4/c_api_sound.h`; after the W0 merge the ABI is 20
-(provisional, see `docs/code-notes/radicle-sound-writer.md`).
+includes `include/fo4/c_api_sound.h`; the current ABI is 12 against main ABI 11
+(re-bump if another ABI PR lands first; see `docs/code-notes/radicle-sound-writer.md`).
 
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 

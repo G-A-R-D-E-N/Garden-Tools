@@ -27,7 +27,7 @@ bool link_refused(fo4::Plugin& plugin, std::uint32_t id, const char* path, std::
   return refused(plugin, [&] { link(plugin, id, path, index, target); });
 }
 
-}  // namespace
+}
 
 TEST(SoundAuthoring, ADuplicatedKindRefusesBothDescriptorLayouts) {
   auto entries = fixture();
@@ -136,6 +136,96 @@ TEST(SoundAuthoring, DescriptorLinksStringsAndRateGroupsEditInPlace) {
   EXPECT_EQ(weapon.rate_files[0].file, "sound\\fast.xwm");
   EXPECT_EQ(weapon.rate_files[1].rpm, 1200u);
   EXPECT_EQ(fo4::env::decode_sound_descriptor(saved.env(), saved.record(k_compound)).descriptors.at(1), key(k_auto));
+}
+
+TEST(SoundAuthoring, MalformedRateGroupsRefuseCountsAndEditsWithoutChangingBytes) {
+  for (int defect = 0; defect < 8; ++defect) {
+    SCOPED_TRACE(defect);
+    auto entries = fixture();
+    auto& subs = entries[2].subs;
+    switch (defect) {
+      case 0: subs.insert(subs.begin() + 4, {"FNAM", zstr("stray.wav")}); break;
+      case 1: subs[3].second = words({3}); break;
+      case 2: subs.erase(subs.begin() + 7); break;
+      case 3: subs[4].second = raw({1}); break;
+      case 4: subs[5].second = raw({1, 2, 3}); break;
+      case 5: subs[6].second = raw({1, 2, 3}); break;
+      case 6: subs.insert(subs.begin() + 3, subs[3]); break;
+      case 7: subs.insert(subs.begin() + 6, subs[5]); break;
+    }
+    auto plugin = read(build(entries));
+    const auto before = fo4::write_plugin(plugin);
+    const SavedEnvironment saved(plugin);
+    EXPECT_THROW(fo4::env::decode_sound_descriptor(saved.env(), saved.record(k_auto)), fo4::env::WorldDecodeError);
+    EXPECT_THROW(count(plugin, k_auto, "SNDR\\RateOfFireRpm"), std::exception);
+    EXPECT_THROW(count(plugin, k_auto, "SNDR\\RateOfFireFile"), std::exception);
+    EXPECT_TRUE(scalar_refused(plugin, k_auto, "SNDR\\RateOfFireRpm", 0, "1200"));
+    EXPECT_TRUE(refused(plugin, [&] { text(plugin, k_auto, "SNDR\\RateOfFireFile", 0, "new.wav"); }));
+    EXPECT_EQ(fo4::write_plugin(plugin), before);
+  }
+}
+
+TEST(SoundAuthoring, UnknownFixedLinkWidthsRefuseWithoutChangingBytes) {
+  const std::tuple<std::uint32_t, const char*, const char*, std::uint32_t> cases[] = {
+      {k_std, "GNAM", "SNDR\\Category", k_snct},
+      {k_std, "SNAM", "SNDR\\AlternateSoundFor", k_compound},
+      {k_std, "ONAM", "SNDR\\OutputModel", k_sopm},
+      {k_auto, "BNAM", "SNDR\\BaseDescriptor", k_compound},
+      {k_compound, "DNAM", "SNDR\\Descriptors", k_std},
+      {k_marker, "SDSC", "SOUN\\SoundDescriptor", k_std},
+      {k_step, "DATA", "FSTP\\ImpactDataSet", k_ipds},
+  };
+  for (const auto& [id, tag, path, target] : cases) {
+    for (const auto width : {6u, 8u}) {
+      SCOPED_TRACE(std::string(path) + " " + std::to_string(width));
+      auto entries = fixture();
+      for (auto& entry : entries) {
+        if (entry.id != id) { continue; }
+        for (auto& [name, data] : entry.subs) {
+          if (name == tag) { data = filled(width, 0); }
+        }
+      }
+      auto plugin = read(build(entries));
+      EXPECT_THROW(count(plugin, id, path), fo4::schema::FormLinkFieldError);
+      EXPECT_TRUE(link_refused(plugin, id, path, 0, key(target)));
+    }
+  }
+}
+
+TEST(SoundAuthoring, UnknownRepeatWidthsRefuseWithoutChangingBytes) {
+  for (const auto width : {4u, 5u, 6u, 7u, 10u, 12u}) {
+    SCOPED_TRACE(width);
+    auto entries = fixture();
+    entries[5].subs[3].second = filled(width, 0);
+    auto plugin = read(build(entries));
+    const SavedEnvironment saved(plugin);
+    EXPECT_THROW(fo4::env::decode_sound_marker(saved.env(), saved.record(k_marker)), fo4::env::WorldDecodeError);
+    EXPECT_THROW(count(plugin, k_marker, "SOUN\\RepeatMinTime"), std::exception);
+    EXPECT_TRUE(scalar_refused(plugin, k_marker, "SOUN\\RepeatMinTime", 0, "1"));
+    EXPECT_TRUE(scalar_refused(plugin, k_marker, "SOUN\\RepeatMaxTime", 0, "1"));
+    EXPECT_TRUE(scalar_refused(plugin, k_marker, "SOUN\\RepeatStackable", 0, "1"));
+  }
+}
+
+TEST(SoundAuthoring, MalformedFootstepCountsRefuseWithoutChangingBytes) {
+  for (int defect = 0; defect < 6; ++defect) {
+    SCOPED_TRACE(defect);
+    auto entries = fixture();
+    auto& subs = entries[9].subs;
+    switch (defect) {
+      case 0: subs[1].second = words({1, 2, 0, 1, 2}); break;
+      case 1: subs.erase(subs.begin() + 1); break;
+      case 2: subs[1].second.resize(16); break;
+      case 3: subs.insert(subs.begin() + 1, subs[1]); break;
+      case 4: subs.insert(subs.begin() + 2, subs[2]); break;
+      case 5: subs[1].second = words({0xFFFFFFFFu, 0, 0, 0, 0}); break;
+    }
+    auto plugin = read(build(entries));
+    const SavedEnvironment saved(plugin);
+    EXPECT_THROW(fo4::env::decode_footstep_set(saved.env(), saved.record(k_set)), fo4::env::WorldDecodeError);
+    EXPECT_THROW(count(plugin, k_set, "FSTS\\Footsteps"), std::exception);
+    EXPECT_TRUE(link_refused(plugin, k_set, "FSTS\\Footsteps", 0, key(k_step2)));
+  }
 }
 
 TEST(SoundAuthoring, MarkerMusicAndFootstepFieldsWriteOnlyTheirBytes) {

@@ -14,7 +14,7 @@ measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673
   `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` (W0 list plus `fo4/c_api_sound.h`), `c_api.h` (ABI),
   `Radicle/tests/test_c_api_quest.cpp` (ABI pin) and the generated `RadicleNative.g.cs`. Every generated file was
   regenerated with its tool, never hand-merged.
-- ABI 20 is provisional; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwenty` pins it. The bump also covers the
+- ABI 12 is provisional against main `c50ad4d5405e1571113019654b10e3d4a05ca0f1`; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwelve` pins it. Main is merged without rewriting the published sound branch. The bump also covers the
   `radicle_sound_descriptor` layout change below. Reassign from current main before merging.
 
 ## Reader fixes (`Radicle/src/environment/sound.cpp:decode_sound_descriptor`)
@@ -32,7 +32,7 @@ measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673
   Standard descriptor carrying a rate group had its file name misread as flags (or failed on size). The official census
   has 120 FNAM, all inside the 24 AutoWeapon rate groups, and no top-level FNAM. FNAM is now only read as a rate file;
   one outside a group fails closed ("rate filename is out of order"). The RE record
-  (`radicle-341-re-followup-20261005/build/RE-Work/6916afb/sound-399-340/README.md`, Standard loader 0x4C1C10) shows the
+  (`build/RE-Work/6916afb/sound-399-340/README.md`, Standard loader 0x4C1C10) shows the
   OG engine would accept a 4-byte top-level FNAM as legacy flags (remapped onto the LNAM looping bits); because nothing
   ships one and xEdit does not define it, Radicle does not expose it. Test:
   `Radicle/tests/test_sound.cpp:SoundTest.RateGroupFilenameIsNeverReadAsTopLevelFlags`.
@@ -140,5 +140,14 @@ All `existing_only`, `presentation: identity`, f32 bounds +-1e9.
   the cap exists because each local-target link check walks the whole master, which made all 5,475 Fallout4.esm SNDR
   take many minutes).
 
-## Radicle/schema/fallout4/fields.json:SNDR\RateOfFireRpm, SNDR\RateOfFireFile (known limit)
-These writers address raw INTV/FNAM occurrences and do not check the ITMS…ITME rate-group structure. On a malformed SNDR with a stray top-level FNAM (which `Radicle/src/environment/sound.cpp:decode_sound_descriptor` rejects), index 0 targets that stray FNAM. No official record has one; refuse-on-malformed is the upgrade if third-party data needs it. `Radicle/tests/test_sound_authoring.cpp:ADuplicatedKindRefusesBothDescriptorLayouts` pins that a duplicated CNAM refuses both BNAM layouts with no byte change.
+## Radicle/src/plugin/field_writer.cpp:scalar_slots — rate-group ownership
+The rate fields must use the same complete ITMS/INTV/FNAM/ITME blocks and ITMC count as `Radicle/src/environment/sound.cpp:decode_sound_descriptor` (pinned FO4 lines 9438–9449). Raw occurrence indexing previously exposed a stray top-level FNAM or incomplete blocks. `Radicle/tests/test_sound_authoring.cpp:MalformedRateGroupsRefuseCountsAndEditsWithoutChangingBytes` covers stray filenames, wrong counts, incomplete groups, nonempty markers, malformed RPM/string payloads and duplicate count/RPM fields. Both count and edit paths must refuse these records before writing bytes. Valid blocks keep their existing occurrence order; callers remain responsible for RPM ordering.
+
+## Radicle/schema/fallout4/fields.json:SNDR, SOUN, FSTP — fixed link widths
+SNDR GNAM/SNAM/ONAM/DNAM and AutoWeapon BNAM, SOUN SDSC, and FSTP DATA are exactly four-byte links in pinned FO4 lines 9406–9450, 11961–11969 and 8686–8690. A longer payload has no verified link layout. `Radicle/tests/test_sound_authoring.cpp:UnknownFixedLinkWidthsRefuseWithoutChangingBytes` checks count and mutation refusal on six/eight-byte payloads. The shared `Radicle/src/plugin/field_writer.cpp:formlink_slots` size constraint must apply before slot exposure or writes, rather than treating the first four bytes as an editable link.
+
+## Radicle/src/environment/sound.cpp:decode_sound_marker, decode_footstep_set — writer shape checks
+Pinned FO4 lines 11964–11969 establish the eight/nine-byte SOUN REPT forms; lines 8692–8718 define FSTS XCNT and the five DATA category arrays. The shared field writer must use the same REPT width and FSTS count validation as the readers before counting or editing. `Radicle/tests/test_sound_authoring.cpp:UnknownRepeatWidthsRefuseWithoutChangingBytes` and `MalformedFootstepCountsRefuseWithoutChangingBytes` cover unsupported repeat widths, missing/short/duplicate counts, duplicate DATA and mismatched/overflow-scale totals. These checks prevent editing an unverified prefix or a list whose category boundaries are unavailable.
+
+## Radicle/tests/test_sound_real.cpp:SoundRealData.DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes
+Every official sound record compares native and C presence flags, numeric values, file strings (with the documented Windows-1252 to UTF-8 conversion), resolved link keys, arrays and category order. Zero-family masters report zero totals and still check preservation. `Radicle/tests/test_sound_writer_real.cpp:LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEveryOtherRecordByteIdentical` also validates byte identity when its family is absent instead of skipping. Missing installed data remains the only family-fixture skip condition. The new stateless parsing functions `Radicle/src/environment/sound.cpp:decode_sound_rate_files`, `decode_sound_repeat` and `decode_footstep_counts` share the existing readers' shape checks with writer count/edit paths; the C ABI is unchanged. The fixed-link payload-size metadata is shared with #427 and only applies after the kind discriminator selects the applicable layout.

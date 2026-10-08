@@ -230,4 +230,4 @@ private:
   fo4::env::Environment env_;
 };
 
-}  // namespace fo4::test::sound
+}

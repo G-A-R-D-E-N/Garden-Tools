@@ -8,7 +8,7 @@ The authenticated private runtime evidence index at commit
 inventories. The newer [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md)
 supplies the OG component-hook grammar: Standard loader RVA 0x4C1C10,
 AutoWeapon loader 0x2CB540 and SOUN loader 0x55A1E0. The verified local copy
-is `../radicle-341-re-followup-20261005/build/RE-Work/6916afb/sound-399-340/README.md`.
+is `build/RE-Work/6916afb/sound-399-340/README.md`.
 
 - SNDR lines 9406–9450: CNAM selects Standard `1EEF540A`, Compound
   `54651A43`, or AutoWeapon `ED157AE3`. GNAM category, SNAM alternate,
@@ -56,17 +56,17 @@ The remaining runtime questions are tracked in
 The native environment read functions are in `environment/sound.hpp`; the
 separate `c_api_sound.h` exposes owned descriptor/music/footstep-set arrays and
 fixed marker/footstep views. The generator reads that header and C# copies the
-arrays before releasing their holders. With the W0 merge the ABI is 20
-(provisional); it needs reconciliation with main before merging.
+arrays before releasing their holders. The current ABI is 12 against main ABI 11;
+re-bump it if another ABI PR lands first.
 
 `test_sound_real.cpp` visits every sound-record version through both native
-and C ABI getters, then compares untouched serialization with the original
+and C ABI getters, checks native/C value agreement for all exposed fields, then compares untouched serialization with the original
 master bytes. It skips cleanly with game data unset. Native synthetic cases
 exercise union selection, malformed groups, optional tails and reversed
 category ordering; managed getter tests cover all five record families.
 Local and CI results are recorded separately for each published head.
 
-GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has no SOUN/SNDR
+The 2026-10-04 GardenEngine audit at main `10ea81f1590b06dad962ff86721c0a55f00ef173` found no SOUN/SNDR
 consumer or marker-to-descriptor conversion path. Record vocabulary and generic
 reference discovery are present; generic Godot audio commands do not consume
 these forms. Its #144 audio runtime must supply that path before the requested
@@ -111,3 +111,5 @@ decoders but not writable per field.
 All official sound records follow the authoring order (0 violators); the 24 AutoWeapon SNDR carry the unlisted
 rate-group members, so add on them is refused with `unknown_order`. Field list, defaults provenance and refusal
 reasons are in `docs/code-notes/radicle-sound-writer.md`.
+
+Malformed rate groups, unsupported fixed-link/repeat widths and inconsistent footstep counts refuse field counting and editing before any byte changes. Valid rate groups remain in their stored order; RPM edits do not sort them. Current GardenEngine adoption and its marker-to-file C ABI probe have not been rerun in this tranche; consumer work remains separate.

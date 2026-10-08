@@ -64,9 +64,12 @@ struct FootstepSetData {
 };
 
 SoundDescriptorData decode_sound_descriptor(const Environment& env, const RecordRef& ref);
+std::vector<SoundRateFile> decode_sound_rate_files(const Record& record);
 SoundMarkerData decode_sound_marker(const Environment& env, const RecordRef& ref);
+std::optional<SoundRepeat> decode_sound_repeat(const Record& record);
 MusicTypeData decode_music_type(const Environment& env, const RecordRef& ref);
 FootstepData decode_footstep(const Environment& env, const RecordRef& ref);
 FootstepSetData decode_footstep_set(const Environment& env, const RecordRef& ref);
+std::array<std::uint32_t, 5> decode_footstep_counts(const Record& record);
 
 }

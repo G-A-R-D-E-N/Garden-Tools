@@ -1024,7 +1024,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("EXPL"), "EXPL\\Sound1", "Sound 1", Signature::from_string("DATA"), 4, true, 45, 1, FieldAddress{}},
   {Signature::from_string("EXPL"), "EXPL\\Sound2", "Sound 2", Signature::from_string("DATA"), 8, true, 46, 1, FieldAddress{}},
   {Signature::from_string("EXPL"), "EXPL\\SpawnProjectile", "Spawn projectile", Signature::from_string("DATA"), 20, true, 47, 1, FieldAddress{}},
-  {Signature::from_string("FSTP"), "FSTP\\ImpactDataSet", "Impact data set", Signature::from_string("DATA"), 0, true, 48, 1, FieldAddress{}},
+  {Signature::from_string("FSTP"), "FSTP\\ImpactDataSet", "Impact data set", Signature::from_string("DATA"), 0, true, 48, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("FSTS"), "FSTS\\Footsteps", "Footstep", Signature::from_string("DATA"), 0, false, 49, 1, FieldAddress{false, 4, 0, FieldDiscriminator{}}},
   {Signature::from_string("HAZD"), "HAZD\\ImpactDataSet", "Impact data set", Signature::from_string("DNAM"), 32, true, 50, 1, FieldAddress{}},
   {Signature::from_string("HAZD"), "HAZD\\Light", "Light", Signature::from_string("DNAM"), 28, true, 51, 1, FieldAddress{}},
@@ -1040,12 +1040,12 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("PROJ"), "PROJ\\ExplosionType", "Explosion type", Signature::from_string("DNAM"), 32, true, 62, 1, FieldAddress{}},
   {Signature::from_string("PROJ"), "PROJ\\Light", "Light", Signature::from_string("DNAM"), 16, true, 63, 1, FieldAddress{}},
   {Signature::from_string("PROJ"), "PROJ\\MuzzleFlashLight", "Muzzle flash light", Signature::from_string("DNAM"), 20, true, 64, 1, FieldAddress{}},
-  {Signature::from_string("SNDR"), "SNDR\\AlternateSoundFor", "Alternate sound for", Signature::from_string("SNAM"), 0, false, 65, 1, FieldAddress{}},
-  {Signature::from_string("SNDR"), "SNDR\\BaseDescriptor", "Base descriptor", Signature::from_string("BNAM"), 0, false, 66, 1, FieldAddress{false, 0, 0, FieldDiscriminator{Signature::from_string("CNAM"), 0, DiscriminatorStorage::u32, 1, {{3977607907}}, false}}},
-  {Signature::from_string("SNDR"), "SNDR\\Category", "Category", Signature::from_string("GNAM"), 0, false, 67, 1, FieldAddress{}},
-  {Signature::from_string("SNDR"), "SNDR\\Descriptors", "Descriptor", Signature::from_string("DNAM"), 0, false, 68, 1, FieldAddress{true, 0, 0, FieldDiscriminator{}}},
-  {Signature::from_string("SNDR"), "SNDR\\OutputModel", "Output model", Signature::from_string("ONAM"), 0, false, 69, 1, FieldAddress{}},
-  {Signature::from_string("SOUN"), "SOUN\\SoundDescriptor", "Sound descriptor", Signature::from_string("SDSC"), 0, false, 70, 1, FieldAddress{}},
+  {Signature::from_string("SNDR"), "SNDR\\AlternateSoundFor", "Alternate sound for", Signature::from_string("SNAM"), 0, false, 65, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("SNDR"), "SNDR\\BaseDescriptor", "Base descriptor", Signature::from_string("BNAM"), 0, false, 66, 1, FieldAddress{false, 0, 0, FieldDiscriminator{Signature::from_string("CNAM"), 0, DiscriminatorStorage::u32, 1, {{3977607907}}, false}}, {{4}}},
+  {Signature::from_string("SNDR"), "SNDR\\Category", "Category", Signature::from_string("GNAM"), 0, false, 67, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("SNDR"), "SNDR\\Descriptors", "Descriptor", Signature::from_string("DNAM"), 0, false, 68, 1, FieldAddress{true, 0, 0, FieldDiscriminator{}}, {{4}}},
+  {Signature::from_string("SNDR"), "SNDR\\OutputModel", "Output model", Signature::from_string("ONAM"), 0, false, 69, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("SOUN"), "SOUN\\SoundDescriptor", "Sound descriptor", Signature::from_string("SDSC"), 0, false, 70, 1, FieldAddress{}, {{4}}},
 };
 
 inline constexpr Signature k_generated_sig_base_objects[] = {

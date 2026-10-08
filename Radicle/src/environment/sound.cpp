@@ -26,6 +26,37 @@ void links(const Reader& reader, const Subrecord& sub, std::vector<FormKey>& out
 
 }
 
+std::vector<SoundRateFile> decode_sound_rate_files(const Record& record) {
+  const auto* count = Reader::sized(record, sig("ITMC"), 4);
+  std::vector<SoundRateFile> out;
+  int state = 0;
+  SoundRateFile rate;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == sig("ITMS")) {
+      if (state != 0 || !sub.data.empty()) Reader::fail(record, sub.signature, "invalid rate start");
+      state = 1;
+    } else if (sub.signature == sig("INTV")) {
+      if (state != 1 || sub.data.size() != 4) Reader::fail(record, sub.signature, "invalid rate RPM");
+      rate.rpm = Reader::u32(sub, 0);
+      state = 2;
+    } else if (sub.signature == sig("FNAM")) {
+      if (state != 2) Reader::fail(record, sub.signature, "rate filename is out of order");
+      const auto file = zstring_view(sub);
+      if (!file) Reader::fail(record, sub.signature, "must be a single NUL-terminated string");
+      rate.file = *file;
+      state = 3;
+    } else if (sub.signature == sig("ITME")) {
+      if (state != 3 || !sub.data.empty()) Reader::fail(record, sub.signature, "invalid rate end");
+      out.push_back(rate);
+      state = 0;
+    }
+  }
+  if (state != 0 || (count ? Reader::u32(*count, 0) != out.size() : !out.empty())) {
+    Reader::fail(record, sig("ITMC"), "rate group count does not match complete blocks");
+  }
+  return out;
+}
+
 SoundDescriptorData decode_sound_descriptor(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("SNDR"));
   SoundDescriptorData out;
@@ -46,9 +77,7 @@ SoundDescriptorData decode_sound_descriptor(const Environment& env, const Record
                                 std::to_integer<std::uint8_t>(sub->data[2]),
                                 std::to_integer<std::uint8_t>(sub->data[3]), Reader::u16(*sub, 4)};
   }
-  const auto* count = reader.sized(sig("ITMC"), 4);
-  int rate_state = 0;
-  SoundRateFile rate;
+  out.rate_files = decode_sound_rate_files(*ref.record);
   for (const auto& sub : ref.record->subrecords) {
     if (sub.signature == sig("ANAM")) out.files.push_back(string(reader, sub));
     else if (sub.signature == sig("LNAM")) {
@@ -59,40 +88,24 @@ SoundDescriptorData decode_sound_descriptor(const Environment& env, const Record
     } else if (sub.signature == sig("DNAM")) {
       if (sub.data.size() != 4) reader.fail(sub.signature, "must be one descriptor link");
       out.descriptors.push_back(reader.link_at(sub, 0));
-    } else if (sub.signature == sig("ITMS")) {
-      if (rate_state != 0 || !sub.data.empty()) reader.fail(sub.signature, "invalid rate start");
-      rate_state = 1;
-    } else if (sub.signature == sig("INTV")) {
-      if (rate_state != 1 || sub.data.size() != 4) reader.fail(sub.signature, "invalid rate RPM");
-      rate.rpm = Reader::u32(sub, 0);
-      rate_state = 2;
-    } else if (sub.signature == sig("FNAM")) {
-      if (rate_state != 2) reader.fail(sub.signature, "rate filename is out of order");
-      rate.file = string(reader, sub);
-      rate_state = 3;
-    } else if (sub.signature == sig("ITME")) {
-      if (rate_state != 3 || !sub.data.empty()) reader.fail(sub.signature, "invalid rate end");
-      out.rate_files.push_back(rate);
-      rate_state = 0;
     }
-  }
-  if (rate_state != 0 || (count ? Reader::u32(*count, 0) != out.rate_files.size() : !out.rate_files.empty())) {
-    reader.fail(sig("ITMC"), "rate group count does not match complete blocks");
   }
   return out;
 }
 
-SoundMarkerData decode_sound_marker(const Environment& env, const RecordRef& ref) {
-  const Reader reader(env, ref, sig("SOUN"));
-  SoundMarkerData out;
-  out.descriptor = reader.link(sig("SDSC"));
-  if (const auto* sub = reader.unique(sig("REPT"))) {
-    if (sub->data.size() != 8 && sub->data.size() != 9) reader.fail(sub->signature, "must be eight or nine bytes");
+std::optional<SoundRepeat> decode_sound_repeat(const Record& record) {
+  if (const auto* sub = Reader::unique(record, sig("REPT"))) {
+    if (sub->data.size() != 8 && sub->data.size() != 9) Reader::fail(record, sub->signature, "must be eight or nine bytes");
     SoundRepeat repeat{Reader::f32(*sub, 0), Reader::f32(*sub, 4), std::nullopt};
     if (sub->data.size() == 9) repeat.stackable = std::to_integer<std::uint8_t>(sub->data[8]);
-    out.repeat = repeat;
+    return repeat;
   }
-  return out;
+  return std::nullopt;
+}
+
+SoundMarkerData decode_sound_marker(const Environment& env, const RecordRef& ref) {
+  const Reader reader(env, ref, sig("SOUN"));
+  return {reader.link(sig("SDSC")), decode_sound_repeat(*ref.record)};
 }
 
 MusicTypeData decode_music_type(const Environment& env, const RecordRef& ref) {
@@ -113,19 +126,30 @@ FootstepData decode_footstep(const Environment& env, const RecordRef& ref) {
   return {reader.link(sig("DATA")), text(reader, sig("ANAM"))};
 }
 
+std::array<std::uint32_t, 5> decode_footstep_counts(const Record& record) {
+  std::array<std::uint32_t, 5> out{};
+  const auto* count = Reader::sized(record, sig("XCNT"), 20);
+  const auto* data = Reader::unique(record, sig("DATA"));
+  if (!count && !data) return out;
+  if (!count || !data) Reader::fail(record, sig("DATA"), "requires both counts and links");
+  std::uint64_t total = 0;
+  for (std::size_t i = 0; i < out.size(); ++i) {
+    out[i] = Reader::u32(*count, i * 4);
+    total += out[i];
+  }
+  if (total * 4 != data->data.size()) Reader::fail(record, sig("DATA"), "does not match the five category counts");
+  return out;
+}
+
 FootstepSetData decode_footstep_set(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("FSTS"));
   FootstepSetData out;
-  const auto* count = reader.sized(sig("XCNT"), 20);
+  const auto counts = decode_footstep_counts(*ref.record);
   const auto* data = reader.unique(sig("DATA"));
-  if (!count && !data) return out;
-  if (!count || !data) reader.fail(sig("DATA"), "requires both counts and links");
-  std::uint64_t total = 0;
-  for (std::size_t i = 0; i < 5; ++i) total += Reader::u32(*count, i * 4);
-  if (total * 4 != data->data.size()) reader.fail(sig("DATA"), "does not match the five category counts");
+  if (!data) return out;
   std::size_t offset = 0;
   for (std::size_t category = 5; category-- > 0;) {
-    for (std::uint32_t i = 0; i < Reader::u32(*count, category * 4); ++i, offset += 4) {
+    for (std::uint32_t i = 0; i < counts[category]; ++i, offset += 4) {
       out.categories[category].push_back(reader.link_at(*data, offset));
     }
   }

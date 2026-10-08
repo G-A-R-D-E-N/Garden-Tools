@@ -267,6 +267,15 @@ class SchemaCodegenTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "overlapping FormLink fields in TEST.DATA"):
             self.link(link(), link(path="TEST" + BS + "OtherLink", offset=2))
 
+    def test_formlink_payload_sizes(self):
+        rendered = formlink_schema_codegen.render(*self.link(link(payload_sizes=[16, 32], stride=4)))
+        self.assertIn("{{16, 32}}", rendered)
+        for sizes in ([], [4, 8, 12], [True], [0], [3], [0x100000000], [4, 4], "4"):
+            with self.subTest(sizes=sizes), self.assertRaisesRegex(ValueError, "payload_sizes"):
+                self.link(link(payload_sizes=sizes))
+        with self.assertRaisesRegex(ValueError, "payload_sizes"):
+            self.link(link(offset=8, payload_sizes=[8]))
+
     def test_formlink_and_scalar_overlap_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "overlapping FormLink/scalar fields in TEST.DATA"):
             self.link_schema(fields=[scalar(offset=0)], formlink_fields=[link()])

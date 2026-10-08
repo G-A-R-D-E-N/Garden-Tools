@@ -21,7 +21,7 @@ Remove remove(fo4::Plugin& plugin, std::uint32_t id, const char* name, std::size
   return fo4::remove_record_subrecord(plugin, key(id), sig(name), index);
 }
 
-}  // namespace
+}
 
 TEST(SoundSubrecords, DescriptorOptionalSubrecordsAddAndRemoveAtTheirSchemaPosition) {
   auto plugin = read(build(fixture()));

@@ -93,12 +93,12 @@ void decode(const fo4::env::Environment& env, const fo4::env::RecordRef& ref) {
   if (type == sig("FSTS")) { static_cast<void>(fo4::env::decode_footstep_set(env, ref)); }
 }
 
-}  // namespace
+}
 
 TEST_P(SoundWriterReal, EveryOfficialRecordIsListedOrderedAndPreflightClean) {
   bool skip = false;
   const auto path = official(GetParam(), skip);
-  if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   const auto plugin = sound_sample(fo4::read_plugin_file(path), path);
   std::map<std::string, int> totals;
   std::vector<std::string> violators;
@@ -133,7 +133,7 @@ TEST_P(SoundWriterReal, EveryOfficialRecordIsListedOrderedAndPreflightClean) {
 TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithoutTouchingOtherBytes) {
   bool skip = false;
   const auto path = official(GetParam(), skip);
-  if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   const auto full = fo4::read_plugin_file(path);
   auto sample = sound_sample(full, path);
   const auto original = sample;
@@ -220,7 +220,7 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
 TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEveryOtherRecordByteIdentical) {
   bool skip = false;
   const auto path = official(GetParam(), skip);
-  if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   auto plugin = fo4::read_plugin_file(path);
   fo4::assign_record_form_keys(plugin);
   const auto original = snapshot(plugin);
@@ -236,7 +236,11 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
                                      [](const fo4::Subrecord& sub) { return sub.signature == sig("ITMS"); });
     if (per_type[type]++ < k_sweep_per_type || grouped) { targets.emplace_back(type, record.form_key); }
   });
-  if (targets.empty()) GTEST_SKIP() << "master has no sound records";
+  if (targets.empty()) {
+    const auto bytes = fo4::write_plugin(plugin);
+    const auto original_bytes = fo4::plugin_original_bytes(plugin);
+    EXPECT_EQ(bytes, Bytes(original_bytes.begin(), original_bytes.end()));
+  }
   const auto changed = [](fo4::FormLinkFieldMutationStatus status) {
     return status == fo4::FormLinkFieldMutationStatus::updated || status == fo4::FormLinkFieldMutationStatus::unchanged;
   };

@@ -35,7 +35,7 @@ protected:
 
 radicle_form_key rkey(std::uint32_t id) { return radicle_form_key{k_plugin, id}; }
 
-}  // namespace
+}
 
 TEST_F(SoundWriterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) {
   radicle_plugin* plugin = nullptr;
@@ -160,4 +160,29 @@ TEST_F(SoundWriterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) 
   ASSERT_EQ(radicle_footstep_get_info(env, handle, &info), RADICLE_STATUS_OK);
   EXPECT_EQ(info.impact_set.plugin, nullptr);
   radicle_env_destroy(env);
+}
+
+TEST_F(SoundWriterCApi, MalformedRateGroupsAndBaseLinksMapToInvalidArgumentAndPreserveBytes) {
+  auto entries = fixture();
+  entries[2].subs[2].second.resize(6);
+  entries[2].subs.insert(entries[2].subs.begin() + 4, {"FNAM", zstr("stray.wav")});
+  const auto bytes = build(entries);
+  {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  }
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const auto weapon = rkey(k_auto), standard = rkey(k_std), compound = rkey(k_compound);
+  size_t count = 0;
+  EXPECT_EQ(radicle_plugin_record_field_count(plugin, weapon, "SNDR\\RateOfFireRpm", &count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_record_field_count(plugin, weapon, "SNDR\\RateOfFireFile", &count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, weapon, "SNDR\\RateOfFireRpm", 0, "1200"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_record_string(plugin, weapon, "SNDR\\RateOfFireFile", 0, "new.wav"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_record_formlink(plugin, weapon, "SNDR\\BaseDescriptor", 0, &compound), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_record_formlink(plugin, standard, "SNDR\\BaseDescriptor", 0, &compound), RADICLE_STATUS_NOT_FOUND);
+  const auto saved = root / "out" / k_plugin;
+  ASSERT_EQ(radicle_plugin_write_file(plugin, saved.string().c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(plugin);
+  EXPECT_EQ(fo4::write_plugin(fo4::read_plugin_file(saved)), bytes);
 }

@@ -1481,6 +1481,7 @@
           "label": "Category",
           "subrecord": "GNAM",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SNCT"],
           "nullable": false,
           "insertion": "existing_only"
@@ -1490,6 +1491,7 @@
           "label": "Alternate sound for",
           "subrecord": "SNAM",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SNDR"],
           "nullable": false,
           "insertion": "existing_only"
@@ -1499,6 +1501,7 @@
           "label": "Output model",
           "subrecord": "ONAM",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SOPM"],
           "nullable": false,
           "insertion": "existing_only"
@@ -1508,6 +1511,7 @@
           "label": "Base descriptor",
           "subrecord": "BNAM",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SNDR"],
           "nullable": false,
           "when": {
@@ -1523,6 +1527,7 @@
           "label": "Descriptor",
           "subrecord": "DNAM",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SNDR"],
           "nullable": false,
           "repeated": true,
@@ -1650,6 +1655,7 @@
           "label": "Sound descriptor",
           "subrecord": "SDSC",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["SNDR"],
           "nullable": false,
           "insertion": "existing_only"
@@ -1805,6 +1811,7 @@
           "label": "Impact data set",
           "subrecord": "DATA",
           "offset": 0,
+          "payload_sizes": [4],
           "targets": ["IPDS"],
           "nullable": true,
           "insertion": "existing_only"
