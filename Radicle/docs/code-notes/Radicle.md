@@ -3,7 +3,7 @@
 ## src/environment/behavior.cpp:decode_package
 
 The private loader record at
-`../radicle-341-re-followup-20261005/build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`
+`build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`
 commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 Q1, stamps
 the OG loader at RVA 0x719180 and schedule consumer at 0x71EC30. PSDT stores
 signed i32 duration in minutes; interpreting it as u32 turns -1 into
@@ -218,15 +218,16 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 
 `src/environment/behavior.cpp:decode_package`, `decode_combat_style` and `decode_idle` follow `docs/PACKAGES_COMBAT_IDLES.md`. Package prelude links/conditions stop at PKCU; post-PKCU streams retain opaque data, and begin/end/change idle links use separate scopes. Combat arrays retain stored lengths and the CSCR integer slot is not read as a float. No scheduler, procedure evaluator or invented defaults are added. RE #407 tracks the remaining behavior and variant evidence.
 
-`src/c_api_behavior.cpp:radicle_package_decode` and `radicle_idle_decode` own condition arrays and converted CIS strings until free; strings, keys and raw payload bytes borrowed from records require a live environment. `bindings/csharp/Radicle.Interop/Behavior.cs` copies these values before freeing native holders. `radicle_combat_style_get_info` uses a fixed output with presence flags and actual variable-array counts. Validation is CI-only; real corpus tests remain skipped without installed data.
+`src/c_api_behavior.cpp:radicle_package_decode` and `radicle_idle_decode` own condition arrays and converted CIS strings until free; strings, keys and raw payload bytes borrowed from records require a live environment. `bindings/csharp/Radicle.Interop/Behavior.cs` copies these values before freeing native holders. `radicle_combat_style_get_info` uses a fixed output with presence flags and actual variable-array counts. The initial validation was CI-only; subsequent official-master runs exercise the stored readers and byte preservation. Corpus cases still skip when installed data is unavailable.
 # Package location and target views
 
 `src/environment/behavior.cpp:decode_package` returns indexed PLDT/PTDA views
 without assigning them to an unproven procedure/input scope. The verified
-`../radicle-341-re-followup-20261005/build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`
-sections Q4/Q5 stamp OG RVAs 0x726520 and 0x729300: PLDT is 12/16 bytes with
-byte type, u32 value/radius and optional item index; PTDA is 12 bytes with
-u32 type/value and signed count-or-distance. Only proven form-valued variants
+`build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`
+sections Q4/Q5 stamp OG RVAs 0x726520 and 0x729300: The disk compatibility views accept PLDT 8/12/16 bytes with
+signed i32 type, raw u32 value, optional signed i32 radius and optional u32 item
+index; PTDA is 12 bytes with signed i32 type, raw u32 value and signed
+count-or-distance. These stored fields are not the normalized runtime layout. Only proven form-valued variants
 resolve their value through the owning plugin. Raw values and unknown shapes
 stay preserved in the original container; input and leaf boundaries remain
 opaque. `src/c_api_behavior.cpp:PackageHolder` owns the copied view arrays,

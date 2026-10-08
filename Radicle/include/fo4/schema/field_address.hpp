@@ -25,6 +25,7 @@ struct FieldDiscriminator {
   DiscriminatorStorage storage{DiscriminatorStorage::u8};
   std::size_t count{0};
   std::array<std::int64_t, k_max_discriminator_values> equals{};
+  bool match_absent{false};
 };
 
 struct FieldAddress {
@@ -62,4 +63,4 @@ FieldSlots resolve_field_slots(const Record& record,
                                const FieldShape& shape,
                                const FieldAddress& address);
 
-}  // namespace fo4::schema
+}

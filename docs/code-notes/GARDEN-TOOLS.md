@@ -1465,8 +1465,27 @@ The empty `catch` bodies are deliberate best-effort paths, and they carry no sou
 
 Validation: `vitest run` 122/122 in 15 files, `tsc -b` clean, `vite build` clean (the pre-existing 1.08 MB chunk warning only), `eslint .` 34 errors and 16 warnings, `git diff --check` clean. The 34 errors are the react-hooks and react-refresh findings the later tranches take; `no-explicit-any` and `no-empty` are 0. The 16th warning is the `NifPanel.tsx:onDrop` `exhaustive-deps` one above, which `main` also has and this tranche leaves in place.
 
-## .github/workflows/native-ci.yml:workflow_dispatch, gate, native-windows-tests
+## .github/workflows/native-ci.yml:workflow_dispatch, native-windows-tests
 
-The optional `lane=radicle-cross` dispatch runs the existing Radicle clang-cl/xwin build while skipping the gate, its dependent Linux/MSVC suites, and the PluginEditTool cross build. The default remains `full`. Pull-request and main-triggered validation retain their existing jobs.
+The optional `lane=radicle-cross` dispatch runs the existing Radicle clang-cl/xwin build while skipping the Linux/MSVC suites and the PluginEditTool cross build. The default remains `full`. Pull-request and main-triggered validation retain their existing jobs.
 
 The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency as `radicle-msvc-release-tests` for seven days. This permits official-data tests on the machine with Fallout 4 installed without rebuilding there. Artifact metadata must identify the tested commit; downloading a binary is not a test result. No game payloads or debug symbols are uploaded.
+## Radicle/tests/test_pex_corpus.cpp:compareCode, Radicle/src/c_api_pex.cpp:CodeBuilder
+
+The ABI 9 corpus proof compares every exported row and field against the decoded C++ PEX model, including flattened ranges, property handlers, debug lines, flags, typed names, defaults and every operand. Floats compare by IEEE-754 bits so signed zero and NaN payloads are not hidden by approximate equality. Mismatch diagnostics include file, object, function and the differing field. Synthetic mutations must fail without changing aggregate counts.
+
+## Radicle/include/fo4/c_api_pex.h:radicle_pex_object_counts, Radicle/bindings/csharp/Radicle.Interop/PexFile.cs:PexObjectCounts
+
+The pre-ABI-9 snapshot function count remains state functions only for compatibility. The ABI 9 object-code function array includes those functions plus property getters and setters. Native and managed both-handler fixtures assert both counts and handler indexes. This clarification changed no layout or ABI version beyond the ABI 9 bump that added the object-code view.
+
+## Radicle/src/c_api_pex.cpp:CodeBuilder::str, Radicle/bindings/csharp/Radicle.Interop/PexCode.cs:PexValue
+
+The decoded C++ model retains string values rather than encoded reference indexes. The code-view contract therefore guarantees exact semantic bytes and selects the first equal string-table entry. It does not promise the original encoded index. Duplicate entries remain visible through the table API; native and managed fixtures explicitly encode a later duplicate and verify first-entry canonicalization. This matches Garden's PEX-to-IR need for semantic values without expanding the ABI.
+
+## Radicle/src/c_api_pex.cpp:CodeBuilder (variables), Radicle/bindings/csharp/Radicle.Interop/PexCode.cs:PexVariable
+
+The PEX parser reads a value for every object variable and struct member, so `has_default` is 1 for every parsed file and `PexVariable.DefaultValue` is never null on that path. "No initializer" arrives as a value of type NONE. The flag stays in the ABI because the C++ model holds the default as optional. Consumers check `Type == None`. Proof: `tests/test_c_api_pex.cpp` asserts `has_default == 1` for the fixture variable.
+
+## Radicle/bindings/csharp/Radicle.Interop/PexCode.cs, Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs
+
+The managed model types and the generated raw structs share names (`PexValue`, `PexFunction`, `PexState`, `PexObjectCode` and others), following `PexHeader` and `PexObjectCounts`. Code inside `Radicle.Interop` resolves to the model type. A consumer outside it that imports both `Radicle.Interop` and `Radicle.Interop.Native` gets CS0104, so it qualifies the raw structs as `Native.X` (as `PexCode.cs:ReadCode` does) or aliases them. Renaming the generated structs would change every existing `Native` type name, so the bindings README documents the rule instead. No GardenEngine file imports both namespaces today.
