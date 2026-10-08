@@ -1,4 +1,5 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginFields.hpp"
 
 #include <cctype>
 #include <cstddef>
@@ -11,6 +12,7 @@
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/scalar.hpp>
+#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -41,11 +43,12 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
         return setArmorField(arguments);
     }
 
-    if (fo4::schema::formlink_field_descriptor(fieldPath).has_value()) {
+    const auto address = semanticFieldAddress(fieldPath);
+    if (address && fo4::schema::formlink_field_descriptor(address->path).has_value()) {
         return setFormLinkField(arguments);
     }
 
-    const auto field = fo4::schema::scalar_field_descriptor(fieldPath);
+    const auto field = fo4::schema::scalar_field_descriptor(address ? address->path : fieldPath);
     if (!field.has_value()) {
         return setField(arguments);
     }
@@ -106,7 +109,17 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
 
     try {
         auto mutated = loaded->plugin;
-        const auto status = fo4::set_record_scalar(mutated, key, *field, value);
+        fo4::ScalarMutationStatus status;
+        if (field->scalar.storage == fo4::schema::ScalarStorage::zstring) {
+            const auto stored = fo4::text::utf8_to_windows1252(value);
+            if (!stored) {
+                return std::unexpected(Error{"ScalarFieldWriteFailed",
+                    "Text must be valid UTF-8 representable in Windows-1252"});
+            }
+            status = fo4::set_record_string(mutated, key, *field, address->index, *stored);
+        } else {
+            status = fo4::set_record_scalar(mutated, key, *field, address->index, value);
+        }
         switch (status) {
             case fo4::ScalarMutationStatus::record_missing:
                 return std::unexpected(Error{
@@ -141,7 +154,8 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
 Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
     const nlohmann::json& arguments) {
     const auto fieldPath = stringArgument(arguments, 2);
-    const auto field = fo4::schema::formlink_field_descriptor(fieldPath);
+    const auto address = semanticFieldAddress(fieldPath);
+    const auto field = fo4::schema::formlink_field_descriptor(address ? address->path : fieldPath);
     if (!field.has_value()) return setField(arguments);
     if (!arguments.is_array() || arguments.size() <= 3 || !arguments[3].is_string()) {
         return std::unexpected(Error{
@@ -236,7 +250,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFormLinkField(
     try {
         auto mutated = loaded->plugin;
         ensureOwnerMaster(mutated, target.owner());
-        const auto status = fo4::set_record_formlink_field(mutated, key, *field, target);
+        const auto status = fo4::set_record_formlink_field(mutated, key, *field, address->index, target);
         switch (status) {
             case fo4::FormLinkFieldMutationStatus::record_missing:
                 return std::unexpected(Error{

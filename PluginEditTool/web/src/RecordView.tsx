@@ -58,6 +58,7 @@ export default function RecordView(
   const [valueFilter, setValueFilter] = useState('');
   const [legendOpen, setLegendOpen] = useState(false);
   const [onlyDiffing, setOnlyDiffing] = useState(false);
+  const [rawView, setRawView] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -161,13 +162,15 @@ export default function RecordView(
 
   const filtering = f.length > 0 || vf.length > 0;
 
-  const matched = useMemo(() => matrix.Rows.filter(r => {
+  const viewRows = useMemo(() => matrix.Rows.filter(r => rawView ? r.Group === 'Raw' : r.Group !== 'Raw'), [matrix.Rows, rawView]);
+
+  const matched = useMemo(() => viewRows.filter(r => {
     if (onlyDiffing && !r.Differs) return false;
     if (f && !(r.DisplayLabel || r.Field).toLowerCase().includes(f)) return false;
     if (vf && !r.Values.some(v => v.toLowerCase().includes(vf))) return false;
     if (severityFilter !== 'all' && !SEVERITY_SETS[severityFilter].has(r.Severity ?? 'none')) return false;
     return true;
-  }), [matrix, f, vf, onlyDiffing, severityFilter]);
+  }), [viewRows, f, vf, onlyDiffing, severityFilter]);
 
   const rows = useMemo(() => {
     if (filtering) return matched;
@@ -191,9 +194,9 @@ export default function RecordView(
   };
 
   const conflictLeafRows = useMemo(
-    () => matrix.Rows.filter(isGenuineConflict),
+    () => viewRows.filter(isGenuineConflict),
 
-    [matrix.Rows]
+    [viewRows]
   );
 
   const conflictGroups = useMemo(() => {
@@ -201,7 +204,7 @@ export default function RecordView(
     const groups: CGroup[] = [];
     let cur: CGroup | null = null;
 
-    for (const r of matrix.Rows) {
+    for (const r of viewRows) {
       if (r.HasChildren && r.Level <= 1) {
         if (cur && cur.rows.length > 0) groups.push(cur);
         cur = { label: r.DisplayLabel || r.Field, rows: [], severity: 'none' };
@@ -214,11 +217,11 @@ export default function RecordView(
     }
     if (cur && cur.rows.length > 0) groups.push(cur);
     return groups;
-  }, [matrix.Rows]);
+  }, [viewRows]);
 
   const startEdit = (r: ConflictFieldRow, col: number) => {
     setMenu(null);
-    if (r.HasChildren) return;
+    if (r.HasChildren || r.Editable?.[col] === false) return;
     if (r.EditKind === 'Ref') { setPicker({ row: r, col }); return; }
     setEdit({ field: r.Field, col });
     setEditVal(r.Values[col] ?? '');
@@ -226,6 +229,7 @@ export default function RecordView(
 
   const commitEdit = async (r: ConflictFieldRow, col: number, value = editVal) => {
     setEdit(null);
+    if (r.Editable?.[col] === false) return;
     const b = back();
     if (!b) return;
     if (value === (r.Values[col] ?? '')) return;
@@ -240,15 +244,14 @@ export default function RecordView(
     if (!menu) return;
     const b = back();
     if (!b) return;
-    (async () => {
-      try { setEditablePlugins(JSON.parse(await b.GetEditablePlugins())); } catch { setEditablePlugins([]); }
-      try {
-        setElementActions(JSON.parse(
-          await b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field)));
-      } catch { setElementActions(null); }
-    })();
-
-  }, [menu]);
+    let cancelled = false;
+    b.GetEditablePlugins().then(json => { if (!cancelled) setEditablePlugins(JSON.parse(json)); })
+      .catch(() => { if (!cancelled) setEditablePlugins([]); });
+    b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field)
+      .then(json => { if (!cancelled) setElementActions(JSON.parse(json)); })
+      .catch(() => { if (!cancelled) setElementActions(null); });
+    return () => { cancelled = true; };
+  }, [menu, matrix.FormKey, matrix.Plugins]);
 
   const actions = useRecordActions({
     matrix, editablePlugins, closeMenu: () => setMenu(null), setStatus, onReload, onPluginsChanged,
@@ -396,6 +399,9 @@ export default function RecordView(
       {recordTab === 'grid' && (
         <>
           <div className="rv-toolbar">
+            <button className={`rv-toggle-btn ${rawView ? 'on' : ''}`} aria-pressed={rawView} onClick={() => setRawView(v => !v)}>
+              Raw / Advanced
+            </button>
             <span className="rv-tb-label">Filter by name</span>
             <div className="rv-filter">
               <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="field name…" />
@@ -588,7 +594,7 @@ export default function RecordView(
               <tr><th>Field</th><th>Value</th><th>Kind</th><th>Group</th></tr>
             </thead>
             <tbody>
-              {matrix.Rows.map(r => (
+              {viewRows.map(r => (
                 <tr key={r.Field} className={r.Differs ? 'rv-row-diff' : ''}>
                   <td className="rv-mono" title={r.Field}>{r.DisplayLabel || r.Field}</td>
                   <td>{r.Values[winnerIdx] ?? <em>not set</em>}</td>

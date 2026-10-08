@@ -143,6 +143,7 @@ export interface ConflictFieldRow {
   DisplayLabel: string;
   Level: number;
   Values: string[];
+  Editable?: boolean[];
   Differs: boolean;
   Statuses: string[];
   Severity: string;
@@ -162,6 +163,7 @@ export interface RecordProblem { Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
 
 export interface ElementActions {
+  canCreate?: boolean;
   canAdd: boolean;
   templates: string[];
   elementType: string;
