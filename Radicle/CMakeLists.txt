@@ -276,6 +276,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_xxxx.cpp
     tests/test_compression.cpp
     tests/test_real_plugin.cpp
+    tests/test_actor_value_perk_real.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
     tests/test_master_metadata.cpp
