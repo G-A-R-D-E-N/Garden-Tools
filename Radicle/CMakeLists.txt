@@ -419,6 +419,9 @@ if(RADICLE_BUILD_TESTS)
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
   if(RADICLE_BUILD_TOOLS)
+    add_test(NAME radicle_papyrus_dump
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/tests/test_papyrus_dump.py
+                     $<TARGET_FILE:radicle_parity_dump>)
     add_test(NAME radicle_env_bench_non_ansi_data_dir
              COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
                      -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp
