@@ -1,6 +1,7 @@
 #include "RadiclePluginSupport.hpp"
 
 #include <cstddef>
+#include <map>
 #include <string>
 #include <string_view>
 
@@ -40,7 +41,7 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
             "'" + name + "' is already ESL-compatible: all " +
             std::to_string(nativeCount) +
             " native record(s) use object IDs within " + slots.range + ". "
-            "Native compact_to_esl would be a no-op.");
+            "Native compact_to_esl would be a no-op." + support::lightFlagAdvice(loaded->plugin));
     }
 
     if (nativeCount > slots.capacity) {
@@ -49,6 +50,23 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
             std::to_string(nativeCount) + " native record(s) exceed the " +
             std::to_string(slots.capacity) +
             "-slot " + slots.range + " capacity. Native compact_to_esl must refuse this plugin.");
+    }
+
+    const auto blockers = support::eslCompactionBlockers(loaded->plugin, slots.first, slots.last);
+    if (!blockers.empty()) {
+        std::map<std::string, std::size_t> groups;
+        for (const auto& blocker : blockers) {
+            ++groups[blocker.signature + (blocker.nested ? " nested" : " with child groups")];
+        }
+        std::string summary;
+        for (const auto& [label, count] : groups) {
+            if (!summary.empty()) summary += ", ";
+            summary += std::to_string(count) + " " + label;
+        }
+        return nlohmann::json(
+            "'" + name + "' would be BLOCKED: " + std::to_string(blockers.size()) +
+            " record(s) cannot be remapped here (" + summary + "). This check is read-only; "
+            "Native compact_to_esl will refuse this plugin.");
     }
 
     return nlohmann::json(

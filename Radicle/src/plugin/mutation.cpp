@@ -231,6 +231,18 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   return RecordDeleteStatus::deleted;
 }
 
+bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& record_key) {
+  const auto context = plugin_form_id_context(plugin);
+  bool found = false;
+  visit_groups(plugin, [&](const Group& group) {
+    if (found || !group_label_is_form_id(group.header.group_type)) return;
+    const RawFormId raw{group.header.label_as_u32()};
+    if (raw.is_null()) return;
+    found = resolve_plugin_form_id(raw, context) == record_key;
+  });
+  return found;
+}
+
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
@@ -254,6 +266,11 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   const FormKey new_key{next.key, new_local};
   if (new_key == record_key) return RecordRenumberStatus::unchanged;
   if (find_record(next, new_key) != nullptr) return RecordRenumberStatus::target_exists;
+
+  if (has_form_id_labelled_child_group(next, record_key)) {
+    throw FormIdError(
+        "renumbering a record with form ID labelled child groups is disabled until parent GRUP label rewriting is proven");
+  }
 
   rekey_form_links(next, record_key, new_key);
   target = find_top_level_record(next, record_key);

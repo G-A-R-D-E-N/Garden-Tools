@@ -94,6 +94,8 @@ FormKey create_local_record(Plugin& plugin,
 // is never decremented or recycled.
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key);
 
+bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& record_key);
+
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);

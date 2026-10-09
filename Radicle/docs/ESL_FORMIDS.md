@@ -1,8 +1,14 @@
 # Light-plugin FormIDs — the actual range
 
-**A light plugin's own records use local FormIDs `0x001`–`0xFFF`.** Not
-`0x800`–`0xFFF`, and not 2048 records. This is the rule that was blocking safe
-ESL authoring.
+**A light plugin's own records use local FormIDs `0x001`–`0xFFF`**, the 12-bit
+object field of the engine's light encoding. Own IDs below `0x800` also need the
+plugin to qualify under xEdit's `GetAllowHardcodedRangeUse` (HEDR at least 1.0 and at
+least one master; `Core/wbImplementation.pas` at `93cc0bc5`, lines 4070-4090). A plugin
+that does not qualify is limited to `0x800`–`0xFFF`. Not 2048 records.
+
+xEdit's `TwbMainRecord.SetLoadOrderFormID` refuses a non-hardcoded object ID below
+`0x800` in a file with no masters (`Core/wbImplementation.pas` at `93cc0bc5`, lines
+14277-14279: `if _File.MasterCount[GetMastersUpdated] < 1 then raise`).
 
 ## Where it comes from
 
@@ -94,5 +100,7 @@ while #26 was open.
   a 10-byte predicate at `0x130560` in the timestamp `0x5ddc40fa` image
   (`0x130550` in the timestamp `0x5dac778e` image). See `OPEN_QUESTIONS.md` Q2
   and the verified `26-RE-TARGETS.md` record above. It corroborates the
-  12-bit ceiling; zero remains excluded by Radicle's allocation policy.
+  12-bit ceiling. It does not say which IDs below `0x800` a plugin may own; that is
+  `GetAllowHardcodedRangeUse` (`Core/wbImplementation.pas` at `93cc0bc5`, lines
+  4070-4090). Zero remains excluded by Radicle's allocation policy.
 - The next-gen cross-check remains [#28](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/28).

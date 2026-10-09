@@ -1,5 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "RadiclePluginSupport.hpp"
+
 #include <algorithm>
 #include <charconv>
 #include <cstddef>
@@ -140,6 +142,12 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
                 "Renumber is blocked by nested record " + mappings[index].oldKey.to_string() +
                 ": parent GRUP label rewriting is not proven for plugin-wide rekeying. "
                 "Renumber this plugin in xEdit instead.");
+        }
+    }
+
+    for (const auto& mapping : mappings) {
+        if (const auto refusal = support::parentGroupRelabelRefusal(loaded->plugin, mapping.oldKey)) {
+            return std::unexpected(*refusal);
         }
     }
 
