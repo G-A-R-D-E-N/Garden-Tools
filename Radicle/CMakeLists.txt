@@ -381,6 +381,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment.cpp
     tests/test_environment_world.cpp
     tests/test_environment_placed.cpp
+    tests/test_environment_script_elements.cpp
     tests/test_environment_terrain.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp

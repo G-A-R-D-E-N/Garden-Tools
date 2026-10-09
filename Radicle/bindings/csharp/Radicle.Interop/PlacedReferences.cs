@@ -17,8 +17,11 @@ public sealed record TopicReference(uint Type, FormKey? Topic, uint Subtype);
 
 public sealed record Patrol(float IdleTime, FormKey? Idle, FormKey? Topic, IReadOnlyList<TopicReference> Topics);
 
+public sealed record ScriptElement(FormKey? Object, short Alias, string? Text, int Integer, float Real, bool Boolean);
+
 public sealed record ScriptProperty(string Name, byte Type, byte Flags, FormKey? Object, short? Alias, string? Text,
-                                   int? Integer, float? Real, bool? Boolean, uint? ElementCount);
+                                   int? Integer, float? Real, bool? Boolean, uint? ElementCount,
+                                   IReadOnlyList<ScriptElement>? Elements = null);
 
 public sealed record Script(string Name, byte Flags, IReadOnlyList<ScriptProperty> Properties);
 
@@ -88,7 +91,11 @@ public sealed unsafe partial class RadicleEnvironment
                                             p.HasAlias != 0 ? p.Alias : null, Utf8.Read(p.Text),
                                             p.HasInteger != 0 ? p.Integer : null, p.HasReal != 0 ? p.Real : null,
                                             p.HasBoolean != 0 ? p.Boolean != 0 : null,
-                                            p.HasElementCount != 0 ? p.ElementCount : null))
+                                            p.HasElementCount != 0 ? p.ElementCount : null,
+                                            p.HasElements != 0 ? Call.Copy<Native.ScriptElement>(p.Elements, p.ElementValueCount)
+                                                .Select(e => new ScriptElement(FormKey.FromNative(e.Object), e.Alias, Utf8.Read(e.Text),
+                                                                               e.Integer, e.Real, e.Boolean != 0))
+                                                .ToArray() : null))
                                         .ToArray()))
             .ToArray();
 

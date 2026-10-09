@@ -122,6 +122,13 @@ int main() {
   printf("Patrol.Topic %zu\n", offsetof(radicle_patrol, topic));
   printf("Patrol.Topics %zu\n", offsetof(radicle_patrol, topics));
   printf("Patrol.TopicCount %zu\n", offsetof(radicle_patrol, topic_count));
+  printf("ScriptElement %zu\n", sizeof(radicle_script_element));
+  printf("ScriptElement.Object %zu\n", offsetof(radicle_script_element, object));
+  printf("ScriptElement.Alias %zu\n", offsetof(radicle_script_element, alias));
+  printf("ScriptElement.Text %zu\n", offsetof(radicle_script_element, text));
+  printf("ScriptElement.Integer %zu\n", offsetof(radicle_script_element, integer));
+  printf("ScriptElement.Real %zu\n", offsetof(radicle_script_element, real));
+  printf("ScriptElement.Boolean %zu\n", offsetof(radicle_script_element, boolean));
   printf("ScriptProperty %zu\n", sizeof(radicle_script_property));
   printf("ScriptProperty.Name %zu\n", offsetof(radicle_script_property, name));
   printf("ScriptProperty.Type %zu\n", offsetof(radicle_script_property, type));
@@ -138,6 +145,9 @@ int main() {
   printf("ScriptProperty.Boolean %zu\n", offsetof(radicle_script_property, boolean));
   printf("ScriptProperty.HasElementCount %zu\n", offsetof(radicle_script_property, has_element_count));
   printf("ScriptProperty.ElementCount %zu\n", offsetof(radicle_script_property, element_count));
+  printf("ScriptProperty.HasElements %zu\n", offsetof(radicle_script_property, has_elements));
+  printf("ScriptProperty.Elements %zu\n", offsetof(radicle_script_property, elements));
+  printf("ScriptProperty.ElementValueCount %zu\n", offsetof(radicle_script_property, element_value_count));
   printf("Script %zu\n", sizeof(radicle_script));
   printf("Script.Name %zu\n", offsetof(radicle_script, name));
   printf("Script.Flags %zu\n", offsetof(radicle_script, flags));

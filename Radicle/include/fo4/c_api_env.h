@@ -247,6 +247,15 @@ typedef struct radicle_patrol {
   size_t topic_count;
 } radicle_patrol;
 
+typedef struct radicle_script_element {
+  radicle_form_key object;
+  int16_t alias;
+  const char* text;
+  int32_t integer;
+  float real;
+  int32_t boolean;
+} radicle_script_element;
+
 typedef struct radicle_script_property {
   const char* name;
   uint8_t type;
@@ -263,6 +272,9 @@ typedef struct radicle_script_property {
   int32_t boolean;
   int32_t has_element_count;
   uint32_t element_count;
+  int32_t has_elements;
+  const radicle_script_element* elements;
+  size_t element_value_count;
 } radicle_script_property;
 
 typedef struct radicle_script {

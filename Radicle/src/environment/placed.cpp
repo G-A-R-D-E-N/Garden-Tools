@@ -289,6 +289,10 @@ private:
         out.real = property.real;
         out.boolean = property.boolean;
         out.element_count = property.element_count;
+        if (property.object_elements) {
+          auto& keys = out.object_elements.emplace();
+          for (const auto& element : *property.object_elements) keys.push_back(env_.resolve_link(ref_, element.object));
+        }
         script.properties.push_back(std::move(out));
       }
       scripts.scripts.push_back(std::move(script));

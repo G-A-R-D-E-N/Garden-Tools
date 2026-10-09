@@ -21,6 +21,7 @@ struct PlacedHolder {
   std::vector<std::vector<radicle_topic_ref>> topics;
   std::vector<radicle_patrol> patrols;
   std::vector<std::vector<radicle_script_property>> properties;
+  std::vector<std::vector<radicle_script_element>> elements;
   std::vector<radicle_script> scripts;
 };
 
@@ -40,6 +41,9 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
       for (auto& property : script.properties) {
         property.name = fo4::text::windows1252_to_utf8(property.name);
         if (property.text) property.text = fo4::text::windows1252_to_utf8(*property.text);
+        if (property.text_elements) {
+          for (auto& text : *property.text_elements) text = fo4::text::windows1252_to_utf8(text);
+        }
       }
     }
   }
@@ -215,6 +219,9 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
     v.script_object_format = scripts.raw.object_format;
     v.scripts_unsupported = scripts.raw.unsupported ? 1 : 0;
     holder.properties.reserve(scripts.raw.scripts.size());
+    std::size_t property_total = 0;
+    for (const auto& raw : scripts.raw.scripts) property_total += raw.properties.size();
+    holder.elements.reserve(property_total);
     for (std::size_t i = 0; i < scripts.raw.scripts.size(); ++i) {
       const auto& raw = scripts.raw.scripts[i];
       const auto& resolved = scripts.scripts[i];
@@ -222,6 +229,30 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
       for (std::size_t p = 0; p < raw.properties.size(); ++p) {
         const auto& in = raw.properties[p];
         radicle_script_property out{};
+        auto& elements = holder.elements.emplace_back();
+        bool has_elements = false;
+        const auto add = [&](const auto& values, const auto& set) {
+          if (!values) return;
+          has_elements = true;
+          for (std::size_t e = 0; e < values->size(); ++e) {
+            radicle_script_element element{};
+            set(element, e);
+            elements.push_back(element);
+          }
+        };
+        add(in.object_elements, [&](auto& element, std::size_t e) {
+          element.object = key(resolved.properties[p].object_elements->at(e));
+          element.alias = (*in.object_elements)[e].alias;
+        });
+        add(in.text_elements, [&](auto& element, std::size_t e) { element.text = (*in.text_elements)[e].c_str(); });
+        add(in.integer_elements, [&](auto& element, std::size_t e) { element.integer = (*in.integer_elements)[e]; });
+        add(in.real_elements, [&](auto& element, std::size_t e) { element.real = (*in.real_elements)[e]; });
+        add(in.boolean_elements, [&](auto& element, std::size_t e) { element.boolean = (*in.boolean_elements)[e] ? 1 : 0; });
+        if (has_elements) {
+          out.has_elements = 1;
+          out.elements = data_or_null(elements);
+          out.element_value_count = elements.size();
+        }
         out.name = in.name.c_str();
         out.type = in.type;
         out.flags = in.flags;

@@ -225,6 +225,17 @@ public unsafe struct Patrol
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptElement
+{
+    public FormKey Object;
+    public short Alias;
+    public IntPtr Text;
+    public int Integer;
+    public float Real;
+    public int Boolean;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScriptProperty
 {
     public IntPtr Name;
@@ -242,6 +253,9 @@ public unsafe struct ScriptProperty
     public int Boolean;
     public int HasElementCount;
     public uint ElementCount;
+    public int HasElements;
+    public IntPtr Elements;
+    public nuint ElementValueCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -778,7 +792,7 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 11u;
+    public const uint CompiledAbiVersion = 12u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
