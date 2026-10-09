@@ -125,6 +125,7 @@ void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
 
   std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
   plugin.header.next_form_id = next_form_id;
+  plugin.original_range.clear();
   plugin.tes4.original_range.clear();
   plugin.tes4.decompressed_payload.clear();
   plugin.tes4.header.data_size = 0;
@@ -168,7 +169,6 @@ FormKey reserve_local_form_key(Plugin& plugin) {
 
   const FormKey key{plugin.key, LocalFormId{candidate}};
   set_hedr_next_form_id(plugin, candidate + 1u);
-  plugin.original_range.clear();
   return key;
 }
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <set>
 #include <string>
 #include <utility>
@@ -67,9 +68,23 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
     }
 
     if (outOfRange.empty()) {
-        return nlohmann::json(
-            "'" + pluginName +
-            "' is already ESL-compatible (all native FormIDs within " + range + ").");
+        const auto lowered = inRange.empty() ? first : *inRange.rbegin() + 1u;
+        const auto next = loaded->plugin.header.next_form_id;
+        if (next <= last || lowered >= next) {
+            return nlohmann::json(
+                "'" + pluginName +
+                "' is already ESL-compatible (all native FormIDs within " + range + ").");
+        }
+        try {
+            auto mutated = loaded->plugin;
+            fo4::set_hedr_next_form_id(mutated, lowered);
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+            return nlohmann::json(
+                "'" + pluginName + "' already has all native FormIDs within " + range +
+                "; lowered HEDR nextFormID to " + std::format("0x{:03X}", lowered) + ".");
+        } catch (const std::exception& error) {
+            return std::unexpected(Error{"CompactToEslFailed", error.what()});
+        }
     }
     if (nativeCount > capacity) {
         return std::unexpected(Error{

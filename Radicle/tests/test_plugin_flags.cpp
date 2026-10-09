@@ -9,20 +9,29 @@
 
 namespace {
 
-std::vector<std::byte> make_plugin(std::uint32_t flags) {
+std::vector<std::byte> make_plugin(std::uint32_t flags, float version = 1.0f, bool has_master = false) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
   fo4::test::ByteWriter hedr;
-  hedr.f32(1.0f);
+  hedr.f32(version);
   hedr.u32(0);
   hedr.u32(0x800);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  if (has_master) {
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Base.esm\0", 9});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+  }
   fo4::test::end_record(out, tes4);
   return out.bytes;
 }
 
-std::vector<std::byte> make_plugin_with_owned_record(std::uint32_t form_id) {
-  auto bytes = make_plugin(0);
+std::vector<std::byte> make_plugin_with_owned_record(std::uint32_t form_id,
+                                                     float version = 1.0f,
+                                                     bool has_master = false) {
+  auto bytes = make_plugin(0, version, has_master);
   fo4::test::ByteWriter group;
   const auto group_header = fo4::test::begin_group(group, "KYWD", 0);
   const auto record = fo4::test::begin_record(group, "KYWD", 0, form_id);
@@ -72,4 +81,37 @@ TEST(PluginFlags, RejectsLightFlagWhenOwnedLocalIdExceedsTwelveBits) {
   EXPECT_THROW(
       static_cast<void>(fo4::set_plugin_light_flag(std::move(plugin), true)),
       fo4::FormIdError);
+}
+
+TEST(PluginFlags, RejectsLightFlagWhenMasterlessLocalIdIsBelowTheFullFloor) {
+  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000005u), "Low.esp");
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::set_plugin_light_flag(plugin, true)),
+      fo4::FormIdError);
+  EXPECT_NO_THROW(static_cast<void>(fo4::set_plugin_light_flag(plugin, false)));
+}
+
+TEST(PluginFlags, RejectsLightFlagBelowTheFloorWhenHedrIsBelowOne) {
+  const auto plugin = fo4::read_plugin(
+      make_plugin_with_owned_record(0x01000005u, 0.95f, true), "OldHedr.esp");
+
+  EXPECT_THROW(
+      static_cast<void>(fo4::set_plugin_light_flag(plugin, true)),
+      fo4::FormIdError);
+}
+
+TEST(PluginFlags, AllowsLightFlagForLowLocalIdsWithHedrOneAndAMaster) {
+  const auto plugin = fo4::set_plugin_light_flag(
+      fo4::read_plugin(make_plugin_with_owned_record(0x01000005u, 1.0f, true), "Hardcoded.esp"),
+      true);
+
+  EXPECT_TRUE(plugin.header.tes4_flags.is_small_file());
+}
+
+TEST(PluginFlags, AllowsLightFlagForMasterlessIdsAtTheFullFloor) {
+  const auto plugin = fo4::set_plugin_light_flag(
+      fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Floor.esp"), true);
+
+  EXPECT_TRUE(plugin.header.tes4_flags.is_small_file());
 }

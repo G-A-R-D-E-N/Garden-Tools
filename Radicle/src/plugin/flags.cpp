@@ -1,19 +1,25 @@
 #include "fo4/plugin/writer.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+
+#include <format>
 
 namespace fo4 {
 
 Plugin set_plugin_light_flag(Plugin plugin, bool light) {
   assign_record_form_keys(plugin);
   if (light) {
+    const auto lowest = allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id;
     for (const auto* record : collect_records(plugin)) {
       if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) {
         continue;
       }
-      if (record->form_key.local().value() > k_light_local_mask) {
-        throw FormIdError(
-            "plugin cannot be flagged light while owned FormIDs exceed 0xFFF");
+      const auto local = record->form_key.local().value();
+      if (local < lowest || local > k_light_local_mask) {
+        throw FormIdError(std::format(
+            "plugin cannot be flagged light while owned FormIDs fall outside 0x{:03X}-0xFFF",
+            lowest));
       }
     }
   }
