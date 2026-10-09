@@ -86,6 +86,26 @@ public class EslPolicyTests
     }
 
     [Fact]
+    public void PluginWithMasterButNoCrossModLinks_UsesHighRangeSoMutagenSaveAccepts()
+    {
+        var plugin = NewPlugin(1f, withMaster: true);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x005, "NoLink_Low");
+        AddWeapon(mod, 0x5000, "NoLink_High");
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("check_esl_eligibility", Args(plugin))
+            .Should().Contain("2 of 2 native record(s) sit outside 0x800-0xFFF");
+        exec.Execute("compact_to_esl", Args(plugin)).Should().Contain("remapped 2").And.Contain("(0x800-0xFFF)");
+
+        WithReload(exec, plugin, reload =>
+        {
+            reload.Weapons.First(w => w.EditorID == "NoLink_Low").FormKey.ID.Should().BeInRange(0x800u, 0xFFFu);
+            reload.Weapons.First(w => w.EditorID == "NoLink_High").FormKey.ID.Should().BeInRange(0x800u, 0xFFFu);
+        });
+    }
+
+    [Fact]
     public void PluginWithMasterAndVersion095_UsesLegacyRangeAndMovesLowRecordsUp()
     {
         var plugin = NewPlugin(0.95f, withMaster: true);

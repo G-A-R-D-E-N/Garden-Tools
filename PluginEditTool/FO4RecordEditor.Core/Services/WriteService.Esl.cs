@@ -93,8 +93,17 @@ public static partial class WriteService
 
     private static (uint First, uint Last, int Capacity, string Range) EslSlots(IFallout4Mod mod)
     {
-        var first = mod.ModHeader.Stats.Version >= 1.0f && mod.MasterReferences.Count > 0 ? 0x001u : 0x800u;
+        var legacyFloor = mod.ModHeader.Stats.Version >= 1.0f && mod.MasterReferences.Count > 0 && HasForeignReference(mod);
+        var first = legacyFloor ? 0x001u : 0x800u;
         const uint last = 0xFFFu;
         return (first, last, (int)(last - first + 1), $"0x{first:X3}-0x{last:X3}");
     }
+
+    private static bool HasForeignReference(IFallout4Mod mod)
+    {
+        return mod.EnumerateMajorRecords().Any(r =>
+            IsForeign(mod, r.FormKey) || r.EnumerateFormLinks().Any(link => IsForeign(mod, link.FormKey)));
+    }
+
+    private static bool IsForeign(IFallout4Mod mod, FormKey key) => !key.IsNull && key.ModKey != mod.ModKey;
 }
