@@ -67,11 +67,18 @@ jobs:
       - name: Build FO4RecordEditor.Core.Tests
         run: dotnet build FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-restore
 
+      # The runner's home folder is a reparse point, which the archive path-safety checks refuse; keep temp files under the job's temp folder.
       - name: Test FO4RecordEditor.Tests
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: dotnet test FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=windows-tests.trx" --results-directory ../TestResults
 
       - name: Test FO4RecordEditor.Core.Tests
         if: ${{ !cancelled() }}
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: dotnet test FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=windows-core-tests.trx" --results-directory ../TestResults
 
       - name: Stop .NET build servers

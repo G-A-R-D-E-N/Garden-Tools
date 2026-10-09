@@ -1504,3 +1504,5 @@ Test fixes made with the workflow:
 - `FO4RecordEditor.Core.Tests/F4SERegionMergeTests.cs:Generated`: the fixture is a raw string literal, so its line endings follow the checkout. With `core.autocrlf=true` it contained CRLF and two tests failed; the fixture is normalised to LF. `F4SERegionMerge.Merge` still returns `generated` untouched when there is nothing to preserve, which is correct because the emitter produces LF.
 
 Path length: the longest tracked path under `PluginEditTool` is 145 characters, so a runner workspace root longer than about 115 characters can break the build unless Windows long paths are enabled. A GitVersion run on a deeply nested checkout failed with LibGit2Sharp "path too long".
+
+On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the Windows test steps set TEMP and TMP to `runner.temp`.
