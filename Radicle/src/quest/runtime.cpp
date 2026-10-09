@@ -68,7 +68,7 @@ QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest) 
     const VmadScripts scripts = read_vmad_scripts(vmad->data);
     data.scripts = scripts.scripts;
     if (scripts.unsupported) {
-      data.unsupported.push_back("a VMAD property type is unsupported, so the script list stops there");
+      data.unsupported.push_back("a VMAD property is unsupported, so the script list stops there");
     }
     if (scripts.trailing_bytes == 0) return data;
 

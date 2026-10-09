@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -95,6 +96,64 @@ void expect_remap_refused(std::uint8_t type) {
       fo4::FormIdError);
 }
 
+fo4::test::ByteWriter object_word_vmad(std::uint16_t format, std::uint16_t word) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(format);
+  vmad.u16(1);
+  wstring(vmad, "WordScript");
+  vmad.u8(0);
+  vmad.u16(3);
+  wstring(vmad, "Before");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(7);
+  wstring(vmad, "Target");
+  vmad.u8(1);
+  vmad.u8(1);
+  if (format == 2) vmad.u16(word);
+  if (format == 1) vmad.u32(0x0200009A);
+  vmad.u16(0xFFFF);
+  if (format == 1) vmad.u16(word);
+  if (format == 2) vmad.u32(0x0200009A);
+  wstring(vmad, "After");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(9);
+  return vmad;
+}
+
+}
+
+TEST(Vmad, UnexposedScalarObjectWordsStopTheTypedReader) {
+  for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
+    for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
+      SCOPED_TRACE("format=" + std::to_string(format) + " word=" + std::to_string(word));
+      const auto vmad = object_word_vmad(format, word);
+      const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+      ASSERT_EQ(scripts.scripts.size(), 1u);
+      EXPECT_EQ(scripts.unsupported, word != 0);
+      const auto& properties = scripts.scripts[0].properties;
+      EXPECT_EQ(properties.size(), word == 0 ? 3u : 1u);
+      ASSERT_FALSE(properties.empty());
+      EXPECT_EQ(properties[0].name, "Before");
+      EXPECT_EQ(properties[0].integer, 7);
+      if (word == 0) {
+        ASSERT_EQ(properties.size(), 3u);
+        EXPECT_EQ(properties[1].object->value(), 0x0200009Au);
+        EXPECT_EQ(properties[1].alias, -1);
+        EXPECT_EQ(properties[2].integer, 9);
+      }
+      auto out = plugin_with_masters();
+      const auto group = fo4::test::begin_group(out, "REFR", 0);
+      const auto record = fo4::test::begin_record(out, "REFR", 0, 0x03000800);
+      fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
+      fo4::test::end_record(out, record);
+      fo4::test::end_group(out, group);
+      const auto plugin = fo4::read_plugin(out.bytes, "WordPatch.esp");
+      EXPECT_EQ(fo4::write_plugin(plugin), out.bytes);
+    }
+  }
 }
 
 TEST(Vmad, VariablePropertyFailsClosedForMasterRemap) {

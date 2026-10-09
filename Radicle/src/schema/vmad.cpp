@@ -443,13 +443,13 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   switch (property.type) {
     case k_type_object:
       if (object_format == 2) {
-        slice.u16();
+        if (slice.u16() != 0) throw UnsupportedVmadProperty{};
         property.alias = slice.i16();
         property.object = RawFormId{slice.u32()};
       } else if (object_format == 1) {
         property.object = RawFormId{slice.u32()};
         property.alias = slice.i16();
-        slice.u16();
+        if (slice.u16() != 0) throw UnsupportedVmadProperty{};
       } else {
         throw parse_error(slice.position(), "unknown VMAD object format");
       }
@@ -610,7 +610,7 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
     result.fully_consumed = slice.at_end();
   } catch (const UnsupportedVmadProperty&) {
     result.unsupported = true;
-    result.unsupported_reason = "a VMAD property type in the quest extras is unsupported";
+    result.unsupported_reason = "a VMAD property in the quest extras is unsupported";
   } catch (const std::exception& error) {
     result.unsupported = true;
     result.unsupported_reason = error.what();
