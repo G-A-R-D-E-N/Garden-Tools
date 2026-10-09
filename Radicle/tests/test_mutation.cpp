@@ -135,6 +135,25 @@ std::vector<std::byte> make_two_record_lifecycle_plugin() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_full_light_plugin(std::uint32_t next_form_id) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::small_file, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2049u);
+  hedr.u32(next_form_id);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  for (std::uint32_t local = 0x800u; local <= 0xFFFu; ++local) {
+    const auto record = fo4::test::begin_record(out, "MISC", 0, local);
+    fo4::test::end_record(out, record);
+  }
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 std::string editor_id(const fo4::Record& record) {
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != fo4::sig_edid) continue;
@@ -391,4 +410,18 @@ TEST(Mutation, ReserveLocalFormKeySkipsOccupiedCandidate) {
   auto plugin = fo4::read_plugin(make_lifecycle_plugin(0x800), "Lifecycle.esp");
   const auto key = fo4::reserve_local_form_key(plugin);
   EXPECT_EQ(key, fo4::FormKey::parse("000801:Lifecycle.esp"));
+}
+
+TEST(Mutation, ReserveLocalFormKeyReportsAFullLightPluginAndAnOverflowedNextSeparately) {
+  const auto reserveError = [](std::uint32_t next_form_id) {
+    auto plugin = fo4::read_plugin(make_full_light_plugin(next_form_id), "Lifecycle.esl");
+    try {
+      static_cast<void>(fo4::reserve_local_form_key(plugin));
+    } catch (const fo4::FormIdError& error) {
+      return std::string{error.what()};
+    }
+    return std::string{};
+  };
+  EXPECT_NE(reserveError(0x1000u).find("no local "), std::string::npos);
+  EXPECT_NE(reserveError(0x1001u).find("is outside this plugin's local "), std::string::npos);
 }

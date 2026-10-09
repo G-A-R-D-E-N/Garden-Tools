@@ -5,10 +5,21 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
+#include <format>
 #include <string>
 #include <string_view>
 
+#include <fo4/plugin/mutation.hpp>
+
 namespace fo4ide::plugin::support {
+
+struct EslSlots {
+    std::uint32_t first;
+    std::uint32_t last;
+    std::size_t capacity;
+    std::string range;
+};
 
 inline std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
@@ -32,6 +43,15 @@ inline std::string asciiLower(std::string_view value) {
         return static_cast<char>(std::tolower(ch));
     });
     return out;
+}
+
+inline EslSlots eslSlots(const fo4::Plugin& plugin) {
+    fo4::Plugin targetPolicy;
+    targetPolicy.header = plugin.header;
+    targetPolicy.header.tes4_flags = fo4::RecordFlags{
+        targetPolicy.header.tes4_flags.value() | fo4::RecordFlags::small_file};
+    const auto [first, last] = fo4::local_form_id_range(targetPolicy);
+    return {first, last, last - first + 1u, std::format("0x{:03X}-0x{:03X}", first, last)};
 }
 
 }

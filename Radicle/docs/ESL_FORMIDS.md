@@ -30,10 +30,11 @@ full:
 140131fd6:  ret
 ```
 
-Verified records: `build/RE-Work/Runtime/03-FINDINGS.md`,
+Verified records, in the private RE repository `ReverseEng/commonlib_NonVR` (re.nomadicinteractive.dev) at commit
+`dbaeca7486300f4f1cc15e4607f8208f0df93013`: `RE-Work/Runtime/03-FINDINGS.md`,
 "Exact runtime FormID stamping" (`0x131fa0`), and
-`build/RE-Work/docs/26-RE-TARGETS.md`, "The +/-0x10 drift explained".
-Both were inspected read-only in the local reference checkout. The timestamp
+`RE-Work/docs/26-RE-TARGETS.md`, "The +/-0x10 drift explained".
+Both were inspected read-only. The timestamp
 `0x5dac778e` image has the same routine at `0x131f90`; mixing builds caused
 the earlier apparent symbol-table shift.
 

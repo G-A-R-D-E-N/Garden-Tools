@@ -251,6 +251,20 @@ std::vector<std::byte> compactSourceBytes(bool hasMaster) {
     return out.bytes;
 }
 
+std::vector<std::byte> fullCapacityBytes() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, 0x1001, {"Base.esm"});
+    const auto group = fo4::test::begin_group(out, "MISC", 0);
+    for (std::uint32_t local = 1; local < 0xFFFu; ++local) {
+        const auto record = fo4::test::begin_record(out, "MISC", 0, 0x01000000u | local, 131);
+        fo4::test::end_record(out, record);
+    }
+    const auto high = fo4::test::begin_record(out, "MISC", 0, 0x01001000u, 131);
+    fo4::test::end_record(out, high);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 std::vector<std::byte> emptyPatchBytes() {
     fo4::test::ByteWriter out;
     writeHeader(out, 0x800);
@@ -270,6 +284,14 @@ void load(fo4ide::plugin::RadiclePluginBackend& backend,
           const nlohmann::json& plugins) {
     const auto result = backend.invoke("environment.LoadMo2", nlohmann::json{{"plugins", plugins}});
     REQUIRE(result.has_value());
+}
+
+nlohmann::json eyesPayload() {
+    return {
+        {"editorId", "CompactEyes"},
+        {"fullText", "Compact Eyes"},
+        {"icon", "Textures\\Actors\\Character\\Eyes\\compact.dds"}
+    };
 }
 
 std::uint32_t rawSubrecord(const fo4::Record& record, std::string_view signature) {
@@ -438,6 +460,8 @@ TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin refe
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("remapped 1 record") != std::string::npos);
+    CHECK(result->get<std::string>().find(
+        "Flag the plugin ESL (or save it as .esl) to load it in the light range.") != std::string::npos);
 
     const auto beforeSave = fo4::read_plugin_file(path);
     CHECK(fo4::find_record(
@@ -458,6 +482,68 @@ TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin refe
     REQUIRE(race != nullptr);
     CHECK(rawSubrecord(*race, "AHCM") == (hasMaster ? 0x01000001u : 0x00000801u));
     CHECK_FALSE(disk.header.tes4_flags.is_small_file());
+    CHECK(disk.header.next_form_id == (hasMaster ? 0x002u : 0x802u));
+}
+
+TEST_CASE("Native CompactToEsl leaves a light plugin that can still create records") {
+    bool hasMaster = false;
+    SECTION("Masterless plugins") {}
+    SECTION("Plugins with HEDR 1.0 and a master") {
+        hasMaster = true;
+    }
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, compactSourceBytes(hasMaster));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({pluginEntry("Patch.esp", path)}));
+    REQUIRE(backend.compactToEsl(nlohmann::json::array({"Patch.esp"})).has_value());
+    REQUIRE(backend.invoke(
+        "masters.SetLight", nlohmann::json::array({"Patch.esp", true})).has_value());
+
+    const auto created = backend.invokeLegacyBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "EYES", eyesPayload()}));
+    REQUIRE(created.has_value());
+    const auto expected = hasMaster ? "000002:Patch.esp" : "000802:Patch.esp";
+    CHECK(nlohmann::json::parse(created->get<std::string>()).at("formKey") == expected);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(disk.header.tes4_flags.is_small_file());
+    CHECK(disk.header.next_form_id == (hasMaster ? 0x003u : 0x803u));
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse(expected)) != nullptr);
+}
+
+TEST_CASE("Native CompactToEsl at full capacity leaves no ID and creation fails cleanly") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, fullCapacityBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({pluginEntry("Patch.esp", path)}));
+    const auto compacted = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(compacted.has_value());
+    CHECK(compacted->get<std::string>().find("remapped 1 record") != std::string::npos);
+    REQUIRE(backend.invoke(
+        "masters.SetLight", nlohmann::json::array({"Patch.esp", true})).has_value());
+
+    const auto created = backend.invokeLegacyBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "EYES", eyesPayload()}));
+    REQUIRE_FALSE(created.has_value());
+    CHECK(created.error().type == "RecordCreateFailed");
+    CHECK(created.error().message.find("no local ") != std::string::npos);
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(disk.header.next_form_id == 0x1000u);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000FFF:Patch.esp")) != nullptr);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("001000:Patch.esp")) == nullptr);
 }
 
 TEST_CASE("Native CopyAsNewRecord duplicates a contained REFR into an existing target CELL") {

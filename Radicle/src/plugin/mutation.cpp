@@ -83,27 +83,6 @@ Record* find_top_level_record(Plugin& plugin, const FormKey& record_key) {
   return nullptr;
 }
 
-void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
-  Subrecord* hedr = nullptr;
-  for (auto& subrecord : plugin.tes4.subrecords) {
-    if (subrecord.signature != sig_hedr) continue;
-    if (hedr != nullptr) {
-      throw FormIdError("TES4 contains duplicate HEDR subrecords");
-    }
-    hedr = &subrecord;
-  }
-  if (hedr == nullptr || hedr->data.size() != 12) {
-    throw FormIdError("TES4 HEDR must be exactly 12 bytes to update nextFormID");
-  }
-
-  std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
-  plugin.header.next_form_id = next_form_id;
-  plugin.tes4.original_range.clear();
-  plugin.tes4.decompressed_payload.clear();
-  plugin.tes4.header.data_size = 0;
-  plugin.tes4.uncompressed_size = 0;
-}
-
 Group* find_or_create_top_group(Plugin& plugin, Signature signature) {
   for (auto& group : plugin.groups) {
     if (group.header.group_type == 0 && group.header.top_label() == signature) {
@@ -131,6 +110,27 @@ bool erase_record(Group& group, const FormKey& record_key) {
 
 }  // namespace
 
+void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
+  Subrecord* hedr = nullptr;
+  for (auto& subrecord : plugin.tes4.subrecords) {
+    if (subrecord.signature != sig_hedr) continue;
+    if (hedr != nullptr) {
+      throw FormIdError("TES4 contains duplicate HEDR subrecords");
+    }
+    hedr = &subrecord;
+  }
+  if (hedr == nullptr || hedr->data.size() != 12) {
+    throw FormIdError("TES4 HEDR must be exactly 12 bytes to update nextFormID");
+  }
+
+  std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
+  plugin.header.next_form_id = next_form_id;
+  plugin.tes4.original_range.clear();
+  plugin.tes4.decompressed_payload.clear();
+  plugin.tes4.header.data_size = 0;
+  plugin.tes4.uncompressed_size = 0;
+}
+
 bool allows_hardcoded_range(const Plugin& plugin) {
   return plugin.header.version >= 1.0f && !plugin.header.masters.empty();
 }
@@ -153,7 +153,7 @@ FormKey reserve_local_form_key(Plugin& plugin) {
   // A light plugin's HEDR nextFormID may legitimately sit below the full-plugin
   // floor, so clamp up to this plugin's own floor rather than rejecting it.
   auto candidate = std::max(plugin.header.next_form_id, lowest);
-  if (candidate > highest) {
+  if (candidate > highest + 1u) {
     throw FormIdError("HEDR nextFormID is outside this plugin's local FormID range");
   }
 

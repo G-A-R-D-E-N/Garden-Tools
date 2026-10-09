@@ -213,3 +213,17 @@ TEST_CASE("Native ESL compaction refuses 4096 own records without staging change
     REQUIRE(actual.size() == original.size());
     CHECK(std::memcmp(actual.data(), original.data(), original.size()) == 0);
 }
+
+TEST_CASE("Native ESL eligibility counts masterless IDs below the full floor") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin({0x00000700, 0x00000800}));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto report = eligibility(backend);
+    CHECK(report.find("remapping 1 of 2") != std::string::npos);
+    CHECK(report.find("0x800-0xFFF") != std::string::npos);
+}
