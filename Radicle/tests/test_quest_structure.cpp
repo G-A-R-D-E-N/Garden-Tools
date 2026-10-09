@@ -135,6 +135,47 @@ TEST(QuestStructure, LocalizedReferencesRemainIds) {
   EXPECT_EQ(view.objectives[0].text.string_id, 0x2345u);
 }
 
+TEST(QuestStructure, OpaqueConditionPrefixesRemainSupportedAndByteExact) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    for (auto& member : record.subrecords) {
+      if (member.signature != fo4::Signature::from_string("CTDA")) continue;
+      member.data[1] = std::byte{0x12};
+      member.data[2] = std::byte{0x34};
+      member.data[3] = std::byte{0x56};
+    }
+  });
+  const auto before = fo4::write_plugin(plugin);
+  const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
+  ASSERT_TRUE(native.unsupported.empty());
+  std::size_t count = 0;
+  for (const auto& list : native.condition_lists) {
+    ASSERT_TRUE(list.supported);
+    count += list.conditions.size();
+    for (const auto& condition : list.conditions) {
+      const auto payload = fo4::serialize_ctda_condition(condition);
+      ASSERT_EQ(payload.size(), 32u);
+      EXPECT_EQ(payload[1], std::byte{0x12});
+      EXPECT_EQ(payload[2], std::byte{0x34});
+      EXPECT_EQ(payload[3], std::byte{0x56});
+    }
+  }
+  ASSERT_EQ(count, 6u);
+  const Snapshot snapshot(plugin);
+  const auto view = snapshot.view();
+  ASSERT_EQ(view.unsupported_count, 0u);
+  ASSERT_EQ(view.condition_count, 6u);
+  const std::uint16_t functions[] = {70, 277, 72, 73, 74, 75};
+  for (std::size_t i = 0; i < 6; ++i) {
+    EXPECT_EQ(view.conditions[i].function, functions[i]);
+    EXPECT_EQ(view.conditions[i].comparison_raw, 0x3f800000u);
+    EXPECT_EQ(view.conditions[i].param1, -3);
+    EXPECT_EQ(view.conditions[i].param2, 5);
+    EXPECT_EQ(view.conditions[i].reference, 0x800u);
+  }
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 TEST(QuestStructure, FailedConditionRunPublishesNoPartialValues) {
   auto plugin = quest_structure_plugin();
   change_quest(plugin, [](fo4::Record& record) {

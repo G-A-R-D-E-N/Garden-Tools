@@ -1883,9 +1883,8 @@ std::optional<Error> adapterConditionUnrepresentable(
     if (name.empty() || asciiLower(name) == "geteventdata") {
         return existingFail("has an unsupported condition function");
     }
-    if (condition.unknown2 != 0 || condition.unknown3 != -1) {
-        return existingFail("CTDA has unknown fields");
-    }
+    if (condition.unknown2 != 0 || condition.unknown3 != -1 ||
+        condition.opaque_prefix != std::array<std::byte, 3>{}) return existingFail("CTDA has unknown fields");
     if (condition.compare_operator() > 5) {
         return existingFail("has an unsupported condition operator");
     }

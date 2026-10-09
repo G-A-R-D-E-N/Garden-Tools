@@ -90,6 +90,7 @@ CtdaCondition parse_ctda_condition(std::span<const std::byte> payload) {
   }
   CtdaCondition condition;
   condition.flags_byte = std::to_integer<std::uint8_t>(payload[k_ctda_flags]);
+  std::copy_n(payload.begin() + 1, condition.opaque_prefix.size(), condition.opaque_prefix.begin());
   condition.function = read_u16(payload, k_ctda_function);
   if (condition.is_event_data()) {
     if (payload.size() < k_event_data_size) {
@@ -119,6 +120,7 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) 
   if (condition.is_event_data()) {
     std::vector<std::byte> out(k_event_data_size);
     out[k_ctda_flags] = std::byte{condition.flags_byte};
+    std::copy(condition.opaque_prefix.begin(), condition.opaque_prefix.end(), out.begin() + 1);
     write_u16(out, k_ctda_function, condition.function);
     write_u16(out, k_ctda_unknown2, condition.unknown2);
     write_i32(out, k_ctda_param1, condition.param1);
@@ -129,6 +131,7 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) 
   }
   std::vector<std::byte> out(k_ctda_size);
   out[k_ctda_flags] = std::byte{condition.flags_byte};
+  std::copy(condition.opaque_prefix.begin(), condition.opaque_prefix.end(), out.begin() + 1);
   write_u32(out, k_ctda_compare, condition.comparison_raw);
   write_u16(out, k_ctda_function, condition.function);
   write_u16(out, k_ctda_unknown2, condition.unknown2);
@@ -168,18 +171,40 @@ std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
                                                    std::size_t begin,
                                                    std::size_t end) {
   std::vector<CtdaCondition> conditions;
+  bool run_open = true;
   end = std::min(end, record.subrecords.size());
+  std::size_t run_begin = end, run_end = end;
   for (std::size_t i = begin; i < end; ++i) {
     const auto& subrecord = record.subrecords[i];
     if (subrecord.signature == sig_ctda) {
-      conditions.push_back(parse_ctda_condition(subrecord.data));
-    } else if (!conditions.empty() &&
+      if (!run_open) throw CtdaMultipleListsError("condition scope has more than one list");
+      if (conditions.empty()) run_begin = i;
+      run_end = i + 1;
+      try {
+        conditions.push_back(parse_ctda_condition(subrecord.data));
+      } catch (const std::out_of_range& error) {
+        throw CtdaNotLosslessError(error.what());
+      }
+    } else if (run_open && !conditions.empty() &&
                (subrecord.signature == sig_cis1 || subrecord.signature == sig_cis2)) {
       auto& last = conditions.back();
+      run_end = i + 1;
       if (subrecord.signature == sig_cis1) {
         last.parameter1_string = zstring_of(subrecord.data);
       } else {
         last.parameter2_string = zstring_of(subrecord.data);
+      }
+    } else if (!conditions.empty()) {
+      run_open = false;
+    }
+  }
+  if (!conditions.empty()) {
+    const auto serialized = serialize_ctda_run(conditions);
+    if (serialized.size() != run_end - run_begin) throw CtdaNotLosslessError("condition run cannot round-trip");
+    for (std::size_t i = 0; i < serialized.size(); ++i) {
+      const auto& original = record.subrecords[run_begin + i];
+      if (serialized[i].signature != original.signature || serialized[i].data != original.data) {
+        throw CtdaNotLosslessError("condition run cannot round-trip");
       }
     }
   }
