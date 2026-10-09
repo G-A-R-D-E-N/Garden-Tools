@@ -67,7 +67,17 @@ Result<nlohmann::json> RadiclePluginBackend::getConditions(
         });
     }
 
-    const auto conditions = fo4::read_ctda_conditions(*record);
+    std::vector<fo4::CtdaCondition> conditions;
+    try {
+        conditions = fo4::read_ctda_conditions(*record);
+    } catch (const fo4::CtdaMultipleListsError&) {
+        return std::unexpected(Error{
+            "ConditionScopeMultipleLists",
+            "Record '" + recordId + "' has more than one condition list."
+        });
+    } catch (const fo4::CtdaNotLosslessError& error) {
+        return std::unexpected(Error{"ConditionPayloadUnsupported", error.what()});
+    }
     const auto* owner = loaded != nullptr ? loaded : &plugins_.front();
     nlohmann::json outp = nlohmann::json::array();
     for (const auto& condition : conditions) {
@@ -145,6 +155,15 @@ Result<nlohmann::json> RadiclePluginBackend::getConditionsAtPath(
     const auto conditions = fo4::schema::read_scoped_conditions(
         *record, scoped->descriptor, scoped->container_index);
     if (!conditions.ok) {
+        if (conditions.error == fo4::schema::ScopedConditionStatus::unrepresentable) {
+            return std::unexpected(Error{"ConditionPayloadUnsupported", "Condition bytes cannot round-trip in this scope"});
+        }
+        if (conditions.error == fo4::schema::ScopedConditionStatus::multiple_lists) {
+            return std::unexpected(Error{
+                "ConditionScopeMultipleLists",
+                "Scope '" + path + "' has more than one condition list on record '" + recordId + "'."
+            });
+        }
         if (conditions.error == fo4::schema::ScopedConditionStatus::element_not_conditioned) {
             return std::unexpected(Error{
                 "ConditionScopeNotConditioned",
@@ -245,33 +264,15 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
         return std::nullopt;
     };
 
-    std::vector<fo4::CtdaCondition> built;
-    std::vector<std::string> failures;
+    nlohmann::json document;
+    std::size_t writtenCount = 0;
     try {
-        nlohmann::json document = nlohmann::json::parse(
-            conditionsJson.empty() ? "[]" : conditionsJson);
+        document = nlohmann::json::parse(conditionsJson.empty() ? "[]" : conditionsJson);
         if (!document.is_array()) {
-            return std::unexpected(Error{
-                "InvalidConditionsJson",
-                "Could not parse conditions JSON: expected an array."
-            });
-        }
-        std::size_t index = 0;
-        for (const auto& element : document) {
-            index++;
-            std::string failure;
-            auto condition = buildCondition(element, loaded->plugin, resolveEditorId, failure);
-            if (!condition.has_value()) {
-                failures.push_back("#" + std::to_string(index) + ": " + failure);
-                continue;
-            }
-            built.push_back(std::move(*condition));
+            return std::unexpected(Error{"InvalidConditionsJson", "Could not parse conditions JSON: expected an array."});
         }
     } catch (const std::exception& error) {
-        return std::unexpected(Error{
-            "InvalidConditionsJson",
-            "Could not parse conditions JSON: " + std::string(error.what())
-        });
+        return std::unexpected(Error{"InvalidConditionsJson", "Could not parse conditions JSON: " + std::string(error.what())});
     }
 
     fo4::FormKey key;
@@ -284,14 +285,20 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
     try {
         auto mutated = loaded->plugin;
         fo4::assign_record_form_keys(mutated);
-        if (fo4::find_record(mutated, key) == nullptr) {
+        const auto* record = fo4::find_record(mutated, key);
+        if (record == nullptr) {
             return std::unexpected(Error{
                 "RecordNotFound",
                 "Record '" + recordId + "' not found in " + pluginName + "."
             });
         }
+        const auto existing = fo4::read_ctda_conditions(*record);
+        std::string failure;
+        const auto built = buildConditions(document, loaded->plugin, existing, resolveEditorId, failure);
+        if (!built) return std::unexpected(Error{"InvalidConditionsJson", failure});
+        writtenCount = built->size();
         const auto status = fo4::set_record_conditions(
-            mutated, key, std::span<const fo4::CtdaCondition>{built});
+            mutated, key, std::span<const fo4::CtdaCondition>{*built});
         if (status == fo4::ConditionMutationStatus::multiple_lists) {
             return std::unexpected(Error{
                 "ConditionScopeMultipleLists",
@@ -305,20 +312,16 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
             });
         }
         stagePluginMutationLocked(*loaded, std::move(mutated));
+    } catch (const fo4::CtdaMultipleListsError&) {
+        return std::unexpected(Error{"ConditionScopeMultipleLists", "Record '" + recordId + "' has more than one condition list."});
+    } catch (const fo4::CtdaNotLosslessError& error) {
+        return std::unexpected(Error{"ConditionPayloadUnsupported", error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetConditionsFailed", error.what()});
     }
 
-    auto message = "Set " + std::to_string(built.size()) +
+    auto message = "Set " + std::to_string(writtenCount) +
                    " condition(s) on " + recordId + " in " + pluginName + ".";
-    if (!failures.empty()) {
-        message += " Skipped " + std::to_string(failures.size()) + ": ";
-        for (std::size_t i = 0; i < failures.size(); ++i) {
-            if (i > 0) message += "; ";
-            message += failures[i];
-        }
-        message += ".";
-    }
     message += " SavePlugin to persist.";
     return nlohmann::json(std::move(message));
 }

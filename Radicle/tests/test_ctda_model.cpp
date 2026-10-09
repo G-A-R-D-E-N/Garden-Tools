@@ -354,6 +354,47 @@ TEST(CtdaModel, WriteRefusesRecordWithSeveralConditionLists) {
   }
 }
 
+TEST(CtdaModel, ReadRefusesSeveralConditionListsButAllowsBoundedRuns) {
+  const auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "CTDA"});
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
+  ASSERT_NE(record, nullptr);
+  EXPECT_THROW(fo4::read_ctda_conditions(*record), std::runtime_error);
+  EXPECT_THROW(fo4::read_ctda_conditions_in(*record, 1, 5), std::runtime_error);
+  const auto first = fo4::read_ctda_conditions_in(*record, 1, 3);
+  ASSERT_EQ(first.size(), 2u);
+  EXPECT_EQ(first[0].function, 1);
+  EXPECT_EQ(first[1].function, 2);
+  const auto second = fo4::read_ctda_conditions_in(*record, 4, 5);
+  ASSERT_EQ(second.size(), 1u);
+  EXPECT_EQ(second[0].function, 3);
+}
+
+TEST(CtdaModel, ReadDoesNotAttachCisAfterTheRunEnds) {
+  const auto plugin = make_plugin_with_layout({"CTDA", "NAM0", "CIS1", "CIS2"});
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
+  ASSERT_NE(record, nullptr);
+  const auto conditions = fo4::read_ctda_conditions(*record);
+  ASSERT_EQ(conditions.size(), 1u);
+  EXPECT_FALSE(conditions[0].parameter1_string.has_value());
+  EXPECT_FALSE(conditions[0].parameter2_string.has_value());
+}
+
+TEST(CtdaModel, ReadRefusesPayloadOrStringsThatCannotRoundTrip) {
+  fo4::CtdaCondition condition;
+  condition.function = 8;
+  condition.parameter1_string = "first";
+  fo4::Record record;
+  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
+  record.subrecords[0].data.push_back(std::byte{0x55});
+  EXPECT_THROW(fo4::read_ctda_conditions(record), std::runtime_error);
+  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
+  record.subrecords[1].data.push_back(std::byte{0x55});
+  EXPECT_THROW(fo4::read_ctda_conditions(record), std::runtime_error);
+  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
+  record.subrecords[0].data.resize(4);
+  EXPECT_THROW(fo4::read_ctda_conditions(record), fo4::CtdaNotLosslessError);
+}
+
 TEST(CtdaModel, WriteKeepsSubrecordsAroundSingleRun) {
   auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "DESC"});
   auto* record = find_record_mutable(plugin, "000800:Cond.esp");
@@ -391,10 +432,12 @@ TEST(CtdaModel, ScopedWriteLeavesOtherListUntouched) {
             fo4::CtdaScopeWrite::replaced);
   const std::vector<std::string> expected{"EDID", "CTDA", "NAM0", "CTDA"};
   EXPECT_EQ(signatures_of(*record), expected);
-  const auto all = fo4::read_ctda_conditions(*record);
-  ASSERT_EQ(all.size(), 2u);
-  EXPECT_EQ(all[0].function, 99);
-  EXPECT_EQ(all[1].function, 3);
+  const auto first = fo4::read_ctda_conditions_in(*record, 1, 2);
+  ASSERT_EQ(first.size(), 1u);
+  EXPECT_EQ(first[0].function, 99);
+  const auto second = fo4::read_ctda_conditions_in(*record, 3, 4);
+  ASSERT_EQ(second.size(), 1u);
+  EXPECT_EQ(second[0].function, 3);
 }
 
 TEST(CtdaModel, WriteIgnoresLeadingCisBeforeFirstCtda) {

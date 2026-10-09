@@ -41,6 +41,7 @@ enum class ScopedConditionStatus {
   element_not_conditioned,
   alias_structure_invalid,
   multiple_lists,
+  unrepresentable,
 };
 
 struct ScopedConditionsRead {

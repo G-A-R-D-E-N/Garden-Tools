@@ -9,10 +9,21 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace fo4 {
+
+class CtdaMultipleListsError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+class CtdaNotLosslessError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
 
 // The discriminator stored in the function slot of a GetEventData condition.
 // xEdit/CK write 0x1240 there; Mutagen's ConditionBinaryCreateTranslation
@@ -89,9 +100,6 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition);
 
 std::vector<Subrecord> serialize_ctda_run(std::span<const CtdaCondition> conditions);
 
-// Reads the record's condition list: every CTDA subrecord in order, each with
-// its trailing CIS1/CIS2 strings attached. Records without CTDA subrecords
-// yield an empty vector.
 std::vector<CtdaCondition> read_ctda_conditions(const Record& record);
 
 std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,

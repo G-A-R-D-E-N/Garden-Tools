@@ -75,7 +75,10 @@ export default function ConditionsEditor(
   }, [functions, fnFilter]);
 
   const patch = (i: number, change: Partial<ConditionDto>) =>
-    setRows(rs => (rs ?? []).map((r, ri) => (ri === i ? { ...r, ...change } : r)));
+    setRows(rs => (rs ?? []).map((r, ri) => (ri === i ? {
+      ...r, ...change,
+      ...(r._native ? { _edited: [...new Set([...(r._edited ?? []), ...Object.keys(change)])] } : {}),
+    } : r)));
 
   const move = (i: number, delta: number) =>
     setRows(rs => {
@@ -174,7 +177,8 @@ export default function ConditionsEditor(
                   </select>
 
                   <select className="ce-op" value={r.operator} onChange={e => patch(i, { operator: e.target.value })}>
-                    {OPERATORS.map(o => <option key={o} value={o}>{o}</option>)}
+                    {(OPERATORS.includes(r.operator) ? OPERATORS : [r.operator, ...OPERATORS])
+                      .map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
 
                   {usesGlobal ? (

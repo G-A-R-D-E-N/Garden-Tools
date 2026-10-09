@@ -167,6 +167,14 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
       ASSERT_TRUE(fo4::forms::lossless_quest_log_entry_conditions(run, parsed, consumed));
       EXPECT_EQ(consumed, run.size());
       EXPECT_EQ(parsed.size(), raw_count);
+      const auto editable = fo4::read_ctda_conditions_in(*record, begin, i);
+      EXPECT_EQ(editable.size(), raw_count);
+      const auto rewritten = fo4::serialize_ctda_run(editable);
+      ASSERT_EQ(rewritten.size(), run.size());
+      for (std::size_t member = 0; member < run.size(); ++member) {
+        EXPECT_EQ(rewritten[member].signature, run[member].signature);
+        EXPECT_EQ(rewritten[member].data, run[member].data);
+      }
       conditions += raw_count;
       ++runs;
     }

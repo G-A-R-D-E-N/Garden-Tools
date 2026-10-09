@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -11,13 +12,6 @@
 
 namespace fo4ide::plugin {
 
-// JSON<->CTDA mapping shared by the backend condition ops. The contracts are
-// ported from WriteService.Conditions.cs (DescribeCondition) and
-// WriteService.SetConditionsCore / ConditionPaths.cs (BuildConditionFromJson).
-
-// Serializes one parsed condition to the DescribeCondition JSON object:
-// {function, operator, [param1], [param2], [compareGlobal|value], runOn,
-//  [reference], [flags]}.
 nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
                                  const fo4::Plugin& plugin);
 
@@ -31,13 +25,15 @@ std::optional<fo4::RawFormId> resolveConditionFormId(std::string_view text,
                                                      const fo4::Plugin& plugin,
                                                      const EditorIdResolver& resolveEditorId);
 
-// Builds one condition from a SetConditions JSON element. Returns nullopt and
-// sets `failure` to the C# message (e.g. "unknown function 'X'") when the
-// element cannot be built.
 std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                                                  const fo4::Plugin& plugin,
                                                  const EditorIdResolver& resolveEditorId,
                                                  std::string& failure);
+
+std::optional<std::vector<fo4::CtdaCondition>> buildConditions(
+    const nlohmann::json& document, const fo4::Plugin& plugin,
+    std::span<const fo4::CtdaCondition> existing,
+    const EditorIdResolver& resolveEditorId, std::string& failure);
 
 // Formatting helpers exposed for the tests.
 std::string conditionOperatorString(std::uint8_t compareOperator);
