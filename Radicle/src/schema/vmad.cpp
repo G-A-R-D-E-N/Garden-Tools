@@ -536,7 +536,7 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
       break;
     }
     default:
-      throw parse_error(slice.position(), "unknown VMAD property type");
+      throw UnsupportedVmadProperty{};
   }
   return property;
 }

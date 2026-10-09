@@ -23,3 +23,15 @@ ABI: `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is bumped from 11 to 12. 
 Bindings: `Radicle/bindings/csharp/tools/generate_interop.py` regenerated `Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs` and `Radicle/bindings/csharp/tests/abi_layout_probe.cpp`; nothing was edited by hand. The managed `Radicle/bindings/csharp/Radicle.Interop/PlacedReferences.cs:ScriptElement` record maps each element, and `Radicle/bindings/csharp/Radicle.Interop/PlacedReferences.cs:ScriptProperty` gets `Elements`, which is null whenever `HasElements` is 0. The managed `AbiGuardTests` load `radicle_abi_stub*` DLLs, so those targets must be rebuilt after a header bump; they are not built by default in the build directory.
 
 Red-first counts. Before any population code, `Radicle/tests/test_environment_script_elements.cpp:CApiExposesDecodedScriptArrayElements` failed (`has_elements` 0 where 1 is expected, `element_value_count` 0 where 2 is expected). `Radicle/bindings/csharp/Radicle.Interop.Tests/PlacedScriptElementTests.cs:ExposesDecodedArrayElementsAndNullForScalars` failed on `Assert.NotNull` for `Elements`. After the implementation, the focused C++ test passes, the full `fo4_tests` run reports 863 tests, 825 passed, 38 skipped (pre-existing optional-data skips) and 0 failed, the managed suite passes 80 of 80, and `ctest -R "interop|abi"` passes 6 of 6 including `radicle_csharp_interop_up_to_date`.
+
+## Unknown property types stop the typed reader
+
+- `Radicle/src/schema/vmad.cpp:read_property`: an unknown property type (anything other than 0-5, 7, 11-15 and 17) throws `UnsupportedVmadProperty` instead of `parse_error`.
+  - `read_vmad_scripts` therefore returns the properties already read with `unsupported = true`, the same as for types 6 and 16, instead of failing the whole record.
+  - This matches an unmerged decompile of Fallout4.exe OG 1.10.163 (ReverseEng/Fallout4_Runtime_Research pull request #11, `vmad-variable-types-388`; GardenEngine issue #355). In it the per-property reader rejects types 8, 9, 10 and >= 18 before reading a value, and the failure ends that script's property loop while keeping the earlier properties. AE was not checked.
+- `Radicle/src/schema/vmad.cpp:walk_property` (form-link scan and master remap) is unchanged. It still reports such a VMAD as failed, so `Radicle/tests/test_vmad_unsupported.cpp:UnknownPropertyTypeFailsClosedForMasterRemap` stays refused.
+- An unknown type nested inside a struct still raises `parse_error` through `walk_property`.
+- `Radicle/src/schema/vmad.cpp:read_quest_vmad_extras` still reports `unsupported`, but its reason is now the generic quest-extras text, not the parse message.
+- Regression: `Radicle/tests/test_vmad_unsupported.cpp:UnknownPropertyTypesStopTheTypedReaderLikeVariables` covers types 8, 9, 10, 18 and 255.
+  - It failed before the change with `plugin parse error at 0x31: unknown VMAD property type`.
+  - After the change `fo4_tests` passed 827, skipped 38 (real-data and corpus tests) and failed 0 of 865.
