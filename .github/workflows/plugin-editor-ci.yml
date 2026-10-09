@@ -42,8 +42,9 @@ jobs:
         shell: cmd
         working-directory: PluginEditTool
     steps:
+      # Full URL gives this workflow its own action cache; the shared actions/checkout cache races with native-ci's Windows job (shallow.lock).
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: https://code.forgejo.org/actions/checkout@v7
 
       # The 10.0 SDK builds both targets; the 9.0 SDK supplies the exact 9.0.19 runtime the net9.0-windows test host needs.
       - name: Set up pinned .NET SDKs
@@ -108,7 +109,7 @@ jobs:
         working-directory: PluginEditTool
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: https://code.forgejo.org/actions/checkout@v7
 
       - name: Set up pinned .NET SDK
         uses: https://github.com/actions/setup-dotnet@v6
