@@ -13,12 +13,6 @@ on:
       - "PluginEditTool/docs/MCP_SETUP.md"
       - ".github/workflows/plugin-editor-ci.yml"
   pull_request:
-    paths:
-      - "PluginEditTool/FO4RecordEditor*/**"
-      - "PluginEditTool/Mutagen/**"
-      - "PluginEditTool/README.md"
-      - "PluginEditTool/docs/MCP_SETUP.md"
-      - ".github/workflows/plugin-editor-ci.yml"
   workflow_dispatch:
 
 permissions:
