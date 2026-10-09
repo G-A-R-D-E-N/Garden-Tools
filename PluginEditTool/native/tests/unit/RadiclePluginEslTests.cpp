@@ -275,6 +275,75 @@ TEST_CASE("Native CompactToEsl lowers an out-of-range HEDR next ID when every re
     CHECK(nlohmann::json::parse(created->get<std::string>()).at("formKey") == expectedKey);
 }
 
+TEST_CASE("Native CompactToEsl HEDR correction survives save and reload and later creation") {
+    bool hasMaster = true;
+    std::vector<std::uint32_t> ids{0x005u, 0x900u};
+    std::uint32_t nextFormId = 0x5000u;
+    std::uint32_t expectedNext = 0x901u;
+    std::string expectedKey = "000901:Patch.esp";
+    SECTION("Plugins with HEDR 1.0 and a master keep the 0x001 floor") {}
+    SECTION("Masterless plugins keep the 0x800 floor") {
+        hasMaster = false;
+        ids = {0x800u, 0x850u};
+        nextFormId = 0x2000u;
+        expectedNext = 0x851u;
+        expectedKey = "000851:Patch.esp";
+    }
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin(ids, hasMaster, nextFormId));
+
+    {
+        fo4ide::plugin::RadiclePluginBackend backend;
+        loadBackend(backend, path);
+        REQUIRE(backend.compactToEsl(nlohmann::json::array({"Patch.esp"})).has_value());
+        REQUIRE(backend.invoke(
+            "masters.SetLight", nlohmann::json::array({"Patch.esp", true})).has_value());
+        REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    }
+
+    fo4ide::plugin::RadiclePluginBackend reloaded;
+    loadBackend(reloaded, path);
+    const auto listed = reloaded.invoke("masters.List", nlohmann::json::array({"Patch.esp"}));
+    REQUIRE(listed.has_value());
+    REQUIRE(listed->is_string());
+    CHECK(nlohmann::json::parse(listed->get<std::string>()).at("light") == true);
+    {
+        const auto disk = fo4::read_plugin_file(path);
+        CHECK(disk.header.tes4_flags.is_small_file());
+        CHECK(disk.header.next_form_id == expectedNext);
+    }
+
+    const auto created = reloaded.invokeLegacyBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "EYES", nlohmann::json{
+            {"editorId", "LaterCreate"},
+            {"fullText", "Later Create"},
+            {"icon", "Textures\\Actors\\Character\\Eyes\\later.dds"}
+        }}));
+    REQUIRE(created.has_value());
+    CHECK(nlohmann::json::parse(created->get<std::string>()).at("formKey") == expectedKey);
+    REQUIRE(reloaded.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    fo4ide::plugin::RadiclePluginBackend fresh;
+    loadBackend(fresh, path);
+    const auto disk = fo4::read_plugin_file(path);
+    CHECK(disk.header.tes4_flags.is_small_file());
+    CHECK(disk.header.next_form_id == expectedNext + 1u);
+    const auto* newRecord = fo4::find_record(
+        disk, fo4::FormKey{disk.key, fo4::LocalFormId{expectedNext}});
+    CHECK(newRecord != nullptr);
+    for (std::size_t index = 0; index < ids.size(); ++index) {
+        const auto* record = fo4::find_record(
+            disk, fo4::FormKey{disk.key, fo4::LocalFormId{ids[index]}});
+        REQUIRE(record != nullptr);
+        const auto& edid = record->subrecords.front().data;
+        CHECK(std::string(reinterpret_cast<const char*>(edid.data()), edid.size()) ==
+              "Record" + std::to_string(index) + '\0');
+    }
+}
+
 TEST_CASE("Native SetLight refuses a masterless plugin with owned IDs below 0x800") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
