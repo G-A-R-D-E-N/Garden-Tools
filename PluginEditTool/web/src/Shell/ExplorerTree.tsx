@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight, ChevronDown, Database, FileBox } from 'lucide-react';
 import type { AppInterop } from '../backend';
 import { errorText } from '../errors';
@@ -16,11 +16,26 @@ export default function ExplorerTree({ path, node, backend, onOpenRecord }: { pa
   const [children, setChildren] = useState<RecordNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [seenNode, setSeenNode] = useState(node);
+
+  if (seenNode !== node) {
+    setSeenNode(node);
+    if (!expanded) setChildren([]);
+  }
+
+  const fetchChildren = (client: AppInterop) => client.GetChildren(path)
+    .then(json => { setChildren(JSON.parse(json)); setLoadError(''); })
+    .catch(err => setLoadError(errorText(err)));
+
+  useEffect(() => {
+    if (expanded && node.HasChildren && backend) void fetchChildren(backend);
+  }, [node]);
 
   const toggle = async () => {
     if (!expanded) {
       if (node.HasChildren && children.length === 0) {
         setLoading(true);
+        setLoadError('');
 
 
         try {
