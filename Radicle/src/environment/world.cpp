@@ -176,7 +176,7 @@ WaterSelection resolve_water(const Environment& env, const RecordRef& ref) {
   const RecordRef* world_ref = nullptr;
   std::optional<FormKey> water;
   if (ref.record && ref.record->header.signature == k_wrld) {
-    world_ref = &ref;
+    world_ref = env.winner(ref.record->form_key);
   } else {
     const auto cell = decode_cell(env, ref);
     const auto flags = cell.flags.value_or(0);
