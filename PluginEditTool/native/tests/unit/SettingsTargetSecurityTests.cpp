@@ -87,7 +87,9 @@ TEST_CASE("GetSettings through the RPC dispatcher is redacted for the MCP get_se
     const auto root = tempRoot();
     Cleanup cleanup{root};
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::SharedSettings shared(fo4ide::settings::Settings{.geminiApiKey = "AIza-test-secret"});
+    fo4ide::settings::Settings settings;
+    settings.geminiApiKey = "AIza-test-secret";
+    fo4ide::settings::SharedSettings shared(settings);
     FakeRunner runner;
     FakePlatform platform;
 
@@ -109,8 +111,10 @@ TEST_CASE("SaveSettings keeps a stored API key when the payload omits or blanks 
     const auto root = tempRoot();
     Cleanup cleanup{root};
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::SharedSettings shared(
-        fo4ide::settings::Settings{.anthropicApiKey = "sk-ant-stored", .geminiApiKey = "AIza-stored"});
+    fo4ide::settings::Settings settings;
+    settings.anthropicApiKey = "sk-ant-stored";
+    settings.geminiApiKey = "AIza-stored";
+    fo4ide::settings::SharedSettings shared(settings);
     FakeRunner runner;
     FakePlatform platform;
 
@@ -133,7 +137,9 @@ TEST_CASE("SaveSettings replaces a stored API key with the trimmed non-blank val
     const auto root = tempRoot();
     Cleanup cleanup{root};
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::SharedSettings shared(fo4ide::settings::Settings{.anthropicApiKey = "sk-ant-old"});
+    fo4ide::settings::Settings settings;
+    settings.anthropicApiKey = "sk-ant-old";
+    fo4ide::settings::SharedSettings shared(settings);
     FakeRunner runner;
     FakePlatform platform;
 
