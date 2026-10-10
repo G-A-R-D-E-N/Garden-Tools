@@ -649,7 +649,7 @@ TEST_F(WorldEnvironmentTest, XcwtToNonWaterRecordFallsBackToWorldspaceWater) {
 TEST_F(WorldEnvironmentTest, XcwtIntoUnloadedMasterFallsBackToWorldspaceWater) {
   paths_ = {write("Fallout4.esm", make_plugin({}, {top("WATR", {rec("WATR", 0x850)}),
                   top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x850})}, {"DNAM", floats({-2048, 450})}})})})),
-            write("Dangling.esp", make_plugin({"Fallout4.esm", "Missing.esm"}, {top("WRLD", {grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x02000810, {{"DATA", {std::byte{0x02}}}, {"XCWT", bytes_of({0x01000851})}})})})})})}))};
+            write("Dangling.esp", make_plugin({"Fallout4.esm", "Missing.esm"}, {top("WATR", {rec("WATR", 0x02000851)}), top("WRLD", {grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x02000810, {{"DATA", {std::byte{0x02}}}, {"XCWT", bytes_of({0x01000851})}})})})})})}))};
   const auto env = fo4::env::Environment::load(paths_);
   const auto selection = fo4::env::resolve_water(env, *env.winner(key("000810:Dangling.esp")));
   EXPECT_EQ(selection.water, key("000850:Fallout4.esm"));

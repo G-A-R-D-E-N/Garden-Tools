@@ -37,6 +37,21 @@ public class WaterSelectionTests
     }
 
     [Fact]
+    public void CellWithMissingXcwtResolvesToWorldspaceWater()
+    {
+        using var temp = new TempDirectory();
+        var cell = new Rec("CELL", 0x810, new[] { ("DATA", new byte[] { 2 }), ("XCWT", U32(0x999)) });
+        var plugin = temp.Write("Fallout4.esm", Build(1, Array.Empty<string>(),
+            Top("WATR", new Rec("WATR", 0x840, Array.Empty<(string, byte[])>())),
+            Top("WRLD", new Rec("WRLD", 0x800, new[] { ("NAM2", U32(0x840)), ("DNAM", F32(-2048, 450)) }),
+                new Grp(0x800, 1, new Node[] { new Grp(0, 4, new Node[] { new Grp(0, 5, new Node[] { cell }) }) }))));
+        using var env = RadicleEnvironment.Load(new[] { plugin });
+        var selection = env.EffectiveWater(env.Winner(new FormKey("Fallout4.esm", 0x810))!.Value);
+        Assert.Equal(new FormKey("Fallout4.esm", 0x840), selection.Water);
+        Assert.False(selection.UsesDefaultWater);
+    }
+
+    [Fact]
     public void ResolveRejectsARecordFromAnotherEnvironment()
     {
         using var temp = new TempDirectory();
