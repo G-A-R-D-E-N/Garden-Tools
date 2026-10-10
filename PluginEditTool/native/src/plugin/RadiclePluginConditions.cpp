@@ -274,6 +274,17 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
         });
     }
 
+    if (!failures.empty()) {
+        std::string message = "Refused: " + std::to_string(failures.size()) + " of " +
+                              std::to_string(built.size() + failures.size()) +
+                              " condition entries failed: ";
+        for (std::size_t i = 0; i < failures.size(); ++i) {
+            if (i > 0) message += "; ";
+            message += failures[i];
+        }
+        return std::unexpected(Error{"ConditionEntriesRefused", message + "."});
+    }
+
     fo4::FormKey key;
     try {
         key = fo4::FormKey::parse(recordId);
@@ -310,16 +321,8 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
     }
 
     auto message = "Set " + std::to_string(built.size()) +
-                   " condition(s) on " + recordId + " in " + pluginName + ".";
-    if (!failures.empty()) {
-        message += " Skipped " + std::to_string(failures.size()) + ": ";
-        for (std::size_t i = 0; i < failures.size(); ++i) {
-            if (i > 0) message += "; ";
-            message += failures[i];
-        }
-        message += ".";
-    }
-    message += " SavePlugin to persist.";
+                   " condition(s) on " + recordId + " in " + pluginName +
+                   ". SavePlugin to persist.";
     return nlohmann::json(std::move(message));
 }
 

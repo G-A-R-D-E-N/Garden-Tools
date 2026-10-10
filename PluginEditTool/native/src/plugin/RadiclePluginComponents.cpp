@@ -154,9 +154,11 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
 
     std::vector<fo4::forms::ComponentEntry> entries;
     std::vector<std::string> failures;
+    std::size_t index = 0;
     for (const auto& element : document) {
+        const auto tag = "#" + std::to_string(++index) + ": ";
         if (!element.is_object()) {
-            failures.push_back("(non-object entry)");
+            failures.push_back(tag + "(non-object entry)");
             continue;
         }
         const auto component =
@@ -164,36 +166,47 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
                 ? element["component"].get<std::string>()
                 : std::string{};
         if (component.empty()) {
-            failures.push_back("(missing component)");
+            failures.push_back(tag + "(missing component)");
             continue;
         }
         const auto resolved = resolveListValue(component);
         if (!resolved.has_value()) {
-            failures.push_back(component + ": unresolved");
+            failures.push_back(tag + component + ": unresolved");
             continue;
         }
         const auto* winner = graph_.winner(*resolved);
         if (winner == nullptr) {
-            failures.push_back(component + ": unresolved");
+            failures.push_back(tag + component + ": unresolved");
             continue;
         }
         if (isMisc) {
             if (winner->signature != cmpo) {
-                failures.push_back(component + ": " + winner->signature.to_string() +
+                failures.push_back(tag + component + ": " + winner->signature.to_string() +
                                    " is not a CMPO component");
                 continue;
             }
         } else if (!isItemSignature(winner->signature)) {
-            failures.push_back(component + ": " + winner->signature.to_string() +
+            failures.push_back(tag + component + ": " + winner->signature.to_string() +
                                " is not a valid recipe item");
             continue;
         }
         std::uint32_t count = 1;
         if (!parseComponentCount(element, count)) {
-            failures.push_back(component + ": count must be 1..4294967295");
+            failures.push_back(tag + component + ": count must be 1..4294967295");
             continue;
         }
         entries.push_back(fo4::forms::ComponentEntry{*resolved, count});
+    }
+
+    if (!failures.empty()) {
+        std::string message = "Refused: " + std::to_string(failures.size()) + " of " +
+                              std::to_string(document.size()) +
+                              " component entries failed: ";
+        for (std::size_t i = 0; i < failures.size(); ++i) {
+            if (i > 0) message += "; ";
+            message += failures[i];
+        }
+        return std::unexpected(Error{"ComponentEntriesRefused", message + "."});
     }
 
     try {
@@ -208,16 +221,7 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
         stagePluginMutationLocked(*loaded, std::move(mutated));
 
         std::string message = "Set " + std::to_string(written) + " component(s) on " +
-                              recordText + " in " + pluginName + ".";
-        if (!failures.empty()) {
-            message += " Skipped " + std::to_string(failures.size()) + ": ";
-            for (std::size_t i = 0; i < failures.size(); ++i) {
-                if (i > 0) message += "; ";
-                message += failures[i];
-            }
-            message += ".";
-        }
-        message += " SavePlugin to persist.";
+                              recordText + " in " + pluginName + ". SavePlugin to persist.";
         return nlohmann::json(std::move(message));
     } catch (const fo4::forms::ComponentError& error) {
         return std::unexpected(Error{"SetComponentsFailed", error.what()});
