@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Table2, X, RefreshCw, Save } from 'lucide-react';
 import { getBackend, type RecordTypeEntry } from './backend';
 import './PapyrusPanel.css';
@@ -24,6 +24,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
+  const loadSeq = useRef(0);
 
   useEffect(() => setLS('plugin', plugin), [plugin]);
   useEffect(() => setLS('type', type), [type]);
@@ -75,19 +76,35 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
 
   const cellKey = (formKey: string, col: string) => `${formKey}|${col}`;
 
-  const load = async () => {
+  const selectPlugin = (name: string) => {
+    loadSeq.current++;
+    setPlugin(name);
+    setType('');
+    setTypes([]);
+    setGrid(null);
+    setEdits(new Map());
+    setError('');
+    setResult('');
+    setBusy(false);
+  };
+
+  const load = async (message = '') => {
     if (!backend || !plugin.trim() || !type.trim()) return;
+    const mySeq = ++loadSeq.current;
     setBusy(true); setError(''); setResult(''); setEdits(new Map());
     try {
       const raw = await backend.GetRecordsGrid(plugin.trim(), type.trim(), 200, 0);
+      if (loadSeq.current !== mySeq) return;
       const parsed = JSON.parse(raw) as GridData;
       if (parsed.error) throw new Error(parsed.error);
       setGrid(parsed);
+      setResult(message);
     } catch (e) {
+      if (loadSeq.current !== mySeq) return;
       setGrid(null);
       setError('Could not load: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
-      setBusy(false);
+      if (loadSeq.current === mySeq) setBusy(false);
     }
   };
 
@@ -101,6 +118,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
 
   const save = async () => {
     if (!backend || !grid || edits.size === 0) return;
+    const mySeq = loadSeq.current;
     setSaving(true); setError(''); setResult('');
     let ok = 0;
     const failures: string[] = [];
@@ -110,9 +128,8 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
         const formKey = key.slice(0, sep);
         const col = key.slice(sep + 1);
         try {
-          const msg = await backend.SetField(plugin.trim(), formKey, col, value);
-          if (msg.toLowerCase().includes('error')) failures.push(`${formKey}.${col}: ${msg}`);
-          else ok++;
+          await backend.SetField(plugin.trim(), formKey, col, value);
+          ok++;
         } catch (e) {
           failures.push(`${formKey}.${col}: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -127,11 +144,10 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           saveMsg = ` NOT saved to disk: ${e instanceof Error ? e.message : String(e)}`;
         }
       }
-      setResult(`Applied ${ok} of ${edits.size} edit(s).`
+      if (loadSeq.current !== mySeq) return;
+      await load(`Applied ${ok} of ${edits.size} edit(s).`
         + (failures.length ? ` ${failures.length} failed: ${failures.slice(0, 5).join('; ')}` : '')
         + saveMsg);
-      setEdits(new Map());
-      await load();
     } finally {
       setSaving(false);
     }
@@ -148,7 +164,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
         {unavailable && <div className="papyrus-warn">Backend bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className="spreadsheet-toolbar">
-          <select className="spreadsheet-select" value={plugin} onChange={e => setPlugin(e.target.value)} disabled={unavailable}>
+          <select className="spreadsheet-select" value={plugin} onChange={e => selectPlugin(e.target.value)} disabled={unavailable}>
             <option value="">Choose a plugin…</option>
             {plugins.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -156,7 +172,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
             <option value="">Choose a record type…</option>
             {(plugin.trim() ? types : []).map(t => <option key={t.Type} value={t.Type}>{t.FriendlyName} ({t.Count})</option>)}
           </select>
-          <button className="papyrus-run" onClick={load} disabled={busy || unavailable || !plugin.trim() || !type.trim()}>
+          <button className="papyrus-run" onClick={() => void load()} disabled={busy || unavailable || !plugin.trim() || !type.trim()}>
             <RefreshCw size={13} /> {busy ? 'Loading…' : 'Load'}
           </button>
           <button className="papyrus-run spreadsheet-save-btn" onClick={save} disabled={saving || busy || unavailable || edits.size === 0}>
