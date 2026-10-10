@@ -116,6 +116,39 @@ TEST(Ba2Texture, RoundTripStoredAndCompressed) {
   }
 }
 
+TEST(Ba2Texture, CubemapFlagSurvivesRebuildAndMarksDdsHeader) {
+  for (const std::uint32_t version : {1u, 7u, 8u}) {
+    SCOPED_TRACE(version);
+    Ba2TextureArchive archive;
+    archive.version = version;
+
+    Ba2TextureEntry cube;
+    cube.name_hash = 0xB465C424u;
+    cube.extension_hash = 0x00736464u;
+    cube.directory_hash = 0x055583E3u;
+    cube.path = "textures\\armor\\sky.dds";
+    cube.texture = {4, 4, 1, 71, 0x1, 8};
+    const auto payload = repeated(48, 0x5A);
+    cube.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
+    archive.entries.push_back(std::move(cube));
+
+    const auto read = fo4::archive::read_ba2_texture(fo4::archive::write_ba2_texture(archive));
+    ASSERT_EQ(read.entries.size(), 1u);
+    EXPECT_EQ(read.entries[0].texture.flags & 0x1u, 0x1u);
+
+    const auto extracted = fo4::archive::extract_ba2_texture_entry(read.entries[0]);
+    ASSERT_EQ(extracted.size(), 148u + payload.size());
+    EXPECT_EQ(read_u32(extracted, 112), 0xFE00u);
+    EXPECT_EQ(read_u32(extracted, 136), 0x4u);
+    EXPECT_EQ(std::vector<std::byte>(extracted.begin() + 148, extracted.end()), payload);
+
+    const auto reread = fo4::archive::read_ba2_texture(fo4::archive::write_ba2_texture(read));
+    ASSERT_EQ(reread.entries.size(), 1u);
+    EXPECT_EQ(reread.entries[0].texture.flags, read.entries[0].texture.flags);
+    EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(reread.entries[0]), extracted);
+  }
+}
+
 TEST(Ba2Texture, ExtractConcatenatesNonTextureChunks) {
   Ba2TextureEntry entry;
   entry.path = "data\\x.bin";

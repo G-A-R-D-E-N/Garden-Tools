@@ -17,7 +17,11 @@ payloads, so CI never runs its assertions.
 The synthetic DX10 stored and compressed round trip runs once per supported
 version (1, 7, 8) because the writer emits the same field widths for all three;
 a version-specific regression in the writer or reader shows up under its
-`SCOPED_TRACE` value.
+`SCOPED_TRACE` value. `Ba2Texture.CubemapFlagSurvivesRebuildAndMarksDdsHeader`
+covers the same three versions for a flags bit 0 (cubemap) entry: the flag
+survives write and read, the extracted DDS header sets caps2 `0xFE00` and DX10
+miscFlag `0x4` (`ba2_texture.cpp:dds_header_for`), and a rebuild keeps flags and
+extracted bytes unchanged.
 
 ## tools/corpus/ba2_measure.py:measure
 
