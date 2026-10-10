@@ -166,3 +166,17 @@ TEST_F(WaterEdgeTest, DeletedWinningWorldspaceInputResolvesDefaultWaterAtZero) {
   ASSERT_TRUE(selection.height.has_value());
   EXPECT_EQ(*selection.height, 0.0f);
 }
+
+TEST_F(WaterEdgeTest, CellInDeletedWinningWorldspaceResolvesDefaultWater) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {top("WATR", {rec("WATR", 0x18), rec("WATR", 0x840)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x840})}, {"DNAM", floats({-2048, 450})}}),
+                               grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x810, {{"DATA", {std::byte{0x02}}}})})})})})})),
+            write("Override.esp", make_plugin({"Fallout4.esm"}, {top("WRLD", {rec("WRLD", 0x800, {}, 0x20)})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  ASSERT_TRUE(env.metadata(*env.winner(key("000800:Fallout4.esm"))).deleted);
+  const auto selection = fo4::env::resolve_water(env, *env.winner(key("000810:Fallout4.esm")));
+  EXPECT_TRUE(selection.uses_default_water);
+  EXPECT_EQ(selection.water, key("000018:Fallout4.esm"));
+  ASSERT_NE(selection.record, nullptr);
+  EXPECT_FALSE(selection.height.has_value());
+}
