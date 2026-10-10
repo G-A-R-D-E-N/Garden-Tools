@@ -134,6 +134,25 @@ std::vector<std::byte> make_vmad_structs() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_vmad_latin1_struct() {
+  fo4::test::ByteWriter out;
+  out.u16(6);
+  out.u16(2);
+  out.u16(1);
+  wstring(out, "LatinScript");
+  out.u8(0);
+  out.u16(1);
+  wstring(out, "Holder");
+  out.u8(7);
+  out.u8(0);
+  out.u32(1);
+  wstring(out, "Caf\xE9");
+  out.u8(2);
+  out.u8(0);
+  wstring(out, "Caf\xE9");
+  return out.bytes;
+}
+
 std::vector<std::byte> make_plugin(const std::vector<Rec>& records) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -313,4 +332,31 @@ TEST_F(PlacedScriptElementTest, CApiExposesDecodedStructMembersAndStructArrays) 
   EXPECT_STREQ(pairs.structs[0].members[0].name, "Flag");
   EXPECT_EQ(pairs.structs[0].members[0].value.boolean, 1);
   EXPECT_EQ(pairs.structs[1].member_count, 0u);
+}
+
+TEST_F(PlacedScriptElementTest, CApiConvertsWindows1252StructMemberNamesAndText) {
+  const auto data = make_plugin({{"REFR", 0x800, {{"VMAD", make_vmad_latin1_struct()}}}});
+  const auto path = root_ / "Latin.esp";
+  std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(data.data()),
+                                               static_cast<std::streamsize>(data.size()));
+  const auto utf8 = path.u8string();
+  const std::string text(utf8.begin(), utf8.end());
+  const char* raw[] = {text.c_str()};
+  radicle_env* pointer = nullptr;
+  ASSERT_EQ(radicle_env_load(raw, 1, &pointer), RADICLE_STATUS_OK) << radicle_last_error();
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(pointer, radicle_env_destroy);
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env.get(), {"Latin.esp", 0x800}, &record), RADICLE_STATUS_OK);
+  radicle_placed_ref* decoded = nullptr;
+  ASSERT_EQ(radicle_placed_ref_decode(env.get(), record, &decoded), RADICLE_STATUS_OK) << radicle_last_error();
+  const std::unique_ptr<radicle_placed_ref, decltype(&radicle_placed_ref_free)> ref(decoded, radicle_placed_ref_free);
+
+  ASSERT_EQ(ref->script_count, 1u);
+  ASSERT_EQ(ref->scripts[0].property_count, 1u);
+  const auto& holder = ref->scripts[0].properties[0];
+  EXPECT_EQ(holder.has_structs, 1);
+  ASSERT_EQ(holder.struct_count, 1u);
+  ASSERT_EQ(holder.structs[0].member_count, 1u);
+  EXPECT_STREQ(holder.structs[0].members[0].name, "Caf\xC3\xA9");
+  EXPECT_STREQ(holder.structs[0].members[0].value.text, "Caf\xC3\xA9");
 }

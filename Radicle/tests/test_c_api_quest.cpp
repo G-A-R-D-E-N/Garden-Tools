@@ -556,6 +556,46 @@ TEST(CApiQuest, ReportsDecodedStructMembersForEveryOwner) {
   radicle_plugin_destroy(plugin);
 }
 
+TEST(CApiQuest, DisengagedStructWithArrayMemberStaysInSync) {
+  fo4::test::ByteWriter out;
+  out.u16(5);
+  out.u16(2);
+  out.u16(1);
+  fo4::test::wstring(out, "HolderScript");
+  out.u8(0);
+  out.u16(2);
+  fo4::test::struct_property(out, "Holder", 1);
+  fo4::test::int_array_property(out, "Items", {1, 2});
+  fo4::test::int_property(out, "Count", 42);
+  out.raw(fo4::test::vmad_extras());
+  const TempPlugin file(fo4::test::make_quest_plugin_with_vmad(1, out.bytes));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  const auto* holder = findProperty(properties, count, "Holder");
+  ASSERT_NE(holder, nullptr);
+  EXPECT_EQ(holder->type, 7);
+  EXPECT_EQ(holder->has_structs, 0);
+  EXPECT_EQ(holder->structs, nullptr);
+  EXPECT_EQ(holder->struct_count, 0u);
+
+  const auto* counter = findProperty(properties, count, "Count");
+  ASSERT_NE(counter, nullptr);
+  EXPECT_EQ(counter->has_integer, 1);
+  EXPECT_EQ(counter->integer, 42);
+
+  radicle_free_quest_properties(properties, count);
+  radicle_plugin_destroy(plugin);
+}
+
 TEST(CApiQuest, AbiVersionIsFourteen) {
   EXPECT_EQ(radicle_abi_version(), 14u);
   EXPECT_EQ(RADICLE_ABI_VERSION, 14u);
