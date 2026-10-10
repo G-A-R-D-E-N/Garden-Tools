@@ -38,11 +38,11 @@ jobs:
     steps:
       # Full URL gives this workflow its own action cache; the shared actions/checkout cache races with native-ci's Windows job (shallow.lock).
       - name: Check out repository
-        uses: https://code.forgejo.org/actions/checkout@v7
+        uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # The 10.0 SDK builds both targets; the 9.0 SDK supplies the exact 9.0.19 runtime the net9.0-windows test host needs.
       - name: Set up pinned .NET SDKs
-        uses: https://github.com/actions/setup-dotnet@v6
+        uses: https://github.com/actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         env:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet-10.0.401-9.0.317
         with:
@@ -103,10 +103,10 @@ jobs:
         working-directory: PluginEditTool
     steps:
       - name: Check out repository
-        uses: https://code.forgejo.org/actions/checkout@v7
+        uses: https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up pinned .NET SDK
-        uses: https://github.com/actions/setup-dotnet@v6
+        uses: https://github.com/actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         env:
           DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet-10.0.401
         with:
