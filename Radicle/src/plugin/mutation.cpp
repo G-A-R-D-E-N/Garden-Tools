@@ -1,5 +1,6 @@
 #include "fo4/plugin/mutation.hpp"
 
+#include "child_groups.hpp"
 #include "record_edit.hpp"
 
 #include "fo4/plugin/reader.hpp"
@@ -7,6 +8,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/scalar.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -92,8 +94,8 @@ void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
     }
     hedr = &subrecord;
   }
-  if (hedr == nullptr || hedr->data.size() != 12) {
-    throw FormIdError("TES4 HEDR must be exactly 12 bytes to update nextFormID");
+  if (hedr == nullptr || hedr->data.size() < 12) {
+    throw FormIdError("TES4 HEDR must be at least 12 bytes to update next form ID");
   }
 
   std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
@@ -117,16 +119,39 @@ Group* find_or_create_top_group(Plugin& plugin, Signature signature) {
   return &plugin.groups.back();
 }
 
-bool erase_record(Group& group, const FormKey& record_key) {
-  for (auto it = group.children.begin(); it != group.children.end(); ++it) {
-    if (auto* record = std::get_if<Record>(&*it)) {
-      if (record->form_key != record_key) continue;
-      group.children.erase(it);
+bool erase_record(Group& group, const FormKey& record_key, std::set<FormKey>& removed) {
+  for (std::size_t i = 0; i < group.children.size(); ++i) {
+    if (auto* sub = std::get_if<Group>(&group.children[i])) {
+      if (!erase_record(*sub, record_key, removed)) continue;
+      if (sub->children.empty()) {
+        group.children.erase(group.children.begin() + static_cast<std::ptrdiff_t>(i));
+      }
       return true;
     }
-    if (erase_record(std::get<Group>(*it), record_key)) return true;
+    const auto& record = std::get<Record>(group.children[i]);
+    if (record.form_key != record_key) continue;
+    removed.insert(record.form_key);
+    auto stop = i + 1;
+    if (const auto* child = owned_child_group(group, i);
+        child != nullptr && child->header.label_as_u32() == record.header.form_id.value()) {
+      visit_group_records(*child, [&](const Record& inner) { removed.insert(inner.form_key); });
+      stop = i + 2;
+    }
+    group.children.erase(group.children.begin() + static_cast<std::ptrdiff_t>(i),
+                         group.children.begin() + static_cast<std::ptrdiff_t>(stop));
+    return true;
   }
   return false;
+}
+
+std::set<FormKey> erase_subtree(Plugin& plugin, const FormKey& record_key) {
+  std::set<FormKey> removed;
+  for (auto it = plugin.groups.begin(); it != plugin.groups.end(); ++it) {
+    if (!erase_record(*it, record_key, removed)) continue;
+    if (it->children.empty()) plugin.groups.erase(it);
+    break;
+  }
+  return removed;
 }
 
 }  // namespace
@@ -211,24 +236,28 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   auto coverage_probe = next;
   rekey_form_links(coverage_probe, record_key, record_key);
   const auto links = collect_form_links(coverage_probe);
+
+  const auto removed = erase_subtree(next, record_key);
+  if (removed.empty()) return RecordDeleteStatus::record_missing;
+
   if (std::any_of(links.begin(), links.end(), [&](const auto& link) {
-        return link.key == record_key;
+        return link.key == record_key ||
+               (removed.contains(link.key) && !removed.contains(link.record));
       })) {
     return RecordDeleteStatus::referenced;
   }
 
-  bool erased = false;
-  for (auto& group : next.groups) {
-    if (erase_record(group, record_key)) {
-      erased = true;
-      break;
-    }
-  }
-  if (!erased) return RecordDeleteStatus::record_missing;
-
   next.original_range.clear();
   plugin = std::move(next);
   return RecordDeleteStatus::deleted;
+}
+
+std::vector<FormKey> records_removed_by_delete(const Plugin& plugin, const FormKey& record_key) {
+  if (record_key.owner() != plugin.key) return {};
+  auto next = plugin;
+  assign_record_form_keys(next);
+  const auto removed = erase_subtree(next, record_key);
+  return std::vector<FormKey>(removed.begin(), removed.end());
 }
 
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
@@ -279,6 +308,13 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,
                           std::string_view editor_id) {
+  if (editor_id.find('\0') != std::string_view::npos) {
+    throw FormIdError("editor ID contains an embedded NUL");
+  }
+  const auto stored = text::utf8_to_windows1252(editor_id);
+  if (!stored) {
+    throw FormIdError("editor ID is not valid UTF-8 text representable in Windows-1252");
+  }
   assign_record_form_keys(plugin);
   bool found = false;
   bool changed = false;
@@ -291,7 +327,7 @@ bool set_record_editor_id(Plugin& plugin,
 
     for (auto& subrecord : record.subrecords) {
       if (subrecord.signature != sig_edid) continue;
-      const auto next = zstring(editor_id);
+      const auto next = zstring(*stored);
       if (subrecord.data == next) return;
       subrecord.data = next;
       record.original_range.clear();
@@ -301,7 +337,7 @@ bool set_record_editor_id(Plugin& plugin,
 
     Subrecord edid;
     edid.signature = sig_edid;
-    edid.data = zstring(editor_id);
+    edid.data = zstring(*stored);
     record.subrecords.insert(record.subrecords.begin(), std::move(edid));
     record.original_range.clear();
     changed = true;

@@ -86,10 +86,12 @@ FormKey create_local_record(Plugin& plugin,
                             Signature signature,
                             std::vector<Subrecord> subrecords);
 
-// Refuses deletion when any schema-proven in-plugin FormLink still targets the
-// record. Unsupported remap surfaces fail closed before mutation. nextFormID
-// is never decremented or recycled.
+// Deletes the record with its owned child GRUP. Refuses deletion when any
+// schema-proven in-plugin FormLink still targets the record or a record inside
+// that GRUP from outside it. Unsupported remap surfaces fail closed before
+// mutation. next form ID is never decremented or recycled.
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key);
+std::vector<FormKey> records_removed_by_delete(const Plugin& plugin, const FormKey& record_key);
 
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,

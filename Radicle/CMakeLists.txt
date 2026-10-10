@@ -140,6 +140,7 @@ add_library(fo4
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
+  src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
@@ -275,6 +276,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_reader.cpp
     tests/test_xxxx.cpp
     tests/test_compression.cpp
+    tests/test_reader_limits.cpp
     tests/test_real_plugin.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
@@ -282,12 +284,15 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
     tests/test_mutation.cpp
+    tests/test_editor_id_text.cpp
     tests/test_record_lifecycle.cpp
+    tests/test_delete_child_groups.cpp
     tests/test_copy_containment.cpp
     tests/test_scalar_mutation.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
+    tests/test_tes4_masters_hedr.cpp
     tests/test_formlinks.cpp
     tests/test_clmt_formlinks.cpp
     tests/test_ipds_formlinks.cpp
@@ -343,6 +348,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
     tests/test_ctda_model.cpp
+    tests/test_ctda_alias_formids.cpp
     tests/test_condition_scopes.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
@@ -383,6 +389,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_terrain.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
+    tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp

@@ -405,6 +405,15 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
                 "Cannot delete a record while loaded records still reference it: " + formKeyText
             });
         }
+        for (const auto& removed : fo4::records_removed_by_delete(loaded->plugin, key)) {
+            for (const auto& reference : graph_.referenced_by(removed)) {
+                if (reference.plugin == loaded->plugin.key) continue;
+                return std::unexpected(Error{
+                    "RecordReferenced",
+                    "Cannot delete a record while loaded records still reference a record in its child group: " + formKeyText
+                });
+            }
+        }
 
         auto mutated = loaded->plugin;
         const auto status = fo4::delete_local_record(mutated, key);
