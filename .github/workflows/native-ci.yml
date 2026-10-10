@@ -108,8 +108,32 @@ jobs:
         if: always()
         run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
+      - name: Check FO4 data folder
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_LINUX }}
+        run: |
+          if [ -z "$FO4_DATA_DIR" ]; then
+            echo "FO4_DATA_DIR_LINUX is unset; real-data tests will skip."
+          else
+            missing=""
+            for m in Fallout4.esm DLCRobot.esm DLCworkshop01.esm DLCworkshop02.esm DLCworkshop03.esm DLCCoast.esm DLCNukaWorld.esm; do
+              [ -f "$FO4_DATA_DIR/$m" ] || missing="$missing $m"
+            done
+            [ -n "$(find "$FO4_DATA_DIR" -maxdepth 1 -type f -iname 'Fallout4 - *.ba2' -print -quit 2>/dev/null)" ] || missing="$missing Fallout4 - *.ba2"
+            if [ -n "$missing" ]; then
+              echo "FO4_DATA_DIR_LINUX ($FO4_DATA_DIR) is missing:$missing; point it at a Fallout 4 Data folder or unset it."
+              exit 1
+            fi
+            echo "FO4_DATA_DIR: $FO4_DATA_DIR"
+            echo "root *.esm: $(find "$FO4_DATA_DIR" -maxdepth 1 -iname '*.esm' | wc -l), *.ba2: $(find "$FO4_DATA_DIR" -maxdepth 1 -iname '*.ba2' | wc -l)"
+          fi
+
       - name: Test
-        run: ctest --test-dir build/native --output-on-failure --parallel 4
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_LINUX }}
+        run: |
+          if [ -z "$FO4_DATA_DIR" ]; then unset FO4_DATA_DIR; fi
+          ctest --test-dir build/native --output-on-failure --parallel 4
 
       - name: Prove clean managed tests without external networking
         run: unshare --user --map-root-user --net python3 Radicle/bindings/csharp/tools/run_managed_tests.py --build-dir build/native --network-isolated
@@ -448,8 +472,39 @@ jobs:
         if: always()
         run: if defined CCACHE "%CCACHE%" --show-stats
 
+      - name: Check FO4 data folder
+        shell: powershell
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
+        run: |
+          if (-not $env:FO4_DATA_DIR) {
+            "FO4_DATA_DIR_WINDOWS is unset; real-data tests will skip."
+            exit 0
+          }
+          if (-not (Test-Path -LiteralPath $env:FO4_DATA_DIR -PathType Container)) {
+            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
+            exit 1
+          }
+          $missing = @()
+          foreach ($m in 'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm', 'DLCCoast.esm', 'DLCNukaWorld.esm') {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:FO4_DATA_DIR $m) -PathType Leaf)) { $missing += $m }
+          }
+          if (-not (Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter 'Fallout4 - *.ba2' -File -ErrorAction SilentlyContinue)) { $missing += 'Fallout4 - *.ba2' }
+          if ($missing) {
+            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
+            exit 1
+          }
+          "FO4_DATA_DIR: $env:FO4_DATA_DIR"
+          $esm = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.esm -File).Count
+          $ba2 = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.ba2 -File).Count
+          "root *.esm: $esm, *.ba2: $ba2"
+
       - name: Test
-        run: ctest --test-dir build\native --output-on-failure --parallel 4
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
+        run: |
+          if "%FO4_DATA_DIR%"=="" set FO4_DATA_DIR=
+          ctest --test-dir build\native --output-on-failure --parallel 4
 
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.
@@ -476,9 +531,12 @@ jobs:
         if: github.event_name != 'pull_request'
         run: cmake --build build\native-debug
 
+      # Real-data tests run in the Release pass only; Debug with game data exceeds the job timeout.
       - name: Test (Debug)
         if: github.event_name != 'pull_request'
-        run: ctest --test-dir build\native-debug --output-on-failure --parallel 4
+        run: |
+          set FO4_DATA_DIR=
+          ctest --test-dir build\native-debug --output-on-failure --parallel 4
 
       - name: Stop .NET build servers
         if: always()

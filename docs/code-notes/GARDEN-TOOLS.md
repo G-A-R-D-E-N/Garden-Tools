@@ -1278,7 +1278,7 @@ Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses ever
   - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
   - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
   - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
-- **Test.** Gated on `FO4_DATA_DIR`; CI has no game files and skips. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+- **Test.** Gated on `FO4_DATA_DIR`; it skips unless the CI variable `FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
 - **Limits.** Archives and string tables are opened for `Fallout4.esm` only, so `archives_ms` and `strings_ms` leave out the DLC archives and their string tables even when the DLC masters are loaded (the installed game has no loose `Strings` folder, and each DLC's tables, such as `Strings/DLCRobot_en.STRINGS`, are only inside its `- Main.ba2`); `load_ms` covers every listed plugin. `tests/test_env_bench_real.cpp` reads `FO4_DATA_DIR` with `std::getenv`, so on Windows a Data path outside the ANSI code page makes the test skip; the standalone tool takes wide arguments.
 
 ## Radicle/src/c_api_version.cpp:radicle_abi_version — C ABI generation probe
@@ -1530,3 +1530,39 @@ Path length: the longest tracked path under `PluginEditTool` is 145 characters, 
 On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the Windows test steps set TEMP and TMP to `runner.temp`.
 
 The checkout step uses the full URL `https://code.forgejo.org/actions/checkout@v7` (the same v7 commit, 3d3c42e5, as the `actions/checkout@v7` that resolves to data.forgejo.org). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
+
+## .github/workflows/native-ci.yml — Test steps (real-data tests)
+
+The real-data tests read `FO4_DATA_DIR`. CI sets it from two Forgejo repository variables:
+
+- `FO4_DATA_DIR_LINUX` feeds the `Test` step of the Linux job `Native (Linux, Debug)`. It is unset today, so that step skips the real-data tests.
+- `FO4_DATA_DIR_WINDOWS` feeds the `Test` step of the Windows job `Native tests (Windows, MSVC)`.
+- `.github/workflows/native-ci.yml:native-windows-tests` `Test (Debug)` clears `FO4_DATA_DIR` (`set FO4_DATA_DIR=`), so the Debug pass runs without game data. It runs only on non-pull_request events.
+- Why: Debug with data does not finish within the job's 90-minute limit. In run 775, `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` took more than 34 CPU-minutes and 6.9 GB in Debug (289-421 s in Release). The `QuestAliasRealData`, `QuestStagesRealData` and `QuestObjectivesRealData` `DecodesEveryShippedQuest` tests each took about 60 CPU-minutes in Debug (131-320 s in Release). The run was still at test 358 of 1824 when the timeout neared.
+- Release keeps the full real-data coverage: the Windows `Test` step runs the real-data tests with the data.
+
+Each job's `Check FO4 data folder` step runs before its first Test step:
+
+- Unset or empty: prints one line saying the real-data tests will skip. The step passes.
+- Set: requires the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in the folder root. Missing names are printed and the step exits 1.
+- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files.
+
+`FO4_DATA_DIR_WINDOWS` points at the Steam install's `Fallout 4\Data` folder on the Windows runner. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
+
+The tests skip when `FO4_DATA_DIR` is unset, or when an expected file is missing or a list is empty. Examples:
+
+- `Radicle/tests/test_real_plugin.cpp:UnmodifiedFallout4MasterIsByteIdentical` skips on a null `getenv` (line 105) and when `Fallout4.esm` is absent (line 110).
+- `Radicle/tests/test_ba2_real.cpp:real_data` returns nothing when the variable is unset (line 22) or no archives load (line 26). The BA2 tests skip at lines 46 and 73.
+- `Radicle/tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` skips when unset (line 12) and when no masters are found (line 15).
+
+An empty value is not a null `getenv` result, so each Test step unsets `FO4_DATA_DIR` when the variable is empty.
+
+The opt-in suites stay off in CI, because no CI variable sets them:
+
+- `FO4_BA2_EXTRACT_ALL`: `Radicle/tests/test_ba2_real.cpp:ExtractsEveryVanillaEntry`.
+- `FO4_PEX_ARCHIVES`: `Radicle/tests/test_pex_corpus.cpp:EveryArchivedPexRoundTripsByteIdentically`.
+- `FO4_PEX_CORPUS`: `Radicle/tests/test_pex_corpus.cpp:EveryLoosePexRoundTripsByteIdentically`.
+- `FO4_PLUGIN_CORPUS`: `Radicle/tests/test_plugin_corpus.cpp:EveryDecoderSurvivesThirdPartyPlugins`.
+- `FO4_SEQ_CORPUS`: `Radicle/tests/test_seq_corpus.cpp:EveryLooseSeqRoundTripsByteIdentically`.
+- `FO4_PAPYRUS_COMPILER` and `FO4_PAPYRUS_ASSEMBLER`: `Radicle/tests/test_pex_oracle.cpp:PexOracle.CompiledFixturesRoundTripByteIdentically` and `PexOracle.AssemblerDisassemblyAgreesWithTheCompiler`.
+- Optional `FO4_PAPYRUS_IMPORTS` and `FO4_PAPYRUS_FLAGS`: passed to the compiler by `Radicle/tests/test_pex_oracle.cpp:optionalArgument`.
