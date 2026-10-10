@@ -20,6 +20,7 @@
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/form_links.hpp>
 #include <fo4/signature.hpp>
+#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -60,7 +61,7 @@ std::string recordEditorId(const fo4::Record& record) {
         const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
         const auto* end = begin + subrecord.data.size();
         const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
+        return fo4::text::windows1252_to_utf8(std::string(begin, nul));
     }
     return {};
 }

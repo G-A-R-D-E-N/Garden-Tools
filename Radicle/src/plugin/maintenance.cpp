@@ -1,5 +1,6 @@
 #include "fo4/plugin/maintenance.hpp"
 
+#include "child_groups.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/placement.hpp"
 #include "fo4/plugin/reader.hpp"
@@ -44,18 +45,6 @@ bool previous_normalizes_equal(const Record& current,
     return false;
   }
   return same_record(current, normalized);
-}
-
-bool is_owned_child_group_type(std::int32_t type) {
-  return type == static_cast<std::int32_t>(GroupType::world_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_children) ||
-         type == static_cast<std::int32_t>(GroupType::topic_children);
-}
-
-const Group* owned_child_group(const Group& parent, std::size_t record_index) {
-  if (record_index + 1 >= parent.children.size()) return nullptr;
-  const auto* next = std::get_if<Group>(&parent.children[record_index + 1]);
-  return next != nullptr && is_owned_child_group_type(next->header.group_type) ? next : nullptr;
 }
 
 struct ItmScan {

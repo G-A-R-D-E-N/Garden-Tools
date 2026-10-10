@@ -201,8 +201,8 @@ void patch_hedr_record_count(Record& tes4, std::uint32_t count) {
     }
     hedr = &sub;
   }
-  if (hedr == nullptr || hedr->data.size() != 12) {
-    throw std::runtime_error("TES4 HEDR must be exactly 12 bytes on rebuild");
+  if (hedr == nullptr || hedr->data.size() < 12) {
+    throw std::runtime_error("TES4 HEDR must be at least 12 bytes on rebuild");
   }
 
   const auto current = static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(hedr->data[4])) |
