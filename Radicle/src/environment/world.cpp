@@ -184,7 +184,8 @@ WaterSelection resolve_water(const Environment& env, const RecordRef& ref) {
   if (ref.record && ref.record->header.signature == k_wrld) {
     world_ref = env.winner(ref.record->form_key);
   } else {
-    const auto cell = decode_cell(env, ref);
+    const auto* winner = ref.record ? env.winner(ref.record->form_key) : nullptr;
+    const auto cell = decode_cell(env, winner ? *winner : ref);
     const auto flags = cell.flags.value_or(0);
     if (cell.water && !cell.water->owner().empty()) {
       water = cell.water;
