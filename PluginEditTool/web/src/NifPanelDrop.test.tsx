@@ -4,6 +4,7 @@ import NifPanel from './NifPanel';
 
 vi.mock('./NifViewport', () => ({ default: () => null }));
 vi.mock('./NifEditor', () => ({ default: () => null }));
+vi.mock('./useDialogs', () => ({ useDialogs: () => ({ confirm: vi.fn() }) }));
 
 const stage = vi.fn<(name: string, base64: string) => Promise<string>>();
 const geo = vi.fn<(path: string) => Promise<string>>();
