@@ -309,6 +309,7 @@ TEST_F(WorldEnvironmentTest, WaterHeightBoundariesPreserveRawValuesAndRejectActi
   cells.push_back(rec("CELL", 0x920, {{"DATA", {std::byte{0}}}, {"XCWT", bytes_of({0x840})}}));
   cells.push_back(rec("CELL", 0x921, {{"DATA", {std::byte{3}}}, {"XCWT", bytes_of({0})}}));
   cells.push_back(rec("CELL", 0x922, {{"DATA", {std::byte{2}}}, {"XCWT", bytes_of({0x999})}}));
+  cells.push_back(rec("CELL", 0x923, {{"DATA", {std::byte{2}}}, {"XCWT", bytes_of({0x800})}}));
   paths_ = {write("Fallout4.esm", make_plugin({}, {
     top("WATR", {rec("WATR", 0x840)}),
     top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x840})}, {"DNAM", floats({-2048, 450})}}),
@@ -334,7 +335,16 @@ TEST_F(WorldEnvironmentTest, WaterHeightBoundariesPreserveRawValuesAndRejectActi
   EXPECT_TRUE(interior.uses_default_water);
   EXPECT_EQ(interior.record, nullptr);
   EXPECT_FALSE(interior.height.has_value());
-  EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x922)), fo4::env::WorldDecodeError);
+  const auto missing_target = fo4::env::resolve_water(env, *selected(0x922));
+  EXPECT_EQ(missing_target.water, key("000840:Fallout4.esm"));
+  EXPECT_NE(missing_target.record, nullptr);
+  EXPECT_FALSE(missing_target.uses_default_water);
+  EXPECT_EQ(missing_target.height, 450.0f);
+  const auto non_water_target = fo4::env::resolve_water(env, *selected(0x923));
+  EXPECT_EQ(non_water_target.water, key("000840:Fallout4.esm"));
+  EXPECT_NE(non_water_target.record, nullptr);
+  EXPECT_FALSE(non_water_target.uses_default_water);
+  EXPECT_EQ(non_water_target.height, 450.0f);
   EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x801)), fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x802)), fo4::env::WorldDecodeError);
   EXPECT_TRUE(fo4::env::resolve_water(env, *selected(0x803)).uses_default_water);
