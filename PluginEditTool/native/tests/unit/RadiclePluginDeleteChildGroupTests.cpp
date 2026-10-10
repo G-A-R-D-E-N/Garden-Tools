@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/plugin/reader.hpp>
+#include <fo4/flags.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -135,6 +136,51 @@ std::vector<std::byte> makeOverridePlugin() {
     writeRecord(out, "INFO", 0x00000802, "InfoBOverride");
     fo4::test::end_group(out, children);
     fo4::test::end_group(out, dials);
+    return out.bytes;
+}
+
+std::vector<std::byte> makeMasterCellPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(2);
+    hedr.u32(0x901);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto cells = fo4::test::begin_group(out, "CELL", 0);
+    writeRecord(out, "CELL", 0x800, "BaseCell");
+    const auto children = fo4::test::begin_group(out, "CELL", 6);
+    out.patch_u32(children + 8, 0x800);
+    writeRecord(out, "REFR", 0x900, "BaseRef");
+    fo4::test::end_group(out, children);
+    fo4::test::end_group(out, cells);
+    return out.bytes;
+}
+
+std::vector<std::byte> makeMasterOverrideCellPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(2);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto cells = fo4::test::begin_group(out, "CELL", 0);
+    writeRecord(out, "CELL", 0x01000800, "PatchCell");
+    const auto children = fo4::test::begin_group(out, "CELL", 6);
+    out.patch_u32(children + 8, 0x01000800);
+    writeRecord(out, "REFR", 0x00000900, "OverrideRef");
+    fo4::test::end_group(out, children);
+    fo4::test::end_group(out, cells);
     return out.bytes;
 }
 
@@ -275,4 +321,34 @@ TEST_CASE("Native delete refuses a DIAL whose topic child is overridden in anoth
     const auto disk = fo4::read_plugin_file(topicPath);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000801:Topic.esp")) != nullptr);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000802:Topic.esp")) != nullptr);
+}
+
+TEST_CASE("Native delete removes a cell whose child group overrides a master record") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Data" / "Fallout4.esm";
+    const auto patchPath = root / "mods" / "CellMod" / "Patch.esp";
+    writeBytes(masterPath, makeMasterCellPlugin());
+    writeBytes(patchPath, makeMasterOverrideCellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Fallout4.esm", masterPath, "Data"),
+            pluginEntry("Patch.esp", patchPath, "CellMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto deleted = parseStringResult(backend.invokeBackend(
+        "DeleteRecord", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"})));
+    CHECK(deleted.at("deleted") == "000800:Patch.esp");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(patchPath);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp")) == nullptr);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Fallout4.esm")) == nullptr);
+    const auto master = fo4::read_plugin_file(masterPath);
+    CHECK(fo4::find_record(master, fo4::FormKey::parse("000900:Fallout4.esm")) != nullptr);
 }

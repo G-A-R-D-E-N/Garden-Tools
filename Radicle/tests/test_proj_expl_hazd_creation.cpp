@@ -301,6 +301,36 @@ TEST(ProjExplHazdCreation, RejectsAnEditorIdContainingANullByte) {
   EXPECT_THROW(fo4::forms::create_explosion(plugin, creation), fo4::forms::ProjExplHazdError);
 }
 
+TEST(ProjExplHazdCreation, StoresEditorIdAsWindows1252) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+
+  fo4::forms::ProjectileCreation creation;
+  creation.editor_id = "Caf\xC3\xA9";
+  creation.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+
+  const auto key = fo4::forms::create_projectile(plugin, creation);
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto* edid = find_subrecord(*record, "EDID");
+  ASSERT_NE(edid, nullptr);
+  const std::vector<std::byte> expected{
+      std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}};
+  EXPECT_EQ(edid->data, expected);
+}
+
+TEST(ProjExplHazdCreation, EditorIdOutsideWindows1252IsRefusedBeforeAnyMutation) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  fo4::forms::ProjectileCreation creation;
+  creation.editor_id = "Snow\xE2\x98\x83";
+  creation.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_projectile(plugin, creation)),
+               fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 // Truncated EXPL DATA is a clean prefix of the current shape, so a decoder must
 // accept the legacy extents and leave the absent tail at its defaults.
 TEST(ProjExplHazdCreation, DecodesTruncatedExplosionDataAsAPrefix) {

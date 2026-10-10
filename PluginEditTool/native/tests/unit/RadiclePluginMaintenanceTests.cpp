@@ -563,7 +563,7 @@ TEST_CASE("Native CompactToEsl at full capacity leaves no ID and creation fails 
         "CreateRecord",
         nlohmann::json::array({"Patch.esp", "EYES", eyesPayload()}));
     REQUIRE_FALSE(created.has_value());
-    CHECK(created.error().type == "RecordCreateFailed");
+    CHECK(created.error().type == "EyesCreateFailed");
     CHECK(created.error().message.find("no local ") != std::string::npos);
 
     REQUIRE(backend.invoke(

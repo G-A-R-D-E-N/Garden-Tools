@@ -247,7 +247,7 @@ TEST_CASE("Native lifecycle refuses a create EditorId outside Windows-1252 witho
     const auto created = backend.invokeBackend(
         "CreateRecord", nlohmann::json::array({"Patch.esp", "EYES", payload}));
     REQUIRE_FALSE(created.has_value());
-    CHECK(created.error().type == "RecordCreateFailed");
+    CHECK(created.error().type == "EyesCreateFailed");
     CHECK(created.error().message ==
           "editor ID is not valid UTF-8 text representable in Windows-1252");
 
