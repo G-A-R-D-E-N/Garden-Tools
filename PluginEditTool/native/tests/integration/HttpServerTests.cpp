@@ -249,7 +249,7 @@ TEST_CASE("HTTP refuses non-loopback binds") {
     fo4ide::events::EventBus events;
     fo4ide::rpc::Dispatcher rpc;
     fo4ide::http::HttpServer server(rpc, events);
-    auto result = server.start({.host = "0.0.0.0", .port = 0, .webRoot = {}});
+    auto result = server.start({.host = "0.0.0.0", .port = 0, .webRoot = {}, .token = {}});
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "UnsafeHttpBind");
 }
@@ -258,7 +258,7 @@ TEST_CASE("HTTP server refuses to start without an access token") {
     fo4ide::events::EventBus events;
     fo4ide::rpc::Dispatcher rpc;
     fo4ide::http::HttpServer server(rpc, events);
-    auto result = server.start({.host = "127.0.0.1", .port = 0, .webRoot = {}});
+    auto result = server.start({.host = "127.0.0.1", .port = 0, .webRoot = {}, .token = {}});
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "HttpTokenMissing");
 }
