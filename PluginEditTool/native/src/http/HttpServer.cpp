@@ -1,7 +1,10 @@
 #include <fo4ide/http/HttpServer.hpp>
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
+#include <cstddef>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -12,6 +15,8 @@
 namespace fo4ide::http {
 namespace {
 
+constexpr std::size_t kMaxRequestBytes = 16 * 1024 * 1024;
+
 nlohmann::json eventJson(const events::Event& event) {
     nlohmann::json value;
     if (event.payload.is_object()) {
@@ -21,6 +26,48 @@ nlohmann::json eventJson(const events::Event& event) {
     }
     if (!value.contains("Type")) value["Type"] = event.type;
     return value;
+}
+
+std::string dumpJson(const nlohmann::json& value) {
+    return value.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+}
+
+void reject(httplib::Response& response, int status, std::string type, std::string message) {
+    const nlohmann::json error{
+        {"ok", false},
+        {"error", std::move(message)},
+        {"type", std::move(type)}
+    };
+    response.status = status;
+    response.set_header("Connection", "close");
+    response.set_content(dumpJson(error), "application/json; charset=utf-8");
+}
+
+bool tokenMatches(const httplib::Request& request, std::string_view token) {
+    const auto provided = request.get_header_value("X-FO4IDE-Token");
+    unsigned int difference = provided.size() == token.size() ? 0u : 1u;
+    for (std::size_t i = 0; i < token.size() && i < provided.size(); ++i) {
+        difference |= static_cast<unsigned char>(provided[i] ^ token[i]);
+    }
+    return difference == 0;
+}
+
+bool isJsonContentType(std::string_view contentType) {
+    constexpr std::string_view jsonType = "application/json";
+    auto mediaType = contentType.substr(0, contentType.find(';'));
+    while (!mediaType.empty() && mediaType.back() == ' ') mediaType.remove_suffix(1);
+    return mediaType.size() == jsonType.size() &&
+           std::equal(mediaType.begin(), mediaType.end(), jsonType.begin(), [](char a, char b) {
+               return std::tolower(static_cast<unsigned char>(a)) ==
+                      std::tolower(static_cast<unsigned char>(b));
+           });
+}
+
+bool hostAllowed(const httplib::Request& request, std::string_view bindHost, int port) {
+    const auto suffix = ":" + std::to_string(port);
+    const auto host = request.get_header_value("Host");
+    if (host == "127.0.0.1" + suffix || host == "localhost" + suffix) return true;
+    return bindHost == "::1" && host == "[::1]" + suffix;
 }
 
 bool wantsHtml(const httplib::Request& request) {
@@ -58,26 +105,40 @@ Result<int> HttpServer::start(const Config& config) {
     if (config.host != "127.0.0.1" && config.host != "localhost" && config.host != "::1") {
         return std::unexpected(Error{"UnsafeHttpBind", "Milestone 1 only permits loopback HTTP binds"});
     }
+    if (config.token.empty()) {
+        return std::unexpected(Error{"HttpTokenMissing", "HTTP server requires an access token"});
+    }
     if (!config.webRoot.empty() && !std::filesystem::is_directory(config.webRoot)) {
         return std::unexpected(Error{"WebRootMissing", "Web UI directory not found: " + config.webRoot.string()});
     }
 
     impl_->config = config;
     auto& server = impl_->server;
+    server.set_payload_max_length(kMaxRequestBytes);
+
+    server.set_pre_routing_handler([this](const httplib::Request& request, httplib::Response& response) {
+        const auto& token = impl_->config.token;
+        const bool isRpc = request.method == "POST" && request.path == "/rpc";
+        const bool isEvents = (request.method == "GET" || request.method == "HEAD") && request.path == "/events";
+        if (!hostAllowed(request, impl_->config.host, impl_->boundPort.load())) {
+            reject(response, 403, "Forbidden", "Host header must name this loopback server");
+        } else if ((isRpc || isEvents) && !tokenMatches(request, token)) {
+            reject(response, 401, "Unauthorized", "Missing or invalid X-FO4IDE-Token");
+        } else if (isRpc && !isJsonContentType(request.get_header_value("Content-Type"))) {
+            reject(response, 415, "UnsupportedMediaType", "RPC requests must use application/json");
+        } else {
+            return httplib::Server::HandlerResponse::Unhandled;
+        }
+        return httplib::Server::HandlerResponse::Handled;
+    });
 
     server.Post("/rpc", [this](const httplib::Request& request, httplib::Response& response) {
         try {
             const auto json = nlohmann::json::parse(request.body);
             const auto result = impl_->dispatcher.invokeJson(json).toJson();
-            response.set_content(result.dump(), "application/json; charset=utf-8");
+            response.set_content(dumpJson(result), "application/json; charset=utf-8");
         } catch (const std::exception& ex) {
-            const nlohmann::json error{
-                {"ok", false},
-                {"error", ex.what()},
-                {"type", "InvalidRequest"}
-            };
-            response.status = 400;
-            response.set_content(error.dump(), "application/json; charset=utf-8");
+            reject(response, 400, "InvalidRequest", ex.what());
         }
     });
 
@@ -87,7 +148,7 @@ Result<int> HttpServer::start(const Config& config) {
             {"native", true},
             {"targets", impl_->dispatcher.targetNames()}
         };
-        response.set_content(health.dump(), "application/json; charset=utf-8");
+        response.set_content(dumpJson(health), "application/json; charset=utf-8");
     });
 
     server.Get("/events", [this](const httplib::Request&, httplib::Response& response) {
@@ -99,7 +160,7 @@ Result<int> HttpServer::start(const Config& config) {
             [subscription](std::size_t, httplib::DataSink& sink) {
                 using namespace std::chrono_literals;
                 if (const auto event = subscription->waitPop(1s)) {
-                    const auto payload = "data: " + eventJson(*event).dump() + "\n\n";
+                    const auto payload = "data: " + dumpJson(eventJson(*event)) + "\n\n";
                     return sink.write(payload.data(), payload.size());
                 }
                 static constexpr std::string_view heartbeat = ": keep-alive\n\n";
