@@ -14,10 +14,10 @@ invalid or deleted WNAM parent ends inheritance. An invalid or non-WATR NAM2 at 
 world where inheritance stops selects the default key with uses_default_water=1.
 Inheritance uses the current world's bit 3 for water type and bit 0 for height,
 respecting the effective WNAM/PNAM flags of `effective_parent_flags`, which the raw
-PNAM readers do not apply. A visited set rejects active inheritance cycles.
+PNAM readers do not apply. A visited set rejects active inheritance cycles. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.3 shows the engine has no cycle guard, and §5 fixture 7 shows it hangs on such a cycle, so this throw is a deliberate divergence.
 
 An absent XCLW selects the world default height for an exterior cell with Has Water
-and a winning world. A WRLD with no DNAM reports height 0.0 with has_height set, and
+and a winning world (inferred in RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.5 from the height predicate, not read from the cell initialiser). A WRLD with no DNAM reports height 0.0 with has_height set, and
 a WRLD input always reports a height. xEdit CELL DATA bits 0 and 1 are
 [lines 5968-5969](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L5968-L5969);
 WRLD PNAM bits 0 and 3 are [lines 13128 and 13131](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L13128-L13131).
@@ -43,6 +43,8 @@ reflection call remains confined to this probe; rendering, `WaterBuilder.Build`
 adoption and in-game parity are separate from this consumer conversion check.
 `Radicle/probes/gardenengine/*` is copied into a GardenEngine checkout to run; no CMakeLists in this repo builds it.
 The default water key (Fallout4.esm, 0x18) is one shared constant pair, `src/environment/default_water.hpp:k_default_water_plugin` and `k_default_water_local`, used by `src/environment/world.cpp:resolve_water` and `src/c_api_world.cpp:radicle_water_resolve`.
+
+GT-119 checks RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.1 (CELL XCWT precedence), §3.2 and §3.5 (PNAM bit 3 for water type, bit 0 for height), §3.6 (XCLW load transform), §3.7 (WNAM/PNAM order), and §3.4 (invalid NAM2 selects the default key; a missing parent ends inheritance). Unresolved: an invalid XCWT target (§3.4, §6; Radicle returns PARSE_ERROR), the absent-XCLW initial value (§3.5, inferred only), and a deleted parent (not addressed by the RE; treated as missing). Deliberate divergences: an active inheritance cycle throws where the engine hangs (§3.3, §5 fixture 7), and a missing form ID 0x18 is not synthesised as a DefaultWater record (§3.4).
 
 ## Water corpus evidence (#341)
 

@@ -96,16 +96,16 @@ RVAs 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910.
 `fo4::env::resolve_water`, C `radicle_water_resolve` and C# `EffectiveWater`
 select a winning CELL XCWT, otherwise the exterior world's inherited NAM2,
 otherwise Fallout4.esm form 0x18. Three rules govern the failure cases. An
-invalid or deleted WNAM parent ends inheritance at the current world. An
+invalid or deleted WNAM parent ends inheritance at the current world (RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.4 covers a missing or NULL parent; a deleted parent is treated the same way, and the RE does not address deletion specifically). An
 invalid or non-WATR NAM2, read from the world where inheritance stops, selects
 Fallout4.esm form 0x18 with `uses_default_water=1`. An invalid XCWT target
 fails with `PARSE_ERROR`, because its runtime fix-up is unverified
 (`src/environment/world.cpp:resolve_water`, `src/environment/world.cpp:inherited_world`,
 `src/c_api_env_internal.hpp:guarded`). Missing default WATR data stays unresolved
-through a null record handle; no synthetic visual record is created.
+through a null record handle; no synthetic visual record is created. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.4 shows the engine synthesises a DefaultWater record when `Fallout4.esm` form ID 0x18 is absent. Radicle reports the default key with `uses_default_water=1` and leaves the record null by design; it does not synthesise one.
 
 Heights: an absent XCLW selects the world default height for an exterior cell
-with Has Water and a winning world. A WRLD with no DNAM reports height 0.0 with
+with Has Water and a winning world (inferred in RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.5 from the height predicate, not read from the cell initialiser). A WRLD with no DNAM reports height 0.0 with
 `has_height` set, and a WRLD input always reports a height. Interior cells use
 only their own XCWT, otherwise the default key, and report no XCLW height. The
 bits come from xEdit CELL DATA bit 0 "Is Interior Cell" and bit 1 "Has Water"
@@ -118,11 +118,10 @@ the record has no PNAM (`src/environment/world.cpp:decode_worldspace`,
 `src/c_api_world.cpp:radicle_worldspace_get_info`). Water inheritance uses the
 effective flags from `src/environment/world.cpp:effective_parent_flags` instead:
 whichever of WNAM and PNAM comes last in file order wins, WNAM setting all bits
-(0xFFFF), so a WNAM-only record inherits every bit. This order rule comes from
-RE 6916afb; the RE re-check (GT-119) is pending.
+(0xFFFF), so a WNAM-only record inherits every bit. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.7 verifies (OG bytes, AE decompile) that WNAM sets all inherit bits, a later PNAM overwrites them, and WNAM alone inherits everything.
 
 Water type follows PNAM bit 3; height follows bit 0 independently. Ordered
-WNAM/PNAM fields affect inheritance, and active cycles fail closed. Exterior
+WNAM/PNAM fields affect inheritance, and active cycles fail closed. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.3 shows the engine has no cycle guard, and §5 fixture 7 records that it hangs on such a cycle, so this throw is a deliberate divergence. Exterior
 CELL heights require Has Water without Interior. Positive fractions round at
 one half, negative fractions truncate, and NaN/below-range values become
 -2^31. Values at least +2^31 select the world's default height: **-2^31 is
