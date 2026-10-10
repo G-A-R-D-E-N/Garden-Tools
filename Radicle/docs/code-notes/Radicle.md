@@ -233,3 +233,7 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 ## Radicle/src/plugin/writer.cpp:remap_plugin_masters
 
 `Radicle/src/plugin/writer.cpp:remap_plugin_masters` refuses dropping the last master of a light plugin that owns local IDs below 0x800 (GT-057). Light plugins with a master use the 0x001 floor from `Radicle/src/plugin/mutation.cpp:allows_hardcoded_range`; with no masters that floor reverts to 0x800, so those low own IDs would become invalid. The refusal throws `FormIdError` before any mutation. Full plugins, adds, reorders and light plugins with no low own IDs are unchanged. Tests: `Radicle/tests/test_master_metadata.cpp` `MasterMetadata.RemovingLastMasterOfLightPluginRefusesLowOwnIds`, `MasterMetadata.RemovingLastMasterOfLightPluginAllowsIdsAtTheFloor`, `MasterMetadata.RemovingLastMasterOfFullPluginAllowsLowOwnIds`; `PluginEditTool/native/tests/unit/RadiclePluginAddMastersTests.cpp` `Native CleanUnusedMasters refuses to drop the last master of a light plugin with low own IDs`.
+
+## Radicle/src/c_api.cpp:radicle_plugin_remap_masters
+
+`Radicle/src/c_api.cpp:radicle_plugin_remap_masters` remaps a copy of the plugin and assigns it back only when `fo4::remap_plugin_masters` succeeds, so a failed call (for example a dropped master that an own record or override still uses, which makes `encode_plugin_form_id` throw "is not in the destination master table") leaves the handle unchanged instead of empty (GT-090). Test: `Radicle/tests/test_c_api.cpp` `CApi.FailedRemapMastersLeavesThePluginUnchanged`.
