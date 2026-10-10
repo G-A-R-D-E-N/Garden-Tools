@@ -309,7 +309,15 @@ Anchored to `src/plugin/mutation.cpp:delete_local_record`, `src/plugin/mutation.
 
 Anchored to `src/plugin/mutation.cpp:stored_editor_id`, which `src/plugin/mutation.cpp:set_record_editor_id` shares, and to the typed creators `src/forms/cell.cpp`, `src/forms/eyes.cpp`, `src/forms/race.cpp`, `src/forms/armor.cpp` and `src/forms/proj_expl_hazd.cpp`.
 
-The creators convert the EditorID with `stored_editor_id`. A character outside Windows-1252 throws `FormIdError` before the plugin changes. An embedded NUL is still refused by each creator's own string check, with that family's error type; `set_record_editor_id` checks NUL itself before converting. PET's `PluginEditTool/native/src/plugin/RadiclePluginReadApi.cpp:editorId` decodes stored EditorIDs from Windows-1252 to UTF-8.
+The creators convert the EditorID with `stored_editor_id`. A character outside Windows-1252 makes `src/plugin/mutation.cpp:stored_editor_id` throw `FormIdError` before the plugin changes. An embedded NUL is still refused by each creator's own string check, with that family's error type; `set_record_editor_id` checks NUL itself before converting.
+
+GT-150: PET's `PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp:createRecord` maps any `fo4::FormIdError` on create to the family's own code (`CellCreateFailed`, `EyesCreateFailed`, `RaceCreateFailed`, `ArmorCreateFailed`, `LeveledSpellCreateFailed` or `ProjExplHazdCreateFailed`), the same code the family uses for an embedded NUL. This also covers other `FormIdError`s on create, such as no free local form ID from `src/plugin/mutation.cpp:reserve_local_form_key`, pinned in `PluginEditTool/native/tests/unit/RadiclePluginMaintenanceTests.cpp:Native CompactToEsl at full capacity leaves no ID and creation fails`.
+
+GT-147: every PET EditorID reader goes through `PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:editorId`, which decodes Windows-1252 to UTF-8. `PluginEditTool/native/src/plugin/RadiclePluginQueries.cpp:subrecordValue` decodes EDID the same way. Lookups by EditorID compare the decoded UTF-8 with the request. Test: `PluginEditTool/native/tests/unit/RadiclePluginEditorIdTextTests.cpp:Native EditorId reads decode Windows-1252 for listings and lookups`.
+
+GT-150: an EditorID stored as raw UTF-8 before the conversion was applied reads back garbled, because each UTF-8 byte decodes as one Windows-1252 character. Before `ab27e845` the typed creators in `src/forms/` wrote the caller's UTF-8 bytes unchanged, so a non-ASCII EditorID that PET created with them now reads back garbled. There is no migration.
+
+Tests: `tests/test_exterior_cell_creation.cpp:ExteriorCellCreation.StoresEditorIdAsWindows1252`, `tests/test_exterior_cell_creation.cpp:ExteriorCellCreation.EditorIdOutsideWindows1252IsRefusedBeforeAnyMutation`, `tests/test_proj_expl_hazd_creation.cpp:ProjExplHazdCreation.StoresEditorIdAsWindows1252` and `tests/test_proj_expl_hazd_creation.cpp:ProjExplHazdCreation.EditorIdOutsideWindows1252IsRefusedBeforeAnyMutation`, next to the EYES ones in `tests/test_eyes_creation.cpp:EyesCreation.StoresEditorIdAsWindows1252` and `tests/test_eyes_creation.cpp:EyesCreation.EditorIdOutsideWindows1252IsRefusedBeforeAnyMutation`.
 
 ## GT-140 C# string arguments refuse an embedded NUL
 
@@ -321,6 +329,8 @@ The generator maps every `const char*` parameter to `Utf8NoNulMarshaler`, so `Ra
 
 GT-141: `deleteRecord` also refuses with `RecordHasExternalVersions` when another loaded plugin overrides a record inside the removed subtree. The message names that plugin, the overridden record inside the subtree and the target. The `RecordReferenced` refusal for references from another plugin names the referencing record, its plugin, the record inside the subtree and the target.
 
+GT-148: the external-versions check runs only for removed records owned by the deleting plugin (`FormKey::owner()`). A record owned by a master that the plugin only overrides is skipped, because deleting drops only the override. References from other plugins to such a record are also not refused when the owner's own version is still loaded, since the record stays. Test: `PluginEditTool/native/tests/unit/RadiclePluginDeleteChildGroupTests.cpp:Native delete removes a cell whose child group overrides a master record`.
+
 ## src/schema/non_formid_slots.cpp:k_non_formid_slots
 
 GT-143: the NPC_ `NAM7` exclusion lives in the hand-written `include/fo4/schema/non_formid_slots_manual.inc`. Its source is xEdit `Core/wbDefinitionsFO4.pas:10424` at `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `wbFloat(NAM7, 'Unused')`. `k_non_formid_slots` includes it alongside the generated `non_formid_slots.inc`, so regenerating the corpus file does not drop it.
@@ -328,3 +338,5 @@ GT-143: the NPC_ `NAM7` exclusion lives in the hand-written `include/fo4/schema/
 ## src/c_api_placed.cpp:radicle_record_primary_model_path
 
 GT-145: `radicle_record_primary_model_path` is wrapped in `guarded()` like its neighbours, so an exception cannot cross `extern "C"`.
+
+GT-149: the entry points in `src/c_api_fields.cpp`, `src/c_api_ref_fields.cpp`, `src/c_api_writeback.cpp` and `src/c_api_authoring.cpp` build form keys, convert text and fill vectors inside `guarded(...)`. The placed-reference setters in `src/c_api_ref_fields.cpp` wrap their argument checks in `guarded` around `run`, so invalid input still returns before the plugin is copied. Status codes and messages are unchanged. Other entry points catch `std::bad_alloc` inline instead of using `guarded`: `src/c_api.cpp`, `src/c_api_pex.cpp`, `src/c_api_quest.cpp`, `src/c_api_seq.cpp` and `src/c_api_env.cpp:radicle_env_load`. `src/c_api_records.cpp:radicle_record_copy_subrecord` uses `std::malloc` with a null check.
