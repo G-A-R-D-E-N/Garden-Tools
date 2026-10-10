@@ -86,6 +86,21 @@ nlohmann::json pluginEntry(std::string name,
     };
 }
 
+int writeLockCount = 0;
+
+void countWriteLock() {
+    ++writeLockCount;
+}
+
+struct WriteLockHookGuard {
+    explicit WriteLockHookGuard(fo4ide::plugin::WriteOpLockedHook hook) {
+        fo4ide::plugin::setWriteOpLockedHook(hook);
+    }
+    ~WriteLockHookGuard() { fo4ide::plugin::setWriteOpLockedHook(nullptr); }
+    WriteLockHookGuard(const WriteLockHookGuard&) = delete;
+    WriteLockHookGuard& operator=(const WriteLockHookGuard&) = delete;
+};
+
 std::string textResult(const fo4ide::Result<nlohmann::json>& result) {
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
@@ -362,6 +377,38 @@ TEST_CASE("Native CopyAsDisabledOverride copies and sets Initially Disabled on t
     const auto* original = fo4::find_record(master, fo4::FormKey::parse("000800:Master.esm"));
     REQUIRE(original != nullptr);
     CHECK((original->header.flags.value() & 0x00000800u) == 0);
+}
+
+TEST_CASE("Native CopyAsDisabledOverride takes one write lock and stages the flagged copy") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(masterPath, makeMaster());
+    writeBytes(targetPath, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Master.esm", masterPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    writeLockCount = 0;
+    const WriteLockHookGuard guard(&countWriteLock);
+    const auto message = textResult(backend.copyAsDisabledOverride(nlohmann::json::array(
+        {"Master.esm", "000800:Master.esm", "Target.esp", false})));
+    CHECK(writeLockCount == 1);
+    CHECK(message.find("Marked it Initially Disabled.") != std::string::npos);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+
+    const auto reloaded = fo4::read_plugin_file(targetPath);
+    const auto* copy = fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm"));
+    REQUIRE(copy != nullptr);
+    CHECK((copy->header.flags.value() & 0x00000800u) != 0);
 }
 
 TEST_CASE("Native CopyAsDisabledOverride leaves an existing override untouched") {

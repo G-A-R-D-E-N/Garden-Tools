@@ -135,6 +135,7 @@ add_executable(
     unit/RadiclePluginReadApiTests.cpp
     unit/RadiclePluginEslTests.cpp
     unit/RadiclePluginEditableTests.cpp
+    unit/RadiclePluginBackendHygieneTests.cpp
     unit/ConditionFunctionsTests.cpp
     unit/ConditionBackendTests.cpp
     unit/ConditionScopeBackendTests.cpp

@@ -18,6 +18,7 @@
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/visit.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/condition_scopes.hpp>
 #include <fo4/schema/ctda.hpp>
@@ -51,6 +52,23 @@ std::string joinNames(const std::vector<std::string>& names) {
         out += name;
     }
     return out;
+}
+
+constexpr std::uint32_t kCopyInitiallyDisabled = 0x00000800u;
+
+bool markCopyInitiallyDisabled(fo4::Plugin& plugin, const fo4::FormKey& key) {
+    bool found = false;
+    fo4::visit_records(plugin, [&](fo4::Record& record) {
+        if (record.header.signature == fo4::sig_tes4 || record.form_key != key) return;
+        record.header.flags = fo4::RecordFlags{record.header.flags.value() | kCopyInitiallyDisabled};
+        record.original_range.clear();
+        record.decompressed_payload.clear();
+        record.header.data_size = 0;
+        record.uncompressed_size = 0;
+        found = true;
+    });
+    if (found) plugin.original_range.clear();
+    return found;
 }
 
 std::string asciiLower(std::string_view value) {
@@ -561,7 +579,6 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
     const auto sourceName = stringArgument(arguments, 0);
     const auto formKeyText = stringArgument(arguments, 1);
     const auto targetName = stringArgument(arguments, 2);
-    bool overwrite = false;
 
     if (sourceName.empty()) {
         return std::unexpected(Error{"SourcePluginMissing", "Source plugin name is empty"});
@@ -572,6 +589,18 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
     if (targetName.empty()) {
         return std::unexpected(Error{"TargetPluginMissing", "Target plugin name is empty"});
     }
+
+    OpLock lock(*this, OpLock::Mode::Write, {targetName, sourceName});
+    return copyAsOverrideLocked(arguments, false);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideLocked(
+    const nlohmann::json& arguments, bool initiallyDisabled) {
+    const auto sourceName = stringArgument(arguments, 0);
+    const auto formKeyText = stringArgument(arguments, 1);
+    const auto targetName = stringArgument(arguments, 2);
+    bool overwrite = false;
+
     if (!boolArgument(arguments, 3, overwrite)) {
         return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
     }
@@ -587,7 +616,6 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    OpLock lock(*this, OpLock::Mode::Write, {targetName, sourceName});
     const auto* source = findPlugin(sourceName);
     if (source == nullptr) {
         return std::unexpected(Error{
@@ -655,6 +683,12 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
                 break;
         }
 
+        if (initiallyDisabled && !markCopyInitiallyDisabled(mutated, key)) {
+            return std::unexpected(Error{
+                "RecordNotFound",
+                "Copied override not found in " + targetName
+            });
+        }
         stagePluginMutationLocked(*target, std::move(mutated));
 
         return nlohmann::json(
