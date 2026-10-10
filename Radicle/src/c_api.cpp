@@ -238,8 +238,8 @@ radicle_status radicle_plugin_remap_masters(radicle_plugin* plugin,
       descriptors.push_back({fo4::PluginKey::from_filename(masters[i].filename),
                              to_plugin_kind(masters[i].kind)});
     }
-    plugin->value = fo4::remap_plugin_masters(std::move(plugin->value),
-                                              std::move(descriptors));
+    auto remapped = fo4::remap_plugin_masters(plugin->value, std::move(descriptors));
+    plugin->value = std::move(remapped);
     return RADICLE_STATUS_OK;
   } catch (const std::bad_alloc& error) {
     return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
