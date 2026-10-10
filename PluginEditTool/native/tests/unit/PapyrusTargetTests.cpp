@@ -154,7 +154,7 @@ TEST_CASE("PapyrusTarget Compile refuses a folder whose ScriptName escapes and r
     CHECK(runner.last.executable.empty());
 }
 
-TEST_CASE("PapyrusTarget Compile refuses a folder whose namespace part cannot be staged and runs no compiler") {
+TEST_CASE("PapyrusTarget Compile refuses a ScriptName part with a character that is invalid in file names and runs no compiler") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto exe = root / "PapyrusCompiler.exe";
@@ -179,13 +179,28 @@ TEST_CASE("PapyrusTarget Compile refuses a folder whose namespace part cannot be
 TEST_CASE("PapyrusStaging reports an unstageable namespace part as an error, not as no staging") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    const auto source = root / "src" / "Star.psc";
-    touch(source, "ScriptName Bad*:Foo\nFunction Ping()\nEndFunction\n");
+    const auto source = root / "src" / "Good.psc";
+    touch(source, "ScriptName Good:Foo\nFunction Ping()\nEndFunction\n");
     const auto staging = root / "staging";
+    touch(staging / "Good");
 
     const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().message.find("Refused to compile") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(staging));
+}
+
+TEST_CASE("PapyrusStaging refuses a ScriptName with a wildcard or query character and creates nothing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "src" / "Query.psc";
+    touch(source, "ScriptName A:B?:C\nFunction Ping()\nEndFunction\n");
+    const auto staging = root / "staging";
+
+    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "UnsafeScriptName");
+    CHECK(result.error().message.find("unsafe namespace part") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(staging));
 }
 

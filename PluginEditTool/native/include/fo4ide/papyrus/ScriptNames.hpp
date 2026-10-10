@@ -14,7 +14,10 @@ inline bool safeScriptObjectName(std::string_view name) {
         const auto part = name.substr(begin, length);
         if (part.empty() || part == "." || part == "..") return false;
         for (const unsigned char ch : part) {
-            if (ch < 0x20 || ch == '/' || ch == '\\' || ch == 0x7F) return false;
+            if (ch < 0x20 || ch == '/' || ch == '\\' || ch == 0x7F || ch == '<' || ch == '>' || ch == '"' ||
+                ch == '|' || ch == '?' || ch == '*') {
+                return false;
+            }
         }
         if (end == std::string_view::npos) break;
         begin = end + 1;
