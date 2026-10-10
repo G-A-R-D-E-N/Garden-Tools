@@ -284,3 +284,45 @@ TEST_CASE("Native DeepCopyAsOverride requires consent before writing overrides t
     REQUIRE(applied.has_value());
     CHECK(applied->get<std::string>().find("Deep-copied 2 of 2 record(s)") != std::string::npos);
 }
+
+TEST_CASE("Native DeepCopyAsOverride refuses to apply a capped copy and stages nothing") {
+    const auto root = deepTempRoot();
+    DeepCleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    deepWriteBytes(sourcePath, deepSourceBytes());
+    deepWriteBytes(patchPath, deepEmptyPatchBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{
+            "plugins",
+            nlohmann::json::array({
+                deepPluginEntry("Base.esm", sourcePath),
+                deepPluginEntry("Patch.esp", patchPath)
+            })
+        }}).has_value());
+
+    const std::string capText = " (capped at 1; more remained in the FormLink graph)";
+    const auto preview = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", false, false, 1
+    }));
+    REQUIRE(preview.has_value());
+    REQUIRE(preview->is_string());
+    CHECK(preview->get<std::string>().find(capText) != std::string::npos);
+
+    const auto refused = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 1
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "DeepCopyCapped");
+    CHECK(refused.error().message.find(capText) != std::string::npos);
+
+    const auto full = backend.deepCopyAsOverride(nlohmann::json::array({
+        "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 200
+    }));
+    REQUIRE(full.has_value());
+    REQUIRE(full->is_string());
+    CHECK(full->get<std::string>().find("Deep-copied 2 of 2 record(s)") != std::string::npos);
+}
