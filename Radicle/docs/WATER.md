@@ -98,10 +98,13 @@ select a winning CELL XCWT, otherwise the exterior world's inherited NAM2,
 otherwise Fallout4.esm form 0x18. Three rules govern the failure cases. An
 invalid or deleted WNAM parent ends inheritance at the current world (RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.4 covers a missing or NULL parent; a deleted parent is treated the same way, and the RE does not address deletion specifically). An
 invalid or non-WATR NAM2, read from the world where inheritance stops, selects
-Fallout4.esm form 0x18 with `uses_default_water=1`. An invalid XCWT target
-fails with `PARSE_ERROR`, because its runtime fix-up is unverified
-(`src/environment/world.cpp:resolve_water`, `src/environment/world.cpp:inherited_world`,
-`src/c_api_env_internal.hpp:guarded`). Missing default WATR data stays unresolved
+Fallout4.esm form 0x18 with `uses_default_water=1`. An XCWT whose target is
+missing, deleted or not a WATR is dropped, as the engine drops it during the
+cell's InitItem fix-up, so the cell falls back to the worldspace water or the
+default (`src/environment/world.cpp:resolve_water`). RE `4cdafd2`
+[README, Follow-up 2](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/4cdafd28b8b576749fea4ffdfde5f3c32fefdb7c/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)
+and [`VERIFY-2026-10-10.md`](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/4cdafd28b8b576749fea4ffdfde5f3c32fefdb7c/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/VERIFY-2026-10-10.md)
+section 7 item 3 show this statically for OG; section 3 row 9 (NG) and section 4 (AE) show the same shape in the decompiles, though the AE remap step is not visible. The RE does not address deleted XCWT targets, so Radicle treats them as missing, as for WNAM. Still open in the RE: when the fix-up runs relative to loading a WATR from another plugin (F2-11), and runtime behaviour. Missing default WATR data stays unresolved
 through a null record handle; no synthetic visual record is created. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.4 shows the engine synthesises a DefaultWater record when `Fallout4.esm` form ID 0x18 is absent. Radicle reports the default key with `uses_default_water=1` and leaves the record null by design; it does not synthesise one.
 
 Heights: an absent XCLW selects the world default height for an exterior cell

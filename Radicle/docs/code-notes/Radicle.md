@@ -8,9 +8,14 @@ record [RE 6916afb](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtim
 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910).
 CELL XCWT takes precedence, exterior cells may use their winning WRLD, and the
 global default selects Fallout4.esm form 0x18. A missing default record remains
-explicitly unresolved; the SDK does not synthesize its visual data. An invalid XCWT
-target fails with PARSE_ERROR because its runtime fix-up remains unverified. An
-invalid or deleted WNAM parent ends inheritance. An invalid or non-WATR NAM2 at the
+explicitly unresolved; the SDK does not synthesize its visual data. An XCWT whose
+target is missing, deleted or not a WATR is dropped, as the engine drops it in the
+cell's InitItem fix-up, so the cell falls back to the worldspace water or the default
+(RE `4cdafd2`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md`
+Follow-up 2; `VERIFY-2026-10-10.md` section 7 item 3, section 3 row 9 (NG) and section 4 (AE)). The RE does
+not address deleted XCWT targets, so Radicle treats them as missing. The RE still leaves
+the fix-up timing against a WATR from another plugin (F2-11) and runtime behaviour open.
+An invalid or deleted WNAM parent ends inheritance. An invalid or non-WATR NAM2 at the
 world where inheritance stops selects the default key with uses_default_water=1.
 Inheritance uses the current world's bit 3 for water type and bit 0 for height,
 respecting the effective WNAM/PNAM flags of `effective_parent_flags`, which the raw
@@ -44,7 +49,7 @@ adoption and in-game parity are separate from this consumer conversion check.
 `Radicle/probes/gardenengine/*` is copied into a GardenEngine checkout to run; no CMakeLists in this repo builds it.
 The default water key (Fallout4.esm, 0x18) is one shared constant pair, `src/environment/default_water.hpp:k_default_water_plugin` and `k_default_water_local`, used by `src/environment/world.cpp:resolve_water` and `src/c_api_world.cpp:radicle_water_resolve`.
 
-GT-119 checks RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.1 (CELL XCWT precedence), §3.2 and §3.5 (PNAM bit 3 for water type, bit 0 for height), §3.6 (XCLW load transform), §3.7 (WNAM/PNAM order), and §3.4 (invalid NAM2 selects the default key; a missing parent ends inheritance). Unresolved: an invalid XCWT target (§3.4, §6; Radicle returns PARSE_ERROR), the absent-XCLW initial value (§3.5, inferred only), and a deleted parent (not addressed by the RE; treated as missing). Deliberate divergences: an active inheritance cycle throws where the engine hangs (§3.3, §5 fixture 7), and a missing form ID 0x18 is not synthesised as a DefaultWater record (§3.4).
+GT-119 checks RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.1 (CELL XCWT precedence), §3.2 and §3.5 (PNAM bit 3 for water type, bit 0 for height), §3.6 (XCLW load transform), §3.7 (WNAM/PNAM order), and §3.4 (invalid NAM2 selects the default key; a missing parent ends inheritance). Verified and matched: an invalid XCWT target, which the engine drops in the cell InitItem fix-up (RE `4cdafd2` Follow-up 2; `VERIFY-2026-10-10.md` section 7 item 3, section 3 row 9 (NG) and section 4 (AE)); Radicle drops it too. Unresolved: the fix-up timing against a WATR from another plugin (F2-11), the runtime behaviour of that removal, the absent-XCLW initial value (§3.5, inferred only), and a deleted parent or XCWT target (not addressed by the RE; treated as missing). Deliberate divergences: an active inheritance cycle throws where the engine hangs (§3.3, §5 fixture 7), and a missing form ID 0x18 is not synthesised as a DefaultWater record (§3.4).
 
 ## Water corpus evidence (#341)
 
