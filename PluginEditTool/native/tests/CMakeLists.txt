@@ -138,6 +138,7 @@ add_executable(
     unit/ConditionFunctionsTests.cpp
     unit/ConditionBackendTests.cpp
     unit/ConditionScopeBackendTests.cpp
+    unit/ConditionCodecValidationTests.cpp
     unit/RadiclePluginListReplaceTests.cpp
     unit/RadiclePluginConcurrencyTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
