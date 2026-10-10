@@ -8,20 +8,22 @@
 #include <fo4ide/papyrus/AnalysisService.hpp>
 
 #include "../helpers/ServiceTargetFakes.hpp"
+#include "../../src/app/PapyrusStaging.hpp"
 
 using namespace fo4ide::app::test;
 
 namespace {
 
 struct PapyrusTargetFixture {
+    fo4ide::settings::SharedSettings shared;
     fo4ide::tools::Locator locator;
     fo4ide::app::PapyrusTarget target;
 
     PapyrusTargetFixture(fo4ide::process::Runner& runner,
                          fo4ide::platform::Services& platform,
-                         fo4ide::settings::Settings& settings,
+                         const fo4ide::settings::Settings& settings,
                          const std::filesystem::path& executablePath)
-        : locator(settings, executablePath), target(runner, locator, platform) {}
+        : shared(settings), locator(shared, executablePath), target(runner, locator, platform) {}
 };
 
 std::filesystem::path buildPex(const std::filesystem::path& sourceFile,
@@ -128,6 +130,126 @@ TEST_CASE("PapyrusTarget Compile runs the Creation Kit process path when exe exi
     CHECK(runner.last.arguments[2].find("-i=\"Data\\Scripts") != std::string::npos);
     CHECK(runner.last.arguments[3] == "-o=\"" + root.string() + "\"");
     CHECK(runner.last.arguments[4] == "-op");
+}
+
+TEST_CASE("PapyrusTarget Compile refuses a folder whose ScriptName escapes and runs no compiler") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto exe = root / "PapyrusCompiler.exe";
+    touch(exe);
+    const auto folder = root / "scripts";
+    touch(folder / "Evil.psc", "ScriptName A:..:B\nFunction Ping()\nEndFunction\n");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result = target.invoke("Compile", nlohmann::json::array({
+        folder.string(), "", "", "", false, false, false, exe.string(), "creationkit"}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().find("Refused to compile") != std::string::npos);
+    CHECK(runner.last.executable.empty());
+}
+
+TEST_CASE("PapyrusTarget Compile refuses a folder whose namespace part cannot be staged and runs no compiler") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto exe = root / "PapyrusCompiler.exe";
+    touch(exe);
+    const auto folder = root / "scripts";
+    touch(folder / "Star.psc", "ScriptName Bad*:Foo\nFunction Ping()\nEndFunction\n");
+
+    FakeRunner runner;
+    FakePlatform platform;
+    fo4ide::settings::Settings settings;
+    PapyrusTargetFixture fixture(runner, platform, settings, root / "host");
+    auto& target = fixture.target;
+
+    auto result = target.invoke("Compile", nlohmann::json::array({
+        folder.string(), "", "", "", false, false, false, exe.string(), "creationkit"}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().find("Refused to compile") != std::string::npos);
+    CHECK(runner.last.executable.empty());
+}
+
+TEST_CASE("PapyrusStaging reports an unstageable namespace part as an error, not as no staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "src" / "Star.psc";
+    touch(source, "ScriptName Bad*:Foo\nFunction Ping()\nEndFunction\n");
+    const auto staging = root / "staging";
+
+    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(staging));
+}
+
+TEST_CASE("PapyrusStaging refuses a ScriptName that climbs out with ..") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "src" / "Evil.psc";
+    touch(source, "ScriptName ..:..:Evil\nFunction Ping()\nEndFunction\n");
+    const auto staging = root / "staging";
+    const auto escaped = root.parent_path() / "Evil.psc";
+
+    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    const bool escapedWritten = std::filesystem::exists(escaped);
+    std::error_code ec;
+    std::filesystem::remove(escaped, ec);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
+    CHECK_FALSE(escapedWritten);
+    CHECK_FALSE(std::filesystem::exists(staging));
+}
+
+TEST_CASE("PapyrusStaging refuses a ScriptName with a parent part in the middle") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "src" / "Evil.psc";
+    touch(source, "ScriptName A:..:B\nFunction Ping()\nEndFunction\n");
+    const auto staging = root / "staging";
+
+    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
+    CHECK_FALSE(std::filesystem::exists(staging));
+}
+
+TEST_CASE("PapyrusStaging refuses a ScriptName with a rooted part") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "src" / "Evil.psc";
+    touch(source, "ScriptName MyMod:/fo4ide_gt086_escape:Evil\nFunction Ping()\nEndFunction\n");
+    const auto staging = root / "staging";
+    const auto escaped = std::filesystem::path("/fo4ide_gt086_escape") / "Evil.psc";
+
+    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    const bool escapedWritten = std::filesystem::exists(escaped);
+    std::error_code ec;
+    std::filesystem::remove(escaped, ec);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
+    CHECK_FALSE(escapedWritten);
+    CHECK_FALSE(std::filesystem::exists(staging));
+}
+
+TEST_CASE("PapyrusStaging stages a namespaced script under its namespace folders") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto source = root / "src" / "Foo.psc";
+    touch(source, "ScriptName MyMod:Quests:Foo\nFunction Ping()\nEndFunction\n");
+    const auto staging = root / "staging";
+
+    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    REQUIRE(result.has_value());
+    REQUIRE(result->has_value());
+    CHECK(result->value() == staging);
+    CHECK(std::filesystem::is_regular_file(staging / "MyMod" / "Quests" / "Foo.psc"));
 }
 
 TEST_CASE("PapyrusTarget Decompile shows the NOT SAVED trailer without write") {

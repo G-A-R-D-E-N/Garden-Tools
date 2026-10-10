@@ -242,6 +242,7 @@ add_library(
     fo4ide_app
     app/ServiceTargets.cpp
     app/PapyrusTarget.cpp
+    app/PapyrusStaging.cpp
     app/GraphTarget.cpp
     app/AppInteropTarget.cpp
     app/AudioTarget.cpp
