@@ -189,7 +189,7 @@ WaterSelection resolve_water(const Environment& env, const RecordRef& ref) {
     if (cell.water && !cell.water->owner().empty()) {
       water = cell.water;
       if (winning_type(env, water, Signature{'W', 'A', 'T', 'R'}) == nullptr) {
-        throw WorldDecodeError("unresolved CELL XCWT water target");
+        water.reset();
       }
     }
     if ((flags & 1u) == 0) world_ref = winning_type(env, cell.worldspace, k_wrld);
