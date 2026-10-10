@@ -5,10 +5,29 @@
 Six installed archive fixtures cover GNRL and DX10 at versions 1, 7 and 8.
 The streaming reader and full models must extract identical first-entry
 bytes, and rebuilding that entry must preserve extracted content (including
-the reconstructed DDS header). This does not require byte-identical archive
-padding. `docs/BA2.md` records the named files, counts and independent table
-measurement of all 79 installed archives. The test reads game data only
-through `FO4_DATA_DIR`; missing data skips without committing payloads.
+the reconstructed DDS header), the name/extension/directory hashes, and for
+DX10 the six texture info fields and each chunk's mip range. This does not
+require byte-identical archive padding. `docs/BA2.md` records the named files
+and the counts printed by `tools/corpus/ba2_measure.py`. The test reads game
+data only through `FO4_DATA_DIR`; missing data skips without committing
+payloads, so CI never runs its assertions.
+
+## tests/test_ba2_texture.cpp:Ba2Texture.RoundTripStoredAndCompressed
+
+The synthetic DX10 stored and compressed round trip runs once per supported
+version (1, 7, 8) because the writer emits the same field widths for all three;
+a version-specific regression in the writer or reader shows up under its
+`SCOPED_TRACE` value.
+
+## tools/corpus/ba2_measure.py:measure
+
+Read-only, stdlib-only corpus check for `docs/BA2.md`. It walks each root-level
+`.ba2` header and entry/chunk table without reading payloads, except that
+`--first-chunk` reads and decodes one chunk per archive. The entry's
+chunk-header-size field (`0x10` GNRL, `0x18` DX10) is a stored value checked
+against the expected one, not the chunk record length: GNRL chunk records are
+20 bytes, so the script reads each record by its struct size. It is not wired
+into CMake or CI.
 
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
