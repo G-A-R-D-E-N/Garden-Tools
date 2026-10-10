@@ -499,12 +499,77 @@ jobs:
           $ba2 = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.ba2 -File).Count
           "root *.esm: $esm, *.ba2: $ba2"
 
+      - name: Select real-data tests
+        shell: powershell
+        run: |
+          if ($env:GITHUB_EVENT_NAME -ne 'pull_request') {
+            Write-Output 'Not a pull request; running all real-data tests.'
+            exit 0
+          }
+          $groups = @(
+            @{ Name = 'Quest'; Tests = 'QuestAliasRealData|QuestStagesRealData|QuestObjectivesRealData|QuestAuthoringRealData|QuestRuntimeReal'; Trigger = 'quest|vmad|papyrus|pex|alias|condition|ctda' }
+            @{ Name = 'Writeback'; Tests = 'WritebackRealData'; Trigger = 'writeback|placed|reference|refr|ref_|master|environment|remap' }
+            @{ Name = 'SubrecordAuthoring'; Tests = 'SubrecordAuthoringRealData'; Trigger = 'subrecord|authoring' }
+            @{ Name = 'StructPayload'; Tests = 'StructPayloadFormLinksRealData'; Trigger = 'struct|payload|proj_expl|hazd' }
+            @{ Name = 'TypedFamilies'; Tests = 'TypedFamiliesRealData'; Trigger = 'typed|famil|armor|armo|arma|race|eyes|leveled|lvsp' }
+          )
+          $core = @(
+            '^Radicle/(src|include/fo4)/binary/'
+            '^Radicle/(src|include/fo4)/plugin/(reader|writer|visit|container|tes4|field_writer|mutation|record_edit|flags)\.'
+            '^Radicle/(src|include/fo4)/(form_?id|plugin_key|signature|error|headers|fo4|flags)\.'
+            '^Radicle/(src|include/fo4)/(text|localization|io)/'
+            '^Radicle/(src|include/fo4)/environment/strings\.'
+            '^Radicle/(src|include/fo4)/schema/(scalar|field_address|localized_fields|form_link|nested_formlink|formlink_lists|non_formid_slots|preflight|record_constraints|generated_record)'
+            '^Radicle/schema/'
+            '^Radicle/tools/.*codegen'
+            '(^|/)CMakeLists\.txt$|\.cmake$'
+            '^\.github/(workflows/native-ci\.yml|scripts/)'
+            '^Radicle/tests/plugin_bytes\.'
+          )
+          $coreRegex = $core -join '|'
+          git fetch --no-tags --depth=1 origin "$env:GITHUB_BASE_REF"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::warning::could not fetch base branch $env:GITHUB_BASE_REF; running all real-data tests."
+            exit 0
+          }
+          $changed = @(git diff --name-only FETCH_HEAD HEAD)
+          if ($LASTEXITCODE -ne 0 -or -not $changed) {
+            Write-Output '::warning::could not determine the changed files; running all real-data tests.'
+            exit 0
+          }
+          $coreHits = @($changed | Where-Object { $_ -match $coreRegex })
+          if ($coreHits) {
+            $coreHits | Select-Object -First 20 | ForEach-Object { Write-Output "core change: $_" }
+            Write-Output 'Shared real-data code changed; running all real-data tests.'
+            exit 0
+          }
+          $skipped = @()
+          foreach ($group in $groups) {
+            $hits = @($changed | Where-Object { $_ -match $group.Trigger })
+            if ($hits) {
+              Write-Output "RUN  $($group.Name): $((($hits | Select-Object -First 20)) -join ', ')"
+            } else {
+              Write-Output "SKIP $($group.Name): no changed path matches $($group.Trigger)"
+              $skipped += $group.Tests
+            }
+          }
+          if ($skipped) {
+            $excludeRegex = '^(' + ($skipped -join '|') + ')\.'
+            [IO.File]::AppendAllText($env:GITHUB_ENV, "CTEST_EXCLUDE_REGEX=$excludeRegex`n")
+          } else {
+            Write-Output 'Every expensive real-data group runs on this pull request.'
+          }
+
       - name: Test
+        shell: powershell
         env:
           FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
         run: |
-          if "%FO4_DATA_DIR%"=="" set FO4_DATA_DIR=
-          ctest --test-dir build\native --output-on-failure --parallel 4
+          if (-not $env:FO4_DATA_DIR) { Remove-Item Env:FO4_DATA_DIR -ErrorAction SilentlyContinue }
+          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4')
+          if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
+          ctest @ctestArgs
+          exit $LASTEXITCODE
 
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.

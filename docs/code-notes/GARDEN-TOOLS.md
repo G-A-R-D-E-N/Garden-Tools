@@ -1539,7 +1539,23 @@ The real-data tests read `FO4_DATA_DIR`. CI sets it from two Forgejo repository 
 - `FO4_DATA_DIR_WINDOWS` feeds the `Test` step of the Windows job `Native tests (Windows, MSVC)`.
 - `.github/workflows/native-ci.yml:native-windows-tests` `Test (Debug)` clears `FO4_DATA_DIR` (`set FO4_DATA_DIR=`), so the Debug pass runs without game data. It runs only on non-pull_request events.
 - Why: Debug with data does not finish within the job's 90-minute limit. In run 775, `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` took more than 34 CPU-minutes and 6.9 GB in Debug (289-421 s in Release). The `QuestAliasRealData`, `QuestStagesRealData` and `QuestObjectivesRealData` `DecodesEveryShippedQuest` tests each took about 60 CPU-minutes in Debug (131-320 s in Release). The run was still at test 358 of 1824 when the timeout neared.
-- Release keeps the full real-data coverage: the Windows `Test` step runs the real-data tests with the data.
+- Release keeps the real-data coverage: the Windows `Test` step runs the real-data tests with the data, except the expensive groups that a pull request does not touch (see below).
+
+On a pull request, the `Select real-data tests` step in `.github/workflows/native-ci.yml:native-windows-tests` decides which expensive real-data groups the Release `Test` step runs. It matches the changed paths (the diff of the base branch tip against `HEAD`, case-insensitive regexes) and writes one `CTEST_EXCLUDE_REGEX` to `GITHUB_ENV` for the groups it skips. A group runs when any changed path matches its trigger. Cheap real-data suites are never skipped, and every real-data suite not in the table below runs on every event.
+
+| Group | Test suites excluded when skipped | Trigger (changed path matches) |
+| --- | --- | --- |
+| Quest | `QuestAliasRealData`, `QuestStagesRealData`, `QuestObjectivesRealData`, `QuestAuthoringRealData`, `QuestRuntimeReal` | `quest`, `vmad`, `papyrus`, `pex`, `alias`, `condition`, `ctda` |
+| Writeback | `WritebackRealData` | `writeback`, `placed`, `reference`, `refr`, `ref_`, `master`, `environment`, `remap` |
+| SubrecordAuthoring | `SubrecordAuthoringRealData` | `subrecord`, `authoring` |
+| StructPayload | `StructPayloadFormLinksRealData` | `struct`, `payload`, `proj_expl`, `hazd` |
+| TypedFamilies | `TypedFamiliesRealData` | `typed`, `famil`, `armor`, `armo`, `arma`, `race`, `eyes`, `leveled`, `lvsp` |
+
+A core path forces every group to run, and nothing is excluded. The core list is one regex array in the step, and these are its entries: `Radicle/src/binary/` and `Radicle/include/fo4/binary/` (the byte cursor every reader uses); `Radicle/{src,include/fo4}/plugin/` reader, writer, visit, container, tes4, field_writer, mutation, record_edit and flags (the read and write path); `form_?id`, `plugin_key`, `signature`, `error`, `headers`, `fo4` and `flags` (form ID, signature and the umbrella headers); `text/`, `localization/` and `io/` (string encoding, string tables and atomic writes); `environment/strings` (the string-table loader); the shared schema files (`scalar`, `field_address`, `localized_fields`, `form_link*`, `formlink_lists`, `nested_formlink*`, `non_formid_slots`, `preflight`, `record_constraints` and `generated_record_constraints`); `Radicle/schema/` (the `fields.json` input); `Radicle/tools/*codegen*` (the generators for those headers); every `CMakeLists.txt` and `*.cmake` (the build and test list, and the generated-file checks; `Radicle/tests` has no CMakeLists of its own); `.github/workflows/native-ci.yml` and `.github/scripts/` (this CI wiring and the zlib script); and `Radicle/tests/plugin_bytes` (the shared plugin-building test helper).
+
+Why: in run 806, a pull request about CELL water with no quest changes spent 925 s in `QuestObjectivesRealData.DecodesEveryShippedQuest`, and the quest groups together take 15-30 minutes. The owner's measurements are about 148 s for Writeback, 200-240 s for SubrecordAuthoring and 108 s for StructPayload. TypedFamilies has no recorded timing, but the owner reports `DecodesEveryShippedArmorAddon` as very slow.
+
+Pushes to `main`, `workflow_dispatch` and any other non-pull-request event run every real-data test, so a break caused by shared code is still caught right after merge. If the changed files cannot be determined (the fetch or the diff fails, or the diff is empty), the step warns and runs everything. The changed files come from a depth-1 fetch of the base branch tip, so a shallow checkout can include files that changed on the base branch. That only makes the step run groups more often, never less. The step log prints a RUN or SKIP line per group with the paths that matched, or `core change:` with the path that forced everything.
 
 Each job's `Check FO4 data folder` step runs before its first Test step:
 
