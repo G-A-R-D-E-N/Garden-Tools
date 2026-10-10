@@ -138,6 +138,7 @@ add_executable(
     unit/RadiclePluginReachableTests.cpp
     unit/RadiclePluginReadApiTests.cpp
     unit/RadiclePluginEslTests.cpp
+    unit/RadiclePluginCompactTests.cpp
     unit/RadiclePluginEditableTests.cpp
     unit/ConditionFunctionsTests.cpp
     unit/ConditionBackendTests.cpp
