@@ -7,23 +7,23 @@ record [RE 6916afb](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtim
 `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 3.1-3.7 (verified RVAs
 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910).
 CELL XCWT takes precedence, exterior cells may use their winning WRLD, and the
-global default selects Fallout4.esm form 0x18. A missing default record remains
+global default selects Fallout4.esm form 0x18. The default is the winning `Fallout4.esm:0x18` WATR record, looked up by form ID, the same lookup the engine's global default makes (`VERIFY-2026-10-10.md` section 1 row 28). A missing default record remains
 explicitly unresolved; the SDK does not synthesize its visual data. An XCWT whose
-target is missing, deleted or not a WATR is dropped, as the engine drops it in the
+target is missing or not a WATR is dropped, as the engine drops it in the
 cell's InitItem fix-up, so the cell falls back to the worldspace water or the default
 (RE `4cdafd2`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md`
-Follow-up 2; `VERIFY-2026-10-10.md` section 7 item 3, section 3 row 9 (NG) and section 4 (AE)). The RE does
-not address deleted XCWT targets, so Radicle treats them as missing. The RE still leaves
+Follow-up 2; `VERIFY-2026-10-10.md` section 7 item 3 for OG; section 3 row 9 for NG, with the same steps including the unlink; section 4 for AE, which shows no visible remap step; its unlink is COULD NOT CONFIRM, section 1 row 33). The RE does
+not address deleted XCWT targets, so Radicle treats them as missing. A CELL or WRLD handle from an older override resolves like the winning version of that form (`src/environment/world.cpp:resolve_water` decodes `env.winner(form_key)`). An XCWT of 0 is treated as absent (test CELL `0x921`); the engine's setter removes the extra for 0, confirmed for OG and NG and not read for AE (`VERIFY-2026-10-10.md` section 1 row 17). The engine's XCWT fix-up uses the last file that defined the cell (`FUN_140153690(cell, -1)`, [README, Follow-up 2](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/4cdafd28b8b576749fea4ffdfde5f3c32fefdb7c/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)). The RE still leaves
 the fix-up timing against a WATR from another plugin (F2-11) and runtime behaviour open.
 An invalid or deleted WNAM parent ends inheritance. An invalid or non-WATR NAM2 at the
 world where inheritance stops selects the default key with uses_default_water=1.
 Inheritance uses the current world's bit 3 for water type and bit 0 for height,
 respecting the effective WNAM/PNAM flags of `effective_parent_flags`, which the raw
-PNAM readers do not apply. A visited set rejects active inheritance cycles. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.3 shows the engine has no cycle guard, and §5 fixture 7 shows it hangs on such a cycle, so this throw is a deliberate divergence.
+PNAM readers do not apply. A visited set rejects active inheritance cycles. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.3 shows the engine has no cycle guard, so the RE expects a hang on such a cycle (static only, not executed; §5 fixture 7, VERIFY section 1 row 22). This throw is a deliberate divergence. A WRLD input always resolves its height through PNAM bit 0 (`src/environment/world.cpp:resolve_water`), so a parent cycle whose worlds set bit 0 makes the whole selection throw, even when the water-type walk (bit 3) would not cycle.
 
 An absent XCLW selects the world default height for an exterior cell with Has Water
-and a winning world (inferred in RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.5 from the height predicate, not read from the cell initialiser). A WRLD with no DNAM reports height 0.0 with has_height set, and
-a WRLD input always reports a height. xEdit CELL DATA bits 0 and 1 are
+and a winning world (Radicle's inference: the RE shows only that the engine tests XCLW >= 2^31, VERIFY-2026-10-10 section 1 row 15, which calls the README's 'untouched' reading interpretation; the RE does not show what an absent XCLW starts as). A WRLD with no DNAM reports height 0.0 with has_height set, and
+a WRLD input always reports a height. A deleted winning WRLD input is not rejected: it is decoded as stored, so a deleted version with no NAM2 or DNAM resolves to the default water with height 0.0. xEdit CELL DATA bits 0 and 1 are
 [lines 5968-5969](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L5968-L5969);
 WRLD PNAM bits 0 and 3 are [lines 13128 and 13131](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L13128-L13131).
 
@@ -31,8 +31,7 @@ The query preserves raw XCLW and reports its load-time integer transform only
 in the effective height: positive halves round up, negative values truncate,
 NaN or values below -2^31 become -2^31, and values at least +2^31 select the
 world default. Thus -2^31 is a real height. Interior height volumes are outside
-this query. These are static OG semantics, with the AE confirmations and NG
-gaps listed in the evidence record, not live game acceptance.
+this query. These are static semantics, not live game acceptance. `VERIFY-2026-10-10.md` confirms NG statically on every row: from bytes for section 3 rows 1, 2, 3, 5 and 7, and from decompiles only for rows 4 (InitItem NAM2 cast and parent handling), 6 (default water init), 8 (WNAM/PNAM load) and 9 (XCWT fix-up). AE is in VERIFY section 4.
 
 `include/fo4/c_api_records.h:radicle_water_resolve` returns the selected key,
 borrowed winning WATR handle, default-selection flag and optional height.
@@ -49,7 +48,7 @@ adoption and in-game parity are separate from this consumer conversion check.
 `Radicle/probes/gardenengine/*` is copied into a GardenEngine checkout to run; no CMakeLists in this repo builds it.
 The default water key (Fallout4.esm, 0x18) is one shared constant pair, `src/environment/default_water.hpp:k_default_water_plugin` and `k_default_water_local`, used by `src/environment/world.cpp:resolve_water` and `src/c_api_world.cpp:radicle_water_resolve`.
 
-GT-119 checks RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.1 (CELL XCWT precedence), §3.2 and §3.5 (PNAM bit 3 for water type, bit 0 for height), §3.6 (XCLW load transform), §3.7 (WNAM/PNAM order), and §3.4 (invalid NAM2 selects the default key; a missing parent ends inheritance). Verified and matched: an invalid XCWT target, which the engine drops in the cell InitItem fix-up (RE `4cdafd2` Follow-up 2; `VERIFY-2026-10-10.md` section 7 item 3, section 3 row 9 (NG) and section 4 (AE)); Radicle drops it too. Unresolved: the fix-up timing against a WATR from another plugin (F2-11), the runtime behaviour of that removal, the absent-XCLW initial value (§3.5, inferred only), and a deleted parent or XCWT target (not addressed by the RE; treated as missing). Deliberate divergences: an active inheritance cycle throws where the engine hangs (§3.3, §5 fixture 7), and a missing form ID 0x18 is not synthesised as a DefaultWater record (§3.4).
+GT-119 checks RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.1 (CELL XCWT precedence), §3.2 and §3.5 (PNAM bit 3 for water type, bit 0 for height), §3.6 (XCLW load transform), §3.7 (WNAM/PNAM order), and §3.4 (invalid NAM2 selects the default key; a missing parent ends inheritance). Verified and matched: an invalid XCWT target, which the engine drops in the cell InitItem fix-up (RE `4cdafd2` Follow-up 2; `VERIFY-2026-10-10.md` section 7 item 3 for OG; section 3 row 9 for NG; section 4 for AE, which shows no visible remap step, and its unlink is COULD NOT CONFIRM, section 1 row 33); Radicle drops it too. Unresolved: the fix-up timing against a WATR from another plugin (F2-11), the runtime behaviour of that removal, the absent-XCLW initial value (Radicle's inference; VERIFY section 1 row 15), and a deleted parent or XCWT target (not addressed by the RE; treated as missing). Deliberate divergences: an active inheritance cycle throws where the RE expects a hang (static only, not executed; §3.3, §5 fixture 7), and a missing form ID 0x18 is not synthesised as a DefaultWater record (§3.4).
 
 ## Water corpus evidence (#341)
 
@@ -280,7 +279,7 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 
 - STAT `MNAM`: up to four 260-byte slots, each a NUL-terminated mesh path followed by unused bytes (`wbDefinitionsFO4.pas`, `wbStruct(MNAM, 'Distant LOD', [wbStringForward('Level 0', 260), ...])`). A slot with no terminator inside its own 260 bytes is a decode error rather than a read past the end into the next slot.
 - ACTI `WNAM`: the water type.
-- WATR: `FNAM` flags, the `DNAM` visual block through Screen Space Reflections, the three noise layers in their stored interleave (wind direction, speed, amplitude scale, UV scale, falloff; `wbDefinitionsFO4.pas` and `src/forms/water.cpp`'s `NoiseLayerParsing` agree), the `NAM2`/`NAM3`/`NAM4` noise textures, and `NAM0`/`NAM1` velocities. `DNAM` is required from 188 bytes and may end anywhere up to 201, matching `SetOptionalFrom(4)`; the silt and reflection tail is optional, and silt is decoded only when all 12 of its bytes are present (`docs/code-notes/radicle-water-writer.md`). `radicle_water_get_info` no longer reports silt for DNAM sizes 192–199 (it now needs the full member at ≥ 200, as xEdit does); no official record is affected.
+- WATR: `FNAM` flags, the `DNAM` visual block through Screen Space Reflections, the three noise layers in their stored interleave (wind direction, speed, amplitude scale, UV scale, falloff, as in `wbDefinitionsFO4.pas`; decoded by `src/environment/base_records.cpp:decode_water`), the `NAM2`/`NAM3`/`NAM4` noise textures, and `NAM0`/`NAM1` velocities. `DNAM` is required from 188 bytes and may end anywhere up to 201, matching `SetOptionalFrom(4)`; the silt and reflection tail is optional, and silt is decoded only when all 12 of its bytes are present (`docs/code-notes/radicle-water-writer.md`). `radicle_water_get_info` no longer reports silt for DNAM sizes 192–199 (it now needs the full member at ≥ 200, as xEdit does); no official record is affected.
 - WRLD `NAM3`/`NAM4`: the LOD water and its height (`wbDefinitionsCommon.pas`, `wbWorldLODData`).
 - CELL `XCWT`: the cell's water type.
 

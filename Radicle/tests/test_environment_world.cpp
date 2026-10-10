@@ -310,6 +310,8 @@ TEST_F(WorldEnvironmentTest, WaterHeightBoundariesPreserveRawValuesAndRejectActi
   cells.push_back(rec("CELL", 0x921, {{"DATA", {std::byte{3}}}, {"XCWT", bytes_of({0})}}));
   cells.push_back(rec("CELL", 0x922, {{"DATA", {std::byte{2}}}, {"XCWT", bytes_of({0x999})}}));
   cells.push_back(rec("CELL", 0x923, {{"DATA", {std::byte{2}}}, {"XCWT", bytes_of({0x800})}}));
+  cells.push_back(rec("CELL", 0x924, {{"DATA", {std::byte{2}}}, {"XCLW", floats({0.5f})}}));
+  cells.push_back(rec("CELL", 0x925, {{"DATA", {std::byte{2}}}, {"XCLW", floats({-0.7f})}}));
   paths_ = {write("Fallout4.esm", make_plugin({}, {
     top("WATR", {rec("WATR", 0x840)}),
     top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x840})}, {"DNAM", floats({-2048, 450})}}),
@@ -348,6 +350,8 @@ TEST_F(WorldEnvironmentTest, WaterHeightBoundariesPreserveRawValuesAndRejectActi
   EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x801)), fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::resolve_water(env, *selected(0x802)), fo4::env::WorldDecodeError);
   EXPECT_TRUE(fo4::env::resolve_water(env, *selected(0x803)).uses_default_water);
+  EXPECT_EQ(fo4::env::resolve_water(env, *selected(0x924)).height, 1.0f);
+  EXPECT_EQ(fo4::env::resolve_water(env, *selected(0x925)).height, 0.0f);
 }
 
 TEST_F(WorldEnvironmentTest, WalksWorldspaceHierarchy) {
@@ -615,6 +619,62 @@ TEST_F(WorldEnvironmentTest, StaleCellHandleResolvesLikeTheWinner) {
   EXPECT_EQ(stale.record, winning.record);
   EXPECT_EQ(stale.uses_default_water, winning.uses_default_water);
   EXPECT_EQ(stale.height, winning.height);
+}
+
+TEST_F(WorldEnvironmentTest, XcwtToDeletedWinningWaterFallsBackToWorldspaceWater) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {top("WATR", {rec("WATR", 0x850), rec("WATR", 0x851)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x850})}, {"DNAM", floats({-2048, 450})}}),
+                               grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x810, {{"DATA", {std::byte{0x02}}}, {"XCWT", bytes_of({0x851})}})})})})})})),
+            write("Override.esp", make_plugin({"Fallout4.esm"}, {top("WATR", {rec("WATR", 0x851, {}, 0x20)})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto selection = fo4::env::resolve_water(env, *env.winner(key("000810:Fallout4.esm")));
+  EXPECT_EQ(selection.water, key("000850:Fallout4.esm"));
+  ASSERT_NE(selection.record, nullptr);
+  EXPECT_EQ(selection.record->record->form_key, key("000850:Fallout4.esm"));
+  EXPECT_FALSE(selection.uses_default_water);
+}
+
+TEST_F(WorldEnvironmentTest, XcwtToNonWaterRecordFallsBackToWorldspaceWater) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {top("WATR", {rec("WATR", 0x850)}), top("STAT", {rec("STAT", 0x860)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x850})}, {"DNAM", floats({-2048, 450})}}),
+                               grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x810, {{"DATA", {std::byte{0x02}}}, {"XCWT", bytes_of({0x860})}})})})})})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto selection = fo4::env::resolve_water(env, *env.winner(key("000810:Fallout4.esm")));
+  EXPECT_EQ(selection.water, key("000850:Fallout4.esm"));
+  ASSERT_NE(selection.record, nullptr);
+  EXPECT_EQ(selection.record->record->form_key, key("000850:Fallout4.esm"));
+  EXPECT_FALSE(selection.uses_default_water);
+}
+
+TEST_F(WorldEnvironmentTest, XcwtIntoUnloadedMasterFallsBackToWorldspaceWater) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {top("WATR", {rec("WATR", 0x850)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x850})}, {"DNAM", floats({-2048, 450})}})})})),
+            write("Dangling.esp", make_plugin({"Fallout4.esm", "Missing.esm"}, {top("WRLD", {grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x02000810, {{"DATA", {std::byte{0x02}}}, {"XCWT", bytes_of({0x01000851})}})})})})})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto selection = fo4::env::resolve_water(env, *env.winner(key("000810:Dangling.esp")));
+  EXPECT_EQ(selection.water, key("000850:Fallout4.esm"));
+  ASSERT_NE(selection.record, nullptr);
+  EXPECT_EQ(selection.record->record->form_key, key("000850:Fallout4.esm"));
+  EXPECT_FALSE(selection.uses_default_water);
+}
+
+TEST_F(WorldEnvironmentTest, CApiInvalidXcwtResolvesToWorldspaceWater) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {top("WATR", {rec("WATR", 0x850)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x850})}, {"DNAM", floats({-2048, 450})}}),
+                               grp(0x800, 1, {grp(0, 4, {grp(0, 5, {rec("CELL", 0x810, {{"DATA", {std::byte{0x02}}}, {"XCWT", bytes_of({0x999})}})})})})})}))};
+  radicle_env* handle = nullptr;
+  const auto first = paths_[0].string();
+  const char* inputs[] = {first.c_str()};
+  ASSERT_EQ(radicle_env_load(inputs, 1, &handle), RADICLE_STATUS_OK);
+  const radicle_record* cell = nullptr;
+  ASSERT_EQ(radicle_env_winner(handle, {"Fallout4.esm", 0x810}, &cell), RADICLE_STATUS_OK);
+  radicle_water_selection selection{};
+  ASSERT_EQ(radicle_water_resolve(handle, cell, &selection), RADICLE_STATUS_OK);
+  EXPECT_STREQ(selection.water.plugin, "Fallout4.esm");
+  EXPECT_EQ(selection.water.local_id, 0x850u);
+  EXPECT_NE(selection.record, nullptr);
+  EXPECT_EQ(selection.uses_default_water, 0);
+  radicle_env_destroy(handle);
 }
 
 TEST_F(WorldEnvironmentTest, WorldspaceWaterCycleThrowsWhenBothWorldsUseWaterData) {

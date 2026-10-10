@@ -44,8 +44,10 @@ DLCCoast.esm 2, DLCNukaWorld.esm 3, and zero in the other four masters.
 Two DNAMs are 188 bytes and 45 are 201 bytes. That run passed 14 parameterized
 native and C ABI checks, including untouched byte identity for all seven
 masters. The file now defines 42 parameterized cases (6 tests x 7 masters),
-not re-run at this head. With `FO4_DATA_DIR` unset, all 42 skip cleanly; no
-workflow under `.github/workflows` sets `FO4_DATA_DIR`, so they skip on CI.
+not re-run at this head. The real-data cases run only when `FO4_DATA_DIR` is set,
+and skip cleanly otherwise. CI sets it from `FO4_DATA_DIR_WINDOWS` in the Windows
+Release pass of `native-ci`; the Windows Debug pass clears it. The Linux job passes
+`FO4_DATA_DIR_LINUX`, which is currently unset, so they skip there.
 
 ## Editing
 
@@ -91,25 +93,25 @@ defines NAM3/NAM4 LOD water and DNAM default land/water heights at 9718–9728.
 Radicle exposes these raw links/heights and load-order winners already.
 
 The [selection record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)
-resolves these questions for OG 1.10.163 (RE 6916afb); sections 3.1–3.7 stamp
+answers these questions for OG 1.10.163 (RE 6916afb), except the XCWT step, which it left unresolved; README Follow-up 2 (RE `4cdafd2`) resolved it; sections 3.1–3.7 stamp
 RVAs 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910.
 `fo4::env::resolve_water`, C `radicle_water_resolve` and C# `EffectiveWater`
 select a winning CELL XCWT, otherwise the exterior world's inherited NAM2,
-otherwise Fallout4.esm form 0x18. Three rules govern the failure cases. An
+otherwise Fallout4.esm form 0x18. The default is the winning `Fallout4.esm:0x18` WATR record, looked up by form ID, the same lookup the engine's global default makes (VERIFY section 1 row 28). Three rules govern the failure cases. An
 invalid or deleted WNAM parent ends inheritance at the current world (RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.4 covers a missing or NULL parent; a deleted parent is treated the same way, and the RE does not address deletion specifically). An
 invalid or non-WATR NAM2, read from the world where inheritance stops, selects
 Fallout4.esm form 0x18 with `uses_default_water=1`. An XCWT whose target is
-missing, deleted or not a WATR is dropped, as the engine drops it during the
+missing or not a WATR is dropped, as the engine drops it during the
 cell's InitItem fix-up, so the cell falls back to the worldspace water or the
 default (`src/environment/world.cpp:resolve_water`). RE `4cdafd2`
 [README, Follow-up 2](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/4cdafd28b8b576749fea4ffdfde5f3c32fefdb7c/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)
 and [`VERIFY-2026-10-10.md`](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/4cdafd28b8b576749fea4ffdfde5f3c32fefdb7c/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/VERIFY-2026-10-10.md)
-section 7 item 3 show this statically for OG; section 3 row 9 (NG) and section 4 (AE) show the same shape in the decompiles, though the AE remap step is not visible. The RE does not address deleted XCWT targets, so Radicle treats them as missing, as for WNAM. Still open in the RE: when the fix-up runs relative to loading a WATR from another plugin (F2-11), and runtime behaviour. Missing default WATR data stays unresolved
+section 7 item 3 show this statically for OG. In `VERIFY-2026-10-10.md`, NG shows the same steps, including the unlink of an unresolved extra, in the decompile (section 3 row 9). For AE the decompile shows only the lookup and the TESWaterForm cast, with no visible remap step (section 4), and the AE unlink is COULD NOT CONFIRM (section 1 row 33). The RE does not address deleted XCWT targets, so Radicle treats them as missing, as for WNAM. A CELL or WRLD handle from an older override resolves like the winning version of that form (`src/environment/world.cpp:resolve_water` decodes `env.winner(form_key)`). An XCWT of 0 is treated as absent (test CELL `0x921`); the engine's setter removes the extra for 0, confirmed for OG and NG and not read for AE (`VERIFY-2026-10-10.md` section 1 row 17). The engine's XCWT fix-up uses the last file that defined the cell (`FUN_140153690(cell, -1)`, [README, Follow-up 2](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/4cdafd28b8b576749fea4ffdfde5f3c32fefdb7c/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)). Still open in the RE: when the fix-up runs relative to loading a WATR from another plugin (F2-11), and runtime behaviour. Missing default WATR data stays unresolved
 through a null record handle; no synthetic visual record is created. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.4 shows the engine synthesises a DefaultWater record when `Fallout4.esm` form ID 0x18 is absent. Radicle reports the default key with `uses_default_water=1` and leaves the record null by design; it does not synthesise one.
 
 Heights: an absent XCLW selects the world default height for an exterior cell
-with Has Water and a winning world (inferred in RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.5 from the height predicate, not read from the cell initialiser). A WRLD with no DNAM reports height 0.0 with
-`has_height` set, and a WRLD input always reports a height. Interior cells use
+with Has Water and a winning world (Radicle's inference: the RE shows only that the engine tests XCLW >= 2^31, VERIFY-2026-10-10 section 1 row 15, which calls the README's 'untouched' reading interpretation; the RE does not show what an absent XCLW starts as). A WRLD with no DNAM reports height 0.0 with
+`has_height` set, and a WRLD input always reports a height. A deleted winning WRLD input is not rejected: it is decoded as stored, so a deleted version with no NAM2 or DNAM resolves to the default water with height 0.0. Interior cells use
 only their own XCWT, otherwise the default key, and report no XCLW height. The
 bits come from xEdit CELL DATA bit 0 "Is Interior Cell" and bit 1 "Has Water"
 ([lines 5968-5969](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L5968-L5969)),
@@ -124,7 +126,7 @@ whichever of WNAM and PNAM comes last in file order wins, WNAM setting all bits
 (0xFFFF), so a WNAM-only record inherits every bit. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.7 verifies (OG bytes, AE decompile) that WNAM sets all inherit bits, a later PNAM overwrites them, and WNAM alone inherits everything.
 
 Water type follows PNAM bit 3; height follows bit 0 independently. Ordered
-WNAM/PNAM fields affect inheritance, and active cycles fail closed. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.3 shows the engine has no cycle guard, and §5 fixture 7 records that it hangs on such a cycle, so this throw is a deliberate divergence. Exterior
+WNAM/PNAM fields affect inheritance, and active cycles fail closed. RE `6916afb`, `RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md` §3.3 shows the engine has no cycle guard, so the RE expects a hang on such a cycle (static only, not executed; §5 fixture 7, VERIFY section 1 row 22). This throw is a deliberate divergence. A WRLD input always resolves its height through PNAM bit 0 (`src/environment/world.cpp:resolve_water`), so a parent cycle whose worlds set bit 0 makes the whole selection throw, even when the water-type walk (bit 3) would not cycle. Exterior
 CELL heights require Has Water without Interior. Positive fractions round at
 one half, negative fractions truncate, and NaN/below-range values become
 -2^31. Values at least +2^31 select the world's default height: **-2^31 is
