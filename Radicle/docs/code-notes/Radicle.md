@@ -232,3 +232,7 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 - CELL `XCWT`: the cell's water type.
 
 `c_api_env.h` was at the file-size limit, so the typed record decoders moved to `include/fo4/c_api_records.h`, which includes the environment header for the shared types; `generate_interop.py` reads it, and the generated bindings and layout probe are regenerated from the headers, so `radicle_csharp_interop_up_to_date` still holds. Tests: `Radicle.Interop.Tests/HlodFieldTests.cs` builds a plugin with these subrecords and checks every field, including a STAT without `MNAM` and the four-slot ceiling.
+
+## Radicle/src/c_api.cpp:radicle_plugin_remap_masters
+
+`Radicle/src/c_api.cpp:radicle_plugin_remap_masters` remaps a copy of the plugin and assigns it back only when `fo4::remap_plugin_masters` succeeds, so a failed call (for example a dropped master that an own record or override still uses, which makes `encode_plugin_form_id` throw "is not in the destination master table") leaves the handle unchanged instead of empty (GT-090). Test: `Radicle/tests/test_c_api.cpp` `CApi.FailedRemapMastersLeavesThePluginUnchanged`.
