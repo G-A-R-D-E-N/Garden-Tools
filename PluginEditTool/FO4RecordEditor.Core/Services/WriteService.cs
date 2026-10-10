@@ -397,58 +397,6 @@ public static partial class WriteService
         return true;
     }
 
-
-
-
-
-
-
-
-
-    public static string SetLightFlag(string plugin, bool light, object? env)
-    {
-        return PluginGraphGate.Run(plugin, () => SetLightFlagCore(plugin, light, env));
-    }
-
-    private static string SetLightFlagCore(string plugin, bool light, object? env)
-    {
-        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
-        var (name, _) = NormalizePlugin(plugin);
-
-        bool wasLight = mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small);
-        if (light == wasLight)
-            return $"'{name}' already {(light ? "has" : "does not have")} the ESL (Small) flag set.";
-
-        if (light)
-        {
-
-
-            var outOfRange = mod.EnumerateMajorRecords()
-                .Count(r => r.FormKey.ModKey == mod.ModKey && r.FormKey.ID > 0xFFF);
-            mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Small;
-            MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
-            var warn = outOfRange > 0
-                ? $" WARNING: {outOfRange} native record(s) still have a FormID above 0xFFF, so this plugin " +
-                  "is NOT actually ESL-safe yet. Call compact_to_esl first, or the light-master FormID " +
-                  "encoding will truncate those records' high bytes at runtime."
-                : "";
-            return $"Set the ESL (Small) flag on '{name}'.{warn} In memory until save_plugin.";
-        }
-
-        mod.ModHeader.Flags &= ~Fallout4ModHeader.HeaderFlag.Small;
-        MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
-        return $"Cleared the ESL (Small) flag on '{name}'. In memory until save_plugin.";
-    }
-
-
-
-
-
-
-
-
-
-
     public static string SetLocalizedFlag(string plugin, bool localized, object? env)
     {
         return PluginGraphGate.Run(plugin, () => SetLocalizedFlagCore(plugin, localized, env));

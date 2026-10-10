@@ -26,6 +26,8 @@ public class EslPolicyTests
 
     private static string Args(string plugin) => $"{{\"plugin\":\"{plugin}\"}}";
 
+    private static string LightArgs(string plugin) => $"{{\"plugin\":\"{plugin}\",\"light\":true}}";
+
     private static void WithReload(PluginToolExecutor exec, string plugin, Action<IFallout4ModGetter> check)
     {
         var outPath = Path.Combine(Path.GetTempPath(), plugin);
@@ -142,6 +144,88 @@ public class EslPolicyTests
             reload.ModHeader.Stats.NextFormID.Should().Be(0x901u);
             reload.ModHeader.Stats.NextFormID.Should().BeLessThanOrEqualTo(0x1000u);
         });
+    }
+
+    [Fact]
+    public void SetLight_RefusesMasterlessPluginWithIdsBelowTheFloor()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x005, "Light_Low");
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("set_light_flag", LightArgs(plugin))
+            .Should().Contain("Cannot flag").And.Contain("0x800-0xFFF").And.Contain("compact_to_esl first");
+        mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetLight_LowersOutOfRangeNextFormIdToOnePastTheHighest()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x800, "Light_A");
+        AddWeapon(mod, 0x801, "Light_B");
+        mod.ModHeader.Stats.NextFormID = 0x5000;
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("set_light_flag", LightArgs(plugin)).Should().Contain("Lowered HEDR next object ID to 0x802");
+        mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small).Should().BeTrue();
+        mod.ModHeader.Stats.NextFormID.Should().Be(0x802u);
+    }
+
+    [Fact]
+    public void SetLight_KeepsNextFormIdThatIsAlreadyInRange()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x800, "Light_A");
+        AddWeapon(mod, 0x801, "Light_B");
+        mod.ModHeader.Stats.NextFormID = 0x900;
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("set_light_flag", LightArgs(plugin)).Should().Contain("Set the ESL").And.NotContain("Lowered");
+        mod.ModHeader.Stats.NextFormID.Should().Be(0x900u);
+    }
+
+    [Fact]
+    public void SetLight_EmptyPluginLowersNextFormIdToTheFloor()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        mod.ModHeader.Stats.NextFormID = 0x5000;
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("set_light_flag", LightArgs(plugin)).Should().Contain("Lowered HEDR next object ID to 0x800");
+        mod.ModHeader.Stats.NextFormID.Should().Be(0x800u);
+    }
+
+    [Fact]
+    public void SetLight_PluginWithMasterButNoCrossModLinksUsesTheHighFloor()
+    {
+        var plugin = NewPlugin(1f, withMaster: true);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x005, "NoLink_Light");
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("set_light_flag", LightArgs(plugin)).Should().Contain("Cannot flag").And.Contain("0x800-0xFFF");
+        mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetLight_PluginWithMasterAndCrossModLinkAcceptsLowRecords()
+    {
+        var plugin = NewPlugin(1f, withMaster: true);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x005, "Link_Light");
+        mod.Weapons.First(w => w.EditorID == "Link_Light").Keywords = new()
+        {
+            new FormLink<IKeywordGetter>(new FormKey("Fallout4.esm", 0x001234))
+        };
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("set_light_flag", LightArgs(plugin)).Should().Contain("Set the ESL");
+        mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small).Should().BeTrue();
     }
 
     [Fact]

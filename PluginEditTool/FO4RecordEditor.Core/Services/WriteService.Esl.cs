@@ -91,6 +91,46 @@ public static partial class WriteService
                "Run compact_to_esl to actually perform the remap.";
     }
 
+    public static string SetLightFlag(string plugin, bool light, object? env)
+    {
+        return PluginGraphGate.Run(plugin, () => SetLightFlagCore(plugin, light, env));
+    }
+
+    private static string SetLightFlagCore(string plugin, bool light, object? env)
+    {
+        var mod = EnsureOpen(plugin, env, out var msg); if (mod == null) return msg;
+        var (name, _) = NormalizePlugin(plugin);
+
+        bool wasLight = mod.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Small);
+        if (light == wasLight)
+            return $"'{name}' already {(light ? "has" : "does not have")} the ESL (Small) flag set.";
+
+        if (light)
+        {
+            var (first, last, _, range) = EslSlots(mod);
+            var native = mod.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == mod.ModKey).ToList();
+            var outOfRange = native.Count(r => r.FormKey.ID < first || r.FormKey.ID > last);
+            if (outOfRange > 0)
+                return $"Cannot flag '{name}' light: {outOfRange} native record(s) sit outside {range}. Run compact_to_esl first.";
+
+            var lowered = native.Count > 0 ? native.Max(r => r.FormKey.ID) + 1 : first;
+            var lowerNote = "";
+            if (mod.ModHeader.Stats.NextFormID > last && mod.ModHeader.Stats.NextFormID > lowered)
+            {
+                mod.ModHeader.Stats.NextFormID = lowered;
+                lowerNote = $" Lowered HEDR next object ID to 0x{lowered:X3}.";
+            }
+
+            mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Small;
+            MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+            return $"Set the ESL (Small) flag on '{name}'.{lowerNote} In memory until save_plugin.";
+        }
+
+        mod.ModHeader.Flags &= ~Fallout4ModHeader.HeaderFlag.Small;
+        MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
+        return $"Cleared the ESL (Small) flag on '{name}'. In memory until save_plugin.";
+    }
+
     private static (uint First, uint Last, int Capacity, string Range) EslSlots(IFallout4Mod mod)
     {
         var legacyFloor = mod.ModHeader.Stats.Version >= 1.0f && mod.MasterReferences.Count > 0 && HasForeignReference(mod);
