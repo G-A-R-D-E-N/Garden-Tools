@@ -82,20 +82,14 @@ public sealed unsafe class PluginFile : IDisposable
     public bool SetScale(FormKey reference, float? scale) =>
         Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedScale(plugin, key, scale.HasValue ? 1 : 0, scale ?? 0));
 
-    public bool SetEditorId(FormKey reference, string? editorId)
-    {
-        ThrowIfEmbeddedNul(editorId, nameof(editorId));
-        return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedEditorId(plugin, key, editorId));
-    }
+    public bool SetEditorId(FormKey reference, string? editorId) =>
+        Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedEditorId(plugin, key, editorId));
 
     public bool SetRecordFlags(FormKey reference, uint flags) =>
         Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedRecordFlags(plugin, key, flags));
 
-    public bool SetComments(FormKey reference, string? comments)
-    {
-        ThrowIfEmbeddedNul(comments, nameof(comments));
-        return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedComments(plugin, key, comments));
-    }
+    public bool SetComments(FormKey reference, string? comments) =>
+        Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedComments(plugin, key, comments));
 
     public bool SetLocationReference(RadicleEnvironment env, FormKey reference, FormKey? location)
     {
@@ -158,7 +152,6 @@ public sealed unsafe class PluginFile : IDisposable
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(value);
-        ThrowIfEmbeddedNul(value, nameof(value));
         var at = Index(index);
         return Edit(record, (plugin, s, key) => RadicleNative.PluginSetRecordScalarAt(plugin, key, path, at, value));
     }
@@ -178,7 +171,6 @@ public sealed unsafe class PluginFile : IDisposable
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(value);
-        ThrowIfEmbeddedNul(value, nameof(value));
         var at = Index(index);
         return Edit(record, (plugin, s, key) => RadicleNative.PluginSetRecordString(plugin, key, path, at, value));
     }
@@ -200,7 +192,6 @@ public sealed unsafe class PluginFile : IDisposable
     {
         ArgumentNullException.ThrowIfNull(signature);
         ArgumentNullException.ThrowIfNull(editorId);
-        ThrowIfEmbeddedNul(editorId, nameof(editorId));
         using var use = Use();
         Native.FormKey key;
         Call.Check(RadicleNative.PluginCreateRecord(use.Pointer, signature, editorId, &key));
@@ -264,11 +255,6 @@ public sealed unsafe class PluginFile : IDisposable
 
     private static nuint Index(int index) =>
         index >= 0 ? (nuint)index : throw new ArgumentOutOfRangeException(nameof(index));
-
-    private static void ThrowIfEmbeddedNul(string? text, string paramName)
-    {
-        if (text is not null && text.Contains('\0')) throw new ArgumentException("A string argument cannot hold an embedded NUL.", paramName);
-    }
 
     private delegate Status NativeEdit(IntPtr plugin, NativeStrings strings, Native.FormKey reference);
 

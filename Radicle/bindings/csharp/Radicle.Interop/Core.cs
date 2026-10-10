@@ -102,6 +102,27 @@ internal static class Utf8
     }
 }
 
+internal sealed class Utf8NoNulMarshaler : ICustomMarshaler
+{
+    public static ICustomMarshaler GetInstance(string cookie) => new Utf8NoNulMarshaler();
+
+    public static IntPtr Allocate(string text)
+    {
+        if (text.Contains('\0')) throw new ArgumentException("A string argument cannot hold an embedded NUL.");
+        return Marshal.StringToCoTaskMemUTF8(text);
+    }
+
+    public IntPtr MarshalManagedToNative(object? managedObj) => managedObj is null ? IntPtr.Zero : Allocate((string)managedObj);
+
+    public object MarshalNativeToManaged(IntPtr pNativeData) => throw new NotSupportedException();
+
+    public void CleanUpNativeData(IntPtr pNativeData) => Marshal.FreeCoTaskMem(pNativeData);
+
+    public void CleanUpManagedData(object? managedObj) { }
+
+    public int GetNativeDataSize() => -1;
+}
+
 internal sealed class NativeStrings : IDisposable
 {
     private readonly List<IntPtr> _owned = new();
@@ -109,7 +130,7 @@ internal sealed class NativeStrings : IDisposable
     public IntPtr Add(string? text)
     {
         if (text is null) return IntPtr.Zero;
-        var pointer = Marshal.StringToCoTaskMemUTF8(text);
+        var pointer = Utf8NoNulMarshaler.Allocate(text);
         _owned.Add(pointer);
         return pointer;
     }
