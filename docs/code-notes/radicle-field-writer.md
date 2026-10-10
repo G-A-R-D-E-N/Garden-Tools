@@ -198,7 +198,7 @@ reload.
 
 Bumped from current main's 9 to 10 for the new exports; no additional C struct layout changed, so the regenerated
 `Radicle/bindings/csharp/tests/abi_layout_probe.cpp` retains the existing layouts. W0b's three additive authoring exports
-subsequently advance the version to 11; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsEleven` pins that integrated value.
+subsequently advance the version to 11; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsEleven` pinned that integrated value; the test is now `AbiVersionIsTwelve` after the material file ABI moved the value to 12.
 
 ## Not done
 

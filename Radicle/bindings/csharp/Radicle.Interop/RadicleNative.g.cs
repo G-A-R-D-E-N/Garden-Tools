@@ -743,6 +743,30 @@ public unsafe struct PexObjectCode
     public nuint StructMemberCount;
 }
 
+public enum MaterialFormat : int
+{
+    Bgsm = 0,
+    Bgem = 1,
+}
+
+public enum MaterialFieldType : int
+{
+    Bool = 0,
+    U8 = 1,
+    U32 = 2,
+    F32 = 3,
+    Color3 = 4,
+    String = 5,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct MaterialColor3
+{
+    public float R;
+    public float G;
+    public float B;
+}
+
 public enum QuestPropertyOwner : int
 {
     Script = 0,
@@ -778,7 +802,7 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 11u;
+    public const uint CompiledAbiVersion = 12u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1157,6 +1181,66 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_free_object_code")]
     public static extern void PexFreeObjectCode(PexObjectCode* code);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_read")]
+    public static extern Status MaterialFileRead(byte* bytes, nuint size, IntPtr* out_file);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_destroy")]
+    public static extern void MaterialFileDestroy(IntPtr file);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_write")]
+    public static extern Status MaterialFileWrite(IntPtr file, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_format")]
+    public static extern Status MaterialFileFormat(IntPtr file, MaterialFormat* out_format);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_version")]
+    public static extern Status MaterialFileVersion(IntPtr file, uint* out_version);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_field_count")]
+    public static extern Status MaterialFileFieldCount(IntPtr file, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_field_name")]
+    public static extern Status MaterialFileFieldName(IntPtr file, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_field_type")]
+    public static extern Status MaterialFileFieldType(IntPtr file, nuint index, MaterialFieldType* out_type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_bool")]
+    public static extern Status MaterialFileGetBool(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_u8")]
+    public static extern Status MaterialFileGetU8(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_u32")]
+    public static extern Status MaterialFileGetU32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, uint* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_f32")]
+    public static extern Status MaterialFileGetF32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, float* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_color3")]
+    public static extern Status MaterialFileGetColor3(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, MaterialColor3* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_string")]
+    public static extern Status MaterialFileGetString(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_bool")]
+    public static extern Status MaterialFileSetBool(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_u8")]
+    public static extern Status MaterialFileSetU8(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_u32")]
+    public static extern Status MaterialFileSetU32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, uint value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_f32")]
+    public static extern Status MaterialFileSetF32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, float value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_color3")]
+    public static extern Status MaterialFileSetColor3(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, MaterialColor3* value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_string")]
+    public static extern Status MaterialFileSetString(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte* bytes, nuint size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_parse")]
     public static extern Status SeqParse(byte* bytes, nuint size, IntPtr* out_seq);
