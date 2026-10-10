@@ -230,7 +230,10 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
           out.has_alias = 1;
           out.alias = *in.alias;
         }
-        out.text = in.text ? in.text->c_str() : nullptr;
+        if (in.text) {
+          out.text = in.text->c_str();
+          out.text_size = in.text->size();
+        }
         if (in.integer) {
           out.has_integer = 1;
           out.integer = *in.integer;
@@ -269,6 +272,9 @@ radicle_status radicle_placed_ref_decode(const radicle_env* env,
   if (env == nullptr || record == nullptr || out_ref == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_ref are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   *out_ref = nullptr;
   return guarded("unknown exception while decoding placed reference", [&] {
     auto holder = std::make_unique<PlacedHolder>();
@@ -291,6 +297,9 @@ radicle_status radicle_record_primary_model_path(const radicle_env* env,
   clear_error();
   if (env == nullptr || record == nullptr || out_path == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_path are required");
+  }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
   }
   *out_path = nullptr;
   const auto path = fo4::env::primary_model_path(*to_ref(record));

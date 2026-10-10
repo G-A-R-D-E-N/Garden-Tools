@@ -1,5 +1,8 @@
 #include "fo4/c_api.h"
+#include "fo4/c_api_env.h"
+#include "fo4/c_api_materials.h"
 #include "plugin_bytes.hpp"
+#include "quest_plugin_fixture.hpp"
 
 #include <gtest/gtest.h>
 
@@ -98,6 +101,29 @@ std::set<std::string> collect_form_links_text(radicle_plugin* plugin) {
   }
   radicle_free_string_array(values, count);
   return out;
+}
+
+std::vector<std::byte> make_placed_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "REFR", 0);
+  const auto refr = fo4::test::begin_record(out, "REFR", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"DoorRef\0", 8});
+  const auto vmad = fo4::test::vmad_scripts();
+  fo4::test::write_subrecord(out, "VMAD", vmad);
+  fo4::test::ByteWriter base;
+  base.u32(0x00000900);
+  fo4::test::write_subrecord(out, "NAME", base.bytes);
+  fo4::test::end_record(out, refr);
+  fo4::test::end_group(out, group);
+  return out.bytes;
 }
 
 }  // namespace
@@ -403,4 +429,137 @@ TEST(CApi, HeatherRealFixtureDropsInsertedMasterWritesAndReloadsStableIdentity) 
   EXPECT_EQ(collect_form_keys(plugin), before_keys);
   EXPECT_EQ(collect_form_links_text(plugin), before_links);
   radicle_plugin_destroy(plugin);
+}
+
+TEST(CApi, PlacedScriptTextKeepsEmbeddedNulBytesWithItsLength) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  const auto file = root / "Placed.esp";
+  write_bytes(file, make_placed_plugin());
+  const auto path = file.string();
+  const char* paths[] = {path.c_str()};
+
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, radicle_form_key{"Placed.esp", 0x800}, &record),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_placed_ref* ref = nullptr;
+  ASSERT_EQ(radicle_placed_ref_decode(env, record, &ref), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(ref, nullptr);
+  ASSERT_EQ(ref->script_count, 1u);
+  const auto& script = ref->scripts[0];
+  const radicle_script_property* embedded = nullptr;
+  for (size_t index = 0; index < script.property_count; ++index) {
+    if (std::string(script.properties[index].name) == "Embedded") embedded = &script.properties[index];
+  }
+  ASSERT_NE(embedded, nullptr);
+  ASSERT_NE(embedded->text, nullptr);
+  const std::string expected("Garden\0Patch", 12);
+  EXPECT_EQ(embedded->text_size, expected.size());
+  EXPECT_EQ(std::string(embedded->text, embedded->text_size), expected);
+
+  radicle_placed_ref_free(ref);
+  radicle_env_destroy(env);
+}
+
+TEST(CApi, RecordFromAnotherEnvironmentIsRejected) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  const auto file_a = root / "a" / "Placed.esp";
+  const auto file_b = root / "b" / "Placed.esp";
+  write_bytes(file_a, make_placed_plugin());
+  write_bytes(file_b, make_placed_plugin());
+  const auto path_a = file_a.string();
+  const auto path_b = file_b.string();
+  const char* paths_a[] = {path_a.c_str()};
+  const char* paths_b[] = {path_b.c_str()};
+
+  radicle_env* env_a = nullptr;
+  radicle_env* env_b = nullptr;
+  ASSERT_EQ(radicle_env_load(paths_a, 1, &env_a), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_env_load(paths_b, 1, &env_b), RADICLE_STATUS_OK) << radicle_last_error();
+
+  const radicle_form_key key{"Placed.esp", 0x800};
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env_a, key, &record), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* own = nullptr;
+  ASSERT_EQ(radicle_env_winner(env_b, key, &own), RADICLE_STATUS_OK) << radicle_last_error();
+  EXPECT_NE(own, record);
+
+  radicle_record_info info{};
+  EXPECT_EQ(radicle_record_get_info(env_a, record, &info), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_record_get_info(env_b, record, &info), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+
+  radicle_placed_ref* ref = nullptr;
+  EXPECT_EQ(radicle_placed_ref_decode(env_b, record, &ref), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(ref, nullptr);
+
+  const char* model = nullptr;
+  EXPECT_EQ(radicle_record_primary_model_path(env_b, record, &model), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(model, nullptr);
+
+  radicle_light_info light{};
+  EXPECT_EQ(radicle_light_get_info(env_b, record, &light), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_worldspace_info worldspace{};
+  EXPECT_EQ(radicle_worldspace_get_info(env_b, record, &worldspace), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_landscape* landscape = nullptr;
+  EXPECT_EQ(radicle_landscape_decode(env_b, record, &landscape), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(landscape, nullptr);
+
+  radicle_material_swap* swap = nullptr;
+  EXPECT_EQ(radicle_material_swap_decode(env_b, record, &swap), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(swap, nullptr);
+
+  radicle_plugin* target = nullptr;
+  ASSERT_EQ(radicle_plugin_create("Target.esp", &target), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_form_key new_key{nullptr, 0};
+  EXPECT_EQ(radicle_plugin_copy_placed_ref_new(target, env_b, record, &new_key),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_TRUE(collect_form_keys(target).empty());
+
+  radicle_placed_copy_status override_status{};
+  EXPECT_EQ(radicle_plugin_copy_placed_ref_override(target, env_b, record, 0, &override_status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  EXPECT_TRUE(collect_form_keys(target).empty());
+
+  radicle_strings* strings = nullptr;
+  ASSERT_EQ(radicle_strings_load(env_b, file_b.parent_path().string().c_str(), "en", &strings),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+  const char* name_text = nullptr;
+  size_t name_size = 0;
+  EXPECT_EQ(radicle_strings_resolve_name(strings, record, &name_text, &name_size),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(name_text, nullptr);
+  radicle_strings_destroy(strings);
+
+  radicle_texture_set_info texture_set{};
+  EXPECT_EQ(radicle_texture_set_get_info(env_b, record, &texture_set),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_form_key landscape_texture{};
+  EXPECT_EQ(radicle_landscape_texture_get_set(env_b, record, &landscape_texture),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_cell_info cell{};
+  EXPECT_EQ(radicle_cell_get_info(env_b, record, &cell), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  int32_t container_group = 0;
+  radicle_form_key container_world{};
+  radicle_form_key container_cell{};
+  EXPECT_EQ(radicle_record_get_container(env_b, record, &container_group, &container_world,
+                                         &container_cell),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+
+  radicle_plugin_destroy(target);
+  radicle_env_destroy(env_a);
+  radicle_env_destroy(env_b);
 }

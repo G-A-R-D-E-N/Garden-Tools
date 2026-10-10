@@ -41,6 +41,9 @@ radicle_status radicle_plugin_copy_placed_ref_override(radicle_plugin* plugin,
   if (plugin == nullptr || env == nullptr || record == nullptr || out_status == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, env, record and out_status are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   const auto& ref = *to_ref(record);
   return guarded("unknown exception while copying placed reference", [&] {
     try {
@@ -73,6 +76,9 @@ radicle_status radicle_plugin_copy_placed_ref_new(radicle_plugin* plugin,
   clear_error();
   if (plugin == nullptr || env == nullptr || record == nullptr || out_key == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, env, record and out_key are required");
+  }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
   }
   *out_key = {nullptr, 0};
   const auto& ref = *to_ref(record);
