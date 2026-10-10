@@ -1,12 +1,15 @@
 #include "fo4/c_api_quest.h"
 
 #include "c_api_internal.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "fo4/quest/runtime.hpp"
 
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <new>
+#include <utility>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -43,21 +46,91 @@ const char* copy_c_string(const char* text) {
   return copy_text(text, std::strlen(text));
 }
 
-void free_text(radicle_quest_property& property) {
+struct ElementStore {
+  fo4::PluginFormIdContext context;
+  std::deque<std::string> plugins;
+  std::vector<std::vector<radicle_script_element>> arrays;
+};
+
+void free_elements(radicle_script_element* elements, size_t count) {
+  if (!elements) return;
+  for (size_t index = 0; index < count; ++index) {
+    std::free(const_cast<char*>(elements[index].object.plugin));
+    std::free(const_cast<char*>(elements[index].text));
+  }
+  std::free(elements);
+}
+
+void free_owned(radicle_quest_property& property) {
   std::free(const_cast<char*>(property.script));
   std::free(const_cast<char*>(property.name));
   std::free(const_cast<char*>(property.text));
+  free_elements(const_cast<radicle_script_element*>(property.elements), property.element_value_count);
   property.script = nullptr;
   property.name = nullptr;
   property.text = nullptr;
   property.text_size = 0;
+  property.elements = nullptr;
+  property.element_value_count = 0;
+}
+
+radicle_form_key element_form_key(fo4::RawFormId raw, ElementStore& store) {
+  const auto key = fo4::resolve_plugin_link(raw, store.context);
+  if (key.owner().empty()) return {nullptr, 0};
+  store.plugins.emplace_back(key.owner().filename());
+  return {store.plugins.back().c_str(), key.local().value()};
+}
+
+void append_elements(radicle_quest_property& value,
+                     const fo4::VmadProperty& property,
+                     ElementStore& store) {
+  std::vector<radicle_script_element> elements;
+  if (property.object_elements) {
+    for (const auto& element : *property.object_elements) {
+      radicle_script_element out{};
+      out.object = element_form_key(element.object, store);
+      out.alias = element.alias;
+      elements.push_back(out);
+    }
+  } else if (property.text_elements) {
+    for (const auto& text : *property.text_elements) {
+      radicle_script_element out{};
+      out.text = text.c_str();
+      elements.push_back(out);
+    }
+  } else if (property.integer_elements) {
+    for (const auto integer : *property.integer_elements) {
+      radicle_script_element out{};
+      out.integer = integer;
+      elements.push_back(out);
+    }
+  } else if (property.real_elements) {
+    for (const auto real : *property.real_elements) {
+      radicle_script_element out{};
+      out.real = real;
+      elements.push_back(out);
+    }
+  } else if (property.boolean_elements) {
+    for (const auto boolean : *property.boolean_elements) {
+      radicle_script_element out{};
+      out.boolean = boolean ? 1 : 0;
+      elements.push_back(out);
+    }
+  } else {
+    return;
+  }
+  auto& array = store.arrays.emplace_back(std::move(elements));
+  value.has_elements = 1;
+  value.elements = array.empty() ? nullptr : array.data();
+  value.element_value_count = array.size();
 }
 
 void append_properties(std::vector<radicle_quest_property>& out,
                        const std::vector<fo4::VmadProperty>& properties,
                        radicle_quest_property_owner owner,
                        std::int32_t alias,
-                       const std::string& script) {
+                       const std::string& script,
+                       ElementStore& store) {
   for (const auto& property : properties) {
     radicle_quest_property value{};
     value.owner = owner;
@@ -94,8 +167,27 @@ void append_properties(std::vector<radicle_quest_property>& out,
       value.has_element_count = 1;
       value.element_count = *property.element_count;
     }
+    append_elements(value, property, store);
     out.push_back(value);
   }
+}
+
+radicle_script_element* copy_elements(const radicle_script_element* source, size_t count) {
+  if (count == 0) return nullptr;
+  auto* copy = static_cast<radicle_script_element*>(
+      std::calloc(count, sizeof(radicle_script_element)));
+  if (!copy) return nullptr;
+  for (size_t index = 0; index < count; ++index) {
+    copy[index] = source[index];
+    copy[index].object.plugin = copy_c_string(source[index].object.plugin);
+    copy[index].text = copy_c_string(source[index].text);
+    if ((source[index].object.plugin && !copy[index].object.plugin) ||
+        (source[index].text && !copy[index].text)) {
+      free_elements(copy, count);
+      return nullptr;
+    }
+  }
+  return copy;
 }
 
 radicle_status copy_properties(const std::vector<radicle_quest_property>& values,
@@ -118,11 +210,13 @@ radicle_status copy_properties(const std::vector<radicle_quest_property>& values
     result[i].script = copy_c_string(values[i].script);
     result[i].name = copy_c_string(values[i].name);
     result[i].text = copy_text(values[i].text, values[i].text_size);
+    result[i].elements = copy_elements(values[i].elements, values[i].element_value_count);
     const bool failed = (values[i].script && !result[i].script) ||
                         (values[i].name && !result[i].name) ||
-                        (values[i].text && !result[i].text);
+                        (values[i].text && !result[i].text) ||
+                        (values[i].element_value_count && !result[i].elements);
     if (failed) {
-      free_text(result[i]);
+      free_owned(result[i]);
       radicle_free_quest_properties(result, i);
       return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate quest property string");
     }
@@ -219,17 +313,18 @@ radicle_status radicle_quest_runtime_properties(const radicle_plugin* plugin,
     const auto data = fo4::quest::quest_runtime_data(plugin->value, key);
 
     std::vector<radicle_quest_property> properties;
+    ElementStore store{fo4::plugin_form_id_context(plugin->value), {}, {}};
     const std::string no_script;
     for (const auto& script : data.scripts) {
       append_properties(properties, script.properties, RADICLE_QUEST_PROPERTY_SCRIPT, -1,
-                        script.name);
+                        script.name, store);
     }
     append_properties(properties, data.fragment_properties, RADICLE_QUEST_PROPERTY_FRAGMENT, -1,
-                      no_script);
+                      no_script, store);
     for (const auto& alias : data.alias_scripts) {
       for (const auto& script : alias.scripts) {
         append_properties(properties, script.properties, RADICLE_QUEST_PROPERTY_ALIAS_SCRIPT,
-                          alias.alias_id, script.name);
+                          alias.alias_id, script.name, store);
       }
     }
 
@@ -252,7 +347,7 @@ void radicle_free_quest_properties(radicle_quest_property* properties, size_t co
     return;
   }
   for (size_t i = 0; i < count; ++i) {
-    free_text(properties[i]);
+    free_owned(properties[i]);
   }
   std::free(properties);
 }

@@ -35,3 +35,17 @@ Red-first counts. Before any population code, `Radicle/tests/test_environment_sc
 - Regression: `Radicle/tests/test_vmad_unsupported.cpp:UnknownPropertyTypesStopTheTypedReaderLikeVariables` covers types 8, 9, 10, 18 and 255.
   - It failed before the change with `plugin parse error at 0x31: unknown VMAD property type`.
   - After the change `fo4_tests` passed 827, skipped 38 (real-data and corpus tests) and failed 0 of 865.
+
+## Quest property array elements
+
+`Radicle/src/c_api_quest.cpp:radicle_quest_runtime_properties` makes one `ElementStore` per call. It holds the quest context from `fo4::plugin_form_id_context`, the plugin names of object elements in a `std::deque` so their pointers stay valid, and one element vector per property. `Radicle/src/c_api_quest.cpp:append_elements` copies only the vector the typed reader engaged, so `has_elements` is 1 only when every element was decoded. A struct (7) or struct array (17) has no element vector, so it keeps `has_elements` 0 and its `element_count`.
+
+Object elements resolve through `fo4::resolve_plugin_link` with the quest plugin's context, because `radicle_script_element::object` is a `radicle_form_key` (plugin and local ID) and the quest path has no environment. The scalar quest `object_form_id` stays a raw form ID; only the element form is resolved. A NULL form ID gives a NULL plugin and local ID 0.
+
+`Radicle/src/c_api_quest.cpp:copy_elements` deep-copies each element's text and plugin name, since the store and the reader's `VmadProperty` strings are gone when the call returns. `Radicle/src/c_api_quest.cpp:free_owned` releases them, and `Radicle/src/c_api_quest.cpp:radicle_free_quest_properties` calls it for every property.
+
+The alias-script owner shares this decode: script, fragment and alias-script properties all go through `Radicle/src/c_api_quest.cpp:append_properties`, which calls `append_elements`.
+
+Element text is NUL-terminated, because `radicle_script_element` has no size field, so an embedded NUL ends an element string. The placed path has the same limit.
+
+ABI: `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is bumped from 12 to 13 for the three members appended to `Radicle/include/fo4/c_api_quest.h:radicle_quest_property`. `Radicle/include/fo4/c_api_quest.h` includes `fo4/c_api_env.h` to reuse `radicle_script_element`, which stays defined there. The managed value is `Radicle/bindings/csharp/Radicle.Interop/QuestRuntime.cs:QuestRuntimeValue` with `Elements`, next to `ElementCount`.

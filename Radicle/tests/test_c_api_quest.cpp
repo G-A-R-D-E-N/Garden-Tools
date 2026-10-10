@@ -405,7 +405,91 @@ TEST(CApiQuest, MalformedFormKeyReturnsInvalidArgument) {
   radicle_plugin_destroy(plugin);
 }
 
-TEST(CApiQuest, AbiVersionIsTwelve) {
-  EXPECT_EQ(radicle_abi_version(), 12u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 12u);
+TEST(CApiQuest, ReportsDecodedArrayElementsForEveryOwner) {
+  const TempPlugin file(fo4::test::make_quest_plugin_with_vmad(1, fo4::test::array_vmad_subrecord()));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  const auto* ints = findProperty(properties, count, "Ints");
+  ASSERT_NE(ints, nullptr);
+  EXPECT_EQ(ints->owner, RADICLE_QUEST_PROPERTY_SCRIPT);
+  EXPECT_EQ(ints->has_elements, 1);
+  ASSERT_EQ(ints->element_value_count, 3u);
+  EXPECT_EQ(ints->elements[0].integer, 4);
+  EXPECT_EQ(ints->elements[1].integer, 5);
+  EXPECT_EQ(ints->elements[2].integer, 6);
+
+  const auto* words = findProperty(properties, count, "Words");
+  ASSERT_NE(words, nullptr);
+  EXPECT_EQ(words->has_elements, 1);
+  ASSERT_EQ(words->element_value_count, 3u);
+  EXPECT_STREQ(words->elements[0].text, "Alpha");
+  ASSERT_NE(words->elements[1].text, nullptr);
+  EXPECT_EQ(std::strlen(words->elements[1].text), 0u);
+  EXPECT_STREQ(words->elements[2].text, "Garden");
+
+  const auto* targets = findProperty(properties, count, "Targets");
+  ASSERT_NE(targets, nullptr);
+  EXPECT_EQ(targets->has_elements, 1);
+  ASSERT_EQ(targets->element_value_count, 2u);
+  ASSERT_NE(targets->elements[0].object.plugin, nullptr);
+  EXPECT_STREQ(targets->elements[0].object.plugin, "Quests.esp");
+  EXPECT_EQ(targets->elements[0].object.local_id, 0x805u);
+  EXPECT_EQ(targets->elements[0].alias, -1);
+  EXPECT_EQ(targets->elements[1].object.local_id, 0x806u);
+  EXPECT_EQ(targets->elements[1].alias, -1);
+
+  const auto* structs = findProperty(properties, count, "Structs");
+  ASSERT_NE(structs, nullptr);
+  EXPECT_EQ(structs->has_element_count, 1);
+  EXPECT_EQ(structs->element_count, 1u);
+  EXPECT_EQ(structs->has_elements, 0);
+  EXPECT_EQ(structs->elements, nullptr);
+  EXPECT_EQ(structs->element_value_count, 0u);
+
+  const auto* frag_ints = findProperty(properties, count, "FragInts");
+  ASSERT_NE(frag_ints, nullptr);
+  EXPECT_EQ(frag_ints->owner, RADICLE_QUEST_PROPERTY_FRAGMENT);
+  EXPECT_EQ(frag_ints->has_elements, 1);
+  ASSERT_EQ(frag_ints->element_value_count, 1u);
+  EXPECT_EQ(frag_ints->elements[0].integer, 9);
+
+  const auto* frag_words = findProperty(properties, count, "FragWords");
+  ASSERT_NE(frag_words, nullptr);
+  EXPECT_EQ(frag_words->owner, RADICLE_QUEST_PROPERTY_FRAGMENT);
+  ASSERT_EQ(frag_words->element_value_count, 1u);
+  EXPECT_STREQ(frag_words->elements[0].text, "Stage");
+
+  const auto* frag_targets = findProperty(properties, count, "FragTargets");
+  ASSERT_NE(frag_targets, nullptr);
+  EXPECT_EQ(frag_targets->owner, RADICLE_QUEST_PROPERTY_FRAGMENT);
+  ASSERT_EQ(frag_targets->element_value_count, 1u);
+  EXPECT_EQ(frag_targets->elements[0].object.local_id, 0x807u);
+  EXPECT_EQ(frag_targets->elements[0].alias, -1);
+
+  const auto* alias_targets = findProperty(properties, count, "AliasTargets");
+  ASSERT_NE(alias_targets, nullptr);
+  EXPECT_EQ(alias_targets->owner, RADICLE_QUEST_PROPERTY_ALIAS_SCRIPT);
+  EXPECT_EQ(alias_targets->alias, 5);
+  EXPECT_EQ(alias_targets->has_elements, 1);
+  ASSERT_EQ(alias_targets->element_value_count, 1u);
+  EXPECT_STREQ(alias_targets->elements[0].object.plugin, "Quests.esp");
+  EXPECT_EQ(alias_targets->elements[0].object.local_id, 0x808u);
+  EXPECT_EQ(alias_targets->elements[0].alias, -1);
+
+  radicle_free_quest_properties(properties, count);
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, AbiVersionIsThirteen) {
+  EXPECT_EQ(radicle_abi_version(), 13u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, 13u);
 }

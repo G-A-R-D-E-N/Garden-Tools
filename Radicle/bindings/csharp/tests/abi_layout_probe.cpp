@@ -540,5 +540,8 @@ int main() {
   printf("QuestProperty.PropertyAlias %zu\n", offsetof(radicle_quest_property, property_alias));
   printf("QuestProperty.HasElementCount %zu\n", offsetof(radicle_quest_property, has_element_count));
   printf("QuestProperty.ElementCount %zu\n", offsetof(radicle_quest_property, element_count));
+  printf("QuestProperty.HasElements %zu\n", offsetof(radicle_quest_property, has_elements));
+  printf("QuestProperty.Elements %zu\n", offsetof(radicle_quest_property, elements));
+  printf("QuestProperty.ElementValueCount %zu\n", offsetof(radicle_quest_property, element_value_count));
   return 0;
 }

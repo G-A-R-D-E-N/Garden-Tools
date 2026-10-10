@@ -787,12 +787,15 @@ public unsafe struct QuestProperty
     public short PropertyAlias;
     public byte HasElementCount;
     public uint ElementCount;
+    public byte HasElements;
+    public IntPtr Elements;
+    public nuint ElementValueCount;
 }
 
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 12u;
+    public const uint CompiledAbiVersion = 13u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();

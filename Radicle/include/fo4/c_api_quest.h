@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fo4/c_api.h"
+#include "fo4/c_api_env.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,8 +70,12 @@ typedef enum radicle_quest_property_owner {
  * NUL-terminated reader would see. The bytes are not claimed to be any particular character
  * encoding: this ABI carries bytes and a length, and naming a charset is the caller's business.
  *
- * `script`, `name` and `text` are owned by the caller and released with
- * radicle_free_quest_properties.
+ * `has_elements` is 1 only when every element of an array property was decoded; then `elements`
+ * points at `element_value_count` radicle_script_element values. Otherwise `has_elements` and
+ * `element_value_count` are 0 and `elements` is NULL.
+ *
+ * `script`, `name`, `text` and `elements`, with each element's `object` plugin and `text`, are
+ * owned by the caller and released with radicle_free_quest_properties.
  */
 typedef struct radicle_quest_property {
   radicle_quest_property_owner owner;
@@ -93,6 +98,9 @@ typedef struct radicle_quest_property {
   int16_t property_alias;
   uint8_t has_element_count;
   uint32_t element_count;
+  uint8_t has_elements;
+  const radicle_script_element* elements;
+  size_t element_value_count;
 } radicle_quest_property;
 
 /*
