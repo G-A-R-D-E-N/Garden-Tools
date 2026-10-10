@@ -15,11 +15,19 @@
 namespace fo4 {
 namespace {
 
+constexpr std::uint64_t k_zlib_max_expansion = 1032;
+constexpr std::uint64_t k_inflate_slack_bytes = 64;
+constexpr std::size_t k_max_group_depth = 16;
+
 std::vector<std::byte> inflate_record_payload(std::span<const std::byte> compressed,
                                               std::uint32_t uncompressed_size,
                                               std::size_t offset) {
   if (uncompressed_size == 0) {
     return {};
+  }
+  if (uncompressed_size > static_cast<std::uint64_t>(compressed.size()) * k_zlib_max_expansion +
+                              k_inflate_slack_bytes) {
+    throw parse_error(offset, "compressed record uncompressed size exceeds zlib expansion bound");
   }
 
   auto try_inflate = [&](int window_bits) -> std::optional<std::vector<std::byte>> {
@@ -144,9 +152,11 @@ Record read_record(binary::Cursor& cursor, const std::vector<std::byte>* owner) 
   return record;
 }
 
-Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner);
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner,
+                 std::size_t depth = 1);
 
-GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
+GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owner,
+                      std::size_t depth) {
   if (cursor.remaining() < 4) {
     throw parse_error(cursor.absolute_offset(), "truncated group child");
   }
@@ -157,12 +167,16 @@ GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owne
       static_cast<char>(std::to_integer<std::uint8_t>(cursor.peek(4)[3])),
   };
   if (sig == sig_grup) {
-    return read_group(cursor, owner);
+    return read_group(cursor, owner, depth + 1);
   }
   return read_record(cursor, owner);
 }
 
-Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner,
+                 std::size_t depth) {
+  if (depth > k_max_group_depth) {
+    throw parse_error(cursor.absolute_offset(), "GRUP nesting exceeds depth limit");
+  }
   const auto start = cursor.position();
   const auto start_abs = cursor.absolute_offset();
   Group group;
@@ -178,7 +192,7 @@ Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
     throw parse_error(start_abs, "GRUP overruns file");
   }
   while (cursor.position() < end) {
-    group.children.push_back(read_child(cursor, owner));
+    group.children.push_back(read_child(cursor, owner, depth));
   }
   if (cursor.position() != end) {
     throw parse_error(start_abs, "GRUP children did not consume the declared size");
