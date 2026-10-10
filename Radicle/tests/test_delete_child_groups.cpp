@@ -195,6 +195,28 @@ std::vector<std::byte> make_world_plugin() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_world_outside_link_plugin() {
+  fo4::test::ByteWriter out;
+  write_tes4(out, 0x807);
+  const auto worlds = fo4::test::begin_group(out, "WRLD", 0);
+  fo4::test::end_record(out, begin_named(out, "WRLD", 0x800));
+  fo4::test::end_record(out, begin_named(out, "WRLD", 0x801));
+  const auto world = begin_children(out, "WRLD", k_world_children, 0x801);
+  fo4::test::end_record(out, begin_named(out, "CELL", 0x802));
+  const auto cell = begin_children(out, "CELL", k_cell_children, 0x802);
+  const auto temporary = begin_children(out, "CELL", k_cell_temporary, 0x802);
+  fo4::test::end_record(out, begin_named(out, "REFR", 0x803));
+  fo4::test::end_group(out, temporary);
+  fo4::test::end_group(out, cell);
+  fo4::test::end_group(out, world);
+  fo4::test::end_record(out, begin_named(out, "WRLD", 0x804));
+  fo4::test::end_group(out, worlds);
+  const auto cells = fo4::test::begin_group(out, "CELL", 0);
+  write_cell(out, 0x805, 0x806, 0x803);
+  fo4::test::end_group(out, cells);
+  return out.bytes;
+}
+
 }  // namespace
 
 TEST(DeleteChildGroups, DeleteDialRemovesItsTopicChildrenGroup) {
@@ -288,6 +310,15 @@ TEST(DeleteChildGroups, DeleteRefusesWhenOutsideReferenceTargetsCellChildWithout
   EXPECT_EQ(fo4::delete_local_record(plugin, local_key(0x801)), fo4::RecordDeleteStatus::referenced);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
   EXPECT_NE(fo4::find_record(plugin, local_key(0x802)), nullptr);
+}
+
+TEST(DeleteChildGroups, DeleteRefusesWorldWhenOutsideReferenceTargetsNestedRefWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_world_outside_link_plugin(), "Delete.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_EQ(fo4::delete_local_record(plugin, local_key(0x801)), fo4::RecordDeleteStatus::referenced);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_NE(fo4::find_record(plugin, local_key(0x803)), nullptr);
 }
 
 TEST(DeleteChildGroups, DeleteAllowsReferencesThatStayInsideTheDeletedSubtree) {

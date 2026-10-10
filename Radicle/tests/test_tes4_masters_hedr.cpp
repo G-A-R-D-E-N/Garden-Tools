@@ -120,3 +120,19 @@ TEST(HedrRebuild, NextFormIdUpdateKeepsTrailingBytes) {
   EXPECT_EQ(reread_trailing, (std::vector<std::byte>{std::byte{0xEF}, std::byte{0xBE}, std::byte{0xAD},
                                                      std::byte{0xDE}}));
 }
+
+TEST(Tes4Masters, ShortHedrIsRefusedByNextFormIdUpdate) {
+  const auto bytes = make_plugin([](fo4::test::ByteWriter& out) {
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(0);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  });
+  auto plugin = fo4::read_plugin(bytes, "ShortHedr.esp");
+  try {
+    fo4::set_hedr_next_form_id(plugin, 0x900);
+    ADD_FAILURE() << "set_hedr_next_form_id accepted a TES4 HEDR shorter than 12 bytes";
+  } catch (const fo4::FormIdError& error) {
+    EXPECT_STREQ(error.what(), "TES4 HEDR must be at least 12 bytes to update next form ID");
+  }
+}

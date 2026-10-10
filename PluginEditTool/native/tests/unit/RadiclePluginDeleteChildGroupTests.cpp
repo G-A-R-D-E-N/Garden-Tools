@@ -114,6 +114,30 @@ std::vector<std::byte> makeLinkingPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> makeOverridePlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(2);
+    hedr.u32(0x802);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Topic.esp\0", 10});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto dials = fo4::test::begin_group(out, "DIAL", 0);
+    const auto children = fo4::test::begin_group(out, "DIAL", 7);
+    out.patch_u32(children + 8, 0x801);
+    writeRecord(out, "INFO", 0x00000802, "InfoBOverride");
+    fo4::test::end_group(out, children);
+    fo4::test::end_group(out, dials);
+    return out.bytes;
+}
+
 nlohmann::json pluginEntry(std::string name,
                            const std::filesystem::path& path,
                            std::string source) {
@@ -212,6 +236,39 @@ TEST_CASE("Native delete refuses a DIAL whose topic child is linked from another
         "DeleteRecord", nlohmann::json::array({"Topic.esp", "000801:Topic.esp"}));
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "RecordReferenced");
+    CHECK(refused.error().message ==
+          "Cannot delete 000801:Topic.esp: 000801:Link.esp in Link.esp refers to 000802:Topic.esp inside it");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Topic.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(topicPath);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000801:Topic.esp")) != nullptr);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000802:Topic.esp")) != nullptr);
+}
+
+TEST_CASE("Native delete refuses a DIAL whose topic child is overridden in another loaded plugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto topicPath = root / "mods" / "TopicMod" / "Topic.esp";
+    const auto overridePath = root / "mods" / "OverrideMod" / "Override.esp";
+    writeBytes(topicPath, makeTopicPlugin(false));
+    writeBytes(overridePath, makeOverridePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Topic.esp", topicPath, "TopicMod"),
+            pluginEntry("Override.esp", overridePath, "OverrideMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto refused = backend.invokeBackend(
+        "DeleteRecord", nlohmann::json::array({"Topic.esp", "000801:Topic.esp"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "RecordHasExternalVersions");
+    CHECK(refused.error().message ==
+          "Cannot delete 000801:Topic.esp: Override.esp overrides 000802:Topic.esp inside it");
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Topic.esp"})).has_value());

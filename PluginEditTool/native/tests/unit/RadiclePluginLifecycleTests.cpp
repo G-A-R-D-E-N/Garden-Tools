@@ -12,6 +12,7 @@
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/text/encoding.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -190,6 +191,71 @@ TEST_CASE("Native lifecycle creates renumbers and deletes a persisted typed reco
     disk = fo4::read_plugin_file(pluginPath);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Patch.esp")) == nullptr);
     CHECK(disk.header.next_form_id == 0x951u);
+}
+
+TEST_CASE("Native lifecycle stores a UTF-8 EditorId as Windows-1252 on create") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MyMod" / "Patch.esp";
+    writeBytes(pluginPath, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MyMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    auto payload = eyesPayload();
+    payload["editorId"] = "Caf\xC3\xA9";
+    const auto created = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "EYES", payload})));
+    REQUIRE(created.at("formKey") == "000900:Patch.esp");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(pluginPath);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(record != nullptr);
+    REQUIRE(record->subrecords[0].signature == fo4::sig_edid);
+    const auto& edid = record->subrecords[0].data;
+    const std::string_view stored{reinterpret_cast<const char*>(edid.data()), edid.size() - 1};
+    CHECK(stored == "Caf\xE9");
+    CHECK(fo4::text::windows1252_to_utf8(stored) == "Caf\xC3\xA9");
+    const auto details = parseStringResult(backend.invokeBackend(
+        "GetRecordDetails", nlohmann::json::array({"000900:Patch.esp"})));
+    CHECK(details.at("EditorId") == "Caf\xC3\xA9");
+}
+
+TEST_CASE("Native lifecycle refuses a create EditorId outside Windows-1252 without writing") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MyMod" / "Patch.esp";
+    writeBytes(pluginPath, makePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MyMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    auto payload = eyesPayload();
+    payload["editorId"] = "Snow\xE2\x98\x83";
+    const auto created = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "EYES", payload}));
+    REQUIRE_FALSE(created.has_value());
+    CHECK(created.error().type == "RecordCreateFailed");
+    CHECK(created.error().message ==
+          "editor ID is not valid UTF-8 text representable in Windows-1252");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(pluginPath);
+    CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);
+    CHECK(disk.header.next_form_id == 0x900u);
 }
 
 TEST_CASE("Native lifecycle creates LVSP with validated initial entries") {

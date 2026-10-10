@@ -198,3 +198,28 @@ TEST(CtdaReferenceParams, AliasParamTwoLeftAloneWhileParamOneRemaps) {
   EXPECT_EQ(read_u32(ctda, 12), 0x01000812u);
   EXPECT_EQ(read_u32(ctda, 16), 3u);
 }
+
+TEST(CtdaReferenceParams, PackdataFlagLeavesReferenceParamTwoAloneWhileParamOneRemaps) {
+  auto out = plugin_with_masters();
+  write_cobj(out, 0x03000801,
+             make_ctda(fo4::k_ctda_flag_pack_data, k_get_faction_rank_difference, 0x00000812, 3,
+                       k_run_on_subject));
+  const auto ctda = remapped_ctda(
+      out, "PackdataParamTwo.esp",
+      {fo4::PluginKey::from_filename("RadiationOverhaul.esp"),
+       fo4::PluginKey::from_filename("Fallout4.esm")});
+  EXPECT_EQ(read_u32(ctda, 12), 0x01000812u);
+  EXPECT_EQ(read_u32(ctda, 16), 3u);
+}
+
+TEST(CtdaReferenceParams, AliasAndPackdataOnQuestAliasPackageStillRemapsParamOne) {
+  auto out = plugin_with_masters();
+  write_cobj(out, 0x03000801,
+             make_ctda(fo4::k_ctda_flag_aliases | fo4::k_ctda_flag_pack_data,
+                       k_get_is_current_package, 0x00000812, 0, k_run_on_quest_alias));
+  const auto ctda = remapped_ctda(
+      out, "AliasPackdataPackage.esp",
+      {fo4::PluginKey::from_filename("RadiationOverhaul.esp"),
+       fo4::PluginKey::from_filename("Fallout4.esm")});
+  EXPECT_EQ(read_u32(ctda, 12), 0x01000812u);
+}

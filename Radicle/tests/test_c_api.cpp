@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -124,6 +125,44 @@ std::vector<std::byte> make_placed_plugin() {
   fo4::test::end_record(out, refr);
   fo4::test::end_group(out, group);
   return out.bytes;
+}
+
+std::vector<std::byte> make_dial_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "DIAL", 0);
+  const auto dial = fo4::test::begin_record(out, "DIAL", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Topic\0", 6});
+  fo4::test::end_record(out, dial);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+int sentinel_marker = 0;
+
+template <class T>
+T* sentinel_ptr() {
+  return reinterpret_cast<T*>(&sentinel_marker);
+}
+
+template <class T>
+T sentinel_value() {
+  T value{};
+  std::memset(&value, 0xA5, sizeof(T));
+  return value;
+}
+
+template <class T>
+void expect_sentinel_value(const T& value) {
+  const auto expected = sentinel_value<T>();
+  EXPECT_EQ(std::memcmp(&value, &expected, sizeof(T)), 0);
 }
 
 }  // namespace
@@ -471,17 +510,29 @@ TEST(CApi, RecordFromAnotherEnvironmentIsRejected) {
   Cleanup cleanup{root};
   const auto file_a = root / "a" / "Placed.esp";
   const auto file_b = root / "b" / "Placed.esp";
+  const auto topic_a = root / "c" / "Topic.esp";
+  const auto topic_b = root / "d" / "Topic.esp";
   write_bytes(file_a, make_placed_plugin());
   write_bytes(file_b, make_placed_plugin());
+  write_bytes(topic_a, make_dial_plugin());
+  write_bytes(topic_b, make_dial_plugin());
   const auto path_a = file_a.string();
   const auto path_b = file_b.string();
+  const auto topic_path_a = topic_a.string();
+  const auto topic_path_b = topic_b.string();
   const char* paths_a[] = {path_a.c_str()};
   const char* paths_b[] = {path_b.c_str()};
+  const char* topic_paths_a[] = {topic_path_a.c_str()};
+  const char* topic_paths_b[] = {topic_path_b.c_str()};
 
   radicle_env* env_a = nullptr;
   radicle_env* env_b = nullptr;
+  radicle_env* topic_env_a = nullptr;
+  radicle_env* topic_env_b = nullptr;
   ASSERT_EQ(radicle_env_load(paths_a, 1, &env_a), RADICLE_STATUS_OK) << radicle_last_error();
   ASSERT_EQ(radicle_env_load(paths_b, 1, &env_b), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_env_load(topic_paths_a, 1, &topic_env_a), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_env_load(topic_paths_b, 1, &topic_env_b), RADICLE_STATUS_OK) << radicle_last_error();
 
   const radicle_form_key key{"Placed.esp", 0x800};
   const radicle_record* record = nullptr;
@@ -490,76 +541,177 @@ TEST(CApi, RecordFromAnotherEnvironmentIsRejected) {
   ASSERT_EQ(radicle_env_winner(env_b, key, &own), RADICLE_STATUS_OK) << radicle_last_error();
   EXPECT_NE(own, record);
 
+  const radicle_form_key topic_key{"Topic.esp", 0x800};
+  const radicle_record* topic = nullptr;
+  ASSERT_EQ(radicle_env_winner(topic_env_a, topic_key, &topic), RADICLE_STATUS_OK) << radicle_last_error();
+
   radicle_record_info info{};
   EXPECT_EQ(radicle_record_get_info(env_a, record, &info), RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_record_get_info(env_b, record, &info), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_record_info rejected_info = sentinel_value<radicle_record_info>();
+  EXPECT_EQ(radicle_record_get_info(env_b, record, &rejected_info), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  expect_sentinel_value(rejected_info);
 
-  radicle_placed_ref* ref = nullptr;
+  radicle_placed_ref* ref = sentinel_ptr<radicle_placed_ref>();
   EXPECT_EQ(radicle_placed_ref_decode(env_b, record, &ref), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(ref, nullptr);
+  EXPECT_EQ(ref, sentinel_ptr<radicle_placed_ref>());
 
-  const char* model = nullptr;
+  const char* model = sentinel_ptr<const char>();
   EXPECT_EQ(radicle_record_primary_model_path(env_b, record, &model), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(model, nullptr);
+  EXPECT_EQ(model, sentinel_ptr<const char>());
 
-  radicle_light_info light{};
+  radicle_light_info light = sentinel_value<radicle_light_info>();
   EXPECT_EQ(radicle_light_get_info(env_b, record, &light), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(light);
 
-  radicle_worldspace_info worldspace{};
+  radicle_worldspace_info worldspace = sentinel_value<radicle_worldspace_info>();
   EXPECT_EQ(radicle_worldspace_get_info(env_b, record, &worldspace), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(worldspace);
 
-  radicle_landscape* landscape = nullptr;
+  radicle_landscape* landscape = sentinel_ptr<radicle_landscape>();
   EXPECT_EQ(radicle_landscape_decode(env_b, record, &landscape), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(landscape, nullptr);
+  EXPECT_EQ(landscape, sentinel_ptr<radicle_landscape>());
 
-  radicle_material_swap* swap = nullptr;
+  radicle_material_swap* swap = sentinel_ptr<radicle_material_swap>();
   EXPECT_EQ(radicle_material_swap_decode(env_b, record, &swap), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(swap, nullptr);
+  EXPECT_EQ(swap, sentinel_ptr<radicle_material_swap>());
 
   radicle_plugin* target = nullptr;
   ASSERT_EQ(radicle_plugin_create("Target.esp", &target), RADICLE_STATUS_OK) << radicle_last_error();
-  radicle_form_key new_key{nullptr, 0};
+  radicle_form_key new_key = sentinel_value<radicle_form_key>();
   EXPECT_EQ(radicle_plugin_copy_placed_ref_new(target, env_b, record, &new_key),
             RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(new_key);
   EXPECT_TRUE(collect_form_keys(target).empty());
 
-  radicle_placed_copy_status override_status{};
+  radicle_placed_copy_status override_status = sentinel_value<radicle_placed_copy_status>();
   EXPECT_EQ(radicle_plugin_copy_placed_ref_override(target, env_b, record, 0, &override_status),
             RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  expect_sentinel_value(override_status);
   EXPECT_TRUE(collect_form_keys(target).empty());
 
   radicle_strings* strings = nullptr;
   ASSERT_EQ(radicle_strings_load(env_b, file_b.parent_path().string().c_str(), "en", &strings),
             RADICLE_STATUS_OK)
       << radicle_last_error();
-  const char* name_text = nullptr;
-  size_t name_size = 0;
+  const char* name_text = sentinel_ptr<const char>();
+  size_t name_size = 0xDEADBEEF;
   EXPECT_EQ(radicle_strings_resolve_name(strings, record, &name_text, &name_size),
             RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(name_text, nullptr);
+  EXPECT_EQ(name_text, sentinel_ptr<const char>());
+  EXPECT_EQ(name_size, 0xDEADBEEFu);
   radicle_strings_destroy(strings);
 
-  radicle_texture_set_info texture_set{};
+  radicle_texture_set_info texture_set = sentinel_value<radicle_texture_set_info>();
   EXPECT_EQ(radicle_texture_set_get_info(env_b, record, &texture_set),
             RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(texture_set);
 
-  radicle_form_key landscape_texture{};
+  radicle_form_key landscape_texture = sentinel_value<radicle_form_key>();
   EXPECT_EQ(radicle_landscape_texture_get_set(env_b, record, &landscape_texture),
             RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(landscape_texture);
 
-  radicle_cell_info cell{};
+  radicle_cell_info cell = sentinel_value<radicle_cell_info>();
   EXPECT_EQ(radicle_cell_get_info(env_b, record, &cell), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(cell);
 
-  int32_t container_group = 0;
-  radicle_form_key container_world{};
-  radicle_form_key container_cell{};
+  int32_t container_group = 0x5EED;
+  radicle_form_key container_world = sentinel_value<radicle_form_key>();
+  radicle_form_key container_cell = sentinel_value<radicle_form_key>();
   EXPECT_EQ(radicle_record_get_container(env_b, record, &container_group, &container_world,
                                          &container_cell),
             RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(container_group, 0x5EED);
+  expect_sentinel_value(container_world);
+  expect_sentinel_value(container_cell);
+
+  radicle_bendable_spline_info bendable = sentinel_value<radicle_bendable_spline_info>();
+  EXPECT_EQ(radicle_bendable_spline_get_info(env_b, record, &bendable), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(bendable);
+
+  radicle_climate* climate = sentinel_ptr<radicle_climate>();
+  EXPECT_EQ(radicle_climate_decode(env_b, record, &climate), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(climate, sentinel_ptr<radicle_climate>());
+
+  radicle_form_key layer_parent = sentinel_value<radicle_form_key>();
+  EXPECT_EQ(radicle_layer_get_parent(env_b, record, &layer_parent), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(layer_parent);
+
+  radicle_lighting_template_info lighting = sentinel_value<radicle_lighting_template_info>();
+  EXPECT_EQ(radicle_lighting_template_get_info(env_b, record, &lighting), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(lighting);
+
+  radicle_static_collection* collection = sentinel_ptr<radicle_static_collection>();
+  EXPECT_EQ(radicle_static_collection_decode(env_b, record, &collection), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(collection, sentinel_ptr<radicle_static_collection>());
+
+  radicle_static_distant_lod distant_lod = sentinel_value<radicle_static_distant_lod>();
+  EXPECT_EQ(radicle_static_get_distant_lod(env_b, record, &distant_lod), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(distant_lod);
+
+  radicle_form_key water_type = sentinel_value<radicle_form_key>();
+  EXPECT_EQ(radicle_activator_get_water_type(env_b, record, &water_type), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(water_type);
+
+  radicle_water_info water = sentinel_value<radicle_water_info>();
+  EXPECT_EQ(radicle_water_get_info(env_b, record, &water), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(water);
+
+  radicle_weather_info* weather = sentinel_ptr<radicle_weather_info>();
+  EXPECT_EQ(radicle_weather_decode(env_b, record, &weather), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(weather, sentinel_ptr<radicle_weather_info>());
+
+  radicle_form_key placed_swap = sentinel_value<radicle_form_key>();
+  EXPECT_EQ(radicle_placed_reference_material_swap(env_b, record, &placed_swap), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(placed_swap);
+
+  radicle_form_key model_swap = sentinel_value<radicle_form_key>();
+  EXPECT_EQ(radicle_record_primary_model_material_swap(env_b, record, &model_swap), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(model_swap);
+
+  float color_index = 1234.5f;
+  EXPECT_EQ(radicle_record_primary_model_color_remapping_index(env_b, record, &color_index),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_FLOAT_EQ(color_index, 1234.5f);
+
+  uint16_t form_version = 0xBEEF;
+  size_t subrecord_count = 0xDEADBEEF;
+  EXPECT_EQ(radicle_record_payload_info(env_b, record, &form_version, &subrecord_count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(form_version, 0);
+  EXPECT_EQ(subrecord_count, 0u);
+
+  uint8_t signature[4] = {0xA5, 0xA5, 0xA5, 0xA5};
+  uint8_t* subrecord_bytes = sentinel_ptr<uint8_t>();
+  size_t subrecord_size = 0xDEADBEEF;
+  int32_t subrecord_extended = 0x5EED;
+  EXPECT_EQ(radicle_record_copy_subrecord(env_b, record, 0, signature, &subrecord_bytes,
+                                          &subrecord_size, &subrecord_extended),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(std::memcmp(signature, "\0\0\0\0", 4), 0);
+  EXPECT_EQ(subrecord_bytes, nullptr);
+  EXPECT_EQ(subrecord_size, 0u);
+  EXPECT_EQ(subrecord_extended, 0);
+
+  radicle_form_key resolved = sentinel_value<radicle_form_key>();
+  EXPECT_EQ(radicle_record_resolve_form_id(env_b, record, 0x00000800, &resolved),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(resolved.plugin, nullptr);
+  EXPECT_EQ(resolved.local_id, 0u);
+
+  const radicle_record** topics = sentinel_ptr<const radicle_record*>();
+  size_t topic_count = 0xDEADBEEF;
+  EXPECT_EQ(radicle_record_topic_children(topic_env_b, topic, &topics, &topic_count),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  EXPECT_EQ(topics, nullptr);
+  EXPECT_EQ(topic_count, 0u);
 
   radicle_plugin_destroy(target);
   radicle_env_destroy(env_a);
   radicle_env_destroy(env_b);
+  radicle_env_destroy(topic_env_a);
+  radicle_env_destroy(topic_env_b);
 }
