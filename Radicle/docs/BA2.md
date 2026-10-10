@@ -17,9 +17,10 @@ tests. Radicle reimplements the format independently in C++.
 
 `tools/corpus/ba2_measure.py` is an independent, read-only measurement of the
 installed Fallout 4 Data folder; re-run it with `FO4_DATA_DIR` set. It reads
-only archive headers and entry/chunk tables, checks the 24-byte headers,
-entry/chunk widths, chunk-header-size fields, `0xBAADF00D` sentinels, payload
-bounds and table end before the name-table offset, prints the totals below and
+only archive headers and entry/chunk tables. It reads fixed-size header, entry
+and chunk records, and checks the 24-byte headers, chunk-header-size fields,
+`0xBAADF00D` sentinels, payload bounds, the name-table offset within the file
+and table end before the name-table offset, prints the totals below and
 exits non-zero if any check fails. It is a local tool and is not run by CI.
 Counts cover all 79 installed root-level `.ba2` archives:
 
@@ -54,8 +55,12 @@ The tests compare streaming and model extraction of the first entry, rebuild
 that entry into an archive, and check identical extracted content and DDS
 bytes after re-reading. The rebuilt entry must keep its name, extension and
 directory hashes; for DX10 it must also keep its texture info and each chunk's
-mip range. They use `FO4_DATA_DIR` and skip cleanly when it or a named file is
-missing, so they are skipped on CI. No game archives or extracted payloads are committed.
+mip range. They run only when `FO4_DATA_DIR` is set; CI sets it from `FO4_DATA_DIR_WINDOWS`
+in the Windows Release pass of `native-ci` (and from `FO4_DATA_DIR_LINUX` in the Linux
+job); the Windows Debug pass clears it. They skip when it or a named archive
+is missing. A present archive whose version, kind or entry count differs from the
+table above fails the test (`ASSERT_EQ` in `tests/test_ba2_versions_real.cpp`)
+rather than skipping. No game archives or extracted payloads are committed.
 
 The measured GNRL layout at versions 1, 7 and 8 is:
 
@@ -107,7 +112,11 @@ The low-level model preserves name/extension/directory hashes and the one-byte e
 
 `fo4/archive/ba2_reader.hpp:Ba2Reader` indexes metadata without loading all
 archive payloads and extracts entries on demand. Texture model extraction
-follows the DDS header rule above. Archive serialization preserves modeled
+follows the DDS header rule above. A DX10 entry with no stored path (no name table,
+or an empty name) is extracted under the path `unnamed.dds`
+(`src/archive/ba2_reader.cpp:Ba2Reader::extract`), so the rule applies: a DDS header
+is prepended unless the payload already starts with `DDS `. GNRL entries are not
+affected. Archive serialization preserves modeled
 metadata and content, but does not promise original padding or byte-identical
 archive files.
 
@@ -121,7 +130,10 @@ archive files.
 - extract matching entries
 - compare archives by decompressed content
 
-The legacy `NullArchiveBackend` construction used by the current native host is a compatibility adapter to `RadicleArchiveBackend`, allowing the existing host setup and React archive contract to remain unchanged while the implementation moves to Radicle.
+The native host constructs `RadicleArchiveBackend` directly
+(`PluginEditTool/native/apps/fo4ide/main.cpp`). `NullArchiveBackend`
+(`PluginEditTool/native/include/fo4ide/archive/ArchiveService.hpp`) is a null object
+whose `available()` returns false.
 
 Extraction performs path validation before writing a batch: absolute paths, traversal components, Windows-invalid/device names, case-insensitive output collisions, and existing symbolic-link traversal are rejected. Writes use a temporary file and preserve an existing regular destination if replacement fails.
 

@@ -7,10 +7,13 @@ The streaming reader and full models must extract identical first-entry
 bytes, and rebuilding that entry must preserve extracted content (including
 the reconstructed DDS header), the name/extension/directory hashes, and for
 DX10 the six texture info fields and each chunk's mip range. This does not
-require byte-identical archive padding. `docs/BA2.md` records the named files
-and the counts printed by `tools/corpus/ba2_measure.py`. The test reads game
-data only through `FO4_DATA_DIR`; missing data skips without committing
-payloads, so CI never runs its assertions.
+require byte-identical archive padding. `docs/BA2.md` records the named fixture files (checked by `Ba2NamedRealData`)
+and the totals printed by `tools/corpus/ba2_measure.py`. The test reads game
+data only through `FO4_DATA_DIR` and runs only when it is set. CI sets it from
+`FO4_DATA_DIR_WINDOWS` in the Windows Release pass of `native-ci` (and from
+`FO4_DATA_DIR_LINUX` in the Linux job); the Windows Debug pass clears it. Missing data or a
+missing named archive skips without committing payloads. A present archive whose
+version, kind or entry count differs fails the test.
 
 ## tests/test_ba2_texture.cpp:Ba2Texture.RoundTripStoredAndCompressed
 
@@ -30,8 +33,9 @@ Read-only, stdlib-only corpus check for `docs/BA2.md`. It walks each root-level
 `--first-chunk` reads and decodes one chunk per archive. The entry's
 chunk-header-size field (`0x10` GNRL, `0x18` DX10) is a stored value checked
 against the expected one, not the chunk record length: GNRL chunk records are
-20 bytes, so the script reads each record by its struct size. It is not wired
-into CMake or CI.
+20 bytes, so the script reads each record by its struct size. A malformed archive (`struct.error` or `zlib.error`) and a name-table
+offset past the end of the file are recorded as problems for that archive; the run
+continues and exits non-zero. It is not wired into CMake or CI.
 
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
