@@ -104,10 +104,16 @@ jobs:
         run: |
           if [ -z "$FO4_DATA_DIR" ]; then
             echo "FO4_DATA_DIR_LINUX is unset; real-data tests will skip."
-          elif [ ! -f "$FO4_DATA_DIR/Fallout4.esm" ]; then
-            echo "FO4_DATA_DIR_LINUX ($FO4_DATA_DIR) has no Fallout4.esm; point it at a Fallout 4 Data folder or unset it."
-            exit 1
           else
+            missing=""
+            for m in Fallout4.esm DLCRobot.esm DLCworkshop01.esm DLCworkshop02.esm DLCworkshop03.esm DLCCoast.esm DLCNukaWorld.esm; do
+              [ -f "$FO4_DATA_DIR/$m" ] || missing="$missing $m"
+            done
+            [ -n "$(find "$FO4_DATA_DIR" -maxdepth 1 -type f -iname 'Fallout4 - *.ba2' -print -quit 2>/dev/null)" ] || missing="$missing Fallout4 - *.ba2"
+            if [ -n "$missing" ]; then
+              echo "FO4_DATA_DIR_LINUX ($FO4_DATA_DIR) is missing:$missing; point it at a Fallout 4 Data folder or unset it."
+              exit 1
+            fi
             echo "FO4_DATA_DIR: $FO4_DATA_DIR"
             echo "root *.esm: $(find "$FO4_DATA_DIR" -maxdepth 1 -iname '*.esm' | wc -l), *.ba2: $(find "$FO4_DATA_DIR" -maxdepth 1 -iname '*.ba2' | wc -l)"
           fi
@@ -375,8 +381,17 @@ jobs:
             "FO4_DATA_DIR_WINDOWS is unset; real-data tests will skip."
             exit 0
           }
-          if (-not (Test-Path -LiteralPath (Join-Path $env:FO4_DATA_DIR 'Fallout4.esm') -PathType Leaf)) {
-            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) has no Fallout4.esm; point it at a Fallout 4 Data folder or unset it."
+          if (-not (Test-Path -LiteralPath $env:FO4_DATA_DIR -PathType Container)) {
+            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
+            exit 1
+          }
+          $missing = @()
+          foreach ($m in 'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm', 'DLCCoast.esm', 'DLCNukaWorld.esm') {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:FO4_DATA_DIR $m) -PathType Leaf)) { $missing += $m }
+          }
+          if (-not (Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter 'Fallout4 - *.ba2' -File -ErrorAction SilentlyContinue)) { $missing += 'Fallout4 - *.ba2' }
+          if ($missing) {
+            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
             exit 1
           }
           "FO4_DATA_DIR: $env:FO4_DATA_DIR"
