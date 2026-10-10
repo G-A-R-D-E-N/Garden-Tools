@@ -1516,3 +1516,31 @@ Path length: the longest tracked path under `PluginEditTool` is 145 characters, 
 On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the Windows test steps set TEMP and TMP to `runner.temp`.
 
 The checkout step uses the full URL `https://code.forgejo.org/actions/checkout@v7` (the same v7 commit, 3d3c42e5, as the `actions/checkout@v7` that resolves to data.forgejo.org). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
+
+## PluginEditTool/native/src/material/MaterialService.cpp:MaterialService
+
+`MaterialService` is a presentation layer over Radicle's material codec. It holds no BGSM/BGEM byte layout. `load` returns `fo4::material::MaterialFile` from `Radicle/src/material/material_file.cpp:read_material_file`. `inspect` turns the ordered Radicle field list into the JSON rows that the web UI and the MCP tools read. `setFields` parses the string values, applies them with `set_field` and `set_text`, encodes with `write_material_file`, and writes with `fo4::io::write_file_atomic` (`Radicle/src/io/atomic_write.cpp:write_file_atomic`). That writer creates the parent folder, verifies the staged size and replaces the destination.
+
+Field names. The JSON and MCP names did not change. The aliases below map Radicle names to the names PET has always shown (`aliases`, `shownName`, `findShown`):
+
+- `ScreenSpaceReflections` -> `Ssr`
+- `WetnessControlScreenSpaceReflections` -> `WetSsr`
+- `EnvironmentMapping` (header, version below 10) -> `EnvMapping`
+- `EnvironmentMappingMaskScale` (header, below 10) -> `EnvMappingMaskScale`
+- `EffectEnvironmentMapping` (BGEM body, 10 and up) -> `EnvironmentMapping`
+- `EffectEnvironmentMappingMaskScale` (BGEM body, 10 and up) -> `EnvironmentMappingMaskScale`
+- `TileFlags` (raw u32) -> `TileU` (value 2) and `TileV` (value 1), handled in `fieldRows` and `applyField`. `TileFlags` is neither shown nor settable.
+
+All other names match in both codecs: the 78 BGSM body names, the 36 BGEM body names other than the two Effect names, and the header names other than those listed above. The mapping is one-to-one within any single file, so `findShown` finds at most one field.
+
+Section split: header rows are the fields before the first texture string (`FieldType::string`). Both formats start the body with texture strings, and the header holds no strings. JSON rows list body fields first and header fields second, as before.
+
+Behaviour changes from the old native codec:
+
+- Round trip is byte-identical. The old writer normalised bools to 0 or 1, appended a NUL to every string, and wrote TileFlags as only bits 0 and 1. Now a raw bool byte of 2 is kept, strings are written as read, and unknown TileFlags bits are kept. Setting TileU or TileV changes only its own bit. JSON still shows a bool of 2 as `true`.
+- String display strips one trailing NUL (`fo4::material::text`). The old code stripped all of them, so only strings with several trailing NULs differ. `TextureResolver.cpp:TextureResolver::resolveMaterialDiffuse` uses the same call.
+- A name the file's layout does not have now returns `MaterialUnknownField`. The old code accepted header names such as `MaskWrites` below version 6, `DepthBias` below 10 and `EnvMapping` from 10, then silently wrote nothing. Conditional body fields such as `EmittanceColor` while `EmitEnabled` is false were already unknown and still are.
+- `fo4::parse_error` maps to `MaterialParseFailed` with Radicle's message (`plugin parse error at 0x...`). Bad magic and short files now use that wording, not the old "Not a BGSM or BGEM material" and "fewer than 4 bytes" texts. The error type is unchanged.
+- `Version` and `Signature`: a request equal to the current value is a no-op. Any other value is `MaterialFieldParseFailed`, as before.
+- The "Set N field(s)" message lists the names as requested, not the canonical spelling of a case-insensitive name.
+- `Document` is removed. `load` returns `fo4::material::MaterialFile` directly.
