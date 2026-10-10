@@ -58,7 +58,17 @@ inline int base64Value(unsigned char c) {
     return -1;
 }
 
+inline constexpr std::size_t kMaxDroppedFileBytes = 16 * 1024 * 1024;
+
 inline Result<std::vector<unsigned char>> decodeBase64(std::string_view input) {
+    std::size_t digits = 0;
+    for (const unsigned char c : input) {
+        if (c == '=') break;
+        if (!std::isspace(c)) ++digits;
+    }
+    if (digits * 3 / 4 > kMaxDroppedFileBytes) {
+        return std::unexpected(Error{"DroppedFileTooLarge", "Dropped file payload exceeds the 16 MiB limit"});
+    }
     std::vector<unsigned char> output;
     output.reserve(input.size() * 3 / 4);
     unsigned int value = 0;
