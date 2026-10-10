@@ -109,11 +109,11 @@ radicle_status radicle_plugin_set_placed_transform(radicle_plugin* plugin,
                                                    const float position[3],
                                                    const float rotation[3]) {
   clear_error();
-  const auto key = to_form_key(reference);
-  if (plugin == nullptr || !key || position == nullptr || rotation == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid reference, position and rotation are required");
-  }
   return guarded("unknown exception while setting transform", [&] {
+    const auto key = to_form_key(reference);
+    if (plugin == nullptr || !key || position == nullptr || rotation == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid reference, position and rotation are required");
+    }
     try {
       const fo4::forms::PositionRotation transform{position[0], position[1], position[2],
                                                    rotation[0], rotation[1], rotation[2]};
@@ -132,9 +132,9 @@ radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugin,
                                                int32_t has_scale,
                                                float scale) {
   clear_error();
-  const auto key = to_form_key(reference);
-  if (plugin == nullptr || !key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid reference are required");
   return guarded("unknown exception while setting scale", [&] {
+    const auto key = to_form_key(reference);
+    if (plugin == nullptr || !key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid reference are required");
     try {
       const auto value = has_scale != 0 ? std::optional<float>{scale} : std::nullopt;
       if (!fo4::forms::set_placed_reference_scale(plugin->value, *key, value)) {
