@@ -407,11 +407,20 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
             });
         }
         for (const auto& removed : fo4::records_removed_by_delete(loaded->plugin, key)) {
+            for (const auto& version : graph_.versions(removed)) {
+                if (version.plugin == loaded->plugin.key) continue;
+                return std::unexpected(Error{
+                    "RecordHasExternalVersions",
+                    "Cannot delete " + formKeyText + ": " + std::string(version.plugin.filename()) +
+                        " overrides " + removed.to_string() + " inside it"
+                });
+            }
             for (const auto& reference : graph_.referenced_by(removed)) {
                 if (reference.plugin == loaded->plugin.key) continue;
                 return std::unexpected(Error{
                     "RecordReferenced",
-                    "Cannot delete a record while loaded records still reference a record in its child group: " + formKeyText
+                    "Cannot delete " + formKeyText + ": " + reference.source.to_string() + " in " +
+                        std::string(reference.plugin.filename()) + " refers to " + removed.to_string() + " inside it"
                 });
             }
         }
