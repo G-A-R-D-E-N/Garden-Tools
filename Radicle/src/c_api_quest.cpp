@@ -50,6 +50,8 @@ struct ElementStore {
   fo4::PluginFormIdContext context;
   std::deque<std::string> plugins;
   std::vector<std::vector<radicle_script_element>> arrays;
+  std::vector<std::vector<radicle_script_struct_member>> members;
+  std::vector<std::vector<radicle_script_struct>> structs;
 };
 
 void free_elements(radicle_script_element* elements, size_t count) {
@@ -61,17 +63,39 @@ void free_elements(radicle_script_element* elements, size_t count) {
   std::free(elements);
 }
 
+void free_members(radicle_script_struct_member* members, size_t count) {
+  if (!members) return;
+  for (size_t index = 0; index < count; ++index) {
+    std::free(const_cast<char*>(members[index].name));
+    std::free(const_cast<char*>(members[index].value.object.plugin));
+    std::free(const_cast<char*>(members[index].value.text));
+  }
+  std::free(members);
+}
+
+void free_structs(radicle_script_struct* structs, size_t count) {
+  if (!structs) return;
+  for (size_t index = 0; index < count; ++index) {
+    free_members(const_cast<radicle_script_struct_member*>(structs[index].members),
+                 structs[index].member_count);
+  }
+  std::free(structs);
+}
+
 void free_owned(radicle_quest_property& property) {
   std::free(const_cast<char*>(property.script));
   std::free(const_cast<char*>(property.name));
   std::free(const_cast<char*>(property.text));
   free_elements(const_cast<radicle_script_element*>(property.elements), property.element_value_count);
+  free_structs(const_cast<radicle_script_struct*>(property.structs), property.struct_count);
   property.script = nullptr;
   property.name = nullptr;
   property.text = nullptr;
   property.text_size = 0;
   property.elements = nullptr;
   property.element_value_count = 0;
+  property.structs = nullptr;
+  property.struct_count = 0;
 }
 
 radicle_form_key element_form_key(fo4::RawFormId raw, ElementStore& store) {
@@ -125,6 +149,36 @@ void append_elements(radicle_quest_property& value,
   value.element_value_count = array.size();
 }
 
+void append_structs(radicle_quest_property& value,
+                    const fo4::VmadProperty& property,
+                    ElementStore& store) {
+  if (!property.struct_elements) return;
+  std::vector<radicle_script_struct> structs;
+  for (const auto& structure : *property.struct_elements) {
+    auto& members = store.members.emplace_back();
+    for (const auto& member : structure.members) {
+      radicle_script_struct_member out{};
+      out.name = member.name.c_str();
+      out.type = member.type;
+      out.flags = member.flags;
+      if (member.object) {
+        out.value.object = element_form_key(member.object->object, store);
+        out.value.alias = member.object->alias;
+      }
+      if (member.text) out.value.text = member.text->c_str();
+      if (member.integer) out.value.integer = *member.integer;
+      if (member.real) out.value.real = *member.real;
+      if (member.boolean) out.value.boolean = *member.boolean ? 1 : 0;
+      members.push_back(out);
+    }
+    structs.push_back({members.data(), members.size()});
+  }
+  auto& array = store.structs.emplace_back(std::move(structs));
+  value.has_structs = 1;
+  value.structs = array.empty() ? nullptr : array.data();
+  value.struct_count = array.size();
+}
+
 void append_properties(std::vector<radicle_quest_property>& out,
                        const std::vector<fo4::VmadProperty>& properties,
                        radicle_quest_property_owner owner,
@@ -168,6 +222,7 @@ void append_properties(std::vector<radicle_quest_property>& out,
       value.element_count = *property.element_count;
     }
     append_elements(value, property, store);
+    append_structs(value, property, store);
     out.push_back(value);
   }
 }
@@ -184,6 +239,42 @@ radicle_script_element* copy_elements(const radicle_script_element* source, size
     if ((source[index].object.plugin && !copy[index].object.plugin) ||
         (source[index].text && !copy[index].text)) {
       free_elements(copy, count);
+      return nullptr;
+    }
+  }
+  return copy;
+}
+
+radicle_script_struct_member* copy_members(const radicle_script_struct_member* source, size_t count) {
+  if (count == 0) return nullptr;
+  auto* copy = static_cast<radicle_script_struct_member*>(
+      std::calloc(count, sizeof(radicle_script_struct_member)));
+  if (!copy) return nullptr;
+  for (size_t index = 0; index < count; ++index) {
+    copy[index] = source[index];
+    copy[index].name = copy_c_string(source[index].name);
+    copy[index].value.object.plugin = copy_c_string(source[index].value.object.plugin);
+    copy[index].value.text = copy_c_string(source[index].value.text);
+    if ((source[index].name && !copy[index].name) ||
+        (source[index].value.object.plugin && !copy[index].value.object.plugin) ||
+        (source[index].value.text && !copy[index].value.text)) {
+      free_members(copy, count);
+      return nullptr;
+    }
+  }
+  return copy;
+}
+
+radicle_script_struct* copy_structs(const radicle_script_struct* source, size_t count) {
+  if (count == 0) return nullptr;
+  auto* copy = static_cast<radicle_script_struct*>(
+      std::calloc(count, sizeof(radicle_script_struct)));
+  if (!copy) return nullptr;
+  for (size_t index = 0; index < count; ++index) {
+    copy[index] = source[index];
+    copy[index].members = copy_members(source[index].members, source[index].member_count);
+    if (source[index].member_count && !copy[index].members) {
+      free_structs(copy, count);
       return nullptr;
     }
   }
@@ -211,10 +302,12 @@ radicle_status copy_properties(const std::vector<radicle_quest_property>& values
     result[i].name = copy_c_string(values[i].name);
     result[i].text = copy_text(values[i].text, values[i].text_size);
     result[i].elements = copy_elements(values[i].elements, values[i].element_value_count);
+    result[i].structs = copy_structs(values[i].structs, values[i].struct_count);
     const bool failed = (values[i].script && !result[i].script) ||
                         (values[i].name && !result[i].name) ||
                         (values[i].text && !result[i].text) ||
-                        (values[i].element_value_count && !result[i].elements);
+                        (values[i].element_value_count && !result[i].elements) ||
+                        (values[i].struct_count && !result[i].structs);
     if (failed) {
       free_owned(result[i]);
       radicle_free_quest_properties(result, i);
@@ -313,7 +406,7 @@ radicle_status radicle_quest_runtime_properties(const radicle_plugin* plugin,
     const auto data = fo4::quest::quest_runtime_data(plugin->value, key);
 
     std::vector<radicle_quest_property> properties;
-    ElementStore store{fo4::plugin_form_id_context(plugin->value), {}, {}};
+    ElementStore store{fo4::plugin_form_id_context(plugin->value), {}, {}, {}, {}};
     const std::string no_script;
     for (const auto& script : data.scripts) {
       append_properties(properties, script.properties, RADICLE_QUEST_PROPERTY_SCRIPT, -1,

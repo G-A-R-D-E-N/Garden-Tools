@@ -26,6 +26,43 @@ public sealed class PlacedScriptElementTests
         WString("Switches"), new byte[] { 15, 1 }, U32(3), new byte[] { 0, 1, 2 },
         WString("Count"), new byte[] { 3, 1 }, U32(7));
 
+    private static byte[] StructVmad() => Cat(
+        U16(6, 2, 1),
+        WString("StructScript"), new byte[] { 0 }, U16(2),
+        WString("Point"), new byte[] { 7, 1 }, U32(3),
+        WString("Target"), new byte[] { 1, 0 }, U16(0, 3), U32(0x806),
+        WString("Label"), new byte[] { 2, 0 }, WString("Alpha"),
+        WString("Count"), new byte[] { 3, 0 }, U32(0xFFFFFFFCu),
+        WString("Pairs"), new byte[] { 17, 0 }, U32(2), U32(1), WString("Flag"), new byte[] { 5, 0, 1 }, U32(0));
+
+    [Fact]
+    public void ExposesDecodedStructMembersAndStructArrays()
+    {
+        using var directory = new TempDirectory();
+        var path = directory.Write("Structs.esp", Build(0, Array.Empty<string>(),
+            Top("REFR", new Rec("REFR", 0x800, new[] { ("VMAD", StructVmad()) })),
+            Top("STAT", new Rec("STAT", 0x806, Array.Empty<(string, byte[])>()))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var placed = env.PlacedReference(env.Winner(new FormKey("Structs.esp", 0x800))!.Value);
+        var properties = placed.Scripts.Single().Properties;
+
+        var point = properties[0].Structs!.Single();
+        Assert.Equal(new[] { "Target", "Label", "Count" }, point.Members.Select(m => m.Name));
+        Assert.Equal(new byte[] { 1, 2, 3 }, point.Members.Select(m => m.Type));
+        Assert.Equal(new FormKey?[] { new FormKey("Structs.esp", 0x806), null, null },
+                     point.Members.Select(m => m.Value.Object));
+        Assert.Equal(new short[] { 3, 0, 0 }, point.Members.Select(m => m.Value.Alias));
+        Assert.Equal("Alpha", point.Members[1].Value.Text);
+        Assert.Equal(-4, point.Members[2].Value.Integer);
+        Assert.Null(properties[0].Elements);
+
+        var pairs = properties[1].Structs!;
+        Assert.Equal(2, pairs.Count);
+        Assert.Equal("Flag", pairs[0].Members.Single().Name);
+        Assert.True(pairs[0].Members.Single().Value.Boolean);
+        Assert.Empty(pairs[1].Members);
+    }
+
     [Fact]
     public void ExposesDecodedArrayElementsAndNullForScalars()
     {

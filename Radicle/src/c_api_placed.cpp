@@ -22,6 +22,8 @@ struct PlacedHolder {
   std::vector<radicle_patrol> patrols;
   std::vector<std::vector<radicle_script_property>> properties;
   std::vector<std::vector<radicle_script_element>> elements;
+  std::vector<std::vector<radicle_script_struct>> structs;
+  std::vector<std::vector<radicle_script_struct_member>> struct_members;
   std::vector<radicle_script> scripts;
 };
 
@@ -43,6 +45,14 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
         if (property.text) property.text = fo4::text::windows1252_to_utf8(*property.text);
         if (property.text_elements) {
           for (auto& text : *property.text_elements) text = fo4::text::windows1252_to_utf8(text);
+        }
+        if (property.struct_elements) {
+          for (auto& structure : *property.struct_elements) {
+            for (auto& member : structure.members) {
+              member.name = fo4::text::windows1252_to_utf8(member.name);
+              if (member.text) member.text = fo4::text::windows1252_to_utf8(*member.text);
+            }
+          }
         }
       }
     }
@@ -252,6 +262,33 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
           out.has_elements = 1;
           out.elements = data_or_null(elements);
           out.element_value_count = elements.size();
+        }
+        if (in.struct_elements) {
+          auto& structs = holder.structs.emplace_back();
+          for (std::size_t s = 0; s < in.struct_elements->size(); ++s) {
+            const auto& structure = (*in.struct_elements)[s];
+            auto& members = holder.struct_members.emplace_back();
+            for (std::size_t m = 0; m < structure.members.size(); ++m) {
+              const auto& member = structure.members[m];
+              radicle_script_struct_member out_member{};
+              out_member.name = member.name.c_str();
+              out_member.type = member.type;
+              out_member.flags = member.flags;
+              if (member.object) {
+                out_member.value.object = key(resolved.properties[p].struct_member_objects->at(s).at(m));
+                out_member.value.alias = member.object->alias;
+              }
+              if (member.text) out_member.value.text = member.text->c_str();
+              if (member.integer) out_member.value.integer = *member.integer;
+              if (member.real) out_member.value.real = *member.real;
+              if (member.boolean) out_member.value.boolean = *member.boolean ? 1 : 0;
+              members.push_back(out_member);
+            }
+            structs.push_back({data_or_null(members), members.size()});
+          }
+          out.has_structs = 1;
+          out.structs = data_or_null(structs);
+          out.struct_count = structs.size();
         }
         out.name = in.name.c_str();
         out.type = in.type;

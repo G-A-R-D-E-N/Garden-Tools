@@ -26,6 +26,8 @@ public readonly record struct QuestRuntimeValue
     public uint? ElementCount { get; init; }
 
     public IReadOnlyList<ScriptElement>? Elements { get; init; }
+
+    public IReadOnlyList<ScriptStruct>? Structs { get; init; }
 }
 
 public readonly record struct QuestRuntimeProperty(
@@ -114,6 +116,9 @@ public static class QuestRuntime
                                 .Select(e => new ScriptElement(FormKey.FromNative(e.Object), e.Alias, Utf8.Read(e.Text),
                                                                e.Integer, e.Real, e.Boolean != 0))
                                 .ToArray()
+                            : null,
+                        Structs = property.HasStructs != 0
+                            ? RadicleEnvironment.ScriptStructs(property.Structs, property.StructCount)
                             : null,
                     });
             }

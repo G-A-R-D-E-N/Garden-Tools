@@ -74,8 +74,14 @@ typedef enum radicle_quest_property_owner {
  * points at `element_value_count` radicle_script_element values. Otherwise `has_elements` and
  * `element_value_count` are 0 and `elements` is NULL.
  *
- * `script`, `name`, `text` and `elements`, with each element's `object` plugin and `text`, are
- * owned by the caller and released with radicle_free_quest_properties.
+ * `has_structs` is 1 only when every member of every struct of a struct or struct array property
+ * is an object, string, int, float or bool; then `structs` points at `struct_count` radicle_script_struct
+ * values (1 for a struct, n for a struct array). Otherwise `has_structs` and `struct_count` are 0
+ * and `structs` is NULL.
+ *
+ * `script`, `name`, `text`, `elements` and `structs`, with each element's and member's `object`
+ * plugin and `text` and each member's `name`, are owned by the caller and released with
+ * radicle_free_quest_properties.
  */
 typedef struct radicle_quest_property {
   radicle_quest_property_owner owner;
@@ -101,6 +107,9 @@ typedef struct radicle_quest_property {
   uint8_t has_elements;
   const radicle_script_element* elements;
   size_t element_value_count;
+  uint8_t has_structs;
+  const radicle_script_struct* structs;
+  size_t struct_count;
 } radicle_quest_property;
 
 /*

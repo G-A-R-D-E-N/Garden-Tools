@@ -95,6 +95,45 @@ std::vector<std::byte> make_vmad_arrays() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_vmad_structs() {
+  fo4::test::ByteWriter out;
+  out.u16(6);
+  out.u16(2);
+  out.u16(1);
+  wstring(out, "StructScript");
+  out.u8(0);
+  out.u16(2);
+  wstring(out, "Point");
+  out.u8(7);
+  out.u8(1);
+  out.u32(3);
+  wstring(out, "Target");
+  out.u8(1);
+  out.u8(0);
+  out.u16(0);
+  out.u16(3);
+  out.u32(0x806);
+  wstring(out, "Label");
+  out.u8(2);
+  out.u8(0);
+  wstring(out, "Alpha");
+  wstring(out, "Count");
+  out.u8(3);
+  out.u8(0);
+  out.u32(0xFFFFFFFCu);
+  wstring(out, "Pairs");
+  out.u8(17);
+  out.u8(0);
+  out.u32(2);
+  out.u32(1);
+  wstring(out, "Flag");
+  out.u8(5);
+  out.u8(0);
+  out.u8(1);
+  out.u32(0);
+  return out.bytes;
+}
+
 std::vector<std::byte> make_plugin(const std::vector<Rec>& records) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -219,4 +258,59 @@ TEST_F(PlacedScriptElementTest, CApiExposesDecodedScriptArrayElements) {
   EXPECT_EQ(holder.has_elements, 0);
   EXPECT_EQ(holder.elements, nullptr);
   EXPECT_EQ(holder.element_value_count, 0u);
+  EXPECT_EQ(holder.has_structs, 1);
+  ASSERT_EQ(holder.struct_count, 1u);
+  ASSERT_EQ(holder.structs[0].member_count, 1u);
+  EXPECT_STREQ(holder.structs[0].members[0].name, "Inner");
+  EXPECT_EQ(holder.structs[0].members[0].value.integer, 5);
+}
+
+TEST_F(PlacedScriptElementTest, CApiExposesDecodedStructMembersAndStructArrays) {
+  const auto data = make_plugin({{"REFR", 0x800, {{"VMAD", make_vmad_structs()}}},
+                                 {"STAT", 0x806, {}}});
+  const auto path = root_ / "Structs.esp";
+  std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(data.data()),
+                                               static_cast<std::streamsize>(data.size()));
+  const auto utf8 = path.u8string();
+  const std::string text(utf8.begin(), utf8.end());
+  const char* raw[] = {text.c_str()};
+  radicle_env* pointer = nullptr;
+  ASSERT_EQ(radicle_env_load(raw, 1, &pointer), RADICLE_STATUS_OK) << radicle_last_error();
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(pointer, radicle_env_destroy);
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env.get(), {"Structs.esp", 0x800}, &record), RADICLE_STATUS_OK);
+  radicle_placed_ref* decoded = nullptr;
+  ASSERT_EQ(radicle_placed_ref_decode(env.get(), record, &decoded), RADICLE_STATUS_OK) << radicle_last_error();
+  const std::unique_ptr<radicle_placed_ref, decltype(&radicle_placed_ref_free)> ref(decoded, radicle_placed_ref_free);
+
+  ASSERT_EQ(ref->script_count, 1u);
+  ASSERT_EQ(ref->scripts[0].property_count, 2u);
+  const radicle_script_property* props = ref->scripts[0].properties;
+
+  const auto& point = props[0];
+  EXPECT_STREQ(point.name, "Point");
+  EXPECT_EQ(point.has_elements, 0);
+  EXPECT_EQ(point.has_structs, 1);
+  ASSERT_EQ(point.struct_count, 1u);
+  ASSERT_EQ(point.structs[0].member_count, 3u);
+  const auto* members = point.structs[0].members;
+  EXPECT_STREQ(members[0].name, "Target");
+  EXPECT_EQ(members[0].type, 1);
+  EXPECT_STREQ(members[0].value.object.plugin, "Structs.esp");
+  EXPECT_EQ(members[0].value.object.local_id, 0x806u);
+  EXPECT_EQ(members[0].value.alias, 3);
+  EXPECT_STREQ(members[1].name, "Label");
+  EXPECT_STREQ(members[1].value.text, "Alpha");
+  EXPECT_EQ(members[1].value.object.plugin, nullptr);
+  EXPECT_STREQ(members[2].name, "Count");
+  EXPECT_EQ(members[2].value.integer, -4);
+
+  const auto& pairs = props[1];
+  EXPECT_STREQ(pairs.name, "Pairs");
+  EXPECT_EQ(pairs.has_structs, 1);
+  ASSERT_EQ(pairs.struct_count, 2u);
+  ASSERT_EQ(pairs.structs[0].member_count, 1u);
+  EXPECT_STREQ(pairs.structs[0].members[0].name, "Flag");
+  EXPECT_EQ(pairs.structs[0].members[0].value.boolean, 1);
+  EXPECT_EQ(pairs.structs[1].member_count, 0u);
 }

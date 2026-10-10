@@ -458,6 +458,53 @@ float read_float(Slice& slice) {
   return value;
 }
 
+bool read_struct_members(Slice& slice, std::int16_t object_format, VmadStruct& out) {
+  const auto count = slice.u32();
+  for (std::uint32_t i = 0; i < count; ++i) {
+    VmadStructMember member;
+    member.name = slice.wstring();
+    member.type = slice.u8();
+    member.flags = slice.u8();
+    switch (member.type) {
+      case k_type_object:
+        member.object = read_object_element(slice, object_format);
+        break;
+      case k_type_string:
+        member.text = slice.wstring();
+        break;
+      case k_type_int:
+        member.integer = static_cast<std::int32_t>(slice.u32());
+        break;
+      case k_type_float:
+        member.real = read_float(slice);
+        break;
+      case k_type_bool:
+        member.boolean = slice.u8() != 0;
+        break;
+      default:
+        return false;
+    }
+    out.members.push_back(std::move(member));
+  }
+  return true;
+}
+
+std::optional<std::vector<VmadStruct>> decode_structs(Slice values, std::int16_t object_format,
+                                                      bool array) {
+  std::vector<VmadStruct> structs;
+  try {
+    const auto n = array ? values.u32() : 1u;
+    for (std::uint32_t i = 0; i < n; ++i) {
+      VmadStruct value;
+      if (!read_struct_members(values, object_format, value)) return std::nullopt;
+      structs.push_back(std::move(value));
+    }
+  } catch (const UnsupportedVmadProperty&) {
+    return std::nullopt;
+  }
+  return structs;
+}
+
 VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   VmadProperty property;
   property.name = slice.wstring();
@@ -497,9 +544,12 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
     case k_type_variable:
     case k_type_variable_array:
       throw UnsupportedVmadProperty{};
-    case k_type_struct:
+    case k_type_struct: {
+      Slice values = slice;
       walk_properties(slice, object_format, slice.u32(), ignored);
+      property.struct_elements = decode_structs(values, object_format, false);
       break;
+    }
     case k_type_object_array: {
       auto& elements = property.object_elements.emplace();
       const auto n = slice.u32();
@@ -531,8 +581,10 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
       break;
     }
     case k_type_struct_array: {
+      Slice values = slice;
       const auto n = slice.u32();
       for (std::uint32_t i = 0; i < n; ++i) walk_properties(slice, object_format, slice.u32(), ignored);
+      property.struct_elements = decode_structs(values, object_format, true);
       break;
     }
     default:

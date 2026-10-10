@@ -87,4 +87,48 @@ public sealed class QuestScriptElementTests
         Assert.NotNull(alias.Value.Elements);
         Assert.Equal(new FormKey?[] { new FormKey("Quests.esp", 0x808) }, alias.Value.Elements!.Select(e => e.Object));
     }
+
+    private static byte[] StructVmad() => Cat(
+        U16(5, 2, 1),
+        WString("StructScript"), new byte[] { 0 }, U16(2),
+        WString("Point"), new byte[] { 7, 0 }, U32(2),
+        WString("Target"), new byte[] { 1, 0 }, U16(0, 0xFFFF), U32(0x805),
+        WString("Label"), new byte[] { 2, 0 }, WString("Alpha"),
+        WString("Pairs"), new byte[] { 17, 0 }, U32(2), U32(1), WString("Flag"), new byte[] { 5, 0, 1 }, U32(0),
+        new byte[] { 0 }, U16(0), WString("QF_Structs"), new byte[] { 0 }, U16(1),
+        WString("FragPoint"), new byte[] { 7, 0 }, U32(1), WString("Stage"), new byte[] { 3, 0 }, U32(9),
+        U16(1), U16(0), U16(5), U32(0), U16(0), U16(2), U16(1),
+        WString("AliasStructs"), new byte[] { 0 }, U16(1),
+        WString("AliasPoint"), new byte[] { 7, 0 }, U32(1), WString("Target"), new byte[] { 1, 0 }, U16(0, 5), U32(0x806));
+
+    [Fact]
+    public void ExposesDecodedStructMembersForScriptFragmentAndAliasOwners()
+    {
+        using var directory = new TempDirectory();
+        var path = directory.Write("StructQuests.esp", Build(0, Array.Empty<string>(),
+            Top("QUST", new Rec("QUST", 0x800, new[] { ("VMAD", StructVmad()) }))));
+        using var plugin = PluginFile.Read(path);
+        var data = QuestRuntime.Decode(plugin, new FormKey("StructQuests.esp", 0x800));
+
+        var point = ScriptValue(data, "Point").Structs!.Single();
+        Assert.Equal(new[] { "Target", "Label" }, point.Members.Select(m => m.Name));
+        Assert.Equal(new FormKey?[] { new FormKey("StructQuests.esp", 0x805), null },
+                     point.Members.Select(m => m.Value.Object));
+        Assert.Equal("Alpha", point.Members[1].Value.Text);
+        Assert.Null(ScriptValue(data, "Point").Elements);
+
+        var pairs = ScriptValue(data, "Pairs").Structs!;
+        Assert.Equal(2, pairs.Count);
+        Assert.True(pairs[0].Members.Single().Value.Boolean);
+        Assert.Empty(pairs[1].Members);
+
+        var stage = data.FragmentProperties.Single(p => p.Name == "FragPoint").Value.Structs!.Single();
+        Assert.Equal(new[] { "Stage" }, stage.Members.Select(m => m.Name));
+        Assert.Equal(9, stage.Members.Single().Value.Integer);
+
+        var alias = data.AliasScriptProperties.Single(p => p.Name == "AliasPoint");
+        Assert.Equal(5, alias.Alias);
+        Assert.Equal(new FormKey?[] { new FormKey("StructQuests.esp", 0x806) },
+                     alias.Value.Structs!.Single().Members.Select(m => m.Value.Object));
+    }
 }

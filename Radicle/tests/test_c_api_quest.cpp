@@ -489,7 +489,74 @@ TEST(CApiQuest, ReportsDecodedArrayElementsForEveryOwner) {
   radicle_plugin_destroy(plugin);
 }
 
-TEST(CApiQuest, AbiVersionIsThirteen) {
-  EXPECT_EQ(radicle_abi_version(), 13u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, 13u);
+TEST(CApiQuest, ReportsDecodedStructMembersForEveryOwner) {
+  const TempPlugin file(fo4::test::make_quest_plugin_with_vmad(1, fo4::test::struct_vmad_subrecord()));
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.path().string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  radicle_quest_property* properties = nullptr;
+  size_t count = 0;
+  ASSERT_EQ(radicle_quest_runtime_properties(plugin, "000800:Quests.esp", &properties, &count),
+            RADICLE_STATUS_OK)
+      << radicle_last_error();
+
+  const auto* point = findProperty(properties, count, "Point");
+  ASSERT_NE(point, nullptr);
+  EXPECT_EQ(point->owner, RADICLE_QUEST_PROPERTY_SCRIPT);
+  EXPECT_EQ(point->type, 7);
+  EXPECT_EQ(point->has_elements, 0);
+  EXPECT_EQ(point->has_structs, 1);
+  ASSERT_EQ(point->struct_count, 1u);
+  ASSERT_EQ(point->structs[0].member_count, 3u);
+  const auto* members = point->structs[0].members;
+  EXPECT_STREQ(members[0].name, "X");
+  EXPECT_EQ(members[0].type, 3);
+  EXPECT_EQ(members[0].value.integer, 4);
+  EXPECT_STREQ(members[1].name, "Label");
+  EXPECT_STREQ(members[1].value.text, "Alpha");
+  EXPECT_STREQ(members[2].name, "Target");
+  EXPECT_STREQ(members[2].value.object.plugin, "Quests.esp");
+  EXPECT_EQ(members[2].value.object.local_id, 0x805u);
+  EXPECT_EQ(members[2].value.alias, -1);
+
+  const auto* pairs = findProperty(properties, count, "Pairs");
+  ASSERT_NE(pairs, nullptr);
+  EXPECT_EQ(pairs->type, 17);
+  EXPECT_EQ(pairs->has_structs, 1);
+  ASSERT_EQ(pairs->struct_count, 2u);
+  ASSERT_EQ(pairs->structs[0].member_count, 1u);
+  EXPECT_STREQ(pairs->structs[0].members[0].name, "Left");
+  EXPECT_EQ(pairs->structs[0].members[0].value.integer, 1);
+  ASSERT_EQ(pairs->structs[1].member_count, 2u);
+  EXPECT_STREQ(pairs->structs[1].members[0].name, "Flag");
+  EXPECT_EQ(pairs->structs[1].members[0].value.boolean, 1);
+  EXPECT_FLOAT_EQ(pairs->structs[1].members[1].value.real, 2.5f);
+
+  const auto* frag = findProperty(properties, count, "FragPoint");
+  ASSERT_NE(frag, nullptr);
+  EXPECT_EQ(frag->owner, RADICLE_QUEST_PROPERTY_FRAGMENT);
+  EXPECT_EQ(frag->has_structs, 1);
+  ASSERT_EQ(frag->struct_count, 1u);
+  EXPECT_STREQ(frag->structs[0].members[0].name, "Stage");
+  EXPECT_EQ(frag->structs[0].members[0].value.integer, 9);
+
+  const auto* alias = findProperty(properties, count, "AliasPoint");
+  ASSERT_NE(alias, nullptr);
+  EXPECT_EQ(alias->owner, RADICLE_QUEST_PROPERTY_ALIAS_SCRIPT);
+  EXPECT_EQ(alias->alias, 5);
+  EXPECT_EQ(alias->has_structs, 1);
+  ASSERT_EQ(alias->struct_count, 1u);
+  EXPECT_STREQ(alias->structs[0].members[0].value.object.plugin, "Quests.esp");
+  EXPECT_EQ(alias->structs[0].members[0].value.object.local_id, 0x806u);
+  EXPECT_EQ(alias->structs[0].members[0].value.alias, 5);
+
+  radicle_free_quest_properties(properties, count);
+  radicle_plugin_destroy(plugin);
+}
+
+TEST(CApiQuest, AbiVersionIsFourteen) {
+  EXPECT_EQ(radicle_abi_version(), 14u);
+  EXPECT_EQ(RADICLE_ABI_VERSION, 14u);
 }

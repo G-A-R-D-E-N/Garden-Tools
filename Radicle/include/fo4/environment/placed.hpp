@@ -110,6 +110,7 @@ struct ScriptProperty {
   std::optional<bool> boolean;
   std::optional<std::uint32_t> element_count;
   std::optional<std::vector<FormKey>> object_elements;
+  std::optional<std::vector<std::vector<std::optional<FormKey>>>> struct_member_objects;
 };
 
 struct Script {

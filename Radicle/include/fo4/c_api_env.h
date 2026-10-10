@@ -256,6 +256,20 @@ typedef struct radicle_script_element {
   int32_t boolean;
 } radicle_script_element;
 
+/* One struct member with its VMAD type and flags; `value` has only the field for `type` set. */
+typedef struct radicle_script_struct_member {
+  const char* name;
+  uint8_t type;
+  uint8_t flags;
+  radicle_script_element value;
+} radicle_script_struct_member;
+
+/* Members in file order. `has_structs` is 1 only when every member of every struct is an object, string, int, float or bool; then `struct_count` is 1 for a struct and n for a struct array (0 allowed). Otherwise `has_structs` and `struct_count` are 0 and `structs` is NULL. */
+typedef struct radicle_script_struct {
+  const radicle_script_struct_member* members;
+  size_t member_count;
+} radicle_script_struct;
+
 typedef struct radicle_script_property {
   const char* name;
   uint8_t type;
@@ -275,6 +289,9 @@ typedef struct radicle_script_property {
   int32_t has_elements;
   const radicle_script_element* elements;
   size_t element_value_count;
+  uint8_t has_structs;
+  const radicle_script_struct* structs;
+  size_t struct_count;
 } radicle_script_property;
 
 typedef struct radicle_script {

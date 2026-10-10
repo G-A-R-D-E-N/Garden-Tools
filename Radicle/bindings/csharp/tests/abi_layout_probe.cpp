@@ -129,6 +129,14 @@ int main() {
   printf("ScriptElement.Integer %zu\n", offsetof(radicle_script_element, integer));
   printf("ScriptElement.Real %zu\n", offsetof(radicle_script_element, real));
   printf("ScriptElement.Boolean %zu\n", offsetof(radicle_script_element, boolean));
+  printf("ScriptStructMember %zu\n", sizeof(radicle_script_struct_member));
+  printf("ScriptStructMember.Name %zu\n", offsetof(radicle_script_struct_member, name));
+  printf("ScriptStructMember.Type %zu\n", offsetof(radicle_script_struct_member, type));
+  printf("ScriptStructMember.Flags %zu\n", offsetof(radicle_script_struct_member, flags));
+  printf("ScriptStructMember.Value %zu\n", offsetof(radicle_script_struct_member, value));
+  printf("ScriptStruct %zu\n", sizeof(radicle_script_struct));
+  printf("ScriptStruct.Members %zu\n", offsetof(radicle_script_struct, members));
+  printf("ScriptStruct.MemberCount %zu\n", offsetof(radicle_script_struct, member_count));
   printf("ScriptProperty %zu\n", sizeof(radicle_script_property));
   printf("ScriptProperty.Name %zu\n", offsetof(radicle_script_property, name));
   printf("ScriptProperty.Type %zu\n", offsetof(radicle_script_property, type));
@@ -148,6 +156,9 @@ int main() {
   printf("ScriptProperty.HasElements %zu\n", offsetof(radicle_script_property, has_elements));
   printf("ScriptProperty.Elements %zu\n", offsetof(radicle_script_property, elements));
   printf("ScriptProperty.ElementValueCount %zu\n", offsetof(radicle_script_property, element_value_count));
+  printf("ScriptProperty.HasStructs %zu\n", offsetof(radicle_script_property, has_structs));
+  printf("ScriptProperty.Structs %zu\n", offsetof(radicle_script_property, structs));
+  printf("ScriptProperty.StructCount %zu\n", offsetof(radicle_script_property, struct_count));
   printf("Script %zu\n", sizeof(radicle_script));
   printf("Script.Name %zu\n", offsetof(radicle_script, name));
   printf("Script.Flags %zu\n", offsetof(radicle_script, flags));
@@ -543,5 +554,8 @@ int main() {
   printf("QuestProperty.HasElements %zu\n", offsetof(radicle_quest_property, has_elements));
   printf("QuestProperty.Elements %zu\n", offsetof(radicle_quest_property, elements));
   printf("QuestProperty.ElementValueCount %zu\n", offsetof(radicle_quest_property, element_value_count));
+  printf("QuestProperty.HasStructs %zu\n", offsetof(radicle_quest_property, has_structs));
+  printf("QuestProperty.Structs %zu\n", offsetof(radicle_quest_property, structs));
+  printf("QuestProperty.StructCount %zu\n", offsetof(radicle_quest_property, struct_count));
   return 0;
 }

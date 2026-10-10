@@ -236,6 +236,22 @@ public unsafe struct ScriptElement
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptStructMember
+{
+    public IntPtr Name;
+    public byte Type;
+    public byte Flags;
+    public ScriptElement Value;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptStruct
+{
+    public IntPtr Members;
+    public nuint MemberCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScriptProperty
 {
     public IntPtr Name;
@@ -256,6 +272,9 @@ public unsafe struct ScriptProperty
     public int HasElements;
     public IntPtr Elements;
     public nuint ElementValueCount;
+    public byte HasStructs;
+    public IntPtr Structs;
+    public nuint StructCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -790,12 +809,15 @@ public unsafe struct QuestProperty
     public byte HasElements;
     public IntPtr Elements;
     public nuint ElementValueCount;
+    public byte HasStructs;
+    public IntPtr Structs;
+    public nuint StructCount;
 }
 
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 13u;
+    public const uint CompiledAbiVersion = 14u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
