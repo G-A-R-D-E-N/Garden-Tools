@@ -53,7 +53,8 @@ struct ProjectileCreation {
   ObjectBounds bounds{};
 
   // DNAM, in file order.
-  std::uint32_t flags{0x00010000};
+  std::uint16_t flags{0};
+  std::uint16_t type{1};
   float gravity{0.0F};
   float speed{1000.0F};
   float range{5000.0F};

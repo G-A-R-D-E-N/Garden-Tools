@@ -9,6 +9,7 @@
 #include "fo4/forms/proj_expl_hazd.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -111,6 +112,73 @@ TEST(ProjExplHazdCreation, ProjectileRoundTripsTheUnalignedVatsSlot) {
   ASSERT_NE(dnam, nullptr);
   ASSERT_EQ(dnam->data.size(), fo4::forms::k_proj_dnam_size);
   EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[88]), 1u);
+}
+
+TEST(ProjExplHazdCreation, ProjectileFlagsAndTypeOccupySeparateLeadingWords) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+
+  fo4::forms::ProjectileCreation creation;
+  creation.editor_id = "SplitProjectile";
+  creation.flags = 0x0005;
+  creation.type = 0x0040;
+  creation.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+
+  const auto key = fo4::forms::create_projectile(plugin, creation);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* dnam = find_subrecord(*record, "DNAM");
+  ASSERT_NE(dnam, nullptr);
+  ASSERT_EQ(dnam->data.size(), fo4::forms::k_proj_dnam_size);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[0]), 0x05u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[1]), 0x00u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[2]), 0x40u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[3]), 0x00u);
+
+  const auto decoded = fo4::forms::decode_projectile(reread, key);
+  EXPECT_EQ(decoded.flags, 0x0005u);
+  EXPECT_EQ(decoded.type, 0x0040u);
+}
+
+TEST(ProjExplHazdCreation, ProjectileTypeDefaultsToMissile) {
+  auto plugin = fo4::read_plugin(make_target("EXPL"), "Patch.esp");
+
+  fo4::forms::ProjectileCreation creation;
+  creation.editor_id = "DefaultProjectile";
+  creation.explosion_type = fo4::FormKey::parse("000800:Patch.esp");
+
+  const auto key = fo4::forms::create_projectile(plugin, creation);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* dnam = find_subrecord(*record, "DNAM");
+  ASSERT_NE(dnam, nullptr);
+  ASSERT_EQ(dnam->data.size(), fo4::forms::k_proj_dnam_size);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[0]), 0x00u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[1]), 0x00u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[2]), 0x01u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[3]), 0x00u);
+}
+
+TEST(ProjExplHazdCreation, ProjectileFlagsRefuseValuesPastU16AndTypeIsTheSecondWord) {
+  const auto flags = fo4::schema::scalar_field_descriptor("PROJ\\Flags");
+  ASSERT_TRUE(flags.has_value());
+  EXPECT_EQ(fo4::schema::encode_scalar("65535", flags->scalar),
+            (std::vector<std::byte>{std::byte{0xFF}, std::byte{0xFF}}));
+  EXPECT_THROW(fo4::schema::encode_scalar("65536", flags->scalar), fo4::schema::ScalarError);
+
+  const auto type = fo4::schema::scalar_field_descriptor("PROJ\\Type");
+  ASSERT_TRUE(type.has_value());
+  std::vector<std::byte> dnam(fo4::forms::k_proj_dnam_size, std::byte{0});
+  fo4::schema::patch_scalar_field(dnam, type->scalar, fo4::schema::encode_scalar("64", type->scalar));
+  EXPECT_EQ(dnam[0], std::byte{0x00});
+  EXPECT_EQ(dnam[1], std::byte{0x00});
+  EXPECT_EQ(dnam[2], std::byte{0x40});
+  EXPECT_EQ(dnam[3], std::byte{0x00});
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(dnam, type->scalar), type->scalar),
+            "64");
 }
 
 TEST(ProjExplHazdCreation, ExplosionWritesTheMeasuredEightyFourByteData) {

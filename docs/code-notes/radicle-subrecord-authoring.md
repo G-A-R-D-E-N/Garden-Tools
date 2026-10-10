@@ -71,7 +71,7 @@ no form ID and leaves HEDR untouched, and only then handed to
 whole plugin; the old overload delegates to it). Refused before any allocation when the signature has no authoring schema (`not_authorable`), the editor ID contains a NUL
 or the schema lists no EDID but an ID was given (`invalid_editor_id`), or any required subrecord other than EDID
 has no usable default (`no_default`). EDID is written when listed and either required or non-empty; the editor ID
-bytes are stored as given, the same convention as `Radicle/src/plugin/mutation.cpp:set_record_editor_id`, and the C
+bytes are stored as given. Unlike `Radicle/src/plugin/mutation.cpp:set_record_editor_id`, which takes UTF-8, converts it itself and refuses an embedded NUL, this path expects Windows-1252 already, so the C
 ABI converts UTF-8 to Windows-1252 first. Every other subrecord with `minimum >= 1` is written `minimum` times
 at its default, in authoring order, and the result must pass the same `layout_valid` check as an add before the
 record is appended.

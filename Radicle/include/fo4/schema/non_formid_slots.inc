@@ -56,6 +56,7 @@
 {Signature::from_string("MUST"), Signature::from_string("CNAM")},  // 624
 {Signature::from_string("MUST"), Signature::from_string("DNAM")},  // 41
 {Signature::from_string("NPC_"), Signature::from_string("NAM4")},  // 4477
+{Signature::from_string("NPC_"), Signature::from_string("NAM7")},  // corpus count not measured; xEdit wbFloat NAM7
 {Signature::from_string("PACK"), Signature::from_string("ANAM")},  // 1026
 {Signature::from_string("PACK"), Signature::from_string("BNAM")},  // 6
 {Signature::from_string("PACK"), Signature::from_string("PNAM")},  // 102
