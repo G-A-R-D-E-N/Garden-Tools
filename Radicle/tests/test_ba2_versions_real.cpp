@@ -43,6 +43,9 @@ TEST_P(Ba2NamedRealData, ExtractsAndRebuildsOneEntry) {
     EXPECT_EQ(rebuilt.version, fixture.version);
     EXPECT_EQ(rebuilt.entries[0].path, archive.entries[0].path);
     EXPECT_EQ(rebuilt.entries[0].unknown, archive.entries[0].unknown);
+    EXPECT_EQ(rebuilt.entries[0].name_hash, archive.entries[0].name_hash);
+    EXPECT_EQ(rebuilt.entries[0].extension_hash, archive.entries[0].extension_hash);
+    EXPECT_EQ(rebuilt.entries[0].directory_hash, archive.entries[0].directory_hash);
     EXPECT_EQ(fo4::archive::extract_ba2_general_entry(rebuilt.entries[0]), expected);
   } else {
     ASSERT_GE(expected.size(), 148u);
@@ -59,6 +62,23 @@ TEST_P(Ba2NamedRealData, ExtractsAndRebuildsOneEntry) {
     EXPECT_EQ(rebuilt.version, fixture.version);
     EXPECT_EQ(rebuilt.entries[0].path, archive.entries[0].path);
     EXPECT_EQ(rebuilt.entries[0].unknown, archive.entries[0].unknown);
+    EXPECT_EQ(rebuilt.entries[0].name_hash, archive.entries[0].name_hash);
+    EXPECT_EQ(rebuilt.entries[0].extension_hash, archive.entries[0].extension_hash);
+    EXPECT_EQ(rebuilt.entries[0].directory_hash, archive.entries[0].directory_hash);
+    const auto& before = archive.entries[0];
+    const auto& after = rebuilt.entries[0];
+    EXPECT_EQ(after.texture.height, before.texture.height);
+    EXPECT_EQ(after.texture.width, before.texture.width);
+    EXPECT_EQ(after.texture.mip_count, before.texture.mip_count);
+    EXPECT_EQ(after.texture.dxgi_format, before.texture.dxgi_format);
+    EXPECT_EQ(after.texture.flags, before.texture.flags);
+    EXPECT_EQ(after.texture.tile_mode, before.texture.tile_mode);
+    ASSERT_EQ(after.chunks.size(), before.chunks.size());
+    for (std::size_t i = 0; i < before.chunks.size(); ++i) {
+      SCOPED_TRACE(i);
+      EXPECT_EQ(after.chunks[i].mip_first, before.chunks[i].mip_first);
+      EXPECT_EQ(after.chunks[i].mip_last, before.chunks[i].mip_last);
+    }
     EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(rebuilt.entries[0]), expected);
   }
 }
