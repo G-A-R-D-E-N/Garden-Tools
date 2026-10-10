@@ -1,6 +1,7 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/c_api_records.h"
 #include "fo4/environment/world.hpp"
+#include "environment/default_water.hpp"
 
 #include <cstdlib>
 #include <optional>
@@ -48,7 +49,7 @@ radicle_status radicle_water_resolve(const radicle_env* env, const radicle_recor
       return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record belongs to another environment");
     }
     const auto water = fo4::env::resolve_water(env->value, *ref);
-    out_selection->water = water.uses_default_water ? radicle_form_key{"Fallout4.esm", 0x18}
+    out_selection->water = water.uses_default_water ? radicle_form_key{fo4::env::k_default_water_plugin, fo4::env::k_default_water_local}
                                                    : to_c_key(*env, water.water);
     out_selection->record = to_handle(water.record);
     out_selection->uses_default_water = water.uses_default_water ? 1 : 0;
