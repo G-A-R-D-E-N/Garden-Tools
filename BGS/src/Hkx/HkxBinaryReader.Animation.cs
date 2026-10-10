@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 
 namespace OpenCommonwealth.Services.Hkx;
@@ -116,7 +117,11 @@ public partial class HkxBinaryReader
         anim.NumTracks = SafeReadI32(data, a + 0x18);
 
         int transforms = SafeReadI32(data, a + 0x40);
-        if (anim.NumTracks <= 0 || transforms <= 0) return;
+        if (anim.NumTracks < 0 || transforms < 0)
+            throw new InvalidDataException($"Interleaved animation has a negative track count {anim.NumTracks} or transform count {transforms}.");
+        if (anim.NumTracks == 0 || transforms == 0) return;
+        if (anim.NumTracks > transforms)
+            throw new InvalidDataException($"Interleaved animation declares {anim.NumTracks} tracks but only {transforms} transforms.");
 
         anim.NumFrames = transforms / anim.NumTracks;
         anim.NumBlocks = 1;
@@ -129,6 +134,8 @@ public partial class HkxBinaryReader
 
         if (!fixups.TryGetValue(animRel + 0x38, out int runRel)) return;
         int run = dataAbs + runRel;
+        if (run < 0 || transforms > (data.Length - run) / QsTransformSize)
+            throw new InvalidDataException($"Interleaved animation declares {transforms} transforms past the end of the file.");
 
         for (int t = 0; t < anim.NumTracks; t++)
         {
@@ -160,10 +167,14 @@ public partial class HkxBinaryReader
         Dictionary<int, int> fixups, HkxAnimationData anim)
     {
         int count = SafeReadI32(data, dataAbs + arrRel + 8);
-        if (count <= 0) return;
+        if (count < 0) throw new InvalidDataException($"Annotation track array at {arrRel} has negative count {count}.");
+        if (count == 0) return;
         if (!fixups.TryGetValue(arrRel, out int contentRel)) return;
 
         const int AnnotTrackStride = 0x18;
+        int annotAt = dataAbs + contentRel;
+        if (annotAt < 0 || count > (data.Length - annotAt) / AnnotTrackStride)
+            throw new InvalidDataException($"Annotation track array at {arrRel} declares {count} tracks past the end of the file.");
         for (int i = 0; i < count; i++)
         {
             int trackRel = contentRel + i * AnnotTrackStride;
@@ -190,6 +201,7 @@ public partial class HkxBinaryReader
     }
 
     private const int LosslessDuration = 20, LosslessTransformTracks = 24, LosslessNumFrames = 216;
+    private const long MaxLosslessFrameTracks = 1L << 22;
 
     private const int AnimationAnnotationTracks = 0x28;
     private const int LosslessDynamicTranslations = 56, LosslessStaticTranslations = 72, LosslessTranslationWords = 88;
@@ -207,7 +219,11 @@ public partial class HkxBinaryReader
         anim.Duration  = ReadF32(data, a + LosslessDuration);
         anim.NumTracks = SafeReadI32(data, a + LosslessTransformTracks);
         anim.NumFrames = SafeReadI32(data, a + LosslessNumFrames);
-        if (anim.NumFrames <= 0 || anim.NumTracks <= 0) return;
+        if (anim.NumFrames < 0 || anim.NumTracks < 0)
+            throw new InvalidDataException($"Lossless animation has a negative frame count {anim.NumFrames} or track count {anim.NumTracks}.");
+        if (anim.NumFrames == 0 || anim.NumTracks == 0) return;
+        if ((long)anim.NumFrames * anim.NumTracks > MaxLosslessFrameTracks)
+            throw new InvalidDataException($"Lossless animation declares {anim.NumFrames} frames for {anim.NumTracks} tracks, more than the decoder accepts.");
 
         anim.NumBlocks = 1;
         anim.MaxFramesPerBlock = anim.NumFrames;
@@ -307,16 +323,20 @@ public partial class HkxBinaryReader
     }
 
     private static int ArrayAt(byte[] data, int dataAbs, int memberRel,
-                               Dictionary<int, int> fixups, out int count)
+                               Dictionary<int, int> fixups, int elementSize, out int count)
     {
         count = SafeReadI32(data, dataAbs + memberRel + 8);
-        if (count <= 0 || !fixups.TryGetValue(memberRel, out int contentRel)) { count = 0; return 0; }
-        return dataAbs + contentRel;
+        if (count < 0) throw new InvalidDataException($"Animation array at {memberRel} has negative count {count}.");
+        if (count == 0 || !fixups.TryGetValue(memberRel, out int contentRel)) { count = 0; return 0; }
+        int at = dataAbs + contentRel;
+        if (at < 0 || count > (data.Length - at) / elementSize)
+            throw new InvalidDataException($"Animation array at {memberRel} declares {count} elements past the end of the file.");
+        return at;
     }
 
     private static List<float> ReadFloats(byte[] data, int dataAbs, int memberRel, Dictionary<int, int> fixups)
     {
-        int at = ArrayAt(data, dataAbs, memberRel, fixups, out int count);
+        int at = ArrayAt(data, dataAbs, memberRel, fixups, 4, out int count);
         var list = new List<float>(count);
         for (int i = 0; i < count; i++) list.Add(ReadF32(data, at + i * 4));
         return list;
@@ -324,7 +344,7 @@ public partial class HkxBinaryReader
 
     private static List<Quaternion> ReadQuaternions(byte[] data, int dataAbs, int memberRel, Dictionary<int, int> fixups)
     {
-        int at = ArrayAt(data, dataAbs, memberRel, fixups, out int count);
+        int at = ArrayAt(data, dataAbs, memberRel, fixups, 16, out int count);
         var list = new List<Quaternion>(count);
         for (int i = 0; i < count; i++)
         {
@@ -336,7 +356,7 @@ public partial class HkxBinaryReader
 
     private static List<ulong> ReadWords64(byte[] data, int dataAbs, int memberRel, Dictionary<int, int> fixups)
     {
-        int at = ArrayAt(data, dataAbs, memberRel, fixups, out int count);
+        int at = ArrayAt(data, dataAbs, memberRel, fixups, 8, out int count);
         var list = new List<ulong>(count);
         for (int i = 0; i < count; i++)
             list.Add(CanRead(data, at + i * 8, 8) ? BitConverter.ToUInt64(data, at + i * 8) : 0UL);
@@ -345,7 +365,7 @@ public partial class HkxBinaryReader
 
     private static List<ulong> ReadWords16(byte[] data, int dataAbs, int memberRel, Dictionary<int, int> fixups)
     {
-        int at = ArrayAt(data, dataAbs, memberRel, fixups, out int count);
+        int at = ArrayAt(data, dataAbs, memberRel, fixups, 2, out int count);
         var list = new List<ulong>(count);
         for (int i = 0; i < count; i++)
             list.Add(CanRead(data, at + i * 2, 2) ? BitConverter.ToUInt16(data, at + i * 2) : (ulong)0);
@@ -360,10 +380,13 @@ public partial class HkxBinaryReader
             anim.OriginalSkeletonName = ReadNullTermString(data, dataAbs + nameRel, 256);
 
         int count = SafeReadI32(data, dataAbs + bindRel + 0x28);
+        if (count < 0) throw new InvalidDataException($"Animation binding has negative track-to-bone count {count}.");
         if (count > 0 && fixups.TryGetValue(bindRel + 0x20, out int idxRel))
         {
             int abs = dataAbs + idxRel;
-            for (int i = 0; i < count && abs + i * 2 + 2 <= data.Length; i++)
+            if (abs < 0 || count > (data.Length - abs) / 2)
+                throw new InvalidDataException($"Animation binding declares {count} track-to-bone indices past the end of the file.");
+            for (int i = 0; i < count; i++)
                 anim.TrackToBoneIndices.Add(BitConverter.ToInt16(data, abs + i * 2));
         }
     }

@@ -75,9 +75,13 @@ internal sealed partial class AssistantUi
             ? ""
             : char.ToUpperInvariant(planType[0]) + planType[1..].ToLowerInvariant();
 
+    internal static bool IsWebUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
     private static void OpenUrl(string url)
     {
-        if (string.IsNullOrWhiteSpace(url)) return;
+        if (!IsWebUrl(url)) return;
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
