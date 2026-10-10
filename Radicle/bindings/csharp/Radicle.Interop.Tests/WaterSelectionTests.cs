@@ -34,7 +34,17 @@ public class WaterSelectionTests
         Assert.True(fallback.UsesDefaultWater);
         Assert.Null(fallback.Record);
         Assert.Null(fallback.Height);
+    }
+
+    [Fact]
+    public void ResolveRejectsARecordFromAnotherEnvironment()
+    {
+        using var temp = new TempDirectory();
+        var plugin = temp.Write("Fallout4.esm", Build(1, Array.Empty<string>(),
+            Top("WATR", new Rec("WATR", 0x840, Array.Empty<(string, byte[])>()))));
+        using var env = RadicleEnvironment.Load(new[] { plugin });
         using var other = RadicleEnvironment.Load(new[] { plugin });
-        Assert.Throws<RadicleException>(() => other.EffectiveWater(R(0x801)));
+        var water = env.Winner(new FormKey("Fallout4.esm", 0x840))!.Value;
+        Assert.Throws<RadicleException>(() => other.EffectiveWater(water));
     }
 }

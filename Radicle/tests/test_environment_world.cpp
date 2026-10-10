@@ -221,6 +221,13 @@ fo4::FormKey key(std::string_view text) {
   return fo4::FormKey::parse(text);
 }
 
+Node parented_world(std::uint32_t id, std::uint32_t parent, std::uint8_t flags,
+                    std::vector<Sub> subrecords = {}) {
+  std::vector<Sub> all{{"WNAM", bytes_of({parent})}, {"PNAM", {std::byte{flags}, std::byte{0}}}};
+  all.insert(all.end(), subrecords.begin(), subrecords.end());
+  return rec("WRLD", id, std::move(all));
+}
+
 }  // namespace
 
 TEST_F(WorldEnvironmentTest, DecodesWorldspaceFields) {
@@ -548,4 +555,83 @@ TEST_F(WorldEnvironmentTest, CApiExposesWorldAndCellQueries) {
 
   EXPECT_EQ(radicle_cell_get_info(env, world, &cell_info), RADICLE_STATUS_PARSE_ERROR);
   radicle_env_destroy(env);
+}
+
+TEST_F(WorldEnvironmentTest, StaleWorldspaceHandleResolvesLikeTheWinner) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {
+                  top("WATR", {rec("WATR", 0x18)}),
+                  top("WRLD", {parented_world(0x800, 0x801, 8), parented_world(0x801, 0x800, 8)})})),
+            write("Override.esp", make_plugin({"Fallout4.esm"}, {top("WRLD", {rec("WRLD", 0x800)})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto world = key("000800:Fallout4.esm");
+  const auto versions = env.versions(world);
+  ASSERT_EQ(versions.size(), 2u);
+  const auto& stale = versions[0];
+  ASSERT_NE(&stale, env.winner(world));
+
+  fo4::env::WaterSelection from_stale;
+  EXPECT_NO_THROW(from_stale = fo4::env::resolve_water(env, stale));
+  const auto from_winner = fo4::env::resolve_water(env, *env.winner(world));
+  EXPECT_EQ(from_stale.water, from_winner.water);
+  EXPECT_EQ(from_stale.record, from_winner.record);
+  EXPECT_EQ(from_stale.uses_default_water, from_winner.uses_default_water);
+  EXPECT_EQ(from_stale.height, from_winner.height);
+}
+
+TEST_F(WorldEnvironmentTest, WorldspaceWaterCycleThrowsWhenBothWorldsUseWaterData) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {top("WRLD", {parented_world(0x800, 0x801, 8),
+                                                                parented_world(0x801, 0x800, 8)})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  EXPECT_THROW(fo4::env::resolve_water(env, *env.winner(key("000800:Fallout4.esm"))),
+               fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::resolve_water(env, *env.winner(key("000801:Fallout4.esm"))),
+               fo4::env::WorldDecodeError);
+
+  radicle_env* handle = nullptr;
+  const auto first = paths_[0].string();
+  const char* inputs[] = {first.c_str()};
+  ASSERT_EQ(radicle_env_load(inputs, 1, &handle), RADICLE_STATUS_OK);
+  const radicle_record* world = nullptr;
+  ASSERT_EQ(radicle_env_winner(handle, {"Fallout4.esm", 0x800}, &world), RADICLE_STATUS_OK);
+  radicle_water_selection selection{};
+  EXPECT_EQ(radicle_water_resolve(handle, world, &selection), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_STREQ(radicle_last_error(), "cyclic worldspace water inheritance");
+  radicle_env_destroy(handle);
+}
+
+TEST_F(WorldEnvironmentTest, DeletedWorldspaceParentEndsWaterInheritance) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {
+                  top("WATR", {rec("WATR", 0x18), rec("WATR", 0x840), rec("WATR", 0x841)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x841})}, {"DNAM", floats({-2048, 99})}}),
+                               parented_world(0x801, 0x800, 8,
+                                              {{"NAM2", bytes_of({0x840})}, {"DNAM", floats({-2048, 450})}})})})),
+            write("Override.esp", make_plugin({"Fallout4.esm"}, {top("WRLD", {rec("WRLD", 0x800, {}, 0x20)})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  EXPECT_TRUE(env.metadata(*env.winner(key("000800:Fallout4.esm"))).deleted);
+  const auto selection = fo4::env::resolve_water(env, *env.winner(key("000801:Fallout4.esm")));
+  EXPECT_EQ(selection.water, key("000840:Fallout4.esm"));
+  ASSERT_NE(selection.record, nullptr);
+  EXPECT_EQ(selection.record->record->form_key, key("000840:Fallout4.esm"));
+  EXPECT_FALSE(selection.uses_default_water);
+  EXPECT_EQ(selection.height, 450.0f);
+}
+
+TEST_F(WorldEnvironmentTest, WorldspaceWithoutDnamResolvesZeroWaterHeight) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {top("WRLD", {rec("WRLD", 0x800)})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto selection = fo4::env::resolve_water(env, *env.winner(key("000800:Fallout4.esm")));
+  ASSERT_TRUE(selection.height.has_value());
+  EXPECT_EQ(*selection.height, 0.0f);
+
+  radicle_env* handle = nullptr;
+  const auto first = paths_[0].string();
+  const char* inputs[] = {first.c_str()};
+  ASSERT_EQ(radicle_env_load(inputs, 1, &handle), RADICLE_STATUS_OK);
+  const radicle_record* world = nullptr;
+  ASSERT_EQ(radicle_env_winner(handle, {"Fallout4.esm", 0x800}, &world), RADICLE_STATUS_OK);
+  radicle_water_selection c_selection{};
+  ASSERT_EQ(radicle_water_resolve(handle, world, &c_selection), RADICLE_STATUS_OK);
+  EXPECT_EQ(c_selection.has_height, 1);
+  EXPECT_EQ(c_selection.height, 0.0f);
+  radicle_env_destroy(handle);
 }
