@@ -162,11 +162,13 @@ DeletedRecordCounts count_deleted_records(const Plugin& plugin) {
 
 EslEligibility esl_eligibility(const Plugin& plugin) {
   EslEligibility out;
-  if (!allows_hardcoded_range(plugin)) out.capacity = k_light_local_mask + 1 - k_first_full_local_id;
+  const auto first = allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id;
+  if (first == k_first_full_local_id) out.capacity = k_light_local_mask + 1 - k_first_full_local_id;
   for (const auto* record : collect_records(plugin)) {
     if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;
     ++out.native_records;
-    if (record->form_key.local().value() > k_light_local_mask) ++out.out_of_range;
+    const auto local = record->form_key.local().value();
+    if (local < first || local > k_light_local_mask) ++out.out_of_range;
   }
   return out;
 }

@@ -70,7 +70,7 @@ Do not call this on plugin bytes unless a file actually stored an `FE` FormID.
 - TES4 flags `0x281` (Master | 0x80 | SmallFile)
 - one master `Fallout4.esm`
 - override of a Fallout4 form: `0x0024A0FE` (high byte 0 = MAST index 0)
-- local records: `0x01000800` … `0x01000F9B` (high byte 1 = `master_count`, local IDs in the 12-bit-friendly `0x800`–`0xFFF` range)
+- local records: `0x01000800` … `0x01000F9B` (high byte 1 = `master_count`; this sample's local IDs are in `0x800`–`0xFFF`. The allocation range is `0x001`–`0xFFF` when `GetAllowHardcodedRangeUse` holds (HEDR >= 1.0 and at least one master), else `0x800`–`0xFFF`; see `ESL_FORMIDS.md`)
 - record headers are **not** `0xFExxxxxx`
 
 So a light plugin's own records still use the plugin-relative MAST index encoding on disk. `FE` is the runtime encoding after `SetSmallCompileIndex`.
@@ -82,7 +82,7 @@ So a light plugin's own records still use the plugin-relative MAST index encodin
 | full | 24 bits | `0x00FFFFFF` |
 | light | 12 bits at runtime | `0x00000FFF` |
 
-`TESFile::CheckValidIDForSmallFile` exists (OG RVA `0x130560`, size 10). Exact predicate is not yet decompiled here. Until it is, light local IDs are stored in a 32-bit `LocalFormId` and masked to 12 bits only when encoding a **light** owner (the current plugin when `current_kind` is light, or a master whose `MasterDescriptor.kind` is light). An ESP with TES4 SmallFile is light even if its filename is `.esp`. Filename `.esl` is only the fallback when the master's TES4 flags are not known.
+`TESFile::CheckValidIDForSmallFile` is recovered as `(id & 0x00FFF000) == 0` (verified record: RE repo `ReverseEng/commonlib_NonVR` at `dbaeca7`, `RE-Work/docs/26-RE-TARGETS.md` section 4; summary in `ESL_FORMIDS.md`). Light local IDs are stored in a 32-bit `LocalFormId` and masked to 12 bits only when encoding a **light** owner (the current plugin when `current_kind` is light, or a master whose `MasterDescriptor.kind` is light). An ESP with TES4 SmallFile is light even if its filename is `.esp`. Filename `.esl` is only the fallback when the master's TES4 flags are not known.
 
 ## What this prevents
 
