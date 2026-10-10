@@ -9,13 +9,16 @@
 
 namespace {
 
-std::vector<std::byte> make_plugin(std::uint32_t flags, float version = 1.0f, bool has_master = false) {
+std::vector<std::byte> make_plugin(std::uint32_t flags,
+                                   float version = 1.0f,
+                                   bool has_master = false,
+                                   std::uint32_t next_form_id = 0x800) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
   fo4::test::ByteWriter hedr;
   hedr.f32(version);
   hedr.u32(0);
-  hedr.u32(0x800);
+  hedr.u32(next_form_id);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   if (has_master) {
     fo4::test::write_subrecord(out, "MAST", std::string_view{"Base.esm\0", 9});
@@ -28,18 +31,27 @@ std::vector<std::byte> make_plugin(std::uint32_t flags, float version = 1.0f, bo
   return out.bytes;
 }
 
-std::vector<std::byte> make_plugin_with_owned_record(std::uint32_t form_id,
-                                                     float version = 1.0f,
-                                                     bool has_master = false) {
-  auto bytes = make_plugin(0, version, has_master);
+std::vector<std::byte> make_plugin_with_owned_records(const std::vector<std::uint32_t>& form_ids,
+                                                      float version,
+                                                      bool has_master,
+                                                      std::uint32_t next_form_id) {
+  auto bytes = make_plugin(0, version, has_master, next_form_id);
   fo4::test::ByteWriter group;
   const auto group_header = fo4::test::begin_group(group, "KYWD", 0);
-  const auto record = fo4::test::begin_record(group, "KYWD", 0, form_id);
-  fo4::test::write_subrecord(group, "EDID", std::string_view{"OwnedRecord\0", 12});
-  fo4::test::end_record(group, record);
+  for (const auto form_id : form_ids) {
+    const auto record = fo4::test::begin_record(group, "KYWD", 0, form_id);
+    fo4::test::write_subrecord(group, "EDID", std::string_view{"OwnedRecord\0", 12});
+    fo4::test::end_record(group, record);
+  }
   fo4::test::end_group(group, group_header);
   bytes.insert(bytes.end(), group.bytes.begin(), group.bytes.end());
   return bytes;
+}
+
+std::vector<std::byte> make_plugin_with_owned_record(std::uint32_t form_id,
+                                                     float version = 1.0f,
+                                                     bool has_master = false) {
+  return make_plugin_with_owned_records({form_id}, version, has_master, 0x800);
 }
 
 }  // namespace
@@ -114,4 +126,40 @@ TEST(PluginFlags, AllowsLightFlagForMasterlessIdsAtTheFullFloor) {
       fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Floor.esp"), true);
 
   EXPECT_TRUE(plugin.header.tes4_flags.is_small_file());
+}
+
+TEST(PluginFlags, LightFlagLowersHedrNextToOnePastTheHighestOwnId) {
+  const auto plugin = fo4::set_plugin_light_flag(
+      fo4::read_plugin(make_plugin_with_owned_records({0x01000800u, 0x01000801u}, 1.0f, true, 0x5000u),
+                       "Lowered.esp"),
+      true);
+
+  EXPECT_EQ(plugin.header.next_form_id, 0x802u);
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), "Lowered.esp");
+  EXPECT_EQ(reloaded.header.next_form_id, 0x802u);
+}
+
+TEST(PluginFlags, LightFlagKeepsHedrNextThatIsAlreadyInRange) {
+  const auto plugin = fo4::set_plugin_light_flag(
+      fo4::read_plugin(make_plugin_with_owned_records({0x01000800u, 0x01000801u}, 1.0f, true, 0x900u),
+                       "InRange.esp"),
+      true);
+
+  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}
+
+TEST(PluginFlags, LightFlagLowersMasterlessHedrNextToTheFullFloor) {
+  const auto plugin = fo4::set_plugin_light_flag(
+      fo4::read_plugin(make_plugin(0, 1.0f, false, 0x5000u), "Empty.esp"), true);
+
+  EXPECT_EQ(plugin.header.next_form_id, 0x800u);
+}
+
+TEST(PluginFlags, ClearingLightFlagNeverChangesHedrNext) {
+  const auto plugin = fo4::set_plugin_light_flag(
+      fo4::read_plugin(make_plugin(fo4::RecordFlags::small_file, 1.0f, true, 0x5000u), "Cleared.esp"),
+      false);
+
+  EXPECT_FALSE(plugin.header.tes4_flags.is_small_file());
+  EXPECT_EQ(plugin.header.next_form_id, 0x5000u);
 }

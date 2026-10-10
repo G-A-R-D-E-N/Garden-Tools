@@ -22,6 +22,9 @@ Plugin set_plugin_light_flag(Plugin plugin, bool light) {
             lowest));
       }
     }
+    if (const auto lowered = lowered_light_next_form_id(plugin)) {
+      set_hedr_next_form_id(plugin, *lowered);
+    }
   }
 
   const auto current = plugin.tes4.header.flags.value();

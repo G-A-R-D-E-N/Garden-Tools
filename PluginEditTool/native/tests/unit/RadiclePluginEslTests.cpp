@@ -229,6 +229,33 @@ TEST_CASE("Native ESL eligibility counts masterless IDs below the full floor") {
     CHECK(report.find("0x800-0xFFF") != std::string::npos);
 }
 
+TEST_CASE("Native ESL eligibility reports a HEDR-only lowering when every record is already in range") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin({0x00000005u, 0x00000900u}, true, 0x5000u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto report = eligibility(backend);
+    CHECK(report.find("would only lower HEDR nextFormID to 0x901.") != std::string::npos);
+    CHECK(report.find("no-op") == std::string::npos);
+}
+
+TEST_CASE("Native ESL eligibility reports a no-op when HEDR next is already in range") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makePlugin({0x00000005u, 0x00000900u}, true, 0x901u));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto report = eligibility(backend);
+    CHECK(report.find("would be a no-op.") != std::string::npos);
+}
+
 TEST_CASE("Native CompactToEsl lowers an out-of-range HEDR next ID when every record is already in range") {
     bool hasMaster = true;
     std::vector<std::uint32_t> ids{0x005u, 0x900u};
@@ -259,6 +286,7 @@ TEST_CASE("Native CompactToEsl lowers an out-of-range HEDR next ID when every re
     const auto compacted = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
     REQUIRE(compacted.has_value());
     CHECK(compacted->get<std::string>().find("lowered HEDR nextFormID") != std::string::npos);
+    CHECK(compacted->get<std::string>().find("masters.SetLight") != std::string::npos);
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK(fo4::read_plugin_file(path).header.next_form_id == expectedNext);
 

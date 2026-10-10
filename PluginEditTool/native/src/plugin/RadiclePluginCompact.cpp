@@ -57,9 +57,8 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
     }
 
     if (outOfRange.empty()) {
-        const auto lowered = inRange.empty() ? first : *inRange.rbegin() + 1u;
-        const auto next = loaded->plugin.header.next_form_id;
-        if (next <= last || lowered >= next) {
+        const auto lowered = fo4::lowered_light_next_form_id(loaded->plugin);
+        if (!lowered) {
             return nlohmann::json(
                 "'" + pluginName +
                 "' is already ESL-compatible (all native FormIDs within " + range + ")." +
@@ -67,11 +66,12 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
         }
         try {
             auto mutated = loaded->plugin;
-            fo4::set_hedr_next_form_id(mutated, lowered);
+            fo4::set_hedr_next_form_id(mutated, *lowered);
             stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json(
                 "'" + pluginName + "' already has all native FormIDs within " + range +
-                "; lowered HEDR nextFormID to " + std::format("0x{:03X}", lowered) + ".");
+                "; lowered HEDR nextFormID to " + std::format("0x{:03X}", *lowered) + "." +
+                support::lightFlagAdvice(loaded->plugin));
         } catch (const std::exception& error) {
             return std::unexpected(Error{"CompactToEslFailed", error.what()});
         }
@@ -140,7 +140,7 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
             "Compacted " + pluginName + ": remapped " +
             std::to_string(remapped) +
             " record(s) into the ESL range (" + range +
-            ") and fixed all supported in-plugin references. " + support::lightFlagHint);
+            ") and fixed all supported in-plugin references." + support::lightFlagAdvice(loaded->plugin));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CompactToEslFailed", error.what()});
     }

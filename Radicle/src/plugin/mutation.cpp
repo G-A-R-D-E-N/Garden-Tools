@@ -143,6 +143,20 @@ std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin
   return {k_first_full_local_id, k_full_local_mask};
 }
 
+std::optional<std::uint32_t> lowered_light_next_form_id(const Plugin& plugin) {
+  const auto lowest = allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id;
+  auto lowered = lowest;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;
+    const auto local = record->form_key.local().value();
+    if (local < lowest || local > k_light_local_mask) return std::nullopt;
+    lowered = std::max(lowered, local + 1u);
+  }
+  const auto next = plugin.header.next_form_id;
+  if (next <= k_light_local_mask || next <= lowered) return std::nullopt;
+  return lowered;
+}
+
 FormKey reserve_local_form_key(Plugin& plugin) {
   if (plugin.key.empty()) {
     throw FormIdError("plugin has no identity for local FormID reservation");

@@ -273,6 +273,7 @@ TEST_CASE("Native CompactToEsl moves out-of-range IDs to the 0x800 floor for HED
     const auto result = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>().find("remapped 2 record") != std::string::npos);
+    CHECK(result->get<std::string>().find("masters.SetLight") != std::string::npos);
     savePatch(backend);
 
     const auto disk = fo4::read_plugin_file(path);
@@ -299,6 +300,7 @@ TEST_CASE("Native CompactToEsl keeps an already-light plugin light and fills the
     const auto result = backend.compactToEsl(nlohmann::json::array({"Patch.esp"}));
     REQUIRE(result.has_value());
     CHECK(result->get<std::string>().find("remapped 1 record") != std::string::npos);
+    CHECK(result->get<std::string>().find("masters.SetLight") == std::string::npos);
     savePatch(backend);
 
     const auto disk = fo4::read_plugin_file(path);
@@ -330,6 +332,85 @@ TEST_CASE("Native CompactToEsl rewrites a masterless FormLink to a record moved 
     CHECK(editorIdOf(*recordAt(disk, 0x800u)) == "Moved");
     REQUIRE(recordAt(disk, 0x900u) != nullptr);
     CHECK(formLinkOf(*recordAt(disk, 0x900u), "AHCM") == 0x800u);
+}
+
+TEST_CASE("Native SetLight lowers an out-of-range HEDR next ID to one past the highest own ID") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, miscPlugin(1.0f, 0u, 0x5000u, true, {0x005u, 0x801u}));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    const auto lighted = backend.invoke("masters.SetLight", nlohmann::json::array({"Patch.esp", true}));
+    REQUIRE(lighted.has_value());
+    REQUIRE(lighted->is_string());
+    CHECK(lighted->get<std::string>().find("lowered HEDR nextFormID to 0x802") != std::string::npos);
+
+    const auto created = backend.invokeLegacyBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "EYES", nlohmann::json{
+            {"editorId", "LowNext"},
+            {"fullText", "Low Next"},
+            {"icon", "Textures\\Actors\\Character\\Eyes\\low.dds"}
+        }}));
+    REQUIRE(created.has_value());
+    CHECK(nlohmann::json::parse(created->get<std::string>()).at("formKey") == "000802:Patch.esp");
+}
+
+TEST_CASE("Native CompactToEsl refuses an out-of-range WRLD with world children and leaves the file unchanged") {
+    refuseAndCheckUnchanged(
+        childGroupPlugin("WRLD", 0x1234u, "CELL", 0x800u, fo4::GroupType::world_children),
+        "1 WRLD with child groups",
+        "ParentGroupRelabelUnsupported");
+}
+
+TEST_CASE("Native RenumberRecord to the same key reports unchanged for a DIAL with child groups") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, childGroupPlugin("DIAL", 0x5000u, "INFO", 0x801u, fo4::GroupType::topic_children));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    const auto result = backend.invokeBackend(
+        "RenumberRecord",
+        nlohmann::json::array({"Patch.esp", "005000:Patch.esp", "005000:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(nlohmann::json::parse(result->get<std::string>()).at("changed") == false);
+}
+
+TEST_CASE("Native RenumberRecord onto an occupied key reports RecordFormIdExists for a DIAL with child groups") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, childGroupPlugin("DIAL", 0x5000u, "INFO", 0x801u, fo4::GroupType::topic_children));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    const auto result = backend.invokeBackend(
+        "RenumberRecord",
+        nlohmann::json::array({"Patch.esp", "005000:Patch.esp", "000801:Patch.esp"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "RecordFormIdExists");
+}
+
+TEST_CASE("Native RenumberRecord refuses a WRLD with world children and leaves the file unchanged") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, childGroupPlugin("WRLD", 0x1234u, "CELL", 0x800u, fo4::GroupType::world_children));
+    const auto before = readFile(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+    const auto result = backend.invokeBackend(
+        "RenumberRecord",
+        nlohmann::json::array({"Patch.esp", "001234:Patch.esp", "000950:Patch.esp"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ParentGroupRelabelUnsupported");
+    savePatch(backend);
+    CHECK(readFile(path) == before);
 }
 
 TEST_CASE("Native RenumberRecord refuses a DIAL with child groups and leaves the file unchanged") {

@@ -37,11 +37,15 @@ Result<nlohmann::json> RadiclePluginBackend::checkEslEligibility(
     const auto outOfRange = esl.out_of_range;
 
     if (outOfRange == 0) {
+        const auto lowered = fo4::lowered_light_next_form_id(loaded->plugin);
+        const auto effect = lowered
+            ? "would only lower HEDR nextFormID to " + std::format("0x{:03X}", *lowered) + "."
+            : std::string("would be a no-op.");
         return nlohmann::json(
             "'" + name + "' is already ESL-compatible: all " +
             std::to_string(nativeCount) +
             " native record(s) use object IDs within " + slots.range + ". "
-            "Native compact_to_esl would be a no-op." + support::lightFlagAdvice(loaded->plugin));
+            "Native compact_to_esl " + effect + support::lightFlagAdvice(loaded->plugin));
     }
 
     if (nativeCount > slots.capacity) {

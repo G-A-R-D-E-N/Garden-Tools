@@ -75,7 +75,7 @@ plugin where it does not, and `[0x800, 0xFFFFFF]` otherwise.
 
 `allows_hardcoded_range` is xEdit's rule, not an engine finding: HEDR version
 at least 1.0 and at least one master
-(source:TES5Edit/TES5Edit@dev-4.1.6 `Core/wbImplementation.pas:TwbFile.GetAllowHardcodedRangeUse`).
+(`Core/wbImplementation.pas` at `93cc0bc5`, `TwbFile.GetAllowHardcodedRangeUse`, lines 4070-4090).
 The `AdjustFormIDFileIndex` pseudocode above has no version check, so the engine may
 accept more. This is not confirmed either way.
 Following xEdit only narrows what Radicle allocates: `0x800`-`0xFFF` is valid

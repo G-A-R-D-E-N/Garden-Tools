@@ -146,12 +146,6 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
     }
 
     for (const auto& mapping : mappings) {
-        if (const auto refusal = support::parentGroupRelabelRefusal(loaded->plugin, mapping.oldKey)) {
-            return std::unexpected(*refusal);
-        }
-    }
-
-    for (const auto& mapping : mappings) {
         if (fo4::find_record(loaded->plugin, mapping.newKey) == nullptr) continue;
         if (movingByOldKey.contains(mapping.newKey)) continue;
         return std::unexpected(Error{
@@ -159,6 +153,12 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
             "Target FormID is occupied by a record that is not being moved: " +
                 mapping.newKey.to_string()
         });
+    }
+
+    for (const auto& mapping : mappings) {
+        if (const auto refusal = support::parentGroupRelabelRefusal(loaded->plugin, mapping.oldKey)) {
+            return std::unexpected(*refusal);
+        }
     }
 
     if (!apply) {
