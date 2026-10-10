@@ -45,7 +45,7 @@ Named regression tests:
 - `ShortSbyteEnumSerialization`
 - `CustomActorValueCtdaFormLink`
 - `MasterRemovalReindex`
-- `Ba2V7Gnrl` / `Ba2V7Dx10` / `Ba2V8Gnrl` / `Ba2V8Dx10`
+- BA2 v7/v8 GNRL and DX10 are now covered by `Ba2NamedRealData` (installed data, `tests/test_ba2_versions_real.cpp`; skipped without `FO4_DATA_DIR`) and the synthetic `Ba2General.RoundTripsNextGenVersions7And8` (`tests/test_ba2.cpp`) and `Ba2Texture.RoundTripStoredAndCompressed` (`tests/test_ba2_texture.cpp`, versions 1, 7 and 8)
 
 Reader/writer:
 

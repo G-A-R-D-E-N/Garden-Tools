@@ -168,7 +168,7 @@ TESFile record/chunk parser was named (`tesfilecontainer.cpp`) but the actual `N
 
 ### BA2
 
-No dedicated BA2 v7/v8 layout write-up was found in ReverseEngineering findings. CK init opens `Fallout4 - Voices1.ba2`. PluginEditTool already has `Ba2Version7Tests` / `Ba2NextGenDecompressionTests` as a later oracle. `speculative` for this repo until that work is inventoried in a BA2 pass.
+No dedicated BA2 v7/v8 layout write-up was found in ReverseEngineering findings. CK init opens `Fallout4 - Voices1.ba2`. PluginEditTool already has `Ba2Version7Tests` / `Ba2NextGenDecompressionTests` as a later oracle. `speculative` for this repo until that work is inventoried in a BA2 pass. Radicle now implements v7/v8 GNRL and DX10 and has measured their on-disk field widths on installed archives (`docs/BA2.md`); that is a file-format measurement, not RE evidence, so the RE status above is unchanged.
 
 ### Packed-exe caveat
 
@@ -184,7 +184,7 @@ From PluginEditTool tests (oracle, not copied):
 
 - custom ActorValue CTDA FormLink uses destination MAST ordinal (`0x02000812`)
 - master order must be the written master list, not a guessed load order
-- BA2 v7 GNRL / DX10 and v8 GNRL / DX10 already have FO4IDE tests
+- BA2 v7 GNRL / DX10 and v8 GNRL / DX10 already have FO4IDE tests; Radicle now implements them and has its own synthetic and installed-data tests (`docs/BA2.md`)
 - PERK Add Activate Choice, nullable enum, short/sbyte enum: FO4IDE history, not yet reproduced here
 
 ---

@@ -64,7 +64,7 @@ Speculative answers must not be hardcoded as facts.
 
 ## BA2
 
-22. Next-gen v7/v8 GNRL and DX10 differences. FO4IDE already has tests; this library has not imported that evidence yet.
+22. Next-gen v7/v8 GNRL and DX10 differences. **Partial answer (#394):** every installed root-level v1, v7 and v8 GNRL and DX10 archive measured by `tools/corpus/ba2_measure.py` uses the v1 header, entry and chunk field widths, and Radicle reads and writes all three versions (`docs/BA2.md`). Still open: layouts and versions not present in the measured install, the meaning of the entry metadata byte, DX10 flag bits other than the cubemap bit and the tile mode, and how the engine itself treats v7/v8 archives at runtime.
 
 ## Writer policy
 
