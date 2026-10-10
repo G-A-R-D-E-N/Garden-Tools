@@ -616,6 +616,19 @@ TEST_F(WorldEnvironmentTest, DeletedWorldspaceParentEndsWaterInheritance) {
   EXPECT_EQ(selection.height, 450.0f);
 }
 
+TEST_F(WorldEnvironmentTest, WnamWithoutPnamInheritsWaterAndHeight) {
+  paths_ = {write("Fallout4.esm", make_plugin({}, {
+                  top("WATR", {rec("WATR", 0x840)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x840})}, {"DNAM", floats({-2048, 450})}}),
+                               rec("WRLD", 0x801, {{"WNAM", bytes_of({0x800})}})})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto selection = fo4::env::resolve_water(env, *env.winner(key("000801:Fallout4.esm")));
+  EXPECT_EQ(selection.water, key("000840:Fallout4.esm"));
+  ASSERT_NE(selection.record, nullptr);
+  EXPECT_FALSE(selection.uses_default_water);
+  EXPECT_EQ(selection.height, 450.0f);
+}
+
 TEST_F(WorldEnvironmentTest, WorldspaceWithoutDnamResolvesZeroWaterHeight) {
   paths_ = {write("Fallout4.esm", make_plugin({}, {top("WRLD", {rec("WRLD", 0x800)})}))};
   const auto env = fo4::env::Environment::load(paths_);
