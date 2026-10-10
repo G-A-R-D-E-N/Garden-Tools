@@ -27,7 +27,7 @@ Confidence: `confirmed` / `strong` / `probable` / `speculative`.
 
 **Proves:** 159-entry index→4CC table, 24-byte entries, index 0 `NONE`, packed 4CC little-endian `'TES4' = 0x34534554`. Validator lives in `tesform.cpp`. Factory setter `FUN_1408bc350` bounds-checks `< 0x9f`.
 
-**Confidence:** `confirmed`. `CheckValidIDForSmallFile` is `(id & 0x00FFF000) == 0` and `AdjustFormIDFileIndex` is as described in `ESL_FORMIDS.md`, both read from their disassembled bodies. Addresses are build-specific: the workspace holds two unpacked images of identical size, 1.10.155 (`0x5dac778e`) and 1.10.163 (`0x5ddc40fa`), whose RVAs for these functions differ by `0x10`. Match the symbol table to the image by PE timestamp; there is no symbol-table shift to compensate for.
+**Confidence:** `confirmed`. `CheckValidIDForSmallFile` is `(id & 0x00FFF000) == 0` and `AdjustFormIDFileIndex` is as described in `ESL_FORMIDS.md`, recorded in `ReverseEng/commonlib_NonVR` @ `dbaeca7` as the predicate bytes and as pseudocode respectively (`RE-Work/docs/26-RE-TARGETS.md` section 4, `RE-Work/Runtime/03-FINDINGS.md` "FormID compile-index remap decoded"). Addresses are build-specific: the RE build table lists two images, Tool-Build (`0x5dac778e`) and 1.10.163 (`0x5ddc40fa`), whose RVAs for these functions differ by `0x10`. Match the symbol table to the image by PE timestamp; there is no symbol-table shift to compensate for.
 
 **Library impact:** The generic reader does not need the factory. The schema system should use this 4CC list as the closed set of known signatures, while still preserving unknown signatures.
 
