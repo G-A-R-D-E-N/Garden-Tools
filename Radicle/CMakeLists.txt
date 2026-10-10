@@ -162,6 +162,7 @@ add_library(fo4
   src/environment/base_records.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
+  src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
 )
@@ -191,7 +192,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_seq.cpp src/c_api_quest.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -397,6 +398,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_hardening.cpp
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
+    tests/test_material_file.cpp
+    tests/test_material_file_real.cpp
+    tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
     tests/test_quest_runtime.cpp
