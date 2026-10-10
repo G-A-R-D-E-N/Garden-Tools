@@ -225,6 +225,23 @@ gh run rerun <run-id> --failed
 This bit real work on 2026-08-15: PR #168 looked like a Papyrus implementation failure
 and was nothing of the sort.
 
+## Real-data tests (FO4_DATA_DIR)
+
+`native-ci.yml` runs the C++ tests that need a Fallout 4 `Data` folder when one is configured. Two repo variables feed them:
+
+- `FO4_DATA_DIR_LINUX`, read by the `Test` step of `Native (Linux, Debug)`. It is unset today.
+- `FO4_DATA_DIR_WINDOWS`, read by the `Test` and `Test (Debug)` steps of `Native tests (Windows, MSVC)`. It points at the Steam install's `Fallout 4\Data` folder on the Windows runner.
+
+The folder must hold the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in its root. Each job's `Check FO4 data folder` step enforces this. Unset means the real-data tests skip. A set but bad value makes that step exit 1, which turns the required native-ci contexts red on every PR.
+
+Data adds test time. Windows Release `Test` took about 437 s with data and about 30 s without (run 764).
+
+This is separate from `FO4RE_TEST_DATA`, which [`WINDOWS_CI_RUNNER.md`](WINDOWS_CI_RUNNER.md) documents for the managed `FO4RecordEditor.Tests` fixture tests. Do not confuse the two variables.
+
+Ask whoever sets `FO4_DATA_DIR_WINDOWS` to record the game build for that folder (the `Fallout4.exe` version). Some real-data asserts fail on a different build: `Radicle/tests/test_writeback_real.cpp:81`, `Radicle/tests/test_check_errors.cpp:195-197` and `Radicle/tests/test_weather_concept.cpp:607-611`. A game update can therefore turn CI red.
+
+`FO4_DATA_DIR_LINUX` stays unset until a Linux Debug run with data has been timed against that job's 60-minute limit.
+
 ## Gotchas
 
 - `swapon` and `mkswap` are not on the non-login `PATH`; use `/sbin/...` explicitly.
