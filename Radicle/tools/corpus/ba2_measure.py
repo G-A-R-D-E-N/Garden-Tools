@@ -17,36 +17,40 @@ LAYOUT = {b"GNRL": (0, 0x10, "<QIII"), b"DX10": (8, 0x18, "<QIIHHI")}
 def measure(path: Path, first_chunk: bool) -> tuple[int, str, int, int, list[str], bool | None]:
     size = path.stat().st_size
     problems: list[str] = []
+    version, tag, count, chunks, decoded = 0, b"", 0, 0, None
     with path.open("rb") as f:
-        magic, version, tag, count, names = struct.unpack("<4sI4sIQ", f.read(24))
-        if magic != b"BTDX" or version not in (1, 7, 8) or tag not in LAYOUT:
-            return version, tag.decode("ascii", "replace"), count, 0, ["unsupported header"], None
-        extra, header_field, chunk_fmt = LAYOUT[tag]
-        chunks = 0
-        first = None
-        for _ in range(count):
-            _, _, _, _, n, hdr = struct.unpack("<IIIBBH", f.read(16))
-            f.read(extra)
-            if hdr != header_field:
-                problems.append(f"chunk-header-size {hdr:#x}")
-            for _ in range(n):
-                fields = struct.unpack(chunk_fmt, f.read(struct.calcsize(chunk_fmt)))
-                offset, packed, unpacked, sentinel = fields[0], fields[1], fields[2], fields[-1]
-                if sentinel != SENTINEL:
-                    problems.append(f"sentinel {sentinel:#x}")
-                if offset + (packed or unpacked) > size:
-                    problems.append("payload out of bounds")
-                if first is None:
-                    first = (offset, packed, unpacked)
-                chunks += 1
-        if names and f.tell() > names:
-            problems.append("table overlaps name table")
-        decoded = None
-        if first_chunk and first is not None:
-            offset, packed, unpacked = first
-            f.seek(offset)
-            data = f.read(packed or unpacked)
-            decoded = len(zlib.decompress(data) if packed else data) == unpacked
+        try:
+            magic, version, tag, count, names = struct.unpack("<4sI4sIQ", f.read(24))
+            if magic != b"BTDX" or version not in (1, 7, 8) or tag not in LAYOUT:
+                return version, tag.decode("ascii", "replace"), count, 0, ["unsupported header"], None
+            extra, header_field, chunk_fmt = LAYOUT[tag]
+            first = None
+            for _ in range(count):
+                _, _, _, _, n, hdr = struct.unpack("<IIIBBH", f.read(16))
+                f.read(extra)
+                if hdr != header_field:
+                    problems.append(f"chunk-header-size {hdr:#x}")
+                for _ in range(n):
+                    fields = struct.unpack(chunk_fmt, f.read(struct.calcsize(chunk_fmt)))
+                    offset, packed, unpacked, sentinel = fields[0], fields[1], fields[2], fields[-1]
+                    if sentinel != SENTINEL:
+                        problems.append(f"sentinel {sentinel:#x}")
+                    if offset + (packed or unpacked) > size:
+                        problems.append("payload out of bounds")
+                    if first is None:
+                        first = (offset, packed, unpacked)
+                    chunks += 1
+            if names > size:
+                problems.append("name table past end of file")
+            if names and f.tell() > names:
+                problems.append("table overlaps name table")
+            if first_chunk and first is not None:
+                offset, packed, unpacked = first
+                f.seek(offset)
+                data = f.read(packed or unpacked)
+                decoded = len(zlib.decompress(data) if packed else data) == unpacked
+        except (struct.error, zlib.error) as e:
+            problems.append(f"malformed archive: {e}")
     return version, tag.decode(), count, chunks, problems, decoded
 
 
