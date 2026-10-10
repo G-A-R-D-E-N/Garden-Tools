@@ -588,6 +588,35 @@ TEST_F(WorldEnvironmentTest, StaleWorldspaceHandleResolvesLikeTheWinner) {
   EXPECT_EQ(from_stale.height, from_winner.height);
 }
 
+TEST_F(WorldEnvironmentTest, StaleCellHandleResolvesLikeTheWinner) {
+  const auto cell_record = [](std::uint32_t water, float height) {
+    return rec("CELL", 0x810, {{"DATA", {std::byte{0x02}}}, {"XCWT", bytes_of({water})}, {"XCLW", floats({height})}});
+  };
+  paths_ = {write("Fallout4.esm", make_plugin({}, {
+                  top("WATR", {rec("WATR", 0x850), rec("WATR", 0x851), rec("WATR", 0x852)}),
+                  top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x850})}, {"DNAM", floats({-2048, 450})}}),
+                               grp(0x800, 1, {grp(0, 4, {grp(0, 5, {cell_record(0x851, 100.0f)})})})})})),
+            write("Override.esp", make_plugin({"Fallout4.esm"}, {
+                  top("WRLD", {grp(0x800, 1, {grp(0, 4, {grp(0, 5, {cell_record(0x852, 250.0f)})})})})}))};
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto cell = key("000810:Fallout4.esm");
+  const auto versions = env.versions(cell);
+  ASSERT_EQ(versions.size(), 2u);
+  const auto& older = versions[0];
+  ASSERT_NE(&older, env.winner(cell));
+
+  const auto winning = fo4::env::resolve_water(env, *env.winner(cell));
+  EXPECT_EQ(winning.water, key("000852:Fallout4.esm"));
+  EXPECT_EQ(winning.height, 250.0f);
+  EXPECT_FALSE(winning.uses_default_water);
+
+  const auto stale = fo4::env::resolve_water(env, older);
+  EXPECT_EQ(stale.water, winning.water);
+  EXPECT_EQ(stale.record, winning.record);
+  EXPECT_EQ(stale.uses_default_water, winning.uses_default_water);
+  EXPECT_EQ(stale.height, winning.height);
+}
+
 TEST_F(WorldEnvironmentTest, WorldspaceWaterCycleThrowsWhenBothWorldsUseWaterData) {
   paths_ = {write("Fallout4.esm", make_plugin({}, {top("WRLD", {parented_world(0x800, 0x801, 8),
                                                                 parented_world(0x801, 0x800, 8)})}))};
