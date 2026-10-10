@@ -1536,7 +1536,10 @@ The checkout step uses the full URL `https://code.forgejo.org/actions/checkout@v
 The real-data tests read `FO4_DATA_DIR`. CI sets it from two Forgejo repository variables:
 
 - `FO4_DATA_DIR_LINUX` feeds the `Test` step of the Linux job `Native (Linux, Debug)`. It is unset today, so that step skips the real-data tests.
-- `FO4_DATA_DIR_WINDOWS` feeds the `Test` and `Test (Debug)` steps of the Windows job `Native tests (Windows, MSVC)`. `Test (Debug)` runs only on non-pull_request events.
+- `FO4_DATA_DIR_WINDOWS` feeds the `Test` step of the Windows job `Native tests (Windows, MSVC)`.
+- `.github/workflows/native-ci.yml:native-windows-tests` `Test (Debug)` clears `FO4_DATA_DIR` (`set FO4_DATA_DIR=`), so the Debug pass runs without game data. It runs only on non-pull_request events.
+- Why: Debug with data does not finish within the job's 90-minute limit. In run 775, `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` took more than 34 CPU-minutes and 6.9 GB in Debug (289-421 s in Release). The `QuestAliasRealData`, `QuestStagesRealData` and `QuestObjectivesRealData` `DecodesEveryShippedQuest` tests each took about 60 CPU-minutes in Debug (131-320 s in Release). The run was still at test 358 of 1824 when the timeout neared.
+- Release keeps the full real-data coverage: the Windows `Test` step runs the real-data tests with the data.
 
 Each job's `Check FO4 data folder` step runs before its first Test step:
 

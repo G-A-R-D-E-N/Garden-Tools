@@ -531,12 +531,11 @@ jobs:
         if: github.event_name != 'pull_request'
         run: cmake --build build\native-debug
 
+      # Real-data tests run in the Release pass only; Debug with game data exceeds the job timeout.
       - name: Test (Debug)
         if: github.event_name != 'pull_request'
-        env:
-          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
         run: |
-          if "%FO4_DATA_DIR%"=="" set FO4_DATA_DIR=
+          set FO4_DATA_DIR=
           ctest --test-dir build\native-debug --output-on-failure --parallel 4
 
       - name: Stop .NET build servers

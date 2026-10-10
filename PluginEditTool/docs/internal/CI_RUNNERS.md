@@ -230,7 +230,7 @@ and was nothing of the sort.
 `native-ci.yml` runs the C++ tests that need a Fallout 4 `Data` folder when one is configured. Two repo variables feed them:
 
 - `FO4_DATA_DIR_LINUX`, read by the `Test` step of `Native (Linux, Debug)`. It is unset today.
-- `FO4_DATA_DIR_WINDOWS`, read by the `Test` and `Test (Debug)` steps of `Native tests (Windows, MSVC)`. It points at the Steam install's `Fallout 4\Data` folder on the Windows runner.
+- `FO4_DATA_DIR_WINDOWS`, read by the `Test` step of `Native tests (Windows, MSVC)`. It points at the Steam install's `Fallout 4\Data` folder on the Windows runner. The `Test (Debug)` step clears it, so the Debug pass runs without game data: with data it exceeds the job's 90-minute limit.
 
 The folder must hold the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in its root. Each job's `Check FO4 data folder` step enforces this. Unset means the real-data tests skip. A set but bad value makes that step exit 1, which turns the required native-ci contexts red on every PR.
 
