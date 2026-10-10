@@ -21,7 +21,9 @@ only archive headers and entry/chunk tables. It reads fixed-size header, entry
 and chunk records, and checks the 24-byte headers, chunk-header-size fields,
 `0xBAADF00D` sentinels, payload bounds, the name-table offset within the file
 and table end before the name-table offset, prints the totals below and
-exits non-zero if any check fails. It is a local tool and is not run by CI.
+exits non-zero if any check fails. An archive that cannot be opened or parsed, or
+that fails a check, is reported as a problem and left out of the totals. It is a
+local tool and is not run by CI.
 Counts cover all 79 installed root-level `.ba2` archives:
 
 | Version | Content | Archives | Entries | Chunks |
@@ -56,11 +58,11 @@ that entry into an archive, and check identical extracted content and DDS
 bytes after re-reading. The rebuilt entry must keep its name, extension and
 directory hashes; for DX10 it must also keep its texture info and each chunk's
 mip range. They run only when `FO4_DATA_DIR` is set; CI sets it from `FO4_DATA_DIR_WINDOWS`
-in the Windows Release pass of `native-ci` (and from `FO4_DATA_DIR_LINUX` in the Linux
-job); the Windows Debug pass clears it. They skip when it or a named archive
-is missing. A present archive whose version, kind or entry count differs from the
-table above fails the test (`ASSERT_EQ` in `tests/test_ba2_versions_real.cpp`)
-rather than skipping. No game archives or extracted payloads are committed.
+in the Windows Release pass of `native-ci`; the Windows Debug pass clears it. The
+Linux job passes `FO4_DATA_DIR_LINUX`, which is currently unset, so the tests skip
+there. They skip when `FO4_DATA_DIR` or a named archive is missing. A present
+archive whose version, kind or entry count differs from the table above fails the
+test (`ASSERT_EQ` in `tests/test_ba2_versions_real.cpp`) rather than skipping. No game archives or extracted payloads are committed.
 
 The measured GNRL layout at versions 1, 7 and 8 is:
 

@@ -15,11 +15,11 @@ LAYOUT = {b"GNRL": (0, 0x10, "<QIII"), b"DX10": (8, 0x18, "<QIIHHI")}
 
 
 def measure(path: Path, first_chunk: bool) -> tuple[int, str, int, int, list[str], bool | None]:
-    size = path.stat().st_size
     problems: list[str] = []
     version, tag, count, chunks, decoded = 0, b"", 0, 0, None
-    with path.open("rb") as f:
-        try:
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as f:
             magic, version, tag, count, names = struct.unpack("<4sI4sIQ", f.read(24))
             if magic != b"BTDX" or version not in (1, 7, 8) or tag not in LAYOUT:
                 return version, tag.decode("ascii", "replace"), count, 0, ["unsupported header"], None
@@ -49,9 +49,9 @@ def measure(path: Path, first_chunk: bool) -> tuple[int, str, int, int, list[str
                 f.seek(offset)
                 data = f.read(packed or unpacked)
                 decoded = len(zlib.decompress(data) if packed else data) == unpacked
-        except (struct.error, zlib.error) as e:
-            problems.append(f"malformed archive: {e}")
-    return version, tag.decode(), count, chunks, problems, decoded
+    except (struct.error, zlib.error, ValueError, OverflowError, OSError) as e:
+        problems.append(f"malformed archive: {e}")
+    return version, tag.decode("ascii", "replace"), count, chunks, problems, decoded
 
 
 def main() -> int:
@@ -66,14 +66,15 @@ def main() -> int:
     failures = 0
     for path in archives:
         version, tag, count, chunks, problems, decoded = measure(path, args.first_chunk)
+        if problems or decoded is False:
+            failures += 1
+            print(f"{path.name}: {sorted(set(problems))} first-chunk={decoded}", file=sys.stderr)
+            continue
         totals[(version, tag, "archives")] += 1
         totals[(version, tag, "entries")] += count
         totals[(version, tag, "chunks")] += chunks
         if decoded is not None:
             totals[(version, tag, "first-chunk ok")] += decoded
-        if problems or decoded is False:
-            failures += 1
-            print(f"{path.name}: {sorted(set(problems))} first-chunk={decoded}", file=sys.stderr)
     print("| Version | Content | Archives | Entries | Chunks |" + (" First chunk ok |" if args.first_chunk else ""))
     print("|---|---|---:|---:|---:|" + ("---:|" if args.first_chunk else ""))
     for version, tag in sorted({k[:2] for k in totals}, key=lambda k: (k[0], k[1] != "GNRL")):
