@@ -302,10 +302,12 @@ radicle_status radicle_record_primary_model_path(const radicle_env* env,
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
   }
   *out_path = nullptr;
-  const auto path = fo4::env::primary_model_path(*to_ref(record));
-  if (!path) return fail(RADICLE_STATUS_NOT_FOUND, "record has no model path");
-  *out_path = stored_text(*env, *path);
-  return RADICLE_STATUS_OK;
+  return guarded("unknown exception while reading the primary model path", [&] {
+    const auto path = fo4::env::primary_model_path(*to_ref(record));
+    if (!path) return fail(RADICLE_STATUS_NOT_FOUND, "record has no model path");
+    *out_path = stored_text(*env, *path);
+    return RADICLE_STATUS_OK;
+  });
 }
 
 }  // extern "C"
