@@ -39,7 +39,8 @@ TEST_CASE("Tool locator prefers explicit NIF setting") {
 
     fo4ide::settings::Settings settings;
     settings.nifToolPath = configured;
-    fo4ide::tools::Locator locator(settings, root / "FO4IDE-native");
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::tools::Locator locator(shared, root / "FO4IDE-native");
 
     CHECK(locator.resolve(fo4ide::tools::Tool::NifTool) == configured);
 }
@@ -55,7 +56,8 @@ TEST_CASE("Tool locator discovers application-local tools") {
     touch(nif);
 
     fo4ide::settings::Settings settings;
-    fo4ide::tools::Locator locator(settings, root / "FO4IDE-native");
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::tools::Locator locator(shared, root / "FO4IDE-native");
     CHECK(locator.resolve(fo4ide::tools::Tool::NifTool) == nif);
 }
 
@@ -67,7 +69,8 @@ TEST_CASE("Tool locator uses configured Fallout 4 root") {
 
     fo4ide::settings::Settings settings;
     settings.fallout4Path = fallout;
-    fo4ide::tools::Locator locator(settings, root / "FO4IDE-native");
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::tools::Locator locator(shared, root / "FO4IDE-native");
 
     CHECK(locator.fallout4Root() == fallout);
 }
@@ -88,7 +91,8 @@ TEST_CASE("Tool locator collects bundled and game Papyrus imports without duplic
     fo4ide::settings::Settings settings;
     settings.fallout4Path = fallout;
     settings.papyrusBaseImports = bundledBase;
-    fo4ide::tools::Locator locator(settings, root / "FO4IDE-native");
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::tools::Locator locator(shared, root / "FO4IDE-native");
 
     const auto imports = locator.papyrusBaseImports();
     CHECK(std::find(imports.begin(), imports.end(), bundledBase) != imports.end());

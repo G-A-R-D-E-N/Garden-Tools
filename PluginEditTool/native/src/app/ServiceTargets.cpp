@@ -31,6 +31,70 @@ void updateBool(const nlohmann::json& payload, const char* key, bool& target) {
     if (it != payload.end() && it->is_boolean()) target = it->get<bool>();
 }
 
+void updateSecret(const nlohmann::json& payload, const char* key, std::string& target) {
+    const auto it = payload.find(key);
+    if (it == payload.end() || !it->is_string()) return;
+    auto value = trim(it->get<std::string>());
+    if (!value.empty()) target = std::move(value);
+}
+
+nlohmann::json redactedSettings(const settings::Settings& current) {
+    nlohmann::json value = current;
+    value.erase("AnthropicApiKey");
+    value.erase("GeminiApiKey");
+    value["hasAnthropicApiKey"] = !current.anthropicApiKey.empty();
+    value["hasGeminiApiKey"] = !current.geminiApiKey.empty();
+    return value;
+}
+
+bool resolvesOnPath(const std::filesystem::path& command) {
+    const auto resolved = tools::resolveCommand(command);
+    std::error_code ec;
+    return resolved != command && std::filesystem::is_regular_file(resolved, ec);
+}
+
+struct ToolPathRule {
+    const char* key;
+    std::vector<std::string> fileNames;
+    bool allowCommand;
+};
+
+std::string toolPathError(const nlohmann::json& payload) {
+    const ToolPathRule rules[] = {
+        {"TexconvPath", {"Texconvx64.exe", "Texconv.exe"}, false},
+        {"PapyrusCompilerPath", {"PapyrusCompiler.exe"}, false},
+        {"XwmaEncodePath", {"xWMAEncode.exe"}, false},
+        {"Archive2Path", {"Archive2.exe"}, false},
+        {"ClaudeCodePath", {}, true},
+        {"NiftoolPath", {}, false},
+        {"FfmpegPath", {}, false},
+    };
+    for (const auto& rule : rules) {
+        const auto it = payload.find(rule.key);
+        if (it == payload.end() || !it->is_string()) continue;
+        const auto value = trim(it->get<std::string>());
+        if (value.empty()) continue;
+        const std::filesystem::path path(value);
+        std::error_code ec;
+        const bool exists = (rule.allowCommand && path.parent_path().empty())
+                                ? resolvesOnPath(path)
+                                : std::filesystem::is_regular_file(path, ec);
+        if (!exists) {
+            return std::string("Invalid ") + rule.key + ": not an existing file" +
+                   (rule.allowCommand ? " or a command on PATH" : "") + ": " + value;
+        }
+        if (rule.fileNames.empty()) continue;
+        const auto name = toLower(path.filename().string());
+        const bool named = std::any_of(rule.fileNames.begin(), rule.fileNames.end(),
+                                       [&](const std::string& expected) { return toLower(expected) == name; });
+        if (named) continue;
+        std::string expected;
+        for (const auto& candidate : rule.fileNames) expected += (expected.empty() ? "" : " or ") + candidate;
+        return std::string("Invalid ") + rule.key + ": expected " + expected;
+    }
+    return {};
+}
+
 nlohmann::json serviceText(Result<std::string> result) {
     if (!result) return "Error: " + result.error().message;
     return std::move(*result);
@@ -39,10 +103,10 @@ nlohmann::json serviceText(Result<std::string> result) {
 }
 
 SettingsTarget::SettingsTarget(settings::Store& store,
-                               settings::Settings& current,
+                               settings::SharedSettings& current,
                                platform::Services& platform,
                                process::Runner& runner)
-    : store_(store), current_(current), platform_(platform), runner_(runner) {}
+    : store_(store), shared_(current), platform_(platform), runner_(runner) {}
 
 Result<nlohmann::json> SettingsTarget::invoke(std::string_view method,
                                                const nlohmann::json& args) {
@@ -55,8 +119,7 @@ Result<nlohmann::json> SettingsTarget::invoke(std::string_view method,
 }
 
 Result<nlohmann::json> SettingsTarget::getSettings() const {
-    nlohmann::json value = current_;
-    return value.dump();
+    return redactedSettings(shared_.snapshot()).dump();
 }
 
 Result<nlohmann::json> SettingsTarget::saveSettings(const nlohmann::json& args) {
@@ -66,32 +129,35 @@ Result<nlohmann::json> SettingsTarget::saveSettings(const nlohmann::json& args) 
     try {
         const auto payload = nlohmann::json::parse(raw->get<std::string>());
         if (!payload.is_object()) return nlohmann::json("Invalid settings payload.");
+        if (auto error = toolPathError(payload); !error.empty()) return nlohmann::json(error);
 
-        updateString(payload, "AiProvider", current_.aiProvider);
-        updateString(payload, "AnthropicApiKey", current_.anthropicApiKey);
-        updateString(payload, "Model", current_.model);
-        updateString(payload, "GeminiApiKey", current_.geminiApiKey);
-        updateString(payload, "GeminiModel", current_.geminiModel);
-        updatePath(payload, "ClaudeCodePath", current_.claudeCodePath);
-        updateString(payload, "OllamaUrl", current_.ollamaUrl);
-        updateString(payload, "OllamaModel", current_.ollamaModel);
-        updatePath(payload, "OutputFolder", current_.outputFolder);
-        updatePath(payload, "Fallout4Path", current_.fallout4Path);
-        updatePath(payload, "DataFolder", current_.dataFolder);
-        updatePath(payload, "Mo2InstancePath", current_.mo2InstancePath);
-        updatePath(payload, "CkWikiPath", current_.ckWikiPath);
-        updatePath(payload, "TexconvPath", current_.texconvPath);
-        updatePath(payload, "PapyrusCompilerPath", current_.papyrusCompilerPath);
-        updatePath(payload, "PapyrusBaseImports", current_.papyrusBaseImports);
-        updatePath(payload, "NiftoolPath", current_.nifToolPath);
-        updatePath(payload, "FfmpegPath", current_.ffmpegPath);
-        updatePath(payload, "XwmaEncodePath", current_.xwmaEncodePath);
-        updatePath(payload, "Archive2Path", current_.archive2Path);
-        updateBool(payload, "ReadLargePluginsIntoMemory", current_.readLargePluginsIntoMemory);
+        return shared_.update([&](settings::Settings& current) {
+            updateString(payload, "AiProvider", current.aiProvider);
+            updateSecret(payload, "AnthropicApiKey", current.anthropicApiKey);
+            updateString(payload, "Model", current.model);
+            updateSecret(payload, "GeminiApiKey", current.geminiApiKey);
+            updateString(payload, "GeminiModel", current.geminiModel);
+            updatePath(payload, "ClaudeCodePath", current.claudeCodePath);
+            updateString(payload, "OllamaUrl", current.ollamaUrl);
+            updateString(payload, "OllamaModel", current.ollamaModel);
+            updatePath(payload, "OutputFolder", current.outputFolder);
+            updatePath(payload, "Fallout4Path", current.fallout4Path);
+            updatePath(payload, "DataFolder", current.dataFolder);
+            updatePath(payload, "Mo2InstancePath", current.mo2InstancePath);
+            updatePath(payload, "CkWikiPath", current.ckWikiPath);
+            updatePath(payload, "TexconvPath", current.texconvPath);
+            updatePath(payload, "PapyrusCompilerPath", current.papyrusCompilerPath);
+            updatePath(payload, "PapyrusBaseImports", current.papyrusBaseImports);
+            updatePath(payload, "NiftoolPath", current.nifToolPath);
+            updatePath(payload, "FfmpegPath", current.ffmpegPath);
+            updatePath(payload, "XwmaEncodePath", current.xwmaEncodePath);
+            updatePath(payload, "Archive2Path", current.archive2Path);
+            updateBool(payload, "ReadLargePluginsIntoMemory", current.readLargePluginsIntoMemory);
 
-        auto saved = store_.save(current_);
-        if (!saved) return nlohmann::json("Save failed: " + saved.error().message);
-        return nlohmann::json("Settings saved.");
+            auto saved = store_.save(current);
+            if (!saved) return nlohmann::json("Save failed: " + saved.error().message);
+            return nlohmann::json("Settings saved.");
+        });
     } catch (const std::exception& ex) {
         return nlohmann::json("Save failed: " + std::string(ex.what()));
     }
@@ -121,8 +187,18 @@ Result<nlohmann::json> SettingsTarget::testClaude(const nlohmann::json& args) {
 
     process::Request request;
 #if defined(_WIN32)
-    request.executable = "cmd.exe";
-    request.arguments = {"/d", "/s", "/c", "\"" + path + "\" --version"};
+    const auto executable = tools::resolveCommand(path);
+    const auto text = executable.string();
+    if (const auto extension = toLower(executable.extension().string()); extension == ".cmd" || extension == ".bat") {
+        if (text.find_first_of("\"&|<>^%") != std::string::npos) {
+            return nlohmann::json("Refused: a .cmd or .bat path cannot contain \" & | < > ^ % because cmd.exe would interpret them. Point ClaudeCodePath at claude.exe instead.");
+        }
+        request.executable = "cmd.exe";
+        request.arguments = {"/d", "/s", "/c", "\"" + text + "\" --version"};
+    } else {
+        request.executable = executable;
+        request.arguments = {"--version"};
+    }
 #else
     request.executable = path;
     request.arguments = {"--version"};
