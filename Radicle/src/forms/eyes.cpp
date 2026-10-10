@@ -160,7 +160,7 @@ FormKey create_eyes(Plugin& plugin,
   // A bad embedded NUL therefore cannot leave an allocated but incomplete
   // record behind in the caller's Plugin object.
   std::optional<std::vector<std::byte>> encoded_edid;
-  if (editor_id.has_value()) encoded_edid = zstring(*editor_id);
+  if (editor_id.has_value()) encoded_edid = zstring(stored_editor_id(*editor_id));
   const auto encoded_full = zstring(full_text);
   const auto encoded_icon = zstring(icon);
 

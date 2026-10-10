@@ -390,7 +390,7 @@ FormKey create_projectile(Plugin& plugin, const ProjectileCreation& creation) {
   }
 
   // Measured shipped order: EDID OBND [FULL] ... DATA DNAM NAM1 VNAM.
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
     record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
@@ -432,7 +432,7 @@ FormKey create_explosion(Plugin& plugin, const ExplosionCreation& creation) {
     throw ProjExplHazdError("newly allocated EXPL record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
     record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
@@ -471,7 +471,7 @@ FormKey create_hazard(Plugin& plugin, const HazardCreation& creation) {
     throw ProjExplHazdError("newly allocated HAZD record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
     record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});

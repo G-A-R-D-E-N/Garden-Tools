@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -103,6 +104,8 @@ bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& recor
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);
+
+std::string stored_editor_id(std::string_view editor_id);
 
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,

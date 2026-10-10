@@ -379,7 +379,7 @@ FormKey create_race(Plugin& plugin, const RaceCreation& creation) {
   }
 
   const auto editor = creation.editor_id.has_value()
-      ? std::optional<std::vector<std::byte>>{zstring(*creation.editor_id)}
+      ? std::optional<std::vector<std::byte>>{zstring(stored_editor_id(*creation.editor_id))}
       : std::nullopt;
   const auto full = creation.full_name.has_value()
       ? std::optional<std::vector<std::byte>>{zstring(*creation.full_name)}
