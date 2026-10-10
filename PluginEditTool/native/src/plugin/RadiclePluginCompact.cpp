@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <set>
 #include <string>
 #include <utility>
@@ -18,17 +19,6 @@ namespace {
 std::string compactStringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
     return args[index].get<std::string>();
-}
-
-bool compactTopLevelContains(const fo4::Plugin& plugin, const fo4::FormKey& key) {
-    for (const auto& group : plugin.groups) {
-        if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-        for (const auto& child : group.children) {
-            const auto* record = std::get_if<fo4::Record>(&child);
-            if (record != nullptr && record->form_key == key) return true;
-        }
-    }
-    return false;
 }
 
 }  // namespace
@@ -67,9 +57,24 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
     }
 
     if (outOfRange.empty()) {
-        return nlohmann::json(
-            "'" + pluginName +
-            "' is already ESL-compatible (all native FormIDs within " + range + ").");
+        const auto lowered = fo4::lowered_light_next_form_id(loaded->plugin);
+        if (!lowered) {
+            return nlohmann::json(
+                "'" + pluginName +
+                "' is already ESL-compatible (all native FormIDs within " + range + ")." +
+                support::lightFlagAdvice(loaded->plugin));
+        }
+        try {
+            auto mutated = loaded->plugin;
+            fo4::set_hedr_next_form_id(mutated, *lowered);
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+            return nlohmann::json(
+                "'" + pluginName + "' already has all native FormIDs within " + range +
+                "; lowered HEDR nextFormID to " + std::format("0x{:03X}", *lowered) + "." +
+                support::lightFlagAdvice(loaded->plugin));
+        } catch (const std::exception& error) {
+            return std::unexpected(Error{"CompactToEslFailed", error.what()});
+        }
     }
     if (nativeCount > capacity) {
         return std::unexpected(Error{
@@ -80,14 +85,18 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
         });
     }
 
-    for (const auto& key : outOfRange) {
-        if (compactTopLevelContains(loaded->plugin, key)) continue;
-        return std::unexpected(Error{
-            "NestedRecordCompactionUnsupported",
-            "Cannot compact '" + pluginName + "': out-of-range nested record " +
-                key.to_string() +
-                " requires parent GRUP label rekeying. Compact this plugin in xEdit instead."
-        });
+    const auto blockers = support::eslCompactionBlockers(loaded->plugin, first, last);
+    if (!blockers.empty()) {
+        const auto& blocker = blockers.front();
+        if (blocker.nested) {
+            return std::unexpected(Error{
+                "NestedRecordCompactionUnsupported",
+                "Cannot compact '" + pluginName + "': out-of-range nested record " +
+                    blocker.key.to_string() +
+                    " requires parent GRUP label rekeying. Compact this plugin in xEdit instead."
+            });
+        }
+        return std::unexpected(support::parentGroupRelabelError(blocker.key));
     }
 
     std::sort(outOfRange.begin(), outOfRange.end(), [](const auto& left, const auto& right) {
@@ -131,8 +140,7 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
             "Compacted " + pluginName + ": remapped " +
             std::to_string(remapped) +
             " record(s) into the ESL range (" + range +
-            ") and fixed all supported in-plugin references. "
-            "Flag the plugin ESL (or save it as .esl) to load it in the light range.");
+            ") and fixed all supported in-plugin references." + support::lightFlagAdvice(loaded->plugin));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CompactToEslFailed", error.what()});
     }

@@ -461,7 +461,7 @@ TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin refe
     REQUIRE(result->is_string());
     CHECK(result->get<std::string>().find("remapped 1 record") != std::string::npos);
     CHECK(result->get<std::string>().find(
-        "Flag the plugin ESL (or save it as .esl) to load it in the light range.") != std::string::npos);
+        "Run masters.SetLight to flag the plugin light; Radicle does not flag it from a .esl file name.") != std::string::npos);
 
     const auto beforeSave = fo4::read_plugin_file(path);
     CHECK(fo4::find_record(

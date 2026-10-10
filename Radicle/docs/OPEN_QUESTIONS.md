@@ -10,9 +10,9 @@ Speculative answers must not be hardcoded as facts.
    `(id & 0x00FFF000) == 0` — bits 12–23 must be clear, so a small-file local ID is
    valid iff it is `<= 0xFFF`. This independently confirms the range derived from
    `AdjustFormIDFileIndex` in `ESL_FORMIDS.md`.
-   **Address depends on the build, and the workspace holds two unpacked images of
-   identical size (65,319,936 bytes), which is an easy trap.**
-   `Symbols/Fallout4.exe` is timestamp `0x5dac778e` (1.10.155): predicate at RVA
+   **Address depends on the build, and the workspace holds two unpacked images that
+   look alike, which is an easy trap.** Build table: `RE-Work/docs/26-RE-TARGETS.md` (section 4).
+   `Symbols/Fallout4.exe` is timestamp `0x5dac778e` (Tool-Build, the RE doc labels it so): predicate at RVA
    `0x130550`, `AdjustFormIDFileIndex` at `0x131f90`.
    `Symbols/1.10.163/Fallout4.exe.unpacked.exe` is `0x5ddc40fa` (1.10.163):
    predicate at `0x130560`, `AdjustFormIDFileIndex` at `0x131fa0` — the listed RVAs.
@@ -23,13 +23,15 @@ Speculative answers must not be hardcoded as facts.
    (re.nomadicinteractive.dev) at commit
    `dbaeca7486300f4f1cc15e4607f8208f0df93013`, `RE-Work/docs/26-RE-TARGETS.md`,
    section 4, the section-aware predicate bytes and build-stamp table; inspected read-only.
-3. Exact bytes of `TESFile::AdjustFormIDFileIndex`. **Answered for OG 1.10.163**
-   (PE timestamp `0x5ddc40fa`, RVA `0x131fa0`, 55 bytes); see `ESL_FORMIDS.md`
+3. Exact bytes of `TESFile::AdjustFormIDFileIndex`. **Partly answered for OG 1.10.163**
+   (PE timestamp `0x5ddc40fa`, RVA `0x131fa0`); `RE-Work/Runtime/03-FINDINGS.md` "FormID compile-index remap decoded" has pseudocode only, not bytes. See `ESL_FORMIDS.md`
    and the same repository's `RE-Work/Runtime/03-FINDINGS.md` "Exact runtime FormID
    stamping" (`0x131fa0`). The timestamp `0x5dac778e` build uses `0x131f90`.
-4. **Answered.** `TESFile::AdjustFormIDFileIndex` (OG 1.10.163 RVA `0x131fa0`, 55 bytes) masks a light plugin's local to 12 bits *destructively* before OR-ing in the slot, so anything above `0xFFF` silently aliases onto another record. Usable range is `0x001`–`0xFFF` — the `0x800` floor belongs to the full-plugin encoding only. Six of the nine shipped ESLs allocate below `0x800`, and `ccFSVFO4007-Halloween.esl` has 2078 own records, disproving the `0x800`–`0xFFF`/2048 folklore. See `ESL_FORMIDS.md`.
+4. **Answered, with an open caveat (see 6b).** `TESFile::AdjustFormIDFileIndex` (OG 1.10.163 RVA `0x131fa0`, `RE-Work/Runtime/03-FINDINGS.md`) masks a light plugin's local to 12 bits *destructively* before OR-ing in the slot, so anything above `0xFFF` silently aliases onto another record. From the encoding, usable range is `0x001`–`0xFFF`; whether the `0x800` floor applies to light plugins is open. Six of the nine shipped ESLs allocate below `0x800`, and `ccFSVFO4007-Halloween.esl` has 2078 own records, disproving the `0x800`–`0xFFF`/2048 folklore. See `ESL_FORMIDS.md`.
 5. How next-gen 1.11.x assigns `smallFileCompileIndex` vs OG 1.10.163. Still open in [#28](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/28).
 6. Can a plugin list more than 254 masters, and what happens?
+6b. Do light plugins pass through `AddCompileIndex` (`0x1549f0`), which leaves IDs below `0x800` unremapped as engine-reserved? If so, own IDs `0x001`–`0x7FF` in a light plugin would not resolve as the plugin's own forms. **Unanswered.** RE request filed: `re-requests/2026-10-09-esl-light-floor-and-hedr-next.md`, question 4.
+6c. Does the game or the Creation Kit read the HEDR next object ID for a light plugin? **Unanswered.** RE request filed: `re-requests/2026-10-09-esl-light-floor-and-hedr-next.md`, questions 2 and 3.
 
 ## HEDR
 

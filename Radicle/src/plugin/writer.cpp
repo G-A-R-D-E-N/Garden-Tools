@@ -268,15 +268,6 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
   tes4.original_range.clear();
 }
 
-bool group_label_is_form_id(std::int32_t type) {
-  return type == static_cast<std::int32_t>(GroupType::world_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_children) ||
-         type == static_cast<std::int32_t>(GroupType::topic_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_persistent_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_temporary_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_visible_distant_children);
-}
-
 void set_group_label_u32(GroupHeader& header, std::uint32_t value) {
   header.label[0] = std::byte{static_cast<std::uint8_t>(value)};
   header.label[1] = std::byte{static_cast<std::uint8_t>(value >> 8)};

@@ -125,6 +125,7 @@ void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
 
   std::memcpy(hedr->data.data() + 8, &next_form_id, sizeof(next_form_id));
   plugin.header.next_form_id = next_form_id;
+  plugin.original_range.clear();
   plugin.tes4.original_range.clear();
   plugin.tes4.decompressed_payload.clear();
   plugin.tes4.header.data_size = 0;
@@ -140,6 +141,20 @@ std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin
     return {allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id, k_light_local_mask};
   }
   return {k_first_full_local_id, k_full_local_mask};
+}
+
+std::optional<std::uint32_t> lowered_light_next_form_id(const Plugin& plugin) {
+  const auto lowest = allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id;
+  auto lowered = lowest;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;
+    const auto local = record->form_key.local().value();
+    if (local < lowest || local > k_light_local_mask) return std::nullopt;
+    lowered = std::max(lowered, local + 1u);
+  }
+  const auto next = plugin.header.next_form_id;
+  if (next <= k_light_local_mask || next <= lowered) return std::nullopt;
+  return lowered;
 }
 
 FormKey reserve_local_form_key(Plugin& plugin) {
@@ -168,7 +183,6 @@ FormKey reserve_local_form_key(Plugin& plugin) {
 
   const FormKey key{plugin.key, LocalFormId{candidate}};
   set_hedr_next_form_id(plugin, candidate + 1u);
-  plugin.original_range.clear();
   return key;
 }
 
@@ -231,6 +245,18 @@ RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key
   return RecordDeleteStatus::deleted;
 }
 
+bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& record_key) {
+  const auto context = plugin_form_id_context(plugin);
+  bool found = false;
+  visit_groups(plugin, [&](const Group& group) {
+    if (found || !group_label_is_form_id(group.header.group_type)) return;
+    const RawFormId raw{group.header.label_as_u32()};
+    if (raw.is_null()) return;
+    found = resolve_plugin_form_id(raw, context) == record_key;
+  });
+  return found;
+}
+
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
@@ -254,6 +280,11 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   const FormKey new_key{next.key, new_local};
   if (new_key == record_key) return RecordRenumberStatus::unchanged;
   if (find_record(next, new_key) != nullptr) return RecordRenumberStatus::target_exists;
+
+  if (has_form_id_labelled_child_group(next, record_key)) {
+    throw FormIdError(
+        "renumbering a record with form ID labelled child groups is disabled until parent GRUP label rewriting is proven");
+  }
 
   rekey_form_links(next, record_key, new_key);
   target = find_top_level_record(next, record_key);

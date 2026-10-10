@@ -412,6 +412,16 @@ TEST(Mutation, ReserveLocalFormKeySkipsOccupiedCandidate) {
   EXPECT_EQ(key, fo4::FormKey::parse("000801:Lifecycle.esp"));
 }
 
+TEST(Mutation, ReserveLocalFormKeyScanExhaustsFromNextToCeiling) {
+  auto plugin = fo4::read_plugin(make_full_light_plugin(0xFFCu), "Lifecycle.esl");
+  try {
+    static_cast<void>(fo4::reserve_local_form_key(plugin));
+    ADD_FAILURE() << "reserve_local_form_key returned a key on an exhausted range";
+  } catch (const fo4::FormIdError& error) {
+    EXPECT_NE(std::string{error.what()}.find("no local"), std::string::npos);
+  }
+}
+
 TEST(Mutation, ReserveLocalFormKeyReportsAFullLightPluginAndAnOverflowedNextSeparately) {
   const auto reserveError = [](std::uint32_t next_form_id) {
     auto plugin = fo4::read_plugin(make_full_light_plugin(next_form_id), "Lifecycle.esl");
