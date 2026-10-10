@@ -525,6 +525,10 @@ jobs:
             '(^|/)CMakeLists\.txt$|\.cmake$'
             '^\.github/(workflows/native-ci\.yml|scripts/)'
             '^Radicle/tests/plugin_bytes\.'
+            '^Radicle/(src|include/fo4)/plugin/onam\.'
+            '^Radicle/(src|include/fo4)/schema/(ctda|vmad)\.'
+            '^Radicle/include/fo4/schema/[^/]+\.inc$'
+            '^Radicle/(src|include/fo4)/forms/proj_expl_hazd\.'
           )
           $coreRegex = $core -join '|'
           git fetch --no-tags --depth=1 origin "$env:GITHUB_BASE_REF"
