@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
@@ -121,6 +122,106 @@ internal sealed class NativeStrings : IDisposable
         foreach (var pointer in _owned) Marshal.FreeCoTaskMem(pointer);
         _owned.Clear();
     }
+}
+
+internal sealed class EnvironmentHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    public EnvironmentHandle(IntPtr handle) : base(ownsHandle: true) => SetHandle(handle);
+
+    protected override bool ReleaseHandle()
+    {
+        RadicleNative.EnvDestroy(handle);
+        return true;
+    }
+}
+
+internal sealed class PluginHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    public PluginHandle(IntPtr handle) : base(ownsHandle: true) => SetHandle(handle);
+
+    protected override bool ReleaseHandle()
+    {
+        RadicleNative.PluginDestroy(handle);
+        return true;
+    }
+}
+
+internal sealed class PexHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    public PexHandle(IntPtr handle) : base(ownsHandle: true) => SetHandle(handle);
+
+    protected override bool ReleaseHandle()
+    {
+        RadicleNative.PexDestroy(handle);
+        return true;
+    }
+}
+
+internal sealed class SeqHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    public SeqHandle(IntPtr handle) : base(ownsHandle: true) => SetHandle(handle);
+
+    protected override bool ReleaseHandle()
+    {
+        RadicleNative.SeqDestroy(handle);
+        return true;
+    }
+}
+
+internal sealed class StringsHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    public StringsHandle(IntPtr handle) : base(ownsHandle: true) => SetHandle(handle);
+
+    protected override bool ReleaseHandle()
+    {
+        RadicleNative.StringsDestroy(handle);
+        return true;
+    }
+}
+
+internal sealed class AssetsHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    public AssetsHandle(IntPtr handle) : base(ownsHandle: true) => SetHandle(handle);
+
+    protected override bool ReleaseHandle()
+    {
+        RadicleNative.AssetsDestroy(handle);
+        return true;
+    }
+}
+
+internal sealed class Ba2Handle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    private readonly bool _owned;
+
+    public Ba2Handle(IntPtr handle, bool owned) : base(ownsHandle: true)
+    {
+        _owned = owned;
+        SetHandle(handle);
+    }
+
+    protected override bool ReleaseHandle()
+    {
+        if (_owned) RadicleNative.Ba2Close(handle);
+        return true;
+    }
+}
+
+internal readonly struct HandleUse : IDisposable
+{
+    private readonly SafeHandle _handle;
+
+    public HandleUse(SafeHandle handle, string name)
+    {
+        var added = false;
+        handle.DangerousAddRef(ref added);
+        if (!added) throw new ObjectDisposedException(name);
+        _handle = handle;
+    }
+
+    public IntPtr Pointer => _handle.DangerousGetHandle();
+
+    public void Dispose() => _handle?.DangerousRelease();
 }
 
 internal static unsafe class Call
