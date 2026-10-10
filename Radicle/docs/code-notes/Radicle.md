@@ -2,17 +2,25 @@
 
 ## src/environment/world.cpp:resolve_water
 
-The read-only selection query follows the static OG water evidence in the pinned
-private record at `build/RE-Work/6916afb/water-395-341/README.md`, RE commit
+The read-only selection query follows the static OG water evidence in the RE
+record [RE 6916afb](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md), RE commit
 `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 3.1-3.7 (verified RVAs
 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910).
 CELL XCWT takes precedence, exterior cells may use their winning WRLD, and the
 global default selects Fallout4.esm form 0x18. A missing default record remains
-explicitly unresolved; the SDK does not synthesize its visual data. Invalid XCWT
-targets fail closed because their runtime fix-up remains unverified. Invalid
-WRLD parent/water targets use the verified OG null fallback. Inheritance uses
-the current world's bit 3 for water type and bit 0 for height, respecting
-WNAM/PNAM order. A visited set rejects active inheritance cycles.
+explicitly unresolved; the SDK does not synthesize its visual data. An invalid XCWT
+target fails with PARSE_ERROR because its runtime fix-up remains unverified. An
+invalid or deleted WNAM parent ends inheritance. An invalid or non-WATR NAM2 at the
+world where inheritance stops selects the default key with uses_default_water=1.
+Inheritance uses the current world's bit 3 for water type and bit 0 for height,
+respecting the effective WNAM/PNAM flags of `effective_parent_flags`, which the raw
+PNAM readers do not apply. A visited set rejects active inheritance cycles.
+
+An absent XCLW selects the world default height for an exterior cell with Has Water
+and a winning world. A WRLD with no DNAM reports height 0.0 with has_height set, and
+a WRLD input always reports a height. xEdit CELL DATA bits 0 and 1 are
+[lines 5968-5969](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L5968-L5969);
+WRLD PNAM bits 0 and 3 are [lines 13128 and 13131](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L13128-L13131).
 
 The query preserves raw XCLW and reports its load-time integer transform only
 in the effective height: positive halves round up, negative values truncate,
@@ -23,7 +31,7 @@ gaps listed in the evidence record, not live game acceptance.
 
 `include/fo4/c_api_records.h:radicle_water_resolve` returns the selected key,
 borrowed winning WATR handle, default-selection flag and optional height.
-The ABI number is provisional (19 on the water branch); see
+The ABI number is 12, re-bumped if another ABI PR lands first; see
 `docs/code-notes/radicle-water-writer.md`.
 `bindings/csharp/Radicle.Interop/WaterSelection.cs:EffectiveWater` consumes it.
 
@@ -33,6 +41,8 @@ GardenEngine's existing private `WaterBuilder.Material` conversion. It checks
 the resulting material key/fog value against the selected winning WATR. The
 reflection call remains confined to this probe; rendering, `WaterBuilder.Build`
 adoption and in-game parity are separate from this consumer conversion check.
+`Radicle/probes/gardenengine/*` is copied into a GardenEngine checkout to run; no CMakeLists in this repo builds it.
+The default water key (Fallout4.esm, 0x18) is one shared constant pair, `src/environment/default_water.hpp:k_default_water_plugin` and `k_default_water_local`, used by `src/environment/world.cpp:resolve_water` and `src/c_api_world.cpp:radicle_water_resolve`.
 
 ## Water corpus evidence (#341)
 
@@ -41,7 +51,7 @@ seven official masters through the native decoder and existing C ABI,
 records DNAM sizes, and compares untouched master serialization byte for
 byte. `docs/WATER.md` pins layout evidence for
 `src/environment/base_records.cpp:decode_water`. The selection query above uses
-the completed RE #395 evidence; raw links and heights are preserved by
+static OG RE evidence from #395; runtime questions remain open. Raw links and heights are preserved by
 `src/environment/world.cpp:decode_cell` and `decode_worldspace`.
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
@@ -241,7 +251,7 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 
 - STAT `MNAM`: up to four 260-byte slots, each a NUL-terminated mesh path followed by unused bytes (`wbDefinitionsFO4.pas`, `wbStruct(MNAM, 'Distant LOD', [wbStringForward('Level 0', 260), ...])`). A slot with no terminator inside its own 260 bytes is a decode error rather than a read past the end into the next slot.
 - ACTI `WNAM`: the water type.
-- WATR: `FNAM` flags, the `DNAM` visual block through Screen Space Reflections, the three noise layers in their stored interleave (wind direction, speed, amplitude scale, UV scale, falloff; `wbDefinitionsFO4.pas` and `src/forms/water.cpp`'s `NoiseLayerParsing` agree), the `NAM2`/`NAM3`/`NAM4` noise textures, and `NAM0`/`NAM1` velocities. `DNAM` is required from 188 bytes and may end anywhere up to 201, matching `SetOptionalFrom(4)`; the silt and reflection tail is optional, and silt is decoded only when all 12 of its bytes are present (`docs/code-notes/radicle-water-writer.md`).
+- WATR: `FNAM` flags, the `DNAM` visual block through Screen Space Reflections, the three noise layers in their stored interleave (wind direction, speed, amplitude scale, UV scale, falloff; `wbDefinitionsFO4.pas` and `src/forms/water.cpp`'s `NoiseLayerParsing` agree), the `NAM2`/`NAM3`/`NAM4` noise textures, and `NAM0`/`NAM1` velocities. `DNAM` is required from 188 bytes and may end anywhere up to 201, matching `SetOptionalFrom(4)`; the silt and reflection tail is optional, and silt is decoded only when all 12 of its bytes are present (`docs/code-notes/radicle-water-writer.md`). `radicle_water_get_info` no longer reports silt for DNAM sizes 192–199 (it now needs the full member at ≥ 200, as xEdit does); no official record is affected.
 - WRLD `NAM3`/`NAM4`: the LOD water and its height (`wbDefinitionsCommon.pas`, `wbWorldLODData`).
 - CELL `XCWT`: the cell's water type.
 
@@ -250,3 +260,7 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 ## Radicle/src/c_api.cpp:radicle_plugin_remap_masters
 
 `Radicle/src/c_api.cpp:radicle_plugin_remap_masters` remaps a copy of the plugin and assigns it back only when `fo4::remap_plugin_masters` succeeds, so a failed call (for example a dropped master that an own record or override still uses, which makes `encode_plugin_form_id` throw "is not in the destination master table") leaves the handle unchanged instead of empty (GT-090). Test: `Radicle/tests/test_c_api.cpp` `CApi.FailedRemapMastersLeavesThePluginUnchanged`.
+
+## src/schema/scalar.cpp:scalar_descriptor
+
+Record-agnostic: it returns the first whole-payload scalar field with the given subrecord signature, whatever record that signature sits in. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`).

@@ -41,9 +41,11 @@ named master skips cleanly. No game bytes are checked in.
 
 The 2026-10-04 installed corpus has 47 WATR versions: Fallout4.esm 42,
 DLCCoast.esm 2, DLCNukaWorld.esm 3, and zero in the other four masters.
-Two DNAMs are 188 bytes and 45 are 201 bytes. All 14 parameterized native
-and C ABI checks passed, including untouched byte identity for all seven
-masters. With `FO4_DATA_DIR` unset, all 14 skipped cleanly.
+Two DNAMs are 188 bytes and 45 are 201 bytes. That run passed 14 parameterized
+native and C ABI checks, including untouched byte identity for all seven
+masters. The file now defines 42 parameterized cases (6 tests x 7 masters),
+not re-run at this head. With `FO4_DATA_DIR` unset, all 42 skip cleanly; no
+workflow under `.github/workflows` sets `FO4_DATA_DIR`, so they skip on CI.
 
 ## Editing
 
@@ -67,13 +69,14 @@ generic W0 field writer and subrecord authoring (`PluginFile.SetScalar`,
 | DATA, GNAM | n/a | n/a | refused (`no_default`) | yes | not created | none |
 | Records | n/a | n/a | n/a | n/a | `CreateRecord("WATR", ...)`: EDID, FNAM, DNAM | n/a |
 
-A 189–199-byte DNAM has no complete silt member. Native field reads and the
+A 189–199-byte DNAM has no complete silt member (GT-115): silt needs a DNAM of at least 200 bytes. Native field reads and the
 generic writer refuse all seven silt paths until 200 bytes; refused writes
 leave the serialized plugin unchanged. No official record has a partial silt member.
 
-Stays opaque: DATA and GNAM payloads (GNAM is 12 bytes of unknown data in
-every official record), the colour pad bytes (byte 195 is 0xFF in four
-Fallout4.esm records), and every byte of an official record that no edit
+Stays opaque: DATA and GNAM payloads (local measurement of the seven official
+masters: every DATA is 0 bytes and every GNAM is 12 bytes of unknown data), the
+colour pad bytes (local measurement: byte 195 is 0xFF in four Fallout4.esm
+records), and every byte of an official record that no edit
 touched. The official order check finds no violators in the 47 WATR. Field
 list, defaults provenance and refusal rules are in
 `docs/code-notes/radicle-water-writer.md`.
@@ -88,14 +91,35 @@ defines NAM3/NAM4 LOD water and DNAM default land/water heights at 9718–9728.
 Radicle exposes these raw links/heights and load-order winners already.
 
 The [selection record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)
-resolves these questions for OG 1.10.163. The local verified copy is
-`build/RE-Work/6916afb/water-395-341/README.md`; sections 3.1–3.7 stamp
+resolves these questions for OG 1.10.163 (RE 6916afb); sections 3.1–3.7 stamp
 RVAs 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910.
 `fo4::env::resolve_water`, C `radicle_water_resolve` and C# `EffectiveWater`
 select a winning CELL XCWT, otherwise the exterior world's inherited NAM2,
-otherwise Fallout4.esm form 0x18. Invalid XCWT targets fail closed because
-their runtime fix-up is unverified. Missing default WATR data stays unresolved
+otherwise Fallout4.esm form 0x18. Three rules govern the failure cases. An
+invalid or deleted WNAM parent ends inheritance at the current world. An
+invalid or non-WATR NAM2, read from the world where inheritance stops, selects
+Fallout4.esm form 0x18 with `uses_default_water=1`. An invalid XCWT target
+fails with `PARSE_ERROR`, because its runtime fix-up is unverified
+(`src/environment/world.cpp:resolve_water`, `src/environment/world.cpp:inherited_world`,
+`src/c_api_env_internal.hpp:guarded`). Missing default WATR data stays unresolved
 through a null record handle; no synthetic visual record is created.
+
+Heights: an absent XCLW selects the world default height for an exterior cell
+with Has Water and a winning world. A WRLD with no DNAM reports height 0.0 with
+`has_height` set, and a WRLD input always reports a height. Interior cells use
+only their own XCWT, otherwise the default key, and report no XCLW height. The
+bits come from xEdit CELL DATA bit 0 "Is Interior Cell" and bit 1 "Has Water"
+([lines 5968-5969](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L5968-L5969)),
+and WRLD PNAM bit 0 "Use Land Data" (height, [line 13128](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L13128))
+and bit 3 "Use Water Data" (water, [line 13131](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L13131)).
+
+`radicle_worldspace_get_info` reports the raw PNAM: `has_parent_flags` is 0 when
+the record has no PNAM (`src/environment/world.cpp:decode_worldspace`,
+`src/c_api_world.cpp:radicle_worldspace_get_info`). Water inheritance uses the
+effective flags from `src/environment/world.cpp:effective_parent_flags` instead:
+whichever of WNAM and PNAM comes last in file order wins, WNAM setting all bits
+(0xFFFF), so a WNAM-only record inherits every bit. This order rule comes from
+RE 6916afb; the RE re-check (GT-119) is pending.
 
 Water type follows PNAM bit 3; height follows bit 0 independently. Ordered
 WNAM/PNAM fields affect inheritance, and active cycles fail closed. Exterior
@@ -116,7 +140,7 @@ and runtime probe `opencw/tools/probes/WaterProbe.cs` with scene
 least `1e30`; it misses the verified positive 2^31 default-height threshold.
 That historical consumer policy is not runtime evidence.
 
-The supplied `probes/gardenengine/WaterSelectionProbe.cs` and scene were run
+**historical: run 2026-10-05 against an ABI-14 build, not re-run at this head.** The supplied `probes/gardenengine/WaterSelectionProbe.cs` and scene were run
 in an isolated checkout of GardenEngine `676d2c1eabeceefedf53dc249cf63ee9a7f73740`.
 Build `opencw/OpenCommonwealth.csproj` with `RadicleSourceDir` set to this
 checkout, set `FO4_DATA_DIR` and `RADICLE_NATIVE_PATH` to its ABI-14 library,
