@@ -380,6 +380,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api.cpp
     tests/test_environment.cpp
     tests/test_environment_world.cpp
+    tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
     tests/test_environment_terrain.cpp
     tests/test_environment_strings.cpp

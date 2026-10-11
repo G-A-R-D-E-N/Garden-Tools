@@ -1,8 +1,7 @@
 # Water writer
 
 Source for every layout, order, default and required flag below: pinned TES5Edit `wbDefinitionsFO4.pas` at
-`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `build/xedit/wbDefinitionsFO4.pas` in the parity checkout, WATR
-lines 12788-12875). Struct loading semantics come from xEdit `wbImplementation.pas:StructDoInit`. Official measurements
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (WATR lines 12788-12875, [permalink](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L12788-L12875)). Struct loading semantics come from xEdit `wbImplementation.pas:StructDoInit`. Official measurements
 are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DLCNukaWorld.esm 3).
 
 ## W0 merge (`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION`)
@@ -42,7 +41,7 @@ are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DL
 covers every silt field at DNAM sizes 188 through 201. At pinned xEdit commit
 `93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
 `Core/wbDefinitionsFO4.pas:12861-12868` declares the 12-byte silt struct as
-one optional member. `Core/wbImplementation.pas:22589-22604` replaces an
+one optional member. `Core/wbImplementation.pas:22588-22603` replaces an
 optional member with an empty value when its full size does not fit. The
 writer must therefore refuse all seven silt scalar paths below 200 bytes,
 preserving the complete serialized plugin; 200- and 201-byte DNAMs retain
@@ -78,8 +77,10 @@ All paths are `existing_only`, `presentation: identity`; f32 bounds are +-1e9 li
   nullable: `[SNDR, NULL]`), `WATR\ConsumeSpell` (XNAM, SPEL), `WATR\ContactSpell` (YNAM, SPEL), `WATR\ImageSpace` (INAM,
   IMGS). Only SNAM's target list contains NULL in xEdit, so it is the only nullable link. All five signatures are in
   `Radicle/include/fo4/schema/formid_subrecords.inc`, so `Radicle/src/schema/form_links.cpp:visit_link_offsets` remaps
-  them when masters change; DNAM, GNAM, NAM0 and NAM1 are in that table too but are never 4 bytes in WATR, so they are not
-  remapped.
+  them when masters change. DNAM, GNAM, NAM0 and NAM1 are in that table too, and no official WATR has a 4-byte one. GNAM is
+  variable-size in xEdit ([`wbByteArray(GNAM, 'Unused', 0)`, line 12869](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas#L12869)),
+  so a 4-byte GNAM in a third-party plugin would be remapped by `Radicle/src/schema/form_links.cpp:visit_link_offsets`
+  (its generic `is_listed_formid_signature` branch with `size == 4`).
 
 ## Authoring (`fields.json` WATR `authoring`)
 
@@ -103,7 +104,7 @@ All paths are `existing_only`, `presentation: identity`; f32 bounds are +-1e9 li
   above at their offsets and are checked field by field after decode in `Radicle/tests/test_water_authoring.cpp:WaterAuthoring.CreatesFromTheXEditDefaults`.
 - No default for TNAM, XNAM, YNAM, INAM (target lists without NULL, so a zero link is invalid), DATA and GNAM
   (`wbByteArray(..., 'Unused', 0)`: size 0 is xEdit's variable-length byte array, not a 0-byte payload; every official DATA
-  is 0 bytes but every official GNAM is 12 bytes of unknown data, and a zero-length default is not expressible). Add is
+  is 0 bytes but every official GNAM is 12 bytes of unknown data (local measurement of the seven official masters), and a zero-length default is not expressible). Add is
   `no_default` for these; removal is allowed because xEdit marks none of them required.
 - `coupled`: none. No WATR subrecord owns siblings (there is no model group, destruction group or count field), so
   every optional entry is freely removable.
@@ -120,9 +121,12 @@ FNAM, INAM, DATA, DNAM, GNAM, NAM0-NAM4.
 
 ## Stays opaque
 
+Anchors: `Radicle/schema/fallout4/fields.json` (WATR entries), `Radicle/src/environment/base_records.cpp:decode_water`,
+`Radicle/tests/test_water_real.cpp`.
+
 - DATA and GNAM payloads (unused/unknown bytes, preserved; listed in the order, removable, not addable).
 - Colour pad bytes at DNAM 7, 11, 39, 99, 195, 199. Not always zero in shipped data: byte 195 (silt light colour pad) is
-  0xFF in four Fallout4.esm records (0x1BDDB1, 0x1450A3, 0x16E900, 0x16E8FF), so they are never rewritten.
+  0xFF in four Fallout4.esm records (local measurement of the seven official masters: 0x1BDDB1, 0x1450A3, 0x16E900, 0x16E8FF), so they are never rewritten.
 - DNAM bytes 188-199 of a 189-199-byte payload as far as the decoder is concerned (see the size rule above).
 - FULL in localized plugins (string ID, W0 refusal).
 

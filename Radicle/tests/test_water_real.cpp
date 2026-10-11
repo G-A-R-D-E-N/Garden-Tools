@@ -85,6 +85,24 @@ TEST_P(WaterRealData, CApiExposesEveryWater) {
   RecordProperty("WATR", static_cast<int>(count));
 }
 
+TEST_P(WaterRealData, MasterHasExpectedWaterCountAndDnamSizes) {
+  const std::map<std::string, std::size_t> expected{
+      {"Fallout4.esm", 42},      {"DLCCoast.esm", 2},       {"DLCNukaWorld.esm", 3}, {"DLCRobot.esm", 0},
+      {"DLCworkshop01.esm", 0}, {"DLCworkshop02.esm", 0}, {"DLCworkshop03.esm", 0}};
+  const auto plugin = fo4::read_plugin_file(path_);
+  std::size_t count = 0;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (record.header.signature != fo4::Signature::from_string("WATR")) { return; }
+    ++count;
+    SCOPED_TRACE(record.form_key.to_string());
+    for (const auto& sub : record.subrecords) {
+      if (sub.signature != fo4::Signature::from_string("DNAM")) { continue; }
+      EXPECT_TRUE(sub.data.size() == 188 || sub.data.size() == 201) << sub.data.size();
+    }
+  });
+  EXPECT_EQ(count, expected.at(GetParam()));
+}
+
 INSTANTIATE_TEST_SUITE_P(
     OfficialMasters, WaterRealData,
     testing::Values("Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",

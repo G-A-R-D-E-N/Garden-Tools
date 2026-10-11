@@ -1,5 +1,6 @@
 #include "fo4/environment/world.hpp"
 
+#include "default_water.hpp"
 #include "record_reader.hpp"
 
 #include <cstring>
@@ -142,6 +143,15 @@ const RecordRef* winning_type(const Environment& env, const std::optional<FormKe
              ? ref : nullptr;
 }
 
+std::uint16_t effective_parent_flags(const Record& record) {
+  std::uint16_t flags = 0;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == k_wnam) flags = 0xFFFFu;
+    if (sub.signature == k_pnam) flags = Reader::u16(sub, 0);
+  }
+  return flags;
+}
+
 WorldspaceData inherited_world(const Environment& env, const RecordRef& root, std::uint16_t bit) {
   const auto* current = &root;
   std::set<FormKey> visited;
@@ -150,11 +160,7 @@ WorldspaceData inherited_world(const Environment& env, const RecordRef& root, st
       throw WorldDecodeError("cyclic worldspace water inheritance");
     }
     auto world = decode_worldspace(env, *current);
-    std::uint16_t flags = 0;
-    for (const auto& sub : current->record->subrecords) {
-      if (sub.signature == k_wnam) flags = 0xFFFFu;
-      if (sub.signature == k_pnam) flags = Reader::u16(sub, 0);
-    }
+    const auto flags = effective_parent_flags(*current->record);
     const auto* parent = winning_type(env, world.parent, k_wrld);
     if (parent == nullptr || (flags & bit) == 0) return world;
     current = parent;
@@ -176,14 +182,15 @@ WaterSelection resolve_water(const Environment& env, const RecordRef& ref) {
   const RecordRef* world_ref = nullptr;
   std::optional<FormKey> water;
   if (ref.record && ref.record->header.signature == k_wrld) {
-    world_ref = &ref;
+    world_ref = env.winner(ref.record->form_key);
   } else {
-    const auto cell = decode_cell(env, ref);
+    const auto* winner = ref.record ? env.winner(ref.record->form_key) : nullptr;
+    const auto cell = decode_cell(env, winner ? *winner : ref);
     const auto flags = cell.flags.value_or(0);
     if (cell.water && !cell.water->owner().empty()) {
       water = cell.water;
       if (winning_type(env, water, Signature{'W', 'A', 'T', 'R'}) == nullptr) {
-        throw WorldDecodeError("unresolved CELL XCWT water target");
+        water.reset();
       }
     }
     if ((flags & 1u) == 0) world_ref = winning_type(env, cell.worldspace, k_wrld);
@@ -203,7 +210,7 @@ WaterSelection resolve_water(const Environment& env, const RecordRef& ref) {
   if (result.record) result.water = result.record->record->form_key;
   else {
     result.uses_default_water = true;
-    result.water = FormKey{PluginKey::from_filename("Fallout4.esm"), LocalFormId{0x18}};
+    result.water = FormKey{PluginKey::from_filename(k_default_water_plugin), LocalFormId{k_default_water_local}};
     result.record = winning_type(env, result.water, Signature{'W', 'A', 'T', 'R'});
   }
   return result;

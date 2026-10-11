@@ -117,6 +117,26 @@ TEST(WaterAuthoring, TailFieldsFollowThePrefixRuleOnA188ByteVisualBlock) {
   EXPECT_EQ(payload(plugin, k_short, "DNAM").size(), 188u);
 }
 
+TEST(WaterAuthoring, ScreenSpaceReflectionsIsRefusedBelow201BytesAndEditableAt201) {
+  for (std::size_t size = 189; size <= 200; ++size) {
+    auto entries = fixture();
+    for (auto& [name, data] : entries[2].subs) {
+      if (name == "DNAM") { data = visual(size); }
+    }
+    auto plugin = read(build(entries));
+    const auto original = fo4::write_plugin(plugin);
+    SCOPED_TRACE(std::to_string(size));
+    EXPECT_EQ(scalar(plugin, k_bare, "WATR\\ScreenSpaceReflections", "0"), k_missing);
+    EXPECT_EQ(fo4::write_plugin(plugin), original);
+    EXPECT_EQ(payload(plugin, k_bare, "DNAM"), visual(size));
+  }
+  auto plugin = read(build(fixture()));
+  EXPECT_EQ(scalar(plugin, k_bare, "WATR\\ScreenSpaceReflections", "0"), k_updated);
+  auto want = visual(201);
+  want[200] = std::byte{0};
+  EXPECT_EQ(payload(plugin, k_bare, "DNAM"), want);
+}
+
 TEST(WaterAuthoring, SiltFieldsRequireTheCompleteOptionalStruct) {
   for (std::size_t size = 188; size <= 201; ++size) {
     auto entries = fixture();
