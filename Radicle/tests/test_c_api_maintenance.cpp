@@ -99,3 +99,30 @@ TEST(CApiMaintenance, ReportsItmDeletedAndUnusedMasters) {
   std::error_code ec;
   std::filesystem::remove_all(root, ec);
 }
+
+TEST(CApiMaintenance, EslEligibilityMatchesTheTargetFloorForMasterlessPlugins) {
+  const auto root = std::filesystem::temp_directory_path() /
+                    ("radicle_c_esl_floor_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  const auto base = write_file(root / "Base.esm", plugin_bytes({}, {{0x000800, 0}}));
+  const auto masterless = write_file(root / "Masterless.esp", plugin_bytes({}, {{0x000700, 0}, {0x000800, 0}}));
+  const auto mastered = write_file(root / "Mastered.esp", plugin_bytes({"Base.esm"}, {{0x01000700, 0}, {0x01000000, 0}}));
+  const char* paths[] = {base.c_str(), masterless.c_str(), mastered.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 3, &env), RADICLE_STATUS_OK) << radicle_last_error();
+
+  size_t native = 0, out_of_range = 0, capacity = 0;
+  ASSERT_EQ(radicle_env_esl_eligibility(env, "Masterless.esp", &native, &out_of_range, &capacity), RADICLE_STATUS_OK);
+  EXPECT_EQ(native, 2u);
+  EXPECT_EQ(out_of_range, 1u);
+  EXPECT_EQ(capacity, 0x800u);
+
+  ASSERT_EQ(radicle_env_esl_eligibility(env, "Mastered.esp", &native, &out_of_range, &capacity), RADICLE_STATUS_OK);
+  EXPECT_EQ(native, 2u);
+  EXPECT_EQ(out_of_range, 1u);
+  EXPECT_EQ(capacity, 0xFFEu);
+
+  radicle_env_destroy(env);
+  std::error_code ec;
+  std::filesystem::remove_all(root, ec);
+}

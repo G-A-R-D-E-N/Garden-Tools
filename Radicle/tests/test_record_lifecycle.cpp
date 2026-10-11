@@ -53,6 +53,39 @@ std::vector<std::byte> make_renumber_plugin(bool malformed_mnam = false,
   return out.bytes;
 }
 
+std::vector<std::byte> make_child_group_plugin(std::string_view parent_type,
+                                               std::string_view child_type,
+                                               std::int32_t child_group_type) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x802);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto top = fo4::test::begin_group(out, parent_type, 0);
+  const auto parent = fo4::test::begin_record(out, parent_type, 0, 0x00000800);
+  fo4::test::end_record(out, parent);
+  const auto children =
+      fo4::test::begin_group(out, std::string_view{"\0\x08\0\0", 4}, child_group_type);
+  const auto child = fo4::test::begin_record(out, child_type, 0, 0x00000801);
+  fo4::test::end_record(out, child);
+  fo4::test::end_group(out, children);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+std::string renumber_refusal(fo4::Plugin& plugin, const fo4::FormKey& key) {
+  try {
+    static_cast<void>(fo4::renumber_local_record(plugin, key, fo4::LocalFormId{0x900}));
+  } catch (const fo4::FormIdError& error) {
+    return error.what();
+  }
+  return {};
+}
+
 std::string editor_id(const fo4::Record& record) {
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != fo4::sig_edid) continue;
@@ -158,4 +191,22 @@ TEST(RecordLifecycle, RenumberRefusesLightPluginAboveTwelveBits) {
       fo4::FormIdError);
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
   EXPECT_EQ(plugin.header.next_form_id, 0x802u);
+}
+
+TEST(RecordLifecycle, RenumberRefusesDialWithTopicChildrenWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_child_group_plugin("DIAL", "INFO", 7), "Lifecycle.esp");
+  const auto key = fo4::FormKey::parse("000800:Lifecycle.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  EXPECT_NE(renumber_refusal(plugin, key).find("parent GRUP label rewriting"), std::string::npos);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+  EXPECT_NE(fo4::find_record(plugin, key), nullptr);
+}
+
+TEST(RecordLifecycle, RenumberRefusesWrldWithWorldChildrenWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_child_group_plugin("WRLD", "CELL", 1), "Lifecycle.esp");
+  const auto key = fo4::FormKey::parse("000800:Lifecycle.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  EXPECT_NE(renumber_refusal(plugin, key).find("parent GRUP label rewriting"), std::string::npos);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+  EXPECT_NE(fo4::find_record(plugin, key), nullptr);
 }
