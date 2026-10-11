@@ -3,6 +3,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/formlink_slots.hpp"
 #include "fo4/schema/preflight.hpp"
 
 #include <algorithm>
@@ -48,23 +49,15 @@ struct SlotTargets {
   std::span<const Signature> targets;
 };
 
-std::optional<SlotTargets> slot_targets(Signature record,
+std::optional<SlotTargets> slot_targets(const Record& record,
                                         Signature subrecord,
-                                        std::size_t offset) noexcept {
-  for (const auto& field : schema::formlink_fields(record)) {
-    const auto& address = field.address;
-    if (address.when.count != 0) continue;
-    const bool strided = address.stride != 0;
-    const bool slot_matches =
-        strided ? offset >= address.array_offset &&
-                      (offset - address.array_offset) % address.stride == field.offset
-                : field.offset == offset;
-    if (field.subrecord == subrecord && slot_matches) {
-      return SlotTargets{false, schema::formlink_field_targets(field)};
-    }
+                                        std::size_t offset) {
+  if (const auto field = schema::formlink_field_at(schema::formlink_fields(record.header.signature),
+                                                   record, subrecord, offset)) {
+    return SlotTargets{false, schema::formlink_field_targets(*field)};
   }
   for (const auto& list : schema::k_generated_formlink_lists) {
-    if (list.record != record || list.subrecord != subrecord) continue;
+    if (list.record != record.header.signature || list.subrecord != subrecord) continue;
     const bool slot_matches = list.storage == schema::FormLinkListStorage::per_subrecord
                                   ? offset == 0
                                   : offset % 4 == 0;
@@ -97,7 +90,7 @@ constexpr std::uint32_t k_first_non_hardcoded_id = 0x800;
 constexpr std::string_view k_game_master = "Fallout4.esm";
 
 void check_links(const Plugin& plugin,
-                 const std::map<FormKey, Signature>& record_signatures,
+                 const std::map<FormKey, const Record*>& records,
                  const std::map<FormKey, WinnerInfo>& winners,
                  const PluginKey& game_master,
                  FindingSink& sink) {
@@ -120,10 +113,10 @@ void check_links(const Plugin& plugin,
       continue;
     }
 
-    const auto owner = record_signatures.find(hit.record);
-    const auto slot = owner == record_signatures.end()
+    const auto owner = records.find(hit.record);
+    const auto slot = owner == records.end()
                           ? std::nullopt
-                          : slot_targets(owner->second, hit.subrecord, hit.offset);
+                          : slot_targets(*owner->second, hit.subrecord, hit.offset);
     const auto target = winners.find(hit.key);
     if (target == winners.end() && hit.key.owner() == game_master &&
         hit.key.local().value() < k_first_non_hardcoded_id) {
@@ -262,11 +255,11 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
 
   for (const auto* plugin : load_order) {
     if (plugin == nullptr || !selected(plugin->key)) continue;
-    std::map<FormKey, Signature> record_signatures;
+    std::map<FormKey, const Record*> records;
     for (const auto* record : collect_records(*plugin)) {
-      record_signatures[record->form_key] = record->header.signature;
+      records[record->form_key] = record;
     }
-    check_links(*plugin, record_signatures, winners, game_master, sink);
+    check_links(*plugin, records, winners, game_master, sink);
     check_preflight(*plugin, sink);
   }
 

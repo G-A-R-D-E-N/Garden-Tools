@@ -129,6 +129,12 @@ Whole-load-order "Check for Errors" (#359, xEdit parity). Findings come only fro
 - `wrong_target_type`: only when `slot_targets` matches a generated field (record + subrecord + offset) or a non-nested list (per-subrecord at offset 0, packed arrays at 4-byte steps, as `formlink_lists.cpp:packed_element_count`). Wildcard lists and nested lists are skipped. `CheckFinding::offset` is `FormLinkHit::offset` (`fo4/schema/form_links.hpp`), the byte offset inside the subrecord.
 - `CheckOptions::plugins` limits which plugins' records are checked; the winner index still covers the whole load order.
 
+## src/graph/check_errors.cpp:slot_targets
+
+Resolves the allowed target signatures for a `(record, subrecord, offset)` slot. Generated FormLink fields are tried first through `src/schema/formlink_slots.cpp:formlink_field_at`. An unguarded field matches by its static offset (or stride), as before. A guarded field (variant, `FieldAddress::when`) matches only when `src/schema/field_address.cpp:resolve_field_slots` reports a valid slot at that offset, so the selector byte decides which variant is in force. When the selected variant is not a FormLink, or the selector is absent, no field matches and the slot stays unproven (`unresolved_link` is then only a warning). Generated FormLink lists are tried after fields, unchanged.
+
+Every entry in `include/fo4/schema/generated_formlink_lists.inc` is `FieldAddress{}`, so no real row is guarded yet (GT-018). The variant branch is covered only by `CheckErrors.VariantFormLinkSlotIsProvenOnlyForSelectedVariant` in `tests/test_check_errors.cpp`, which uses a synthetic guarded copy of `EXPL\Light`. `check_load_order` itself still reads the generated tables, so an end-to-end wrong-signature variant error has no test until a guarded row exists.
+
 ## src/graph/check_errors.cpp:find_leveled_list_cycles
 
 Ported from `PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::checkCircularLeveledLists` and extended to LVSP. Edges are each leveled record's FormLinks in its winning plugin; non-leveled targets are ignored. A cycle is reported once, keyed by its rotation starting at the smallest FormKey, and the returned path repeats its first node at the end.
