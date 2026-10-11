@@ -30,7 +30,7 @@ The fixture follows `Radicle/tests/test_condition_scopes.cpp:ConditionScopes.Ref
 
 ## Radicle/include/fo4/plugin/mutation.hpp:set_record_conditions follow-ups
 
-Records with several condition lists remain refused by whole-record writes: QUST top-level conditions alongside conditioned objectives/targets, PACK, PERK and INFO. Current scoped paths cover magic-effect entries and quest aliases. Additional scoped paths remain follow-ups.
+Records with several condition lists remain refused by whole-record writes: QUST top-level conditions alongside conditioned objectives/targets, PACK, PERK and INFO. Scoped paths cover magic-effect entries, quest aliases, PACK `Branches[i].Conditions` (`Radicle/src/schema/condition_scopes.cpp:package_branch_ranges`) and QUST `Targets[k].Conditions` (`Radicle/src/schema/condition_scopes.cpp:quest_target_ranges`). PERK and INFO top-level lists and the PACK/QUST top-level lists remain follow-ups; see `docs/code-notes/GARDEN-TOOLS.md`.
 
 ## Radicle/src/schema/ctda.cpp:read_ctda_conditions_in / Radicle/include/fo4/schema/ctda.hpp:CtdaMultipleListsError
 

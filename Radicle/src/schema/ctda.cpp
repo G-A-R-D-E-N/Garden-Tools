@@ -223,10 +223,16 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
     if (conditions.empty()) return CtdaScopeWrite::no_op;
     if (!insert_anchor.has_value()) return CtdaScopeWrite::no_list;
     const std::size_t anchor = std::min(*insert_anchor, record.subrecords.size());
+    const bool has_citc = anchor > begin && record.subrecords[anchor - 1].signature == sig_citc &&
+                          record.subrecords[anchor - 1].data.size() == 4;
     record.subrecords.insert(
         record.subrecords.begin() + static_cast<std::ptrdiff_t>(anchor),
         std::make_move_iterator(replacement.begin()),
         std::make_move_iterator(replacement.end()));
+    if (has_citc) {
+      std::uint32_t count = static_cast<std::uint32_t>(conditions.size());
+      std::memcpy(record.subrecords[anchor - 1].data.data(), &count, sizeof(count));
+    }
     return CtdaScopeWrite::inserted;
   }
 

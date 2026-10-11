@@ -345,6 +345,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ctda_strings.cpp
     tests/test_ctda_model.cpp
     tests/test_condition_scopes.cpp
+    tests/test_condition_scopes_records.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
     tests/test_navmesh_formlinks.cpp

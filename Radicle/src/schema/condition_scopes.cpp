@@ -26,6 +26,19 @@ constexpr Signature sig_alcs = Signature::from_string("ALCS");
 constexpr Signature sig_aled = Signature::from_string("ALED");
 constexpr Signature sig_almi = Signature::from_string("ALMI");
 constexpr Signature sig_alcc = Signature::from_string("ALCC");
+constexpr Signature sig_citc = Signature::from_string("CITC");
+constexpr Signature sig_qsta = Signature::from_string("QSTA");
+
+constexpr Signature k_package_branch_members[] = {
+    sig_citc, sig_ctda, sig_cis1, sig_cis2, Signature::from_string("PRCB"),
+    Signature::from_string("PNAM"), Signature::from_string("FNAM"),
+    Signature::from_string("PKC2"), Signature::from_string("PFO2"),
+    Signature::from_string("PFOR"),
+};
+
+constexpr Signature k_quest_target_members[] = {
+    sig_citc, sig_ctda, sig_cis1, sig_cis2,
+};
 
 constexpr Signature k_reference_condition_successors[] = {
     Signature::from_string("KSIZ"), Signature::from_string("KWDA"),
@@ -230,6 +243,46 @@ std::optional<std::vector<ScopeRange>> alias_element_ranges(const Record& record
   return ranges;
 }
 
+template <std::size_t N>
+bool contains_signature(const Signature (&set)[N], Signature signature) {
+  for (const auto member : set) {
+    if (signature == member) return true;
+  }
+  return false;
+}
+
+std::vector<ScopeRange> package_branch_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::vector<ScopeRange> ranges;
+  for (std::size_t i = 0; i + 1 < subs.size(); ++i) {
+    if (subs[i].signature != sig_anam || subs[i + 1].signature != sig_citc) continue;
+    std::size_t end = i + 2;
+    while (end < subs.size() &&
+           contains_signature(k_package_branch_members, subs[end].signature)) {
+      ++end;
+    }
+    ranges.push_back(ScopeRange{i, end, i + 2, true});
+  }
+  return ranges;
+}
+
+std::vector<ScopeRange> quest_target_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::vector<ScopeRange> ranges;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature != sig_qsta) continue;
+    std::size_t end = i + 1;
+    while (end < subs.size() &&
+           contains_signature(k_quest_target_members, subs[end].signature)) {
+      ++end;
+    }
+    const std::size_t anchor =
+        (i + 1 < subs.size() && subs[i + 1].signature == sig_citc) ? i + 2 : i + 1;
+    ranges.push_back(ScopeRange{i, end, anchor, true});
+  }
+  return ranges;
+}
+
 enum class ScopeStatus { ok, out_of_range, not_conditioned, structure_invalid };
 
 struct ScopeResolution {
@@ -253,6 +306,12 @@ ScopeResolution resolve_scope(const Record& record,
       ranges = std::move(*alias_ranges);
       break;
     }
+    case ConditionScopeKind::package_branch:
+      ranges = package_branch_ranges(record);
+      break;
+    case ConditionScopeKind::quest_target:
+      ranges = quest_target_ranges(record);
+      break;
   }
   if (container_index >= ranges.size()) {
     return ScopeResolution{ScopeStatus::out_of_range, {}};

@@ -1345,7 +1345,9 @@
     { "record": "ALCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "ENCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "INGR", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "PACK", "container": "Branches", "member": "Conditions", "scope": "package_branch" },
     { "record": "QUST", "container": "Aliases", "member": "Conditions", "scope": "alias" },
+    { "record": "QUST", "container": "Targets", "member": "Conditions", "scope": "quest_target" },
     { "record": "SPEL", "container": "Effects", "member": "Conditions", "scope": "effect" }
   ]
 }
