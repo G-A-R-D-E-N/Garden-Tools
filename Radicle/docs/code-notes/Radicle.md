@@ -27,6 +27,15 @@ survives write and read, the extracted DDS header sets caps2 `0xFE00` and DX10
 miscFlag `0x4` (`ba2_texture.cpp:dds_header_for`), and a rebuild keeps flags and
 extracted bytes unchanged.
 
+## src/archive/ba2_texture.cpp:dds_header_for
+
+DX10 extraction picks the DDS header the way xEdit's writer does. Formats in
+`dx9_format` (the xEdit `TwbDDS.DXGI_DX9` set, `Core/wbDDS.pas:249-265`) get the
+128-byte classic header with a FourCC or pixel masks; the rest get the 148-byte
+DX10 extension. Cubemaps set `DDSCAPS_COMPLEX` even with one mip
+(`Core/wbDDS.pas:600-606`). The rule, its xEdit citations and the Radicle policy
+differences are in `Radicle/docs/BA2.md` under "DDS header rule".
+
 ## tools/corpus/ba2_measure.py:measure
 
 Read-only, stdlib-only corpus check for `docs/BA2.md`. It walks each root-level

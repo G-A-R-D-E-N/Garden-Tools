@@ -48,7 +48,7 @@ TEST_P(Ba2NamedRealData, ExtractsAndRebuildsOneEntry) {
     EXPECT_EQ(rebuilt.entries[0].directory_hash, archive.entries[0].directory_hash);
     EXPECT_EQ(fo4::archive::extract_ba2_general_entry(rebuilt.entries[0]), expected);
   } else {
-    ASSERT_GE(expected.size(), 148u);
+    ASSERT_GE(expected.size(), 128u);
     EXPECT_EQ(std::to_integer<char>(expected[0]), 'D');
     EXPECT_EQ(std::to_integer<char>(expected[1]), 'D');
     EXPECT_EQ(std::to_integer<char>(expected[2]), 'S');

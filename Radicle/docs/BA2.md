@@ -100,6 +100,45 @@ Flags bit 0 is read as the cubemap bit when the DDS header is reconstructed
 (`src/archive/ba2_texture.cpp:dds_header_for`). The other flag bits and the
 tile mode are preserved on round trip but not interpreted.
 
+## DDS header rule
+
+`src/archive/ba2_texture.cpp:dds_header_for` writes the same header as xEdit's
+DDS builder for a `.dds` DX10 entry (`Core/wbBSArchive.pas:2195-2211` calls
+`TwbDDS.SetUpHeader`, `Core/wbDDS.pas:574-786`; pinned xEdit source 93cc0bc5):
+
+- Formats in `TwbDDS.DXGI_DX9` (`wbDDS.pas:249-265`) get the classic 128-byte
+  header with no DX10 extension (`wbBSArchive.pas:2199`). BC1 (71) is `DXT1`,
+  BC2 (74) `DXT3`, BC3 (77) `DXT5`, BC4U/BC4S (80/81) `BC4U`/`BC4S`, BC5U/BC5S
+  (83/84) `BC5U`/`BC5S`. R8G8B8A8 (28), B8G8R8A8 (87), B8G8R8X8 (88), B5G6R5 (85),
+  B5G5R5A1 (86), R8G8 (49), A8 (65) and R8 (61) get pixel-format masks
+  (`wbDDS.pas:675-756`).
+- Every other format gets the 148-byte header: `DX10` FourCC, DXGI format, and
+  the DX10 extension (`wbDDS.pas:767-773`).
+- Flags: `DDSD_LINEARSIZE` (0x80000) for BC formats, `DDSD_PITCH` (0x8) for
+  uncompressed (`wbDDS.pas:612-744`). DX9 pitch or linear size: BC1 and BC4
+  `width*height/2`, BC2, BC3 and BC5 `width*height`, uncompressed
+  `width*bytes per pixel`.
+- Caps: `DDSCAPS_TEXTURE`; `DDSCAPS_MIPMAP|DDSCAPS_COMPLEX` when mips > 1;
+  `DDSCAPS_COMPLEX` for any cubemap, including one mip; caps2 `0xFE00` for a
+  cubemap (`wbDDS.pas:593-606`).
+
+Open mismatch, code not changed here: the DX10 path keeps block rounding
+(`((w+3)/4)*((h+3)/4)*bytes`), while xEdit writes `width*height` for DX10 BC
+formats (`wbDDS.pas:665`). The two agree only when width and height are multiples
+of 4.
+
+Radicle policy differences from xEdit, pending an owner decision (code unchanged):
+
+- Non-`.dds` entries in a DX10 archive pass through unchanged; xEdit always
+  prepends a header (`wbBSArchive.pas:2195-2210`).
+- A missing name table gives `unnamed.dds`; xEdit builds
+  `<dirhash>\<namehash>.<ext>` (`wbBSArchive.pas:1491-1497`).
+- Zero width or height throws; xEdit does not check.
+- Chunk-header size (must be 0x18) and the `0xBAADF00D` sentinel are enforced;
+  xEdit reads and ignores them (`wbBSArchive.pas:1453`, `:1464`, `:1485`).
+- A name-table offset past EOF throws; xEdit falls back to hash names
+  (`wbBSArchive.pas:1491`).
+
 ## Current API
 
 `fo4/archive/ba2.hpp` and `fo4/archive/ba2_texture.hpp` expose:

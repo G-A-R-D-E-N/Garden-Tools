@@ -28,6 +28,7 @@ constexpr std::size_t k_entry_size = 24;
 constexpr std::size_t k_chunk_record_size = 24;
 constexpr std::uint32_t k_dds_magic = 0x20534444u;     // "DDS "
 constexpr std::uint32_t k_dds_dx10_fourcc = 0x30315844u;
+constexpr std::size_t k_dds_header_size = 128;
 constexpr std::size_t k_dds_dx10_header_size = 148;
 
 constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
@@ -122,17 +123,54 @@ std::pair<std::uint32_t, std::uint32_t> dds_pitch_and_flag(const Ba2TextureInfo&
   return {static_cast<std::uint32_t>(value), flag};
 }
 
+struct Dx9Format {
+  std::uint32_t pitch_or_linear;
+  std::uint32_t size_flag;
+  std::uint32_t pixel_flags;
+  std::uint32_t fourcc;
+  std::uint32_t bit_count;
+  std::uint32_t masks[4];
+};
+
+std::optional<Dx9Format> dx9_format(const Ba2TextureInfo& info) {
+  constexpr std::uint32_t linear = 0x80000u;
+  constexpr std::uint32_t pitch = 0x8u;
+  constexpr std::uint32_t fourcc_flag = 0x4u;
+  const std::uint32_t w = info.width;
+  const std::uint32_t h = info.height;
+  switch (info.dxgi_format) {
+    case 71: return Dx9Format{w * h / 2, linear, fourcc_flag, 0x31545844u, 0, {}};
+    case 74: return Dx9Format{w * h, linear, fourcc_flag, 0x33545844u, 0, {}};
+    case 77: return Dx9Format{w * h, linear, fourcc_flag, 0x35545844u, 0, {}};
+    case 80: return Dx9Format{w * h / 2, linear, fourcc_flag, 0x55344342u, 0, {}};
+    case 81: return Dx9Format{w * h / 2, linear, fourcc_flag, 0x53344342u, 0, {}};
+    case 83: return Dx9Format{w * h, linear, fourcc_flag, 0x55354342u, 0, {}};
+    case 84: return Dx9Format{w * h, linear, fourcc_flag, 0x53354342u, 0, {}};
+    case 28: return Dx9Format{w * 4, pitch, 0x41u, 0, 32, {0xFFu, 0xFF00u, 0xFF0000u, 0xFF000000u}};
+    case 87: return Dx9Format{w * 4, pitch, 0x41u, 0, 32, {0xFF0000u, 0xFF00u, 0xFFu, 0xFF000000u}};
+    case 88: return Dx9Format{w * 4, pitch, 0x40u, 0, 32, {0xFF0000u, 0xFF00u, 0xFFu, 0}};
+    case 85: return Dx9Format{w * 2, pitch, 0x40u, 0, 16, {0xF800u, 0x7E0u, 0x1Fu, 0}};
+    case 86: return Dx9Format{w * 2, pitch, 0x41u, 0, 16, {0x7C00u, 0x3E0u, 0x1Fu, 0x8000u}};
+    case 49: return Dx9Format{w * 2, pitch, 0x20001u, 0, 16, {0xFFu, 0, 0, 0xFF00u}};
+    case 65: return Dx9Format{w, pitch, 0x2u, 0, 8, {0, 0, 0, 0xFFu}};
+    case 61: return Dx9Format{w, pitch, 0x20000u, 0, 8, {0xFFu, 0, 0, 0}};
+    default: return std::nullopt;
+  }
+}
+
 std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
   if (entry.texture.width == 0 || entry.texture.height == 0) {
     throw Ba2Error("DX10 BA2 texture has zero width or height");
   }
 
-  const auto [pitch_or_linear, size_flag] = dds_pitch_and_flag(entry.texture);
+  const auto dx9 = dx9_format(entry.texture);
+  const auto [pitch_or_linear, size_flag] =
+      dx9 ? std::make_pair(dx9->pitch_or_linear, dx9->size_flag) : dds_pitch_and_flag(entry.texture);
   const auto mip_count = std::max<std::uint32_t>(1u, entry.texture.mip_count);
   const bool cube = (entry.texture.flags & 0x1u) != 0;
 
   std::vector<std::byte> out;
-  out.reserve(k_dds_dx10_header_size);
+  out.reserve(dx9 ? k_dds_header_size : k_dds_dx10_header_size);
   append_u32(out, k_dds_magic);
   append_u32(out, 124u);
   append_u32(out, 0x1u | 0x2u | 0x4u | 0x1000u | 0x20000u | size_flag);
@@ -143,24 +181,27 @@ std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
   append_u32(out, mip_count);
   for (int i = 0; i < 11; ++i) append_u32(out, 0u);
   append_u32(out, 32u);
-  append_u32(out, 0x4u);
-  append_u32(out, k_dds_dx10_fourcc);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0x1000u | (mip_count > 1 ? 0x400008u : 0u));
+  if (dx9) {
+    append_u32(out, dx9->pixel_flags);
+    append_u32(out, dx9->fourcc);
+    append_u32(out, dx9->bit_count);
+    for (const auto mask : dx9->masks) append_u32(out, mask);
+  } else {
+    append_u32(out, 0x4u);
+    append_u32(out, k_dds_dx10_fourcc);
+    for (int i = 0; i < 5; ++i) append_u32(out, 0u);
+  }
+  append_u32(out, 0x1000u | (mip_count > 1 ? 0x400008u : 0u) | (cube ? 0x8u : 0u));
   append_u32(out, cube ? (0x200u | 0xFC00u) : 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, entry.texture.dxgi_format);
-  append_u32(out, 3u);
-  append_u32(out, cube ? 0x4u : 0u);
-  append_u32(out, 1u);
-  append_u32(out, 0u);
-  if (out.size() != k_dds_dx10_header_size) {
+  for (int i = 0; i < 3; ++i) append_u32(out, 0u);
+  if (!dx9) {
+    append_u32(out, entry.texture.dxgi_format);
+    append_u32(out, 3u);
+    append_u32(out, cube ? 0x4u : 0u);
+    append_u32(out, 1u);
+    append_u32(out, 0u);
+  }
+  if (out.size() != (dx9 ? k_dds_header_size : k_dds_dx10_header_size)) {
     throw Ba2Error("internal DDS header size mismatch");
   }
   return out;
