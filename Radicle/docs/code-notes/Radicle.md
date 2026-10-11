@@ -3,7 +3,7 @@
 ## src/environment/sound.cpp:decode_sound_descriptor and decode_sound_marker
 
 The pinned loader record is
-`build/RE-Work/6916afb/sound-399-340/README.md`
+`https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md`
 at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 5.2–5.5 (OG
 addresses 0x4C1C10, 0x2CB540 and 0x55A1E0). The OG Standard loader would accept a
 top-level FNAM as legacy flags, but xEdit defines FNAM only inside rate groups
