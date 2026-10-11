@@ -7,8 +7,7 @@ GRAS DATA is 32 bytes: density/min/max slope bytes, one unused byte,
 u16 distance from water, two unused bytes, u32 water-distance discriminator,
 four f32 placement/color/wave values and one flag byte plus three unused bytes.
 The [verified loader record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md)
-and local copy `build/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`
-stamp `TESGrass::Load` at OG RVA 0x31AA00. Present DATA is copied into a
+stamps `TESGrass::Load` at OG address 0x31AA00. Present DATA is copied into a
 zero-filled 32-byte prefix, including short or oversized fields. The read
 surface keeps absent DATA distinct from present zero-length DATA. Untouched
 original bytes, including surplus bytes and padding, remain in the container.
@@ -52,11 +51,38 @@ separately for each published head.
 
 GardenEngine main `5cb5e18131a53e3c7c6fa049ce8fde6a9ad9f742` pins Radicle
 `34d16d50de68e7da079745240fd247310ea730f6`, before these getters, and has no
-LTEX GNAM or GRAS/TREE/FLOR getter consumer. GardenEngine #148 must add that
-consumer and update its pin before the probe required by GARDEN-TOOLS #342 can
-run. Existing foliage HLOD support does not establish that grass-reader proof.
+LTEX GNAM or GRAS/TREE/FLOR getter consumer. The probe source for GARDEN-TOOLS
+#342 is in `Radicle/probes/gardenengine/`; it has not been run. It cannot run
+until GardenEngine #148 adds that consumer and moves its Radicle pin. Existing foliage HLOD support does not establish that grass-reader proof.
 The audit and ABI 12 integration are recorded in
 `docs/code-notes/radicle-vegetation.md` at the repository root.
+
+## GardenEngine consumer probe
+
+Copy `Radicle/probes/gardenengine/VegetationProbe.cs` and
+`Radicle/probes/gardenengine/vegetation_probe.tscn` into `opencw/tools/` of a
+GardenEngine checkout. Build `opencw/OpenCommonwealth.csproj` with
+`RadicleSourceDir` set to this Radicle checkout. Set `FO4_DATA_DIR` to the
+installed data folder and `RADICLE_NATIVE_PATH` to the built library of the
+matching ABI, then run `--headless --path opencw tools/vegetation_probe.tscn`.
+
+Exit codes: 0 means `vegetation_probe PASS` with a one-line JSON summary;
+77 means `vegetation_probe SKIP` because `FO4_DATA_DIR` is unset; 1 means
+`vegetation_probe FAIL` on stderr with the exception text.
+
+The probe loads only `Fallout4.esm` and asserts:
+- the first GRAS winner with DATA decodes through `RadicleEnvironment.Grass`;
+- the base-master TREE decodes through `Tree` with exactly twelve CNAM wind
+  values, matching the 48-byte CNAM inventory above;
+- the first FLOR winner with FNAM decodes through `Flora` with non-null flags;
+- the first LTEX winner with GNAM links decodes through `LandscapeGrasses`,
+  and every link is non-null, resolves through `Winner`, and is a GRAS.
+
+No vanilla EDIDs for these signatures are cited in this repository, so the probe
+walks `WinnersOf` and prints the EDIDs it finds in the PASS line instead of
+hard-coding names.
+
+Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (GardenEngine pins ABI 9 at 34d16d50).
 
 ## Editing
 
