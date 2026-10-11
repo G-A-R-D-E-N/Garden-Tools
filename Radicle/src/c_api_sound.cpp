@@ -32,6 +32,8 @@ bool valid(const radicle_env* env, const radicle_record* record, const void* out
 
 radicle_status invalid() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and output are required"); }
 
+radicle_status foreign() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment"); }
+
 }
 
 extern "C" {
@@ -41,6 +43,7 @@ radicle_status radicle_sound_descriptor_decode(const radicle_env* env, const rad
   clear_error();
   if (out_descriptor) *out_descriptor = nullptr;
   if (!valid(env, record, out_descriptor)) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding SNDR", [&] {
     const auto data = fo4::env::decode_sound_descriptor(env->value, *to_ref(record));
     auto holder = std::make_unique<DescriptorHolder>();
@@ -82,6 +85,7 @@ radicle_status radicle_sound_marker_get_info(const radicle_env* env, const radic
                                             radicle_sound_marker_info* out_info) {
   clear_error();
   if (!valid(env, record, out_info)) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding SOUN", [&] {
     const auto data = fo4::env::decode_sound_marker(env->value, *to_ref(record));
     radicle_sound_marker_info v{};
@@ -102,6 +106,7 @@ radicle_status radicle_music_type_decode(const radicle_env* env, const radicle_r
   clear_error();
   if (out_music) *out_music = nullptr;
   if (!valid(env, record, out_music)) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding MUSC", [&] {
     const auto data = fo4::env::decode_music_type(env->value, *to_ref(record));
     auto holder = std::make_unique<MusicHolder>();
@@ -127,6 +132,7 @@ radicle_status radicle_footstep_get_info(const radicle_env* env, const radicle_r
                                        radicle_footstep_info* out_info) {
   clear_error();
   if (!valid(env, record, out_info)) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding FSTP", [&] {
     const auto data = fo4::env::decode_footstep(env->value, *to_ref(record));
     *out_info = {to_c_key(*env, data.impact_set), stored_text(*env, data.tag)};
@@ -139,6 +145,7 @@ radicle_status radicle_footstep_set_decode(const radicle_env* env, const radicle
   clear_error();
   if (out_set) *out_set = nullptr;
   if (!valid(env, record, out_set)) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding FSTS", [&] {
     const auto data = fo4::env::decode_footstep_set(env->value, *to_ref(record));
     auto holder = std::make_unique<FootstepSetHolder>();
