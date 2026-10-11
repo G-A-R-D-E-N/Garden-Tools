@@ -77,6 +77,11 @@ enum class RecordRenumberStatus {
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 bool allows_hardcoded_range(const Plugin& plugin);
 
+// Writes the HEDR next object ID verbatim, including lowering it; callers own the range policy.
+void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id);
+
+std::optional<std::uint32_t> lowered_light_next_form_id(const Plugin& plugin);
+
 // Advances HEDR nextFormID and returns the reserved local key; creates no record.
 FormKey reserve_local_form_key(Plugin& plugin);
 
@@ -90,6 +95,8 @@ FormKey create_local_record(Plugin& plugin,
 // record. Unsupported remap surfaces fail closed before mutation. nextFormID
 // is never decremented or recycled.
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key);
+
+bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& record_key);
 
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
