@@ -4,7 +4,7 @@ Partial work for [#30](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/is
 
 Verified source: [versioned inflater and chunk record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a/RE-Work/subsystems/plugin-io-garden-tools/decompress-current-form-391/README.md), read 2026-10-04. Private copy: `decompress-current-form-391.md` (not committed, same note as the link above), SHA256 `b5a3f11f90134f49699b8cc1f056d13e562eb2b06ba01cbc55901c2463c6a8c5`. It carries real Ghidra 12.1.3 OG 1.10.163 decompiles; older PDB names are naming evidence only.
 
-| OG RVA | Verified operation |
+| OG address | Verified operation |
 |---|---|
 | `0x132500` | Read a declared output size followed by compressed bytes; initialize the inflater and require stream end |
 | `0x1b58820`, `0x1b58730` | Initialize zlib with window bits 15, enforcing its wrapper and Adler32 checksum |
