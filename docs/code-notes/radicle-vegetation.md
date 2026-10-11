@@ -61,3 +61,11 @@ Brace conditionals containing GoogleTest assertion macros so GCC's
 
 Restore the blank line after `hasRow` removed by merge conflict resolution; the
 diff against main then contains only the ABI 12 test update in this file.
+
+## Radicle/src/environment/vegetation.cpp:decode_landscape_grasses
+
+A NULL LTEX GNAM (raw form ID 0) is returned as an empty key, not as an error. `Radicle/src/formid.cpp:resolve_plugin_form_id` maps a null raw ID to an empty `FormKey`, and `Reader::link_at` in `Radicle/src/environment/record_reader.hpp` takes that path, the same as the other Radicle decoders. xEdit flags it: `source:xEdit Core/wbDefinitionsFO4.pas:9976 @93cc0bc5` declares GNAM as `wbFormIDCk(GNAM, 'Grass', [GRAS])` with no NULL allowed, and `source:xEdit Core/wbInterface.pas:TwbFormIDChecked.Check @93cc0bc5` (line 19359, IsNull branch) reports "Found a NULL reference". The official-master test asserts non-null links, so this case is not covered for other files.
+
+## Radicle/src/environment/vegetation.cpp:decode_tree
+
+A TREE CNAM whose length is not 48 bytes is treated the same as an absent CNAM: `wind` stays unset and no error is raised, so the rest of the record still decodes. The only difference is in the record container: a wrong-size CNAM is still a subrecord and its bytes stay untouched there, while an absent CNAM has no subrecord at all.
