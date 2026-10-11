@@ -18,6 +18,8 @@ BA2 support currently covers the proven Fallout 4 version-1 `BTDX/GNRL` layout: 
 
 Localized string-table support now covers `.STRINGS`, `.DLSTRINGS`, and `.ILSTRINGS`: strict header/offset validation, raw text-byte preservation, lookup, deduplication, and deterministic writing. Automatic resolution of 4-byte localized plugin fields remains deliberately separate until TES4 bit 7 semantics are settled or the caller supplies an explicit localization context.
 
+Material files (`.bgsm` / `.bgem`) read and write byte-identically across the BGSM and BGEM version gates through `fo4/material/material_file.hpp`, the `radicle_material_file_*` C ABI and the `Radicle.Interop.MaterialFile` wrapper; see `docs/MATERIALS.md`.
+
 Still incomplete: broad typed/schema-driven record authoring, safe ESL compaction, remaining mixed-layout FormID surfaces such as NAVM/NAVI, plugin-field integration with localized string tables, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
 
 ## Build
@@ -77,5 +79,6 @@ See `docs/FORMID_MODEL.md`.
 - `docs/FORM_LINK_EVIDENCE.md`
 - `docs/BA2.md`
 - `docs/LOCALIZED_STRINGS.md`
+- `docs/MATERIALS.md`
 - `docs/TEST_STRATEGY.md`
 - `docs/OPEN_QUESTIONS.md`

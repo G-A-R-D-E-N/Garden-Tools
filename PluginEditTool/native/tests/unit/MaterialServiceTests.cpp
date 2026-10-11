@@ -31,11 +31,11 @@ void color(std::vector<std::uint8_t>& bytes, float r, float g, float b) {
     f32(bytes, r); f32(bytes, g); f32(bytes, b);
 }
 
-std::vector<std::uint8_t> minimalBgem(bool trailing = false) {
+std::vector<std::uint8_t> minimalBgem(bool trailing = false, std::uint32_t tileFlags = 3U, std::uint8_t effectLighting = 1U) {
     std::vector<std::uint8_t> bytes;
     u32(bytes, 0x4D454742U); // BGEM
     u32(bytes, 0); // version
-    u32(bytes, 3); // tile U+V
+    u32(bytes, tileFlags); // tile flags
     f32(bytes, 0.0F); f32(bytes, 0.0F); f32(bytes, 1.0F); f32(bytes, 1.0F);
     f32(bytes, 1.0F); // alpha
     u8(bytes, 0); u32(bytes, 0); u32(bytes, 0); u8(bytes, 0);
@@ -62,7 +62,7 @@ std::vector<std::uint8_t> minimalBgem(bool trailing = false) {
     string(bytes, "");
 
     boolean(bytes, false); // blood
-    boolean(bytes, true);  // effect lighting
+    u8(bytes, effectLighting); // effect lighting
     boolean(bytes, false); // falloff
     boolean(bytes, false); // falloff color
     boolean(bytes, false); // grayscale alpha
@@ -191,6 +191,37 @@ TEST_CASE("Native material service refuses layout-changing version edits") {
     CHECK(changed.error().type == "MaterialFieldParseFailed");
 }
 
+TEST_CASE("Native material edit keeps raw bool and tile flag bytes on unrelated fields") {
+    const auto source = tempFile(".bgem");
+    const auto output = tempFile("_edited.bgem");
+    Cleanup cleanup{{source, output}};
+    const auto original = minimalBgem(false, 0xF3U, 2);
+    writeFile(source, original);
+
+    fo4ide::material::MaterialService service;
+    const std::map<std::string, std::string, std::less<>> changes{{"SoftDepth", "3.25"}};
+    REQUIRE(service.setFields(source, changes, output).has_value());
+
+    auto expected = original;
+    expected.resize(expected.size() - 4);
+    f32(expected, 3.25F);
+    CHECK(readFile(output) == expected);
+}
+
+TEST_CASE("Native material service refuses an embedded NUL in a string field without writing") {
+    const auto source = tempFile(".bgem");
+    Cleanup cleanup{{source}};
+    const auto original = minimalBgem();
+    writeFile(source, original);
+
+    fo4ide::material::MaterialService service;
+    const std::map<std::string, std::string, std::less<>> changes{{"BaseTexture", std::string("a\0b", 3)}};
+    const auto changed = service.setFields(source, changes);
+    REQUIRE_FALSE(changed.has_value());
+    CHECK(changed.error().type == "MaterialFieldParseFailed");
+    CHECK(readFile(source) == original);
+}
+
 TEST_CASE("Native material save keeps an existing destination when the rename fails") {
     const auto source = tempFile(".bgem");
     const auto output = tempFile("_blocked.bgem");
@@ -204,5 +235,8 @@ TEST_CASE("Native material save keeps an existing destination when the rename fa
     REQUIRE_FALSE(changed.has_value());
     CHECK(changed.error().type == "MaterialWriteFailed");
     CHECK(std::filesystem::is_directory(output));
-    CHECK_FALSE(std::filesystem::exists(output.string() + ".tmp"));
+    const auto stagePrefix = output.filename().string() + ".radicle-tmp";
+    for (const auto& entry : std::filesystem::directory_iterator(output.parent_path())) {
+        CHECK_FALSE(entry.path().filename().string().starts_with(stagePrefix));
+    }
 }

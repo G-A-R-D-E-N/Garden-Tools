@@ -131,8 +131,8 @@ target_link_libraries(fo4ide_audio PUBLIC fo4ide_core fo4ide_process fo4ide_tool
 fo4ide_enable_warnings(fo4ide_audio)
 fo4ide_enable_sanitizers(fo4ide_audio)
 
-add_library(fo4ide_material material/MaterialService.cpp material/MaterialFileIo.cpp)
-target_link_libraries(fo4ide_material PUBLIC fo4ide_core nlohmann_json::nlohmann_json)
+add_library(fo4ide_material material/MaterialService.cpp)
+target_link_libraries(fo4ide_material PUBLIC fo4ide_core nlohmann_json::nlohmann_json fo4)
 fo4ide_enable_warnings(fo4ide_material)
 fo4ide_enable_sanitizers(fo4ide_material)
 
