@@ -106,14 +106,14 @@ TEST(CtdaModel, ParseSerializesFunctionConditionByteIdentically) {
   EXPECT_EQ(fo4::serialize_ctda_condition(condition), bytes);
 }
 
-TEST(CtdaModel, GetEventDataFunctionRoundTripsThirtyTwoBytes) {
-  auto bytes = make_ctda(0, 0x3F800000u, 4672, 0x314F, 0x02000812, 0x55, 7, 0x01000800, -1).bytes;
+TEST(CtdaModel, GetEventDataLayoutParsesAndSerializes) {
+  auto bytes = make_ctda(0, 0x3F800000u, 576, 0x314F, 0x02000812, 0x55, 7, 0x01000800, -1).bytes;
   const auto condition = fo4::parse_ctda_condition(bytes);
 
   EXPECT_TRUE(condition.is_event_data());
-  EXPECT_EQ(condition.function, 4672);
-  EXPECT_EQ(condition.unknown2, 0x314F);  // EventMember.CreatedObject
+  EXPECT_EQ(condition.function, 576);
   EXPECT_EQ(condition.comparison_raw, 0x3F800000u);
+  EXPECT_EQ(condition.unknown2, 0x314F);
   EXPECT_EQ(condition.param1, 0x02000812);
   EXPECT_EQ(condition.param2, 0x55);
   EXPECT_EQ(condition.run_on, 7u);
@@ -123,8 +123,16 @@ TEST(CtdaModel, GetEventDataFunctionRoundTripsThirtyTwoBytes) {
   EXPECT_EQ(fo4::serialize_ctda_condition(condition), bytes);
 }
 
+TEST(CtdaModel, FunctionFourThousandSixHundredSeventyTwoIsNotGetEventData) {
+  auto bytes = make_ctda(0, 0, 4672, 0, 0x314B0000, 0, 0, 0, -1).bytes;
+  const auto condition = fo4::parse_ctda_condition(bytes);
+
+  EXPECT_FALSE(condition.is_event_data());
+  EXPECT_EQ(condition.function, 4672);
+}
+
 TEST(CtdaModel, TwentyEightBytePayloadIsRefused) {
-  auto bytes = make_ctda(0, 0, 4672, 0x314F, 0x02000812, 0, 7, 0x01000800, -1).bytes;
+  auto bytes = make_ctda(0, 0, 576, 0x314F, 0x02000812, 0, 7, 0x01000800, -1).bytes;
   bytes.resize(28);
   EXPECT_THROW(fo4::parse_ctda_condition(bytes), std::out_of_range);
 }

@@ -144,6 +144,8 @@ add_executable(
     unit/RadiclePluginEditableTests.cpp
     unit/ConditionFunctionsTests.cpp
     unit/ConditionBackendTests.cpp
+    unit/ConditionBackendParamTests.cpp
+    unit/ConditionCodecTests.cpp
     unit/RadiclePluginConcurrencyTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )
@@ -184,6 +186,7 @@ catch_discover_tests(fo4ide_test_proj_expl_hazd PROPERTIES TIMEOUT 10)
 add_executable(
     fo4ide_test_quest_authoring
     unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestEventDataTests.cpp
     unit/RadiclePluginQuestPartialFormTests.cpp
     unit/RadiclePluginQuestCreateLevelTests.cpp
     unit/RadiclePluginDeferredLocalizationTests.cpp
