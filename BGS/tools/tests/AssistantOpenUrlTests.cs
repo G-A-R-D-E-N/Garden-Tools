@@ -12,6 +12,12 @@ public sealed class AssistantOpenUrlTests
     public void WebUrlsAreLaunchable(string url) => Assert.True(AssistantUi.IsWebUrl(url));
 
     [Theory]
+    [InlineData("HTTPS://EXAMPLE.COM", "https://example.com/")]
+    [InlineData("https://example.com/a b", "https://example.com/a%20b")]
+    public void LaunchedUrlIsTheNormalisedUri(string url, string expected) =>
+        Assert.Equal(expected, AssistantUi.WebUrlToOpen(url));
+
+    [Theory]
     [InlineData("file:///C:/Windows/System32/calc.exe")]
     [InlineData("calc.exe")]
     [InlineData("ms-settings:")]

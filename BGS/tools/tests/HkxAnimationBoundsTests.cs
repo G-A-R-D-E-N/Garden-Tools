@@ -57,6 +57,27 @@ public sealed class HkxAnimationBoundsTests
     }
 
     [Fact]
+    public void ArrayEndingExactlyAtBufferEndIsNotRejectedAsPastTheEnd()
+    {
+        byte[] probe = Packfile(LosslessClass, (c, a) =>
+        {
+            SetLossless(c, a, frames: 4, tracks: 1);
+            c.SetArray(a, LosslessClass, "dynamicTranslations", 0);
+        }, out int contentAbs);
+        int available = probe.Length - contentAbs;
+        Assert.Equal(0, available % 4);
+
+        byte[] bytes = Packfile(LosslessClass, (c, a) =>
+        {
+            SetLossless(c, a, frames: 4, tracks: 1);
+            c.SetArray(a, LosslessClass, "dynamicTranslations", available / 4);
+        }, out _);
+
+        var error = Record.Exception(() => new HkxBinaryReader().ReadAnimation(bytes));
+        Assert.DoesNotContain("past the end of the file", error?.Message ?? string.Empty);
+    }
+
+    [Fact]
     public void HugeAnnotationTrackCountIsRejected()
     {
         byte[] bytes = Packfile(LosslessClass, (c, a) =>
