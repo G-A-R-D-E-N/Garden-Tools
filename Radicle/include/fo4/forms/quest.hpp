@@ -335,6 +335,7 @@ QuestAlias encode_quest_alias(const QuestAliasCreation& creation);
 QuestAlias encode_quest_alias(const Plugin& plugin,
                               const QuestAliasCreation& creation);
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
+QuestAliases decode_quest_aliases(const RecordIndex& index, const FormKey& key);
 
 void sync_quest_vmad_aliases(Record& record,
                              const QuestAliases& previous,
