@@ -235,5 +235,8 @@ TEST_CASE("Native material save keeps an existing destination when the rename fa
     REQUIRE_FALSE(changed.has_value());
     CHECK(changed.error().type == "MaterialWriteFailed");
     CHECK(std::filesystem::is_directory(output));
-    CHECK_FALSE(std::filesystem::exists(output.string() + ".tmp"));
+    const auto stagePrefix = output.filename().string() + ".radicle-tmp";
+    for (const auto& entry : std::filesystem::directory_iterator(output.parent_path())) {
+        CHECK_FALSE(entry.path().filename().string().starts_with(stagePrefix));
+    }
 >}
