@@ -113,6 +113,31 @@ TEST(ProjExplHazdCreation, ProjectileRoundTripsTheUnalignedVatsSlot) {
   EXPECT_EQ(std::to_integer<std::uint8_t>(dnam->data[88]), 1u);
 }
 
+TEST(ProjExplHazdCreation, ProjectileFlagsAndTypeAreSeparateSixteenBitWords) {
+  auto plugin = fo4::read_plugin(make_target("PROJ"), "Patch.esp");
+
+  fo4::forms::ProjectileCreation creation;
+  creation.editor_id = "SplitWords";
+  creation.flags = 5;
+  creation.type = 2;
+
+  const auto key = fo4::forms::create_projectile(plugin, creation);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* dnam = find_subrecord(*record, "DNAM");
+  ASSERT_NE(dnam, nullptr);
+  EXPECT_EQ(dnam->data[0], std::byte{0x05});
+  EXPECT_EQ(dnam->data[1], std::byte{0x00});
+  EXPECT_EQ(dnam->data[2], std::byte{0x02});
+  EXPECT_EQ(dnam->data[3], std::byte{0x00});
+
+  const auto decoded = fo4::forms::decode_projectile(reread, key);
+  EXPECT_EQ(decoded.flags, 5u);
+  EXPECT_EQ(decoded.type, 2u);
+}
+
 TEST(ProjExplHazdCreation, ExplosionWritesTheMeasuredEightyFourByteData) {
   auto plugin = fo4::read_plugin(make_target("PROJ"), "Patch.esp");
 

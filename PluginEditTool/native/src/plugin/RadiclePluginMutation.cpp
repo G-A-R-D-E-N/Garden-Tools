@@ -21,6 +21,7 @@
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/condition_scopes.hpp>
 #include <fo4/schema/ctda.hpp>
+#include "RadiclePluginSupport.hpp"
 
 namespace fo4ide::plugin {
 namespace {
@@ -147,7 +148,7 @@ std::string editorId(const fo4::Record& record) {
             if (ch == '\0') break;
             out.push_back(ch);
         }
-        return out;
+        return fo4::text::windows1252_to_utf8(out);
     }
     return {};
 }
@@ -433,7 +434,9 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
         std::string status;
 
         if (edidField) {
-            if (!fo4::set_record_editor_id(mutated, key, value)) {
+            const auto stored = support::encodeEditorId(value);
+            if (!stored) return std::unexpected(stored.error());
+            if (!fo4::set_record_editor_id(mutated, key, *stored)) {
                 return std::unexpected(Error{
                     "RecordNotFound",
                     "Record is not present in " + pluginName + ": " + formKeyText
