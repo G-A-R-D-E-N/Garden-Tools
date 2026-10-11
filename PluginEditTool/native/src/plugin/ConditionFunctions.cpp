@@ -862,13 +862,11 @@ struct ConditionFunctionEntry {
 constexpr ConditionFunctionEntry kFunctionIndex[] = {
 #include "fo4ide/plugin/condition_function_index.inc"
 };
-// RunOnType values are not contiguous: Subject..EventData = 0..7, then
-// CommandTarget = 9, EventCameraRef = 10, MyKiller = 11.
 constexpr std::pair<std::string_view, std::uint32_t> kRunOnValues[] = {
     {"Subject", 0}, {"Target", 1}, {"Reference", 2}, {"CombatTarget", 3},
     {"LinkedReference", 4}, {"QuestAlias", 5}, {"PackageData", 6},
-    {"EventData", 7}, {"CommandTarget", 9}, {"EventCameraRef", 10},
-    {"MyKiller", 11},
+    {"EventData", 7}, {"CommandTarget", 8}, {"EventCameraRef", 9},
+    {"MyKiller", 10},
 };
 }  // namespace
 
