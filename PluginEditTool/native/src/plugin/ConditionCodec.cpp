@@ -86,7 +86,10 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
     nlohmann::json d = nlohmann::json::object();
     d["function"] = condition.is_event_data() ? "GetEventData" : functionName(condition.function);
     d["operator"] = conditionOperatorString(condition.compare_operator());
-    if (!condition.is_event_data()) {
+    if (condition.is_event_data()) {
+        if (condition.param1 != 0) d["param1"] = condition.param1;
+        if (condition.param2 != 0) d["param2"] = condition.param2;
+    } else {
         if (condition.param1 != 0) d["param1"] = formIdString(condition.param1, plugin);
         if (condition.param2 != 0) d["param2"] = formIdString(condition.param2, plugin);
     }
