@@ -13,7 +13,7 @@ xEdit's `TwbMainRecord.SetLoadOrderFormID` refuses a non-hardcoded object ID bel
 ## Where it comes from
 
 `TESFile::AdjustFormIDFileIndex(TESFile* this, uint* id)` — Fallout4.exe
-1.10.155 (unpacked), RVA **`0x131f90`**, 55 bytes. Rebuilds an on-disk FormID
+1.10.155 (unpacked), address **`0x131f90`**, 55 bytes. Rebuilds an on-disk form ID
 into a runtime one:
 
 Build identification source: [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md), question 2's verified PE timestamps and predicate/conversion addresses. The assembly below is the older 1.10.155 image; the 1.10.163 conversion is at `0x131fa0`.
