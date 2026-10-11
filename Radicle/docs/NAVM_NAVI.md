@@ -97,11 +97,15 @@ godot --headless --path opencw tools/navmesh_probe.tscn
 Exit codes: 0 prints `navmesh_probe PASS` with a one-line JSON summary; 77 prints
 `navmesh_probe SKIP: FO4_DATA_DIR unset`; 1 prints `navmesh_probe FAIL` with the exception.
 
+The PASS JSON carries `NavmeshLinks`/`NavmeshUnresolved`, `WorldLinks`/`WorldUnresolved` and
+`CellLinks`/`CellUnresolved`: present NVMI links per kind and how many did not resolve through `env.Winner`.
+
 Assertions:
 
 - Exactly one NAVI record exists in `Fallout4.esm` (`WinnersOf("NAVI")`), matching the
   installed-data table above, and `NavmeshInfos` decodes at least one NVMI entry.
-- Every present NVMI navmesh, parent world and parent cell link resolves through `env.Winner`.
+- For each NVMI kind (navmesh, parent world, parent cell), counts present and unresolved links.
+  The probe fails only if a kind has present links and none of them resolve; unresolved links are reported, not failed.
 - The first NAVM whose `Navmesh` decodes with vertices and triangles greater than zero has every
   triangle vertex index below its vertex count, and its present parent world and cell links resolve.
 

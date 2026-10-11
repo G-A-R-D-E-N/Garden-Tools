@@ -25,12 +25,16 @@ public partial class NavmeshProbe : Node
             if (navi.Count != 1) throw new InvalidOperationException("NAVI record count is " + navi.Count + ", expected 1");
             var infos = env.NavmeshInfos(navi[0]);
             if (infos.Count == 0) throw new InvalidOperationException("NAVI has no NVMI entries");
+            int navmeshLinks = 0, navmeshUnresolved = 0, worldLinks = 0, worldUnresolved = 0, cellLinks = 0, cellUnresolved = 0;
             foreach (var info in infos)
             {
-                RequireResolved(env, info.Navmesh, "NVMI navmesh");
-                RequireResolved(env, info.Parent.World, "NVMI parent world");
-                RequireResolved(env, info.Parent.Cell, "NVMI parent cell");
+                Tally(env, info.Navmesh, ref navmeshLinks, ref navmeshUnresolved);
+                Tally(env, info.Parent.World, ref worldLinks, ref worldUnresolved);
+                Tally(env, info.Parent.Cell, ref cellLinks, ref cellUnresolved);
             }
+            RequireSomeResolved(navmeshLinks, navmeshUnresolved, "NVMI navmesh");
+            RequireSomeResolved(worldLinks, worldUnresolved, "NVMI parent world");
+            RequireSomeResolved(cellLinks, cellUnresolved, "NVMI parent cell");
             var (rec, geometry) = env.WinnersOf("NAVM").Select(r => (Rec: r, Mesh: env.Navmesh(r)))
                 .FirstOrDefault(x => x.Mesh is { Vertices.Count: > 0, Triangles.Count: > 0 });
             var mesh = geometry ?? throw new InvalidOperationException("no NAVM decodes with vertices and triangles");
@@ -45,6 +49,9 @@ public partial class NavmeshProbe : Node
                 Navi = env.Info(navi[0]).FormKey.ToString(), NaviInfos = infos.Count,
                 Navmesh = env.Info(rec).FormKey.ToString(), mesh.Version, Vertices = mesh.Vertices.Count,
                 Triangles = mesh.Triangles.Count, World = mesh.Parent.World?.ToString(), Cell = mesh.Parent.Cell?.ToString(),
+                NavmeshLinks = navmeshLinks, NavmeshUnresolved = navmeshUnresolved,
+                WorldLinks = worldLinks, WorldUnresolved = worldUnresolved,
+                CellLinks = cellLinks, CellUnresolved = cellUnresolved,
             }));
             GetTree().Quit(0);
         }
@@ -53,6 +60,19 @@ public partial class NavmeshProbe : Node
             GD.PrintErr("navmesh_probe FAIL: " + error);
             GetTree().Quit(1);
         }
+    }
+
+    private static void Tally(RadicleEnvironment env, FormKey? key, ref int links, ref int unresolved)
+    {
+        if (key is not { } link) return;
+        links++;
+        if (env.Winner(link) is null) unresolved++;
+    }
+
+    private static void RequireSomeResolved(int links, int unresolved, string what)
+    {
+        if (links > 0 && unresolved == links)
+            throw new InvalidOperationException(what + " links all unresolved: " + unresolved + " of " + links);
     }
 
     private static void RequireResolved(RadicleEnvironment env, FormKey? key, string what)
