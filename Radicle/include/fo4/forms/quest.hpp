@@ -269,6 +269,7 @@ struct QuestObjectiveTarget {
   std::int32_t alias{0};
   std::uint32_t flags{0};
   std::optional<FormKey> keyword;
+  bool keyword_unresolved{false};
   // Per-target conditions and anything unmodelled, kept in order.
   std::vector<Subrecord> subrecords;
 };

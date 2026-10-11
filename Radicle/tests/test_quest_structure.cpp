@@ -507,6 +507,64 @@ TEST(QuestStructure, EightByteTargetKeepsItsWidthOnRewrite) {
                fo4::forms::QuestError);
 }
 
+TEST(QuestStructure, UnresolvedTargetKeywordIsReportedForThatTargetOnly) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    ByteWriter second;
+    second.i32(-2);
+    second.u32(1);
+    second.u32(0x800);
+    const auto target = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& member) {
+      return member.signature == fo4::Signature::from_string("QSTA");
+    });
+    target->data[11] = std::byte{0x07};
+    record.subrecords.insert(target + 1, quest_member("QSTA", second.bytes));
+  });
+  const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
+  EXPECT_TRUE(native.objectives_supported);
+  EXPECT_TRUE(native.aliases_supported);
+  ASSERT_EQ(native.objectives.objectives.size(), 1u);
+  const auto& objective = native.objectives.objectives[0];
+  EXPECT_EQ(objective.index, 30u);
+  EXPECT_EQ(objective.flags, 2u);
+  ASSERT_EQ(objective.targets.size(), 2u);
+  EXPECT_FALSE(objective.targets[0].keyword.has_value());
+  EXPECT_TRUE(objective.targets[0].keyword_unresolved);
+  ASSERT_TRUE(objective.targets[1].keyword.has_value());
+  EXPECT_EQ(objective.targets[1].keyword->to_string(), "000800:Quests.esp");
+  EXPECT_FALSE(objective.targets[1].keyword_unresolved);
+  ASSERT_EQ(native.unsupported.size(), 1u);
+  EXPECT_EQ(native.unsupported[0].scope, QuestScope::objective_target);
+  EXPECT_EQ(native.unsupported[0].primary, 0u);
+  EXPECT_EQ(native.unsupported[0].secondary, 0u);
+  EXPECT_EQ(native.unsupported[0].signature.to_string(), "QSTA");
+  const Snapshot snapshot(plugin);
+  const auto view = snapshot.view();
+  EXPECT_EQ(view.objectives_supported, 1u);
+  ASSERT_EQ(view.target_count, 2u);
+  EXPECT_EQ(view.targets[0].keyword.plugin, nullptr);
+  EXPECT_EQ(view.targets[1].keyword.local_id, 0x800u);
+  ASSERT_EQ(view.unsupported_count, 1u);
+  EXPECT_EQ(view.unsupported[0].scope, RADICLE_QUEST_SCOPE_OBJECTIVE_TARGET);
+  EXPECT_EQ(view.unsupported[0].primary, 0u);
+  EXPECT_EQ(view.unsupported[0].secondary, 0u);
+  EXPECT_STREQ(view.unsupported[0].signature, "QSTA");
+}
+
+TEST(QuestStructure, UnresolvedTargetKeywordIsNotRewritten) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    const auto target = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& member) {
+      return member.signature == fo4::Signature::from_string("QSTA");
+    });
+    target->data[11] = std::byte{0x07};
+  });
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(static_cast<void>(fo4::forms::remove_quest_objective(plugin, structure_quest_key(), 30)),
+               fo4::forms::QuestError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 TEST(QuestStructure, MissingQuestReturnsNotFound) {
   const auto plugin = quest_structure_plugin();
   const auto id = std::chrono::steady_clock::now().time_since_epoch().count();

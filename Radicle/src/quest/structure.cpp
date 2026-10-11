@@ -184,6 +184,10 @@ QuestStructure read_quest_structure(const Plugin& plugin, const FormKey& quest) 
     for (std::size_t t = 0; t < objective.targets.size(); ++t) {
       const auto& members = objective.targets[t].subrecords;
       conditions(out, QuestScope::objective_target, o, t, members, true);
+      if (objective.targets[t].keyword_unresolved) {
+        unsupported(out, QuestScope::objective_target, o, t, 0, Signature::from_string("QSTA"),
+                    "objective target link is unresolved");
+      }
       for (std::size_t m = 0; m < members.size(); ++m) {
         if (!condition_member(members[m])) {
           unsupported(out, QuestScope::objective_target, o, t, m, members[m].signature,

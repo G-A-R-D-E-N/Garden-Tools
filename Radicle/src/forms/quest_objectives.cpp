@@ -71,7 +71,11 @@ QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& que
       next.flags = read_u32(subrecord.data, 4);
       if (keyword_layout) {
         if (const auto raw = RawFormId{read_u32(subrecord.data, 8)}; !raw.is_null()) {
-          next.keyword = resolve_plugin_form_id(raw, context);
+          try {
+            next.keyword = resolve_plugin_form_id(raw, context);
+          } catch (const FormIdError&) {
+            next.keyword_unresolved = true;
+          }
         }
       }
       objective->targets.push_back(std::move(next));
@@ -155,6 +159,9 @@ std::vector<Subrecord> encode_objectives(const Plugin& plugin,
       out.push_back(marker(k_nnam, schema::write_localized_string(*objective.display_text)));
     }
     for (const auto& target : objective.targets) {
+      if (target.keyword_unresolved) {
+        throw QuestError("QUST objective target keyword does not resolve and cannot be rewritten");
+      }
       if (!keyword_layout && target.keyword.has_value()) {
         throw QuestError("QUST objective target keyword requires form version 82 or later");
       }
