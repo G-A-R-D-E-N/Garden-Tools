@@ -183,6 +183,8 @@ export interface ConditionDto {
   compareGlobal?: string;
   param1?: string | number;
   param2?: string | number;
+  cis1?: string | null;
+  cis2?: string | null;
   runOn?: string;
   reference?: string;
   flags?: string;

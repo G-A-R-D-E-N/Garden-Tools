@@ -77,3 +77,18 @@ TEST_CASE("Malformed settings fail explicitly") {
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "SettingsReadFailed");
 }
+
+TEST_CASE("Settings save keeps an existing destination when the rename fails") {
+    const auto path = tempSettingsPath();
+    Cleanup cleanup{path.parent_path()};
+    std::filesystem::create_directories(path);
+
+    fo4ide::settings::Store store(path);
+    fo4ide::settings::Settings settings;
+    settings.model = "replacement";
+    const auto saved = store.save(settings);
+    REQUIRE_FALSE(saved.has_value());
+    CHECK(saved.error().type == "SettingsWriteFailed");
+    CHECK(std::filesystem::is_directory(path));
+    CHECK_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+}

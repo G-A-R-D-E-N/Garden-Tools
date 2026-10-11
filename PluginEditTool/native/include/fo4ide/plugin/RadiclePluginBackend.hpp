@@ -28,7 +28,12 @@ void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook);
 using WriteOpLockedHook = void (*)();
 void setWriteOpLockedHook(WriteOpLockedHook hook);
 void setSaveIoLockedHook(WriteOpLockedHook hook);
+using LoadReadWindowHook = void (*)();
+void setLoadReadWindowHook(LoadReadWindowHook hook);
 #endif
+
+Result<void> requirePluginUnchangedSince(const std::filesystem::path& path,
+                                         std::filesystem::file_time_type loadedTime);
 
 class RadiclePluginBackend final : public IPluginBackend {
 public:
@@ -179,6 +184,7 @@ private:
     Result<nlohmann::json> clearElement(const nlohmann::json& arguments) override;
 
     Result<nlohmann::json> copyAsOverride(const nlohmann::json& arguments);
+    Result<nlohmann::json> copyAsOverrideLocked(const nlohmann::json& arguments, bool initiallyDisabled);
     Result<nlohmann::json> copyAsOverrideMany(const nlohmann::json& arguments);
     Result<nlohmann::json> addMasters(const nlohmann::json& arguments);
     Result<nlohmann::json> checkEslEligibility(const nlohmann::json& arguments) const;

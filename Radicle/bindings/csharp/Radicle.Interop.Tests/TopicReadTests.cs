@@ -40,7 +40,7 @@ public class TopicReadTests
         Assert.All(children, r => Assert.Equal(2, env.Info(r).PluginIndex));
         Assert.Equal(new FormKey("Selected.esp", 0x805), env.Info(children[0]).FormKey);
         Assert.Equal("SiblingLine", env.Info(Assert.Single(env.TopicChildren(env.Winner(new FormKey("Master.esm", 0x803))!.Value))).EditorId);
-        Assert.Throws<RadicleException>(() => env.TopicChildren(default));
+        Assert.Throws<ArgumentException>(() => env.TopicChildren(default));
         Assert.Throws<RadicleException>(() => env.TopicChildren(children[0]));
         env.Dispose();
         Assert.Throws<ObjectDisposedException>(() => env.TopicChildren(versions[0]));

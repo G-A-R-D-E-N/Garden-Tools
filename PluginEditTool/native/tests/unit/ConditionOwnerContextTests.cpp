@@ -32,7 +32,7 @@ void writePlugin(const std::filesystem::path& path, bool second, bool ownTarget)
     fo4::test::write_subrecord(out, "EFID", efid.bytes);
     fo4::test::write_subrecord(out, "EFIT", efit.bytes);
     fo4::CtdaCondition condition;
-    condition.function = 8;
+    condition.function = 1;
     condition.flags_byte = fo4::k_ctda_flag_use_global;
     condition.comparison_raw = second && ownTarget ? 0x01000800u : 0x800u;
     condition.param1 = static_cast<std::int32_t>(condition.comparison_raw);
