@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/forms/components.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
@@ -115,6 +116,37 @@ const fo4::Subrecord* findSub(const fo4::Record& record, std::string_view signat
     return nullptr;
 }
 
+bool isPending(fo4ide::plugin::RadiclePluginBackend& backend) {
+    const auto active = backend.invoke("backend.GetActivePlugins", nlohmann::json::array());
+    REQUIRE(active.has_value());
+    return nlohmann::json::parse(active->get<std::string>()).at(0).at("Pending").get<bool>();
+}
+
+std::vector<std::byte> seedComponents(fo4ide::plugin::RadiclePluginBackend& backend,
+                                      const std::filesystem::path& path,
+                                      std::string_view record) {
+    REQUIRE(backend.invokeBackend(
+        "SetComponents",
+        nlohmann::json::array({"Patch.esp", std::string(record),
+                               R"([{"component":"000801:Patch.esp","count":5}])"})).has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    return fo4::test::original_bytes(fo4::read_plugin_file(path));
+}
+
+std::vector<fo4::forms::ComponentEntry> seededList() {
+    return {{fo4::FormKey::parse("000801:Patch.esp"), 5}};
+}
+
+std::vector<fo4::forms::ComponentEntry> savedComponents(
+    fo4ide::plugin::RadiclePluginBackend& backend, const std::filesystem::path& path,
+    std::string_view record) {
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    return fo4::forms::decode_components(fo4::read_plugin_file(path),
+                                         fo4::FormKey::parse(record));
+}
+
 }  // namespace
 
 TEST_CASE("PluginEditTool set_components writes CVPA and identity CDIX on a MISC") {
@@ -180,7 +212,7 @@ TEST_CASE("PluginEditTool set_components writes FVPA and no CDIX on a COBJ") {
     CHECK(findSub(*cobj, "CDIX") == nullptr);
 }
 
-TEST_CASE("PluginEditTool set_components skips a non-CMPO component on a MISC") {
+TEST_CASE("PluginEditTool set_components refuses a non-CMPO component on a MISC") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -188,24 +220,42 @@ TEST_CASE("PluginEditTool set_components skips a non-CMPO component on a MISC") 
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    const auto before = seedComponents(backend, path, "000900:Patch.esp");
     const auto result = backend.invokeBackend(
         "SetComponents",
         nlohmann::json::array({
             "Patch.esp", "000900:Patch.esp",
             R"([{"component":"000801:Patch.esp","count":1},{"component":"000B00:Patch.esp","count":1}])"}));
-    REQUIRE(result.has_value());
-    CHECK(result->get<std::string>() ==
-          "Set 1 component(s) on 000900:Patch.esp in Patch.esp. "
-          "Skipped 1: 000B00:Patch.esp: WEAP is not a CMPO component. SavePlugin to persist.");
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ComponentEntriesRefused");
+    CHECK(result.error().message ==
+          "Refused: 1 of 2 component entries failed: #2: 000B00:Patch.esp: WEAP is not a CMPO component.");
 
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
-    const auto disk = fo4::read_plugin_file(path);
-    const auto* misc = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
-    REQUIRE(misc != nullptr);
-    const auto* cvpa = findSub(*misc, "CVPA");
-    REQUIRE(cvpa != nullptr);
-    CHECK(cvpa->data.size() == 8u);
+    CHECK_FALSE(isPending(backend));
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+    const auto saved = savedComponents(backend, path, "000900:Patch.esp");
+    CHECK(saved == seededList());
+}
+
+TEST_CASE("PluginEditTool set_components refuses an empty components string and keeps the list") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, componentPluginBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto before = seedComponents(backend, path, "000900:Patch.esp");
+    const auto result = backend.invokeBackend(
+        "SetComponents", nlohmann::json::array({"Patch.esp", "000900:Patch.esp", ""}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidComponentsJson");
+    CHECK(result.error().message == "components JSON is empty; pass [] to clear");
+
+    CHECK_FALSE(isPending(backend));
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+    const auto saved = savedComponents(backend, path, "000900:Patch.esp");
+    CHECK(saved == seededList());
 }
 
 TEST_CASE("PluginEditTool set_components clears CVPA and CDIX on an empty list") {
@@ -279,7 +329,7 @@ TEST_CASE("PluginEditTool set_components accepts broad item types on a COBJ") {
     CHECK(fvpa->data.size() == 16u);
 }
 
-TEST_CASE("PluginEditTool set_components skips a non-item component on a COBJ") {
+TEST_CASE("PluginEditTool set_components refuses a non-item component on a COBJ") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -287,18 +337,24 @@ TEST_CASE("PluginEditTool set_components skips a non-item component on a COBJ") 
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    const auto before = seedComponents(backend, path, "000A00:Patch.esp");
     const auto result = backend.invokeBackend(
         "SetComponents",
         nlohmann::json::array({
             "Patch.esp", "000A00:Patch.esp",
             R"([{"component":"000B00:Patch.esp","count":1},{"component":"000C00:Patch.esp","count":1}])"}));
-    REQUIRE(result.has_value());
-    CHECK(result->get<std::string>() ==
-          "Set 1 component(s) on 000A00:Patch.esp in Patch.esp. "
-          "Skipped 1: 000C00:Patch.esp: QUST is not a valid recipe item. SavePlugin to persist.");
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ComponentEntriesRefused");
+    CHECK(result.error().message ==
+          "Refused: 1 of 2 component entries failed: #2: 000C00:Patch.esp: QUST is not a valid recipe item.");
+
+    CHECK_FALSE(isPending(backend));
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+    const auto saved = savedComponents(backend, path, "000A00:Patch.esp");
+    CHECK(saved == seededList());
 }
 
-TEST_CASE("PluginEditTool set_components skips negative and oversized counts") {
+TEST_CASE("PluginEditTool set_components refuses negative and oversized counts") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -306,16 +362,22 @@ TEST_CASE("PluginEditTool set_components skips negative and oversized counts") {
 
     fo4ide::plugin::RadiclePluginBackend backend;
     load(backend, path);
+    const auto before = seedComponents(backend, path, "000900:Patch.esp");
     const auto result = backend.invokeBackend(
         "SetComponents",
         nlohmann::json::array({
             "Patch.esp", "000900:Patch.esp",
             R"([{"component":"000801:Patch.esp","count":-1},{"component":"000802:Patch.esp","count":4294967296}])"}));
-    REQUIRE(result.has_value());
-    CHECK(result->get<std::string>() ==
-          "Set 0 component(s) on 000900:Patch.esp in Patch.esp. "
-          "Skipped 2: 000801:Patch.esp: count must be 1..4294967295; "
-          "000802:Patch.esp: count must be 1..4294967295. SavePlugin to persist.");
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ComponentEntriesRefused");
+    CHECK(result.error().message ==
+          "Refused: 2 of 2 component entries failed: #1: 000801:Patch.esp: count must be "
+          "1..4294967295; #2: 000802:Patch.esp: count must be 1..4294967295.");
+
+    CHECK_FALSE(isPending(backend));
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+    const auto saved = savedComponents(backend, path, "000900:Patch.esp");
+    CHECK(saved == seededList());
 }
 
 TEST_CASE("PluginEditTool set_components accepts a COBJ as a recipe component") {

@@ -1,4 +1,4 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -14,6 +14,9 @@
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string seqStringArgument(const nlohmann::json& args, std::size_t index) {
@@ -62,17 +65,6 @@ Result<bool> questStartGameEnabled(const fo4::Record& record) {
     std::uint16_t flags = 0;
     std::memcpy(&flags, data->data.data(), sizeof(flags));
     return (flags & 0x0001u) != 0u;
-}
-
-std::string seqEditorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
 }
 
 }  // namespace
@@ -135,7 +127,7 @@ Result<nlohmann::json> RadiclePluginBackend::createSeqFile(
             (static_cast<std::uint32_t>(loaded->plugin.header.masters.size()) << 24u) |
             (record->form_key.local().value() & 0x00FFFFFFu);
         ids.push_back(raw);
-        const auto editor = seqEditorId(*record);
+        const auto editor = editorId(*record);
         included.push_back(
             (editor.empty() ? std::string("(no EditorID)") : editor) +
             " [" + record->form_key.to_string() + "]");

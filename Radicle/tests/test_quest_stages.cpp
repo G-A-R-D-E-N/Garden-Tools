@@ -189,3 +189,17 @@ TEST(QuestStages, LosslessLogEntryConditionsRoundTripCtdaAndCis) {
   std::vector<fo4::Subrecord> bad{short_ctda};
   EXPECT_FALSE(fo4::forms::lossless_quest_log_entry_conditions(bad, decoded, consumed));
 }
+
+TEST(QuestStages, LosslessLogEntryConditionsRetainPaddingBytes) {
+  fo4::CtdaCondition condition;
+  condition.function = 74;
+  auto members = fo4::serialize_ctda_run(std::span<const fo4::CtdaCondition>(&condition, 1));
+  members[0].data[1] = std::byte{0xAC};
+  members[0].data[2] = std::byte{0x93};
+  members[0].data[3] = std::byte{0x13};
+  std::vector<fo4::CtdaCondition> decoded;
+  std::size_t consumed = 0;
+  ASSERT_TRUE(fo4::forms::lossless_quest_log_entry_conditions(members, decoded, consumed));
+  EXPECT_EQ(consumed, 1u);
+  EXPECT_EQ(fo4::serialize_ctda_run(decoded)[0].data, members[0].data);
+}

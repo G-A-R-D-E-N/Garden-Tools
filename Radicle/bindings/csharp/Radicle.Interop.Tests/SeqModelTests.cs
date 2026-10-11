@@ -8,7 +8,7 @@ namespace Radicle.Interop.Tests;
 
 public class SeqModelTests
 {
-    private static byte[] SyntheticSeq(params uint[] values)
+    internal static byte[] SyntheticSeq(params uint[] values)
     {
         var bytes = new List<byte>();
         foreach (var value in values)

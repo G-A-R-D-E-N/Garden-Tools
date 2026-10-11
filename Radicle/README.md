@@ -2,13 +2,11 @@
 
 Native Fallout 4 plugin SDK. The first root a plugin puts down, and a radiation pun.
 
-C++ namespace is still `fo4`. The library is meant to replace Mutagen inside FO4IDE / PluginEditTool. It is not a line-for-line Mutagen port. It is an independent reader/writer grounded in:
+C++ namespace is still `fo4`. Radicle is the native xEdit-style plugin backend replacing Mutagen for PluginTool / PluginEditTool and supplying structured game data to GardenEngine. It parses and exposes records, supports proven field and record edits, and serializes changes while preserving untouched data.
 
-1. Fallout 4 runtime behavior
-2. Creation Kit behavior
-3. local reverse-engineering in `CKRE` and `ReverseEngineering`
-4. xEdit where useful
-5. Mutagen as a compatibility oracle, not a specification
+Stored layouts may be established from xEdit definitions, official plugins, existing Radicle behavior, CK/CKRE and synthetic tests. Runtime RE is required for unresolved layouts, unproven safe mutation or intended runtime behavior; it is not a blanket prerequisite for plugin editing. Unknown layouts stay opaque or refuse mutation/remapping. Mutagen remains a compatibility oracle.
+
+[#86](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/86) governs the product roadmap; [#287](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/287) and [the parity matrix](docs/FO4_PARITY.md) govern READ / WRITE / ADD / REMOVE / CREATE / REMAP / VALIDATE / OPAQUE coverage. A reader alone does not establish editing support. [#43](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/43) supplies reusable schema infrastructure where proven gaps justify it.
 
 ## Status
 
@@ -16,9 +14,11 @@ Generic lossless plugin container, FormKey identity, preservation writer, master
 
 The first machine-readable authoring schema is active under `schema/fallout4/fields.json`. A deterministic generator emits record-qualified C++ scalar descriptors and CMake checks that committed generated output is current. `REFR\\HealthPercent` / `XHLT` is the first field using this path; typed EYES and LVSP editing remain structured record models rather than scalar byte patches.
 
-BA2 support currently covers the proven Fallout 4 version-1 `BTDX/GNRL` layout: list/read, stored and zlib-compressed chunks, extraction, path lookup, and write/read round trips. PluginEditTool's native Archive panel now uses this Radicle reader through its archive backend seam. DX10 texture archives and next-generation v7/v8 layouts remain deliberately unsupported until their fields are verified.
+BA2 support covers `BTDX/GNRL` general resources and `BTDX/DX10` textures at versions 1, 7 and 8: list/read, stored and zlib-compressed chunks, path lookup, write/read round trips, and texture extraction that prepends a reconstructed DDS header to `.dds` entries whose payload does not already start with `DDS ` (other entries are returned as stored). PluginEditTool's native Archive panel uses the Radicle reader and rejects any non-empty GNRL or DX10 archive without a string table. Synthetic coverage is supplemented by installed-data tests for six named version/content combinations, which skip unless `FO4_DATA_DIR` is set; see `docs/BA2.md` for measured corpus scope and remaining opaque metadata.
 
 Localized string-table support now covers `.STRINGS`, `.DLSTRINGS`, and `.ILSTRINGS`: strict header/offset validation, raw text-byte preservation, lookup, deduplication, and deterministic writing. Automatic resolution of 4-byte localized plugin fields remains deliberately separate until TES4 bit 7 semantics are settled or the caller supplies an explicit localization context.
+
+Material files (`.bgsm` / `.bgem`) read and write byte-identically across the BGSM and BGEM version gates through `fo4/material/material_file.hpp`, the `radicle_material_file_*` C ABI and the `Radicle.Interop.MaterialFile` wrapper; see `docs/MATERIALS.md`.
 
 Still incomplete: broad typed/schema-driven record authoring, safe ESL compaction, remaining mixed-layout FormID surfaces such as NAVM/NAVI, plugin-field integration with localized string tables, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
 
@@ -79,5 +79,6 @@ See `docs/FORMID_MODEL.md`.
 - `docs/FORM_LINK_EVIDENCE.md`
 - `docs/BA2.md`
 - `docs/LOCALIZED_STRINGS.md`
+- `docs/MATERIALS.md`
 - `docs/TEST_STRATEGY.md`
 - `docs/OPEN_QUESTIONS.md`
