@@ -162,6 +162,15 @@ def load_lists(schema_path: Path):
                 raise ValueError(f"FormLink field nullable must be boolean: {path!r}")
             if insertion != "existing_only":
                 raise ValueError(f"unsupported FormLink field insertion policy: {insertion!r}")
+            payload_sizes = row.get("payload_sizes", [])
+            if "payload_sizes" in row:
+                if not isinstance(payload_sizes, list) or not 1 <= len(payload_sizes) <= 2:
+                    raise ValueError(f"FormLink payload_sizes must contain one or two sizes: {path!r}")
+                if any(type(size) is not int or size < offset + 4 or size > 0xFFFFFFFF
+                       for size in payload_sizes):
+                    raise ValueError(f"FormLink payload_sizes must contain fitting positive integers: {path!r}")
+                if len(set(payload_sizes)) != len(payload_sizes):
+                    raise ValueError(f"FormLink payload_sizes contains duplicate sizes: {path!r}")
             fields.append({
                 "record": record_signature,
                 "path": path,
@@ -170,6 +179,7 @@ def load_lists(schema_path: Path):
                 "offset": offset,
                 "nullable": nullable,
                 "address": parse_address(row, path, subrecord, True, 4),
+                "payload_sizes": payload_sizes,
                 "targets": parse_formlink_field_targets(row, path, union_targets),
             })
 
@@ -450,6 +460,7 @@ def render(lists, nested_lists, fields, unions) -> str:
             ("true" if row["nullable"] else "false") + ", " +
             f"{first_target}, {target_count}, " +
             render_address(row["address"]) +
+            (", {{" + ", ".join(map(str, row["payload_sizes"])) + "}}" if row["payload_sizes"] else "") +
             "},"
         )
     lines.append("};")

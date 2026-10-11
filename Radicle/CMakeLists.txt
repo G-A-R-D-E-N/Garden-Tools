@@ -335,6 +335,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
+    tests/test_climate_weather_authoring.cpp
+    tests/test_climate_weather_c_api.cpp
+    tests/test_climate_weather_real.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp

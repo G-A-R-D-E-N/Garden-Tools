@@ -23,7 +23,7 @@
 namespace {
 
 struct WeatherPluginOptions {
-  std::size_t pnam_jnam_size = 512;
+  std::size_t pnam_jnam_size = 1024;
   std::size_t imsp_size = 32;
   std::size_t data_size = 20;
   int dalc_count = 8;
@@ -33,6 +33,7 @@ struct WeatherPluginOptions {
   std::size_t fnam_size = 72;
   std::size_t nam0_size = 608;
   std::uint32_t weather_form_id = 0x00000800;
+  std::uint16_t form_version = 131;
   std::uint32_t snam_form_id = 0x00000810;
   std::uint32_t tnam_form_id = 0x00000820;
   std::uint32_t mnam = 0;
@@ -76,7 +77,7 @@ void write_minimal_misc(fo4::test::ByteWriter& out, std::uint32_t form_id) {
 
 void write_weather_record(fo4::test::ByteWriter& out, const WeatherPluginOptions& options) {
   const auto group = fo4::test::begin_group(out, "WTHR", 0);
-  const auto record = fo4::test::begin_record(out, "WTHR", 0, options.weather_form_id);
+  const auto record = fo4::test::begin_record(out, "WTHR", 0, options.weather_form_id, options.form_version);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"TestWeather\0", 12});
   fo4::test::write_subrecord(out, "00TX", std::string_view{"Textures\\Sky\\Clouds\\Test.dds\0", 29});
   {
@@ -242,29 +243,47 @@ std::ostream& operator<<(std::ostream& out, const WeatherLayoutCase& value) {
   return out << value.name;
 }
 
-const std::array<WeatherLayoutCase, 13> kWeatherLayoutCases{{
-    {"default512", {}, 32u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"pnam1024", make_options([](WeatherPluginOptions& o) { o.pnam_jnam_size = 1024; }), 32u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"imsp16", make_options([](WeatherPluginOptions& o) { o.imsp_size = 16; }), 32u, 4u, 20u, 8u, true, true, 72u, 608u},
-    {"data19", make_options([](WeatherPluginOptions& o) { o.data_size = 19; }), 32u, 8u, 19u, 8u, true, true, 72u, 608u},
-    {"dalc4", make_options([](WeatherPluginOptions& o) { o.dalc_count = 4; }), 32u, 8u, 20u, 4u, true, true, 72u, 608u},
-    {"noNam4", make_options([](WeatherPluginOptions& o) { o.include_nam4 = false; }), 32u, 8u, 20u, 8u, false, true, 72u, 608u},
-    {"unam12", make_options([](WeatherPluginOptions& o) { o.unam_size = 12; }), 32u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"noUnam", make_options([](WeatherPluginOptions& o) { o.unam_size = 0; }), 32u, 8u, 20u, 8u, true, false, 72u, 608u},
-    {"fnam32", make_options([](WeatherPluginOptions& o) { o.fnam_size = 32; }), 32u, 8u, 20u, 8u, true, true, 32u, 608u},
-    {"fnam56", make_options([](WeatherPluginOptions& o) { o.fnam_size = 56; }), 32u, 8u, 20u, 8u, true, true, 56u, 608u},
-    {"nam0272", make_options([](WeatherPluginOptions& o) { o.nam0_size = 272; }), 32u, 8u, 20u, 8u, true, true, 72u, 272u},
-    {"nam0544", make_options([](WeatherPluginOptions& o) { o.nam0_size = 544; }), 32u, 8u, 20u, 8u, true, true, 72u, 544u},
-    {"full1024",
-     make_options([](WeatherPluginOptions& o) {
-       o.pnam_jnam_size = 1024;
-       o.imsp_size = 16;
+void legacy_layout(WeatherPluginOptions& o) {
+  o.form_version = 110;
+  o.pnam_jnam_size = 512;
+  o.data_size = 19;
+  o.fnam_size = 32;
+  o.nam0_size = 272;
+  o.imsp_size = 16;
+  o.dalc_count = 4;
+  o.unam_size = 12;
+}
+
+const std::array<WeatherLayoutCase, 10> kWeatherLayoutCases{{
+    {"default", {}, 32u, 8u, 20u, 8u, true, true, 72u, 608u},
+    {"imsp16", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
+    {"pre119", make_options([](WeatherPluginOptions& o) {
+       o.form_version = 118;
        o.data_size = 19;
-       o.dalc_count = 4;
-       o.include_nam4 = false;
-       o.unam_size = 12;
        o.fnam_size = 32;
-       o.nam0_size = 272;
+       o.nam0_size = 544;
+       o.unam_size = 12;
+     }),
+     32u, 8u, 19u, 8u, true, true, 32u, 544u},
+    {"dalc4", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
+    {"noNam4", make_options([](WeatherPluginOptions& o) { o.include_nam4 = false; }), 32u, 8u, 20u, 8u, false, true, 72u, 608u},
+    {"unam12", make_options([](WeatherPluginOptions& o) {
+       o.form_version = 129;
+       o.unam_size = 12;
+     }),
+     32u, 8u, 20u, 8u, true, true, 72u, 608u},
+    {"noUnam", make_options([](WeatherPluginOptions& o) { o.unam_size = 0; }), 32u, 8u, 20u, 8u, true, false, 72u, 608u},
+    {"v119", make_options([](WeatherPluginOptions& o) {
+       o.form_version = 119;
+       o.fnam_size = 56;
+       o.unam_size = 12;
+     }),
+     32u, 8u, 20u, 8u, true, true, 56u, 608u},
+    {"v110", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
+    {"full",
+     make_options([](WeatherPluginOptions& o) {
+       legacy_layout(o);
+       o.include_nam4 = false;
      }),
      32u, 4u, 19u, 4u, false, true, 32u, 272u},
 }};

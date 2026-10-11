@@ -455,6 +455,13 @@ int main() {
   printf("LightingTemplateInfo.HasLighting %zu\n", offsetof(radicle_lighting_template_info, has_lighting));
   printf("LightingTemplateInfo.Lighting %zu\n", offsetof(radicle_lighting_template_info, lighting));
   printf("LightingTemplateInfo.GodRays %zu\n", offsetof(radicle_lighting_template_info, god_rays));
+  printf("ClimateTimingEdit %zu\n", sizeof(radicle_climate_timing_edit));
+  printf("ClimateTimingEdit.SunriseBegin %zu\n", offsetof(radicle_climate_timing_edit, sunrise_begin));
+  printf("ClimateTimingEdit.SunriseEnd %zu\n", offsetof(radicle_climate_timing_edit, sunrise_end));
+  printf("ClimateTimingEdit.SunsetBegin %zu\n", offsetof(radicle_climate_timing_edit, sunset_begin));
+  printf("ClimateTimingEdit.SunsetEnd %zu\n", offsetof(radicle_climate_timing_edit, sunset_end));
+  printf("ClimateTimingEdit.Volatility %zu\n", offsetof(radicle_climate_timing_edit, volatility));
+  printf("ClimateTimingEdit.MoonsPhaseLength %zu\n", offsetof(radicle_climate_timing_edit, moons_phase_length));
   printf("MaterialSubstitution %zu\n", sizeof(radicle_material_substitution));
   printf("MaterialSubstitution.OriginalMaterial %zu\n", offsetof(radicle_material_substitution, original_material));
   printf("MaterialSubstitution.ReplacementMaterial %zu\n", offsetof(radicle_material_substitution, replacement_material));

@@ -185,6 +185,22 @@ void radicle_climate_free(radicle_climate* climate) {
   if (climate != nullptr) delete static_cast<ClimateHolder*>(climate->internal);
 }
 
+radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
+                                                 radicle_form_key key,
+                                                 const radicle_climate_timing_edit* timing) {
+  clear_error();
+  if (plugin == nullptr || timing == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and timing are required");
+  return guarded("unknown exception while editing CLMT timing", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid climate key is required");
+    const fo4::env::ClimateTiming value{timing->sunrise_begin, timing->sunrise_end,
+                                        timing->sunset_begin, timing->sunset_end,
+                                        timing->volatility, timing->moons_phase_length};
+    return fo4::env::set_climate_timing(plugin->value, *form_key, value)
+               ? RADICLE_STATUS_OK : RADICLE_STATUS_NOT_FOUND;
+  });
+}
+
 radicle_status radicle_weather_decode(const radicle_env* env,
                                       const radicle_record* record,
                                       radicle_weather_info** out_weather) {

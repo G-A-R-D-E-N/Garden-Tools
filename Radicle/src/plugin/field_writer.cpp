@@ -44,6 +44,15 @@ schema::FieldSlots scalar_slots(const Record& record, const schema::ScalarFieldD
 }
 
 schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFieldDescriptor& field) {
+  if (field.payload_sizes[0] != 0) {
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == field.subrecord &&
+          subrecord.data.size() != field.payload_sizes[0] &&
+          (field.payload_sizes[1] == 0 || subrecord.data.size() != field.payload_sizes[1])) {
+        throw schema::FormLinkFieldError(std::string(field.path) + " has unexpected payload size");
+      }
+    }
+  }
   schema::FieldShape shape;
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;

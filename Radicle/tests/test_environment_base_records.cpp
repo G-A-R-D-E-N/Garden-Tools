@@ -331,6 +331,17 @@ TEST_F(BaseRecordsTest, RejectsFogDistanceSizesOutsideTheFormSet) {
   EXPECT_THROW(fo4::env::decode_weather(env, *env.winner(key(0x850))), fo4::env::WorldDecodeError);
 }
 
+TEST_F(BaseRecordsTest, RejectsFogDistanceSizeThatDisagreesWithFormVersion) {
+  const auto data = make_plugin(0x1, {}, {top("WTHR", {versioned(rec("WTHR", 0x851, {{"FNAM", floats({1, 2, 3, 4, 5, 6, 7, 8})}}), 120)})});
+  {
+    std::ofstream stream(path_, std::ios::binary | std::ios::trunc);
+    stream.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+  }
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+  EXPECT_THROW(fo4::env::decode_weather(env, *env.winner(key(0x851))), fo4::env::WorldDecodeError);
+}
+
 TEST_F(BaseRecordsTest, DecodesStaticCollectionsAndListsPluginRecords) {
   const std::vector<std::filesystem::path> paths{path_};
   const auto env = fo4::env::Environment::load(paths);

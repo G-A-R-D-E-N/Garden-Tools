@@ -9,7 +9,7 @@ namespace Radicle.Interop.Tests;
 // source:Radicle/src/plugin/reader.cpp; fixture records and groups must use the layout it parses.
 internal abstract record Node;
 
-internal sealed record Rec(string Signature, uint FormId, (string Sig, byte[] Data)[] Subs, uint Flags = 0) : Node;
+internal sealed record Rec(string Signature, uint FormId, (string Sig, byte[] Data)[] Subs, uint Flags = 0, ushort FormVersion = 131) : Node;
 
 internal sealed record Grp(uint Label, int Type, Node[] Children) : Node;
 
@@ -72,7 +72,8 @@ internal static class PluginWriter
         w.Write(rec.Flags);
         w.Write(rec.FormId);
         w.Write(0u);
-        w.Write((ushort)131);
+        // source:Radicle/include/fo4/forms/weather.hpp; WTHR subrecord sizes must match this header form version.
+        w.Write(rec.FormVersion);
         w.Write((ushort)0);
         w.Write(payload);
     }

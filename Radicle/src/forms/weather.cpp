@@ -37,7 +37,6 @@ constexpr auto k_wnam = Signature::from_string("WNAM");
 constexpr auto k_modl = Signature::from_string("MODL");
 constexpr auto k_modt = Signature::from_string("MODT");
 constexpr auto k_dalc = Signature::from_string("DALC");
-constexpr std::size_t k_weather_legacy_cloud_color_size = 64;
 constexpr std::uint16_t k_weather_legacy_cloud_form_version = 35;
 constexpr std::uint32_t k_cloud_tex_base = Signature::from_string("00TX").packed();
 
@@ -133,16 +132,17 @@ void decode_speed_bytes(std::array<std::uint8_t, k_weather_cloud_layer_slots>& o
     throw WeatherError(std::string(name) + " must be exactly 32 bytes");
   }
   for (std::size_t i = 0; i < k_weather_cloud_layer_slots; ++i) {
-    out[i] = static_cast<std::uint8_t>(sub.data[i]);
+    out[i] = std::to_integer<std::uint8_t>(sub.data[i]);
   }
 }
 
 void decode_cloud_colors(Weather& result, const Subrecord& sub) {
-  const bool legacy = sub.data.size() == k_weather_legacy_cloud_color_size && result.form_version < k_weather_legacy_cloud_form_version;
-  if (sub.data.size() != 512 && sub.data.size() != 1024 && !legacy) {
-    throw WeatherError("PNAM size must be 512 or 1024 (64 before form version 35)");
+  const bool legacy = result.form_version < k_weather_legacy_cloud_form_version;
+  const std::size_t layers = legacy ? 4u : k_weather_cloud_layer_slots;
+  if (sub.data.size() != layers * weather_time_slots(result.form_version) * 4) {
+    throw WeatherError("PNAM size does not match its form version");
   }
-  result.cloud_color_layer_count = legacy ? 4u : static_cast<std::uint32_t>(k_weather_cloud_layer_slots);
+  result.cloud_color_layer_count = static_cast<std::uint32_t>(layers);
   result.cloud_colors.resize(sub.data.size() / 4);
   for (std::size_t i = 0; i < result.cloud_colors.size(); ++i) {
     result.cloud_colors[i] = read_u32(sub.data, i * 4);
@@ -150,8 +150,8 @@ void decode_cloud_colors(Weather& result, const Subrecord& sub) {
 }
 
 void decode_cloud_alphas(Weather& result, const Subrecord& sub) {
-  if (sub.data.size() != 512 && sub.data.size() != 1024) {
-    throw WeatherError("JNAM size must be 512 or 1024");
+  if (sub.data.size() != k_weather_cloud_layer_slots * weather_time_slots(result.form_version) * 4) {
+    throw WeatherError("JNAM size does not match its form version");
   }
   if (sub.data.size() / k_weather_cloud_layer_slots != result.cloud_colors.size() * 4 / result.cloud_color_layer_count) {
     throw WeatherError("JNAM times per layer do not match PNAM");
@@ -285,20 +285,20 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
   decode_cloud_alphas(result, *unique_required(*record, k_jnam, "JNAM"));
 
   result.nam0 = unique_required(*record, k_nam0, "NAM0")->data;
-  if (result.nam0.size() != 272 && result.nam0.size() != 544 && result.nam0.size() != 608) {
-    throw WeatherError("NAM0 size must be 272, 544, or 608");
+  if (result.nam0.size() != weather_nam0_size(result.form_version)) {
+    throw WeatherError("NAM0 size does not match its form version");
   }
   if (const auto* nam4 = unique_optional(*record, k_nam4, "NAM4")) {
     if (nam4->data.size() != 128) throw WeatherError("NAM4 must be exactly 128 bytes when present");
     result.nam4 = nam4->data;
   }
   result.fnam = unique_required(*record, k_fnam, "FNAM")->data;
-  if (result.fnam.size() != 32 && result.fnam.size() != 56 && result.fnam.size() != 72) {
-    throw WeatherError("FNAM size must be 32, 56, or 72");
+  if (result.fnam.size() != weather_fnam_size(result.form_version)) {
+    throw WeatherError("FNAM size does not match its form version");
   }
   result.data = unique_required(*record, sig_data, "DATA")->data;
-  if (result.data.size() != 19 && result.data.size() != 20) {
-    throw WeatherError("DATA size must be 19 or 20");
+  if (result.data.size() != weather_data_size(result.form_version)) {
+    throw WeatherError("DATA size does not match its form version");
   }
 
   const auto* nam1 = unique_required(*record, k_nam1, "NAM1");
@@ -321,8 +321,8 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
   }
 
   const auto* imsp = unique_required(*record, k_imsp, "IMSP");
-  if (imsp->data.size() != 16 && imsp->data.size() != 32) {
-    throw WeatherError("IMSP size must be 16 or 32");
+  if (imsp->data.size() != weather_imsp_size(result.form_version)) {
+    throw WeatherError("IMSP size does not match its form version");
   }
   result.imsp_count = static_cast<std::uint8_t>(imsp->data.size() / 4);
   for (std::uint8_t i = 0; i < result.imsp_count; ++i) {
@@ -351,8 +351,8 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
     if (data.size() == 32) ambient.fresnel = read_f32(data, 28);
     result.dalc.push_back(ambient);
   }
-  if (result.dalc.size() != 4 && result.dalc.size() != 8) {
-    throw WeatherError("WTHR must contain 4 or 8 DALC subrecords");
+  if (result.dalc.size() != weather_dalc_count(result.form_version)) {
+    throw WeatherError("WTHR DALC count does not match its form version");
   }
 
   if (const auto* gnam = unique_optional(*record, k_gnam, "GNAM")) {
@@ -369,8 +369,8 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
   }
 
   if (const auto* unam = unique_optional(*record, k_unam, "UNAM")) {
-    if (unam->data.size() != 12 && unam->data.size() != 24) {
-      throw WeatherError("UNAM size must be 12 or 24");
+    if (unam->data.size() != weather_unam_size(result.form_version)) {
+      throw WeatherError("UNAM size does not match its form version");
     }
     result.has_unam = true;
     result.unam[0].spell = decode_optional_form(context, unam->data, 0, "UNAM+00");

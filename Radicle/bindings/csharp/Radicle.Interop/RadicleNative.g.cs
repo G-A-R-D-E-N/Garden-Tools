@@ -645,6 +645,17 @@ public unsafe struct LightingTemplateInfo
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct ClimateTimingEdit
+{
+    public byte SunriseBegin;
+    public byte SunriseEnd;
+    public byte SunsetBegin;
+    public byte SunsetEnd;
+    public byte Volatility;
+    public byte MoonsPhaseLength;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct MaterialSubstitution
 {
     public IntPtr OriginalMaterial;
@@ -1033,7 +1044,7 @@ public unsafe struct QuestStructureView
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 24u;
+    public const uint CompiledAbiVersion = 25u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1319,6 +1330,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_climate_free")]
     public static extern void ClimateFree(Climate* climate);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_climate_timing")]
+    public static extern Status PluginSetClimateTiming(IntPtr plugin, FormKey key, ClimateTimingEdit* timing);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_weather_decode")]
     public static extern Status WeatherDecode(IntPtr env, IntPtr record, WeatherInfo** out_weather);
