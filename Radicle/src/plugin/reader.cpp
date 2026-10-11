@@ -205,6 +205,33 @@ void collect_groups_in_group(const Group& group, std::vector<const Group*>& out)
   }
 }
 
+template <class Match>
+const Record* find_first_in_group(const Group& group, const Match& match) {
+  for (const auto& child : group.children) {
+    if (const auto* record = std::get_if<Record>(&child)) {
+      if (match(*record)) {
+        return record;
+      }
+    } else if (const auto* found = find_first_in_group(std::get<Group>(child), match)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
+template <class Match>
+const Record* find_first_record(const Plugin& plugin, const Match& match) {
+  if (match(plugin.tes4)) {
+    return &plugin.tes4;
+  }
+  for (const auto& group : plugin.groups) {
+    if (const auto* found = find_first_in_group(group, match)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
 Plugin read_plugin_from_owned_bytes(
     std::shared_ptr<const std::vector<std::byte>> original_data,
     std::filesystem::path path) {
@@ -314,21 +341,34 @@ std::vector<const Group*> collect_groups(const Plugin& plugin) {
 }
 
 const Record* find_record(const Plugin& plugin, RawFormId form_id) {
-  for (const auto* record : collect_records(plugin)) {
-    if (record->header.form_id == form_id && record->header.signature != sig_tes4) {
-      return record;
-    }
-  }
-  return nullptr;
+  return find_first_record(plugin, [form_id](const Record& record) {
+    return record.header.form_id == form_id && record.header.signature != sig_tes4;
+  });
 }
 
 const Record* find_record(const Plugin& plugin, const FormKey& form_key) {
-  for (const auto* record : collect_records(plugin)) {
-    if (record->form_key == form_key && record->header.signature != sig_tes4) {
-      return record;
+  return find_first_record(plugin, [&form_key](const Record& record) {
+    return record.form_key.local() == form_key.local() && record.form_key == form_key &&
+           record.header.signature != sig_tes4;
+  });
+}
+
+RecordIndex::RecordIndex(const Plugin& plugin) : plugin_(&plugin) {
+  visit_records(plugin, [this](const Record& record) {
+    if (record.header.signature != sig_tes4) {
+      records_.try_emplace(record.form_key, &record);
     }
-  }
-  return nullptr;
+  });
+}
+
+const Record* RecordIndex::find(const FormKey& form_key) const {
+  const auto found = records_.find(form_key);
+  return found == records_.end() ? nullptr : found->second;
+}
+
+std::size_t RecordIndex::FormKeyHash::operator()(const FormKey& form_key) const noexcept {
+  const auto owner = hash_value(form_key.owner());
+  return owner ^ (static_cast<std::size_t>(form_key.local().value()) * 0x9E3779B97F4A7C15ull);
 }
 
 PluginFormIdContext plugin_form_id_context(const Plugin& plugin) {

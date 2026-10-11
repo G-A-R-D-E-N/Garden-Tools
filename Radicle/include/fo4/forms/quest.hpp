@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "fo4/schema/ctda.hpp"
 #include "fo4/schema/localized_fields.hpp"
 
@@ -248,6 +249,7 @@ struct QuestStages {
 };
 
 QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest);
+QuestStages decode_quest_stages(const RecordIndex& index, const FormKey& quest);
 
 bool lossless_quest_log_entry_conditions(std::span<const Subrecord> members,
                                          std::vector<CtdaCondition>& conditions,
@@ -286,6 +288,7 @@ struct QuestObjectives {
 };
 
 QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& quest);
+QuestObjectives decode_quest_objectives(const RecordIndex& index, const FormKey& quest);
 
 /*
  * Authoring.

@@ -48,10 +48,9 @@ std::string decode_note(const Subrecord& subrecord) {
   return std::string(begin, begin + data.size() - 1);
 }
 
-}  // namespace
-
-QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest) {
-  const auto* record = find_record(plugin, quest);
+QuestStages decode_quest_stages_record(const Plugin& plugin,
+                                       const FormKey& quest,
+                                       const Record* record) {
   if (record == nullptr) {
     throw QuestError("QUST record " + quest.to_string() + " was not found");
   }
@@ -123,6 +122,16 @@ QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest) {
   }
 
   return result;
+}
+
+}  // namespace
+
+QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest) {
+  return decode_quest_stages_record(plugin, quest, find_record(plugin, quest));
+}
+
+QuestStages decode_quest_stages(const RecordIndex& index, const FormKey& quest) {
+  return decode_quest_stages_record(index.plugin(), quest, index.find(quest));
 }
 
 bool lossless_quest_log_entry_conditions(std::span<const Subrecord> members,
