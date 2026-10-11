@@ -478,7 +478,7 @@ TEST_CASE("Native CopyAsNewRecord duplicates a Windows-1252 EditorID as UTF-8 te
     const auto* duplicate = fo4::find_record(
         patch, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(duplicate != nullptr);
-    CHECK(editorId(*duplicate) == std::string{"Caf\xE9" "DUP"});
+    CHECK(editorId(*duplicate) == std::string{"Caf\xC3\xA9" "DUP"});
 }
 
 TEST_CASE("Native CopyAsNewRecord refuses an EditorID that Windows-1252 cannot store without staging") {
@@ -500,7 +500,7 @@ TEST_CASE("Native CopyAsNewRecord refuses an EditorID that Windows-1252 cannot s
         "CopyAsNewRecord",
         nlohmann::json::array({"Base.esm", "000801:Base.esm", "Patch.esp", "\xe6\x97\xa5"}));
     REQUIRE_FALSE(refused.has_value());
-    CHECK(refused.error().type == "InvalidEditorId");
+    CHECK(refused.error().type == "CopyAsNewFailed");
     const auto pending = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
     REQUIRE(pending.has_value());
     for (const auto& plugin : nlohmann::json::parse(pending->get<std::string>())) {

@@ -64,14 +64,6 @@ inline Result<std::string> encodeEditorId(std::string_view utf8) {
     return std::move(*stored);
 }
 
-inline Result<std::optional<std::string>> encodeOptionalEditorId(
-    const std::optional<std::string>& utf8) {
-    if (!utf8.has_value()) return std::optional<std::string>{};
-    auto stored = encodeEditorId(*utf8);
-    if (!stored) return std::unexpected(stored.error());
-    return std::optional<std::string>{std::move(*stored)};
-}
-
 inline std::string asciiLower(std::string_view value) {
     std::string out(value);
     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
