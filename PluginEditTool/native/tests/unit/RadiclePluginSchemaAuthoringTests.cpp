@@ -1,6 +1,9 @@
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
+#include <fstream>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <fo4/plugin/mutation.hpp>
@@ -57,6 +60,18 @@ struct Fixture {
     }
 };
 
+std::vector<std::byte> readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    REQUIRE(stream.good());
+    const auto size = stream.tellg();
+    REQUIRE(size >= 0);
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+    stream.seekg(0);
+    stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    REQUIRE(stream.good());
+    return bytes;
+}
+
 }
 
 TEST_CASE("Schema authoring capabilities use native rules and persist exact operations", "[w0][authoring]") {
@@ -111,4 +126,40 @@ TEST_CASE("Schema creation uses proven defaults and refuses unsupported placemen
         "Authoring.esp", "INFO", {{"schema", true}, {"editorId", "Unsafe"}}}));
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error().type == "RecordNotAuthorable");
+}
+
+TEST_CASE("Schema creation refuses an EditorID that Windows-1252 cannot store without staging", "[w0][authoring]") {
+    Fixture fixture;
+    const auto before = readBytes(fixture.path);
+    const auto refused = fixture.backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Authoring.esp", "ARMO", {{"schema", true}, {"editorId", "\xe6\x97\xa5"}}}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidEditorId");
+    const auto pending = fixture.backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(pending.has_value());
+    CHECK(nlohmann::json::parse(pending->get<std::string>())[0].at("Pending") == false);
+    CHECK(readBytes(fixture.path) == before);
+}
+
+TEST_CASE("Schema authoring refuses every write on a protected master without staging", "[w0][authoring]") {
+    Fixture fixture(false, "Fallout4.esm");
+    const auto before = readBytes(fixture.path);
+    const auto icon = fixture.describe("Authoring\\ICON");
+    CHECK(icon.at("canAdd") == false);
+    CHECK(icon.at("canCreate") == false);
+    CHECK(fixture.describe("Authoring\\ICON[0]").at("canRemove") == false);
+    const auto added = fixture.mutate("AddElement", "Authoring\\ICON");
+    REQUIRE_FALSE(added.has_value());
+    CHECK(added.error().type == "PluginReadOnly");
+    const auto removed = fixture.mutate("RemoveElement", "Authoring\\ICON[0]");
+    REQUIRE_FALSE(removed.has_value());
+    CHECK(removed.error().type == "PluginReadOnly");
+    const auto created = fixture.backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Fallout4.esm", "ARMO", {{"schema", true}}}));
+    REQUIRE_FALSE(created.has_value());
+    CHECK(created.error().type == "PluginReadOnly");
+    const auto pending = fixture.backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(pending.has_value());
+    CHECK(nlohmann::json::parse(pending->get<std::string>())[0].at("Pending") == false);
+    CHECK(readBytes(fixture.path) == before);
 }
