@@ -1,8 +1,9 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <set>
 #include <string>
 #include <utility>
@@ -18,17 +19,6 @@ namespace {
 std::string compactStringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
     return args[index].get<std::string>();
-}
-
-bool compactTopLevelContains(const fo4::Plugin& plugin, const fo4::FormKey& key) {
-    for (const auto& group : plugin.groups) {
-        if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-        for (const auto& child : group.children) {
-            const auto* record = std::get_if<fo4::Record>(&child);
-            if (record != nullptr && record->form_key == key) return true;
-        }
-    }
-    return false;
 }
 
 }  // namespace
@@ -47,9 +37,7 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
     }
     if (const auto guard = writeGuard(*loaded)) return std::unexpected(*guard);
 
-    constexpr std::uint32_t kFirst = 0x800u;
-    constexpr std::uint32_t kLast = 0xFFFu;
-    constexpr std::size_t kCapacity = kLast - kFirst + 1u;
+    const auto [first, last, capacity, range] = support::eslSlots(loaded->plugin);
 
     std::set<std::uint32_t> inRange;
     std::vector<fo4::FormKey> outOfRange;
@@ -61,35 +49,54 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
         }
         ++nativeCount;
         const auto local = record->form_key.local().value();
-        if (local >= kFirst && local <= kLast) {
+        if (local >= first && local <= last) {
             inRange.insert(local);
-        } else if (local > kLast) {
+        } else {
             outOfRange.push_back(record->form_key);
         }
     }
 
     if (outOfRange.empty()) {
-        return nlohmann::json(
-            "'" + pluginName +
-            "' is already ESL-compatible (all native FormIDs within 0x800-0xFFF).");
+        const auto lowered = fo4::lowered_light_next_form_id(loaded->plugin);
+        if (!lowered) {
+            return nlohmann::json(
+                "'" + pluginName +
+                "' is already ESL-compatible (all native FormIDs within " + range + ")." +
+                support::lightFlagAdvice(loaded->plugin));
+        }
+        try {
+            auto mutated = loaded->plugin;
+            fo4::set_hedr_next_form_id(mutated, *lowered);
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+            return nlohmann::json(
+                "'" + pluginName + "' already has all native FormIDs within " + range +
+                "; lowered HEDR nextFormID to " + std::format("0x{:03X}", *lowered) + "." +
+                support::lightFlagAdvice(loaded->plugin));
+        } catch (const std::exception& error) {
+            return std::unexpected(Error{"CompactToEslFailed", error.what()});
+        }
     }
-    if (nativeCount > kCapacity) {
+    if (nativeCount > capacity) {
         return std::unexpected(Error{
             "EslCapacityExceeded",
             "Cannot compact '" + pluginName + "': it has " +
                 std::to_string(nativeCount) + " native records, exceeding the " +
-                std::to_string(kCapacity) + "-record ESL range"
+                std::to_string(capacity) + "-record ESL range"
         });
     }
 
-    for (const auto& key : outOfRange) {
-        if (compactTopLevelContains(loaded->plugin, key)) continue;
-        return std::unexpected(Error{
-            "NestedRecordCompactionUnsupported",
-            "Cannot compact '" + pluginName + "': out-of-range nested record " +
-                key.to_string() +
-                " requires parent GRUP label rekeying. Compact this plugin in xEdit instead."
-        });
+    const auto blockers = support::eslCompactionBlockers(loaded->plugin, first, last);
+    if (!blockers.empty()) {
+        const auto& blocker = blockers.front();
+        if (blocker.nested) {
+            return std::unexpected(Error{
+                "NestedRecordCompactionUnsupported",
+                "Cannot compact '" + pluginName + "': out-of-range nested record " +
+                    blocker.key.to_string() +
+                    " requires parent GRUP label rekeying. Compact this plugin in xEdit instead."
+            });
+        }
+        return std::unexpected(support::parentGroupRelabelError(blocker.key));
     }
 
     std::sort(outOfRange.begin(), outOfRange.end(), [](const auto& left, const auto& right) {
@@ -98,11 +105,14 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
 
     try {
         auto mutated = loaded->plugin;
-        std::uint32_t next = kFirst;
+        const auto originalFlags = mutated.header.tes4_flags;
+        mutated.header.tes4_flags = fo4::RecordFlags{
+            originalFlags.value() | fo4::RecordFlags::small_file};
+        std::uint32_t next = first;
         std::size_t remapped = 0;
         for (const auto& oldKey : outOfRange) {
-            while (next <= kLast && inRange.contains(next)) ++next;
-            if (next > kLast) {
+            while (next <= last && inRange.contains(next)) ++next;
+            if (next > last) {
                 return std::unexpected(Error{
                     "EslCapacityExceeded",
                     "No free ESL FormID remains while compacting " + pluginName
@@ -123,11 +133,14 @@ Result<nlohmann::json> RadiclePluginBackend::compactToEsl(
             ++remapped;
         }
 
+        fo4::set_hedr_next_form_id(mutated, next);
+        mutated.header.tes4_flags = originalFlags;
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(
             "Compacted " + pluginName + ": remapped " +
             std::to_string(remapped) +
-            " record(s) into the ESL range (0x800-0xFFF) and fixed all supported in-plugin references.");
+            " record(s) into the ESL range (" + range +
+            ") and fixed all supported in-plugin references." + support::lightFlagAdvice(loaded->plugin));
     } catch (const std::exception& error) {
         return std::unexpected(Error{"CompactToEslFailed", error.what()});
     }
