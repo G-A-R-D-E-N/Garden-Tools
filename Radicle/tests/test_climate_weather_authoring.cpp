@@ -446,10 +446,10 @@ TEST(ClimateWeatherReader, CloudColorLayerCountsMatchTheStoredLayouts) {
 
 TEST(ClimateWeatherReader, PnamAndJnamLengthFollowTheFormVersionNotTheSize) {
   auto entries = fixture();
-  entries[3].version = 112;
+  entries[3].version = 110;
   for (auto& [name, data] : entries[3].subs) {
     if (name == "PNAM" || name == "JNAM") { data = filled(1024, 0); }
-    if (name == "NAM0") { data = filled(544, 0); }
+    if (name == "NAM0") { data = filled(272, 0); }
   }
   EXPECT_THROW(fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr_old)), fo4::forms::WeatherError);
 }
