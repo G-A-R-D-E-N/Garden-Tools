@@ -30,14 +30,13 @@ Slots are applied after the flags byte is parsed, so `paramKind` sees the final 
 
 - Any kind, JSON integer: raw int32 bits, accepted in -2147483648 to 4294967295 (cast to int32); values outside that range are ignored. Note that the old code cast without a range check, so out-of-range values were truncated before.
 - Any kind, string `0x` plus 1 to 8 hex digits: raw bits. This is how non-finite floats round-trip.
-- Form: FormKey or editor ID first (`resolveConditionFormId`), then a strict whole-string decimal. Order changed from the old decimal-first. A JSON float is ignored.
-- Integer: strict decimal first, then FormKey or editor ID. A JSON float with an integral value is accepted; a non-integral one is ignored.
+- Form: strict whole-string decimal first, then FormKey or editor ID (`resolveConditionFormId`). A JSON float is ignored.
+- Integer: strict decimal first, then FormKey or editor ID. A JSON float with an integral value in the JSON integer range is accepted (converted through uint32, so 3000000000.0 gives the bits of 3000000000); a non-integral one is ignored.
 - Float: a JSON number (integer or float) is the float value (5 becomes 5.0f), stored as its bits. A string is strict `strtof` first, then FormKey or editor ID as raw bits (legacy).
 - Empty string, null, bool and object leave the param at 0 (as before).
 - GetEventData (`is_event_data`) uses the Integer rules for both params, so its raw JSON integers are unchanged.
 
-Behaviour change: a JSON integer on a Float slot is now a value, not raw bits. The old describe never emitted that shape for floats, so no stored round trip breaks. Every other input the old build accepted (integers, decimal strings, FormKey strings, editor IDs) is still accepted. The one ordering change is a decimal string on a Form slot that is also a valid editor ID, which now resolves as the editor ID.
-
+Behaviour change: a JSON integer on a Float slot is now a value, not raw bits. The old describe never emitted that shape for floats, so no stored round trip breaks. Every other input the old build accepted (integers, decimal strings, FormKey strings, editor IDs) is still accepted.
 Anchors: source:xEdit Core/wbDefinitionsFO4.pas:554 @93cc0bc5 (GetEventData: ParamType1 ptEvent, ParamType2 ptEventData); source:xEdit Core/wbDefinitionsFO4.pas:860 @93cc0bc5 (wbConditionEventToStr: the event value is `function | member << 16`, so GetEventData params stay raw).
 
 ## PluginEditTool/native/src/plugin/ConditionCodec.cpp:describeParam

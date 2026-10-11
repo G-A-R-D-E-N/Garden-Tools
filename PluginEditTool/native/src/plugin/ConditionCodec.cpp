@@ -299,7 +299,8 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             if (kind == ParamKind::Integer && std::trunc(number) == number &&
                 number >= std::numeric_limits<std::int32_t>::min() &&
                 number <= std::numeric_limits<std::uint32_t>::max()) {
-                target = static_cast<std::int32_t>(number);
+                target = static_cast<std::int32_t>(
+                    static_cast<std::uint32_t>(static_cast<std::int64_t>(number)));
             }
         } else if (value.is_string()) {
             const auto text = value.get<std::string>();
@@ -315,7 +316,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                     target = floatBits(number);
                     return;
                 }
-            } else if (kind == ParamKind::Integer) {
+            } else {
                 const auto number = std::strtol(text.c_str(), &end, 10);
                 if (end != text.c_str() && *end == '\0') {
                     target = static_cast<std::int32_t>(number);
@@ -324,9 +325,6 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             }
             if (const auto raw = resolveConditionFormId(text, plugin, resolveEditorId)) {
                 target = static_cast<std::int32_t>(raw->value());
-            } else if (kind == ParamKind::Form) {
-                const auto number = std::strtol(text.c_str(), &end, 10);
-                if (end != text.c_str() && *end == '\0') target = static_cast<std::int32_t>(number);
             }
         }
     };
