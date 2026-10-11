@@ -35,6 +35,8 @@ public class VegetationEditTests
         Assert.True(plugin.SetScalar(GrassKey, "GRAS\\Density", "21"));
         Assert.True(plugin.SetScalar(GrassKey, "GRAS\\UnitsFromWaterType", "4294967295"));
         Assert.True(plugin.SetScalar(GrassKey, "GRAS\\UnitsFromWaterType", "6"));
+        Assert.True(plugin.SetScalar(GrassKey, "GRAS\\PositionRange", "1e10"));
+        Assert.True(plugin.SetScalar(GrassKey, "GRAS\\PositionRange", "32"));
         Assert.True(plugin.SetScalar(GrassKey, "GRAS\\WavePeriod", (12.5f).ToString(CultureInfo.InvariantCulture)));
         Assert.True(plugin.SetScalar(TreeKey, "TREE\\LeafFrequency", (-3.5f).ToString(CultureInfo.InvariantCulture)));
         Assert.True(plugin.SetScalar(TreeKey, "TREE\\Winter", "250"));
@@ -81,7 +83,7 @@ public class VegetationEditTests
     [Theory]
     [InlineData("nan")]
     [InlineData("inf")]
-    [InlineData("1e10")]
+    [InlineData("1e39")]
     public void NonFiniteAndOutOfRangeFloatsAreRefused(string value)
     {
         using var temp = new TempDirectory();

@@ -115,7 +115,7 @@ protected:
     grass("MaxSlope", "19", [](const auto& g) { EXPECT_EQ(g.max_slope, 19); });
     grass("UnitsFromWater", "65535", [](const auto& g) { EXPECT_EQ(g.units_from_water, 65535); });
     grass("UnitsFromWaterType", "4294967295", [](const auto& g) { EXPECT_EQ(g.water_type, 4294967295u); });
-    grass("PositionRange", "-2.5", [](const auto& g) { EXPECT_FLOAT_EQ(g.position_range, -2.5f); });
+    grass("PositionRange", "-1e10", [](const auto& g) { EXPECT_FLOAT_EQ(g.position_range, -1e10f); });
     grass("HeightRange", "3.25", [](const auto& g) { EXPECT_FLOAT_EQ(g.height_range, 3.25f); });
     grass("ColorRange", "0.75", [](const auto& g) { EXPECT_FLOAT_EQ(g.color_range, 0.75f); });
     grass("WavePeriod", "99.5", [](const auto& g) { EXPECT_FLOAT_EQ(g.wave_period, 99.5f); });
@@ -283,7 +283,7 @@ TEST_F(VegetationEdit, RefusesUnknownLayoutsAndBadValuesBeforeAnyByteChanges) {
   refuse(records, k_gras, "GRAS\\Flags", "256");
   refuse(records, k_tree, "TREE\\Winter", "256");
   refuse(records, k_flor, "FLOR\\Flags", "65536");
-  for (const char* value : {"nan", "inf", "-inf", "abc", "", "1e10", "-1e10"}) {
+  for (const char* value : {"nan", "inf", "-inf", "abc", "", "1e39", "-1e39"}) {
     refuse(records, k_gras, "GRAS\\PositionRange", value);
     refuse(records, k_tree, "TREE\\SideFrequency", value);
   }
