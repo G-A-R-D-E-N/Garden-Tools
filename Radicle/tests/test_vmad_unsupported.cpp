@@ -194,3 +194,19 @@ TEST(Vmad, FragmentCountsArePublishedOnlyForCompleteCoverage) {
     EXPECT_EQ(incomplete.fragment_script_count, 0u);
   }
 }
+
+TEST(Vmad, InfoFragmentCensusCountsOnlyDefinedFlagBits) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(0);
+  vmad.u8(0);
+  vmad.u8(0x04);
+  wstring(vmad, "Fragments");
+  vmad.u8(0);
+  vmad.u16(0);
+  const auto coverage = fo4::vmad_coverage(vmad.bytes, fo4::sig_info);
+  ASSERT_TRUE(coverage.complete());
+  EXPECT_EQ(coverage.fragment_count, 0u);
+  EXPECT_EQ(coverage.fragment_script_count, 1u);
+}
