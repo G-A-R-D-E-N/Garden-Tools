@@ -112,6 +112,19 @@ Group& find_or_add_child_group(Group& parent, const GroupHeader& header) {
   return std::get<Group>(parent.children.back());
 }
 
+Group& find_or_add_leaf_group(Group& parent, const GroupHeader& header) {
+  if (auto* found = find_child_group(parent, header)) return *found;
+  Group created;
+  created.header = header;
+  const auto position =
+      std::find_if(parent.children.begin(), parent.children.end(), [&](const GroupChild& child) {
+        const auto* group = std::get_if<Group>(&child);
+        return group != nullptr && group->header.group_type > header.group_type;
+      });
+  const auto inserted = parent.children.insert(position, std::move(created));
+  return std::get<Group>(*inserted);
+}
+
 Group* adjacent_child_group(Group& parent, std::size_t position, const GroupHeader& header) {
   if (const auto* next = owned_child_group(parent, position); next != nullptr) {
     return same_group(next->header, header) ? &std::get<Group>(parent.children[position + 1]) : nullptr;
@@ -234,16 +247,22 @@ bool insert_nested_copy(Plugin& destination,
   auto cell_index = record_index(*current, cell_key);
   if (existing != nullptr && (!cell_index || existing->header.signature != k_cell)) return false;
   if (!cell_index) {
-    current->children.emplace_back(
-        clone_record(*plan.cell, cell_key, source_context, destination_context));
-    cell_index = current->children.size() - 1;
+    auto cell = clone_record(*plan.cell, cell_key, source_context, destination_context);
+    const bool persistent = path.size() == 4;
+    if (persistent) {
+      current->children.insert(current->children.begin(), std::move(cell));
+      cell_index = 0;
+    } else {
+      current->children.emplace_back(std::move(cell));
+      cell_index = current->children.size() - 1;
+    }
   }
 
   auto* cell_children = adjacent_child_group(
       *current, *cell_index,
       destination_header(*path[path.size() - 2], source_context, destination_context));
   if (cell_children == nullptr) return false;
-  auto& leaf = find_or_add_child_group(
+  auto& leaf = find_or_add_leaf_group(
       *cell_children, destination_header(*path.back(), source_context, destination_context));
   leaf.children.emplace_back(std::move(copied));
   return true;

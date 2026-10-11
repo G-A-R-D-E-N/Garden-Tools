@@ -17,7 +17,6 @@
 
 namespace {
 
-// Nesting and kind lists are concept-level, TODO-verify against a Fallout4.esm sample; see docs/code-notes/radicle-copy-cell-children.md.
 using Bytes = std::vector<std::byte>;
 
 enum class Shape { interior, exterior, persistent };
@@ -210,6 +209,87 @@ std::size_t count_records(const fo4::Plugin& plugin, const fo4::FormKey& key) {
   return static_cast<std::size_t>(std::count_if(
       records.begin(), records.end(),
       [&](const fo4::Record* record) { return record->form_key == key; }));
+}
+
+std::vector<std::int32_t> child_group_types(const fo4::Group& group) {
+  std::vector<std::int32_t> types;
+  for (const auto& child : group.children) {
+    if (const auto* sub = std::get_if<fo4::Group>(&child)) types.push_back(sub->header.group_type);
+  }
+  return types;
+}
+
+std::size_t count_child_records(const fo4::Group& group, std::string_view signature) {
+  std::size_t count = 0;
+  for (const auto& child : group.children) {
+    const auto* record = std::get_if<fo4::Record>(&child);
+    if (record != nullptr && record->header.signature.to_string() == signature) ++count;
+  }
+  return count;
+}
+
+Bytes subrecord_data(const fo4::Record& record, std::string_view signature) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature.to_string() == signature) return sub.data;
+  }
+  return {};
+}
+
+Bytes target_with_world_group(bool with_block) {
+  fo4::test::ByteWriter out;
+  write_header(out, 0, {"Base.esm"});
+  const auto top = fo4::test::begin_group(out, "WRLD", 0);
+  put_record(out, "WRLD", 0, 0xA00, "World");
+  const auto world_children = fo4::test::begin_group(out, label_of(0xA00), 1);
+  if (with_block) {
+    fo4::test::end_group(out, fo4::test::begin_group(out, label_of(0x00010002), 4));
+  }
+  fo4::test::end_group(out, world_children);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+Bytes target_with_world_outside_world_group() {
+  fo4::test::ByteWriter out;
+  write_header(out, 0, {"Base.esm"});
+  const auto top = fo4::test::begin_group(out, "CELL", 0);
+  put_record(out, "WRLD", 0, 0xA00, "World");
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+Bytes source_with_record_before_cell_children() {
+  fo4::test::ByteWriter out;
+  write_header(out, 0, {"Base.esm"});
+  const auto top = fo4::test::begin_group(out, "CELL", 0);
+  const auto block = fo4::test::begin_group(out, label_of(3), 2);
+  const auto sub = fo4::test::begin_group(out, label_of(5), 3);
+  put_record(out, "CELL", 0, 0x900, "Cell");
+  put_record(out, "REFR", 0, 0x901, "Between");
+  put_cell_children(out, 0x900, {{9, "REFR", 0x800}});
+  fo4::test::end_group(out, sub);
+  fo4::test::end_group(out, block);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+Bytes interior_source_with_image_space() {
+  fo4::test::ByteWriter out;
+  write_header(out, 0, {"Base.esm", "Other.esm"});
+  const auto top = fo4::test::begin_group(out, "CELL", 0);
+  const auto block = fo4::test::begin_group(out, label_of(3), 2);
+  const auto sub = fo4::test::begin_group(out, label_of(5), 3);
+  const auto cell = fo4::test::begin_record(out, "CELL", 0, 0x01000900);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Cell\0", 5});
+  fo4::test::ByteWriter image;
+  image.u32(0x01000950);
+  fo4::test::write_subrecord(out, "XCIM", image.bytes);
+  fo4::test::end_record(out, cell);
+  put_cell_children(out, 0x01000900, {{9, "REFR", 0x800}});
+  fo4::test::end_group(out, sub);
+  fo4::test::end_group(out, block);
+  fo4::test::end_group(out, top);
+  return out.bytes;
 }
 
 }  // namespace
@@ -430,4 +510,114 @@ TEST(CopyCellChildren, RepeatCopyIsAlreadyExistsThenOverwritesInPlace) {
   EXPECT_EQ(group_types(containment_path(reread, key)),
             (std::vector<std::int32_t>{0, 2, 3, 6, 9}));
   EXPECT_EQ(count_records(reread, key), 1u);
+}
+
+TEST(CopyCellChildren, PersistentCellPrecedesBlockGroupsInWorldChildren) {
+  const auto source = fo4::read_plugin(
+      nested_source(Shape::persistent, 0x900, 0, {{8, "REFR", 0x800}}), "Source.esp");
+  auto target = fo4::read_plugin(target_with_world_group(true), "Target.esp");
+
+  ASSERT_EQ(fo4::copy_record_as_override(target, source, base_key(0x800), false),
+            fo4::RecordCopyStatus::inserted);
+  const auto reread = reread_plugin(target);
+  ASSERT_EQ(reread.groups.size(), 1u);
+  const auto* world_children = std::get_if<fo4::Group>(&reread.groups.front().children[1]);
+  ASSERT_NE(world_children, nullptr);
+  ASSERT_EQ(world_children->children.size(), 3u);
+  const auto* cell = std::get_if<fo4::Record>(&world_children->children[0]);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->header.signature.to_string(), "CELL");
+  EXPECT_EQ(child_group_types(*world_children), (std::vector<std::int32_t>{6, 4}));
+}
+
+TEST(CopyCellChildren, CellChildGroupsStayInAscendingTypeOrder) {
+  const auto temporary = fo4::read_plugin(
+      nested_source(Shape::interior, 0x900, 0, {{9, "REFR", 0x800}}), "Source.esp");
+  const auto persistent = fo4::read_plugin(
+      nested_source(Shape::interior, 0x900, 0, {{8, "REFR", 0x801}}), "Source.esp");
+  auto target = fo4::read_plugin(empty_target(), "Target.esp");
+
+  ASSERT_EQ(fo4::copy_record_as_override(target, temporary, base_key(0x800), false),
+            fo4::RecordCopyStatus::inserted);
+  ASSERT_EQ(fo4::copy_record_as_override(target, persistent, base_key(0x801), false),
+            fo4::RecordCopyStatus::inserted);
+  const auto reread = reread_plugin(target);
+  const auto path = containment_path(reread, base_key(0x801));
+  ASSERT_EQ(path.size(), 5u);
+  EXPECT_EQ(child_group_types(*path[3]), (std::vector<std::int32_t>{8, 9}));
+}
+
+TEST(CopyCellChildren, RefusalAfterMasterAddedLeavesHeaderAndBytesUnchanged) {
+  const auto source = fo4::read_plugin(
+      nested_source(Shape::persistent, 0x01000900, 0, {{8, "REFR", 0x800}}), "Source.esp");
+  auto target = fo4::read_plugin(target_with_world_outside_world_group(), "Target.esp");
+  const auto before = fo4::write_plugin(target);
+  const auto masters_before = target.header.masters.size();
+
+  EXPECT_EQ(fo4::copy_record_as_override(target, source, base_key(0x800), false),
+            fo4::RecordCopyStatus::source_containment_unsupported);
+  EXPECT_EQ(target.header.masters.size(), masters_before);
+  EXPECT_EQ(fo4::write_plugin(target), before);
+}
+
+TEST(CopyCellChildren, RefusalWhenWorldExistsOutsideWorldGroup) {
+  const auto source = fo4::read_plugin(
+      nested_source(Shape::persistent, 0x900, 0, {{8, "REFR", 0x800}}), "Source.esp");
+  auto target = fo4::read_plugin(target_with_world_outside_world_group(), "Target.esp");
+  const auto before = fo4::write_plugin(target);
+
+  EXPECT_EQ(fo4::copy_record_as_override(target, source, base_key(0x800), false),
+            fo4::RecordCopyStatus::source_containment_unsupported);
+  EXPECT_EQ(fo4::write_plugin(target), before);
+  EXPECT_EQ(target.groups.size(), 1u);
+}
+
+TEST(CopyCellChildren, RefusalWhenChildGroupIsNotAdjacentToCell) {
+  const auto source = fo4::read_plugin(source_with_record_before_cell_children(), "Source.esp");
+  auto target = fo4::read_plugin(empty_target(), "Target.esp");
+  const auto before = fo4::write_plugin(target);
+
+  EXPECT_EQ(fo4::copy_record_as_override(target, source, base_key(0x800), false),
+            fo4::RecordCopyStatus::source_containment_unsupported);
+  EXPECT_EQ(fo4::write_plugin(target), before);
+}
+
+TEST(CopyCellChildren, PersistentCopyReusesExistingWorldAndWorldChildren) {
+  const auto source = fo4::read_plugin(
+      nested_source(Shape::persistent, 0x900, 0, {{8, "REFR", 0x800}}), "Source.esp");
+  auto target = fo4::read_plugin(target_with_world_group(false), "Target.esp");
+
+  ASSERT_EQ(fo4::copy_record_as_override(target, source, base_key(0x800), false),
+            fo4::RecordCopyStatus::inserted);
+  const auto reread = reread_plugin(target);
+  ASSERT_EQ(reread.groups.size(), 1u);
+  const auto& world = reread.groups.front();
+  EXPECT_EQ(count_child_records(world, "WRLD"), 1u);
+  EXPECT_EQ(child_group_types(world), (std::vector<std::int32_t>{1}));
+  const auto path = containment_path(reread, base_key(0x800));
+  EXPECT_EQ(group_types(path), (std::vector<std::int32_t>{0, 1, 6, 8}));
+  ASSERT_EQ(path.size(), 4u);
+  EXPECT_EQ(path[1]->children.size(), 2u);
+  EXPECT_EQ(count_records(reread, base_key(0x900)), 1u);
+}
+
+TEST(CopyCellChildren, ParentCellKeepsEdidAndRemapsFormIdSubrecord) {
+  const auto source = fo4::read_plugin(interior_source_with_image_space(), "Source.esp");
+  fo4::test::ByteWriter header;
+  write_header(header, 0, {"Other.esm", "Base.esm"});
+  auto target = fo4::read_plugin(header.bytes, "Target.esp");
+  const auto other_cell =
+      fo4::FormKey{fo4::PluginKey::from_filename("Other.esm"), fo4::LocalFormId{0x900}};
+
+  ASSERT_EQ(fo4::copy_record_as_override(target, source, base_key(0x800), false),
+            fo4::RecordCopyStatus::inserted);
+  const auto reread = reread_plugin(target);
+  const auto* cell = fo4::find_record(reread, other_cell);
+  const auto* source_cell = fo4::find_record(source, other_cell);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_NE(source_cell, nullptr);
+  EXPECT_EQ(subrecord_data(*cell, "EDID"), subrecord_data(*source_cell, "EDID"));
+  fo4::test::ByteWriter expected;
+  expected.u32(0x00000950);
+  EXPECT_EQ(subrecord_data(*cell, "XCIM"), expected.bytes);
 }
