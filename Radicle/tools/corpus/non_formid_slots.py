@@ -10,7 +10,8 @@ import re
 import subprocess
 import sys
 
-XEDIT_ONLY_SCALAR_SLOTS = [("FSTP", "ANAM"), ("SNDR", "ANAM"), ("SNDR", "FNAM"), ("SNDR", "NNAM")]
+XEDIT_ONLY_SCALAR_SLOTS = [("FSTP", "ANAM"), ("SNDR", "ANAM"), ("SNDR", "FNAM"), ("SNDR", "NNAM"),
+                           ("MUST", "ANAM"), ("MUST", "BNAM"), ("MUST", "FNAM"), ("SOPM", "MNAM")]
 OFFICIAL = re.compile(r"^(Fallout4\.esm|DLC[A-Za-z0-9]+\.esm|cc[A-Z]{3}FO4\d{3}-[A-Za-z0-9_]+\.esl)$")
 SCALAR_TYPES = {"wbFloat", "wbInteger", "wbString", "wbLString", "wbRGBA", "wbByteRGBA", "wbFloatRGBA", "wbByteArray",
                 "wbByteColors", "wbByteABGR", "wbFloatColors", "wbLStringKC", "wbStringKC",
