@@ -8,13 +8,13 @@ namespace Radicle.Interop;
 /// <summary>A plugin being written (radicle_plugin); not thread-safe.</summary>
 public sealed unsafe class PluginFile : IDisposable
 {
-    private IntPtr _handle;
+    private readonly PluginHandle _handle;
 
     static PluginFile() => RadicleLibrary.Register();
 
-    private PluginFile(IntPtr handle) => _handle = handle;
+    private PluginFile(IntPtr handle) => _handle = new PluginHandle(handle);
 
-    internal IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(PluginFile));
+    internal HandleUse Use() => new(_handle, nameof(PluginFile));
 
     public static PluginFile Create(string filename)
     {
@@ -30,107 +30,140 @@ public sealed unsafe class PluginFile : IDisposable
         return new PluginFile(handle);
     }
 
-    public void Write(string path) => Call.Check(RadicleNative.PluginWriteFile(Handle, path));
+    public void Write(string path)
+    {
+        using var use = Use();
+        Call.Check(RadicleNative.PluginWriteFile(use.Pointer, path));
+    }
 
     public byte[] ToBytes()
     {
+        using var use = Use();
         byte* bytes;
         nuint size;
-        Call.Check(RadicleNative.PluginWriteBytes(Handle, &bytes, &size));
+        Call.Check(RadicleNative.PluginWriteBytes(use.Pointer, &bytes, &size));
         return Call.TakeBytes(bytes, size);
     }
 
     public PlacedCopyStatus CopyPlacedOverride(RadicleEnvironment env, Record record, bool overwrite = false)
     {
+        using var use = Use();
+        using var envUse = env.Use(record);
         PlacedCopyStatus status;
-        Call.Check(RadicleNative.PluginCopyPlacedRefOverride(Handle, env.Handle, record.Handle, overwrite ? 1 : 0, &status));
+        Call.Check(RadicleNative.PluginCopyPlacedRefOverride(use.Pointer, envUse.Pointer, record.Handle, overwrite ? 1 : 0, &status));
         return status;
     }
 
     /// <summary>A new reference owned by this plugin in the same CELL; the CELL must already be in this plugin.</summary>
     public FormKey CopyPlacedNew(RadicleEnvironment env, Record record)
     {
+        using var use = Use();
+        using var envUse = env.Use(record);
         Native.FormKey key;
-        Call.Check(RadicleNative.PluginCopyPlacedRefNew(Handle, env.Handle, record.Handle, &key));
+        Call.Check(RadicleNative.PluginCopyPlacedRefNew(use.Pointer, envUse.Pointer, record.Handle, &key));
         return FormKey.FromNative(key)!.Value;
     }
 
-    public void SortMasters(RadicleEnvironment env) => Call.Check(RadicleNative.PluginSortMasters(Handle, env.Handle));
+    public void SortMasters(RadicleEnvironment env)
+    {
+        using var use = Use();
+        using var envUse = env.Use();
+        Call.Check(RadicleNative.PluginSortMasters(use.Pointer, envUse.Pointer));
+    }
 
     public bool SetTransform(FormKey reference, Vector3 position, Vector3 rotation) =>
-        Edit(reference, (s, key) =>
+        Edit(reference, (plugin, s, key) =>
         {
             var p = stackalloc float[] { position.X, position.Y, position.Z };
             var r = stackalloc float[] { rotation.X, rotation.Y, rotation.Z };
-            return RadicleNative.PluginSetPlacedTransform(Handle, key, p, r);
+            return RadicleNative.PluginSetPlacedTransform(plugin, key, p, r);
         });
 
     public bool SetScale(FormKey reference, float? scale) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedScale(Handle, key, scale.HasValue ? 1 : 0, scale ?? 0));
+        Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedScale(plugin, key, scale.HasValue ? 1 : 0, scale ?? 0));
 
     public bool SetEditorId(FormKey reference, string? editorId) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedEditorId(Handle, key, editorId));
+        Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedEditorId(plugin, key, editorId));
 
     public bool SetRecordFlags(FormKey reference, uint flags) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedRecordFlags(Handle, key, flags));
+        Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedRecordFlags(plugin, key, flags));
 
     public bool SetComments(FormKey reference, string? comments) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedComments(Handle, key, comments));
+        Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedComments(plugin, key, comments));
 
-    public bool SetLocationReference(RadicleEnvironment env, FormKey reference, FormKey? location) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedLocationReference(Handle, env.Handle, key, s.Key(location)));
+    public bool SetLocationReference(RadicleEnvironment env, FormKey reference, FormKey? location)
+    {
+        using var envUse = env.Use();
+        return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedLocationReference(plugin, envUse.Pointer, key, s.Key(location)));
+    }
 
-    public bool SetOwnership(RadicleEnvironment env, FormKey reference, FormKey? owner, bool noCrime, int? factionRank) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedOwnership(Handle, env.Handle, key, s.Key(owner), noCrime ? 1 : 0,
-                                                                             factionRank.HasValue ? 1 : 0, factionRank ?? 0));
+    public bool SetOwnership(RadicleEnvironment env, FormKey reference, FormKey? owner, bool noCrime, int? factionRank)
+    {
+        using var envUse = env.Use();
+        return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedOwnership(plugin, envUse.Pointer, key, s.Key(owner),
+                                                                                         noCrime ? 1 : 0, factionRank.HasValue ? 1 : 0,
+                                                                                         factionRank ?? 0));
+    }
 
-    public bool SetEnableParent(RadicleEnvironment env, FormKey reference, FormKey? parent, byte flags) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedEnableParent(Handle, env.Handle, key, s.Key(parent), flags));
+    public bool SetEnableParent(RadicleEnvironment env, FormKey reference, FormKey? parent, byte flags)
+    {
+        using var envUse = env.Use();
+        return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedEnableParent(plugin, envUse.Pointer, key, s.Key(parent), flags));
+    }
 
-    public bool SetLinkedReferences(RadicleEnvironment env, FormKey reference, IEnumerable<LinkedReference> links) =>
-        Edit(reference, (s, key) =>
+    public bool SetLinkedReferences(RadicleEnvironment env, FormKey reference, IEnumerable<LinkedReference> links)
+    {
+        using var envUse = env.Use();
+        return Edit(reference, (plugin, s, key) =>
         {
             var native = links.Select(l => new LinkedRef { Keyword = s.Key(l.Keyword), Reference = s.Key(l.Reference) }).ToArray();
             fixed (LinkedRef* p = native)
             {
-                return RadicleNative.PluginSetPlacedLinkedRefs(Handle, env.Handle, key, p, (nuint)native.Length);
+                return RadicleNative.PluginSetPlacedLinkedRefs(plugin, envUse.Pointer, key, p, (nuint)native.Length);
             }
         });
+    }
 
-    public bool SetTeleport(RadicleEnvironment env, FormKey reference, FormKey door, Vector3 position, Vector3 rotation) =>
-        Edit(reference, (s, key) =>
+    public bool SetTeleport(RadicleEnvironment env, FormKey reference, FormKey door, Vector3 position, Vector3 rotation)
+    {
+        using var envUse = env.Use();
+        return Edit(reference, (plugin, s, key) =>
         {
             var p = stackalloc float[] { position.X, position.Y, position.Z };
             var r = stackalloc float[] { rotation.X, rotation.Y, rotation.Z };
-            return RadicleNative.PluginSetPlacedTeleport(Handle, env.Handle, key, s.Key(door), p, r);
+            return RadicleNative.PluginSetPlacedTeleport(plugin, envUse.Pointer, key, s.Key(door), p, r);
         });
+    }
 
     public bool SetPrimitive(FormKey reference, Vector3 bounds, uint type) =>
-        Edit(reference, (s, key) =>
+        Edit(reference, (plugin, s, key) =>
         {
             var b = stackalloc float[] { bounds.X, bounds.Y, bounds.Z };
-            return RadicleNative.PluginSetPlacedPrimitive(Handle, key, b, type);
+            return RadicleNative.PluginSetPlacedPrimitive(plugin, key, b, type);
         });
 
-    public bool SetActivateParentDelay(FormKey reference, int index, float delay) =>
-        Edit(reference, (s, key) => RadicleNative.PluginSetPlacedActivateParentDelay(Handle, key, (nuint)index, delay));
+    public bool SetActivateParentDelay(FormKey reference, int index, float delay)
+    {
+        var at = Index(index);
+        return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedActivateParentDelay(plugin, key, at, delay));
+    }
 
     public bool SetScalar(FormKey record, string path, string value, int index = 0)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(value);
         var at = Index(index);
-        return Edit(record, (s, key) => RadicleNative.PluginSetRecordScalarAt(Handle, key, path, at, value));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetRecordScalarAt(plugin, key, path, at, value));
     }
 
     public bool SetFormLink(FormKey record, string path, FormKey? target, int index = 0)
     {
         ArgumentNullException.ThrowIfNull(path);
         var at = Index(index);
-        return Edit(record, (s, key) =>
+        return Edit(record, (plugin, s, key) =>
         {
             var native = s.Key(target);
-            return RadicleNative.PluginSetRecordFormlink(Handle, key, path, at, target.HasValue ? &native : null);
+            return RadicleNative.PluginSetRecordFormlink(plugin, key, path, at, target.HasValue ? &native : null);
         });
     }
 
@@ -138,31 +171,30 @@ public sealed unsafe class PluginFile : IDisposable
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(value);
-        if (value.Contains('\0')) throw new ArgumentException("A string field cannot hold an embedded NUL.", nameof(value));
         var at = Index(index);
-        return Edit(record, (s, key) => RadicleNative.PluginSetRecordString(Handle, key, path, at, value));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetRecordString(plugin, key, path, at, value));
     }
 
     public bool AddSubrecord(FormKey record, string signature)
     {
         ArgumentNullException.ThrowIfNull(signature);
-        return Edit(record, (s, key) => RadicleNative.PluginAddSubrecord(Handle, key, signature));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginAddSubrecord(plugin, key, signature));
     }
 
     public bool RemoveSubrecord(FormKey record, string signature, int occurrence = 0)
     {
         ArgumentNullException.ThrowIfNull(signature);
         var at = Index(occurrence);
-        return Edit(record, (s, key) => RadicleNative.PluginRemoveSubrecord(Handle, key, signature, at));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginRemoveSubrecord(plugin, key, signature, at));
     }
 
     public FormKey CreateRecord(string signature, string editorId)
     {
         ArgumentNullException.ThrowIfNull(signature);
         ArgumentNullException.ThrowIfNull(editorId);
-        if (editorId.Contains('\0')) throw new ArgumentException("An editor ID cannot hold an embedded NUL.", nameof(editorId));
+        using var use = Use();
         Native.FormKey key;
-        Call.Check(RadicleNative.PluginCreateRecord(Handle, signature, editorId, &key));
+        Call.Check(RadicleNative.PluginCreateRecord(use.Pointer, signature, editorId, &key));
         return FormKey.FromNative(key)!.Value;
     }
 
@@ -172,9 +204,10 @@ public sealed unsafe class PluginFile : IDisposable
     public bool TryFieldCount(FormKey record, string path, out int count)
     {
         ArgumentNullException.ThrowIfNull(path);
+        using var use = Use();
         using var strings = new NativeStrings();
         nuint native;
-        var found = Call.Found(RadicleNative.PluginRecordFieldCount(Handle, strings.Key(record), path, &native));
+        var found = Call.Found(RadicleNative.PluginRecordFieldCount(use.Pointer, strings.Key(record), path, &native));
         count = found ? checked((int)native) : 0;
         return found;
     }
@@ -185,9 +218,10 @@ public sealed unsafe class PluginFile : IDisposable
     public bool TryFormLinkListCount(FormKey record, string path, out int count)
     {
         ArgumentNullException.ThrowIfNull(path);
+        using var use = Use();
         using var strings = new NativeStrings();
         nuint native;
-        var found = Call.Found(RadicleNative.PluginFormlinkListSize(Handle, strings.Key(record), path, &native));
+        var found = Call.Found(RadicleNative.PluginFormlinkListSize(use.Pointer, strings.Key(record), path, &native));
         count = found ? checked((int)native) : 0;
         return found;
     }
@@ -196,10 +230,10 @@ public sealed unsafe class PluginFile : IDisposable
     {
         ArgumentNullException.ThrowIfNull(path);
         var at = Index(index);
-        return Edit(record, (s, key) =>
+        return Edit(record, (plugin, s, key) =>
         {
             var native = s.Key(target);
-            return RadicleNative.PluginFormlinkListInsert(Handle, key, path, at, target.HasValue ? &native : null);
+            return RadicleNative.PluginFormlinkListInsert(plugin, key, path, at, target.HasValue ? &native : null);
         });
     }
 
@@ -207,40 +241,37 @@ public sealed unsafe class PluginFile : IDisposable
     {
         ArgumentNullException.ThrowIfNull(path);
         var at = Index(index);
-        return Edit(record, (s, key) => RadicleNative.PluginFormlinkListRemove(Handle, key, path, at));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginFormlinkListRemove(plugin, key, path, at));
     }
 
     public bool FormLinkListSet(FormKey record, string path, int index, FormKey? target)
     {
         ArgumentNullException.ThrowIfNull(path);
         var at = Index(index);
-        return Edit(record, (s, key) =>
+        return Edit(record, (plugin, s, key) =>
         {
             var native = s.Key(target);
-            return RadicleNative.PluginFormlinkListSet(Handle, key, path, at, target.HasValue ? &native : null);
+            return RadicleNative.PluginFormlinkListSet(plugin, key, path, at, target.HasValue ? &native : null);
         });
     }
 
     public bool FormLinkListClear(FormKey record, string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        return Edit(record, (s, key) => RadicleNative.PluginFormlinkListClear(Handle, key, path));
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginFormlinkListClear(plugin, key, path));
     }
 
-    public void Dispose()
-    {
-        var handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero) RadicleNative.PluginDestroy(handle);
-    }
+    public void Dispose() => _handle.Dispose();
 
     private static nuint Index(int index) =>
         index >= 0 ? (nuint)index : throw new ArgumentOutOfRangeException(nameof(index));
 
-    private delegate Status NativeEdit(NativeStrings strings, Native.FormKey reference);
+    private delegate Status NativeEdit(IntPtr plugin, NativeStrings strings, Native.FormKey reference);
 
-    private static bool Edit(FormKey reference, NativeEdit edit)
+    private bool Edit(FormKey reference, NativeEdit edit)
     {
+        using var use = Use();
         using var strings = new NativeStrings();
-        return Call.Found(edit(strings, strings.Key(reference)));
+        return Call.Found(edit(use.Pointer, strings, strings.Key(reference)));
     }
 }

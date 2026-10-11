@@ -155,6 +155,35 @@ public class FieldWriterTests
     }
 
     [Fact]
+    public void EmbeddedNulInWritePathsIsRefusedBeforeNativeTruncatesIt()
+    {
+        using var temp = new TempDirectory();
+        using var plugin = Open(temp);
+        var before = plugin.ToBytes();
+
+        Assert.Throws<ArgumentException>(() => plugin.SetScalar(Refr, "REFR\\HealthPercent\0junk", "80"));
+        Assert.Throws<ArgumentException>(() => plugin.SetString(Race, "RACE\\BipedObjectNames\0junk", "x"));
+        Assert.Throws<ArgumentException>(() => plugin.SetFormLink(Expl, "EXPL\\Light\0junk", M(0x900)));
+        Assert.Throws<ArgumentException>(() => plugin.FormLinkListInsert(Flst, "FLST\\Items\0junk", 0, M(0x900)));
+        Assert.Throws<ArgumentException>(() => plugin.AddSubrecord(Refr, "XHLT\0junk"));
+        Assert.Throws<ArgumentException>(() => plugin.SetScalar(new Radicle.Interop.FormKey("Fields.esp\0junk", 0x820), "REFR\\HealthPercent", "80"));
+
+        Assert.Equal(before, plugin.ToBytes());
+    }
+
+    [Fact]
+    public void EmbeddedNulInFilePathsIsRefused()
+    {
+        using var temp = new TempDirectory();
+        using var plugin = Open(temp);
+
+        Assert.Throws<ArgumentException>(() => PluginFile.Read(Path.Combine(temp.Path, Plugin) + "\0junk"));
+        Assert.Throws<ArgumentException>(() => PluginFile.Create(Plugin + "\0junk"));
+        Assert.Throws<ArgumentException>(() => plugin.Write(Path.Combine(temp.Path, "Written.esp") + "\0junk"));
+        Assert.False(File.Exists(Path.Combine(temp.Path, "Written.esp")));
+    }
+
+    [Fact]
     public void FieldCountReportsOccurrences()
     {
         using var temp = new TempDirectory();

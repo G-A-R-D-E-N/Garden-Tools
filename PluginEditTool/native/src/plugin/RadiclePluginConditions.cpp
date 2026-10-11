@@ -67,7 +67,15 @@ Result<nlohmann::json> RadiclePluginBackend::getConditions(
         });
     }
 
-    const auto conditions = fo4::read_ctda_conditions(*record);
+    std::vector<fo4::CtdaCondition> conditions;
+    try {
+        conditions = fo4::read_ctda_conditions(*record);
+    } catch (const fo4::CtdaMultipleListsError&) {
+        return std::unexpected(Error{
+            "ConditionScopeMultipleLists",
+            "Record '" + recordId + "' has more than one condition list."
+        });
+    }
     const auto* owner = loaded != nullptr ? loaded : &plugins_.front();
     nlohmann::json outp = nlohmann::json::array();
     for (const auto& condition : conditions) {
@@ -145,6 +153,12 @@ Result<nlohmann::json> RadiclePluginBackend::getConditionsAtPath(
     const auto conditions = fo4::schema::read_scoped_conditions(
         *record, scoped->descriptor, scoped->container_index);
     if (!conditions.ok) {
+        if (conditions.error == fo4::schema::ScopedConditionStatus::multiple_lists) {
+            return std::unexpected(Error{
+                "ConditionScopeMultipleLists",
+                "Scope '" + path + "' has more than one condition list on record '" + recordId + "'."
+            });
+        }
         if (conditions.error == fo4::schema::ScopedConditionStatus::element_not_conditioned) {
             return std::unexpected(Error{
                 "ConditionScopeNotConditioned",

@@ -289,9 +289,13 @@ ScopedConditionsRead read_scoped_conditions(
   const auto resolution = resolve_scope(record, descriptor, container_index);
   switch (resolution.status) {
     case ScopeStatus::ok:
-      return ScopedConditionsRead{
-          true, ScopedConditionStatus::updated,
-          read_ctda_conditions_in(record, resolution.range.begin, resolution.range.end)};
+      try {
+        return ScopedConditionsRead{
+            true, ScopedConditionStatus::updated,
+            read_ctda_conditions_in(record, resolution.range.begin, resolution.range.end)};
+      } catch (const CtdaMultipleListsError&) {
+        return ScopedConditionsRead{false, ScopedConditionStatus::multiple_lists, {}};
+      }
     case ScopeStatus::out_of_range:
       return ScopedConditionsRead{false,
                                   ScopedConditionStatus::container_index_out_of_range, {}};
