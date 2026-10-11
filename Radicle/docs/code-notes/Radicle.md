@@ -61,7 +61,7 @@ Unknown four-byte signatures use reversible Latin1 in managed snapshots.
 A `radicle_record` handle is only meaningful to the environment that produced it: it
 is a pointer to one of that environment's own `RecordRef` versions, and the plugin
 index it carries is an index into that environment's plugin list. All four exports
-therefore call `src/c_api_records.cpp:belongs_to_env` first, which looks the record's
+therefore call `src/c_api_env_internal.hpp:belongs_to_env` first, which looks the record's
 FormKey up in `env->value.versions` and compares addresses. That is the same
 pointer-identity test `radicle_record_topic_children` already used, now shared.
 `ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
@@ -93,6 +93,19 @@ condition/script gates and original-payload parity remain separate integration w
 bindings/csharp/Radicle.Interop.Tests/RecordReadTests.cs verifies override choice,
 duplicate unknown bytes, empty payloads, master/self/null/invalid FormIDs and
 managed byte ownership after disposal. This is not a decoded UI-content claim.
+
+## src/c_api_dialogue.cpp:radicle_dialogue_topic_get_info / radicle_dialogue_info_decode / radicle_scene_decode
+
+These three exports take a `radicle_record` handle like the record readers above, so
+they check it with `src/c_api_env_internal.hpp:belongs_to_env` before decoding, and
+refuse a handle from another live environment with `RADICLE_STATUS_INVALID_ARGUMENT`
+and the same message the record readers use. Without the check a foreign DIAL, INFO
+or SCEN handle decoded through the supplied environment's plugin and link tables, the
+same wrong-answer path `ResolveFormId` had. The helper moved from
+`src/c_api_records.cpp` into the shared internal header so every caller uses one
+definition. `Radicle/tests/test_dialogue_writer_c_api.cpp:DecodeRefusesRecordsFromAnotherEnvironment`
+loads one plugin into two environments, requires both foreign decodes to refuse with
+null outputs, and requires the owner environment to still decode the DIAL.
 
 ## src/schema/form_links.cpp:visit_link_offsets
 

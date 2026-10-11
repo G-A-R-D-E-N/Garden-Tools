@@ -21,12 +21,6 @@ bool find_topic_group(const fo4::Group& group, const fo4::Record* record,
   return false;
 }
 
-bool belongs_to_env(const radicle_env* env, const fo4::env::RecordRef* ref) {
-  const auto versions = env->value.versions(ref->record->form_key);
-  return std::any_of(versions.begin(), versions.end(),
-                     [&](const auto& candidate) { return &candidate == ref; });
-}
-
 }
 
 extern "C" {

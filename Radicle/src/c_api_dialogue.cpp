@@ -71,6 +71,7 @@ radicle_status radicle_dialogue_topic_get_info(const radicle_env* env, const rad
   clear_error();
   if (!env || !record || !out_info) return invalid();
   return guarded("unknown exception while decoding DIAL", [&] {
+    if (!belongs_to_env(env, to_ref(record))) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
     const auto t = fo4::env::decode_dialogue_topic(env->value, *to_ref(record)); radicle_dialogue_topic_info v{};
     if (t.data) { v.has_data = 1; v.flags = t.data->flags; v.category = t.data->category; v.subtype = t.data->subtype; }
     set_optional(t.priority, v.has_priority, v.priority); set_optional(t.info_count, v.has_info_count, v.info_count);
@@ -85,6 +86,7 @@ radicle_status radicle_dialogue_info_decode(const radicle_env* env, const radicl
   clear_error(); if (out_info) *out_info = nullptr;
   if (!env || !record || !out_info) return invalid();
   return guarded("unknown exception while decoding INFO", [&] {
+    if (!belongs_to_env(env, to_ref(record))) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
     const auto d = fo4::env::decode_dialogue_info(env->value, *to_ref(record)); auto h = std::make_unique<InfoHolder>();
     auto& v = h->view;
     if (d.data) { v.has_data = 1; v.flags = (*d.data)[0]; v.reset_time_encoded = (*d.data)[1]; }
@@ -110,6 +112,7 @@ radicle_status radicle_scene_decode(const radicle_env* env, const radicle_record
   clear_error(); if (out_scene) *out_scene = nullptr;
   if (!env || !record || !out_scene) return invalid();
   return guarded("unknown exception while decoding SCEN", [&] {
+    if (!belongs_to_env(env, to_ref(record))) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
     const auto s = fo4::env::decode_scene(env->value, *to_ref(record)); auto h = std::make_unique<SceneHolder>();
     auto& v = h->view; set_optional(s.flags, v.has_flags, v.flags); v.parent_quest = to_c_key(*env, s.parent_quest);
     h->starts.resize(s.phases.size()); h->completions.resize(s.phases.size());

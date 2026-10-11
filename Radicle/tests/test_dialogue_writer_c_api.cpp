@@ -169,3 +169,29 @@ TEST_F(DialogueWriterCApi, MalformedTopLevelLinksRefuseNativeAndCApiWritesWithou
     }
   }
 }
+
+TEST_F(DialogueWriterCApi, DecodeRefusesRecordsFromAnotherEnvironment) {
+  const auto file = path.string();
+  const char* paths[] = {file.c_str()};
+  radicle_env* owner = nullptr;
+  radicle_env* other = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &owner), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_env_load(paths, 1, &other), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record *topic = nullptr, *info = nullptr, *scene = nullptr;
+  ASSERT_EQ(radicle_env_winner(owner, rkey(k_topic), &topic), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_winner(owner, rkey(k_info), &info), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_winner(owner, rkey(k_scene), &scene), RADICLE_STATUS_OK);
+
+  radicle_dialogue_topic_info topic_info{};
+  EXPECT_EQ(radicle_dialogue_topic_get_info(other, topic, &topic_info), RADICLE_STATUS_INVALID_ARGUMENT);
+  const radicle_dialogue_info* decoded = nullptr;
+  EXPECT_EQ(radicle_dialogue_info_decode(other, info, &decoded), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(decoded, nullptr);
+  const radicle_scene_info* decoded_scene = nullptr;
+  EXPECT_EQ(radicle_scene_decode(other, scene, &decoded_scene), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(decoded_scene, nullptr);
+
+  EXPECT_EQ(radicle_dialogue_topic_get_info(owner, topic, &topic_info), RADICLE_STATUS_OK);
+  radicle_env_destroy(other);
+  radicle_env_destroy(owner);
+}
