@@ -115,7 +115,9 @@ add_library(fo4
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/proj_expl_hazd.cpp
-  src/forms/quest_aliases.cpp
+  src/forms/quest_aliases_decode.cpp
+  src/forms/quest_aliases_encode.cpp
+  src/forms/quest_aliases_extras.cpp
   src/forms/quest_stages.cpp
   src/forms/quest_objectives.cpp
   src/forms/quest_alias_edit.cpp
