@@ -116,15 +116,20 @@ TEST(LocalizedFields, NonLocalizedFieldStaysInlineInALocalizedPlugin) {
   EXPECT_EQ(value.inline_text(), "EdId");
 }
 
-TEST(LocalizedFields, ShortLocalizedPayloadReadsMinFourBytesAndRoundTrips) {
+TEST(LocalizedFields, NonFourByteLocalizedPayloadHasNoIdAndRoundTrips) {
   const auto plugin = plugin_with_flags(0x80);
-  const std::vector<std::byte> payload{std::byte{0x34}, std::byte{0x12}};
-  const auto value =
-      fo4::schema::read_localized_string(plugin, k_race, k_desc, make(k_desc, payload));
-  ASSERT_TRUE(value.localized());
-  EXPECT_EQ(*value.id, 0x1234u);
-  EXPECT_FALSE(value.text.has_value());
-  EXPECT_EQ(fo4::schema::write_localized_string(value), payload);
+  const std::vector<std::vector<std::byte>> payloads{
+      {std::byte{0x34}, std::byte{0x12}},
+      {std::byte{'n'}, std::byte{'o'}, std::byte{'p'}, std::byte{'e'}, std::byte{0}},
+  };
+  for (const auto& payload : payloads) {
+    const auto value =
+        fo4::schema::read_localized_string(plugin, k_race, k_desc, make(k_desc, payload));
+    EXPECT_FALSE(value.localized());
+    EXPECT_FALSE(value.id.has_value());
+    EXPECT_FALSE(value.text.has_value());
+    EXPECT_EQ(fo4::schema::write_localized_string(value), payload);
+  }
 }
 
 TEST(LocalizedFields, InlineTextMustBeSingleNulTerminated) {
