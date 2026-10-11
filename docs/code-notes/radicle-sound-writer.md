@@ -26,8 +26,8 @@ measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673
   `uint?`). No official SNDR lacks CNAM, so official decode results are unchanged. Unknown CNAM values still fail closed.
   Tests: `Radicle/tests/test_sound.cpp:SoundTest.MissingKindUsesTheValuesLayoutAndExposesNoKind`,
   `Radicle/bindings/csharp/Radicle.Interop.Tests/SoundRecordTests.cs:MissingKindUsesValuesLayoutAndStrayFilenameFailsClosed`.
-- The top-level "legacy flags" FNAM is gone (`SoundDescriptorData::legacy_flags`, `has_legacy_flags`/`legacy_flags` in
-  the C struct and `SoundDescriptor.LegacyFlags` removed). xEdit defines FNAM only inside the rate-of-fire group
+- The top-level "legacy flags" FNAM is gone (`Radicle/include/fo4/environment/sound.hpp:SoundDescriptorData` has no
+  legacy-flags member; the C struct field and the C# LegacyFlags property were removed). xEdit defines FNAM only inside the rate-of-fire group
   {ITMS, INTV, FNAM, ITME}. The old decoder tested the Standard-kind FNAM branch before the rate-group branch, so a
   Standard descriptor carrying a rate group had its file name misread as flags (or failed on size). The official census
   has 120 FNAM, all inside the 24 AutoWeapon rate groups, and no top-level FNAM. FNAM is now only read as a rate file;
