@@ -18,6 +18,7 @@
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/text/encoding.hpp>
 
 // RevertOverrides and CreateMergedPatch: two bulk override -> patch drivers,
 // faithful ports of C# WriteService.RevertOverridesFrom / CreateMergedPatch.
@@ -93,7 +94,7 @@ std::string editorId(const fo4::Record& record) {
             if (ch == '\0') break;
             out.push_back(ch);
         }
-        return out;
+        return fo4::text::windows1252_to_utf8(out);
     }
     return {};
 }

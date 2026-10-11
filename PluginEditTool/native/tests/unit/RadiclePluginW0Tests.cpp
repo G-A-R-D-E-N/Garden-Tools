@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -180,6 +181,57 @@ TEST_CASE("W0 strings use UTF-8 transport and reject unrepresentable text", "[w0
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:W0.esp"));
     REQUIRE(record != nullptr);
     CHECK(record->subrecords[1].data == std::vector<std::byte>{std::byte{0x80}, std::byte{0}});
+}
+
+TEST_CASE("W0 EDID is stored as Windows-1252 and refuses unrepresentable text", "[w0]") {
+    Fixture fixture;
+    REQUIRE(fixture.backend.setFieldValue(nlohmann::json::array({
+        "W0.esp", "000800:W0.esp", "EDID", "Caf\xc3\xa9"
+    })).has_value());
+    CHECK(fixture.grid().at("rows")[0].at("cells")[0] == "Caf\xc3\xa9");
+    const auto refused = fixture.backend.setFieldValue(nlohmann::json::array({
+        "W0.esp", "000800:W0.esp", "EDID", "\xe6\x97\xa5"
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidEditorId");
+    REQUIRE(fixture.backend.invokeBackend("SavePlugin", nlohmann::json::array({"W0.esp"})).has_value());
+    const auto plugin = fo4::read_plugin_file(fixture.path);
+    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:W0.esp"));
+    REQUIRE(record != nullptr);
+    CHECK(record->subrecords[0].data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}});
+}
+
+TEST_CASE("W0 typed EYES creation round-trips a Windows-1252 EDID and refuses unrepresentable text", "[w0]") {
+    Fixture fixture;
+    const auto payload = [](std::string_view editor) {
+        return nlohmann::json{{"editorId", std::string(editor)}, {"fullText", "Eyes"}, {"icon", "eyes.dds"}};
+    };
+    const auto created = fixture.backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "W0.esp", "EYES", payload("Caf\xc3\xa9")
+    }));
+    REQUIRE(created.has_value());
+    const auto formKey = nlohmann::json::parse(created->get<std::string>()).at("formKey").get<std::string>();
+    const auto grid = nlohmann::json::parse(fixture.backend.invokeBackend(
+        "GetRecordsGrid", nlohmann::json::array({"W0.esp", "EYES", 20, 0}))->get<std::string>());
+    CHECK(grid.at("rows")[0].at("cells")[0] == "Caf\xc3\xa9");
+    const auto refused = fixture.backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "W0.esp", "EYES", payload("\xe6\x97\xa5")
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidEditorId");
+    const auto afterRefusal = nlohmann::json::parse(fixture.backend.invokeBackend(
+        "GetRecordsGrid", nlohmann::json::array({"W0.esp", "EYES", 20, 0}))->get<std::string>());
+    CHECK(afterRefusal.at("rows").size() == 1);
+    REQUIRE(fixture.backend.invokeBackend("SavePlugin", nlohmann::json::array({"W0.esp"})).has_value());
+    const auto plugin = fo4::read_plugin_file(fixture.path);
+    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(formKey));
+    REQUIRE(record != nullptr);
+    const auto edid = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+        [](const fo4::Subrecord& sub) { return sub.signature.to_string() == "EDID"; });
+    REQUIRE(edid != record->subrecords.end());
+    CHECK(edid->data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}});
 }
 
 TEST_CASE("W0 malformed FormLink storage stays distinguishable from absence", "[w0]") {

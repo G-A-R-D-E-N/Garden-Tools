@@ -1,4 +1,5 @@
 #include "RadiclePluginLifecycleFields.hpp"
+#include "RadiclePluginSupport.hpp"
 
 #include <fo4/plugin/subrecord_authoring.hpp>
 #include <fo4/text/encoding.hpp>
@@ -59,9 +60,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (editor != payload->end() && !editor->is_string()) {
                 return std::unexpected(Error{"InvalidRecordCreationPayload", "Schema editorId must be a string"});
             }
-            const auto editorId = editor == payload->end() ? std::optional<std::string>{std::string{}} :
-                fo4::text::utf8_to_windows1252(editor->get_ref<const std::string&>());
-            if (!editorId) return std::unexpected(Error{"InvalidEditorId", "Editor ID cannot be encoded as Windows-1252"});
+            const auto editorId = editor == payload->end() ? support::encodeEditorId(std::string_view{}) :
+                support::encodeEditorId(editor->get_ref<const std::string&>());
+            if (!editorId) return std::unexpected(editorId.error());
             const auto created = fo4::create_record(mutated, fo4::Signature::from_string(signatureText), *editorId);
             switch (created.status) {
                 case fo4::RecordCreateStatus::created: key = created.key; break;
@@ -106,7 +107,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "CELL editorId must be a string or null"
                 });
             }
-            creation.editor_id = optionalStringView(editorId);
+            const auto editorStored = support::encodeOptionalEditorId(editorId);
+            if (!editorStored) return std::unexpected(editorStored.error());
+            creation.editor_id = optionalStringView(*editorStored);
             key = fo4::forms::create_exterior_cell(mutated, creation);
         } else if (signatureText == "EYES") {
             const auto full = payload->find("fullText");
@@ -138,9 +141,11 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
 
+            const auto editorStored = support::encodeOptionalEditorId(editorId);
+            if (!editorStored) return std::unexpected(editorStored.error());
             key = fo4::forms::create_eyes(
                 mutated,
-                optionalStringView(editorId),
+                optionalStringView(*editorStored),
                 full->get_ref<const std::string&>(),
                 icon->get_ref<const std::string&>(),
                 dataFlags,
@@ -221,10 +226,12 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
 
+            const auto editorStored = support::encodeOptionalEditorId(editorId);
+            if (!editorStored) return std::unexpected(editorStored.error());
             key = fo4::forms::create_leveled_spell(
                 mutated, chanceNone, maxCount, flags, entries);
-            if (editorId.has_value() &&
-                !fo4::set_record_editor_id(mutated, key, *editorId)) {
+            if (editorStored->has_value() &&
+                !fo4::set_record_editor_id(mutated, key, **editorStored)) {
                 return std::unexpected(Error{
                     "RecordCreateFailed",
                     "Newly created LVSP record could not accept its editor ID"
@@ -247,7 +254,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "RACE fullName must be a string or null"});
 
             fo4::forms::RaceCreation creation;
-            creation.editor_id = optionalStringView(editorId);
+            const auto editorStored = support::encodeOptionalEditorId(editorId);
+            if (!editorStored) return std::unexpected(editorStored.error());
+            creation.editor_id = optionalStringView(*editorStored);
             creation.full_name = optionalStringView(fullName);
             creation.description = description->get_ref<const std::string&>();
             if (!lifecycleFloatField(*payload, "maleHeight", 0.0f, creation.male_height) ||
@@ -284,7 +293,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO femaleMessageIcon must be a string or null"});
 
             fo4::forms::ArmorCreation creation;
-            creation.editor_id = optionalStringView(editorId);
+            const auto editorStored = support::encodeOptionalEditorId(editorId);
+            if (!editorStored) return std::unexpected(editorStored.error());
+            creation.editor_id = optionalStringView(*editorStored);
             creation.male_world_model = optionalStringView(maleWorld);
             creation.male_icon = optionalStringView(maleIcon);
             creation.male_message_icon = optionalStringView(maleMessage);
@@ -314,7 +325,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA femaleFirstPersonModel must be a string or null"});
 
             fo4::forms::ArmorAddonCreation creation;
-            creation.editor_id = optionalStringView(editorId);
+            const auto editorStored = support::encodeOptionalEditorId(editorId);
+            if (!editorStored) return std::unexpected(editorStored.error());
+            creation.editor_id = optionalStringView(*editorStored);
             creation.male_biped_model = optionalStringView(maleBiped);
             creation.female_biped_model = optionalStringView(femaleBiped);
             creation.male_first_person_model = optionalStringView(maleFirst);
