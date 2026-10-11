@@ -30,6 +30,10 @@ bool is_localized_field(Signature record, Signature subrecord) noexcept;
 // Decoding keeps whichever form the file used, so a write-back reproduces the
 // original bytes and no language choice is baked into the SDK. Resolve an ID
 // through fo4::localization when display text is wanted.
+//
+// A localized payload that is not four bytes has no ID and no text; its bytes
+// are kept in raw_id and written back unchanged. Build a new value to change
+// the ID; writing returns raw_id before id.
 struct LocalizedString {
   std::optional<std::uint32_t> id;
   std::optional<std::string> text;
