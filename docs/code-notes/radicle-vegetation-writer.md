@@ -49,7 +49,7 @@ Source: pinned xEdit `wbDefinitionsFO4.pas` and `wbDefinitionsCommon.pas`; every
 
 ## Radicle/src/plugin/field_writer.cpp:formlink_slots / Radicle/schema/fallout4/fields.json:formlink_fields
 
-PFIG/SNAM in TREE and FLOR, and LTEX GNAM list elements, are four-byte FormIDs in
+PFIG/SNAM in TREE and FLOR, and LTEX GNAM list elements, are four-byte form IDs in
 TES5Edit pin `93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
 `Core/wbDefinitionsFO4.pas` lines 12142-12143, 12189-12190 and 9976. Private RE
 pin `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
