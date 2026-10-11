@@ -492,9 +492,7 @@ void RadiclePluginBackend::ensureOwnerMaster(fo4::Plugin& plugin,
         owner.looks_light() ? fo4::PluginKind::light : fo4::PluginKind::full;
     for (const auto& candidate : plugins_) {
         if (candidate.plugin.key == owner) {
-            kind = candidate.plugin.header.tes4_flags.is_small_file()
-                       ? fo4::PluginKind::light
-                       : fo4::PluginKind::full;
+            kind = fo4::classify_plugin_kind(candidate.plugin.header.tes4_flags, candidate.plugin.key);
             break;
         }
     }

@@ -23,8 +23,7 @@ RuntimeFormIdContext build_runtime_form_id_context(
 
     MasterDescriptor descriptor{
         plugin->key,
-        plugin->header.tes4_flags.is_small_file() || plugin->key.looks_light()
-            ? PluginKind::light : PluginKind::full,
+        classify_plugin_kind(plugin->header.tes4_flags, plugin->key),
     };
     if (descriptor.kind == PluginKind::light) {
       if (context.light_plugins.size() >= 0x1000u) {

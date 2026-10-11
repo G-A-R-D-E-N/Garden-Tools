@@ -89,8 +89,7 @@ fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
 fo4::PluginKind maintenanceOwnerKind(const fo4::Plugin& source,
                                      const fo4::PluginKey& owner) {
     if (owner == source.key) {
-        return source.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
-                                                       : fo4::PluginKind::full;
+        return fo4::classify_plugin_kind(source.header.tes4_flags, source.key);
     }
     for (const auto& master : source.header.masters) {
         if (master.key == owner) return master.kind;

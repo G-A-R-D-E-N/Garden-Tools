@@ -32,8 +32,7 @@ std::vector<std::byte> zstring(std::string_view value) {
 
 PluginKind owner_kind(const Plugin& source, const PluginKey& owner) {
   if (owner == source.key) {
-    return source.header.tes4_flags.is_small_file() ? PluginKind::light
-                                                   : PluginKind::full;
+    return classify_plugin_kind(source.header.tes4_flags, source.key);
   }
   for (const auto& master : source.header.masters) {
     if (master.key == owner) return master.kind;
@@ -136,7 +135,7 @@ bool allows_hardcoded_range(const Plugin& plugin) {
 }
 
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin) {
-  if (plugin.header.tes4_flags.is_small_file()) {
+  if (classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == PluginKind::light) {
     return {allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id, k_light_local_mask};
   }
   return {k_first_full_local_id, k_full_local_mask};

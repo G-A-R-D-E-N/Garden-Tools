@@ -20,8 +20,8 @@ using namespace support;
 namespace {
 
 std::string pluginKind(const fo4::Plugin& plugin) {
-    if (plugin.header.tes4_flags.is_small_file()) return "light";
-    if (plugin.header.tes4_flags.is_master()) return "master";
+    if (fo4::classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == fo4::PluginKind::light) return "light";
+    if (fo4::is_master_plugin(plugin.header.tes4_flags, plugin.key)) return "master";
     return "plugin";
 }
 
@@ -522,7 +522,7 @@ Result<nlohmann::json> RadiclePluginBackend::listMasters(const nlohmann::json& a
     return nlohmann::json(nlohmann::json{
         {"pluginName", loaded->name},
         {"masters", std::move(masters)},
-        {"light", loaded->plugin.header.tes4_flags.is_small_file()}
+        {"light", fo4::classify_plugin_kind(loaded->plugin.header.tes4_flags, loaded->plugin.key) == fo4::PluginKind::light}
     }.dump());
 }
 

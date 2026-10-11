@@ -169,6 +169,34 @@ TEST_CASE("Native AddMasters preserves actual light kind for flagged ESP master"
     CHECK(listed.at("masters")[0].at("kind") == "light");
 }
 
+TEST_CASE("Native AddMasters treats an ESL-named master without the light flag as light") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Extension.esl";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(masterPath, makeMaster(false));
+    writeBytes(targetPath, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Extension.esl", masterPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    REQUIRE(backend.invokeBackend(
+        "AddMasters", nlohmann::json::array({"Target.esp", "Extension.esl"})).has_value());
+
+    const auto listedRaw = backend.invoke("masters.List",
+                                          nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listedRaw.has_value());
+    const auto listed = nlohmann::json::parse(listedRaw->get<std::string>());
+    REQUIRE(listed.at("masters").size() == 1);
+    CHECK(listed.at("masters")[0].at("name") == "Extension.esl");
+    CHECK(listed.at("masters")[0].at("kind") == "light");
+}
+
 TEST_CASE("Native AddMasters duplicate is a no-op") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

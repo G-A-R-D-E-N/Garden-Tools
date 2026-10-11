@@ -170,7 +170,7 @@ Result<nlohmann::json> RadiclePluginBackend::updateOnam(const nlohmann::json& ar
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + name});
     }
     if (!isEditable(*loaded)) return readOnlyError(loaded->name);
-    if (!loaded->plugin.header.tes4_flags.is_master()) {
+    if (!fo4::is_master_plugin(loaded->plugin.header.tes4_flags, loaded->plugin.key)) {
         return nlohmann::json(name + " is not master-flagged; the game ignores ONAM there.");
     }
 
@@ -216,8 +216,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
         for (const auto& item : plugins_) {
             known.push_back({
                 item.plugin.key,
-                item.plugin.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
-                                                              : fo4::PluginKind::full,
+                fo4::classify_plugin_kind(item.plugin.header.tes4_flags, item.plugin.key),
             });
         }
         for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, known);
