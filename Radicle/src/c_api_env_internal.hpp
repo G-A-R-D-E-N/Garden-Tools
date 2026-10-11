@@ -52,6 +52,12 @@ inline const radicle_record* to_handle(const fo4::env::RecordRef* ref) {
   return reinterpret_cast<const radicle_record*>(ref);
 }
 
+inline bool belongs_to_env(const radicle_env* env, const fo4::env::RecordRef* ref) {
+  const auto versions = env->value.versions(ref->record->form_key);
+  return std::any_of(versions.begin(), versions.end(),
+                     [&](const auto& candidate) { return &candidate == ref; });
+}
+
 inline std::optional<fo4::FormKey> to_form_key(radicle_form_key key) {
   if (key.plugin == nullptr || *key.plugin == '\0' || key.local_id > 0x00FFFFFFu) {
     return std::nullopt;

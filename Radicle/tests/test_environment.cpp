@@ -187,6 +187,56 @@ TEST_F(EnvironmentTest, WinnersOfGroupsByHighestPriorityPlugin) {
   EXPECT_EQ(misc[0]->plugin, 0u);
 }
 
+TEST_F(EnvironmentTest, WinnerSkipsPartialFormOverrideOfPartialCapableRecord) {
+  const auto base = write(
+      "Base.esm", make_plugin(0x1, {}, {{"QUST", 0x00000800, 0, {edid("QuestBase")}}}));
+  const auto mid = write(
+      "Mid.esp", make_plugin(0, {"Base.esm"}, {{"QUST", 0x00000800, 0, {edid("QuestMid")}}}));
+  const auto partial = write(
+      "Partial.esp",
+      make_plugin(0, {"Base.esm"}, {{"QUST", 0x00000800, 0x4000, {edid("QuestPartial")}}}));
+  const std::vector<std::filesystem::path> ordered{base, mid, partial};
+  const auto env = fo4::env::Environment::load(ordered);
+
+  const auto versions = env.versions(key("000800:Base.esm"));
+  ASSERT_EQ(versions.size(), 3u);
+  const auto* winner = env.winner(key("000800:Base.esm"));
+  ASSERT_NE(winner, nullptr);
+  EXPECT_EQ(winner, &versions[1]);
+  EXPECT_EQ(env.metadata(*winner).editor_id, "QuestMid");
+}
+
+TEST_F(EnvironmentTest, WinnerFallsBackToMasterWhenEveryOverrideIsPartialForm) {
+  const auto base = write(
+      "Base.esm", make_plugin(0x1, {}, {{"QUST", 0x00000800, 0, {edid("QuestBase")}}}));
+  const auto mid = write(
+      "Mid.esp",
+      make_plugin(0, {"Base.esm"}, {{"QUST", 0x00000800, 0x4000, {edid("QuestMid")}}}));
+  const auto partial = write(
+      "Partial.esp",
+      make_plugin(0, {"Base.esm"}, {{"QUST", 0x00000800, 0x4000, {edid("QuestPartial")}}}));
+  const std::vector<std::filesystem::path> ordered{base, mid, partial};
+  const auto env = fo4::env::Environment::load(ordered);
+
+  const auto versions = env.versions(key("000800:Base.esm"));
+  ASSERT_EQ(versions.size(), 3u);
+  EXPECT_EQ(env.winner(key("000800:Base.esm")), &versions[0]);
+}
+
+TEST_F(EnvironmentTest, WinnerKeepsLastVersionOfRecordTypeWithoutPartialForm) {
+  const auto base = write(
+      "Base.esm", make_plugin(0x1, {}, {{"LCTN", 0x00000800, 0, {edid("LocBase")}}}));
+  const auto patch = write(
+      "Patch.esp",
+      make_plugin(0, {"Base.esm"}, {{"LCTN", 0x00000800, 0x4000, {edid("LocLast")}}}));
+  const std::vector<std::filesystem::path> ordered{base, patch};
+  const auto env = fo4::env::Environment::load(ordered);
+
+  const auto versions = env.versions(key("000800:Base.esm"));
+  ASSERT_EQ(versions.size(), 2u);
+  EXPECT_EQ(env.winner(key("000800:Base.esm")), &versions[1]);
+}
+
 TEST_F(EnvironmentTest, PluginInfoReportsKindsFlagsAndUnresolvedMasters) {
   const auto light = write("Light.esp", make_plugin(0x200, {"Missing.esm"}, {}));
   const auto paths = write_base_and_patch();

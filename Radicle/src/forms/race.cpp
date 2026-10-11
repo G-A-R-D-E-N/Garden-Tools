@@ -379,12 +379,12 @@ FormKey create_race(Plugin& plugin, const RaceCreation& creation) {
   }
 
   const auto editor = creation.editor_id.has_value()
-      ? std::optional<std::vector<std::byte>>{zstring(*creation.editor_id)}
+      ? std::optional<std::vector<std::byte>>{zstring(stored_editor_id(*creation.editor_id))}
       : std::nullopt;
   const auto full = creation.full_name.has_value()
-      ? std::optional<std::vector<std::byte>>{zstring(*creation.full_name)}
+      ? std::optional<std::vector<std::byte>>{zstring(stored_inline_text(*creation.full_name, "full name"))}
       : std::nullopt;
-  const auto desc = zstring(creation.description);
+  const auto desc = zstring(stored_inline_text(creation.description, "description"));
   const auto data = encode_current_data(plugin, creation);
   const auto voices = encode_voices(plugin, creation);
   const auto main_clamp = float_subrecord(k_pnam, creation.facegen_main_clamp);

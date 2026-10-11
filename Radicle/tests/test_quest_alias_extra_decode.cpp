@@ -688,3 +688,53 @@ TEST(QuestAliasExtraDecode, RejectsMismatchedKeywordCount) {
       (void)fo4::forms::decode_quest_aliases(plugin, k_quest),
       fo4::forms::QuestError);
 }
+
+TEST(QuestAliasExtraDecode, IndexOverloadDecodesCoedOwnersLikePluginOverload) {
+  auto plugin = fo4::read_plugin(empty_quest_plugin(), "Patch.esp");
+  auto creation = reference_alias(1);
+  fo4::forms::QuestAliasItem owned{.item = k_item, .count = 2, .extra = {}};
+  owned.extra = fo4::forms::QuestAliasItemExtra{
+      .owner = k_faction,
+      .global = {},
+      .required_rank = 4,
+      .item_condition = 0.5f,
+  };
+  fo4::forms::QuestAliasItem npcOwned{.item = k_item, .count = 3, .extra = {}};
+  npcOwned.extra = fo4::forms::QuestAliasItemExtra{
+      .owner = k_npc,
+      .global = k_glob,
+      .required_rank = {},
+      .item_condition = 1.0f,
+  };
+  creation.items = {owned, npcOwned};
+
+  const std::vector<fo4::forms::QuestAliasCreation> creations{creation};
+  fo4::forms::write_quest_aliases(plugin, k_quest, creations);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const fo4::RecordIndex index{reread};
+  const auto by_plugin = fo4::forms::decode_quest_aliases(reread, k_quest);
+  const auto by_index = fo4::forms::decode_quest_aliases(index, k_quest);
+
+  ASSERT_EQ(by_plugin.aliases.size(), 1u);
+  ASSERT_EQ(by_index.aliases.size(), 1u);
+  EXPECT_EQ(by_index.next_alias_id, by_plugin.next_alias_id);
+  EXPECT_EQ(by_index.aliases[0].subrecords.size(), by_plugin.aliases[0].subrecords.size());
+  ASSERT_EQ(by_plugin.aliases[0].items.size(), 2u);
+  ASSERT_EQ(by_index.aliases[0].items.size(), 2u);
+  for (std::size_t i = 0; i < 2; ++i) {
+    const auto& expected = by_plugin.aliases[0].items[i];
+    const auto& actual = by_index.aliases[0].items[i];
+    EXPECT_EQ(actual.item, expected.item);
+    EXPECT_EQ(actual.count, expected.count);
+    ASSERT_EQ(actual.extra.has_value(), expected.extra.has_value());
+    if (!expected.extra.has_value()) continue;
+    EXPECT_EQ(actual.extra->owner, expected.extra->owner);
+    EXPECT_EQ(actual.extra->global, expected.extra->global);
+    EXPECT_EQ(actual.extra->required_rank, expected.extra->required_rank);
+    EXPECT_FLOAT_EQ(actual.extra->item_condition, expected.extra->item_condition);
+  }
+  ASSERT_TRUE(by_index.aliases[0].items[0].extra.has_value());
+  EXPECT_EQ(by_index.aliases[0].items[0].extra->required_rank, std::optional<std::int32_t>{4});
+  ASSERT_TRUE(by_index.aliases[0].items[1].extra.has_value());
+  EXPECT_EQ(by_index.aliases[0].items[1].extra->global, std::optional<fo4::FormKey>{k_glob});
+}

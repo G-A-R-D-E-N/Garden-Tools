@@ -5,13 +5,16 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function fetchMock(rpcResponse: unknown) {
+  return vi.fn((url: string) => (url === '/events' ? new Promise<never>(() => {}) : Promise.resolve(rpcResponse)));
+}
+
 it.each([true, false])('uses HTTP RPC on loopback with WebView2 present: %s', async (hasWebView) => {
   vi.stubGlobal('window', {
     location: new URL('http://127.0.0.1:49152/#/main'),
     chrome: hasWebView ? { webview: { hostObjects: {} } } : undefined,
   });
-  vi.stubGlobal('EventSource', vi.fn(class {}));
-  const fetchRpc = vi.fn().mockResolvedValue({
+  const fetchRpc = fetchMock({
     ok: true,
     json: async () => ({ ok: true, value: ['Smoke.esp'] }),
   });
@@ -33,8 +36,7 @@ it('includes RPC error type in thrown host-object failures', async () => {
     location: new URL('http://127.0.0.1:49152/#/main'),
     chrome: undefined,
   });
-  vi.stubGlobal('EventSource', vi.fn(class {}));
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+  vi.stubGlobal('fetch', fetchMock({
     ok: true,
     json: async () => ({
       ok: false,
@@ -55,11 +57,11 @@ it('preserves the legacy host objects on app.local', async () => {
     location: new URL('https://app.local/index.html#/main'),
     chrome: { webview: legacyWebview },
   });
-  const eventSource = vi.fn(class {});
-  vi.stubGlobal('EventSource', eventSource);
+  const fetchStub = vi.fn();
+  vi.stubGlobal('fetch', fetchStub);
 
   await import('./hostbridge');
 
   expect(window.chrome?.webview).toBe(legacyWebview);
-  expect(eventSource).not.toHaveBeenCalled();
+  expect(fetchStub).not.toHaveBeenCalled();
 });

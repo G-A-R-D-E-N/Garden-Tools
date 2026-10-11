@@ -4,6 +4,7 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/signature.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <cstddef>
 #include <optional>
@@ -26,6 +27,56 @@ constexpr Signature sig_alcs = Signature::from_string("ALCS");
 constexpr Signature sig_aled = Signature::from_string("ALED");
 constexpr Signature sig_almi = Signature::from_string("ALMI");
 constexpr Signature sig_alcc = Signature::from_string("ALCC");
+constexpr Signature sig_citc = Signature::from_string("CITC");
+constexpr Signature sig_qsta = Signature::from_string("QSTA");
+constexpr Signature sig_pack = Signature::from_string("PACK");
+constexpr Signature sig_info = Signature::from_string("INFO");
+constexpr Signature sig_perk = Signature::from_string("PERK");
+constexpr Signature sig_qust = Signature::from_string("QUST");
+constexpr Signature sig_indx = Signature::from_string("INDX");
+constexpr Signature sig_next = Signature::from_string("NEXT");
+constexpr Signature sig_prkc = Signature::from_string("PRKC");
+
+constexpr Signature k_package_branch_members[] = {
+    sig_citc, sig_ctda, sig_cis1, sig_cis2, Signature::from_string("PRCB"),
+    Signature::from_string("PNAM"), Signature::from_string("FNAM"),
+    Signature::from_string("PKC2"), Signature::from_string("PFO2"),
+    Signature::from_string("PFOR"),
+};
+
+constexpr Signature k_quest_target_members[] = {
+    sig_citc, sig_ctda, sig_cis1, sig_cis2,
+};
+
+constexpr Signature k_pack_root_successors[] = {
+    Signature::from_string("IDLF"), Signature::from_string("IDLC"),
+    Signature::from_string("IDLT"), Signature::from_string("IDLA"),
+    Signature::from_string("IDLB"), Signature::from_string("CNAM"),
+    Signature::from_string("QNAM"), Signature::from_string("PKCU"),
+};
+
+constexpr Signature k_info_root_successors[] = {
+    Signature::from_string("RNAM"), Signature::from_string("ANAM"),
+    Signature::from_string("TSCE"), Signature::from_string("INTV"),
+    Signature::from_string("ALFA"), Signature::from_string("ONAM"),
+    Signature::from_string("GREE"), Signature::from_string("TIQS"),
+    Signature::from_string("NAM0"), Signature::from_string("INCC"),
+    Signature::from_string("MODQ"), Signature::from_string("INAM"),
+};
+
+constexpr Signature k_perk_root_successors[] = {
+    Signature::from_string("DATA"), Signature::from_string("SNAM"),
+    Signature::from_string("NNAM"), Signature::from_string("FNAM"),
+    Signature::from_string("PRKE"),
+};
+
+constexpr Signature k_qust_root_successors[] = {
+    sig_next,
+};
+
+constexpr Signature k_perk_tab_members[] = {
+    sig_ctda, sig_cis1, sig_cis2,
+};
 
 constexpr Signature k_reference_condition_successors[] = {
     Signature::from_string("KSIZ"), Signature::from_string("KWDA"),
@@ -230,6 +281,61 @@ std::optional<std::vector<ScopeRange>> alias_element_ranges(const Record& record
   return ranges;
 }
 
+template <std::size_t N>
+bool contains_signature(const Signature (&set)[N], Signature signature) {
+  for (const auto member : set) {
+    if (signature == member) return true;
+  }
+  return false;
+}
+
+std::vector<ScopeRange> package_branch_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::vector<ScopeRange> ranges;
+  for (std::size_t i = 0; i + 1 < subs.size(); ++i) {
+    if (subs[i].signature != sig_anam || subs[i + 1].signature != sig_citc) continue;
+    std::size_t end = i + 2;
+    while (end < subs.size() &&
+           contains_signature(k_package_branch_members, subs[end].signature)) {
+      ++end;
+    }
+    ranges.push_back(ScopeRange{i, end, i + 2, true});
+  }
+  return ranges;
+}
+
+std::vector<ScopeRange> quest_target_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::vector<ScopeRange> ranges;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature != sig_qsta) continue;
+    std::size_t end = i + 1;
+    while (end < subs.size() &&
+           contains_signature(k_quest_target_members, subs[end].signature)) {
+      ++end;
+    }
+    const std::size_t anchor =
+        (i + 1 < subs.size() && subs[i + 1].signature == sig_citc) ? i + 2 : i + 1;
+    ranges.push_back(ScopeRange{i, end, anchor, true});
+  }
+  return ranges;
+}
+
+std::vector<ScopeRange> perk_effect_tab_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::vector<ScopeRange> ranges;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature != sig_prkc) continue;
+    std::size_t end = i + 1;
+    while (end < subs.size() &&
+           contains_signature(k_perk_tab_members, subs[end].signature)) {
+      ++end;
+    }
+    ranges.push_back(ScopeRange{i, end, i + 1, true});
+  }
+  return ranges;
+}
+
 enum class ScopeStatus { ok, out_of_range, not_conditioned, structure_invalid };
 
 struct ScopeResolution {
@@ -237,31 +343,103 @@ struct ScopeResolution {
   ScopeRange range{};
 };
 
+std::optional<std::vector<ScopeRange>> scope_ranges(const Record& record,
+                                                    ConditionScopeKind kind) {
+  switch (kind) {
+    case ConditionScopeKind::effect:
+      return effect_element_ranges(record);
+    case ConditionScopeKind::alias:
+      return alias_element_ranges(record);
+    case ConditionScopeKind::package_branch:
+      return package_branch_ranges(record);
+    case ConditionScopeKind::quest_target:
+      return quest_target_ranges(record);
+    case ConditionScopeKind::perk_effect_tab:
+      return perk_effect_tab_ranges(record);
+  }
+  return std::nullopt;
+}
+
 ScopeResolution resolve_scope(const Record& record,
                               const ConditionScopeDescriptor& descriptor,
                               std::size_t container_index) {
-  std::vector<ScopeRange> ranges;
-  switch (descriptor.kind) {
-    case ConditionScopeKind::effect:
-      ranges = effect_element_ranges(record);
-      break;
-    case ConditionScopeKind::alias: {
-      auto alias_ranges = alias_element_ranges(record);
-      if (!alias_ranges.has_value()) {
-        return ScopeResolution{ScopeStatus::structure_invalid, {}};
-      }
-      ranges = std::move(*alias_ranges);
-      break;
-    }
+  const auto ranges = scope_ranges(record, descriptor.kind);
+  if (!ranges.has_value()) {
+    return ScopeResolution{ScopeStatus::structure_invalid, {}};
   }
-  if (container_index >= ranges.size()) {
+  if (container_index >= ranges->size()) {
     return ScopeResolution{ScopeStatus::out_of_range, {}};
   }
-  const auto& range = ranges[container_index];
+  const auto& range = (*ranges)[container_index];
   if (!range.conditioned) {
     return ScopeResolution{ScopeStatus::not_conditioned, range};
   }
   return ScopeResolution{ScopeStatus::ok, range};
+}
+
+bool has_scope_of_kind(Signature record, ConditionScopeKind kind) {
+  for (const auto& descriptor : k_generated_condition_scopes) {
+    if (descriptor.record == record && descriptor.kind == kind) return true;
+  }
+  return false;
+}
+
+std::optional<std::vector<ScopeRange>> nested_scope_ranges(const Record& record) {
+  constexpr ConditionScopeKind kinds[] = {
+      ConditionScopeKind::effect,
+      ConditionScopeKind::alias,
+      ConditionScopeKind::package_branch,
+      ConditionScopeKind::quest_target,
+      ConditionScopeKind::perk_effect_tab,
+  };
+  std::vector<ScopeRange> ranges;
+  for (const auto kind : kinds) {
+    if (!has_scope_of_kind(record.header.signature, kind)) continue;
+    auto kind_ranges = scope_ranges(record, kind);
+    if (!kind_ranges.has_value()) return std::nullopt;
+    ranges.insert(ranges.end(), kind_ranges->begin(), kind_ranges->end());
+  }
+  std::sort(ranges.begin(), ranges.end(),
+            [](const ScopeRange& a, const ScopeRange& b) { return a.begin < b.begin; });
+  return ranges;
+}
+
+template <std::size_t N>
+std::optional<std::size_t> first_member_index(const std::vector<Subrecord>& subs,
+                                              const Signature (&set)[N]) {
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (contains_signature(set, subs[i].signature)) return i;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::size_t> root_insert_anchor(const Record& record) {
+  const auto& subs = record.subrecords;
+  if (record.header.signature == sig_pack) return first_member_index(subs, k_pack_root_successors);
+  if (record.header.signature == sig_info) {
+    return first_member_index(subs, k_info_root_successors).value_or(subs.size());
+  }
+  if (record.header.signature == sig_perk) {
+    return first_member_index(subs, k_perk_root_successors).value_or(subs.size());
+  }
+  if (record.header.signature == sig_qust) return first_member_index(subs, k_qust_root_successors);
+  return std::nullopt;
+}
+
+std::size_t root_window_limit(const Record& record) {
+  if (record.header.signature != sig_qust) return record.subrecords.size();
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    const auto signature = record.subrecords[i].signature;
+    if (signature == sig_next || signature == sig_indx) return i;
+  }
+  return record.subrecords.size();
+}
+
+bool has_ctda_in(const std::vector<Subrecord>& subs, std::size_t begin, std::size_t end) {
+  for (std::size_t i = begin; i < end; ++i) {
+    if (subs[i].signature == sig_ctda) return true;
+  }
+  return false;
 }
 
 Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
@@ -282,6 +460,69 @@ std::optional<ScopedConditionPath> scoped_condition_path(
   return parse_scoped_path(record, path);
 }
 
+RootConditionWindow root_condition_window(const Record& record) {
+  const auto& subs = record.subrecords;
+  const auto nested = nested_scope_ranges(record);
+  if (!nested.has_value()) {
+    return RootConditionWindow{RootConditionStatus::alias_structure_invalid, 0, 0, std::nullopt};
+  }
+
+  std::size_t lists = 0;
+  RootConditionWindow found{RootConditionStatus::ok, 0, subs.size(), std::nullopt};
+  const auto consider = [&](std::size_t begin, std::size_t end) {
+    if (begin < end && has_ctda_in(subs, begin, end)) {
+      ++lists;
+      found.begin = begin;
+      found.end = end;
+    }
+  };
+  const auto limit = root_window_limit(record);
+  std::size_t cursor = 0;
+  for (const auto& range : *nested) {
+    if (cursor < range.begin) consider(cursor, std::min(range.begin, limit));
+    cursor = std::max(cursor, range.end);
+  }
+  consider(cursor, limit);
+
+  if (lists > 1) return RootConditionWindow{RootConditionStatus::multiple_lists, 0, 0, std::nullopt};
+  if (lists == 1) return found;
+
+  const auto anchor = root_insert_anchor(record);
+  if (!anchor.has_value()) {
+    return RootConditionWindow{RootConditionStatus::no_list, 0, 0, std::nullopt};
+  }
+  std::size_t begin = 0;
+  std::size_t end = limit;
+  for (const auto& range : *nested) {
+    if (range.end <= *anchor) begin = std::max(begin, range.end);
+    if (range.begin >= *anchor) end = std::min(end, range.begin);
+  }
+  return RootConditionWindow{RootConditionStatus::no_list, begin, end, anchor};
+}
+
+ScopedConditionsRead read_root_conditions(const Record& record) {
+  const auto window = root_condition_window(record);
+  switch (window.status) {
+    case RootConditionStatus::no_list:
+      return ScopedConditionsRead{true, ScopedConditionStatus::updated, {}};
+    case RootConditionStatus::multiple_lists:
+      return ScopedConditionsRead{false, ScopedConditionStatus::multiple_lists, {}};
+    case RootConditionStatus::alias_structure_invalid:
+      return ScopedConditionsRead{false, ScopedConditionStatus::alias_structure_invalid, {}};
+    case RootConditionStatus::ok:
+      break;
+  }
+  try {
+    return ScopedConditionsRead{
+        true, ScopedConditionStatus::updated,
+        read_ctda_conditions_in(record, window.begin, window.end)};
+  } catch (const CtdaMultipleListsError&) {
+    return ScopedConditionsRead{false, ScopedConditionStatus::multiple_lists, {}};
+  } catch (const CtdaNotLosslessError&) {
+    return ScopedConditionsRead{false, ScopedConditionStatus::unrepresentable, {}};
+  }
+}
+
 ScopedConditionsRead read_scoped_conditions(
     const Record& record,
     const ConditionScopeDescriptor& descriptor,
@@ -289,9 +530,15 @@ ScopedConditionsRead read_scoped_conditions(
   const auto resolution = resolve_scope(record, descriptor, container_index);
   switch (resolution.status) {
     case ScopeStatus::ok:
-      return ScopedConditionsRead{
-          true, ScopedConditionStatus::updated,
-          read_ctda_conditions_in(record, resolution.range.begin, resolution.range.end)};
+      try {
+        return ScopedConditionsRead{
+            true, ScopedConditionStatus::updated,
+            read_ctda_conditions_in(record, resolution.range.begin, resolution.range.end)};
+      } catch (const CtdaMultipleListsError&) {
+        return ScopedConditionsRead{false, ScopedConditionStatus::multiple_lists, {}};
+      } catch (const CtdaNotLosslessError&) {
+        return ScopedConditionsRead{false, ScopedConditionStatus::unrepresentable, {}};
+      }
     case ScopeStatus::out_of_range:
       return ScopedConditionsRead{false,
                                   ScopedConditionStatus::container_index_out_of_range, {}};
