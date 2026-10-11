@@ -45,9 +45,9 @@ public partial class Condition
         PackageData = 6,
         EventData = 7,
 
-        CommandTarget = 9,
-        EventCameraRef = 10,
-        MyKiller = 11
+        CommandTarget = 8,
+        EventCameraRef = 9,
+        MyKiller = 10
     }
 
     public enum ParameterType

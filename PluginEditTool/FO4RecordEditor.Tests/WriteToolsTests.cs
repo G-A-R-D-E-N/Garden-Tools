@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.IO;
+using System.Text;
 using FluentAssertions;
 using FO4RecordEditor.Services;
 using Mutagen.Bethesda.Fallout4;
@@ -58,6 +60,33 @@ public class WriteToolsTests
             second.CompareOperator.Should().Be(CompareOperator.GreaterThanOrEqualTo);
             second.ComparisonValue.Should().Be(25f);
             ((FunctionConditionData)second.Data).RunOnType.Should().Be(Condition.RunOnType.Reference);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
+    public void SetConditions_RunOnMyKillerWritesByteTenAtRunOnOffset()
+    {
+        var name = $"WriteToolsRunOn_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(name);
+        WriteService.CreateRecord(name, "COBJ", "FWTest_RunOn", env: null);
+        WriteService.SetConditions(name, "FWTest_RunOn",
+            """[{"function":"GetEventData","operator":"==","value":1,"runOn":"MyKiller"}]""", env: null)
+            .Should().Contain("Set 1 condition(s)");
+
+        var path = Path.Combine(Path.GetTempPath(), name);
+        WriteService.SavePlugin(name, path, null).Should().Contain("Saved");
+
+        try
+        {
+            var payload = ReadSingleCtdaPayload(path);
+            payload[20].Should().Be(10);
+            payload.AsSpan(21, 3).ToArray().Should().AllBeEquivalentTo((byte)0);
+
+            var mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(path), Fallout4Release.Fallout4);
+            var cobj = mod.ConstructibleObjects.Single();
+            cobj.Conditions.Should().HaveCount(1);
+            ((FunctionConditionData)((ConditionFloat)cobj.Conditions[0]).Data).RunOnType.Should().Be(Condition.RunOnType.MyKiller);
         }
         finally { try { File.Delete(path); } catch { } }
     }
@@ -153,5 +182,22 @@ public class WriteToolsTests
         var failures = root.GetProperty("failures");
         failures.GetArrayLength().Should().Be(1);
         failures[0].GetProperty("formKey").GetString().Should().Be("000000:DoesNotExist.esp");
+    }
+
+    private static byte[] ReadSingleCtdaPayload(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        var signature = Encoding.ASCII.GetBytes("CTDA");
+        var matches = new List<int>();
+        for (var i = 0; i <= bytes.Length - 6; i++)
+        {
+            if (bytes.AsSpan(i, 4).SequenceEqual(signature))
+                matches.Add(i);
+        }
+
+        matches.Should().ContainSingle("the test writes exactly one condition subrecord");
+        var offset = matches.Single();
+        BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(offset + 4, 2)).Should().Be(32);
+        return bytes.AsSpan(offset + 6, 32).ToArray();
     }
 }
