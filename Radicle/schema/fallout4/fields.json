@@ -152,8 +152,8 @@
           "offset": 24,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -164,8 +164,8 @@
           "offset": 28,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -176,8 +176,8 @@
           "offset": 32,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -188,8 +188,8 @@
           "offset": 36,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -200,8 +200,8 @@
           "offset": 40,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -212,8 +212,8 @@
           "offset": 44,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -248,8 +248,8 @@
           "offset": 56,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -272,8 +272,8 @@
           "offset": 64,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -284,8 +284,8 @@
           "offset": 68,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -296,8 +296,8 @@
           "offset": 72,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -308,8 +308,8 @@
           "offset": 76,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -488,8 +488,8 @@
           "offset": 4,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -500,8 +500,8 @@
           "offset": 8,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -512,8 +512,8 @@
           "offset": 12,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -524,8 +524,8 @@
           "offset": 16,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -548,8 +548,8 @@
           "offset": 40,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -560,8 +560,8 @@
           "offset": 44,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -572,8 +572,8 @@
           "offset": 48,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         }
       ],
@@ -727,6 +727,18 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PROJ\\Type",
+          "label": "Type",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PROJ\\Gravity",
           "label": "Gravity",
           "kind": "scalar",
@@ -734,8 +746,8 @@
           "offset": 4,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -746,8 +758,8 @@
           "offset": 8,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -758,8 +770,8 @@
           "offset": 12,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -770,8 +782,8 @@
           "offset": 24,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -782,8 +794,8 @@
           "offset": 28,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -794,8 +806,8 @@
           "offset": 40,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -806,8 +818,8 @@
           "offset": 44,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -818,8 +830,8 @@
           "offset": 48,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -830,8 +842,8 @@
           "offset": 64,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -842,8 +854,8 @@
           "offset": 68,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -854,8 +866,8 @@
           "offset": 72,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -866,8 +878,8 @@
           "offset": 76,
           "storage": "f32",
           "presentation": "identity",
-          "minimum": -1000000000.0,
-          "maximum": 1000000000.0,
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
         },
         {
@@ -2389,7 +2401,10 @@
     { "record": "ALCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "ENCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "INGR", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "PACK", "container": "Branches", "member": "Conditions", "scope": "package_branch" },
+    { "record": "PERK", "container": "Tabs", "member": "Conditions", "scope": "perk_effect_tab" },
     { "record": "QUST", "container": "Aliases", "member": "Conditions", "scope": "alias" },
+    { "record": "QUST", "container": "Targets", "member": "Conditions", "scope": "quest_target" },
     { "record": "SPEL", "container": "Effects", "member": "Conditions", "scope": "effect" }
   ]
 }

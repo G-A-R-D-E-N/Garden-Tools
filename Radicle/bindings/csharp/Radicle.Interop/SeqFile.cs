@@ -6,11 +6,11 @@ namespace Radicle.Interop;
 
 public sealed class SeqFile : IDisposable
 {
-    private IntPtr _handle;
+    private readonly SeqHandle _handle;
 
     private SeqFile(IntPtr handle, IReadOnlyList<uint> entries)
     {
-        _handle = handle;
+        _handle = new SeqHandle(handle);
         Entries = entries;
     }
 
@@ -33,21 +33,18 @@ public sealed class SeqFile : IDisposable
         return Snapshot(handle);
     }
 
+    private HandleUse Use() => new(_handle, nameof(SeqFile));
+
     public unsafe byte[] ToBytes()
     {
-        if (_handle == IntPtr.Zero) throw new ObjectDisposedException(nameof(SeqFile));
+        using var use = Use();
         byte* bytes = null;
         nuint size = 0;
-        Call.Check(RadicleNative.SeqWriteBytes(_handle, &bytes, &size));
+        Call.Check(RadicleNative.SeqWriteBytes(use.Pointer, &bytes, &size));
         return Call.TakeBytes(bytes, size);
     }
 
-    public void Dispose()
-    {
-        if (_handle == IntPtr.Zero) return;
-        RadicleNative.SeqDestroy(_handle);
-        _handle = IntPtr.Zero;
-    }
+    public void Dispose() => _handle.Dispose();
 
     private static unsafe SeqFile Snapshot(IntPtr handle)
     {

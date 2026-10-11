@@ -1,3 +1,4 @@
+#include "RadiclePluginSupport.hpp"
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 #include "RadiclePluginFields.hpp"
 
@@ -25,6 +26,9 @@
 #include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
@@ -42,17 +46,6 @@ std::size_t sizeArgument(const nlohmann::json& args,
     const auto raw = args[index].get<long long>();
     if (raw < 0) return fallback;
     return std::min(static_cast<std::size_t>(raw), maximum);
-}
-
-std::string editorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return fo4::text::windows1252_to_utf8(std::string(begin, nul));
-    }
-    return {};
 }
 
 std::string asciiLower(std::string_view value) {
