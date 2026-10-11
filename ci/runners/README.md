@@ -7,9 +7,9 @@ the VPS behind `git.nomadicinteractive.dev`.
 
 ## Scripts in this directory
 
-The paths below are on the CI runner hosts, not on contributors' machines.
+Paths in this file are CI runner host paths (examples of the configured layout), not contributors' machines.
 
-Installed on the runner host at `C:\tools\forgejo-runner\`.
+Installed on the runner host under the runner host path (example) `C:\tools\forgejo-runner\`.
 
 | Script | Called from | Why |
 |---|---|---|

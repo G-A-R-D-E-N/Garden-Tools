@@ -1757,4 +1757,16 @@ xEdit places optional NNAM/GNAM/SNAM after the single contiguous Alias array. On
 The CI failure `***Timeout 10.19 sec` on the largest-dropped-file test was not a stall. The body is read linearly. httplib v0.51.0 reads a Content-Length body in `CPPHTTPLIB_RECV_BUFSIZ` (16384 bytes) chunks and appends each chunk (`read_content_with_length`, httplib.h:7312-7345; `Server::read_content`, httplib.h:11776). The pre-routing handler runs before the body is read, and the `/rpc` route runs only after the whole body has arrived, so the client's full write and the server's read cannot wait on each other. Per request the work is linear in the body size: the `/rpc` route parses about 22 MB of JSON, `Dispatcher::invokeJson` (src/rpc/RpcDispatcher.cpp) and the echo target each copy the `args` value, and the response is dumped with UTF-8 validation through `dumpJson` and sent back. The test also base64-encodes 16 MiB before it sends. The Linux Debug job (`.github/workflows/native-ci.yml`, job `Native (Linux, Debug)`) builds at -O0 without sanitizers and runs `ctest --parallel 4`, so these steps share the runner's CPU.
 
 The test is tagged `[large]`. `tests/integration/CMakeLists.txt:catch_discover_tests` gives the untagged HTTP cases the 10 s bound and gives only `[large]` a 120 s bound, the same bound the f4se and MCP smoke tests use in `PluginEditTool/native/tests/CMakeLists.txt`. The 10.19 s figure is the only timing available, and the 120 s bound is an estimate with headroom, not a measured runtime. Proof: the `[large]` test is listed under its own CTest entry with TIMEOUT 120 (check `ctest -N -V` in CI), and the other HTTP tests still have TIMEOUT 10.
->
+
+## ci/runners/clear-stale-git-locks.ps1:try block — stale action-cache lock cleanup
+
+Removes git lock files left in the shared action cache when a fetch was killed, for example when the runner restarted mid-download. A leftover `shallow.lock` makes every job that uses that action fail during "workflow prepared" with "Unable to create ...shallow.lock: File exists". Called from each Windows `start-runner.ps1` and every 5 minutes by the `ForgejoRunner-clear-stale-git-locks` scheduled task. Searches the cache roots `C:\ci\act` and `C:\ci\home\.cache\act` (runner host paths, examples); repos live at `<root>\<2 hex>\<62 hex>` of a sha256.
+
+## ci/runners/clear-stale-git-locks.ps1:$cutoff — five-minute age gate
+
+Only locks older than five minutes are removed. An action fetch takes seconds, so a fetch another runner is doing right now keeps its lock.
+
+## ci/runners/alias-profile-path.ps1:try block — neutral profile path in PATH
+
+Rewrites PATH entries under the real Windows profile to the neutral runner host junction `C:\ci\home` (example path), so tool paths printed in CI logs never show the profile folder name. Called from each runner's `start-runner.ps1`. `$real` comes from `GetFolderPath` rather than `$env:USERPROFILE` because `start-runner.ps1` has already pointed `$env:USERPROFILE` at the junction; the script keeps that as its one-line constraint comment.
+
