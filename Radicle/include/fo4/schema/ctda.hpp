@@ -20,10 +20,7 @@ public:
   using std::runtime_error::runtime_error;
 };
 
-// The discriminator stored in the function slot of a GetEventData condition.
-// xEdit/CK write 0x1240 there; Mutagen's ConditionBinaryCreateTranslation
-// uses the same magic (EventFunctionIndex = 4672) to pick the layout.
-inline constexpr std::uint16_t k_ctda_event_function_index = 4672;
+inline constexpr std::uint16_t k_ctda_event_function_index = 576;
 
 // Condition.Flag bits (Mutagen): OR=0x01, ParametersUseAliases=0x02,
 // UseGlobal=0x04, UsePackData=0x08, SwapSubjectAndTarget=0x10.

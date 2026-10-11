@@ -45,9 +45,9 @@ public partial class Condition
         PackageData = 6,
         EventData = 7,
 
-        CommandTarget = 9,
-        EventCameraRef = 10,
-        MyKiller = 11
+        CommandTarget = 8,
+        EventCameraRef = 9,
+        MyKiller = 10
     }
 
     public enum ParameterType
@@ -1298,50 +1298,6 @@ partial class GetEventDataBinaryWriteTranslation
     public static partial void WriteBinaryParameterParsingCustom(MutagenWriter writer, IGetEventDataGetter item)
     {
         WriteCommonParams(writer, item);
-    }
-}
-
-partial class ConditionFloatBinaryOverlay
-{
-    public partial IConditionDataGetter GetDataCustom(int location)
-    {
-        var functionIndex = BinaryPrimitives.ReadUInt16LittleEndian(_structData.Slice(location));
-        if (functionIndex == ConditionBinaryCreateTranslation.EventFunctionIndex)
-        {
-            return GetEventDataBinaryOverlay.GetEventDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-        else
-        {
-            return FunctionConditionDataBinaryOverlay.FunctionConditionDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-    }
-
-    partial void CustomFactoryEnd(OverlayStream stream, int finalPos, int offset)
-    {
-        stream.Position = offset;
-        _structData = stream.RemainingMemory;
-    }
-}
-
-partial class ConditionGlobalBinaryOverlay
-{
-    public partial IConditionDataGetter GetDataCustom(int location)
-    {
-        var functionIndex = BinaryPrimitives.ReadUInt16LittleEndian(_structData.Slice(location));
-        if (functionIndex == ConditionBinaryCreateTranslation.EventFunctionIndex)
-        {
-            return GetEventDataBinaryOverlay.GetEventDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-        else
-        {
-            return FunctionConditionDataBinaryOverlay.FunctionConditionDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-    }
-
-    partial void CustomFactoryEnd(OverlayStream stream, int finalPos, int offset)
-    {
-        stream.Position = offset;
-        _structData = stream.RemainingMemory;
     }
 }
 
