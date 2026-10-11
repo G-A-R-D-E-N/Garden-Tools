@@ -359,6 +359,25 @@ The `package_branch` kind. A procedure-tree branch starts at an `ANAM` immediate
 
 The `quest_target` kind. Each `QSTA` starts one objective target (`source:xEdit Core/wbDefinitionsFO4.pas:10779-10793 @93cc0bc5`: `Objectives` > `Objective` > `Targets` > `Target` = `QSTA` struct, then `wbConditions`). `QSTA` appears nowhere else in the definition. The index `k` is the flat ordinal of targets across all objectives in record order. This deliberately departs from Mutagen's nested `Objectives[i].Targets[j].Conditions`, because the native path grammar accepts one index. Renumbering objectives shifts target indices, as it already does for `Aliases[i]`. The range covers `CITC`, `CTDA`, `CIS1`, `CIS2`. `Objective` has no `wbConditions` (`source:xEdit Core/wbDefinitionsFO4.pas:10772-10778 @93cc0bc5`), so no objective scope exists. The insert anchor is after `QSTA`, or after `CITC` when one is present.
 
+## Radicle/tests/test_condition_scopes_real.cpp:ConditionScopesReal.BranchAndTargetScopesMatchOfficialLayoutAndWriteBackIsIdentity — real-data PACK branch and QUST target scopes
+
+Checks `condition_scopes.cpp:package_branch_ranges` and `condition_scopes.cpp:quest_target_ranges` against the seven official masters, through `read_scoped_conditions` and `set_record_scoped_conditions`. Gated on `FO4_DATA_DIR`, parameterized like `test_quest_structure_real.cpp`. This stack branches from a main without the real-data CI wiring; on current main `.github/workflows/native-ci.yml` sets `FO4_DATA_DIR` from the runner variables for the Windows Release pass (main `e224573b`), so it runs with data there once merged, if the variable is set on the runner. Registered in the `fo4_tests` source list in `Radicle/CMakeLists.txt` with no per-test timeout or label; the only timeout is `gtest_discover_tests(DISCOVERY_TIMEOUT 120)`.
+
+**Oracle.** The test does not call the finders to build its expectations. It derives its own ranges from the record layout. A PACK branch starts at `ANAM` immediately followed by `CITC`, and extends over `CITC`, `CTDA`, `CIS1`, `CIS2`, `PRCB`, `PNAM`, `FNAM`, `PKC2`, `PFO2`, `PFOR` (`source:xEdit Core/wbDefinitionsFO4.pas:10604-10634 @93cc0bc5`). A QUST target starts at `QSTA` and extends over `CITC`, `CTDA`, `CIS1`, `CIS2` (`source:xEdit Core/wbDefinitionsFO4.pas:10779-10793 @93cc0bc5`). xEdit has no `CITC` in the target, so an optional leading `CITC` is accepted, as the finder does. Top-level PACK conditions sit before the procedure tree (`source:xEdit Core/wbDefinitionsFO4.pas:10571 @93cc0bc5`).
+
+**Checks, per record.**
+- Each independently derived scope reads with `ok`, and the read count equals its CTDA count.
+- A leading `CITC`, when present, equals that CTDA count.
+- The index one past the last scope returns `container_index_out_of_range`, so the finder does not invent extra scopes.
+- Every PACK `CTDA` lies in exactly one branch, or before the first branch (top-level).
+- Every QUST `CTDA` between the first `QOBJ` (`source:xEdit Core/wbDefinitionsFO4.pas:10773 @93cc0bc5`) and the first `ANAM` ("Next Alias ID", `source:xEdit Core/wbDefinitionsFO4.pas:10805 @93cc0bc5`) lies in exactly one target.
+- Writing back each successfully read scope leaves the subrecord list identical (signature, extended size, payload). The header and compressed bytes are not compared.
+
+**Deviation from the brief.** The QUST window ends at the first `ANAM`, not at the end of the record. Alias conditions sit after `QOBJ` but belong to alias scopes (`source:xEdit Core/wbDefinitionsFO4.pas:10868, 10921 @93cc0bc5`). A literal "after the first QOBJ" rule would flag every quest with alias conditions.
+
+**Totals.** The test prints per master and reports via `RecordProperty` (`PackCount`, `BranchCount`, `QuestCount`, `TargetCount`, `ConditionCount`, and the failure counts). No figures are written here. The lane had no game data and nothing was run.
+
+**Cost.** Each write-back calls `set_record_scoped_conditions`, which scans the whole plugin, so runtime grows with branches times records. Not measured.
 ## Radicle/src/schema/condition_scopes.cpp:perk_effect_tab_ranges — PERK Tabs[k].Conditions
 
 The `perk_effect_tab` kind. Each `PRKC` ("Run On (Tab Index)", one signed byte) starts one run-on tab of a perk effect (`source:xEdit Core/wbDefinitionsFO4.pas:7643-7647 @93cc0bc5`: `Effects` > `Perk Conditions` > `Perk Condition` = `PRKC` then `wbConditions.SetRequired`). The effect itself is `PRKE` header, `DATA` union, the tab list, then `EPFT`/`EPFB`/`EPF2`/`EPF3`/`EPFD` and the `PRKF` end marker (`source:xEdit Core/wbDefinitionsFO4.pas:7606-7642 @93cc0bc5` and `:7648-7689 @93cc0bc5`). `PRKC` is defined only there in the PERK definition (`source:xEdit Core/wbDefinitionsFO4.pas:7645 @93cc0bc5`), so matching the exact four-byte signature inside PERK cannot collide with another member. The index `k` is the flat ordinal of `PRKC` subrecords across all effects in record order, the same convention as `quest_target`; renumbering effects shifts tab indices.
