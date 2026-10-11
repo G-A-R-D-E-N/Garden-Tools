@@ -411,9 +411,12 @@ TEST(ClimateWeatherReader, NullSkyStaticsAndShortAmbientColorsDecode) {
   EXPECT_EQ(modern.tnam[1], std::nullopt);
   const auto old = fo4::forms::decode_weather(plugin, key(k_wthr_old));
   ASSERT_EQ(old.dalc.size(), 4u);
-  EXPECT_EQ(old.dalc[0].size(), 24u);
-  EXPECT_EQ(old.dalc[1].size(), 28u);
-  EXPECT_EQ(old.dalc[2].size(), 32u);
+  EXPECT_FALSE(old.dalc[0].specular.has_value());
+  EXPECT_FALSE(old.dalc[0].fresnel.has_value());
+  EXPECT_TRUE(old.dalc[1].specular.has_value());
+  EXPECT_FALSE(old.dalc[1].fresnel.has_value());
+  EXPECT_TRUE(old.dalc[2].specular.has_value());
+  EXPECT_TRUE(old.dalc[2].fresnel.has_value());
 
   for (const std::size_t size : {20u, 30u, 36u}) {
     auto entries = fixture();

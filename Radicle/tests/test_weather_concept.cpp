@@ -27,6 +27,7 @@ struct WeatherPluginOptions {
   std::size_t imsp_size = 32;
   std::size_t data_size = 20;
   int dalc_count = 8;
+  std::size_t dalc_size = 32;
   bool include_nam4 = true;
   int unam_size = 24;
   std::size_t fnam_size = 72;
@@ -154,7 +155,7 @@ void write_weather_record(fo4::test::ByteWriter& out, const WeatherPluginOptions
   }
   for (int i = 0; i < options.dalc_count; ++i) {
     fo4::test::ByteWriter body;
-    write_zeros(body, 32);
+    write_zeros(body, options.dalc_size);
     fo4::test::write_subrecord(out, "DALC", body.bytes);
   }
   if (options.unam_size > 0) {
@@ -299,7 +300,7 @@ TEST(WeatherConcept, DecodesProvenCloudAndLinkSlots) {
   ASSERT_TRUE(model.snam[0].sound.has_value());
   EXPECT_EQ(model.snam[0].sound->to_string(), "000810:WeatherPatch.esp");
   ASSERT_EQ(model.tnam.size(), 1u);
-  EXPECT_EQ(model.tnam[0].value().to_string(), "000820:WeatherPatch.esp");
+  EXPECT_EQ(model.tnam[0]->to_string(), "000820:WeatherPatch.esp");
   EXPECT_EQ(model.imsp_count, 8);
   EXPECT_TRUE(model.has_wgdr);
   EXPECT_EQ(model.dalc.size(), 8u);
@@ -376,6 +377,40 @@ TEST(WeatherConcept, MnamNullAccepted) {
   EXPECT_FALSE(model.mnam.has_value());
 }
 
+TEST(WeatherConcept, NullSkyStaticTnamDecodesAsAbsent) {
+  WeatherPluginOptions options;
+  options.tnam_form_id = 0;
+  auto plugin = fo4::read_plugin(make_weather_plugin(options), "WeatherPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  const auto model = fo4::forms::decode_weather(plugin, key);
+  ASSERT_EQ(model.tnam.size(), 1u);
+  EXPECT_FALSE(model.tnam[0].has_value());
+}
+
+TEST(WeatherConcept, DalcDecodesSpecularAndFresnelOnlyWhenPresent) {
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  const struct {
+    std::size_t size;
+    bool specular;
+    bool fresnel;
+  } cases[] = {{24, false, false}, {28, true, false}, {32, true, true}};
+  for (const auto& c : cases) {
+    SCOPED_TRACE(c.size);
+    WeatherPluginOptions options;
+    options.dalc_size = c.size;
+    auto plugin = fo4::read_plugin(make_weather_plugin(options), "WeatherPatch.esp");
+    const auto model = fo4::forms::decode_weather(plugin, key);
+    ASSERT_EQ(model.dalc.size(), 8u);
+    EXPECT_EQ(model.dalc[0].specular.has_value(), c.specular);
+    EXPECT_EQ(model.dalc[0].fresnel.has_value(), c.fresnel);
+  }
+
+  WeatherPluginOptions options;
+  options.dalc_size = 20;
+  auto plugin = fo4::read_plugin(make_weather_plugin(options), "WeatherPatch.esp");
+  EXPECT_THROW(fo4::forms::decode_weather(plugin, key), fo4::forms::WeatherError);
+}
+
 TEST(WeatherConcept, MnamRejectsNonSpgd) {
   WeatherPluginOptions options;
   options.include_local_misc = true;
@@ -431,7 +466,7 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   ASSERT_FALSE(before.tnam.empty());
   ASSERT_TRUE(before.snam[0].sound.has_value());
   const auto snam_before = before.snam[0].sound->to_string();
-  const auto tnam_before = before.tnam[0].value().to_string();
+  const auto tnam_before = before.tnam[0]->to_string();
 
   const auto spgd_plugin = fo4::read_plugin(make_spgd_only_plugin(0x00000100), "FalloutSpgd.esm");
   const fo4::Plugin* environment[] = {&spgd_plugin};
@@ -447,7 +482,7 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   ASSERT_FALSE(after.tnam.empty());
   ASSERT_TRUE(after.snam[0].sound.has_value());
   EXPECT_EQ(after.snam[0].sound->to_string(), snam_before);
-  EXPECT_EQ(after.tnam[0].value().to_string(), tnam_before);
+  EXPECT_EQ(after.tnam[0]->to_string(), tnam_before);
   EXPECT_FLOAT_EQ(after.vnam.value_or(-1.0f), 1.0f);
   EXPECT_FLOAT_EQ(after.wnam.value_or(-1.0f), 1.0f);
 
