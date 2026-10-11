@@ -190,7 +190,7 @@ TEST_CASE("quest log entry CIS1 is stored as Windows-1252 and reads back as UTF-
             storedCis1.assign(reinterpret_cast<const char*>(subrecord.data.data()), subrecord.data.size());
         }
     }
-    CHECK(storedCis1 == "caf\xE9");
+    CHECK(storedCis1 == std::string("caf\xE9\0", 5));
 
     const auto decoded = fo4::forms::decode_quest_stages(disk, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(decoded.stages.size() == 1u);

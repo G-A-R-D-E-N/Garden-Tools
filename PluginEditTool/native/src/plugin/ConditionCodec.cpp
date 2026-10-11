@@ -409,6 +409,8 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         const auto declared = ConditionFunctions::paramsOf(fnName);
         const auto applyCis = [&](const char* key, std::size_t slot, std::optional<std::string>& target) {
             if (!changed(key)) return;
+            const auto listed = std::find(edited.begin(), edited.end(), key) != edited.end();
+            if (preserved && !listed && !element.contains(key)) return;
             target.reset();
             if (!element.contains(key)) return;
             if (!element[key].is_string()) reject(std::string(key) + " must be a string");

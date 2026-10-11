@@ -59,7 +59,7 @@ The JSON is UTF-8. describe emits `cis1` / `cis2` when the string is present and
 
 Text that Windows-1252 cannot represent (for example U+4E2D) is refused, not substituted: `cis1 is not valid UTF-8 text representable in Windows-1252`, or the same wording with `cis2`. The `_native` restore path uses `preserved CIS string is not valid UTF-8 text representable in Windows-1252`.
 
-Top-level `cis1` / `cis2` are read in buildCondition only when they differ from the native baseline or on a new row (`changed`). They are refused on a slot that is not String or Event (`ConditionFunctions::editorFor` text kind), matching the quest codec in `RadiclePluginQuestCondition.cpp`.
+Top-level `cis1` / `cis2` in buildCondition (`applyCis`) are read on a new row when present, and on a preserved row when present and different from the native baseline. On a preserved row an omitted key keeps the native bytes unless it is listed in `_edited`, which clears the string. Native metadata alone therefore restores the original bytes. They are refused on a slot that is not String or Event (`ConditionFunctions::editorFor` text kind), matching the quest codec in `RadiclePluginQuestCondition.cpp`.
 
 The shared conversion is `PluginEditTool/native/src/plugin/ConditionCodec.cpp:conditionCisFromUtf8` (declared in `PluginEditTool/native/include/fo4ide/plugin/ConditionCodec.hpp`). It returns nullopt for text Windows-1252 cannot represent and for an embedded NUL, so a NUL is now refused with the same not-representable wording instead of its own message. Every caller uses it: `buildCondition` (`applyCis` and the `_native` `restoreString`) and the quest path below.
 
@@ -69,4 +69,4 @@ Quest log-entry and alias conditions take `cis1` / `cis2` as UTF-8 JSON text. `p
 
 The quest codebase has no JSON writer for conditions. A read of quest conditions goes through the condition backend (`RadiclePluginConditions.cpp:getConditions` / `getConditionsAtPath`) and `ConditionCodec.cpp:describeCondition`, which is the function fixed above, so the read path needs no separate change.
 
-Test anchor: `PluginEditTool/native/tests/unit/QuestOpaqueConditionTests.cpp` (TEST_CASE "quest log entry CIS1 is stored as Windows-1252 and reads back as UTF-8") sets a `GetGraphVariableInt` log-entry condition with `cis1` "café", checks the saved CIS1 subrecord is `caf\xE9`, decodes it with `lossless_quest_log_entry_conditions`, and checks `describeCondition` gives `café`.
+Test anchor: `PluginEditTool/native/tests/unit/QuestOpaqueConditionTests.cpp` (TEST_CASE "quest log entry CIS1 is stored as Windows-1252 and reads back as UTF-8") sets a `GetGraphVariableInt` log-entry condition with `cis1` "café", checks the saved CIS1 subrecord is `caf\xE9` plus its NUL terminator (5 bytes, from `Radicle/src/schema/ctda.cpp:zstring_bytes`), decodes it with `lossless_quest_log_entry_conditions`, and checks `describeCondition` gives `café`.
