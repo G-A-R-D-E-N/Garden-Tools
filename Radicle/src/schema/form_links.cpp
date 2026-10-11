@@ -560,10 +560,6 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     return;
   }
-  if (perk_epfd_is_formid(record, sub)) {
-    fn(0);
-    return;
-  }
   if (is_formid_array_signature(sub.signature) && sub.data.size() % 4 == 0) {
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);

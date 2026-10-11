@@ -28,6 +28,9 @@ constexpr auto k_tnam = Signature::from_string("TNAM");
 constexpr auto k_omod = Signature::from_string("OMOD");
 constexpr auto k_equp = Signature::from_string("EQUP");
 constexpr auto k_musc = Signature::from_string("MUSC");
+constexpr auto k_epft = Signature::from_string("EPFT");
+constexpr auto k_epfd = Signature::from_string("EPFD");
+constexpr auto k_prke = Signature::from_string("PRKE");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -213,23 +216,50 @@ bool is_navmesh_mixed_payload(const Record& record, const Subrecord& sub) {
           (sub.signature == k_nvmi || sub.signature == k_nvpp || sub.signature == k_nvsi));
 }
 
-bool perk_epfd_is_formid(const Record& record, const Subrecord& sub) {
-  if (record.header.signature != Signature::from_string("PERK") ||
-      sub.signature != Signature::from_string("EPFD") || sub.data.size() != 4) {
-    return false;
-  }
+std::optional<std::vector<std::size_t>> perk_formid_offsets(const Record& record,
+                                                           const Subrecord& sub) {
+  if (record.header.signature != sig_perk) return std::nullopt;
+  if (sub.signature != k_epfd && sub.signature != sig_data) return std::nullopt;
 
   int function_type = -1;
+  const Subrecord* prke = nullptr;
+  const Subrecord* effect_data = nullptr;
   for (const auto& candidate : record.subrecords) {
-    if (&candidate == &sub) {
-      break;
+    if (candidate.signature == k_epft && !candidate.data.empty()) {
+      function_type = std::to_integer<int>(candidate.data.front());
+    } else if (candidate.signature == k_prke) {
+      prke = &candidate;
+      effect_data = nullptr;
+      function_type = -1;
+    } else if (candidate.signature == sig_data && prke != nullptr && effect_data == nullptr) {
+      effect_data = &candidate;
     }
-    if (candidate.signature == Signature::from_string("EPFT") && !candidate.data.empty()) {
-      function_type = static_cast<int>(std::to_integer<std::uint8_t>(candidate.data.front()));
-    }
+    if (&candidate == &sub) break;
+  }
+  const int effect_type = prke != nullptr && !prke->data.empty()
+                              ? std::to_integer<int>(prke->data.front())
+                              : -1;
+  const auto size = sub.data.size();
+
+  if (sub.signature == sig_data) {
+    const bool quest_stage = effect_type == 0 && size == 6;
+    const bool ability = effect_type == 1 && size == 4;
+    if (effect_data != &sub || !(quest_stage || ability)) return std::nullopt;
+    return std::vector<std::size_t>{0};
   }
 
-  return function_type == 3 || function_type == 4 || function_type == 5;
+  const auto entry_function = effect_type == 2 && effect_data != nullptr &&
+                                      effect_data->data.size() >= 2
+                                  ? std::to_integer<int>(effect_data->data[1])
+                                  : -1;
+  const bool actor_value_entry = entry_function == 5 || entry_function == 12 ||
+                                 entry_function == 13 || entry_function == 14;
+  const bool actor_value_formid =
+      size >= 8 && (function_type == 8 || (function_type == 2 && actor_value_entry));
+  const bool epft_formid =
+      size == 4 && (function_type == 3 || function_type == 4 || function_type == 5);
+  if (!actor_value_formid && !epft_formid) return std::nullopt;
+  return std::vector<std::size_t>{0};
 }
 std::optional<std::vector<std::size_t>> struct_payload_formid_offsets(const Record& record,
                                                                      const Subrecord& sub,
@@ -366,6 +396,7 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
+  if (auto perk = perk_formid_offsets(record, sub)) return perk;
   if (auto packed = packed_formid_array_offsets(record, sub, strict_remap)) return packed;
   return placed_reference_formid_offsets(record, sub, strict_remap);
 }
