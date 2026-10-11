@@ -251,6 +251,34 @@ TEST_CASE("Native SetConditions reports multiple lists without staging") {
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
+TEST_CASE("Native SetConditions refuses a record with no condition list without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makePlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const nlohmann::json rows = nlohmann::json::array({
+        {
+            {"function", "GetStage"},
+            {"operator", ">="},
+            {"value", 5},
+            {"param1", 2},
+            {"runOn", "Subject"},
+        },
+    });
+    const auto result = backend.invokeBackend(
+        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", rows.dump()}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "NoConditionList");
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
 TEST_CASE("Native condition reads report multiple lists without staging") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

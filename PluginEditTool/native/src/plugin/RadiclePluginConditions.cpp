@@ -308,9 +308,15 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 "Record '" + recordId + "' has more than one condition list."
             });
         }
-        if (status == fo4::ConditionMutationStatus::record_missing) {
+        if (status == fo4::ConditionMutationStatus::no_condition_list) {
             return std::unexpected(Error{
                 "NoConditionList",
+                "Record '" + recordId + "' has no condition list to replace."
+            });
+        }
+        if (status == fo4::ConditionMutationStatus::record_missing) {
+            return std::unexpected(Error{
+                "RecordNotFound",
                 "Record '" + recordId + "' not found in " + pluginName + "."
             });
         }
