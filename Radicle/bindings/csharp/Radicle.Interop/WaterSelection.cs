@@ -13,7 +13,7 @@ public sealed unsafe partial class RadicleEnvironment
         WaterSelection selection;
         Call.Check(RadicleNative.WaterResolve(use.Pointer, record.Handle, &selection));
         return new EffectiveWater(FormKey.FromNative(selection.Water)!.Value,
-            selection.Record == IntPtr.Zero ? null : new Record(selection.Record),
+            selection.Record == IntPtr.Zero ? null : new Record(selection.Record, this),
             selection.UsesDefaultWater != 0, selection.HasHeight != 0 ? selection.Height : null);
     }
 }
