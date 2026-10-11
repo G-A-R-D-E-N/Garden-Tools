@@ -325,4 +325,18 @@ describe('NIF load and mode switch over unsaved edits (GT-088)', () => {
     expect(dialogs.confirm).toHaveBeenCalledTimes(1);
     expect(screen.queryByDisplayValue('Alpha edited')).toBeNull();
   });
+
+  it('keeps the open tree and its edits when a same-path reload fails', async () => {
+    localStorage.setItem('nif.mode', 'edit');
+    render(<NifPanel onClose={() => {}} />);
+    await loadNif(A);
+    editField('Alpha', 'Alpha edited');
+
+    tree.mockRejectedValueOnce(new Error('file is locked'));
+    fireEvent.click(document.querySelector('.nif-load-btn')!);
+    await screen.findByText('Could not load tree: file is locked');
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue('Alpha edited')).toBeTruthy();
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+  });
 });

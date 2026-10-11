@@ -1,6 +1,10 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConfirmRequest } from './useDialogs';
 import SpreadsheetPanel from './SpreadsheetPanel';
+
+const dialogs = vi.hoisted(() => ({ confirm: vi.fn<(req: ConfirmRequest) => Promise<boolean>>() }));
+vi.mock('./useDialogs', () => ({ useDialogs: () => ({ confirm: dialogs.confirm }) }));
 
 const grid = JSON.stringify({
   columns: ['Name'],
@@ -24,6 +28,7 @@ function installBackend(setField: () => Promise<string>) {
 beforeEach(() => {
   localStorage.setItem('spreadsheet.plugin', 'Mod.esp');
   localStorage.setItem('spreadsheet.type', 'NPC_');
+  dialogs.confirm.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -77,7 +82,7 @@ describe('SpreadsheetPanel plugin selection', () => {
     await screen.findByRole('option', { name: 'Other.esp' });
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'Other.esp' } });
 
-    expect(screen.queryByDisplayValue('New')).toBeNull();
+    await waitFor(() => expect(screen.queryByDisplayValue('New')).toBeNull());
     expect(screen.queryByDisplayValue('Old')).toBeNull();
     expect(screen.getByText('Save Changes (0)').closest('button')!.disabled).toBe(true);
     expect(backend.SetField).not.toHaveBeenCalled();
@@ -122,5 +127,73 @@ describe('SpreadsheetPanel plugin selection', () => {
     expect(screen.getByText('Pick a plugin and a record type, then Load.')).toBeTruthy();
     expect(backend.GetRecordsGrid).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Save Changes (0)').closest('button')!.disabled).toBe(true);
+  });
+});
+
+const closes: Array<[string, () => void]> = [
+  ['the × button', () => fireEvent.click(document.querySelector('.papyrus-close')!)],
+  ['the backdrop', () => fireEvent.click(document.querySelector('.papyrus-overlay')!)],
+];
+const leaves: Array<[string, () => void]> = [
+  ...closes,
+  ['Load', () => fireEvent.click(screen.getByText('Load'))],
+  ['a plugin switch', () => fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'Other.esp' } })],
+];
+
+async function openWithEdit(onClose = vi.fn()) {
+  const backend = installBackend(async () => 'Updated.');
+  render(<SpreadsheetPanel onClose={onClose} />);
+  fireEvent.click(screen.getByText('Load'));
+  await screen.findByDisplayValue('Old');
+  fireEvent.change(screen.getByDisplayValue('Old'), { target: { value: 'New' } });
+  return { backend, onClose };
+}
+
+describe('SpreadsheetPanel unsaved cell edits (GT-089)', () => {
+  it.each(leaves)('asks before %s and keeps the pending edits when cancelled', async (_name, leave) => {
+    dialogs.confirm.mockResolvedValue(false);
+    const { backend, onClose } = await openWithEdit();
+    leave();
+    await waitFor(() => expect(dialogs.confirm).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue('New')).toBeTruthy();
+    expect(screen.getByText('Save Changes (1)')).toBeTruthy();
+    expect(backend.GetRecordsGrid).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(closes)('closes after the user confirms discarding the pending edits via %s', async (_name, leave) => {
+    const { onClose } = await openWithEdit();
+    leave();
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads the grid without the pending edits after the user confirms Load', async () => {
+    const { backend } = await openWithEdit();
+    fireEvent.click(screen.getByText('Load'));
+    await waitFor(() => expect(backend.GetRecordsGrid).toHaveBeenCalledTimes(2));
+    await screen.findByDisplayValue('Old');
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    expect(screen.queryByDisplayValue('New')).toBeNull();
+    expect(screen.getByText('Save Changes (0)').closest('button')!.disabled).toBe(true);
+  });
+
+  it('drops the pending edits after the user confirms a plugin switch', async () => {
+    const { backend } = await openWithEdit();
+    await screen.findByRole('option', { name: 'Other.esp' });
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'Other.esp' } });
+    await waitFor(() => expect(screen.queryByDisplayValue('New')).toBeNull());
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Save Changes (0)').closest('button')!.disabled).toBe(true);
+    expect(backend.SetField).not.toHaveBeenCalled();
+  });
+
+  it('closes without asking when no edits are pending', async () => {
+    installBackend(async () => 'Updated.');
+    const onClose = vi.fn();
+    render(<SpreadsheetPanel onClose={onClose} />);
+    fireEvent.click(document.querySelector('.papyrus-close')!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(dialogs.confirm).not.toHaveBeenCalled();
   });
 });

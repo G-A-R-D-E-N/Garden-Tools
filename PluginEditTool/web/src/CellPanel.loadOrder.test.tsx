@@ -65,4 +65,22 @@ describe('Cell Viewer load ordering', () => {
     await act(async () => { geometry[0]('{"count":1,"geometry":{}}'); });
     expect(screen.getByText('0/2')).toBeTruthy();
   });
+
+  it('clears the conversion progress of a superseded load when the newer load has no meshes', async () => {
+    const geometry: Array<(raw: string) => void> = [];
+    bridge.geometry.mockImplementation(() => new Promise<string>(resolve => { geometry.push(resolve); }));
+    bridge.load
+      .mockResolvedValueOnce('{"references":[{"modelPath":"A.nif"}]}')
+      .mockResolvedValueOnce('{"references":[]}');
+    render(<CellPanel onClose={() => {}} />);
+    const inputs = screen.getAllByRole('spinbutton') as HTMLInputElement[];
+    await waitFor(() => expect(inputs.every(input => !input.disabled)).toBe(true));
+    fireEvent.keyDown(inputs[0], { key: 'Enter' });
+    expect(await screen.findByText('Converting meshes…')).toBeTruthy();
+    fireEvent.change(inputs[0], { target: { value: '2' } });
+    fireEvent.keyDown(inputs[0], { key: 'Enter' });
+    await waitFor(() => expect(bridge.load).toHaveBeenCalledTimes(2));
+    await act(async () => { geometry[0]('{"count":1,"geometry":{}}'); });
+    expect(screen.queryByText('Converting meshes…')).toBeNull();
+  });
 });

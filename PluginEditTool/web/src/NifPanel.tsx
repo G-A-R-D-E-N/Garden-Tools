@@ -139,7 +139,6 @@ export default function NifPanel({ onClose }: { onClose: () => void }) {
       appendLog(`• editing ${baseName(p)}`);
       loadGeo(p);
     } catch (e) {
-      setTree(null);
       setGeoInfo('Could not load tree: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setBusy(false); }
   };

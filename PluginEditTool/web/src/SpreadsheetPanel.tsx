@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Table2, X, RefreshCw, Save } from 'lucide-react';
 import { getBackend, type RecordTypeEntry } from './backend';
+import { useDialogs } from './useDialogs';
 import './PapyrusPanel.css';
 import './SpreadsheetPanel.css';
 
@@ -13,6 +14,7 @@ interface GridData { columns: string[]; rows: GridRow[]; total: number; offset: 
 export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
   const backend = getBackend();
   const unavailable = !backend;
+  const { confirm: askConfirm } = useDialogs();
 
   const [plugins, setPlugins] = useState<string[]>([]);
   const [types, setTypes] = useState<RecordTypeEntry[]>([]);
@@ -76,7 +78,16 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
 
   const cellKey = (formKey: string, col: string) => `${formKey}|${col}`;
 
-  const selectPlugin = (name: string) => {
+  const confirmDiscard = (message: string) => edits.size === 0 || askConfirm({
+    title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard', message,
+  });
+
+  const requestClose = async () => {
+    if (await confirmDiscard('Closing the Spreadsheet discards the unsaved cell edits.')) onClose();
+  };
+
+  const selectPlugin = async (name: string) => {
+    if (!await confirmDiscard('Switching plugins discards the unsaved cell edits.')) return;
     loadSeq.current++;
     setPlugin(name);
     setType('');
@@ -106,6 +117,10 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
     } finally {
       if (loadSeq.current === mySeq) setBusy(false);
     }
+  };
+
+  const requestLoad = async () => {
+    if (await confirmDiscard('Loading the grid discards the unsaved cell edits.')) await load();
   };
 
   const onEdit = (formKey: string, col: string, value: string) => {
@@ -154,11 +169,11 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="papyrus-overlay" onClick={onClose}>
+    <div className="papyrus-overlay" onClick={requestClose}>
       <div className="papyrus-modal glass-panel spreadsheet-modal" onClick={e => e.stopPropagation()}>
         <div className="papyrus-header">
           <span className="papyrus-title"><Table2 size={16} /> Spreadsheet</span>
-          <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
+          <button className="papyrus-close" onClick={requestClose} title="Close"><X size={16} /></button>
         </div>
 
         {unavailable && <div className="papyrus-warn">Backend bridge not available -- run the desktop app (not the browser dev server).</div>}
@@ -172,7 +187,7 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
             <option value="">Choose a record type…</option>
             {(plugin.trim() ? types : []).map(t => <option key={t.Type} value={t.Type}>{t.FriendlyName} ({t.Count})</option>)}
           </select>
-          <button className="papyrus-run" onClick={() => void load()} disabled={busy || unavailable || !plugin.trim() || !type.trim()}>
+          <button className="papyrus-run" onClick={() => void requestLoad()} disabled={busy || unavailable || !plugin.trim() || !type.trim()}>
             <RefreshCw size={13} /> {busy ? 'Loading…' : 'Load'}
           </button>
           <button className="papyrus-run spreadsheet-save-btn" onClick={save} disabled={saving || busy || unavailable || edits.size === 0}>

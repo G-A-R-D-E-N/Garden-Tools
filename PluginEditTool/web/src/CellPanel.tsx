@@ -278,6 +278,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setResult(null);
     setGeometry({});
+    setGeoProgress(null);
     setTexStats(null);
     texStatsLoggedRef.current = '';
     setSelected(null);
