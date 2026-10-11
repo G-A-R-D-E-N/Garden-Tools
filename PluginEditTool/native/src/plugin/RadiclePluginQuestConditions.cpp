@@ -381,7 +381,7 @@ std::optional<Error> parseQuestCondition(
         out.condition.flags_byte =
             static_cast<std::uint8_t>(out.condition.flags_byte | fo4::k_ctda_flag_use_global);
     } else {
-        float value = 1.0f;
+        float value = 0.0f;
         if (hasValue) {
             if (!element["value"].is_number()) {
                 return fail("condition value must be a number");
