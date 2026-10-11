@@ -349,6 +349,8 @@ TEST_CASE("Native delete removes a cell whose child group overrides a master rec
     const auto disk = fo4::read_plugin_file(patchPath);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp")) == nullptr);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Fallout4.esm")) == nullptr);
-    const auto master = fo4::read_plugin_file(masterPath);
-    CHECK(fo4::find_record(master, fo4::FormKey::parse("000900:Fallout4.esm")) != nullptr);
+    const auto resolved = parseStringResult(backend.invokeBackend(
+        "GetRecordDetails", nlohmann::json::array({"000900:Fallout4.esm"})));
+    CHECK(resolved.at("FormKey") == "000900:Fallout4.esm");
+    CHECK(resolved.at("File") == "Fallout4.esm");
 }

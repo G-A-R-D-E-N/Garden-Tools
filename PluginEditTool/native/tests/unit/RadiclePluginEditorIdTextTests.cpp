@@ -57,6 +57,38 @@ std::vector<std::byte> makePlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> makeConditionedPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "WEAP", 0);
+    const auto record = fo4::test::begin_record(out, "WEAP", 0, 0x800u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Caf\xE9\0", 5});
+    fo4::test::ByteWriter ctda;
+    ctda.u8(0x40);
+    ctda.u8(0);
+    ctda.u8(0);
+    ctda.u8(0);
+    ctda.u32(0x3F800000u);
+    ctda.u16(8);
+    ctda.u16(0);
+    ctda.u32(1);
+    ctda.u32(0);
+    ctda.u32(0);
+    ctda.u32(0);
+    ctda.u32(0xFFFFFFFFu);
+    fo4::test::write_subrecord(out, "CTDA", ctda.bytes);
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 nlohmann::json pluginEntry(std::string name,
                            const std::filesystem::path& path,
                            std::string source) {
@@ -90,12 +122,15 @@ TEST_CASE("Native EditorId reads decode Windows-1252 for listings and lookups") 
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto pluginPath = root / "mods" / "MyMod" / "Patch.esp";
+    const auto conditionsPath = root / "mods" / "MyMod" / "Conditions.esp";
     writeBytes(pluginPath, makePlugin());
+    writeBytes(conditionsPath, makeConditionedPlugin());
 
     fo4ide::plugin::RadiclePluginBackend backend;
     const nlohmann::json environment{
         {"plugins", nlohmann::json::array({
-            pluginEntry("Patch.esp", pluginPath, "MyMod")
+            pluginEntry("Patch.esp", pluginPath, "MyMod"),
+            pluginEntry("Conditions.esp", conditionsPath, "MyMod")
         })}
     };
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
@@ -116,8 +151,9 @@ TEST_CASE("Native EditorId reads decode Windows-1252 for listings and lookups") 
 
     SECTION("lookup by the decoded EditorId finds the record") {
         const auto conditions = parseStringResult(backend.invokeBackend(
-            "GetConditions", nlohmann::json::array({"Patch.esp", "Caf\xC3\xA9"})));
-        CHECK(conditions.is_array());
-        CHECK(conditions.empty());
+            "GetConditions", nlohmann::json::array({"Conditions.esp", "Caf\xC3\xA9"})));
+        REQUIRE(conditions.is_array());
+        REQUIRE(conditions.size() == 1);
+        CHECK(conditions[0].at("function") == "GetAngle");
     }
 }
