@@ -560,9 +560,21 @@ TEST(QuestStructure, UnresolvedTargetKeywordIsNotRewritten) {
     target->data[11] = std::byte{0x07};
   });
   const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW(static_cast<void>(fo4::forms::remove_quest_objective(plugin, structure_quest_key(), 30)),
+  EXPECT_THROW(static_cast<void>(fo4::forms::reorder_quest_objective(plugin, structure_quest_key(), 30, 0)),
                fo4::forms::QuestError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(QuestStructure, RemovingObjectiveWithUnresolvedTargetKeywordSucceeds) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    const auto target = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& member) {
+      return member.signature == fo4::Signature::from_string("QSTA");
+    });
+    target->data[11] = std::byte{0x07};
+  });
+  EXPECT_TRUE(fo4::forms::remove_quest_objective(plugin, structure_quest_key(), 30));
+  EXPECT_TRUE(fo4::forms::decode_quest_objectives(plugin, structure_quest_key()).objectives.empty());
 }
 
 TEST(QuestStructure, MissingQuestReturnsNotFound) {
