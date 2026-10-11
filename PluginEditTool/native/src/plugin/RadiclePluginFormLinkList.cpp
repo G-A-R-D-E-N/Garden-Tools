@@ -1,4 +1,4 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -20,6 +20,9 @@
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string listStringArgument(const nlohmann::json& args, std::size_t index) {
@@ -48,17 +51,6 @@ bool listIndexArgument(const nlohmann::json& args,
     return true;
 }
 
-std::string listEditorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
-}
-
 std::string listLower(std::string_view value) {
     std::string out(value);
     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char ch) {
@@ -83,7 +75,7 @@ const fo4::Record* resolveRecordInPlugin(const fo4::Plugin& plugin,
     }
     const auto wanted = listLower(recordText);
     for (const auto* record : fo4::collect_records(plugin)) {
-        if (listLower(listEditorId(*record)) == wanted) {
+        if (listLower(editorId(*record)) == wanted) {
             outKey = record->form_key;
             return record;
         }
@@ -474,7 +466,7 @@ std::optional<fo4::FormKey> RadiclePluginBackend::resolveListValue(
     const auto wanted = listLower(value);
     for (const auto& candidate : plugins_) {
         for (const auto* record : fo4::collect_records(candidate.plugin)) {
-            if (listLower(listEditorId(*record)) == wanted) {
+            if (listLower(editorId(*record)) == wanted) {
                 return record->form_key;
             }
         }

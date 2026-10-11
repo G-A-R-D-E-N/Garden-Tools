@@ -1,4 +1,5 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
+
 #include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
@@ -25,6 +26,9 @@
 // one patch plugin, then writing the patch a single time (rather than the
 // per-record write the single-record CopyAsOverride path performs).
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
@@ -81,21 +85,6 @@ std::vector<std::string> splitCsv(std::string_view value) {
         start = comma + 1;
     }
     return out;
-}
-
-std::string editorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        std::string out;
-        out.reserve(subrecord.data.size());
-        for (const auto byte : subrecord.data) {
-            const auto ch = static_cast<char>(std::to_integer<std::uint8_t>(byte));
-            if (ch == '\0') break;
-            out.push_back(ch);
-        }
-        return out;
-    }
-    return {};
 }
 
 std::string copyStatusText(fo4::RecordCopyStatus status) {
