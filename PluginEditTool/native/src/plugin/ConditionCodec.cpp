@@ -2,15 +2,17 @@
 
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/text/encoding.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
-#include <sstream>
 #include <limits>
+#include <sstream>
 
 namespace fo4ide::plugin {
 namespace {
@@ -50,6 +52,7 @@ std::optional<fo4::RawFormId> placeholderFormId(std::string_view text) {
 
 constexpr std::int64_t kParamMin = std::numeric_limits<std::int32_t>::min();
 constexpr std::int64_t kParamMax = std::numeric_limits<std::uint32_t>::max();
+constexpr std::uint32_t kRunOnReference = 2;
 
 std::optional<std::uint32_t> flagValue(std::string_view name) {
     const auto needle = lower(name);
@@ -65,7 +68,82 @@ std::optional<std::uint32_t> flagValue(std::string_view name) {
     return std::nullopt;
 }
 
+enum class ParamKind { Form, Integer, Float };
+
+ParamKind paramKind(const std::string& name, std::size_t slot, std::uint8_t ctdaFlags,
+                    std::uint32_t runOn) {
+    if (name.empty()) return ParamKind::Form;
+    const auto declared = ConditionFunctions::paramsOf(name);
+    if (slot >= declared.size()) return ParamKind::Integer;
+    const auto type = lower(declared[slot]);
+    if (type == "float") return ParamKind::Float;
+    if (type == "reference" || type == "actor" || type == "package") {
+        if ((ctdaFlags & fo4::k_ctda_flag_aliases) != 0) {
+            const auto currentPackage =
+                slot == 0 && runOn == 5 && lower(name) == "getiscurrentpackage";
+            return currentPackage ? ParamKind::Form : ParamKind::Integer;
+        }
+        if ((ctdaFlags & fo4::k_ctda_flag_pack_data) != 0) return ParamKind::Integer;
+    }
+    static const std::vector<std::string> kIntegerTypes = {
+        "integer", "string", "alias", "event", "packdata", "queststage", "alignment",
+        "axis", "castingsource", "crimetype", "criticalstage", "formtype", "miscstat",
+        "sex", "wardstate"};
+    return std::find(kIntegerTypes.begin(), kIntegerTypes.end(), type) != kIntegerTypes.end()
+               ? ParamKind::Integer
+               : ParamKind::Form;
+}
+
+float bitsFloat(std::int32_t raw) {
+    const auto bits = static_cast<std::uint32_t>(raw);
+    float value{};
+    std::memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+nlohmann::json describeParam(std::int32_t value, ParamKind kind, const fo4::Plugin& plugin) {
+    switch (kind) {
+        case ParamKind::Integer:
+            return value;
+        case ParamKind::Float: {
+            const auto number = bitsFloat(value);
+            if (std::isfinite(number)) return number;
+            std::ostringstream out;
+            out << "0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+                << static_cast<std::uint32_t>(value);
+            return out.str();
+        }
+        case ParamKind::Form:
+            break;
+    }
+    return formIdString(static_cast<std::uint32_t>(value), plugin);
+}
+
+bool isHexBits(const std::string& text) {
+    return text.size() > 2 && text.size() <= 10 && text.compare(0, 2, "0x") == 0 &&
+           std::all_of(text.begin() + 2, text.end(),
+                       [](unsigned char ch) { return std::isxdigit(ch) != 0; });
+}
+
+nlohmann::json cisText(const std::optional<std::string>& bytes) {
+    return bytes ? nlohmann::json(fo4::text::windows1252_to_utf8(*bytes)) : nlohmann::json(nullptr);
+}
+
+std::optional<std::uint32_t> runOnFromText(const std::string& text) {
+    if (const auto value = runOnValue(text)) return value;
+    std::uint32_t value = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error == std::errc{} && end == text.data() + text.size()) return value;
+    return std::nullopt;
+}
+
 }  // namespace
+
+std::optional<std::string> conditionCisFromUtf8(std::string_view utf8) {
+    auto bytes = fo4::text::utf8_to_windows1252(utf8);
+    if (!bytes || bytes->find('\0') != std::string::npos) return std::nullopt;
+    return bytes;
+}
 
 std::string conditionOperatorString(std::uint8_t compareOperator) {
     switch (compareOperator) {
@@ -97,9 +175,20 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
     d["function"] = condition.is_event_data() ? "GetEventData" : functionName(condition.function);
     if (d["function"] == "") d["function"] = "Unknown (" + std::to_string(condition.function) + ")";
     d["operator"] = conditionOperatorString(condition.compare_operator());
-    if (!condition.is_event_data()) {
-        if (condition.param1 != 0) d["param1"] = formIdString(condition.param1, plugin);
-        if (condition.param2 != 0) d["param2"] = formIdString(condition.param2, plugin);
+    if (condition.is_event_data()) {
+        if (condition.param1 != 0) d["param1"] = condition.param1;
+        if (condition.param2 != 0) d["param2"] = condition.param2;
+    } else {
+        const auto name = functionName(condition.function);
+        const auto flags = condition.flags();
+        if (condition.param1 != 0) {
+            d["param1"] = describeParam(condition.param1,
+                                        paramKind(name, 0, flags, condition.run_on), plugin);
+        }
+        if (condition.param2 != 0) {
+            d["param2"] = describeParam(condition.param2,
+                                        paramKind(name, 1, flags, condition.run_on), plugin);
+        }
     }
     if (condition.use_global()) {
         d["compareGlobal"] = formIdString(condition.comparison_raw, plugin);
@@ -120,9 +209,11 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
     for (const auto byte : fo4::serialize_ctda_condition(condition)) {
         bytes.push_back(std::to_integer<std::uint8_t>(byte));
     }
-    d["_native"] = {{"ctda", std::move(bytes)},
-                    {"cis1", condition.parameter1_string ? nlohmann::json(*condition.parameter1_string) : nlohmann::json(nullptr)},
-                    {"cis2", condition.parameter2_string ? nlohmann::json(*condition.parameter2_string) : nlohmann::json(nullptr)}};
+    const auto cis1 = cisText(condition.parameter1_string);
+    const auto cis2 = cisText(condition.parameter2_string);
+    if (!cis1.is_null()) d["cis1"] = cis1;
+    if (!cis2.is_null()) d["cis2"] = cis2;
+    d["_native"] = {{"ctda", std::move(bytes)}, {"cis1", cis1}, {"cis2", cis2}};
     return d;
 }
 
@@ -152,7 +243,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         const auto reject = [](const std::string& message) { throw std::invalid_argument(message); };
         if (!element.is_object()) reject("every condition must be an object");
         constexpr std::string_view keys[] = {"function", "operator", "param1", "param2", "value",
-                                             "compareGlobal", "runOn", "reference", "flags", "_native", "_edited"};
+                                             "compareGlobal", "runOn", "reference", "flags", "cis1", "cis2", "_native", "_edited"};
         for (const auto& [key, value] : element.items()) {
             (void)value;
             if (std::find(std::begin(keys), std::end(keys), key) == std::end(keys)) reject("unknown condition field '" + key + "'");
@@ -186,8 +277,9 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 const auto& value = metadata[key];
                 if (value.is_null()) return;
                 if (!value.is_string()) reject("invalid preserved CIS string");
-                target = value.get<std::string>();
-                if (target->find('\0') != std::string::npos) reject("preserved CIS string contains a terminator");
+                const auto stored = conditionCisFromUtf8(value.get<std::string>());
+                if (!stored) reject("preserved CIS string is not valid UTF-8 text representable in Windows-1252");
+                target = *stored;
             };
             restoreString("cis1", condition.parameter1_string);
             restoreString("cis2", condition.parameter2_string);
@@ -203,7 +295,6 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         const auto fnIndex = functionIndex(fnName);
         if (!preserved) {
             if (!fnIndex) reject("unknown function '" + fnName + "'");
-            if (lower(fnName) == "geteventdata") reject("new GetEventData conditions are unsupported");
             condition.function = *fnIndex;
         } else {
             if (changed("function")) reject("changing a preserved condition function is unsupported; replace the row");
@@ -222,7 +313,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             return element[key].get<std::string>();
         };
         if (changed("runOn")) {
-            const auto value = runOnValue(text("runOn", "Subject"));
+            const auto value = runOnFromText(text("runOn", "Subject"));
             if (!value) reject("unknown runOn value");
             condition.run_on = *value;
         }
@@ -234,32 +325,9 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 condition.reference = raw->value();
             }
         }
-        const auto applyParam = [&](const char* key, std::int32_t& target) {
-            if (!changed(key)) return;
-            target = 0;
-            if (!element.contains(key)) return;
-            const auto& value = element[key];
-            if (value.is_number_integer()) {
-                if (value < kParamMin || value > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
-                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(value.get<std::int64_t>()));
-            } else if (value.is_string()) {
-                const auto source = value.get<std::string>();
-                if (source.empty()) return;
-                std::int64_t integer = 0;
-                const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), integer);
-                if (error == std::errc{} && end == source.data() + source.size()) {
-                    if (integer < kParamMin || integer > kParamMax) reject(std::string(key) + " " + source + " is outside [-2147483648, 4294967295]");
-                    target = static_cast<std::int32_t>(static_cast<std::uint32_t>(integer));
-                    return;
-                }
-                if (const auto raw = resolveConditionFormId(source, plugin, resolveEditorId)) {
-                    const auto bits = raw->value();
-                    std::memcpy(&target, &bits, sizeof(target));
-                } else reject("unresolved condition parameter");
-            } else reject("condition parameter must be an integer or string");
-        };
-        applyParam("param1", condition.param1);
-        applyParam("param2", condition.param2);
+        const auto runOnReference = condition.run_on == kRunOnReference;
+        if (!runOnReference && changed("reference") && condition.reference != 0) reject("reference requires runOn Reference");
+        if (!runOnReference && changed("runOn") && !changed("reference")) condition.reference = 0;
         if (changed("operator")) {
             const auto op = text("operator", "==");
             std::uint8_t index = 0;
@@ -285,21 +353,102 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             }
             condition.flags_byte = static_cast<std::uint8_t>((condition.flags_byte & (0xe0u | fo4::k_ctda_flag_use_global)) | flags);
         }
+        const auto applyParam = [&](const char* key, std::size_t slot, std::int32_t& target) {
+            if (!changed(key)) return;
+            target = 0;
+            if (!element.contains(key)) return;
+            const auto& value = element[key];
+            const auto kind = condition.is_event_data()
+                                  ? ParamKind::Integer
+                                  : paramKind(fnName, slot, condition.flags(), condition.run_on);
+            if (kind == ParamKind::Float) {
+                float number = 0.0f;
+                if (value.is_number()) {
+                    number = value.get<float>();
+                } else if (value.is_string()) {
+                    const auto source = value.get<std::string>();
+                    if (source.empty()) return;
+                    if (isHexBits(source)) {
+                        target = static_cast<std::int32_t>(std::strtoul(source.c_str() + 2, nullptr, 16));
+                        return;
+                    }
+                    const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), number);
+                    if (error != std::errc{} || end != source.data() + source.size()) reject(std::string(key) + " " + source + " is not a number");
+                } else reject(std::string(key) + " must be a number or numeric string");
+                if (!std::isfinite(number)) reject(std::string(key) + " must be a finite number");
+                std::memcpy(&target, &number, sizeof(number));
+                return;
+            }
+            if (value.is_number_unsigned()) {
+                const auto unsignedValue = value.get<std::uint64_t>();
+                if (unsignedValue > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
+                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(unsignedValue));
+            } else if (value.is_number_integer()) {
+                if (value < kParamMin || value > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
+                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(value.get<std::int64_t>()));
+            } else if (value.is_number_float()) {
+                const auto number = value.get<double>();
+                if (kind != ParamKind::Integer || std::trunc(number) != number || number < kParamMin || number > kParamMax) {
+                    reject(std::string(key) + " must be an integer or string");
+                }
+                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(static_cast<std::int64_t>(number)));
+            } else if (value.is_string()) {
+                const auto source = value.get<std::string>();
+                if (source.empty()) return;
+                if (isHexBits(source)) {
+                    target = static_cast<std::int32_t>(std::strtoul(source.c_str() + 2, nullptr, 16));
+                    return;
+                }
+                std::int64_t integer = 0;
+                const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), integer);
+                if (error == std::errc{} && end == source.data() + source.size()) {
+                    if (integer < kParamMin || integer > kParamMax) reject(std::string(key) + " " + source + " is outside [-2147483648, 4294967295]");
+                    target = static_cast<std::int32_t>(static_cast<std::uint32_t>(integer));
+                    return;
+                }
+                if (const auto raw = resolveConditionFormId(source, plugin, resolveEditorId)) {
+                    const auto bits = raw->value();
+                    std::memcpy(&target, &bits, sizeof(target));
+                } else reject("unresolved condition parameter");
+            } else reject("condition parameter must be an integer or string");
+        };
+        applyParam("param1", 0, condition.param1);
+        applyParam("param2", 1, condition.param2);
+        const auto declared = ConditionFunctions::paramsOf(fnName);
+        const auto applyCis = [&](const char* key, std::size_t slot, std::optional<std::string>& target) {
+            if (!changed(key)) return;
+            const auto listed = std::find(edited.begin(), edited.end(), key) != edited.end();
+            if (preserved && !listed && !element.contains(key)) return;
+            target.reset();
+            if (!element.contains(key)) return;
+            if (!element[key].is_string()) reject(std::string(key) + " must be a string");
+            const auto stored = conditionCisFromUtf8(element[key].get<std::string>());
+            if (!stored) reject(std::string(key) + " is not valid UTF-8 text representable in Windows-1252");
+            if (slot >= declared.size() || ConditionFunctions::editorFor(declared[slot]).first != "text") {
+                reject(std::string(key) + " is only valid when parameter " + std::to_string(slot + 1) + " is String or Event");
+            }
+            target = *stored;
+        };
+        applyCis("cis1", 0, condition.parameter1_string);
+        applyCis("cis2", 1, condition.parameter2_string);
         if (changed("value") || changed("compareGlobal")) {
             if (element.contains("compareGlobal")) {
                 const auto raw = resolveConditionFormId(text("compareGlobal"), plugin, resolveEditorId);
                 if (!raw) reject("unresolved comparison global");
                 condition.comparison_raw = raw->value();
-                condition.flags_byte |= fo4::k_ctda_flag_use_global;
+                condition.flags_byte = static_cast<std::uint8_t>(condition.flags_byte | fo4::k_ctda_flag_use_global);
             } else {
-                float value = 1.0f;
+                float value = 0.0f;
                 if (element.contains("value")) {
                     if (!element["value"].is_number()) reject("comparison value must be a finite number");
-                    value = element["value"].get<float>();
+                    const auto number = element["value"].get<double>();
+                    if (!std::isfinite(number) || std::fabs(number) > std::numeric_limits<float>::max()) {
+                        reject("comparison value must be a finite number");
+                    }
+                    value = static_cast<float>(number);
                 }
-                if (!std::isfinite(value)) reject("comparison value must be a finite number");
                 std::memcpy(&condition.comparison_raw, &value, sizeof(value));
-                condition.flags_byte &= static_cast<std::uint8_t>(~fo4::k_ctda_flag_use_global);
+                condition.flags_byte = static_cast<std::uint8_t>(condition.flags_byte & ~fo4::k_ctda_flag_use_global);
             }
         }
         return condition;

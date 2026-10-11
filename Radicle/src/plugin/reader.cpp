@@ -9,11 +9,17 @@
 #include <algorithm>
 #include <fstream>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <utility>
 
 namespace fo4 {
 namespace {
+
+constexpr std::uint64_t k_zlib_max_expansion = 1032;
+constexpr std::uint64_t k_inflate_slack_bytes = 64;
+constexpr std::uint64_t k_max_record_uncompressed_bytes = std::uint64_t{1} << 30;
+constexpr std::size_t k_max_group_depth = 16;
 
 std::vector<std::byte> inflate_record_payload(std::span<const std::byte> compressed,
                                               std::uint32_t uncompressed_size,
@@ -21,32 +27,42 @@ std::vector<std::byte> inflate_record_payload(std::span<const std::byte> compres
   if (uncompressed_size == 0) {
     return {};
   }
+  if (uncompressed_size > static_cast<std::uint64_t>(compressed.size()) * k_zlib_max_expansion +
+                              k_inflate_slack_bytes) {
+    throw parse_error(offset, "compressed record uncompressed size exceeds zlib expansion bound");
+  }
+  if (uncompressed_size > k_max_record_uncompressed_bytes) {
+    throw parse_error(offset, "compressed record uncompressed size exceeds the " +
+                                  std::to_string(k_max_record_uncompressed_bytes) +
+                                  " byte limit");
+  }
 
-  auto try_inflate = [&](int window_bits) -> std::optional<std::vector<std::byte>> {
+  std::vector<std::byte> out(uncompressed_size);
+  auto try_inflate = [&](int window_bits) -> std::optional<std::size_t> {
     z_stream stream{};
     if (inflateInit2(&stream, window_bits) != Z_OK) {
       return std::nullopt;
     }
-    std::vector<std::byte> out(uncompressed_size);
     stream.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(compressed.data()));
     stream.avail_in = static_cast<uInt>(compressed.size());
     stream.next_out = reinterpret_cast<Bytef*>(out.data());
     stream.avail_out = static_cast<uInt>(out.size());
     const int rc = inflate(&stream, Z_FINISH);
-    const auto produced = stream.total_out;
+    const auto produced = static_cast<std::size_t>(stream.total_out);
     inflateEnd(&stream);
     if (rc != Z_STREAM_END) {
       return std::nullopt;
     }
-    out.resize(produced);
-    return out;
+    return produced;
   };
 
-  if (auto out = try_inflate(MAX_WBITS)) {
-    return *out;
+  if (auto produced = try_inflate(MAX_WBITS)) {
+    out.resize(*produced);
+    return out;
   }
-  if (auto out = try_inflate(-MAX_WBITS)) {
-    return *out;
+  if (auto produced = try_inflate(-MAX_WBITS)) {
+    out.resize(*produced);
+    return out;
   }
   throw parse_error(offset, "zlib inflate failed for compressed record");
 }
@@ -144,9 +160,11 @@ Record read_record(binary::Cursor& cursor, const std::vector<std::byte>* owner) 
   return record;
 }
 
-Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner);
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner,
+                 std::size_t depth = 1);
 
-GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
+GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owner,
+                      std::size_t depth) {
   if (cursor.remaining() < 4) {
     throw parse_error(cursor.absolute_offset(), "truncated group child");
   }
@@ -157,12 +175,16 @@ GroupChild read_child(binary::Cursor& cursor, const std::vector<std::byte>* owne
       static_cast<char>(std::to_integer<std::uint8_t>(cursor.peek(4)[3])),
   };
   if (sig == sig_grup) {
-    return read_group(cursor, owner);
+    return read_group(cursor, owner, depth + 1);
   }
   return read_record(cursor, owner);
 }
 
-Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
+Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner,
+                 std::size_t depth) {
+  if (depth > k_max_group_depth) {
+    throw parse_error(cursor.absolute_offset(), "GRUP nesting exceeds depth limit");
+  }
   const auto start = cursor.position();
   const auto start_abs = cursor.absolute_offset();
   Group group;
@@ -178,7 +200,7 @@ Group read_group(binary::Cursor& cursor, const std::vector<std::byte>* owner) {
     throw parse_error(start_abs, "GRUP overruns file");
   }
   while (cursor.position() < end) {
-    group.children.push_back(read_child(cursor, owner));
+    group.children.push_back(read_child(cursor, owner, depth));
   }
   if (cursor.position() != end) {
     throw parse_error(start_abs, "GRUP children did not consume the declared size");
@@ -203,6 +225,33 @@ void collect_groups_in_group(const Group& group, std::vector<const Group*>& out)
       collect_groups_in_group(*nested, out);
     }
   }
+}
+
+template <class Match>
+const Record* find_first_in_group(const Group& group, const Match& match) {
+  for (const auto& child : group.children) {
+    if (const auto* record = std::get_if<Record>(&child)) {
+      if (match(*record)) {
+        return record;
+      }
+    } else if (const auto* found = find_first_in_group(std::get<Group>(child), match)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
+template <class Match>
+const Record* find_first_record(const Plugin& plugin, const Match& match) {
+  if (match(plugin.tes4)) {
+    return &plugin.tes4;
+  }
+  for (const auto& group : plugin.groups) {
+    if (const auto* found = find_first_in_group(group, match)) {
+      return found;
+    }
+  }
+  return nullptr;
 }
 
 Plugin read_plugin_from_owned_bytes(
@@ -305,6 +354,17 @@ std::vector<const Record*> collect_records(const Plugin& plugin) {
   return out;
 }
 
+std::vector<const Record*> collect_first_records(const Plugin& plugin) {
+  std::vector<const Record*> out;
+  std::set<FormKey> seen;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->header.signature == sig_tes4 || seen.insert(record->form_key).second) {
+      out.push_back(record);
+    }
+  }
+  return out;
+}
+
 std::vector<const Group*> collect_groups(const Plugin& plugin) {
   std::vector<const Group*> out;
   for (const auto& group : plugin.groups) {
@@ -314,21 +374,34 @@ std::vector<const Group*> collect_groups(const Plugin& plugin) {
 }
 
 const Record* find_record(const Plugin& plugin, RawFormId form_id) {
-  for (const auto* record : collect_records(plugin)) {
-    if (record->header.form_id == form_id && record->header.signature != sig_tes4) {
-      return record;
-    }
-  }
-  return nullptr;
+  return find_first_record(plugin, [form_id](const Record& record) {
+    return record.header.form_id == form_id && record.header.signature != sig_tes4;
+  });
 }
 
 const Record* find_record(const Plugin& plugin, const FormKey& form_key) {
-  for (const auto* record : collect_records(plugin)) {
-    if (record->form_key == form_key && record->header.signature != sig_tes4) {
-      return record;
+  return find_first_record(plugin, [&form_key](const Record& record) {
+    return record.form_key.local() == form_key.local() && record.form_key == form_key &&
+           record.header.signature != sig_tes4;
+  });
+}
+
+RecordIndex::RecordIndex(const Plugin& plugin) : plugin_(&plugin) {
+  visit_records(plugin, [this](const Record& record) {
+    if (record.header.signature != sig_tes4) {
+      records_.try_emplace(record.form_key, &record);
     }
-  }
-  return nullptr;
+  });
+}
+
+const Record* RecordIndex::find(const FormKey& form_key) const {
+  const auto found = records_.find(form_key);
+  return found == records_.end() ? nullptr : found->second;
+}
+
+std::size_t RecordIndex::FormKeyHash::operator()(const FormKey& form_key) const noexcept {
+  const auto owner = hash_value(form_key.owner());
+  return owner ^ (static_cast<std::size_t>(form_key.local().value()) * 0x9E3779B97F4A7C15ull);
 }
 
 PluginFormIdContext plugin_form_id_context(const Plugin& plugin) {

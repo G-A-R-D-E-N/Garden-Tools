@@ -5,6 +5,7 @@ import type { ConflictFieldRow, ConflictMatrix, ElementActions } from './backend
 import type { useRecordActions } from './recordActions';
 
 const conditionsPathOf = (field: string) => (/(^|\.)Conditions(\[|$)/.test(field) ? field : null);
+const initiallyDisabledTypes = new Set(['REFR', 'ACHR', 'NAVM', 'PARW', 'PBAR', 'PBEA', 'PCON', 'PFLA', 'PGRE', 'PHZD', 'PMIS']);
 
 export default function RecordContextMenu({
   menu, matrix, elementActions, actions, onEdit, onEditConditions, onShowTab,
@@ -70,7 +71,9 @@ export default function RecordContextMenu({
       <div className="rv-context-sep" />
       { }
       <button onClick={() => copyAsOverrideInto(menu.col)}><Copy size={13} /> Copy as override into...</button>
-      <button onClick={() => copyAsDisabledOverrideInto(menu.col)}><Copy size={13} /> Copy as disabled override into...</button>
+      {initiallyDisabledTypes.has(matrix.Type) && (
+        <button onClick={() => copyAsDisabledOverrideInto(menu.col)}><Copy size={13} /> Copy as disabled override into...</button>
+      )}
       <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into...</button>
       <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into...</button>
       <div className="rv-context-sep" />

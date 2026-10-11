@@ -301,3 +301,30 @@ TEST(ExteriorCellCreation, HonoursOverriddenFlagsButRefusesTheInteriorBit) {
                fo4::forms::CellError);
   EXPECT_EQ(plugin.header.next_form_id, next_before);
 }
+
+TEST(ExteriorCellCreation, StoresEditorIdAsWindows1252) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  auto creation = cell_creation(fo4::FormKey::parse("000800:Cells.esp"), 3, 4);
+  creation.editor_id = std::string_view{"Caf\xC3\xA9"};
+  const auto key = fo4::forms::create_exterior_cell(plugin, creation);
+
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto* edid = unique_subrecord(*record, "EDID");
+  ASSERT_NE(edid, nullptr);
+  const std::vector<std::byte> expected{
+      std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}};
+  EXPECT_EQ(edid->data, expected);
+}
+
+TEST(ExteriorCellCreation, EditorIdOutsideWindows1252IsRefusedBeforeAnyMutation) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  const auto before = fo4::write_plugin(plugin);
+  auto creation = cell_creation(fo4::FormKey::parse("000800:Cells.esp"), 3, 4);
+  creation.editor_id = std::string_view{"Snow\xE2\x98\x83"};
+
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_exterior_cell(plugin, creation)),
+               fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}

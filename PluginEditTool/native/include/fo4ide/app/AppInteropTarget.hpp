@@ -18,7 +18,7 @@ namespace fo4ide::app {
 class AppInteropTarget final : public rpc::Target {
 public:
     AppInteropTarget(settings::Store& store,
-                     settings::Settings& settings,
+                     settings::SharedSettings& settings,
                      platform::Services& platform,
                      plugin::IPluginBackend& plugins);
 
@@ -57,7 +57,7 @@ private:
     bool isWatchKindStale(const std::vector<WatchedFile>& files, WatchKind kind) const;
 
     settings::Store& store_;
-    settings::Settings& settings_;
+    settings::SharedSettings& settings_;
     platform::Services& platform_;
     plugin::IPluginBackend& plugins_;
     mutable std::mutex mutex_;

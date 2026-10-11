@@ -209,9 +209,7 @@ TEST_CASE("condition functions: index<->name lookups match the Mutagen enum") {
     using namespace fo4ide::plugin;
 
     // Known spot checks from the enum: GetWantBlocking=0, GetDistance=1,
-    // GetAngle=8. 4672 is the binary EventFunctionIndex discriminator, not a
-    // Condition.Function member, so it has no name here (the CTDA codec maps
-    // it to the GetEventData type via is_event_data).
+    // GetAngle=8. 4672 is not a CTDA function index (GetEventData is 576), so it has no name.
     CHECK(functionName(0) == "GetWantBlocking");
     CHECK(functionName(1) == "GetDistance");
     CHECK(functionName(8) == "GetAngle");
@@ -244,17 +242,17 @@ TEST_CASE("condition functions: index<->name lookups match the Mutagen enum") {
 TEST_CASE("condition functions: run-on value<->name lookups match the Mutagen enum") {
     using namespace fo4ide::plugin;
 
-    // RunOnType values are not contiguous: Subject=0..EventData=7, then
-    // CommandTarget=9, EventCameraRef=10, MyKiller=11.
     CHECK(runOnName(0) == "Subject");
     CHECK(runOnName(7) == "EventData");
-    CHECK(runOnName(8).empty());  // 8 is unused
-    CHECK(runOnName(9) == "CommandTarget");
-    CHECK(runOnName(11) == "MyKiller");
+    CHECK(runOnName(8) == "CommandTarget");
+    CHECK(runOnName(9) == "EventCameraRef");
+    CHECK(runOnName(10) == "MyKiller");
+    CHECK(runOnName(11).empty());
     CHECK(runOnName(99).empty());
 
     CHECK(runOnValue("Target") == std::optional<std::uint32_t>{1});
     CHECK(runOnValue("reference") == std::optional<std::uint32_t>{2});  // ignoreCase
-    CHECK(runOnValue("MyKiller") == std::optional<std::uint32_t>{11});
+    CHECK(runOnValue("CommandTarget") == std::optional<std::uint32_t>{8});
+    CHECK(runOnValue("MyKiller") == std::optional<std::uint32_t>{10});
     CHECK(runOnValue("NotARunOn") == std::nullopt);
 }
