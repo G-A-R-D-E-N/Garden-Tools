@@ -1,6 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cctype>
 #include <cstdint>
@@ -20,6 +21,7 @@
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/visit.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/condition_scopes.hpp>
 #include <fo4/schema/ctda.hpp>
@@ -56,6 +58,37 @@ std::string joinNames(const std::vector<std::string>& names) {
         out += name;
     }
     return out;
+}
+
+constexpr std::uint32_t kCopyInitiallyDisabled = 0x00000800u;
+
+constexpr std::array kInitiallyDisabledSignatures{
+    fo4::Signature::from_string("REFR"), fo4::Signature::from_string("ACHR"),
+    fo4::Signature::from_string("NAVM"), fo4::Signature::from_string("PARW"),
+    fo4::Signature::from_string("PBAR"), fo4::Signature::from_string("PBEA"),
+    fo4::Signature::from_string("PCON"), fo4::Signature::from_string("PFLA"),
+    fo4::Signature::from_string("PGRE"), fo4::Signature::from_string("PHZD"),
+    fo4::Signature::from_string("PMIS"),
+};
+
+bool supportsInitiallyDisabled(fo4::Signature signature) {
+    return std::find(kInitiallyDisabledSignatures.begin(), kInitiallyDisabledSignatures.end(),
+                     signature) != kInitiallyDisabledSignatures.end();
+}
+
+bool markCopyInitiallyDisabled(fo4::Plugin& plugin, const fo4::FormKey& key) {
+    bool found = false;
+    fo4::visit_records(plugin, [&](fo4::Record& record) {
+        if (record.header.signature == fo4::sig_tes4 || record.form_key != key) return;
+        record.header.flags = fo4::RecordFlags{record.header.flags.value() | kCopyInitiallyDisabled};
+        record.original_range.clear();
+        record.decompressed_payload.clear();
+        record.header.data_size = 0;
+        record.uncompressed_size = 0;
+        found = true;
+    });
+    if (found) plugin.original_range.clear();
+    return found;
 }
 
 std::string asciiLower(std::string_view value) {
@@ -208,6 +241,12 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
     if (recordId.empty()) {
         return std::unexpected(Error{"RecordMissing", "Record FormKey is empty"});
     }
+    if (conditionsJson.empty()) {
+        return std::unexpected(Error{
+            "InvalidConditionsJson",
+            "conditions JSON is empty; pass [] to clear"
+        });
+    }
 
     OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
@@ -264,7 +303,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
     nlohmann::json document;
     std::size_t writtenCount = 0;
     try {
-        document = nlohmann::json::parse(conditionsJson.empty() ? "[]" : conditionsJson);
+        document = nlohmann::json::parse(conditionsJson);
         if (!document.is_array()) {
             return std::unexpected(Error{"InvalidConditionsJson", "Could not parse conditions JSON: expected an array."});
         }
@@ -345,8 +384,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditionsAtPath(
 
     auto message = "Set " + std::to_string(writtenCount) +
                    " condition(s) at " + path + " on " + recordId + " in " +
-                   pluginName + ".";
-    message += " SavePlugin to persist.";
+                   pluginName + ". SavePlugin to persist.";
     return nlohmann::json(std::move(message));
 }
 
@@ -535,7 +573,6 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
     const auto sourceName = stringArgument(arguments, 0);
     const auto formKeyText = stringArgument(arguments, 1);
     const auto targetName = stringArgument(arguments, 2);
-    bool overwrite = false;
 
     if (sourceName.empty()) {
         return std::unexpected(Error{"SourcePluginMissing", "Source plugin name is empty"});
@@ -546,6 +583,18 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
     if (targetName.empty()) {
         return std::unexpected(Error{"TargetPluginMissing", "Target plugin name is empty"});
     }
+
+    OpLock lock(*this, OpLock::Mode::Write, {targetName, sourceName});
+    return copyAsOverrideLocked(arguments, false);
+}
+
+Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideLocked(
+    const nlohmann::json& arguments, bool initiallyDisabled) {
+    const auto sourceName = stringArgument(arguments, 0);
+    const auto formKeyText = stringArgument(arguments, 1);
+    const auto targetName = stringArgument(arguments, 2);
+    bool overwrite = false;
+
     if (!boolArgument(arguments, 3, overwrite)) {
         return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
     }
@@ -561,7 +610,6 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
 
-    OpLock lock(*this, OpLock::Mode::Write, {targetName, sourceName});
     const auto* source = findPlugin(sourceName);
     if (source == nullptr) {
         return std::unexpected(Error{
@@ -590,10 +638,18 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
         });
     }
 
-    if (fo4::find_record(source->plugin, key) == nullptr) {
+    const auto* sourceRecord = fo4::find_record(source->plugin, key);
+    if (sourceRecord == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",
             "Record is not present in " + sourceName + ": " + formKeyText
+        });
+    }
+    if (initiallyDisabled && !supportsInitiallyDisabled(sourceRecord->header.signature)) {
+        return std::unexpected(Error{
+            "DisabledOverrideUnsupported",
+            "Initially Disabled applies only to placed references and NAVM, not " +
+                sourceRecord->header.signature.to_string() + ": " + formKeyText
         });
     }
     if (!allowLosing) {
@@ -629,6 +685,12 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverride(
                 break;
         }
 
+        if (initiallyDisabled && !markCopyInitiallyDisabled(mutated, key)) {
+            return std::unexpected(Error{
+                "RecordNotFound",
+                "Copied override not found in " + targetName
+            });
+        }
         stagePluginMutationLocked(*target, std::move(mutated));
 
         return nlohmann::json(

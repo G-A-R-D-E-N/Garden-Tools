@@ -325,3 +325,40 @@ TEST_CASE("Native CopyAsOverrideMany does not ask when the target already loads 
     CHECK(result.at("ok") == 1);
     CHECK(result.at("requiresLoadOrderConfirmation") == false);
 }
+
+TEST_CASE("Native CopyAsOverrideMany reports a wrong-typed item and applies the rest") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourceA = root / "SourceA.esp";
+    const auto target = root / "Patch.esp";
+    writeBytes(sourceA, makeSource(0x00000800, "WeaponA"));
+    writeBytes(target, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("SourceA.esp", sourceA),
+            pluginEntry("Patch.esp", target)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json items = nlohmann::json::array({
+        {{"formKey", "000800:Master.esm"}, {"source", "SourceA.esp"}},
+        {{"formKey", "000802:Master.esm"}, {"source", 2}}
+    });
+    const auto result = parseResult(backend.invokeBackend(
+        "CopyAsOverrideMany",
+        nlohmann::json::array({items.dump(), "Patch.esp", false})));
+    CHECK(result.at("total") == 2);
+    CHECK(result.at("ok") == 1);
+    CHECK(result.at("failed") == 1);
+    REQUIRE(result.at("failures").size() == 1);
+    CHECK(result.at("failures")[0].at("reason") == "source and formKey must be strings");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto reloaded = fo4::read_plugin_file(target);
+    CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm")) != nullptr);
+    CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000802:Master.esm")) == nullptr);
+}

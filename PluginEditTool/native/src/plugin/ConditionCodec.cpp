@@ -129,6 +129,14 @@ nlohmann::json cisText(const std::optional<std::string>& bytes) {
     return bytes ? nlohmann::json(fo4::text::windows1252_to_utf8(*bytes)) : nlohmann::json(nullptr);
 }
 
+std::optional<std::uint32_t> runOnFromText(const std::string& text) {
+    if (const auto value = runOnValue(text)) return value;
+    std::uint32_t value = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error == std::errc{} && end == text.data() + text.size()) return value;
+    return std::nullopt;
+}
+
 }  // namespace
 
 std::optional<std::string> conditionCisFromUtf8(std::string_view utf8) {
@@ -305,7 +313,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             return element[key].get<std::string>();
         };
         if (changed("runOn")) {
-            const auto value = runOnValue(text("runOn", "Subject"));
+            const auto value = runOnFromText(text("runOn", "Subject"));
             if (!value) reject("unknown runOn value");
             condition.run_on = *value;
         }
@@ -430,12 +438,15 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 condition.comparison_raw = raw->value();
                 condition.flags_byte = static_cast<std::uint8_t>(condition.flags_byte | fo4::k_ctda_flag_use_global);
             } else {
-                float value = 1.0f;
+                float value = 0.0f;
                 if (element.contains("value")) {
                     if (!element["value"].is_number()) reject("comparison value must be a finite number");
-                    value = element["value"].get<float>();
+                    const auto number = element["value"].get<double>();
+                    if (!std::isfinite(number) || std::fabs(number) > std::numeric_limits<float>::max()) {
+                        reject("comparison value must be a finite number");
+                    }
+                    value = static_cast<float>(number);
                 }
-                if (!std::isfinite(value)) reject("comparison value must be a finite number");
                 std::memcpy(&condition.comparison_raw, &value, sizeof(value));
                 condition.flags_byte = static_cast<std::uint8_t>(condition.flags_byte & ~fo4::k_ctda_flag_use_global);
             }

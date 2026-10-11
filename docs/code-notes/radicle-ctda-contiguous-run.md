@@ -42,6 +42,22 @@ Scoped reads translate the shared multiple-list exception into the existing `Sco
 
 The caller search across Radicle and PluginEditTool found the backend and native tests only. No C ABI source/header exposes this setter; its C++ result change does not change the C ABI or ABI version.
 
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition — stored reference by Run On
+
+`buildCondition` stores a nonzero reference only for Run On Reference (2). A new row with a nonzero reference and any other Run On is refused (`reference requires runOn Reference`). Editing Run On away from Reference without touching the reference zeroes it. Only an untouched preserved row keeps a stored reference under another Run On. This follows xEdit's union handling: `source:xEdit Core/wbDefinitionsCommon.pas:5495-5509 @93cc0bc5` (wbConditionReferenceDecider) picks the branch by Run On, and `:1310-1322 @93cc0bc5` (wbConditionRunOnAfterSet) zeroes the reference only when Run On is edited in the UI.
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition — omitted value defaults to 0
+
+An entry with neither `value` nor `compareGlobal` stores comparison 0.0. xEdit's CTDA "Comparison Value - Float" member is a plain `wbFloat` with no default value set (`source:xEdit Core/wbDefinitionsFO4.pas:5189-5190 @93cc0bc5`, `Core/wbInterface.pas:3709-3716 @93cc0bc5`), and the Use Global toggle resets it to 0 (`source:xEdit Core/wbDefinitionsCommon.pas:1296-1298 @93cc0bc5`). The zero default for a new CTDA is inferred from those lines, not from a traced creation path. Covered by `PluginEditTool/native/tests/unit/ConditionCodecValidationTests.cpp:condition codec: compareGlobal resolves to a use-global entry and value defaults to 0`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQuestCondition.cpp:parseQuestCondition — omitted value defaults to 0
+
+The quest log and alias condition parser keeps its own JSON-to-CTDA logic (typed FormKey targets through the conflict graph, unknown-key refusal, the GetEventData refusal per surface, and `PendingQuestCondition` output), so it is not merged into `buildCondition`. Its value default is 0.0 like `buildCondition`, not 1.0. Covered by `PluginEditTool/native/tests/unit/RadiclePluginQuestConditionDefaultsTests.cpp:Native SetQuestStages stores a quest condition without a value as comparison 0`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:copyAsOverrideLocked — Initially Disabled is per signature
+
+The 0x800 flag is defined only for REFR, ACHR, NAVM and the placed-object set PARW, PBAR, PBEA, PCON, PFLA, PGRE, PHZD, PMIS (`source:xEdit Core/wbDefinitionsFO4.pas:3206 @93cc0bc5` for `ReferenceRecord`, `:4487` for ACHR, `:7214` for NAVM, and the REFR `wbRefRecord` blocks from `:11347`). The gate sits after the source-record lookup and before any LOSES, EXISTS or copy step, so a refused disabled copy writes nothing. `RadiclePluginDisabledOverride.cpp:copyAsDisabledOverride` inherits it. xEdit offers the action only from Referenced By on placed refs (`source:xEdit xEdit/xeMainForm.pas:9370 @93cc0bc5`, `:15758 @93cc0bc5`). Covered by `PluginEditTool/native/tests/unit/RadiclePluginAddMastersTests.cpp` (WEAP refused with the subsequent plain copy succeeding, REFR flagged). The web menu item in `PluginEditTool/web/src/RecordContextMenu.tsx:RecordContextMenu` is shown only when `matrix.Type` is in the same set.
+
 ## Radicle/include/fo4/schema/ctda.hpp:k_ctda_event_function_index — GetEventData is function 576 (GT-198)
 
 GetEventData is CTDA function 576 on disk: xEdit `Core/wbDefinitionsFO4.pas:554` @93cc0bc5 lists `(Index: 576; Name: 'GetEventData')`. Every CTDA is one fixed 32-byte `wbStructSK(CTDA` (`wbDefinitionsFO4.pas:5186`), with no shorter variant. Offset 10 is `wbUnused(2)` (`wbDefinitionsFO4.pas:5194`), so `CtdaCondition::unknown2` keeps those bytes as opaque padding. The vanilla corpus scan (Fallout4.esm and the official DLC masters, 2026-10-11, output not committed) found 335 CTDA rows with function 576 and none with 4672. Mutagen's `EventFunctionIndex = 4672` (`PluginEditTool/Mutagen/Mutagen.Bethesda.Fallout4/Records/Common Subrecords/Condition.cs`) does not match disk data.
