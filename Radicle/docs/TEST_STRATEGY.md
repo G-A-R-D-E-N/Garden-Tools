@@ -2,10 +2,14 @@
 
 ## Principles
 
-1. Tests describe engine-facing behavior, not Mutagen internals.
+1. Tests prove stored plugin reads, edits and serialization; runtime behavior has separate acceptance.
 2. Mutagen/FO4IDE results are oracles. When they disagree with Fallout 4 or CK, document the difference.
 3. Unknown bytes must survive.
 4. FormKey tests exist specifically to catch master-index corruption.
+
+For editable surfaces, acceptance is parse -> expose -> edit -> serialize -> reparse. Check requested edited values, valid field addition/removal, required structure and cardinality, master/reference remapping, rejected malformed or unsafe writes, untouched fields/records/unknown bytes, and file save/reload. Native, C ABI and managed mutation tests must exercise each exposed path. A byte-identical unmodified round-trip establishes preservation alone.
+
+Use known definitions and real plugins to prove decoded values. Runtime RE is required when the layout or safe mutation remains unresolved, or when reproducing runtime behavior. See [FO4_PARITY.md](FO4_PARITY.md) and #287 for capability-specific acceptance; #384 tracks required managed CI execution.
 
 ## Current coverage
 
@@ -66,7 +70,7 @@ Reader/writer:
 - FormKeys
 - EditorIDs
 
-Until a writer exists, `fo4inspect` JSON is the native side of that diff.
+`fo4inspect` JSON is the native inspection side of that diff. Writer acceptance additionally edits, saves and reparses the resulting plugin.
 
 ## Sanitizers
 

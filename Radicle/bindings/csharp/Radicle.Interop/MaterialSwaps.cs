@@ -10,8 +10,9 @@ public sealed unsafe partial class RadicleEnvironment
 {
     public IReadOnlyList<MaterialSubstitution> MaterialSwap(Record record)
     {
+        using var use = Use(record);
         Native.MaterialSwap* swap;
-        Call.Check(RadicleNative.MaterialSwapDecode(Handle, record.Handle, &swap));
+        Call.Check(RadicleNative.MaterialSwapDecode(use.Pointer, record.Handle, &swap));
         try
         {
             return Call.Copy<Native.MaterialSubstitution>(swap->Substitutions, swap->SubstitutionCount)
@@ -28,21 +29,24 @@ public sealed unsafe partial class RadicleEnvironment
 
     public FormKey? PlacedMaterialSwap(Record record)
     {
+        using var use = Use(record);
         Native.FormKey key;
-        Call.Check(RadicleNative.PlacedReferenceMaterialSwap(Handle, record.Handle, &key));
+        Call.Check(RadicleNative.PlacedReferenceMaterialSwap(use.Pointer, record.Handle, &key));
         return FormKey.FromNative(key);
     }
 
     public FormKey? PrimaryModelMaterialSwap(Record record)
     {
+        using var use = Use(record);
         Native.FormKey key;
-        Call.Check(RadicleNative.RecordPrimaryModelMaterialSwap(Handle, record.Handle, &key));
+        Call.Check(RadicleNative.RecordPrimaryModelMaterialSwap(use.Pointer, record.Handle, &key));
         return FormKey.FromNative(key);
     }
 
     public float? PrimaryModelColorRemappingIndex(Record record)
     {
+        using var use = Use(record);
         float index;
-        return Call.Found(RadicleNative.RecordPrimaryModelColorRemappingIndex(Handle, record.Handle, &index)) ? index : null;
+        return Call.Found(RadicleNative.RecordPrimaryModelColorRemappingIndex(use.Pointer, record.Handle, &index)) ? index : null;
     }
 }

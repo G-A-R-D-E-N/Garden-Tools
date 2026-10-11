@@ -3,6 +3,7 @@
 #include "fo4/c_api_materials.h"
 #include "fo4/c_api_maintenance.h"
 #include "fo4/c_api_pex.h"
+#include "fo4/c_api_material_file.h"
 #include "fo4/c_api_seq.h"
 #include "fo4/c_api_quest.h"
 #include "fo4/c_api_authoring.h"
@@ -130,6 +131,7 @@ int main() {
   printf("ScriptProperty.HasAlias %zu\n", offsetof(radicle_script_property, has_alias));
   printf("ScriptProperty.Alias %zu\n", offsetof(radicle_script_property, alias));
   printf("ScriptProperty.Text %zu\n", offsetof(radicle_script_property, text));
+  printf("ScriptProperty.TextSize %zu\n", offsetof(radicle_script_property, text_size));
   printf("ScriptProperty.HasInteger %zu\n", offsetof(radicle_script_property, has_integer));
   printf("ScriptProperty.Integer %zu\n", offsetof(radicle_script_property, integer));
   printf("ScriptProperty.HasReal %zu\n", offsetof(radicle_script_property, has_real));
@@ -509,6 +511,10 @@ int main() {
   printf("PexObjectCode.StructCount %zu\n", offsetof(radicle_pex_object_code, struct_count));
   printf("PexObjectCode.StructMembers %zu\n", offsetof(radicle_pex_object_code, struct_members));
   printf("PexObjectCode.StructMemberCount %zu\n", offsetof(radicle_pex_object_code, struct_member_count));
+  printf("MaterialColor3 %zu\n", sizeof(radicle_material_color3));
+  printf("MaterialColor3.R %zu\n", offsetof(radicle_material_color3, r));
+  printf("MaterialColor3.G %zu\n", offsetof(radicle_material_color3, g));
+  printf("MaterialColor3.B %zu\n", offsetof(radicle_material_color3, b));
   printf("QuestProperty %zu\n", sizeof(radicle_quest_property));
   printf("QuestProperty.Owner %zu\n", offsetof(radicle_quest_property, owner));
   printf("QuestProperty.Alias %zu\n", offsetof(radicle_quest_property, alias));

@@ -251,6 +251,33 @@ TEST_CASE("Native SetConditions reports multiple lists without staging") {
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
+TEST_CASE("Native condition reads report multiple lists without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makeMultipleConditionListsPlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto whole = backend.invokeBackend(
+        "GetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    CHECK_FALSE(whole.has_value());
+    if (!whole.has_value()) {
+        CHECK(whole.error().type == "ConditionScopeMultipleLists");
+    }
+    const auto scoped = backend.invokeBackend(
+        "GetConditionsAtPath", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Aliases[0].Conditions"}));
+    CHECK_FALSE(scoped.has_value());
+    if (!scoped.has_value()) {
+        CHECK(scoped.error().type == "ConditionScopeMultipleLists");
+    }
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
 TEST_CASE("Native SetConditionsAtPath reports multiple lists without staging") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

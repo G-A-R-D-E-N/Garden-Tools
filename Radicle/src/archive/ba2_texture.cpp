@@ -63,7 +63,7 @@ void append_bytes(std::vector<std::byte>& out, std::span<const std::byte> data) 
 }
 
 std::string normalized_path(std::string_view path) {
-  return normalize_ba2_path(path);
+  return normalize_ba2_name(path);
 }
 
 bool is_dds_path(std::string_view path) {
