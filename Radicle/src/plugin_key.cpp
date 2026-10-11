@@ -20,6 +20,19 @@ std::string filename_only(std::string_view path) {
   return std::string{path.substr(slash + 1)};
 }
 
+bool has_extension(std::string_view filename, std::string_view extension) noexcept {
+  if (filename.size() < extension.size()) {
+    return false;
+  }
+  const auto ext = filename.substr(filename.size() - extension.size());
+  for (std::size_t i = 0; i < extension.size(); ++i) {
+    if (ascii_lower(ext[i]) != extension[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 PluginKey PluginKey::from_filename(std::string_view filename) {
@@ -35,12 +48,11 @@ bool operator<(const PluginKey& a, const PluginKey& b) noexcept {
 }
 
 bool PluginKey::looks_light() const noexcept {
-  if (filename_.size() < 4) {
-    return false;
-  }
-  const auto ext = filename_.substr(filename_.size() - 4);
-  return ascii_lower(ext[0]) == '.' && ascii_lower(ext[1]) == 'e' &&
-         ascii_lower(ext[2]) == 's' && ascii_lower(ext[3]) == 'l';
+  return has_extension(filename_, ".esl");
+}
+
+bool PluginKey::looks_master() const noexcept {
+  return has_extension(filename_, ".esm") || looks_light();
 }
 
 std::size_t hash_value(const PluginKey& key) noexcept {

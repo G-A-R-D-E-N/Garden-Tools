@@ -336,8 +336,8 @@ void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) 
 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
   assign_record_form_keys(plugin);
-  if (plugin.header.tes4_flags.is_small_file() && new_masters.empty() &&
-      allows_hardcoded_range(plugin)) {
+  if (classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == PluginKind::light &&
+      new_masters.empty() && allows_hardcoded_range(plugin)) {
     std::size_t stranded = 0;
     for (const auto* record : collect_records(plugin)) {
       if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;

@@ -139,7 +139,7 @@ PluginKind classify_plugin_kind(RecordFlags tes4_flags, const PluginKey& key) no
 }
 
 bool is_master_plugin(RecordFlags tes4_flags, const PluginKey& key) noexcept {
-  return tes4_flags.is_master() || key.looks_light();
+  return tes4_flags.is_master() || key.looks_master();
 }
 
 }  // namespace fo4
