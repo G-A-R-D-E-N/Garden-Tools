@@ -17,6 +17,7 @@ constexpr std::int32_t k_world_children = static_cast<std::int32_t>(fo4::GroupTy
 constexpr std::int32_t k_cell_children = static_cast<std::int32_t>(fo4::GroupType::cell_children);
 constexpr std::int32_t k_cell_temporary = static_cast<std::int32_t>(fo4::GroupType::cell_temporary_children);
 constexpr std::int32_t k_topic_children = static_cast<std::int32_t>(fo4::GroupType::topic_children);
+constexpr std::int32_t k_quest_children = static_cast<std::int32_t>(fo4::GroupType::quest_children);
 
 fo4::FormKey local_key(std::uint32_t local) {
   return fo4::FormKey{fo4::PluginKey::from_filename("Delete.esp"), fo4::LocalFormId{local}};
@@ -139,6 +140,18 @@ std::vector<std::byte> make_last_dial_plugin() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_quest_plugin() {
+  fo4::test::ByteWriter out;
+  write_tes4(out, 0x802);
+  const auto quests = fo4::test::begin_group(out, "QUST", 0);
+  fo4::test::end_record(out, begin_named(out, "QUST", 0x800));
+  const auto children = begin_children(out, "QUST", k_quest_children, 0x800);
+  fo4::test::end_record(out, begin_named(out, "SCEN", 0x801));
+  fo4::test::end_group(out, children);
+  fo4::test::end_group(out, quests);
+  return out.bytes;
+}
+
 std::vector<std::byte> make_cell_plugin() {
   fo4::test::ByteWriter out;
   write_tes4(out, 0x805);
@@ -233,6 +246,16 @@ TEST(DeleteChildGroups, DeleteDialRemovesItsTopicChildrenGroup) {
   expect_child_groups_attached(reloaded.groups[0]);
   EXPECT_EQ(fo4::collect_groups(reloaded).size(), 2u);
   EXPECT_EQ(reloaded.header.record_count, 5u);
+}
+
+TEST(DeleteChildGroups, DeleteQuestRemovesItsQuestChildrenGroup) {
+  auto plugin = fo4::read_plugin(make_quest_plugin(), "Delete.esp");
+  ASSERT_EQ(fo4::delete_local_record(plugin, local_key(0x800)), fo4::RecordDeleteStatus::deleted);
+
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(plugin), "Delete.esp");
+  EXPECT_EQ(fo4::find_record(reloaded, local_key(0x800)), nullptr);
+  EXPECT_EQ(fo4::find_record(reloaded, local_key(0x801)), nullptr);
+  EXPECT_TRUE(reloaded.groups.empty());
 }
 
 TEST(DeleteChildGroups, DeleteCellRemovesItsCellChildrenGroup) {

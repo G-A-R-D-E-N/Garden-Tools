@@ -20,4 +20,12 @@ inline const Group* owned_child_group(const Group& parent, std::size_t record_in
   return next != nullptr && is_owned_child_group_type(next->header.group_type) ? next : nullptr;
 }
 
+inline const Group* quest_child_group(const Group& parent, std::size_t record_index) {
+  if (record_index + 1 >= parent.children.size()) return nullptr;
+  const auto* next = std::get_if<Group>(&parent.children[record_index + 1]);
+  return next != nullptr && next->header.group_type == static_cast<std::int32_t>(GroupType::quest_children)
+             ? next
+             : nullptr;
+}
+
 }  // namespace fo4

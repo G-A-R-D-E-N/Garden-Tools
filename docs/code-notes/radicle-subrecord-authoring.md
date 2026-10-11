@@ -173,3 +173,17 @@ EDID is converted once with `stored_editor_id`. The compare against `decode_eyes
 bytes undecoded) and the write both use those Windows-1252 bytes. Before this, a non-ASCII EDID never matched
 and was rewritten on every edit. Test: `Radicle/tests/test_eyes.cpp:NonAsciiEditorIdIsStoredAsWindows1252AndRepeatEditStaysClean`.
 FULL and ICON in this function still write raw UTF-8 and compare undecoded bytes; this change does not touch them.
+
+## Radicle/src/plugin/child_groups.hpp:quest_child_group
+
+xEdit gives a QUST record a child group of type 10 when `wbVWDAsQuestChildren` is set for FO4
+(`xEdit/xeInit.pas:1095`, `Core/wbImplementation.pas:11245-11246`), and `TwbMainRecord.Remove` removes that
+group with the record (`Core/wbImplementation.pas:13549-13551`, xEdit 93cc0bc5). `quest_child_group` names
+the type-10 group directly after a QUST as its child group. Only `erase_record` uses it; maintenance and
+reachability still treat types 1, 6, and 7 alone as owned child groups.
+
+## Radicle/src/plugin/mutation.cpp:erase_record
+
+For a QUST, a type-10 group after the record is removed with it when its label matches the record's form ID,
+the same check used for types 1, 6, and 7. Without this the group stayed behind and reattached to the previous
+record on reload. Test: `Radicle/tests/test_delete_child_groups.cpp:DeleteQuestRemovesItsQuestChildrenGroup`.
