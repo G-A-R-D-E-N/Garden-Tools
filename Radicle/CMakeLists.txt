@@ -130,6 +130,7 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/copy_hierarchy.cpp
   src/plugin/field_writer.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/master_usage.cpp
@@ -140,6 +141,7 @@ add_library(fo4
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
+  src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
@@ -149,6 +151,7 @@ add_library(fo4
   src/schema/non_formid_slots.cpp
   src/schema/scalar.cpp
   src/schema/field_address.cpp
+  src/schema/formlink_slots.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
@@ -276,6 +279,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_reader.cpp
     tests/test_xxxx.cpp
     tests/test_compression.cpp
+    tests/test_reader_limits.cpp
     tests/test_real_plugin.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
@@ -283,12 +287,16 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
     tests/test_mutation.cpp
+    tests/test_editor_id_text.cpp
     tests/test_record_lifecycle.cpp
+    tests/test_delete_child_groups.cpp
     tests/test_copy_containment.cpp
+    tests/test_copy_cell_children.cpp
     tests/test_scalar_mutation.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
+    tests/test_tes4_masters_hedr.cpp
     tests/test_formlinks.cpp
     tests/test_clmt_formlinks.cpp
     tests/test_ipds_formlinks.cpp
@@ -344,6 +352,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
     tests/test_ctda_model.cpp
+    tests/test_ctda_alias_formids.cpp
     tests/test_condition_scopes.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
@@ -384,6 +393,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_terrain.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
+    tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
@@ -410,7 +420,7 @@ if(RADICLE_BUILD_TESTS)
   target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
-    FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+    FO4_TESTDATA_DIR="testdata"
     _CRT_SECURE_NO_WARNINGS
   )
   target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
@@ -419,7 +429,8 @@ if(RADICLE_BUILD_TESTS)
   target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
-  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120)
+  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
   if(RADICLE_BUILD_TOOLS)

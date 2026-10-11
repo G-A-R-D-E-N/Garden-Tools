@@ -18,9 +18,11 @@ public partial class HkxBinaryReader
         for (int blockIdx = 0; blockIdx < numBlocks && blockIdx < blockOffsets.Count; blockIdx++)
         {
             int blockStart = blobAbs + blockOffsets[blockIdx];
-            int firstFrame = blockIdx * maxFramesPerBlock;
-            int framesInBlock = (blockIdx == numBlocks - 1) ? (numFrames - firstFrame) : maxFramesPerBlock;
-            if (framesInBlock <= 0) continue;
+            long firstFrame = (long)blockIdx * maxFramesPerBlock;
+            long remaining = numFrames - firstFrame;
+            long framesLong = (blockIdx == numBlocks - 1) ? remaining : Math.Min(maxFramesPerBlock, remaining);
+            if (framesLong <= 0) continue;
+            int framesInBlock = (int)framesLong;
 
             if (!CanRead(data, blockStart, 4 * numTracks)) continue;
 

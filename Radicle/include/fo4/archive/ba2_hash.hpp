@@ -20,6 +20,7 @@ std::uint32_t ba2_crc32(std::span<const std::byte> data);
 // lowercase, trim leading/trailing '\'. Returns "." for empty paths and for
 // paths of 260+ characters (the length a BA2 string table entry must fit).
 std::string normalize_ba2_path(std::string_view path);
+std::string normalize_ba2_name(std::string_view path);
 
 // Compute the three hashes for an archive path: CRC-32 of the file stem,
 // the extension as a little-endian word (first 4 bytes), and CRC-32 of the

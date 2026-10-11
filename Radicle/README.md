@@ -2,13 +2,11 @@
 
 Native Fallout 4 plugin SDK. The first root a plugin puts down, and a radiation pun.
 
-C++ namespace is still `fo4`. The library is meant to replace Mutagen inside FO4IDE / PluginEditTool. It is not a line-for-line Mutagen port. It is an independent reader/writer grounded in:
+C++ namespace is still `fo4`. Radicle is the native xEdit-style plugin backend replacing Mutagen for PluginTool / PluginEditTool and supplying structured game data to GardenEngine. It parses and exposes records, supports proven field and record edits, and serializes changes while preserving untouched data.
 
-1. Fallout 4 runtime behavior
-2. Creation Kit behavior
-3. local reverse-engineering in `CKRE` and `ReverseEngineering`
-4. xEdit where useful
-5. Mutagen as a compatibility oracle, not a specification
+Stored layouts may be established from xEdit definitions, official plugins, existing Radicle behavior, CK/CKRE and synthetic tests. Runtime RE is required for unresolved layouts, unproven safe mutation or intended runtime behavior; it is not a blanket prerequisite for plugin editing. Unknown layouts stay opaque or refuse mutation/remapping. Mutagen remains a compatibility oracle.
+
+[#86](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/86) governs the product roadmap; [#287](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/287) and [the parity matrix](docs/FO4_PARITY.md) govern READ / WRITE / ADD / REMOVE / CREATE / REMAP / VALIDATE / OPAQUE coverage. A reader alone does not establish editing support. [#43](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/43) supplies reusable schema infrastructure where proven gaps justify it.
 
 ## Status
 

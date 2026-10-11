@@ -9,6 +9,7 @@ namespace {
 
 constexpr std::pair<Signature, Signature> k_non_formid_slots[] = {
 #include "fo4/schema/non_formid_slots.inc"
+#include "fo4/schema/non_formid_slots_manual.inc"
 };
 
 constexpr Signature k_sig_pack = Signature::from_string("PACK");

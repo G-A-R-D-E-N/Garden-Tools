@@ -131,6 +131,7 @@ int main() {
   printf("ScriptProperty.HasAlias %zu\n", offsetof(radicle_script_property, has_alias));
   printf("ScriptProperty.Alias %zu\n", offsetof(radicle_script_property, alias));
   printf("ScriptProperty.Text %zu\n", offsetof(radicle_script_property, text));
+  printf("ScriptProperty.TextSize %zu\n", offsetof(radicle_script_property, text_size));
   printf("ScriptProperty.HasInteger %zu\n", offsetof(radicle_script_property, has_integer));
   printf("ScriptProperty.Integer %zu\n", offsetof(radicle_script_property, integer));
   printf("ScriptProperty.HasReal %zu\n", offsetof(radicle_script_property, has_real));
