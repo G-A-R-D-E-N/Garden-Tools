@@ -74,11 +74,15 @@ public sealed class VmadAuthoringTests
         Assert.Throws<ArgumentOutOfRangeException>(() => plugin.SetVmadInt(key, 0, 2, 1, -1));
         Assert.Throws<ArgumentException>(() => plugin.SetVmadString(key, 0, 1, "a\0b"));
         Assert.Throws<ArgumentNullException>(() => plugin.SetVmadString(key, 0, 1, null!));
-        Assert.Throws<RadicleException>(() => plugin.SetVmadString(key, 0, 1, "\u0100"));
         Assert.Throws<RadicleException>(() => plugin.SetVmadString(key, 0, 1, new string('a', 65536)));
         Assert.Throws<RadicleException>(() => plugin.SetVmadFloat(key, 0, 3, float.NaN));
         Assert.Throws<RadicleException>(() => plugin.SetVmadInt(key, 0, 1, 1));
         Assert.False(plugin.SetVmadInt(key, 1, 2, 1));
         Assert.Equal(bytes, plugin.ToBytes());
+        Assert.True(plugin.SetVmadString(key, 0, 1, "\u0100"));
+        var utf8 = Path.Combine(temp.Path, "Utf8.esp"); plugin.Write(utf8);
+        using var env = RadicleEnvironment.Load(new[] { utf8 });
+        var script = Assert.Single(env.PlacedReference(env.Winner(new FormKey("Utf8.esp", 0x800))!.Value).Scripts);
+        Assert.Equal("\u0100", script.Properties[1].Text);
     }
 }
