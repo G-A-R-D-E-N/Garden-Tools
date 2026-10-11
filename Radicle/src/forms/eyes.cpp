@@ -161,8 +161,8 @@ FormKey create_eyes(Plugin& plugin,
   // record behind in the caller's Plugin object.
   std::optional<std::vector<std::byte>> encoded_edid;
   if (editor_id.has_value()) encoded_edid = zstring(stored_editor_id(*editor_id));
-  const auto encoded_full = zstring(full_text);
-  const auto encoded_icon = zstring(icon);
+  const auto encoded_full = zstring(stored_inline_text(full_text, "EYES FULL"));
+  const auto encoded_icon = zstring(stored_inline_text(icon, "EYES ICON"));
 
   const auto key = create_local_record(next, k_eyes);
   auto* record = find_mutable_record(next, key);

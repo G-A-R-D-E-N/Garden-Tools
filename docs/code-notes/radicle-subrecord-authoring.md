@@ -129,3 +129,40 @@ and offline managed/RID consumer checks from main remain enabled.
 Pass the loaded plugin's localized flag to the merged `preflight_record` API, as the Radicle plugin-aware
 callers do. The current scalar string registrations do not overlap localized fields; this aligns the caller
 for subsequent reader registrations without adding a new field or claiming a current localized-data failure.
+
+## Radicle/src/plugin/mutation.cpp:stored_inline_text
+
+xEdit writes every inline (non-localized) string through the file code page: `Core/wbInterface.pas:15695`
+(`GetBytes`) with `wbEncoding := wbMBCSEncoding(1252)` at `Core/wbInterface.pas:23867` (xEdit 93cc0bc5).
+`stored_inline_text` applies the same UTF-8 to Windows-1252 conversion for any inline zstring and refuses
+text outside the code page with `FormIdError`, naming the field. `stored_editor_id` delegates with the label
+"editor ID", so its message is unchanged. Test: `Radicle/tests/test_race_creation.cpp` (see the race entry).
+
+## Radicle/src/forms/race.cpp:create_race
+
+FULL and DESC are stored with `stored_inline_text`. Localized plugins are refused before this point, so DESC
+is always inline here. Test: `Radicle/tests/test_race_creation.cpp:InlineFullNameStoresWindows1252AndRefusesUnencodableText`
+(stores `é` as 0xE9 and refuses `😀` without mutating the plugin).
+
+## Radicle/src/forms/proj_expl_hazd.cpp:create_projectile
+
+FULL and NAM1 are stored with `stored_inline_text`; EDID already was. No dedicated test in this change.
+
+## Radicle/src/forms/proj_expl_hazd.cpp:create_explosion
+
+FULL is stored with `stored_inline_text`; EDID already was. No dedicated test in this change.
+
+## Radicle/src/forms/proj_expl_hazd.cpp:create_hazard
+
+FULL and MODL are stored with `stored_inline_text`; EDID already was. No dedicated test in this change.
+
+## Radicle/src/forms/armor.cpp:encode_optional
+
+Model, icon, message icon, and description values all pass through `stored_inline_text`. `create_armor`
+refuses inline DESC in a localized plugin before encoding, so this path only sees inline text. No dedicated
+test in this change.
+
+## Radicle/src/forms/eyes.cpp:create_eyes
+
+EDID, FULL, and ICON are stored as Windows-1252 through `stored_editor_id` and `stored_inline_text`. Tests:
+`Radicle/tests/test_eyes_creation.cpp:StoresEditorIdAsWindows1252` (EDID only).

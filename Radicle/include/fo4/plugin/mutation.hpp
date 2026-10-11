@@ -106,6 +106,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            LocalFormId new_local);
 
 std::string stored_editor_id(std::string_view editor_id);
+std::string stored_inline_text(std::string_view text, std::string_view field);
 
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,

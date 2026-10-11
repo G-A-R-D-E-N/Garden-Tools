@@ -162,7 +162,7 @@ void append_optional_string(Record& record,
 std::optional<std::vector<std::byte>> encode_optional(
     std::optional<std::string_view> value) {
   if (!value.has_value()) return std::nullopt;
-  return zstring(*value);
+  return zstring(stored_inline_text(*value, "ARMO/ARMA string field"));
 }
 
 std::optional<std::vector<std::byte>> encode_editor_id(

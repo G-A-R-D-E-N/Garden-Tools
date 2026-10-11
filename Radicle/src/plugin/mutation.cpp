@@ -336,12 +336,16 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   return RecordRenumberStatus::renumbered;
 }
 
-std::string stored_editor_id(std::string_view editor_id) {
-  const auto stored = text::utf8_to_windows1252(editor_id);
+std::string stored_inline_text(std::string_view value, std::string_view field) {
+  const auto stored = text::utf8_to_windows1252(value);
   if (!stored) {
-    throw FormIdError("editor ID is not valid UTF-8 text representable in Windows-1252");
+    throw FormIdError(std::string(field) + " is not valid UTF-8 text representable in Windows-1252");
   }
   return *stored;
+}
+
+std::string stored_editor_id(std::string_view editor_id) {
+  return stored_inline_text(editor_id, "editor ID");
 }
 
 bool set_record_editor_id(Plugin& plugin,
