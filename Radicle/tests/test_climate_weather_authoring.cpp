@@ -432,12 +432,15 @@ TEST(ClimateWeatherReader, CloudColorLayerCountsMatchTheStoredLayouts) {
     SCOPED_TRACE(size);
     auto entries = fixture();
     entries[3].version = size == 64 ? 34 : size == 512 ? 110 : 131;
+    if (size == 1024) { for (int i = 0; i < 4; ++i) { entries[3].subs.push_back({"DALC", filled(32, 0)}); } }
     for (auto& [name, data] : entries[3].subs) {
       if (name == "PNAM") { data = filled(size, 1); }
       if (name == "JNAM") { data = filled(size == 64 ? 512 : size, 0); }
       if (name == "NAM0") { data = filled(size == 64 ? 208 : size == 512 ? 272 : 608, 0); }
       if (name == "FNAM") { data = filled(size == 1024 ? 72 : 32, 0); }
       if (name == "DATA") { data = filled(size == 1024 ? 20 : 19, 0); }
+      if (name == "IMSP") { data = filled(size == 1024 ? 32 : 16, 0); }
+      if (name == "UNAM") { data = filled(size == 1024 ? 24 : 12, 0); }
     }
     const auto model = fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr_old));
     EXPECT_EQ(model.cloud_color_layer_count, size == 64 ? 4u : 32u);
@@ -459,8 +462,22 @@ TEST(ClimateWeatherReader, FnamLengthFollowsTheFormVersionNotTheSize) {
   entries[2].version = 120;
   for (auto& [name, data] : entries[2].subs) {
     if (name == "FNAM") { data = filled(32, 0); }
+    if (name == "UNAM") { data = filled(12, 0); }
   }
   EXPECT_THROW(fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr)), fo4::forms::WeatherError);
+}
+
+TEST(ClimateWeatherReader, UnamAndImspSizesFollowTheFormVersionNotTheSize) {
+  auto modern = fixture();
+  modern[2].version = 129;
+  EXPECT_THROW(fo4::forms::decode_weather(read(build(modern, true)), key(k_wthr)), fo4::forms::WeatherError);
+
+  auto legacy = fixture();
+  legacy[3].version = 110;
+  for (auto& [name, data] : legacy[3].subs) {
+    if (name == "IMSP") { data = filled(32, 0); }
+  }
+  EXPECT_THROW(fo4::forms::decode_weather(read(build(legacy, true)), key(k_wthr_old)), fo4::forms::WeatherError);
 }
 
 TEST(ClimateWeatherReader, FourLayerCloudColorsDecodeOnlyBeforeFormVersion35) {

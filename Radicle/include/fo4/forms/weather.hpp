@@ -48,6 +48,18 @@ constexpr std::size_t weather_data_size(std::uint16_t form_version) noexcept {
   return form_version >= 119 ? 20 : 19;
 }
 
+constexpr std::size_t weather_unam_size(std::uint16_t form_version) noexcept {
+  return form_version >= 130 ? 24 : 12;
+}
+
+constexpr std::size_t weather_imsp_size(std::uint16_t form_version) noexcept {
+  return form_version >= k_weather_eight_times_form_version ? 32 : 16;
+}
+
+constexpr std::size_t weather_dalc_count(std::uint16_t form_version) noexcept {
+  return form_version >= k_weather_eight_times_form_version ? 8 : 4;
+}
+
 struct WeatherSound {
   std::optional<FormKey> sound;
   std::uint32_t type{0};

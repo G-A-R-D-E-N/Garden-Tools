@@ -321,8 +321,8 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
   }
 
   const auto* imsp = unique_required(*record, k_imsp, "IMSP");
-  if (imsp->data.size() != 16 && imsp->data.size() != 32) {
-    throw WeatherError("IMSP size must be 16 or 32");
+  if (imsp->data.size() != weather_imsp_size(result.form_version)) {
+    throw WeatherError("IMSP size does not match its form version");
   }
   result.imsp_count = static_cast<std::uint8_t>(imsp->data.size() / 4);
   for (std::uint8_t i = 0; i < result.imsp_count; ++i) {
@@ -351,8 +351,8 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
     if (data.size() == 32) ambient.fresnel = read_f32(data, 28);
     result.dalc.push_back(ambient);
   }
-  if (result.dalc.size() != 4 && result.dalc.size() != 8) {
-    throw WeatherError("WTHR must contain 4 or 8 DALC subrecords");
+  if (result.dalc.size() != weather_dalc_count(result.form_version)) {
+    throw WeatherError("WTHR DALC count does not match its form version");
   }
 
   if (const auto* gnam = unique_optional(*record, k_gnam, "GNAM")) {
@@ -369,8 +369,8 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
   }
 
   if (const auto* unam = unique_optional(*record, k_unam, "UNAM")) {
-    if (unam->data.size() != 12 && unam->data.size() != 24) {
-      throw WeatherError("UNAM size must be 12 or 24");
+    if (unam->data.size() != weather_unam_size(result.form_version)) {
+      throw WeatherError("UNAM size does not match its form version");
     }
     result.has_unam = true;
     result.unam[0].spell = decode_optional_form(context, unam->data, 0, "UNAM+00");
