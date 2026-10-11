@@ -803,7 +803,7 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 12u;
+    public const uint CompiledAbiVersion = 22u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1208,40 +1208,40 @@ public static unsafe partial class RadicleNative
     public static extern Status MaterialFileFieldType(IntPtr file, nuint index, MaterialFieldType* out_type);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_bool")]
-    public static extern Status MaterialFileGetBool(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte* out_value);
+    public static extern Status MaterialFileGetBool(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte* out_value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_u8")]
-    public static extern Status MaterialFileGetU8(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte* out_value);
+    public static extern Status MaterialFileGetU8(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte* out_value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_u32")]
-    public static extern Status MaterialFileGetU32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, uint* out_value);
+    public static extern Status MaterialFileGetU32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, uint* out_value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_f32")]
-    public static extern Status MaterialFileGetF32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, float* out_value);
+    public static extern Status MaterialFileGetF32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, float* out_value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_color3")]
-    public static extern Status MaterialFileGetColor3(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, MaterialColor3* out_value);
+    public static extern Status MaterialFileGetColor3(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, MaterialColor3* out_value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_string")]
-    public static extern Status MaterialFileGetString(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte** out_bytes, nuint* out_size);
+    public static extern Status MaterialFileGetString(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte** out_bytes, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_bool")]
-    public static extern Status MaterialFileSetBool(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte value);
+    public static extern Status MaterialFileSetBool(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_u8")]
-    public static extern Status MaterialFileSetU8(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte value);
+    public static extern Status MaterialFileSetU8(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_u32")]
-    public static extern Status MaterialFileSetU32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, uint value);
+    public static extern Status MaterialFileSetU32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, uint value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_f32")]
-    public static extern Status MaterialFileSetF32(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, float value);
+    public static extern Status MaterialFileSetF32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, float value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_color3")]
-    public static extern Status MaterialFileSetColor3(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, MaterialColor3* value);
+    public static extern Status MaterialFileSetColor3(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, MaterialColor3* value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_string")]
-    public static extern Status MaterialFileSetString(IntPtr file, [MarshalAs(UnmanagedType.LPUTF8Str)] string? name, byte* bytes, nuint size);
+    public static extern Status MaterialFileSetString(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte* bytes, nuint size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_parse")]
     public static extern Status SeqParse(byte* bytes, nuint size, IntPtr* out_seq);
