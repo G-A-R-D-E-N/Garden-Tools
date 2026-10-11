@@ -382,7 +382,7 @@ to 93, 84 and 52 bytes with nothing left over.
 
 | Offset | Field | Type |
 |---|---|---|
-| +0 | flags | u16 (xEdit `wbFlags`, bits `0x0001`-`0x2000`) |
+| +0 | flags | u16 (xEdit `wbFlags`, bits `0x0001`-`0x2000`; source:xEdit Core/wbDefinitionsFO4.pas:7123-7147 @93cc0bc5) |
 | +2 | type | u16 (xEdit `wbEnum`: 1 Missile, 2 Lobber, 4 Beam, 8 Flame, 0x10 Cone, 0x20 Barrier, 0x40 Arrow; default 1) |
 | +4 | gravity | float (−0.01 … 10) |
 | +8 | speed | float (0 … 16000) |
