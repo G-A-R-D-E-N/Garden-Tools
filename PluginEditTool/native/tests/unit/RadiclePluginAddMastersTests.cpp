@@ -534,7 +534,7 @@ TEST_CASE("Native CopyAsDisabledOverride refuses a record type outside placed re
     const auto rejected = backend.copyAsDisabledOverride(args);
     REQUIRE_FALSE(rejected.has_value());
     CHECK(rejected.error().type == "DisabledOverrideUnsupported");
-    const auto copied = textResult(backend.copyAsOverride(args));
+    const auto copied = textResult(backend.invoke("backend.CopyAsOverride", args));
     CHECK(copied.starts_with("Copied "));
 }
 
