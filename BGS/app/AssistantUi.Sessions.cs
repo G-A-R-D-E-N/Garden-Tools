@@ -83,9 +83,9 @@ internal sealed partial class AssistantUi
             ? uri.AbsoluteUri
             : null;
 
-    private static void OpenUrl(string url)
+    private static bool OpenUrl(string url)
     {
-        if (WebUrlToOpen(url) is not { } launch) return;
+        if (WebUrlToOpen(url) is not { } launch) return false;
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -93,9 +93,11 @@ internal sealed partial class AssistantUi
                 FileName = launch,
                 UseShellExecute = true,
             });
+            return true;
         }
         catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
+            return false;
         }
     }
 }

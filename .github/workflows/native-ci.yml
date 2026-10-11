@@ -25,6 +25,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # A newer push supersedes a pull request or branch run, but main runs always
 # finish: cancelling them on every merge left main itself untested.
 concurrency:
@@ -141,7 +144,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: native-linux-failure
           path: |
@@ -224,7 +227,7 @@ jobs:
       - name: Upload Windows binaries
         if: always()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: radicle-windows-x64
           path: |
@@ -300,7 +303,7 @@ jobs:
       - name: Upload native Windows executable
         if: always()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: fo4recordeditor-windows-x64
           path: build/fo4ide-win/bin/FO4RecordEditor.exe

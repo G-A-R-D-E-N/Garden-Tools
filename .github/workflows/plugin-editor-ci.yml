@@ -83,7 +83,7 @@ jobs:
       - name: Upload test results on failure
         if: failure()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: plugin-editor-windows-failure
           path: TestResults/**
@@ -128,7 +128,7 @@ jobs:
       - name: Upload test results on failure
         if: failure()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: plugin-editor-linux-failure
           path: TestResults/**
