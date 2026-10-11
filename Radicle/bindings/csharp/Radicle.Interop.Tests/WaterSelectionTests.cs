@@ -60,6 +60,6 @@ public class WaterSelectionTests
         using var env = RadicleEnvironment.Load(new[] { plugin });
         using var other = RadicleEnvironment.Load(new[] { plugin });
         var water = env.Winner(new FormKey("Fallout4.esm", 0x840))!.Value;
-        Assert.Throws<RadicleException>(() => other.EffectiveWater(water));
+        Assert.Throws<ArgumentException>(() => other.EffectiveWater(water));
     }
 }
