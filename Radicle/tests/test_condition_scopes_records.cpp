@@ -414,6 +414,44 @@ TEST(ConditionScopesRecords, PerkTabInsertsIntoEmptyTabDirectlyAfterPrkc) {
   EXPECT_TRUE(citc_counts(*record).empty());
 }
 
+TEST(ConditionScopesRecords, PerkTabReplaceDropsCisWithItsCondition) {
+  auto plugin = make_plugin("PERK", {
+      {"CTDA", ctda_bytes(100)},
+      {"PRKE", zeros(3)},
+      {"DATA", zeros(8)},
+      {"PRKC", zeros(1)},
+      {"CTDA", ctda_bytes(1)},
+      {"CIS1", zstring("A")},
+      {"CTDA", ctda_bytes(2)},
+      {"CIS2", zstring("A")},
+      {"EPFT", zeros(1)},
+      {"PRKF", zeros(0)},
+  });
+  const auto descriptor = descriptor_for("PERK", "Tabs[0].Conditions");
+  ASSERT_TRUE(descriptor.has_value());
+  EXPECT_EQ(functions_in(*cond_record(plugin), *descriptor, 0), (Functions{1, 2}));
+  const auto before = cond_record(plugin)->subrecords;
+  const auto prkc = index_of_nth(*cond_record(plugin), "PRKC", 0);
+  ASSERT_LT(prkc, before.size());
+
+  fo4::CtdaCondition replacement;
+  replacement.function = 9;
+  const std::vector<fo4::CtdaCondition> conditions{replacement};
+  EXPECT_EQ(fo4::schema::set_record_scoped_conditions(
+                plugin, fo4::FormKey::parse("000800:Cond.esp"), *descriptor, 0, conditions),
+            fo4::schema::ScopedConditionStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cond.esp");
+  const auto* record = cond_record(reread);
+  ASSERT_NE(record, nullptr);
+  expect_prefix_unchanged(before, *record, prkc + 1);
+  EXPECT_EQ(functions_in(*record, *descriptor, 0), Functions{9});
+  EXPECT_EQ(index_of_nth(*record, "CIS1", 0), record->subrecords.size());
+  EXPECT_EQ(index_of_nth(*record, "CIS2", 0), record->subrecords.size());
+  EXPECT_EQ(index_of_nth(*record, "CTDA", 1), prkc + 1);
+  EXPECT_EQ(index_of_nth(*record, "EPFT", 0), prkc + 2);
+}
+
 TEST(ConditionScopesRecords, PerkTabRefusesOutOfRangeIndex) {
   auto plugin = make_plugin("PERK", perk_tabs_body());
   const auto descriptor = descriptor_for("PERK", "Tabs[3].Conditions");
