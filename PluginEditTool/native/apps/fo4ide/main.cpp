@@ -342,7 +342,7 @@ int main(int argc, char** argv) {
 
     if (printHealth) {
         const auto response = rpc.invoke({"app", "GetHealth", nlohmann::json::array()});
-        std::cout << response.toJson().dump(2) << '\n';
+        std::cout << response.toJson().dump(2, ' ', false, nlohmann::json::error_handler_t::replace) << '\n';
     }
 
 #if defined(FO4IDE_HAS_HTTP)

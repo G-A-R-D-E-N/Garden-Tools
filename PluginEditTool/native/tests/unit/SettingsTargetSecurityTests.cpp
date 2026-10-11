@@ -291,6 +291,26 @@ TEST_CASE("SaveSettings accepts tool paths with the expected file names and empt
     CHECK(shared.snapshot().archive2Path.empty());
 }
 
+TEST_CASE("SaveSettings accepts a TexconvPath named texconv") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto tools = root / "tools";
+    touch(tools / "texconv");
+    fo4ide::settings::Store store(root / "settings.json");
+    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings shared(settings);
+    FakeRunner runner;
+    FakePlatform platform;
+
+    fo4ide::app::SettingsTarget target(store, shared, platform, runner);
+    auto result = saveSettingsJson(
+        target, nlohmann::json{{"TexconvPath", (tools / "texconv").string()}});
+
+    REQUIRE(result.has_value());
+    CHECK(*result == "Settings saved.");
+    CHECK(shared.snapshot().texconvPath == tools / "texconv");
+}
+
 TEST_CASE("SaveSettings accepts a bare ClaudeCodePath that resolves on PATH") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

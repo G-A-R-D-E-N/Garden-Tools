@@ -23,6 +23,25 @@ it('takes the token from the hash, strips it from the URL, and streams events wi
   expect(fetchStub).toHaveBeenCalledWith('/events', { headers: { 'X-FO4IDE-Token': 'abc123' } });
 });
 
+it('sends the hash token as X-FO4IDE-Token on host RPC calls', async () => {
+  vi.stubGlobal('window', {
+    location: new URL('http://127.0.0.1:49152/#/main?t=abc'),
+    history: { replaceState: vi.fn() },
+    chrome: undefined,
+  });
+  const fetchStub = vi.fn((url: string) => (url === '/rpc'
+    ? Promise.resolve({ ok: true, json: async () => ({ ok: true, value: null }) })
+    : new Promise<never>(() => {})));
+  vi.stubGlobal('fetch', fetchStub);
+
+  await import('./hostbridge');
+  await window.chrome?.webview?.hostObjects?.appInterop?.GetPlugins();
+
+  expect(fetchStub).toHaveBeenCalledWith('/rpc', expect.objectContaining({
+    headers: { 'Content-Type': 'application/json', 'X-FO4IDE-Token': 'abc' },
+  }));
+});
+
 it('reuses the stored token when the URL carries none', async () => {
   sessionStorage.setItem('fo4ide.token', 'stored');
   vi.stubGlobal('window', {

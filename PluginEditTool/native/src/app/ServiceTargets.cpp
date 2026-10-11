@@ -61,7 +61,7 @@ struct ToolPathRule {
 
 std::string toolPathError(const nlohmann::json& payload) {
     const ToolPathRule rules[] = {
-        {"TexconvPath", {"Texconvx64.exe", "Texconv.exe"}, false},
+        {"TexconvPath", {"Texconvx64.exe", "Texconv.exe", "texconv"}, false},
         {"PapyrusCompilerPath", {"PapyrusCompiler.exe"}, false},
         {"XwmaEncodePath", {"xWMAEncode.exe"}, false},
         {"Archive2Path", {"Archive2.exe"}, false},
