@@ -117,7 +117,7 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
     if (componentsJson.empty()) {
         return std::unexpected(Error{
             "InvalidComponentsJson",
-            "conditions JSON is empty; pass [] to clear"
+            "components JSON is empty; pass [] to clear"
         });
     }
 

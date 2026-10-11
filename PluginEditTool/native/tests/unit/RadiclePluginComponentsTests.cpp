@@ -250,7 +250,7 @@ TEST_CASE("PluginEditTool set_components refuses an empty components string and 
         "SetComponents", nlohmann::json::array({"Patch.esp", "000900:Patch.esp", ""}));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "InvalidComponentsJson");
-    CHECK(result.error().message == "conditions JSON is empty; pass [] to clear");
+    CHECK(result.error().message == "components JSON is empty; pass [] to clear");
 
     CHECK_FALSE(isPending(backend));
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
