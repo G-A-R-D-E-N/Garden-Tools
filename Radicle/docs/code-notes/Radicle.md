@@ -6,7 +6,7 @@ Stored action-header SNAM/ENAM are four-byte unsigned values in pinned xEdit
 `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas:9010-9011`.
 The seven-master corpus test caught the incorrect two-byte requirement. Native,
 C and C# preserve all 32 stored bits, including values above 65535. The private
-record `build/RE-Work/6916afb/dialogue-scenes-405-344/README.md`
+record `https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/dialogue-scenes-405-344/README.md`
 stamps OG runtime action storage/range use at addresses 0x5975E0/0x597910 as 16-bit;
 that runtime representation does not establish the on-disk field size. Action
 payload SNAM after the header remains opaque. SCQS values keep schema-derived

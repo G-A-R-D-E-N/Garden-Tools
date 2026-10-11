@@ -16,7 +16,7 @@ shares the existing lookup/reassign fallback used by scene and subrecord writers
 presence for every official action through native and C ABI decoders.
 
 Source for every layout, order, default and required flag: pinned TES5Edit `wbDefinitionsFO4.pas` at
-`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `build/xedit/wbDefinitionsFO4.pas`: DIAL 6309-6475,
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (DIAL 6309-6475,
 SCEN 8879-9133, INFO 9672-9786) and `wbDefinitionsCommon.pas` (`wbINOM`/`wbINOA` 8604-8624). Official measurements are
 over the seven shipped masters: 46,427 DIAL, 102,462 INFO, 4,778 SCEN (DLCworkshop02.esm has none).
 
