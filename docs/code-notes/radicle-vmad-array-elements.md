@@ -54,7 +54,7 @@ ABI: `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is bumped from 12 to 13 f
 
 This section supersedes the struct line of the first section for structs whose members are all scalars or objects. The rest of that section still holds. The ten `VmadArrayElements.*` cases are in `Radicle/tests/test_vmad_array_elements.cpp`, not `Radicle/tests/test_vmad.cpp` as that section says.
 
-Papyrus structs cannot hold structs, arrays, `Var` or `const` members (`Structs_(Papyrus).html` in the offline Creation Kit wiki, `C:\Users\Ricky\Downloads\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4\`). A struct member is therefore type 1 to 5 (object, string, int, float, bool), and every other member type leaves the struct undecoded.
+Papyrus structs cannot hold structs, arrays, `Var` or `const` members (`Structs_(Papyrus).html` in the offline Creation Kit wiki, Nexus file 52183, `FO4CKWiki_210520/fallout4/`). A struct member is therefore type 1 to 5 (object, string, int, float, bool), and every other member type leaves the struct undecoded.
 
 - `Radicle/src/schema/vmad.cpp:read_property` takes a copy of the slice before the walk for types 7 and 17. The walk is still `walk_properties`, so the consumed bytes do not change. `Radicle/src/schema/vmad.cpp:decode_structs` decodes the copy into `VmadProperty::struct_elements`: one struct for type 7, `n` for type 17, and an empty array is engaged as empty.
 - `Radicle/src/schema/vmad.cpp:read_struct_members` reads one struct: a u32 member count, then each member's name, type, flags and scalar value. A member of any other type makes it return false, which leaves `struct_elements` disengaged. It does not throw.
