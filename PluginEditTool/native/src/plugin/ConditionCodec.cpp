@@ -292,7 +292,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         }
     }
 
-    float value = 1.0f;
+    float value = 0.0f;
     if (isPresent(element, "value")) {
         if (!element["value"].is_number()) {
             failure = "value must be a number";

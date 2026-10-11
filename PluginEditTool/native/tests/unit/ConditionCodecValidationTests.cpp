@@ -177,7 +177,7 @@ TEST_CASE("condition codec: non-integer param fails the entry") {
     CHECK(failureOf(element) == "param1 must be an integer or form ID text");
 }
 
-TEST_CASE("condition codec: compareGlobal resolves to a use-global entry and value defaults to 1") {
+TEST_CASE("condition codec: compareGlobal resolves to a use-global entry and value defaults to 0") {
     std::string failure;
 
     const nlohmann::json global = {{"function", "GetAngle"}, {"compareGlobal", "CondWeapon"}};
@@ -190,7 +190,7 @@ TEST_CASE("condition codec: compareGlobal resolves to a use-global entry and val
     const auto plainCondition = buildFrom(plain, failure);
     REQUIRE(plainCondition.has_value());
     CHECK_FALSE(plainCondition->use_global());
-    CHECK(plainCondition->comparison_float() == 1.0f);
+    CHECK(plainCondition->comparison_float() == 0.0f);
 }
 
 TEST_CASE("condition codec: a valid entry builds the same stored fields") {
