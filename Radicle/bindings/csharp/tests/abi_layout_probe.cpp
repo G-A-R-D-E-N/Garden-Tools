@@ -7,6 +7,7 @@
 #include "fo4/c_api_seq.h"
 #include "fo4/c_api_quest.h"
 #include "fo4/c_api_authoring.h"
+#include "fo4/c_api_vegetation.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -685,5 +686,34 @@ int main() {
   printf("QuestStructureView.ConditionCount %zu\n", offsetof(radicle_quest_structure_view, condition_count));
   printf("QuestStructureView.Unsupported %zu\n", offsetof(radicle_quest_structure_view, unsupported));
   printf("QuestStructureView.UnsupportedCount %zu\n", offsetof(radicle_quest_structure_view, unsupported_count));
+  printf("GrassInfo %zu\n", sizeof(radicle_grass_info));
+  printf("GrassInfo.HasData %zu\n", offsetof(radicle_grass_info, has_data));
+  printf("GrassInfo.Density %zu\n", offsetof(radicle_grass_info, density));
+  printf("GrassInfo.MinSlope %zu\n", offsetof(radicle_grass_info, min_slope));
+  printf("GrassInfo.MaxSlope %zu\n", offsetof(radicle_grass_info, max_slope));
+  printf("GrassInfo.UnitsFromWater %zu\n", offsetof(radicle_grass_info, units_from_water));
+  printf("GrassInfo.WaterType %zu\n", offsetof(radicle_grass_info, water_type));
+  printf("GrassInfo.PositionRange %zu\n", offsetof(radicle_grass_info, position_range));
+  printf("GrassInfo.HeightRange %zu\n", offsetof(radicle_grass_info, height_range));
+  printf("GrassInfo.ColorRange %zu\n", offsetof(radicle_grass_info, color_range));
+  printf("GrassInfo.WavePeriod %zu\n", offsetof(radicle_grass_info, wave_period));
+  printf("GrassInfo.Flags %zu\n", offsetof(radicle_grass_info, flags));
+  printf("HarvestInfo %zu\n", sizeof(radicle_harvest_info));
+  printf("HarvestInfo.Ingredient %zu\n", offsetof(radicle_harvest_info, ingredient));
+  printf("HarvestInfo.Sound %zu\n", offsetof(radicle_harvest_info, sound));
+  printf("HarvestInfo.HasSeasons %zu\n", offsetof(radicle_harvest_info, has_seasons));
+  printf("HarvestInfo.Seasons %zu\n", offsetof(radicle_harvest_info, seasons));
+  printf("TreeInfo %zu\n", sizeof(radicle_tree_info));
+  printf("TreeInfo.Harvest %zu\n", offsetof(radicle_tree_info, harvest));
+  printf("TreeInfo.HasWind %zu\n", offsetof(radicle_tree_info, has_wind));
+  printf("TreeInfo.Wind %zu\n", offsetof(radicle_tree_info, wind));
+  printf("FloraInfo %zu\n", sizeof(radicle_flora_info));
+  printf("FloraInfo.Harvest %zu\n", offsetof(radicle_flora_info, harvest));
+  printf("FloraInfo.HasFlags %zu\n", offsetof(radicle_flora_info, has_flags));
+  printf("FloraInfo.Flags %zu\n", offsetof(radicle_flora_info, flags));
+  printf("GrassLinks %zu\n", sizeof(radicle_grass_links));
+  printf("GrassLinks.Grasses %zu\n", offsetof(radicle_grass_links, grasses));
+  printf("GrassLinks.GrassCount %zu\n", offsetof(radicle_grass_links, grass_count));
+  printf("GrassLinks.Internal %zu\n", offsetof(radicle_grass_links, internal));
   return 0;
 }

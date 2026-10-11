@@ -1,5 +1,35 @@
 # Radicle code notes
 
+## src/environment/vegetation.cpp:decode_grass / decode_tree
+
+The pinned private evidence at RE commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
+`RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`, section
+3.1, verifies the OG grass loader address 0x31AA00 and bounded copy helper 0x1523A0:
+present DATA copies at most 32 bytes into zeroed storage. The typed view will
+zero-fill a short present DATA and read the prefix of a long one; original
+bytes remain available through the lossless container and payload getter.
+Missing DATA remains absent on this stored-field surface, rather than creating
+an authored payload. Section 5 verifies TREE CNAM is read only at exactly 48
+bytes; other lengths stay opaque without failing the rest of the record.
+Regression tests exercise short/long DATA and nonmatching CNAM before the fix.
+No placement, shader, wind or seasonal simulation is added.
+
+## src/environment/vegetation.cpp:decode_grass, decode_tree, decode_flora
+
+`docs/VEGETATION.md` pins stored fields and official-master size measurements.
+The shared model/bounds fields retain the existing metadata API; these getters
+validate present MODL and OBND rather than duplicating their surface. Raw flags,
+discriminators, seasonal bytes and tree wind values carry no runtime defaults.
+`decode_landscape_grasses` preserves repeated GNAM order and validates each
+individual link. Unknown payloads stay untouched in the container.
+
+`src/c_api_vegetation.cpp:radicle_landscape_grasses_decode` owns its key array
+until free; fixed record getters reuse environment-owned strings. C#
+`Vegetation.cs:RadicleEnvironment` copies arrays and releases the holder.
+ABI 26 follows merged main's ABI 25 and preserves its existing exports.
+`CMakeLists.txt:RADICLE_CSHARP_TESTS` is
+enabled in native CI with a writable runner-local .NET install directory.
+
 ## include/fo4/environment/base_records.hpp:ClimateTiming
 
 The pinned private RE record at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,

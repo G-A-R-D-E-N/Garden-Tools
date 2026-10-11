@@ -165,6 +165,7 @@ add_library(fo4
   src/environment/placed.cpp
   src/environment/terrain.cpp
   src/environment/strings.cpp
+  src/environment/vegetation.cpp
   src/environment/base_records.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
@@ -199,7 +200,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_vegetation.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -368,6 +369,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_scopes_real.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
+    tests/test_vegetation.cpp
+    tests/test_vegetation_real.cpp
     tests/test_navmesh_formlinks.cpp
     tests/test_armor_creation.cpp
     tests/test_armor_edit.cpp
