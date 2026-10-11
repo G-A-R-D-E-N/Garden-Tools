@@ -1288,7 +1288,7 @@ Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses ever
   - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
   - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
   - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
-- **Test.** Gated on `FO4_DATA_DIR`; it skips unless the CI variable `FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+- **Test.** Gated on `FO4_DATA_DIR`; it skips unless `FO4_DATA_DIR` is set: CI sets it from the variable `FO4_DATA_DIR_LINUX` on Linux, and the `fo4-data` runner sets it on Windows. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
 - **Limits.** Archives and string tables are opened for `Fallout4.esm` only, so `archives_ms` and `strings_ms` leave out the DLC archives and their string tables even when the DLC masters are loaded (the installed game has no loose `Strings` folder, and each DLC's tables, such as `Strings/DLCRobot_en.STRINGS`, are only inside its `- Main.ba2`); `load_ms` covers every listed plugin. `tests/test_env_bench_real.cpp` reads `FO4_DATA_DIR` with `std::getenv`, so on Windows a Data path outside the ANSI code page makes the test skip; the standalone tool takes wide arguments.
 
 ## Radicle/src/c_api_version.cpp:radicle_abi_version — C ABI generation probe
@@ -1687,20 +1687,20 @@ Known gaps: the flag name `UseGlobal` is rejected as unknown. The C# oracle acce
 
 ## .github/workflows/native-ci.yml — Test steps (real-data tests)
 
-The real-data tests read `FO4_DATA_DIR`. CI sets it from two Forgejo repository variables:
+The real-data tests read `FO4_DATA_DIR`. Linux takes it from a Forgejo repository variable; Windows takes it from the runner:
 
 - `FO4_DATA_DIR_LINUX` feeds the `Test` step of the Linux job `Native (Linux, Debug)`. It is unset today, so that step skips the real-data tests.
-- `FO4_DATA_DIR_WINDOWS` feeds the `Test` step of `.github/workflows/native-ci.yml:native-windows-real-data`, the only job that sets `FO4_DATA_DIR`. That job runs on the runner labelled `fo4-data`.
-- `.github/workflows/native-ci.yml:native-windows-tests` (`self-hosted, Windows, X64`) excludes the real-data suites from its Release `Test` step with `REAL_DATA_TEST_REGEX` (workflow `env`), and sets no `FO4_DATA_DIR`.
+- `.github/workflows/native-ci.yml:native-windows-real-data` reads `FO4_DATA_DIR` from the environment of the runner labelled `fo4-data` (its runner config `envs`). No workflow step sets it, and the `Test` step inherits it. The repository variable `FO4_DATA_DIR_WINDOWS` is no longer read; leave it unset so branches from before PR #480 skip the real-data tests.
+- `.github/workflows/native-ci.yml:native-windows-tests` (`self-hosted, Windows, X64`) excludes the real-data suites from its Release `Test` step with `REAL_DATA_TEST_REGEX` (workflow `env`), and sets no `FO4_DATA_DIR`; its Debug `Test` step clears any inherited value with `set FO4_DATA_DIR=`.
 - Why: Debug with data does not finish within the job's 90-minute limit. In run 775, `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` took more than 34 CPU-minutes and 6.9 GB in Debug (289-421 s in Release). The `QuestAliasRealData`, `QuestStagesRealData` and `QuestObjectivesRealData` `DecodesEveryShippedQuest` tests each took about 60 CPU-minutes in Debug (131-320 s in Release). The run was still at test 358 of 1824 when the timeout neared.
 
-The `Check FO4 data folder` step of `native-windows-real-data` runs before any build or test step:
+The `Check FO4 data folder` step (step id `fo4`) of `native-windows-real-data` reads the runner's `FO4_DATA_DIR` and runs before any build or test step:
 
-- Unset or empty: prints a `::notice::` that the real-data tests are not run. The step passes, and every later step of the job is skipped by `if: vars.FO4_DATA_DIR_WINDOWS != ''`.
+- Unset or empty: prints a `::notice::` that this runner has no Fallout 4 data configured, writes `has_data=false` to `GITHUB_OUTPUT`, and passes. Every later step is gated on `steps.fo4.outputs.has_data == 'true'` (the `always()` steps on `always() && steps.fo4.outputs.has_data == 'true'`), so the job succeeds with them skipped.
 - Set: requires the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in the folder root. Missing names are printed and the step exits 1.
-- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files.
+- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files, and writes `has_data=true`.
 
-`FO4_DATA_DIR_WINDOWS` points at the Steam install's `Fallout 4\Data` folder on the `fo4-data` runner. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
+On the `fo4-data` runner, `FO4_DATA_DIR` points at the Steam install's `Fallout 4\Data` folder. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
 
 The tests skip when `FO4_DATA_DIR` is unset, or when an expected file is missing or a list is empty. Examples:
 
@@ -1722,7 +1722,7 @@ The opt-in suites stay off in CI, because no CI variable sets them:
 
 ## .github/workflows/native-ci.yml:native-windows-real-data (Fallout 4 data job)
 
-The Fallout 4 `Data` folder exists only on the PC, so `native-windows-real-data` runs on `runs-on: [fo4-data]` and runs only the real-data tests. It is not a required check.
+The Fallout 4 `Data` folder exists only on the PC, so `native-windows-real-data` runs on `runs-on: [fo4-data]` and runs only the real-data tests. It is not a required check. The assumption is that the PC runner carries the label `fo4-data` alone and has `FO4_DATA_DIR` in its runner config `envs`. That variable reaches every job the runner takes, so only this job may run there.
 
 - Build: the Release configure matches `native-windows-tests` (same pinned actions, lane gate and 15-minute Configure timeout), then `cmake --build build\native --target fo4_tests`, which holds every FO4-reading suite (`Radicle/CMakeLists.txt:fo4_tests`). `.NET 8` stays because `RADICLE_CSHARP_TESTS=ON` makes configure need `dotnet`. The `Restore RID consumer` step is not copied because this job runs no managed tests.
 - Selection: `REAL_DATA_TEST_REGEX` (workflow `env`) is the CTest `-R` filter here and the `-E` filter in `native-windows-tests`, so both jobs split one pattern. It matches every suite ending in `RealData`, plus `QuestRuntimeReal`, `QuestConditionCorpus` (a `TEST_P`, named `OfficialMasters/QuestConditionCorpus.*`) and `RealPluginPreservation`, and four named tests in suites that also hold non-data tests: `CheckErrors.VanillaMasterHasNoErrorFindings`, `HedrCount.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent`, and the two `WeatherConcept` `*WhenPresent` tests. `RealPlugin.*` reads repository fixtures, so it is not matched. `--no-tests=error` fails the job when nothing matches.

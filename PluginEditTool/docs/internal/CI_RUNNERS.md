@@ -227,18 +227,18 @@ and was nothing of the sort.
 
 ## Real-data tests (FO4_DATA_DIR)
 
-`native-ci.yml` runs the C++ tests that need a Fallout 4 `Data` folder when one is configured. Two repo variables feed them:
+`native-ci.yml` runs the C++ tests that need a Fallout 4 `Data` folder when one is configured. Two sources feed them:
 
 - `FO4_DATA_DIR_LINUX`, read by the `Test` step of `Native (Linux, Debug)`. It is unset today.
-- `FO4_DATA_DIR_WINDOWS`, read by `Native real-data tests (Windows, MSVC, Fallout 4 data)` (`native-windows-real-data`). That job runs only on the runner labelled `fo4-data`, the machine with the Steam install's `Fallout 4\Data` folder. It builds `fo4_tests` in Release and runs only the tests that read `FO4_DATA_DIR` (those matching `REAL_DATA_TEST_REGEX`). `Native tests (Windows, MSVC)` (`self-hosted, Windows, X64`) sets no `FO4_DATA_DIR` and needs no game files; its real-data tests skip.
+- `FO4_DATA_DIR` from the environment of the runner labelled `fo4-data`, read by `Native real-data tests (Windows, MSVC, Fallout 4 data)` (`native-windows-real-data`). That job runs only on that runner, the machine with the Steam install's `Fallout 4\Data` folder. The runner's config `envs` sets `FO4_DATA_DIR`, and every job the runner takes inherits it. This assumes the runner has only the `fo4-data` label, so only this job runs on it. The repo variable `FO4_DATA_DIR_WINDOWS` is no longer read by main's workflow; leave it unset so branches from before PR #480 print that it is unset and skip the real-data tests. The job builds `fo4_tests` in Release and runs only the tests that read `FO4_DATA_DIR` (those matching `REAL_DATA_TEST_REGEX`). `Native tests (Windows, MSVC)` (`self-hosted, Windows, X64`) sets no `FO4_DATA_DIR` and needs no game files; its real-data tests skip.
 
-The folder must hold the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in its root. The `Check FO4 data folder` step enforces this. Unset: the Windows real-data job succeeds with a notice and skips its later steps. A set but bad value makes that step exit 1 and turns the `Native real-data tests` check red; that job is not a required context.
+The folder must hold the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in its root. The `Check FO4 data folder` step enforces this. Unset on the runner: the Windows real-data job succeeds with a notice and skips its later steps. A set but bad value makes that step exit 1 and turns the `Native real-data tests` check red; that job is not a required context.
 
 Data adds test time. The Release real-data tests took about 437 s with data (run 764); the Windows job without data took about 30 s. The `fo4-data` runner must be online for the real-data job to start; otherwise it waits.
 
 This is separate from `FO4RE_TEST_DATA`, which [`WINDOWS_CI_RUNNER.md`](WINDOWS_CI_RUNNER.md) documents for the managed `FO4RecordEditor.Tests` fixture tests. Do not confuse the two variables.
 
-Ask whoever sets `FO4_DATA_DIR_WINDOWS` to record the game build for that folder (the `Fallout4.exe` version). Some real-data asserts fail on a different build: `Radicle/tests/test_writeback_real.cpp:81`, `Radicle/tests/test_check_errors.cpp:195-197` and `Radicle/tests/test_weather_concept.cpp:607-611`. A game update can therefore turn CI red.
+Ask whoever sets `FO4_DATA_DIR` on the `fo4-data` runner to record the game build for that folder (the `Fallout4.exe` version). Some real-data asserts fail on a different build: `Radicle/tests/test_writeback_real.cpp:81`, `Radicle/tests/test_check_errors.cpp:195-197` and `Radicle/tests/test_weather_concept.cpp:607-611`. A game update can therefore turn CI red.
 
 `FO4_DATA_DIR_LINUX` stays unset until a Linux Debug run with data has been timed against that job's 60-minute limit.
 

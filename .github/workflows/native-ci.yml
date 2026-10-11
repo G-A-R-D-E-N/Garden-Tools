@@ -577,16 +577,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Check FO4 data folder
+        id: fo4
         shell: powershell
-        env:
-          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
         run: |
           if (-not $env:FO4_DATA_DIR) {
-            "::notice::FO4_DATA_DIR_WINDOWS is unset; the real-data tests are not run."
+            "::notice::this runner has no Fallout 4 data configured (FO4_DATA_DIR is unset); the real-data tests are not run."
+            [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "has_data=false`n")
             exit 0
           }
           if (-not (Test-Path -LiteralPath $env:FO4_DATA_DIR -PathType Container)) {
-            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
+            "FO4_DATA_DIR ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
             exit 1
           }
           $missing = @()
@@ -595,16 +595,17 @@ jobs:
           }
           if (-not (Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter 'Fallout4 - *.ba2' -File -ErrorAction SilentlyContinue)) { $missing += 'Fallout4 - *.ba2' }
           if ($missing) {
-            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
+            "FO4_DATA_DIR ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
             exit 1
           }
           "FO4_DATA_DIR: $env:FO4_DATA_DIR"
           $esm = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.esm -File).Count
           $ba2 = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.ba2 -File).Count
           "root *.esm: $esm, *.ba2: $ba2"
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "has_data=true`n")
 
       - name: Select real-data tests
-        if: vars.FO4_DATA_DIR_WINDOWS != ''
+        if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
         run: |
           if ($env:GITHUB_EVENT_NAME -ne 'pull_request') {
@@ -670,7 +671,7 @@ jobs:
           }
 
       - name: Set up .NET 8
-        if: vars.FO4_DATA_DIR_WINDOWS != ''
+        if: steps.fo4.outputs.has_data == 'true'
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         env:
           DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
@@ -678,7 +679,7 @@ jobs:
           global-json-file: Radicle/bindings/csharp/global.json
 
       - name: Set up MSVC, Ninja and ccache
-        if: vars.FO4_DATA_DIR_WINDOWS != ''
+        if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
         run: |
           $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
@@ -724,7 +725,7 @@ jobs:
           }
 
       - name: Pinned zlib source (cached)
-        if: vars.FO4_DATA_DIR_WINDOWS != ''
+        if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -791,7 +792,7 @@ jobs:
 
       - name: Configure
         timeout-minutes: 15
-        if: vars.FO4_DATA_DIR_WINDOWS != ''
+        if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
         run: |
           $launcher = @()
@@ -808,18 +809,16 @@ jobs:
           }
 
       - name: Build
-        if: vars.FO4_DATA_DIR_WINDOWS != ''
+        if: steps.fo4.outputs.has_data == 'true'
         run: cmake --build build\native --target fo4_tests
 
       - name: ccache statistics
-        if: always() && vars.FO4_DATA_DIR_WINDOWS != ''
+        if: always() && steps.fo4.outputs.has_data == 'true'
         run: if defined CCACHE "%CCACHE%" --show-stats
 
       - name: Test
-        if: vars.FO4_DATA_DIR_WINDOWS != ''
+        if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
-        env:
-          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
         run: |
           $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
           if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
@@ -827,5 +826,5 @@ jobs:
           exit $LASTEXITCODE
 
       - name: Stop .NET build servers
-        if: always() && vars.FO4_DATA_DIR_WINDOWS != ''
+        if: always() && steps.fo4.outputs.has_data == 'true'
         run: dotnet build-server shutdown
