@@ -112,6 +112,8 @@ add_executable(
     unit/RadiclePluginMasterOverrideTests.cpp
     unit/RadiclePluginScalarTests.cpp
     unit/RadiclePluginSchemaGridTests.cpp
+    unit/RadiclePluginW0Tests.cpp
+    unit/RadiclePluginSchemaAuthoringTests.cpp
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp
@@ -175,6 +177,7 @@ catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT 10)
 add_executable(
     fo4ide_test_proj_expl_hazd
     unit/RadiclePluginProjExplHazdTests.cpp
+    unit/RadiclePluginProjFlagsTests.cpp
     unit/RadiclePluginProjExplHazdLimitsTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
 )

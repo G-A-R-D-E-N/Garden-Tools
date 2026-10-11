@@ -147,6 +147,7 @@ add_library(fo4
   src/schema/form_link_mixed.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
+  src/schema/formlink_list_read.cpp
   src/schema/nested_formlink_lists.cpp
   src/schema/nested_formlink_list_null.cpp
   src/schema/preflight.cpp

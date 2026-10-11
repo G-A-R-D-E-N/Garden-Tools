@@ -20,12 +20,12 @@ export default function RecordContextMenu({
 }) {
   const {
     copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
-    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq,
+    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq, createSchemaRecord,
     checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
   } = actions;
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
-      {!menu.row.HasChildren && (
+      {!menu.row.HasChildren && menu.row.Editable?.[menu.col] !== false && (
         <button onClick={() => onEdit(menu.row, menu.col)}><Pencil size={13} /> Edit value <span className="rv-key">F2</span></button>
       )}
 
@@ -61,6 +61,11 @@ export default function RecordContextMenu({
           <button disabled={!elementActions?.canMoveDown}
             onClick={() => elementAction('down', menu.row, menu.col)}><ArrowDown size={13} /> Move down</button>
         </>
+      )}
+      {elementActions?.canCreate && (
+        <button onClick={() => createSchemaRecord(menu.col)}>
+          <FilePlus2 size={13} /> Create {matrix.Type} record…
+        </button>
       )}
       {elementActions?.canClear && (
         <button className="rv-danger" onClick={() => elementAction('clear', menu.row, menu.col)}>

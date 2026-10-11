@@ -286,6 +286,18 @@ void load(fo4ide::plugin::RadiclePluginBackend& backend,
     REQUIRE(result.has_value());
 }
 
+std::vector<std::byte> readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    REQUIRE(stream.good());
+    const auto size = stream.tellg();
+    REQUIRE(size >= 0);
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+    stream.seekg(0);
+    stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    REQUIRE(stream.good());
+    return bytes;
+}
+
 nlohmann::json eyesPayload() {
     return {
         {"editorId", "CompactEyes"},
@@ -467,6 +479,34 @@ TEST_CASE("Native CopyAsNewRecord duplicates a Windows-1252 EditorID as UTF-8 te
         patch, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(duplicate != nullptr);
     CHECK(editorId(*duplicate) == std::string{"Caf\xE9" "DUP"});
+}
+
+TEST_CASE("Native CopyAsNewRecord refuses an EditorID that Windows-1252 cannot store without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(sourcePath, copySourceBytes(std::string_view{"Caf\xE9", 4}));
+    writeBytes(patchPath, emptyPatchBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({
+        pluginEntry("Base.esm", sourcePath),
+        pluginEntry("Patch.esp", patchPath)
+    }));
+    const auto before = readBytes(patchPath);
+
+    const auto refused = backend.invokeLegacyBackend(
+        "CopyAsNewRecord",
+        nlohmann::json::array({"Base.esm", "000801:Base.esm", "Patch.esp", "\xe6\x97\xa5"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "CopyAsNewFailed");
+    const auto pending = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(pending.has_value());
+    for (const auto& plugin : nlohmann::json::parse(pending->get<std::string>())) {
+        CHECK(plugin.at("Pending") == false);
+    }
+    CHECK(readBytes(patchPath) == before);
 }
 
 TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin references") {

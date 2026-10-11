@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include <fo4/text/encoding.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -11,12 +12,12 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
-#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin::support {
 
@@ -50,6 +51,17 @@ inline std::string editorId(const fo4::Record& record) {
         return fo4::text::windows1252_to_utf8(std::string(begin, nul));
     }
     return {};
+}
+
+inline Result<std::string> encodeEditorId(std::string_view utf8) {
+    auto stored = fo4::text::utf8_to_windows1252(utf8);
+    if (!stored) {
+        return std::unexpected(Error{
+            "InvalidEditorId",
+            "EditorID is not valid UTF-8 text representable in Windows-1252"
+        });
+    }
+    return std::move(*stored);
 }
 
 inline std::string asciiLower(std::string_view value) {
