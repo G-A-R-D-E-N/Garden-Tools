@@ -31,13 +31,20 @@ public static partial class WriteService
         }
 
         if (remap.Count == 0)
-            return $"'{plugin}' is already ESL-compatible (all native form IDs within {range}).";
+        {
+            var lowered = LowerHedrNext(mod, native.Select(r => r.FormKey.ID), first, last);
+            if (lowered is null)
+                return $"'{plugin}' is already ESL-compatible (all native form IDs within {range}).";
+            MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
+            return $"'{plugin}' already has all native form IDs within {range}; lowered HEDR next object ID to 0x{lowered:X3}. In memory until save_plugin.";
+        }
 
         if (!TryRekeyRecords(mod, remap, "compact_to_esl", plugin,
                 $"Compact in xEdit instead, or keep cell-placed records within {range} when authoring them.",
                 out var rekeyError))
             return rekeyError;
 
+        while (next <= last && inRange.Contains(next)) next++;
         mod.ModHeader.Stats.NextFormID = next;
         MutagenLoader.InvalidateModIndex(plugin); NotifyChanged(plugin);
         return $"Compacted {plugin}: remapped {remap.Count} record(s) into the ESL range ({range}) and fixed " +
@@ -113,13 +120,9 @@ public static partial class WriteService
             if (outOfRange > 0)
                 return $"Cannot flag '{name}' light: {outOfRange} native record(s) sit outside {range}. Run compact_to_esl first.";
 
-            var lowered = native.Count > 0 ? native.Max(r => r.FormKey.ID) + 1 : first;
             var lowerNote = "";
-            if (mod.ModHeader.Stats.NextFormID > last && mod.ModHeader.Stats.NextFormID > lowered)
-            {
-                mod.ModHeader.Stats.NextFormID = lowered;
+            if (LowerHedrNext(mod, native.Select(r => r.FormKey.ID), first, last) is uint lowered)
                 lowerNote = $" Lowered HEDR next object ID to 0x{lowered:X3}.";
-            }
 
             mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Small;
             MutagenLoader.InvalidateModIndex(name); NotifyChanged(name);
@@ -137,6 +140,14 @@ public static partial class WriteService
         var first = legacyFloor ? 0x001u : 0x800u;
         const uint last = 0xFFFu;
         return (first, last, (int)(last - first + 1), $"0x{first:X3}-0x{last:X3}");
+    }
+
+    private static uint? LowerHedrNext(IFallout4Mod mod, IEnumerable<uint> nativeIds, uint first, uint last)
+    {
+        var lowered = nativeIds.Any() ? nativeIds.Max() + 1 : first;
+        if (mod.ModHeader.Stats.NextFormID <= last || mod.ModHeader.Stats.NextFormID <= lowered) return null;
+        mod.ModHeader.Stats.NextFormID = lowered;
+        return lowered;
     }
 
     private static bool HasForeignReference(IFallout4Mod mod)

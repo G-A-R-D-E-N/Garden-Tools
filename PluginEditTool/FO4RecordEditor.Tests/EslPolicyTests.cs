@@ -147,6 +147,50 @@ public class EslPolicyTests
     }
 
     [Fact]
+    public void CompactToEsl_InMemoryNextObjectIdSkipsRecordsAlreadyInRange()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x801, "Next_Taken");
+        AddWeapon(mod, 0x5000, "Next_Moves");
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("compact_to_esl", Args(plugin)).Should().Contain("remapped 1");
+        mod.Weapons.First(w => w.EditorID == "Next_Moves").FormKey.ID.Should().Be(0x800u);
+        mod.ModHeader.Stats.NextFormID.Should().Be(0x802u);
+        mod.EnumerateMajorRecords().Any(r => r.FormKey.ID == mod.ModHeader.Stats.NextFormID).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CompactToEsl_FullRangeAfterCompactionSetsNextToTheCeiling()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        for (uint id = 0x801; id <= 0xFFF; id++) AddWeapon(mod, id, $"Ceil_{id:X3}");
+        AddWeapon(mod, 0x5000, "Ceil_High");
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("compact_to_esl", Args(plugin)).Should().Contain("remapped 1");
+        mod.Weapons.First(w => w.EditorID == "Ceil_High").FormKey.ID.Should().Be(0x800u);
+        mod.ModHeader.Stats.NextFormID.Should().Be(0x1000u);
+        mod.EnumerateMajorRecords().Any(r => r.FormKey.ID == mod.ModHeader.Stats.NextFormID).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CompactToEsl_AlreadyCompatiblePluginLowersOutOfRangeNextObjectId()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x900, "Compat_A");
+        mod.ModHeader.Stats.NextFormID = 0x5000;
+        var exec = new PluginToolExecutor(() => null);
+
+        exec.Execute("compact_to_esl", Args(plugin))
+            .Should().Contain("already has all native form IDs within 0x800-0xFFF").And.Contain("lowered HEDR next object ID to 0x901");
+        mod.ModHeader.Stats.NextFormID.Should().Be(0x901u);
+    }
+
+    [Fact]
     public void SetLight_RefusesMasterlessPluginWithIdsBelowTheFloor()
     {
         var plugin = NewPlugin(1f, withMaster: false);
