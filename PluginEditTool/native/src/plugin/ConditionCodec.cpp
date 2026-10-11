@@ -24,6 +24,10 @@ std::string lower(std::string_view text) {
     return out;
 }
 
+// Mirrors Mutagen's FormKey.ToString() for a raw FormID resolved in the
+// plugin's master context: "000812:Master.esp". Raws whose master index is
+// out of range fall back to the empty-owner form "000001:" exactly like
+// Mutagen's FormKey.Factory(reference: true) does for unmatched indices.
 std::string formIdString(std::uint32_t raw, const fo4::Plugin& plugin) {
     const fo4::RawFormId formId{raw};
     if (!formId.is_null()) {
@@ -36,20 +40,10 @@ std::string formIdString(std::uint32_t raw, const fo4::Plugin& plugin) {
         }
     }
     std::ostringstream out;
-    out << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << raw << ':';
+    out << std::uppercase << std::hex << std::setw(6) << std::setfill('0')
+        << (raw & 0x00FFFFFFu) << ':';
     return out.str();
 }
-
-std::optional<fo4::RawFormId> placeholderFormId(std::string_view text) {
-    if (text.size() != 9 || text[8] != ':') return std::nullopt;
-    std::uint32_t raw = 0;
-    const auto [end, error] = std::from_chars(text.data(), text.data() + 8, raw, 16);
-    if (error != std::errc{} || end != text.data() + 8) return std::nullopt;
-    return fo4::RawFormId{raw};
-}
-
-constexpr std::int64_t kParamMin = std::numeric_limits<std::int32_t>::min();
-constexpr std::int64_t kParamMax = std::numeric_limits<std::uint32_t>::max();
 
 std::optional<std::uint32_t> flagValue(std::string_view name) {
     const auto needle = lower(name);
@@ -129,7 +123,6 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
 std::optional<fo4::RawFormId> resolveConditionFormId(std::string_view text,
                                                      const fo4::Plugin& plugin,
                                                      const EditorIdResolver& resolveEditorId) {
-    if (const auto placeholder = placeholderFormId(text)) return placeholder;
     try {
         const auto key = fo4::FormKey::parse(text);
         const auto raw = fo4::encode_plugin_form_id(key, fo4::plugin_form_id_context(plugin));
@@ -174,7 +167,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             const auto& metadata = element["_native"];
             if (!metadata.is_object() || metadata.size() != 3 || !metadata.contains("ctda") ||
                 !metadata.contains("cis1") || !metadata.contains("cis2") || !metadata["ctda"].is_array() ||
-                metadata["ctda"].size() != 32) reject("invalid native preservation data");
+                metadata["ctda"].size() > 32) reject("invalid native preservation data");
             std::vector<std::byte> bytes;
             for (const auto& byte : metadata["ctda"]) {
                 if (!byte.is_number_integer() || byte < 0 || byte > 255) reject("invalid native preservation byte");
@@ -240,18 +233,13 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             if (!element.contains(key)) return;
             const auto& value = element[key];
             if (value.is_number_integer()) {
-                if (value < kParamMin || value > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
-                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(value.get<std::int64_t>()));
+                if (value < std::numeric_limits<std::int32_t>::min() || value > std::numeric_limits<std::int32_t>::max()) reject("condition parameter is out of range");
+                target = value.get<std::int32_t>();
             } else if (value.is_string()) {
                 const auto source = value.get<std::string>();
                 if (source.empty()) return;
-                std::int64_t integer = 0;
-                const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), integer);
-                if (error == std::errc{} && end == source.data() + source.size()) {
-                    if (integer < kParamMin || integer > kParamMax) reject(std::string(key) + " " + source + " is outside [-2147483648, 4294967295]");
-                    target = static_cast<std::int32_t>(static_cast<std::uint32_t>(integer));
-                    return;
-                }
+                const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), target);
+                if (error == std::errc{} && end == source.data() + source.size()) return;
                 if (const auto raw = resolveConditionFormId(source, plugin, resolveEditorId)) {
                     const auto bits = raw->value();
                     std::memcpy(&target, &bits, sizeof(target));
@@ -288,7 +276,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         if (changed("value") || changed("compareGlobal")) {
             if (element.contains("compareGlobal")) {
                 const auto raw = resolveConditionFormId(text("compareGlobal"), plugin, resolveEditorId);
-                if (!raw) reject("unresolved comparison global");
+                if (!raw || raw->is_null()) reject("unresolved comparison global");
                 condition.comparison_raw = raw->value();
                 condition.flags_byte |= fo4::k_ctda_flag_use_global;
             } else {

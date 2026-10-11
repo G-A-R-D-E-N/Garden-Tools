@@ -2006,11 +2006,13 @@ std::vector<std::byte> makeCtdaPayload(std::uint16_t function,
 
 std::vector<std::byte> makeEventDataPayload() {
     fo4::test::ByteWriter ctda;
-    ctda.u32(0);
+    ctda.u8(0);
+    ctda.u8(0);
+    ctda.u8(0);
+    ctda.u8(0);
     ctda.u32(0);
     ctda.u16(4672);
     ctda.u16(0);
-    ctda.u32(0);
     ctda.u32(0);
     ctda.u32(0);
     ctda.u32(0);

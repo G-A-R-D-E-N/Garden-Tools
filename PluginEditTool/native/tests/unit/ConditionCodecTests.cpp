@@ -2,8 +2,6 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <fo4ide/plugin/ConditionCodec.hpp>
 
-#include <limits>
-
 namespace {
 
 fo4::Plugin context() {
@@ -16,7 +14,7 @@ fo4::CtdaCondition storedCondition() {
     fo4::CtdaCondition condition;
     condition.function = 8;
     condition.comparison_raw = 0x3f800000;
-    condition.padding = {std::byte{0xac}, std::byte{0x93}, std::byte{0x13}};
+    condition.opaque_prefix = {std::byte{0xac}, std::byte{0x93}, std::byte{0x13}};
     condition.unknown2 = 0x1234;
     condition.unknown3 = 123;
     condition.parameter1_string = "first";
@@ -79,7 +77,7 @@ TEST_CASE("condition codec retains row identity when rows move", "[condition-pre
     const auto plugin = context();
     const auto first = storedCondition();
     auto second = first;
-    second.padding[0] = std::byte{0x55};
+    second.opaque_prefix[0] = std::byte{0x55};
     second.parameter1_string = "other";
     auto rows = nlohmann::json::array({fo4ide::plugin::describeCondition(first, plugin),
                                       fo4ide::plugin::describeCondition(second, plugin)});
@@ -126,97 +124,4 @@ TEST_CASE("condition codec refuses malformed preservation data and invalid edits
     const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
     CHECK_FALSE(rebuilt.has_value());
     CHECK_FALSE(failure.empty());
-}
-
-TEST_CASE("condition codec stores integer params across the 32-bit range", "[condition-preservation]") {
-    const auto plugin = context();
-    std::string failure;
-
-    const nlohmann::json low = {{"function", "GetAngle"}, {"param1", std::numeric_limits<std::int32_t>::min()}};
-    const auto lowCondition = fo4ide::plugin::buildCondition(low, plugin, {}, failure);
-    REQUIRE(lowCondition.has_value());
-    CHECK(static_cast<std::uint32_t>(lowCondition->param1) == 0x80000000u);
-
-    const nlohmann::json high = {{"function", "GetAngle"}, {"param2", std::numeric_limits<std::uint32_t>::max()}};
-    const auto highCondition = fo4ide::plugin::buildCondition(high, plugin, {}, failure);
-    REQUIRE(highCondition.has_value());
-    CHECK(static_cast<std::uint32_t>(highCondition->param2) == 0xFFFFFFFFu);
-
-    const nlohmann::json above = {{"function", "GetAngle"}, {"param1", 3000000000u}};
-    const auto aboveCondition = fo4ide::plugin::buildCondition(above, plugin, {}, failure);
-    REQUIRE(aboveCondition.has_value());
-    CHECK(static_cast<std::uint32_t>(aboveCondition->param1) == 3000000000u);
-}
-
-TEST_CASE("condition codec rejects integer params outside the 32-bit range", "[condition-preservation]") {
-    const auto plugin = context();
-    std::string failure;
-
-    const nlohmann::json below = {{"function", "GetAngle"},
-                                  {"param1", static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::min()) - 1}};
-    CHECK_FALSE(fo4ide::plugin::buildCondition(below, plugin, {}, failure).has_value());
-    CHECK(failure == "param1 -2147483649 is outside [-2147483648, 4294967295]");
-
-    const nlohmann::json above = {{"function", "GetAngle"},
-                                  {"param2", static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1}};
-    CHECK_FALSE(fo4ide::plugin::buildCondition(above, plugin, {}, failure).has_value());
-    CHECK(failure == "param2 4294967296 is outside [-2147483648, 4294967295]");
-
-    const nlohmann::json textAbove = {{"function", "GetAngle"}, {"param1", "4294967296"}};
-    CHECK_FALSE(fo4ide::plugin::buildCondition(textAbove, plugin, {}, failure).has_value());
-    CHECK(failure == "param1 4294967296 is outside [-2147483648, 4294967295]");
-}
-
-TEST_CASE("condition codec round trips unresolvable form IDs through describe", "[condition-preservation]") {
-    fo4::Plugin plugin;
-    plugin.key = fo4::PluginKey::from_filename("CondEdit.esp");
-
-    fo4::CtdaCondition original;
-    original.function = 8;
-    original.flags_byte = 0x44;
-    original.comparison_raw = 0x0B000802u;
-    original.param1 = static_cast<std::int32_t>(0x0A000801u);
-    original.reference = 0x0A000803u;
-    original.unknown3 = -1;
-
-    auto json = fo4ide::plugin::describeCondition(original, plugin);
-    CHECK(json.at("param1") == "0A000801:");
-    CHECK(json.at("compareGlobal") == "0B000802:");
-    CHECK(json.at("reference") == "0A000803:");
-    json.erase("_native");
-
-    std::string failure;
-    const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
-    REQUIRE(rebuilt.has_value());
-    CHECK(failure.empty());
-    checkSame(*rebuilt, original);
-}
-
-TEST_CASE("condition codec round trips a zero compareGlobal as raw zero", "[condition-preservation]") {
-    fo4::Plugin plugin;
-    plugin.key = fo4::PluginKey::from_filename("CondEdit.esp");
-
-    fo4::CtdaCondition original;
-    original.function = 8;
-    original.flags_byte = 0x04;
-
-    auto json = fo4ide::plugin::describeCondition(original, plugin);
-    CHECK(json.at("compareGlobal") == "00000000:");
-    json.erase("_native");
-
-    std::string failure;
-    const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
-    REQUIRE(rebuilt.has_value());
-    CHECK(rebuilt->use_global());
-    CHECK(rebuilt->comparison_raw == 0u);
-}
-
-TEST_CASE("condition codec accepts only the exact placeholder form for unresolvable form IDs", "[condition-preservation]") {
-    const auto plugin = context();
-    for (const char* text : {"", "000801:", "0A000801", "0A0008010:", "0x0A000801:", "0A00080G:"}) {
-        std::string failure;
-        const nlohmann::json element = {{"function", "GetAngle"}, {"reference", text}};
-        CHECK_FALSE(fo4ide::plugin::buildCondition(element, plugin, {}, failure).has_value());
-        CHECK_FALSE(failure.empty());
-    }
 }

@@ -21,13 +21,13 @@ struct Fixture {
         fo4::CtdaCondition first;
         first.function = 8;
         first.comparison_raw = 0x3f800000;
-        first.padding = {std::byte{0xac}, std::byte{0x93}, std::byte{0x13}};
+        first.opaque_prefix = {std::byte{0xac}, std::byte{0x93}, std::byte{0x13}};
         first.unknown2 = 0x1234;
         first.unknown3 = 123;
         first.parameter1_string = "first";
         first.parameter2_string = "second";
         auto second = first;
-        second.padding[0] = std::byte{0x55};
+        second.opaque_prefix[0] = std::byte{0x55};
         second.parameter1_string = "other";
         conditions = {first, second};
         fo4::test::ByteWriter out;

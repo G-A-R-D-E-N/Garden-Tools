@@ -99,7 +99,7 @@ TEST(QuestStagesRealData, DecodesEveryShippedQuest) {
   EXPECT_GT(multi_entry, 200u);
 }
 
-TEST(QuestStagesRealData, MQ101ConditionsRoundTripPaddingBytes) {
+TEST(QuestStagesRealData, MQ101ConditionsRoundTripOpaqueBytes) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to run this";
@@ -110,7 +110,7 @@ TEST(QuestStagesRealData, MQ101ConditionsRoundTripPaddingBytes) {
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("01ED86:Fallout4.esm"));
   ASSERT_NE(record, nullptr);
   std::size_t conditions = 0;
-  std::size_t padding = 0;
+  std::size_t opaque = 0;
   for (const auto& member : record->subrecords) {
     if (member.signature != fo4::sig_ctda) continue;
     SCOPED_TRACE("MQ101 CTDA ordinal " + std::to_string(conditions));
@@ -119,12 +119,12 @@ TEST(QuestStagesRealData, MQ101ConditionsRoundTripPaddingBytes) {
     EXPECT_EQ(fo4::serialize_ctda_condition(condition), member.data);
     ASSERT_GE(member.data.size(), 4u);
     if (member.data[1] != std::byte{0} || member.data[2] != std::byte{0} ||
-        member.data[3] != std::byte{0}) ++padding;
+        member.data[3] != std::byte{0}) ++opaque;
   }
   EXPECT_GT(conditions, 0u);
-  EXPECT_GT(padding, 0u);
+  EXPECT_GT(opaque, 0u);
   RecordProperty("ConditionCount", conditions);
-  RecordProperty("PaddingCount", padding);
+  RecordProperty("OpaquePrefixCount", opaque);
 }
 
 namespace {
@@ -144,7 +144,7 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
   const auto condition_member = [&](const auto& member) {
     return member.signature == fo4::sig_ctda || member.signature == cis1 || member.signature == cis2;
   };
-  std::size_t quests = 0, conditions = 0, padding = 0, runs = 0;
+  std::size_t quests = 0, conditions = 0, opaque = 0, runs = 0;
   for (const auto* record : fo4::collect_records(plugin)) {
     if (record->header.signature != k_qust) continue;
     ++quests;
@@ -158,7 +158,7 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
         if (member.signature != fo4::sig_ctda) continue;
         ++raw_count;
         ASSERT_GE(member.data.size(), 4u);
-        padding += member.data[1] != std::byte{0} || member.data[2] != std::byte{0} || member.data[3] != std::byte{0};
+        opaque += member.data[1] != std::byte{0} || member.data[2] != std::byte{0} || member.data[3] != std::byte{0};
       }
       SCOPED_TRACE("condition run at member " + std::to_string(begin));
       const auto run = std::span<const fo4::Subrecord>(record->subrecords).subspan(begin, i - begin);
@@ -183,7 +183,7 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
   RecordProperty("QuestCount", quests);
   RecordProperty("ConditionCount", conditions);
   RecordProperty("ConditionRunCount", runs);
-  RecordProperty("PaddingCount", padding);
+  RecordProperty("OpaquePrefixCount", opaque);
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, QuestConditionCorpus, testing::Values(
