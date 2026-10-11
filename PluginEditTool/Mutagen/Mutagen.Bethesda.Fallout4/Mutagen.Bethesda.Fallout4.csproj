@@ -124,6 +124,7 @@
     <Compile Include="Records\Common Subrecords\ConditionGlobal.cs">
       <DependentUpon>Condition.xml</DependentUpon>
     </Compile>
+    <Compile Include="Records\Common Subrecords\ConditionBinaryOverlays.cs" />
     <Compile Include="Records\Common Subrecords\Decal.cs">
       <DependentUpon>Decal.xml</DependentUpon>
     </Compile>

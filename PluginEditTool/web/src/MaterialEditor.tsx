@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Save, RotateCcw, ChevronDown, ChevronRight, Undo2 } from 'lucide-react';
 import type { MaterialHost, MaterialField } from './backend';
 
@@ -18,11 +18,12 @@ const formatColor = (arr: number[]) => arr.map(n => Number(n.toFixed(3))).join('
 
 
 export default function MaterialEditor(
-  { fields, path, material, onSaved, appendLog }: {
+  { fields, path, material, onSaved, onDirtyChange, appendLog }: {
     fields: MaterialField[];
     path: string;
     material: MaterialHost;
     onSaved: () => void;
+    onDirtyChange: (dirty: boolean) => void;
     appendLog: (line: string) => void;
   }
 ) {
@@ -38,6 +39,11 @@ export default function MaterialEditor(
 
   const dirtyKeys = Object.keys(edits);
   const dirtyCount = dirtyKeys.length;
+
+  useEffect(() => {
+    onDirtyChange(dirtyCount > 0);
+    return () => onDirtyChange(false);
+  }, [dirtyCount, onDirtyChange]);
 
   const cur = (f: MaterialField) => (f.name in edits ? edits[f.name] : f.value);
   const setVal = (name: string, value: string) => {
@@ -106,6 +112,7 @@ export default function MaterialEditor(
           {dirtyCount ? `${dirtyCount} unsaved change${dirtyCount > 1 ? 's' : ''}` : 'No changes'}
         </span>
         <div className="nif-editor-actions">
+          <span className="nif-dirty-count" title={path}>Save target: {path.split(/[\\/]/).pop()}</span>
           <button className="sidebar-action-btn" disabled={!dirtyCount || saving} onClick={() => setEdits({})} title="Discard all changes">
             <RotateCcw size={13} /> Revert
           </button>

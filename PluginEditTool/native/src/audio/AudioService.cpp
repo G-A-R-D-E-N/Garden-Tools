@@ -82,6 +82,11 @@ std::string firstLine(std::string value) {
     return value;
 }
 
+bool sameLocation(const std::filesystem::path& a, const std::filesystem::path& b) {
+    std::error_code ec;
+    return std::filesystem::weakly_canonical(a, ec) == std::filesystem::weakly_canonical(b, ec);
+}
+
 }
 
 AudioService::AudioService(process::Runner& runner, const tools::Locator& tools)
@@ -160,6 +165,9 @@ Result<std::string> AudioService::convertOneToXwm(const std::filesystem::path& s
     if (outPath.empty()) {
         outPath = source;
         outPath.replace_extension(".xwm");
+    }
+    if (sameLocation(outPath, source)) {
+        return std::unexpected(Error{"AudioOutputMatchesSource", "Refusing to overwrite the source audio file: " + source.string()});
     }
     if (auto ready = ensureOutputDirectory(outPath); !ready) return std::unexpected(ready.error());
 
@@ -254,6 +262,9 @@ Result<std::string> AudioService::convertFromXwm(const std::filesystem::path& so
     if (finalOutput.empty()) {
         finalOutput = source;
         finalOutput.replace_extension("." + targetExtension);
+    }
+    if (sameLocation(finalOutput, source)) {
+        return std::unexpected(Error{"AudioOutputMatchesSource", "Refusing to overwrite the source audio file: " + source.string()});
     }
     if (auto ready = ensureOutputDirectory(finalOutput); !ready) return std::unexpected(ready.error());
 

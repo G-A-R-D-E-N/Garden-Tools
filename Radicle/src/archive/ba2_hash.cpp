@@ -33,10 +33,7 @@ std::uint32_t ba2_crc32(std::span<const std::byte> data) {
   return crc;
 }
 
-std::string normalize_ba2_path(std::string_view path) {
-  if (path.empty() || path.size() >= k_max_path_length) {
-    return ".";
-  }
+std::string normalize_ba2_name(std::string_view path) {
   std::string out;
   out.reserve(path.size());
   for (const unsigned char ch : path) {
@@ -55,6 +52,13 @@ std::string normalize_ba2_path(std::string_view path) {
   }
   out.erase(0, first);
   return out;
+}
+
+std::string normalize_ba2_path(std::string_view path) {
+  if (path.empty() || path.size() >= k_max_path_length) {
+    return ".";
+  }
+  return normalize_ba2_name(path);
 }
 
 Ba2Hashes compute_ba2_hashes(std::string_view path) {

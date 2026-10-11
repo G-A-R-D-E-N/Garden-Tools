@@ -26,10 +26,9 @@ std::uint32_t read_u32(const std::vector<std::byte>& data, std::size_t offset) {
   return value;
 }
 
-}  // namespace
-
-QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& quest) {
-  const auto* record = find_record(plugin, quest);
+QuestObjectives decode_quest_objectives_record(const Plugin& plugin,
+                                               const FormKey& quest,
+                                               const Record* record) {
   if (record == nullptr) {
     throw QuestError("QUST record " + quest.to_string() + " was not found");
   }
@@ -113,6 +112,16 @@ QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& que
   }
 
   return result;
+}
+
+}  // namespace
+
+QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& quest) {
+  return decode_quest_objectives_record(plugin, quest, find_record(plugin, quest));
+}
+
+QuestObjectives decode_quest_objectives(const RecordIndex& index, const FormKey& quest) {
+  return decode_quest_objectives_record(index.plugin(), quest, index.find(quest));
 }
 
 namespace {

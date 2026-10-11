@@ -53,12 +53,13 @@ TEST(QuestStagesRealData, DecodesEveryShippedQuest) {
     ++files;
 
     const auto plugin = fo4::read_plugin_file(path);
+    const fo4::RecordIndex index{plugin};
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != k_qust) continue;
       ++quests;
       const auto expected = stage_markers(*record);
       try {
-        const auto decoded = fo4::forms::decode_quest_stages(plugin, record->form_key);
+        const auto decoded = fo4::forms::decode_quest_stages(index, record->form_key);
         if (decoded.stages.size() != expected) {
           failures.push_back(std::string{name} + " " + record->form_key.to_string() +
                              ": decoded " + std::to_string(decoded.stages.size()) +

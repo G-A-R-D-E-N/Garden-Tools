@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link2, X, RefreshCw, ArrowUp, ArrowDown, Save, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { getMasters, type MasterRow } from './backend';
 import './PapyrusPanel.css';
@@ -21,6 +21,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
   const [cleanPreview, setCleanPreview] = useState('');
   const [staged, setStaged] = useState(false);
+  const loadSeq = useRef(0);
 
   const masters = getMasters();
   const unavailable = !masters;
@@ -34,15 +35,31 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
     });
   }, [masters]);
 
+  const selectPlugin = (name: string) => {
+    loadSeq.current++;
+    setPlugin(name);
+    setRows(null);
+    setOrder([]);
+    setLight(false);
+    setOrigLight(false);
+    setCleanPreview('');
+    setStaged(false);
+    setResult('');
+    setError('');
+    setBusy(false);
+  };
+
   const appendLog = (line: string) =>
     setLog(prev => [`[${new Date().toLocaleTimeString()}] ${line}`, ...prev].slice(0, 200));
 
-  const load = async (p?: string) => {
+  const load = async (p?: string, message = '') => {
     const name = (p ?? plugin).trim();
     if (!masters || !name) return;
+    const mySeq = ++loadSeq.current;
     setBusy(true); setError(''); setResult('');
     try {
       const raw = await masters.List(name);
+      if (loadSeq.current !== mySeq) return;
       const parsed = JSON.parse(raw) as { pluginName?: string; masters?: MasterRow[]; light?: boolean; error?: string };
       if (parsed.error) throw new Error(parsed.error);
       if (!parsed.masters) throw new Error('no masters');
@@ -51,11 +68,13 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
       setLight(!!parsed.light);
       setOrigLight(!!parsed.light);
       setCleanPreview('');
+      setResult(message);
       appendLog(`• loaded masters of ${name} (${parsed.masters.length})`);
     } catch (e) {
+      if (loadSeq.current !== mySeq) return;
       setRows(null);
       setError('Could not load masters: ' + (e instanceof Error ? e.message : String(e)));
-    } finally { setBusy(false); }
+    } finally { if (loadSeq.current === mySeq) setBusy(false); }
   };
 
   const orderDirty = useMemo(() => rows != null && order.some((n, i) => n !== rows[i]?.name), [order, rows]);
@@ -71,59 +90,69 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
 
   const applyOrder = async () => {
     if (!masters || !plugin.trim() || !orderDirty) return;
+    const mySeq = loadSeq.current;
     setBusy(true);
+    let reloading = false;
     try {
       const res = await masters.Reorder(plugin, JSON.stringify(order));
       const ok = /^Wrote /.test(res);
-      setResult(res);
       appendLog(`${ok ? '✓' : '✗'} ${ok ? 'reordered masters' : 'reorder failed'}`);
-      if (ok) await load(plugin);
+      if (loadSeq.current !== mySeq) return;
+      if (ok) { reloading = true; await load(plugin, res); }
+      else setResult(res);
     } catch (e) {
       appendLog('✗ reorder failed -- ' + (e instanceof Error ? e.message : String(e)));
-    } finally { setBusy(false); }
+    } finally { if (!reloading && loadSeq.current === mySeq) setBusy(false); }
   };
 
   const toggleLight = async (checked: boolean) => {
     if (!masters || !plugin.trim()) return;
+    const mySeq = loadSeq.current;
     setLight(checked);
     setBusy(true);
     try {
       const res = await masters.SetLight(plugin, checked);
       const ok = /^Set the ESL|^Cleared the ESL/.test(res);
       appendLog(`${ok ? '✓' : '✗'} ${res}`);
-      if (!ok) setLight(!checked);
+      if (!ok && loadSeq.current === mySeq) setLight(!checked);
     } catch (e) {
-      setLight(!checked);
+      if (loadSeq.current === mySeq) setLight(!checked);
       appendLog('✗ set_light_flag failed -- ' + (e instanceof Error ? e.message : String(e)));
-    } finally { setBusy(false); }
+    } finally { if (loadSeq.current === mySeq) setBusy(false); }
   };
 
   const cleanMasters = async (apply: boolean) => {
     if (!masters || !plugin.trim()) return;
+    const mySeq = loadSeq.current;
     setBusy(true);
+    let reloading = false;
     try {
       const res = await masters.CleanUnused(plugin, apply);
       appendLog(`${/^(DRY RUN|Removed|No unused)/.test(res) ? '✓' : '✗'} ${res}`);
+      if (loadSeq.current !== mySeq) return;
       setCleanPreview(!apply && res.startsWith('DRY RUN:') ? res : '');
-      if (apply && res.startsWith('Removed')) { setStaged(true); setResult(res); await load(plugin); }
+      if (apply && res.startsWith('Removed')) { setStaged(true); reloading = true; await load(plugin, res); }
       else if (!apply) setResult(res);
     } catch (e) {
       appendLog('✗ clean masters failed -- ' + (e instanceof Error ? e.message : String(e)));
-    } finally { setBusy(false); }
+    } finally { if (!reloading && loadSeq.current === mySeq) setBusy(false); }
   };
 
   const savePlugin = async () => {
     if (!masters || !plugin.trim()) return;
+    const mySeq = loadSeq.current;
     setBusy(true);
+    let reloading = false;
     try {
       const res = await masters.SavePlugin(plugin);
       const ok = /^Saved /.test(res);
-      setResult(res);
       appendLog(`${ok ? '✓' : '✗'} ${ok ? 'saved ' + plugin : 'save failed'}`);
-      if (ok) { setOrigLight(light); setStaged(false); await load(plugin); }
+      if (loadSeq.current !== mySeq) return;
+      if (ok) { setOrigLight(light); setStaged(false); reloading = true; await load(plugin, res); }
+      else setResult(res);
     } catch (e) {
       appendLog('✗ save failed -- ' + (e instanceof Error ? e.message : String(e)));
-    } finally { setBusy(false); }
+    } finally { if (!reloading && loadSeq.current === mySeq) setBusy(false); }
   };
 
   return (
@@ -137,7 +166,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
         {unavailable && <div className="papyrus-warn">Masters bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className="masters-toolbar">
-          <select className="masters-plugin-select" value={plugin} onChange={e => setPlugin(e.target.value)} disabled={unavailable}>
+          <select className="masters-plugin-select" value={plugin} onChange={e => selectPlugin(e.target.value)} disabled={unavailable}>
             <option value="">Choose a plugin…</option>
             {plugins.map(p => <option key={p} value={p}>{p}</option>)}
           </select>

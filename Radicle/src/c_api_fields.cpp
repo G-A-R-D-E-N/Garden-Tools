@@ -73,11 +73,11 @@ radicle_status radicle_plugin_set_record_scalar_at(radicle_plugin* plugin,
                                                    size_t index,
                                                    const char* value) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr || value == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and value are required");
-  }
   return guarded("unknown exception while setting scalar field", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr || value == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and value are required");
+    }
     const auto field = fo4::schema::scalar_field_descriptor(path);
     if (!field) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown scalar field path");
     try {
@@ -94,11 +94,11 @@ radicle_status radicle_plugin_set_record_string(radicle_plugin* plugin,
                                                 size_t index,
                                                 const char* utf8) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr || utf8 == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and text are required");
-  }
   return guarded("unknown exception while setting string field", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr || utf8 == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and text are required");
+    }
     const auto field = fo4::schema::scalar_field_descriptor(path);
     if (!field) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown string field path");
     const auto stored = fo4::text::utf8_to_windows1252(utf8);
@@ -117,11 +117,11 @@ radicle_status radicle_plugin_set_record_formlink(radicle_plugin* plugin,
                                                   size_t index,
                                                   const radicle_form_key* target) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr || !target_valid(target)) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target or NULL are required");
-  }
   return guarded("unknown exception while setting FormLink field", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr || !target_valid(target)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target or NULL are required");
+    }
     const auto field = fo4::schema::formlink_field_descriptor(path);
     if (!field) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink field path");
     try {
@@ -148,12 +148,12 @@ radicle_status radicle_plugin_record_field_count(const radicle_plugin* plugin,
                                                  const char* path,
                                                  size_t* out_count) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr || out_count == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and out_count are required");
-  }
-  *out_count = 0;
   return guarded("unknown exception while counting field occurrences", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr || out_count == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and out_count are required");
+    }
+    *out_count = 0;
     try {
       const auto count = fo4::record_field_count(plugin->value, *form_key, path);
       if (!count) return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
@@ -172,12 +172,12 @@ radicle_status radicle_plugin_formlink_list_size(const radicle_plugin* plugin,
                                                  const char* path,
                                                  size_t* out_count) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr || out_count == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and out_count are required");
-  }
-  *out_count = 0;
   return guarded("unknown exception while sizing FormLink list", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr || out_count == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and out_count are required");
+    }
+    *out_count = 0;
     const auto list = list_descriptor(path);
     if (!list) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink list path");
     try {
@@ -197,11 +197,11 @@ radicle_status radicle_plugin_formlink_list_insert(radicle_plugin* plugin,
                                                    size_t at,
                                                    const radicle_form_key* target) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr || !target_valid(target)) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target or NULL are required");
-  }
   return guarded("unknown exception while inserting FormLink list element", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr || !target_valid(target)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target or NULL are required");
+    }
     const auto list = list_descriptor(path);
     if (!list) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink list path");
     try {
@@ -224,11 +224,11 @@ radicle_status radicle_plugin_formlink_list_remove(radicle_plugin* plugin,
                                                    const char* path,
                                                    size_t at) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and path are required");
-  }
   return guarded("unknown exception while removing FormLink list element", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and path are required");
+    }
     const auto list = list_descriptor(path);
     if (!list) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink list path");
     try {
@@ -246,11 +246,11 @@ radicle_status radicle_plugin_formlink_list_set(radicle_plugin* plugin,
                                                 size_t at,
                                                 const radicle_form_key* target) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr || !target_valid(target)) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target or NULL are required");
-  }
   return guarded("unknown exception while setting FormLink list element", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr || !target_valid(target)) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target or NULL are required");
+    }
     const auto list = list_descriptor(path);
     if (!list) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink list path");
     if (target == nullptr && !list->nullable) {
@@ -271,11 +271,11 @@ radicle_status radicle_plugin_formlink_list_clear(radicle_plugin* plugin,
                                                   radicle_form_key key,
                                                   const char* path) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key || path == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and path are required");
-  }
   return guarded("unknown exception while clearing FormLink list", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key || path == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and path are required");
+    }
     const auto list = list_descriptor(path);
     if (!list) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "unknown FormLink list path");
     try {
