@@ -103,3 +103,16 @@ fields remain editable. Preflight takes the owning plugin's localized flag expli
 
 All official DIAL, INFO and SCEN follow the authoring order and placement (0 violators). Field list, defaults
 provenance and refusal reasons are in `docs/code-notes/radicle-dialogue-writer.md`.
+
+## GardenEngine consumer probe
+
+Copy `probes/gardenengine/DialogueProbe.cs` and `probes/gardenengine/dialogue_probe.tscn` into `opencw/tools/`. Build `opencw/OpenCommonwealth.csproj` with `RadicleSourceDir` set to this Radicle checkout. Set `FO4_DATA_DIR` to the installed data directory and `RADICLE_NATIVE_PATH` to the built native library of the matching ABI, then run `--headless --path opencw tools/dialogue_probe.tscn` with the double-precision Godot Mono editor. Exit 0 prints `dialogue_probe PASS` with a one-line JSON summary. Exit 77 prints `dialogue_probe SKIP: FO4_DATA_DIR unset`. Exit 1 prints `dialogue_probe FAIL` with the exception.
+
+The probe loads `Fallout4.esm` only and makes no writes. Records are found by walking winners and topic children, not by editor ID. Its assertions:
+
+- A DIAL whose QNAM resolves through `env.Winner` to a QUST and that has at least one INFO child (`RadicleEnvironment.DialogueTopic`, `TopicChildren`).
+- An INFO child with at least one response and at least one INFO-level link (PNAM, TPIC, DNAM, GNAM, ANAM, TSCE), where every non-null link resolves through `env.Winner` (`DialogueInfo`).
+- The first response's NAM1 text, looked up through `StringTables.Load` on `FO4_DATA_DIR/Strings` with language `en` and `ResolveDialogueText`, is non-empty.
+- A SCEN whose PNAM parent quest resolves through `env.Winner` to a QUST (`RadicleEnvironment.Scene`).
+
+Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (GardenEngine pins ABI 9 at 34d16d50).
