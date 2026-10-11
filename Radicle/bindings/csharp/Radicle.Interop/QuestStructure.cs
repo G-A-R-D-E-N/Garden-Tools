@@ -55,7 +55,8 @@ public static class QuestStructure
     public static unsafe QuestStoredStructure Read(PluginFile plugin, FormKey quest)
     {
         var snapshot = IntPtr.Zero;
-        Call.Check(RadicleNative.QuestStructureRead(plugin.Handle, quest.ToString(), &snapshot));
+        using var use = plugin.Use();
+        Call.Check(RadicleNative.QuestStructureRead(use.Pointer, quest.ToString(), &snapshot));
         try
         {
             QuestStructureView view = default;
