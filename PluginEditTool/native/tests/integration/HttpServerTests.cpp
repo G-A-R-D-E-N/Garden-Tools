@@ -92,13 +92,13 @@ TEST_CASE("HTTP RPC preserves the existing JSON envelope") {
 TEST_CASE("HTTP RPC refuses a missing or wrong access token") {
     ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
-    const std::string body = R"({"target":"echo","method":"Run","args":[]})";
 
-    auto missing = client.Post("/rpc", body, "application/json");
+    auto missing = client.Post("/rpc", std::string{}, "application/json");
     REQUIRE(missing);
     CHECK(missing->status == 401);
 
-    auto wrong = client.Post("/rpc", httplib::Headers{{"X-FO4IDE-Token", "wrong"}}, body, "application/json");
+    auto wrong = client.Post("/rpc", httplib::Headers{{"X-FO4IDE-Token", "wrong"}}, std::string{},
+                             "application/json");
     REQUIRE(wrong);
     CHECK(wrong->status == 401);
 }
@@ -108,7 +108,7 @@ TEST_CASE("HTTP RPC requires an application/json content type") {
     httplib::Client client("127.0.0.1", fixture.port);
     const std::string body = R"({"target":"echo","method":"Run","args":[]})";
 
-    auto plain = client.Post("/rpc", httplib::Headers{{"X-FO4IDE-Token", kToken}}, body, "text/plain");
+    auto plain = client.Post("/rpc", httplib::Headers{{"X-FO4IDE-Token", kToken}}, std::string{}, "text/plain");
     REQUIRE(plain);
     CHECK(plain->status == 415);
 
@@ -122,10 +122,9 @@ TEST_CASE("HTTP refuses Host headers that are not this loopback server") {
     ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
     const std::string evil = "evil.example:" + std::to_string(fixture.port);
-    const std::string body = R"({"target":"echo","method":"Run","args":[]})";
 
     auto rpc = client.Post("/rpc", httplib::Headers{{"Host", evil}, {"X-FO4IDE-Token", kToken}},
-                           body, "application/json");
+                           std::string{}, "application/json");
     REQUIRE(rpc);
     CHECK(rpc->status == 403);
 
