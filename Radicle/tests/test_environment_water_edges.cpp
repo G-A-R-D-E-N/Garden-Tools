@@ -154,7 +154,7 @@ TEST_F(WaterEdgeTest, WrldParentCycleThroughBit0Throws) {
                fo4::env::WorldDecodeError);
 }
 
-TEST_F(WaterEdgeTest, DeletedWinningWorldspaceInputResolvesDefaultWaterAtZero) {
+TEST_F(WaterEdgeTest, DeletedWinningWorldspaceInputTakesNoWaterOrHeight) {
   paths_ = {write("Fallout4.esm", make_plugin({}, {top("WATR", {rec("WATR", 0x840)}),
                   top("WRLD", {rec("WRLD", 0x800, {{"NAM2", bytes_of({0x840})}, {"DNAM", floats({-2048, 450})}})})})),
             write("Override.esp", make_plugin({"Fallout4.esm"}, {top("WRLD", {rec("WRLD", 0x800, {}, 0x20)})}))};
@@ -163,8 +163,7 @@ TEST_F(WaterEdgeTest, DeletedWinningWorldspaceInputResolvesDefaultWaterAtZero) {
   const auto selection = fo4::env::resolve_water(env, *env.winner(key("000800:Fallout4.esm")));
   EXPECT_TRUE(selection.uses_default_water);
   EXPECT_EQ(selection.water, key("000018:Fallout4.esm"));
-  ASSERT_TRUE(selection.height.has_value());
-  EXPECT_EQ(*selection.height, 0.0f);
+  EXPECT_FALSE(selection.height.has_value());
 }
 
 TEST_F(WaterEdgeTest, CellInDeletedWinningWorldspaceResolvesDefaultWater) {
