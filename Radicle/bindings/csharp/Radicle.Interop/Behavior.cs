@@ -16,7 +16,7 @@ public sealed record PackageTarget(nuint SubrecordIndex, int Type, uint Value, i
 public sealed record Package(PackageData? Data, PackageSchedule? Schedule, PackageCounter? Counter,
     FormKey? CombatStyle, FormKey? OwnerQuest, FormKey? BeginIdle, FormKey? EndIdle, FormKey? ChangeIdle,
     IReadOnlyList<BehaviorCondition> Conditions, IReadOnlyList<PackagePayload> Opaque,
-    IReadOnlyList<PackageLocation> Locations, IReadOnlyList<PackageTarget> Targets);
+    IReadOnlyList<PackageLocation> Locations, IReadOnlyList<PackageTarget> Targets, IReadOnlyList<FormKey?> IdleAnimations);
 public sealed record CombatCloseRange(float[] Values, uint ThrowMaxTargets, float FlankVariance);
 public sealed record CombatStyle(float[]? General, float[] Melee, float[] LongRange, CombatCloseRange? CloseRange,
     float[]? Flight, float? RangedAccuracy, float? CoverSearch, uint? Flags);
@@ -50,7 +50,8 @@ public sealed unsafe partial class RadicleEnvironment
                     new PackageLocation(l.SubrecordIndex, l.Type, l.Value, l.HasRadius == 0 ? null : l.Radius, l.HasItemIndex == 0 ? null : l.ItemIndex,
                         FormKey.FromNative(l.Form))).ToArray(),
                 Call.Copy<Native.PackageTarget>(p->Targets, p->TargetCount).Select(t =>
-                    new PackageTarget(t.SubrecordIndex, t.Type, t.Value, t.CountOrDistance, FormKey.FromNative(t.Form))).ToArray());
+                    new PackageTarget(t.SubrecordIndex, t.Type, t.Value, t.CountOrDistance, FormKey.FromNative(t.Form))).ToArray(),
+                Call.Copy<Native.FormKey>(p->IdleAnimations, p->IdleAnimationCount).Select(FormKey.FromNative).ToArray());
         }
         finally { RadicleNative.PackageFree(p); }
     }

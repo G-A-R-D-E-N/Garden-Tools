@@ -4,7 +4,7 @@ This #345 slice reads and edits stored PKDT, PSDT, PKCU version/template, scoped
 
 ## Sources and scope
 
-The pinned compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas), commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`: CSTY 6233–6307, IDLE 9646–9671 and PACK 10526–10667. These are disk schema descriptions, not runtime execution proof. The private index at `ReverseEng/Fallout4_Runtime_Research`, commit `f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a`, `RE-Work/subsystems/plugin-io-garden-tools/evidence-index-garden-tools/README.md`, verifies CK tag sets and CSTY sizes, but reports PACK/IDLE payload layouts NOT FOUND. Its unresolved printed combat tag typo is not used as a tag name.
+The pinned compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas), commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`: CSTY 6233–6307, IDLE 9646–9671 and PACK 10526–10653. These are disk schema descriptions, not runtime execution proof. The private index at `ReverseEng/Fallout4_Runtime_Research`, commit `f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a`, `RE-Work/subsystems/plugin-io-garden-tools/evidence-index-garden-tools/README.md`, verifies CK tag sets and CSTY sizes, but reports PACK/IDLE payload layouts NOT FOUND. Its unresolved printed combat tag typo is not used as a tag name.
 
 ## PACK
 

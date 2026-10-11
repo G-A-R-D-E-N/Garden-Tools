@@ -78,6 +78,8 @@ typedef struct radicle_package_info {
   size_t location_count;
   const radicle_package_target* targets;
   size_t target_count;
+  const radicle_form_key* idle_animations;
+  size_t idle_animation_count;
   void* internal;
 } radicle_package_info;
 

@@ -29,6 +29,7 @@ struct PackageHolder {
   std::vector<radicle_package_payload> opaque;
   std::vector<radicle_package_location> locations;
   std::vector<radicle_package_target> targets;
+  std::vector<radicle_form_key> idle_animations;
 };
 struct IdleHolder { radicle_idle_info view{}; ConditionStorage conditions; };
 
@@ -72,8 +73,10 @@ radicle_status radicle_package_decode(const radicle_env* env, const radicle_reco
         location.item_index.has_value(), location.item_index.value_or(0), to_c_key(*env, location.form)});
     for (const auto& target : p.targets) h->targets.push_back({target.subrecord_index, target.type,
         target.value, target.count_or_distance, to_c_key(*env, target.form)});
+    for (const auto& animation : p.idle_animations) h->idle_animations.push_back(to_c_key(*env, animation));
     v.locations = h->locations.data(); v.location_count = h->locations.size();
     v.targets = h->targets.data(); v.target_count = h->targets.size();
+    v.idle_animations = h->idle_animations.data(); v.idle_animation_count = h->idle_animations.size();
     v.opaque = h->opaque.data(); v.opaque_count = h->opaque.size(); v.internal = h.get();
     *out_package = &h.release()->view; return RADICLE_STATUS_OK;
   });

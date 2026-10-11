@@ -122,6 +122,17 @@ TEST_F(BehaviorRead, LocationRetainsEightBytePrefixAndRejectsUnknownFullWidthTyp
   EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
 }
 
+TEST_F(BehaviorRead, IdleAnimationListKeepsEverySlotInOrderAndRefusesPartialWidth) {
+  write({{"PACK", 0x800, {{"IDLA", words({0x810, 0, 0x811})}, {"PKCU", words({0, 0, 9})}}}});
+  const auto env = load(); const auto p = fo4::env::decode_package(env, record(env));
+  ASSERT_EQ(p.idle_animations.size(), 3u);
+  EXPECT_EQ(p.idle_animations[0].local().value(), 0x810u); EXPECT_TRUE(p.idle_animations[1].owner().empty());
+  EXPECT_EQ(p.idle_animations[2].local().value(), 0x811u);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+  write({{"PACK", 0x800, {{"IDLA", std::vector<std::byte>(6)}}}}); const auto bad = load();
+  EXPECT_THROW(fo4::env::decode_package(bad, record(bad)), fo4::env::WorldDecodeError);
+}
+
 TEST_F(BehaviorRead, IdlePreservesSelectionDataStringsAndRawConditions) {
   write({{"IDLE", 0x800, {{"ANAM", words({0x810, 0})}, {"DATA", {std::byte{255}, std::byte{254}, std::byte{0x81}, std::byte{9}, std::byte{0x34}, std::byte{0x12}}},
     {"DNAM", text("graph.hkx")}, {"ENAM", text("event")}, {"GNAM", text("animation.hkx")}, {"CTDA", condition(14)}}}});

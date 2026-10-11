@@ -42,6 +42,7 @@ struct Package {
   std::vector<CtdaCondition> conditions;
   std::vector<PackageLocation> locations;
   std::vector<PackageTarget> targets;
+  std::vector<FormKey> idle_animations;
   std::span<const Subrecord> opaque;
 };
 struct CombatCloseRange { std::array<float, 9> values{}; std::uint32_t throw_max_targets{0}; float flank_variance{0}; };

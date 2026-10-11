@@ -698,6 +698,8 @@ public unsafe struct PackageInfo
     public nuint LocationCount;
     public IntPtr Targets;
     public nuint TargetCount;
+    public IntPtr IdleAnimations;
+    public nuint IdleAnimationCount;
     public IntPtr Internal;
 }
 

@@ -491,6 +491,8 @@ int main() {
   printf("PackageInfo.LocationCount %zu\n", offsetof(radicle_package_info, location_count));
   printf("PackageInfo.Targets %zu\n", offsetof(radicle_package_info, targets));
   printf("PackageInfo.TargetCount %zu\n", offsetof(radicle_package_info, target_count));
+  printf("PackageInfo.IdleAnimations %zu\n", offsetof(radicle_package_info, idle_animations));
+  printf("PackageInfo.IdleAnimationCount %zu\n", offsetof(radicle_package_info, idle_animation_count));
   printf("PackageInfo.Internal %zu\n", offsetof(radicle_package_info, internal));
   printf("CombatStyleInfo %zu\n", sizeof(radicle_combat_style_info));
   printf("CombatStyleInfo.HasGeneral %zu\n", offsetof(radicle_combat_style_info, has_general));

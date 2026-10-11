@@ -95,6 +95,11 @@ std::optional<std::vector<std::size_t>> behavior_formid_offsets(const Record& re
   };
   if (record_type == "IDLE" && tag == "ANAM") return checked({0, 4}, sub.data.size() == 8);
   if (record_type != "PACK") return std::nullopt;
+  if (tag == "IDLA") {
+    std::vector<std::size_t> offsets;
+    for (std::size_t offset = 0; offset < sub.data.size(); offset += 4) offsets.push_back(offset);
+    return checked(offsets, sub.data.size() % 4 == 0);
+  }
   if (tag == "CNAM" || tag == "QNAM" || tag == "PKCU") {
     std::size_t counters = 0;
     for (const auto& item : record.subrecords) {

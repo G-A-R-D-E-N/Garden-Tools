@@ -61,7 +61,7 @@ public class BehaviorTests
         using var temp = new TempDirectory();
         var location = U32(6, 0x810, uint.MaxValue);
         var path = temp.Write("Behavior.esm", Build(1, Array.Empty<string>(), Top("PACK", new Rec("PACK", 0x800, new[] {
-            ("PKCU", U32(0, 0, 9)), ("PLDT", location), ("PLDT", U32(14, 99, 7, uint.MaxValue)),
+            ("IDLA", U32(0x810, 0)), ("PKCU", U32(0, 0, 9)), ("PLDT", location), ("PLDT", U32(14, 99, 7, uint.MaxValue)),
             ("PTDA", U32(7, 0x811, uint.MaxValue)), ("PTDA", U32(4, 33, 0x80000000)), ("PLDT", U32(255, 1, 2)) }))));
         Package package;
         using (var env = RadicleEnvironment.Load(new[] { path })) package = env.Package(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
@@ -73,6 +73,8 @@ public class BehaviorTests
         Assert.Equal(new FormKey("Behavior.esm", 0x811), package.Targets[0].Form); Assert.Null(package.Targets[1].Form);
         Assert.Equal(int.MinValue, package.Targets[1].CountOrDistance); Assert.Equal(location, package.Opaque[0].Bytes);
         Assert.Equal(5, package.Opaque.Count);
+        Assert.Equal(2, package.IdleAnimations.Count); Assert.Equal(new FormKey("Behavior.esm", 0x810), package.IdleAnimations[0]);
+        Assert.Null(package.IdleAnimations[1]);
     }
 
     [Fact]

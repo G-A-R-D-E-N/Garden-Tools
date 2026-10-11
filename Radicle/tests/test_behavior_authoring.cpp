@@ -169,4 +169,15 @@ TEST(BehaviorAuthoring, NonzeroUnknownVariantsRefuseStrictRemapWhileZeroAndLinkV
   EXPECT_EQ(fo4::find_record(plugin, key())->subrecords.back().data, words({1, 0x808, 0}));
 }
 
+TEST(BehaviorAuthoring, IdleAnimationListRemapsEveryEntryAndRefusesPartialWidth) {
+  auto pack = package(); pack.insert(pack.begin() + 3, {"IDLA", words({0x804, 0, 0x803})});
+  auto plugin = load(pack);
+  fo4::rekey_form_links(plugin, key(0x804), key(0x808));
+  EXPECT_EQ(fo4::find_record(plugin, key())->subrecords[3].data, words({0x808, 0, 0x803}));
+  auto bad = package(); bad.insert(bad.begin() + 3, {"IDLA", Bytes(6)});
+  auto opaque = load(bad); const auto bytes = fo4::write_plugin(opaque);
+  EXPECT_THROW(fo4::rekey_form_links(opaque, key(0x804), key(0x808)), fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(opaque), bytes);
+}
+
 }

@@ -67,6 +67,10 @@ Package decode_package(const Environment& env, const RecordRef& ref) {
   }
   out.combat_style = link(r, subs.first(boundary), sig("CNAM")); out.owner_quest = link(r, subs.first(boundary), sig("QNAM"));
   out.conditions = conditions(r, 0, boundary);
+  if (const auto* sub = r.unique(sig("IDLA"))) {
+    if (sub->data.size() % 4 != 0) r.fail(sig("IDLA"), "must be a whole number of form links");
+    for (std::size_t i = 0; i < sub->data.size(); i += 4) out.idle_animations.push_back(r.link_at(*sub, i));
+  }
   for (std::size_t i = 0; i < subs.size(); ++i) {
     const auto& sub = subs[i];
     if (sub.signature == sig("PLDT") && (sub.data.size() == 8 || sub.data.size() == 12 || sub.data.size() == 16)) {

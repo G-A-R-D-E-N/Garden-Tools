@@ -5,9 +5,8 @@
 The private loader record at
 `build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`
 commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 Q1, stamps
-the OG loader at RVA 0x719180 and schedule consumer at 0x71EC30. PSDT stores
-signed i32 duration in minutes; interpreting it as u32 turns -1 into
-4294967295. PKDT's final u16 is exposed as an unnamed trailing value rather
+the OG loader at RVA 0x719180 and schedule consumer at 0x71EC30. xEdit types PSDT duration as unsigned u32 minutes (`source:xEdit Core/wbDefinitionsFO4.pas:10569 @93cc0bc5`, `wbInteger('Duration (Hours)', itU32, wbDiv(60, 4))`), and `decode_package` keeps the raw u32, so 0xFFFFFFFF stays 4294967295 and is not read as -1. Whether the OG schedule consumer reads it as signed is an RE question (RE #407), not settled by xEdit.
+PKDT's final u16 is exposed as an unnamed trailing value rather
 than discarded. Raw signed month/hour/minute bytes remain unchanged;
 legacy month adjustment and schedule execution are not simulated.
 
@@ -241,13 +240,14 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 - CELL `XCWT`: the cell's water type.
 
 `c_api_env.h` was at the file-size limit, so the typed record decoders moved to `include/fo4/c_api_records.h`, which includes the environment header for the shared types; `generate_interop.py` reads it, and the generated bindings and layout probe are regenerated from the headers, so `radicle_csharp_interop_up_to_date` still holds. Tests: `Radicle.Interop.Tests/HlodFieldTests.cs` builds a plugin with these subrecords and checks every field, including a STAT without `MNAM` and the four-slot ceiling.
-# Package, combat-style and idle read slice
+
+## Package, combat-style and idle read slice
 
 `src/environment/behavior.cpp:decode_package`, `decode_combat_style` and `decode_idle` follow `docs/PACKAGES_COMBAT_IDLES.md`. Package prelude links/conditions stop at PKCU; post-PKCU streams retain opaque data, and begin/end/change idle links use separate scopes. Combat arrays retain stored lengths and the CSCR integer slot is not read as a float. No scheduler, procedure evaluator or invented defaults are added. RE #407 tracks the remaining behavior and variant evidence.
 
 `src/c_api_behavior.cpp:radicle_package_decode` and `radicle_idle_decode` own condition arrays and converted CIS strings until free; strings, keys and raw payload bytes borrowed from records require a live environment. `bindings/csharp/Radicle.Interop/Behavior.cs` copies these values before freeing native holders. `radicle_combat_style_get_info` uses a fixed output with presence flags and actual variable-array counts. The initial validation was CI-only; subsequent official-master runs exercise the stored readers and byte preservation. Corpus cases still skip when installed data is unavailable.
 
-# Package location and target views
+## Package location and target views
 
 `src/environment/behavior.cpp:decode_package` returns indexed PLDT/PTDA views
 without assigning them to an unproven procedure/input scope. The verified
@@ -275,4 +275,3 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 ## Radicle/src/c_api.cpp:radicle_plugin_remap_masters
 
 `Radicle/src/c_api.cpp:radicle_plugin_remap_masters` remaps a copy of the plugin and assigns it back only when `fo4::remap_plugin_masters` succeeds, so a failed call (for example a dropped master that an own record or override still uses, which makes `encode_plugin_form_id` throw "is not in the destination master table") leaves the handle unchanged instead of empty (GT-090). Test: `Radicle/tests/test_c_api.cpp` `CApi.FailedRemapMastersLeavesThePluginUnchanged`.
->
