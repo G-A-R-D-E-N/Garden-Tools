@@ -168,6 +168,8 @@ public class FieldWriterTests
         Assert.Equal(0, missing);
         Assert.True(plugin.TryFieldCount(Refr, "REFR\\Scale", out var none));
         Assert.Equal(0, none);
+        Assert.True(plugin.TryFieldCount(Race, "RACE\\BipedObjectNames", out var biped));
+        Assert.Equal(2, biped);
         var error = Assert.Throws<RadicleException>(() => plugin.FieldCount(Refr, "REFR\\Nope"));
         Assert.Equal(Status.InvalidArgument, error.Status);
         Assert.Throws<ArgumentNullException>(() => plugin.FieldCount(Refr, null!));
@@ -190,6 +192,8 @@ public class FieldWriterTests
         Assert.Throws<KeyNotFoundException>(() => plugin.FormLinkListCount(K(0x999), "FLST\\Items"));
         Assert.False(plugin.TryFormLinkListCount(K(0x999), "FLST\\Items", out var missing));
         Assert.Equal(0, missing);
+        Assert.True(plugin.TryFormLinkListCount(Flst, "FLST\\Items", out var items));
+        Assert.Equal(3, items);
         Assert.True(plugin.FormLinkListRemove(Flst, "FLST\\Items", 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => plugin.FormLinkListRemove(Flst, "FLST\\Items", -1));
 
