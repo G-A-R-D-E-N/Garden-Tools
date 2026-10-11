@@ -156,6 +156,48 @@ TEST(ScalarEmbedded, RejectsAValueOutsideTheFieldBounds) {
       fo4::schema::ScalarError);
 }
 
+TEST(ScalarEmbedded, AcceptsAnyFiniteFloatUpToTheSingleLimit) {
+  auto plugin = fo4::read_plugin(empty_plugin(), "Patch.esp");
+
+  fo4::forms::ExplosionCreation explosion;
+  explosion.editor_id = "Blast";
+  const auto blast = fo4::forms::create_explosion(plugin, explosion);
+
+  fo4::forms::HazardCreation hazard;
+  hazard.editor_id = "Rads";
+  hazard.model = "Effects\\FXFireMedSmokey01.nif";
+  const auto rads = fo4::forms::create_hazard(plugin, hazard);
+
+  fo4::forms::ProjectileCreation projectile;
+  projectile.editor_id = "Bolt";
+  const auto bolt = fo4::forms::create_projectile(plugin, projectile);
+
+  ASSERT_EQ(fo4::set_record_scalar(plugin, blast, field("EXPL\\Damage"), "1e10"),
+            fo4::ScalarMutationStatus::updated);
+  ASSERT_EQ(fo4::set_record_scalar(plugin, rads, field("HAZD\\Radius"), "1e10"),
+            fo4::ScalarMutationStatus::updated);
+  ASSERT_EQ(fo4::set_record_scalar(plugin, bolt, field("PROJ\\Speed"), "1e10"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::forms::decode_explosion(plugin, blast).damage, 1e10F);
+  EXPECT_EQ(fo4::forms::decode_hazard(plugin, rads).radius, 1e10F);
+  EXPECT_EQ(fo4::forms::decode_projectile(plugin, bolt).speed, 1e10F);
+
+  for (const char* value : {"1e39", "-1e39", "nan", "inf"}) {
+    EXPECT_THROW(
+        static_cast<void>(fo4::set_record_scalar(plugin, blast, field("EXPL\\Damage"), value)),
+        fo4::schema::ScalarError)
+        << value;
+    EXPECT_THROW(
+        static_cast<void>(fo4::set_record_scalar(plugin, rads, field("HAZD\\Radius"), value)),
+        fo4::schema::ScalarError)
+        << value;
+    EXPECT_THROW(
+        static_cast<void>(fo4::set_record_scalar(plugin, bolt, field("PROJ\\Speed"), value)),
+        fo4::schema::ScalarError)
+        << value;
+  }
+}
+
 // EXPL DATA also ships at 52/56/60/64 bytes. Those are clean prefixes, so a
 // field past the end is absent -- it must not be read from beyond the payload,
 // and a write must not silently extend the record.
