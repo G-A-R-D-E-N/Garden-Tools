@@ -1880,3 +1880,10 @@ Only locks older than five minutes are removed. An action fetch takes seconds, s
 
 Rewrites PATH entries under the real Windows profile to the neutral runner host junction `C:\ci\home` (example path), so tool paths printed in CI logs never show the profile folder name. Called from each runner's `start-runner.ps1`. `$real` comes from `GetFolderPath` rather than `$env:USERPROFILE` because `start-runner.ps1` has already pointed `$env:USERPROFILE` at the junction; the script keeps that as its one-line constraint comment.
 
+## .github/workflows/native-ci.yml:native-linux — failure artifact
+
+`native-linux-failure` keeps only what diagnoses a failed Linux run: the CTest tree (`build/native/Testing/**`, whose `LastTest.log` holds every test's output), the CMake logs (`build/native/**/*.log`, `build/native/CMakeFiles/CMakeConfigureLog.yaml`) and `build/native/CMakeCache.txt`. It no longer uploads `build/native/bin/**`. That directory holds the Debug test and tool executables with debug information, and each upload was 360-470 MB. Compiler and linker errors appear in the step log, so no compiler log file is uploaded. Retention is 3 days. To inspect a failing test binary, rebuild the same commit locally.
+
+## .github/workflows/plugin-editor-ci.yml:windows, linux — failure artifacts
+
+`plugin-editor-windows-failure` and `plugin-editor-linux-failure` upload `TestResults/**` (the TRX logs written by `dotnet test --results-directory ../TestResults`). The TRX files are not expected to be large, so only the retention changed, from 7 to 3 days.

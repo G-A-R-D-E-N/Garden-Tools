@@ -160,9 +160,10 @@ jobs:
           path: |
             build/native/Testing/**
             build/native/**/*.log
-            build/native/bin/**
+            build/native/CMakeCache.txt
+            build/native/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
   # The two Windows cross-compile lanes only prove the code compiles and links
   # with clang-cl/xwin. native-windows-tests already builds and tests the same
