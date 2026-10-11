@@ -320,7 +320,9 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 "Record '" + recordId + "' not found in " + pluginName + "."
             });
         }
-        stagePluginMutationLocked(*loaded, std::move(mutated));
+        if (status == fo4::ConditionMutationStatus::updated) {
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+        }
     } catch (const fo4::CtdaMultipleListsError&) {
         return std::unexpected(Error{"ConditionScopeMultipleLists", "Record '" + recordId + "' has more than one condition list."});
     } catch (const fo4::CtdaNotLosslessError& error) {

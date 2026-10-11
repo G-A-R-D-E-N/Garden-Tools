@@ -179,7 +179,7 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
       status = ConditionMutationStatus::multiple_lists;
       return;
     }
-    if (result == CtdaScopeWrite::no_list || result == CtdaScopeWrite::no_op) {
+    if (result == CtdaScopeWrite::no_list) {
       status = ConditionMutationStatus::no_condition_list;
       return;
     }
