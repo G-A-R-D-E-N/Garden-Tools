@@ -166,20 +166,30 @@ public sealed unsafe class PluginFile : IDisposable
         return FormKey.FromNative(key)!.Value;
     }
 
-    public int FieldCount(FormKey record, string path)
+    public int FieldCount(FormKey record, string path) =>
+        TryFieldCount(record, path, out var count) ? count : throw new KeyNotFoundException($"Record not found: {record}");
+
+    public bool TryFieldCount(FormKey record, string path, out int count)
     {
         ArgumentNullException.ThrowIfNull(path);
         using var strings = new NativeStrings();
-        nuint count;
-        return Call.Found(RadicleNative.PluginRecordFieldCount(Handle, strings.Key(record), path, &count)) ? checked((int)count) : 0;
+        nuint native;
+        var found = Call.Found(RadicleNative.PluginRecordFieldCount(Handle, strings.Key(record), path, &native));
+        count = found ? checked((int)native) : 0;
+        return found;
     }
 
-    public int FormLinkListCount(FormKey record, string path)
+    public int FormLinkListCount(FormKey record, string path) =>
+        TryFormLinkListCount(record, path, out var count) ? count : throw new KeyNotFoundException($"Record not found: {record}");
+
+    public bool TryFormLinkListCount(FormKey record, string path, out int count)
     {
         ArgumentNullException.ThrowIfNull(path);
         using var strings = new NativeStrings();
-        nuint count;
-        return Call.Found(RadicleNative.PluginFormlinkListSize(Handle, strings.Key(record), path, &count)) ? checked((int)count) : 0;
+        nuint native;
+        var found = Call.Found(RadicleNative.PluginFormlinkListSize(Handle, strings.Key(record), path, &native));
+        count = found ? checked((int)native) : 0;
+        return found;
     }
 
     public bool FormLinkListInsert(FormKey record, string path, int index, FormKey? target)
