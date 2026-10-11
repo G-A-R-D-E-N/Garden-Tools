@@ -1,7 +1,7 @@
 # Climate and weather writer
 
 Source for every layout, order, default and required flag below: pinned TES5Edit `wbDefinitionsFO4.pas` at
-`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `build/xedit/wbDefinitionsFO4.pas` in the parity checkout:
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `wbDefinitionsFO4.pas` in the parity checkout, not committed:
 CLMT lines 6115-6126, WTHR lines 13034-13108) and the shared helpers in `wbDefinitionsCommon.pas`
 (`wbClimateTiming` 8435, `wbWeatherCloudAlphas` 9303, `wbWeatherCloudColors` 9346, `wbWeatherCloudSpeed` 9358,
 `wbWeatherCloudTextures` 9379, `wbWeatherColors` 9433, `wbWeatherDirectionalLighting` 9485, `wbWeatherDisabledLayers`

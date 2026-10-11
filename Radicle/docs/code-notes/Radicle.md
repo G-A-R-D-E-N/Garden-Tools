@@ -4,7 +4,7 @@
 
 The pinned private RE record at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
 `RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/README.md`,
-is saved locally as `build/RE-Work/6916afb/weather-climate-397-343/README.md`.
+is saved locally as `weather-climate-397-343/README.md` (not committed).
 Its sections 3.2 and 3.4 verify the unsigned four timing bytes multiplied by
 the float32 one-sixth constant (OG getter RVAs 0x648A50–0x648B40), plus the
 moon byte's low six phase-day bits and Secunda/Masser bits 6/7 (0x648A10,
