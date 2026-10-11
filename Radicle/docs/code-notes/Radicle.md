@@ -4,6 +4,8 @@
 
 The existing flag-and-schema classification matches the verified OG read direction, summarized by `docs/TES4_LOCALIZATION_EVIDENCE.md`. `tests/test_localized_fields.cpp:BitSevenSelectsRepresentationForTheSameFourBytes` distinguishes identical bytes by plugin state and preserves both representations. `ZeroExternalIdIsPreservedWithoutTextLookup` preserves the empty-ID representation without inventing a sidecar lookup. No production decoder or semantic API rename is required for this evidence slice.
 
+Difference from xEdit (fail-closed, owner decision): a localized field whose payload is not exactly 4 bytes throws here (`read_localized_string`). xEdit reads `Min(4, remaining)` bytes as the ID and leaves the rest as unparsed data (`TwbLStringDef.GetSize`, Core/wbInterface.pas:20951-20970 at xEdit 93cc0bc5). The official masters have no such payload in the FULL survey above; no RE or corpus proof makes the refusal necessary, so whether to tolerate short or long IDs as xEdit does is Nomad's call.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children
