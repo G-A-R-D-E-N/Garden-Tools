@@ -269,6 +269,45 @@ TEST(QuestStructure, AliasConditionsAfterExtrasAreUnsupported) {
   }
 }
 
+TEST(QuestStructure, AliasConditionsBeforeFillAreUnsupported) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    const auto at = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& member) {
+      return member.signature == fo4::Signature::from_string("ALFR");
+    });
+    ASSERT_NE(at, record.subrecords.end());
+    std::iter_swap(at, at + 1);
+  });
+  const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
+  ASSERT_TRUE(native.aliases_supported);
+  ASSERT_LT(4u, native.condition_lists.size());
+  EXPECT_FALSE(native.condition_lists[4].supported);
+  EXPECT_TRUE(native.condition_lists[4].conditions.empty());
+  EXPECT_FALSE(native.unsupported.empty());
+}
+
+TEST(QuestStructure, LevelIsOnlyProjectedForCreateReference) {
+  using namespace fo4::forms;
+  auto plugin = quest_structure_plugin();
+  QuestAliasCreation creation;
+  creation.kind = QuestAliasKind::location;
+  creation.id = 6;
+  creation.name = "fill";
+  creation.flags = 4;
+  creation.fill = QuestSpecificLocationFill{structure_quest_key()};
+  auto alias = encode_quest_alias(plugin, creation);
+  alias.subrecords.push_back(quest_u32("ALCL", 3));
+  change_quest(plugin, [&](fo4::Record& record) {
+    record.subrecords = {quest_string("EDID", "FillQuest"), quest_member("NEXT"), quest_u32("ANAM", 7)};
+    record.subrecords.insert(record.subrecords.end(), alias.subrecords.begin(), alias.subrecords.end());
+  });
+  const Snapshot snapshot(plugin);
+  const auto view = snapshot.view();
+  ASSERT_EQ(view.alias_count, 1u);
+  EXPECT_EQ(view.aliases[0].has_level, 0u);
+  EXPECT_EQ(view.aliases[0].level, 0u);
+}
+
 TEST(QuestStructure, UnresolvedFillIsDistinctFromNullFill) {
   for (const bool unresolved : {false, true}) {
     auto plugin = quest_structure_plugin();

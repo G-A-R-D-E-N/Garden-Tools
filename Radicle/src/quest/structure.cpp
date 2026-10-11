@@ -204,13 +204,17 @@ QuestStructure read_quest_structure(const Plugin& plugin, const FormKey& quest) 
         "ALST", "ALLS", "ALID", "FNAM", "ALFI", "ALFR", "ALUA", "ALFA", "ALRT",
         "ALEQ", "ALEA", "ALCO", "ALCA", "ALCL", "ALNA", "ALNT", "ALFE", "ALFD",
         "ALFL", "KNAM"};
-    const auto prefix_end = std::find_if(alias.subrecords.begin(), alias.subrecords.end(), [&](const auto& member) {
-      return !(alias.kind == forms::QuestAliasKind::reference && is(member, "ALCC")) &&
-          std::none_of(std::begin(prefix_members), std::end(prefix_members),
-                       [&](std::string_view name) { return is(member, name); });
-    });
+    const auto is_prefix = [&](const Subrecord& member) {
+      return (alias.kind == forms::QuestAliasKind::reference && is(member, "ALCC")) ||
+          std::any_of(std::begin(prefix_members), std::end(prefix_members),
+                      [&](std::string_view name) { return is(member, name); });
+    };
+    const auto prefix_end = std::find_if(alias.subrecords.begin(), alias.subrecords.end(),
+                                         [&](const auto& member) { return !is_prefix(member); });
+    const auto prefix_size = static_cast<std::size_t>(prefix_end - alias.subrecords.begin());
+    const bool prefix_closed = std::none_of(prefix_end, alias.subrecords.end(), is_prefix);
     conditions(out, QuestScope::alias, a, 0, alias.subrecords, true,
-               static_cast<std::size_t>(prefix_end - alias.subrecords.begin()));
+               prefix_closed ? prefix_size : alias.subrecords.size());
     for (const auto signature : alias.unresolved_links) {
       unsupported(out, QuestScope::alias, a, 0, 0, signature, "alias link is unresolved");
     }
