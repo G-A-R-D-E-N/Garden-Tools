@@ -144,6 +144,10 @@ FULL and DESC are stored with `stored_inline_text`. Localized plugins are refuse
 is always inline here. Test: `Radicle/tests/test_race_creation.cpp:InlineFullNameStoresWindows1252AndRefusesUnencodableText`
 (stores `é` as 0xE9 and refuses `😀` without mutating the plugin).
 
+## Radicle/include/fo4/forms/proj_expl_hazd.hpp:ProjectileCreation
+
+The create defaults for `range`, `collision_radius` and `relaunch_interval` follow xEdit `build/xedit/wbDefinitionsFO4.pas`: Range `SetDefaultEditValue('4000.0')` at line 7150, Collision Radius `'10.0'` at 7164 and Relaunch Interval `'0.25'` at 7166 (PROJ DNAM, `wbStruct(DNAM` at 7122). The header's claim that defaults are attested vanilla values does not hold for these three. A vanilla corpus scan (7 official masters, 239 PROJ, 2026-10-11) counted Range 15000=132, 10000=59, 5000=5; Collision Radius 5=129, 10=56, 1.0=22; Relaunch Interval 0.25=161, 1.0=11. The old defaults (5000, 1.0, 1.0) are therefore not the common values, and the creator follows xEdit.
+
 ## Radicle/src/forms/proj_expl_hazd.cpp:create_projectile
 
 FULL and NAM1 are stored with `stored_inline_text`; EDID already was. No dedicated test in this change.

@@ -57,7 +57,7 @@ struct ProjectileCreation {
   std::uint16_t type{1};
   float gravity{0.0F};
   float speed{1000.0F};
-  float range{5000.0F};
+  float range{4000.0F};
   FormKey light{};                 // LIGH
   FormKey muzzle_flash_light{};    // LIGH
   float explosion_proximity{0.0F};
@@ -71,9 +71,9 @@ struct ProjectileCreation {
   FormKey deactivate_sound{};      // SNDR
   FormKey default_weapon_source{}; // WEAP
   float cone_spread{0.0F};
-  float collision_radius{1.0F};
+  float collision_radius{10.0F};
   float lifetime{0.0F};
-  float relaunch_interval{1.0F};
+  float relaunch_interval{0.25F};
   FormKey decal_data{};            // TXST
   FormKey collision_layer{};       // COLL
   std::uint8_t tracer_frequency{0};
