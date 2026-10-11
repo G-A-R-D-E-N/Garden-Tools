@@ -329,6 +329,8 @@ TEST(CtdaModel, SetRecordConditionsDistinguishesMissingRecordAndNoList) {
   EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000999:Cond.esp"), conditions),
             fo4::ConditionMutationStatus::record_missing);
   EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::no_condition_list);
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), {}),
             fo4::ConditionMutationStatus::unchanged);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

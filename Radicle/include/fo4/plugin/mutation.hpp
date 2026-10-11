@@ -37,6 +37,7 @@ enum class ConditionMutationStatus {
   unchanged,
   record_missing,
   multiple_lists,
+  no_condition_list,
 };
 
 enum class FormLinkFieldMutationStatus {
@@ -182,6 +183,10 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
                                                  conditions, std::nullopt);
     if (result == CtdaScopeWrite::multiple_lists) {
       status = ConditionMutationStatus::multiple_lists;
+      return;
+    }
+    if (result == CtdaScopeWrite::no_list) {
+      status = ConditionMutationStatus::no_condition_list;
       return;
     }
     if (result != CtdaScopeWrite::replaced) return;
