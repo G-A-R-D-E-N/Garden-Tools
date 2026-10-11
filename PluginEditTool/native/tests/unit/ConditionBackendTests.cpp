@@ -208,7 +208,7 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
             {"operator", "="},
             {"compareGlobal", "000800:CondEdit.esp"},
             {"param1", "000800:CondEdit.esp"},
-            {"runOn", "Target"},
+            {"runOn", "Reference"},
             {"reference", "000801:CondEdit.esp"},
             {"flags", "OR"},
         },
@@ -238,7 +238,7 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
     CHECK(conditions[1].at("operator") == "==");
     CHECK(conditions[1].at("compareGlobal") == "000800:CondEdit.esp");
     CHECK(conditions[1].at("param1") == "000800:CondEdit.esp");
-    CHECK(conditions[1].at("runOn") == "Target");
+    CHECK(conditions[1].at("runOn") == "Reference");
     CHECK(conditions[1].at("reference") == "000801:CondEdit.esp");
     CHECK(conditions[1].at("flags") == "OR");
 
@@ -266,46 +266,6 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
                       nlohmann::json::array({"CondEdit.esp", "000800:CondEdit.esp"})));
     REQUIRE(reread.size() == 2);
     CHECK(reread[0].at("function") == "GetStage");
-}
-
-TEST_CASE("condition backend: SetConditions reports skipped entries and hard failures") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto pluginPath = root / "CondEdit.esp";
-    writeBytes(pluginPath, makeConditionPlugin());
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    REQUIRE(backend.invoke("environment.LoadMo2",
-                           nlohmann::json{{"plugins", nlohmann::json::array(
-                                                          {pluginEntry("CondEdit.esp", pluginPath, "Override")})}})
-                .has_value());
-
-    // One unknown function name: skipped with a message, the rest applied.
-    const nlohmann::json withFailure = nlohmann::json::array({
-        {{"function", "NotARealFunction"}, {"value", 1}},
-        {{"function", "GetScale"}, {"value", 2}},
-    });
-    const auto message = backend.invoke("backend.SetConditions",
-                                        nlohmann::json::array({"CondEdit.esp", "000800:CondEdit.esp",
-                                                               withFailure.dump()}));
-    REQUIRE(message.has_value());
-    CHECK(message->get<std::string>().find("Set 1 condition(s)") == 0);
-    CHECK(message->get<std::string>().find("Skipped 1: #1: unknown function 'NotARealFunction'") !=
-          std::string::npos);
-
-    // Malformed JSON is a hard failure.
-    const auto bad = backend.invoke("backend.SetConditions",
-                                    nlohmann::json::array({"CondEdit.esp", "000800:CondEdit.esp",
-                                                           "{not json"}));
-    REQUIRE_FALSE(bad.has_value());
-    CHECK(bad.error().type == "InvalidConditionsJson");
-
-    // A record that is not present refuses.
-    const auto noCond = backend.invoke("backend.SetConditions",
-                                       nlohmann::json::array({"CondEdit.esp", "000999:CondEdit.esp",
-                                                              "[]"}));
-    REQUIRE_FALSE(noCond.has_value());
-    CHECK(noCond.error().type == "RecordNotFound");
 }
 
 namespace {

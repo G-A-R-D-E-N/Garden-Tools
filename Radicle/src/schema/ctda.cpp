@@ -144,14 +144,22 @@ std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
   std::vector<CtdaCondition> conditions;
   bool run_open = true;
   end = std::min(end, record.subrecords.size());
+  std::size_t run_begin = end, run_end = end;
   for (std::size_t i = begin; i < end; ++i) {
     const auto& subrecord = record.subrecords[i];
     if (subrecord.signature == sig_ctda) {
       if (!run_open) throw CtdaMultipleListsError("condition scope has more than one list");
-      conditions.push_back(parse_ctda_condition(subrecord.data));
+      if (conditions.empty()) run_begin = i;
+      run_end = i + 1;
+      try {
+        conditions.push_back(parse_ctda_condition(subrecord.data));
+      } catch (const std::out_of_range& error) {
+        throw CtdaNotLosslessError(error.what());
+      }
     } else if (run_open && !conditions.empty() &&
                (subrecord.signature == sig_cis1 || subrecord.signature == sig_cis2)) {
       auto& last = conditions.back();
+      run_end = i + 1;
       if (subrecord.signature == sig_cis1) {
         last.parameter1_string = zstring_of(subrecord.data);
       } else {
@@ -159,6 +167,16 @@ std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
       }
     } else if (!conditions.empty()) {
       run_open = false;
+    }
+  }
+  if (!conditions.empty()) {
+    const auto serialized = serialize_ctda_run(conditions);
+    if (serialized.size() != run_end - run_begin) throw CtdaNotLosslessError("condition run cannot round-trip");
+    for (std::size_t i = 0; i < serialized.size(); ++i) {
+      const auto& original = record.subrecords[run_begin + i];
+      if (serialized[i].signature != original.signature || serialized[i].data != original.data) {
+        throw CtdaNotLosslessError("condition run cannot round-trip");
+      }
     }
   }
   return conditions;

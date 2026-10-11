@@ -20,6 +20,11 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+class CtdaNotLosslessError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
 inline constexpr std::uint16_t k_ctda_event_function_index = 576;
 
 // Condition.Flag bits (Mutagen): OR=0x01, ParametersUseAliases=0x02,

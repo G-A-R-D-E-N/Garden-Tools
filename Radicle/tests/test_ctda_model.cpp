@@ -382,6 +382,22 @@ TEST(CtdaModel, ReadDoesNotAttachCisAfterTheRunEnds) {
   EXPECT_FALSE(conditions[0].parameter2_string.has_value());
 }
 
+TEST(CtdaModel, ReadRefusesPayloadOrStringsThatCannotRoundTrip) {
+  fo4::CtdaCondition condition;
+  condition.function = 8;
+  condition.parameter1_string = "first";
+  fo4::Record record;
+  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
+  record.subrecords[0].data.push_back(std::byte{0x55});
+  EXPECT_THROW(fo4::read_ctda_conditions(record), std::runtime_error);
+  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
+  record.subrecords[1].data.push_back(std::byte{0x55});
+  EXPECT_THROW(fo4::read_ctda_conditions(record), std::runtime_error);
+  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
+  record.subrecords[0].data.resize(4);
+  EXPECT_THROW(fo4::read_ctda_conditions(record), fo4::CtdaNotLosslessError);
+}
+
 TEST(CtdaModel, WriteKeepsSubrecordsAroundSingleRun) {
   auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "DESC"});
   auto* record = find_record_mutable(plugin, "000800:Cond.esp");

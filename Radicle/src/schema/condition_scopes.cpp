@@ -295,6 +295,8 @@ ScopedConditionsRead read_scoped_conditions(
             read_ctda_conditions_in(record, resolution.range.begin, resolution.range.end)};
       } catch (const CtdaMultipleListsError&) {
         return ScopedConditionsRead{false, ScopedConditionStatus::multiple_lists, {}};
+      } catch (const CtdaNotLosslessError&) {
+        return ScopedConditionsRead{false, ScopedConditionStatus::unrepresentable, {}};
       }
     case ScopeStatus::out_of_range:
       return ScopedConditionsRead{false,
