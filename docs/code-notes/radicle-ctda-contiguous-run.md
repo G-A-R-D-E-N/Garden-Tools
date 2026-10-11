@@ -30,6 +30,8 @@ The fixture follows `Radicle/tests/test_condition_scopes.cpp:ConditionScopes.Ref
 
 ## Radicle/include/fo4/plugin/mutation.hpp:set_record_conditions follow-ups
 
+Records with several condition lists remain refused by whole-record writes: QUST top-level conditions alongside conditioned objectives/targets, PACK and PERK. INFO has a single condition list in xEdit (`wbDefinitionsFO4.pas:9754` at 93cc0bc5), and the official masters agree: 60,230 INFO records have no CTDA run and 42,232 have exactly one. An INFO is refused only when its stored bytes split the run. `Targets[k]` is a flat ordinal across all objectives, while xEdit nests targets under each objective (`wbDefinitionsFO4.pas:10772`, `:10779`); this is a path-grammar choice with no RE or corpus proof, so the owner decides whether to keep it. Scoped paths cover magic-effect entries, quest aliases, PACK `Branches[i].Conditions` (`Radicle/src/schema/condition_scopes.cpp:package_branch_ranges`) and QUST `Targets[k].Conditions` (`Radicle/src/schema/condition_scopes.cpp:quest_target_ranges`). PERK and INFO top-level lists and the PACK/QUST top-level lists remain follow-ups; see `docs/code-notes/GARDEN-TOOLS.md`.
+
 Records with several condition lists remain refused by whole-record writes: QUST top-level conditions alongside conditioned objectives/targets, PACK and PERK. INFO has one condition list in xEdit (`wbDefinitionsFO4.pas:9754`); all 42,232 vanilla INFO with conditions hold a single run. Current scoped paths cover magic-effect entries and quest aliases. Additional scoped paths remain follow-ups.
 
 ## Radicle/src/schema/ctda.cpp:read_ctda_conditions_in / Radicle/include/fo4/schema/ctda.hpp:CtdaMultipleListsError

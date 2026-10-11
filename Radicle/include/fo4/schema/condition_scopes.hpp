@@ -16,6 +16,8 @@ namespace fo4::schema {
 enum class ConditionScopeKind {
   effect,
   alias,
+  package_branch,
+  quest_target,
 };
 
 struct ConditionScopeDescriptor {
