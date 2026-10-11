@@ -5,14 +5,14 @@
 
 namespace fo4::test {
 
-inline Plugin navmesh_writer_fixture() {
+inline Plugin navmesh_writer_fixture(std::uint16_t stored_edge0 = 0xFFFF) {
   ByteWriter geometry;
   geometry.u32(15); geometry.u32(0x12345678); geometry.u32(0); geometry.u32(0x810);
   geometry.u32(3);
   for (int i = 0; i < 9; ++i) geometry.f32(static_cast<float>(i));
   geometry.u32(1);
   for (std::uint16_t i = 0; i < 3; ++i) geometry.u16(i);
-  for (int i = 0; i < 3; ++i) geometry.u16(0xFFFF);
+  geometry.u16(stored_edge0); geometry.u16(0xFFFF); geometry.u16(0xFFFF);
   geometry.f32(4.5f); geometry.u8(0xAA); geometry.u32(0xABCD8012);
   geometry.u32(0); geometry.u32(1); geometry.u16(0); geometry.u32(0xABCDE); geometry.u32(0x811);
   for (int i = 0; i < 12; ++i) geometry.u32(0);

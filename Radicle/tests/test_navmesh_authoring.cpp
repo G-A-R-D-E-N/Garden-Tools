@@ -89,6 +89,20 @@ TEST(NavmeshAuthoring, EdgeAndDoorIndicesOutsideTheirArraysRefuseWithoutChanging
   EXPECT_EQ(set_navmesh_triangle(plugin, key, 0, triangle), ScalarMutationStatus::updated);
 }
 
+TEST(NavmeshAuthoring, UnchangedDanglingTriangleEdgeIsKeptAndChangedOneRefuses) {
+  auto plugin = test::navmesh_writer_fixture(1);
+  const auto key = test::navmesh_key();
+  env::NavmeshTriangle triangle{{2, 1, 0}, {1, -1, -1}, 6.5f, 0xAA, 0xABCD8012};
+  EXPECT_EQ(set_navmesh_triangle(plugin, key, 0, triangle), ScalarMutationStatus::updated);
+  const auto bytes = write_plugin(plugin);
+  const auto read = read_plugin(bytes, "Navigation.esp");
+  binary::Cursor cursor(find_record(read, key)->subrecords[0].data);
+  cursor.read_bytes(60 + 6); EXPECT_EQ(cursor.read_u16(), 1); EXPECT_EQ(cursor.read_u16(), 0xFFFF);
+  triangle.edges[0] = 2;
+  EXPECT_THROW(set_navmesh_triangle(plugin, key, 0, triangle), schema::ScalarError);
+  EXPECT_EQ(write_plugin(plugin), bytes);
+}
+
 TEST(NavmeshAuthoring, MalformedDuplicateAndUnsupportedGeometryFailsClosed) {
   for (const auto mode : {0, 1, 2, 3}) {
     auto plugin = test::navmesh_writer_fixture();
