@@ -239,4 +239,4 @@ TEST_CASE("Native material save keeps an existing destination when the rename fa
     for (const auto& entry : std::filesystem::directory_iterator(output.parent_path())) {
         CHECK_FALSE(entry.path().filename().string().starts_with(stagePrefix));
     }
->}
+}
