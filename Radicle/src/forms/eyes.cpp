@@ -205,14 +205,18 @@ bool set_eyes_text_fields(Plugin& plugin,
   const auto stored_edid = editor_id.has_value()
       ? std::optional<std::string>{stored_editor_id(*editor_id)}
       : std::nullopt;
+  const auto stored_full = full_text.has_value()
+      ? std::optional<std::string>{stored_inline_text(*full_text, "EYES FULL")}
+      : std::nullopt;
+  const auto stored_icon = icon.has_value()
+      ? std::optional<std::string>{stored_inline_text(*icon, "EYES ICON")}
+      : std::nullopt;
   bool needs_change = false;
   if (stored_edid.has_value() && current.editor_id != stored_edid) {
     needs_change = true;
   }
-  if (full_text.has_value() && current.full_text != std::optional<std::string>{std::string(*full_text)}) {
-    needs_change = true;
-  }
-  if (icon.has_value() && current.icon != *icon) needs_change = true;
+  if (stored_full.has_value() && current.full_text != stored_full) needs_change = true;
+  if (stored_icon.has_value() && current.icon != *stored_icon) needs_change = true;
   if (!needs_change) return true;
 
   auto* record = find_mutable_record(plugin, key);
@@ -221,11 +225,11 @@ bool set_eyes_text_fields(Plugin& plugin,
   if (stored_edid.has_value()) {
     changed |= replace_string_subrecord(*record, sig_edid, *stored_edid, true);
   }
-  if (full_text.has_value()) {
-    changed |= replace_string_subrecord(*record, k_full, *full_text, false);
+  if (stored_full.has_value()) {
+    changed |= replace_string_subrecord(*record, k_full, *stored_full, false);
   }
-  if (icon.has_value()) {
-    changed |= replace_string_subrecord(*record, k_icon, *icon, false);
+  if (stored_icon.has_value()) {
+    changed |= replace_string_subrecord(*record, k_icon, *stored_icon, false);
   }
   if (changed) mark_modified(plugin, *record);
   return true;

@@ -176,6 +176,25 @@ TEST(Eyes, NonAsciiEditorIdIsStoredAsWindows1252AndRepeatEditStaysClean) {
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
+TEST(Eyes, NonAsciiFullAndIconAreStoredAsWindows1252AndRepeatEditStaysClean) {
+  auto plugin = fo4::read_plugin(make_eyes_plugin(), "EyesPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:EyesPatch.esp");
+  ASSERT_TRUE(fo4::forms::set_eyes_text_fields(plugin, key, std::nullopt,
+                                               std::string_view{"Caf\xC3\xA9"},
+                                               std::string_view{"Ic\xC3\xA9n"}));
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "EyesPatch.esp");
+  const auto decoded = fo4::forms::decode_eyes(reread, key);
+  EXPECT_EQ(decoded.full_text, std::optional<std::string>{"Caf\xE9"});
+  EXPECT_EQ(decoded.icon, "Ic\xE9n");
+
+  const auto original = fo4::test::original_bytes(plugin);
+  ASSERT_TRUE(fo4::forms::set_eyes_text_fields(plugin, key, std::nullopt,
+                                               std::string_view{"Caf\xC3\xA9"},
+                                               std::string_view{"Ic\xC3\xA9n"}));
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
 TEST(Eyes, NoOpEditDoesNotDirtyParsedPlugin) {
   auto plugin = fo4::read_plugin(make_eyes_plugin(), "EyesPatch.esp");
   const auto key = fo4::FormKey::parse("000800:EyesPatch.esp");

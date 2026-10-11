@@ -173,10 +173,20 @@ EDID, FULL, and ICON are stored as Windows-1252 through `stored_editor_id` and `
 
 ## Radicle/src/forms/eyes.cpp:set_eyes_text_fields
 
-EDID is converted once with `stored_editor_id`. The compare against `decode_eyes` (which returns the stored
-bytes undecoded) and the write both use those Windows-1252 bytes. Before this, a non-ASCII EDID never matched
-and was rewritten on every edit. Test: `Radicle/tests/test_eyes.cpp:NonAsciiEditorIdIsStoredAsWindows1252AndRepeatEditStaysClean`.
-FULL and ICON in this function still write raw UTF-8 and compare undecoded bytes; this change does not touch them.
+EDID is converted once with `stored_editor_id`; FULL and ICON are converted once with `stored_inline_text`. xEdit
+writes every inline string through the file encoding, Windows-1252 (`Core/wbInterface.pas:15695`, `:23867`). The
+compare against `decode_eyes` (which returns the stored bytes undecoded) and the write all use those Windows-1252
+bytes. Before this, a non-ASCII EDID never matched and was rewritten on every edit, and FULL and ICON were written
+as raw UTF-8. A character outside Windows-1252 throws `FormIdError` before the plugin changes. Tests:
+`Radicle/tests/test_eyes.cpp:NonAsciiEditorIdIsStoredAsWindows1252AndRepeatEditStaysClean` and
+`Radicle/tests/test_eyes.cpp:NonAsciiFullAndIconAreStoredAsWindows1252AndRepeatEditStaysClean`.
+
+## Radicle/src/forms/armor_edit.cpp:upsert_ordered_string
+
+The upserted value is converted with `stored_inline_text`, with the subrecord signature as the field name, so ARMO and
+ARMA model and icon subrecords are stored as Windows-1252 like EDID. The PET caller passes UTF-8 from JSON. The
+compare uses the same converted bytes. A character outside Windows-1252 throws `FormIdError` before the plugin
+changes. Test: `Radicle/tests/test_armor_edit.cpp:ArmorEdit.NonAsciiGenderedModelIsStoredAsWindows1252`.
 
 ## Radicle/src/plugin/child_groups.hpp:quest_child_group
 
