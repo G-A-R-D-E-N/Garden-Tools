@@ -166,3 +166,10 @@ test in this change.
 
 EDID, FULL, and ICON are stored as Windows-1252 through `stored_editor_id` and `stored_inline_text`. Tests:
 `Radicle/tests/test_eyes_creation.cpp:StoresEditorIdAsWindows1252` (EDID only).
+
+## Radicle/src/forms/eyes.cpp:set_eyes_text_fields
+
+EDID is converted once with `stored_editor_id`. The compare against `decode_eyes` (which returns the stored
+bytes undecoded) and the write both use those Windows-1252 bytes. Before this, a non-ASCII EDID never matched
+and was rewritten on every edit. Test: `Radicle/tests/test_eyes.cpp:NonAsciiEditorIdIsStoredAsWindows1252AndRepeatEditStaysClean`.
+FULL and ICON in this function still write raw UTF-8 and compare undecoded bytes; this change does not touch them.

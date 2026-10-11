@@ -202,8 +202,11 @@ bool set_eyes_text_fields(Plugin& plugin,
         "EYES FULL is opaque/localized storage; refusing to reinterpret it as inline text");
   }
 
+  const auto stored_edid = editor_id.has_value()
+      ? std::optional<std::string>{stored_editor_id(*editor_id)}
+      : std::nullopt;
   bool needs_change = false;
-  if (editor_id.has_value() && current.editor_id != std::optional<std::string>{std::string(*editor_id)}) {
+  if (stored_edid.has_value() && current.editor_id != stored_edid) {
     needs_change = true;
   }
   if (full_text.has_value() && current.full_text != std::optional<std::string>{std::string(*full_text)}) {
@@ -215,8 +218,8 @@ bool set_eyes_text_fields(Plugin& plugin,
   auto* record = find_mutable_record(plugin, key);
   if (record == nullptr) return false;
   bool changed = false;
-  if (editor_id.has_value()) {
-    changed |= replace_string_subrecord(*record, sig_edid, *editor_id, true);
+  if (stored_edid.has_value()) {
+    changed |= replace_string_subrecord(*record, sig_edid, *stored_edid, true);
   }
   if (full_text.has_value()) {
     changed |= replace_string_subrecord(*record, k_full, *full_text, false);
