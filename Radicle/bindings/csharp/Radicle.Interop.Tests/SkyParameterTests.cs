@@ -65,7 +65,7 @@ public class SkyParameterTests
         var bytes = Enumerable.Range(0, size).Select(i => (byte)i).ToArray();
         var plugin = temp.Write("Sky.esm", Build(1, Array.Empty<string>(),
             Top("CLMT", new Rec("CLMT", 0x800, new[] { ("TNAM", new byte[] { 30, 42, 102, 114, 10, 195 }) })),
-            Top("WTHR", new Rec("WTHR", 0x801, new[] { ("DATA", bytes) }))));
+            Top("WTHR", new Rec("WTHR", 0x801, new[] { ("DATA", bytes) }, FormVersion: (ushort)(size == 20 ? 119 : 118)))));
         using var env = RadicleEnvironment.Load(new[] { plugin });
         var timing = env.Climate(env.Winner(new FormKey("Sky.esm", 0x800))!.Value).Timing;
         Assert.Equal(new ClimateTiming(30, 42, 102, 114, 10, 195), timing);
