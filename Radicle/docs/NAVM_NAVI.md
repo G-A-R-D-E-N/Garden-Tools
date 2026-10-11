@@ -73,7 +73,7 @@ inferred semantic names. Pathfinding remains outside stored-data authoring.
 
 Edits preserve array sizes. Triangle vertex indices must fit the existing vertex array; the unknown traversal byte and complete raw flags word must remain identical. Vertex and height values must be finite. Door references must be non-null, use an existing master, and resolve to REFR when local. These are stored-data edits; no derived navigation rebuild is implied.
 
-ABI 12 advances main's ABI 11 once while retaining main and published exports and layouts. A re-bump is expected if another additive ABI PR merges first. Current validation and exact-head CI counts belong in the PR description, with local proof under `build/evidence/`. `tests/test_navmesh_real.cpp:expect_geometry` and `expect_info` check native/C value agreement, including opaque bytes and resolved keys. Untouched body records are byte-identical; TES4 checks allow the existing serializer's regenerated ONAM metadata and size markers.
+ABI 12 advances main's ABI 11 once while retaining main and published exports and layouts. A re-bump is expected if another additive ABI PR merges first. Current validation and exact-head CI counts belong in the PR description. `tests/test_navmesh_real.cpp:expect_geometry` and `expect_info` check native/C value agreement, including opaque bytes and resolved keys. Untouched body records are byte-identical; TES4 checks allow the existing serializer's regenerated ONAM metadata and size markers.
 
 The earlier GardenEngine audit at `10ea81f1590b06dad962ff86721c0a55f00ef173`
 found vocabulary entries without a NAVM/NAVI geometry consumer. That audit

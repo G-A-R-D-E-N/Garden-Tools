@@ -4,7 +4,7 @@
 
 `docs/NAVM_NAVI.md` records the measured version-15 disk grammar and the
 resolved CK reader discrepancy. The pinned private record is
-`build/RE-Work/6916afb/navigation-401-339/README.md`
+`https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/navigation-401-339/README.md`
 at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 (OG readers
 @0x14250FCD0 and @0x14250FFB0; independently matched AE readers). Triangles
 store f32 clearance, a raw traversal byte and one u32 flags word; splitting
