@@ -1,6 +1,7 @@
 #include "fo4/schema/ctda.hpp"
 
 #include "fo4/signature.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -66,6 +67,7 @@ std::string zstring_of(std::span<const std::byte> data) {
     if (ch == '\0') break;
     out.push_back(ch);
   }
+  if (!text::valid_utf8(out)) throw CtdaNotLosslessError("condition string is not UTF-8");
   return out;
 }
 

@@ -129,6 +129,13 @@ std::optional<std::string> utf8_to_windows1252(std::string_view utf8) {
   return out;
 }
 
+bool valid_utf8(std::string_view utf8) noexcept {
+  for (std::size_t at = 0; at < utf8.size();) {
+    if (!decode(utf8, at)) return false;
+  }
+  return true;
+}
+
 std::string fold(std::string_view utf8) {
   std::string out;
   out.reserve(utf8.size());
