@@ -244,6 +244,10 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 
 `Radicle/src/c_api.cpp:radicle_plugin_remap_masters` remaps a copy of the plugin and assigns it back only when `fo4::remap_plugin_masters` succeeds, so a failed call (for example a dropped master that an own record or override still uses, which makes `encode_plugin_form_id` throw "is not in the destination master table") leaves the handle unchanged instead of empty (GT-090). Test: `Radicle/tests/test_c_api.cpp` `CApi.FailedRemapMastersLeavesThePluginUnchanged`.
 
+## bindings/csharp/Radicle.Interop/PluginFile.cs:FieldCount
+
+`FieldCount` and `FormLinkListCount` throw `KeyNotFoundException` for a missing record and return 0 when the record exists but the field has no occurrences; before GT-017 both cases returned 0. `TryFieldCount` and `TryFormLinkListCount` give the non-throwing form (false for a missing record, true with `out` 0 for no occurrences), matching the `Edit` family where NOT_FOUND returns false. The old names are kept so callers on open branches still compile. The C side already distinguishes the cases: `Radicle/src/c_api_fields.cpp:radicle_plugin_record_field_count` returns NOT_FOUND when `Radicle/src/plugin/field_writer.cpp:record_field_count` finds no record, and `radicle_plugin_formlink_list_size` does the same through `Radicle/src/schema/formlink_lists.cpp:record_formlink_list_size`. Tests: `Radicle/bindings/csharp/Radicle.Interop.Tests/FieldWriterTests.cs:FieldCountReportsOccurrences` and `FormLinkListOperationsEditByPath`.
+
 ## GT-082 / GT-092 reader limits
 
 Anchored to `src/plugin/reader.cpp:read_group` and `src/plugin/reader.cpp:inflate_record_payload`.
