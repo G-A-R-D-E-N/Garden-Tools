@@ -51,6 +51,50 @@ The caller search across Radicle and PluginEditTool found the backend and native
 QUST has two top-level condition lists split by a `NEXT` marker. Quest Dialogue Conditions sits before `NEXT` (`source:xEdit Core/wbDefinitionsFO4.pas:10737-10739 @93cc0bc5`: `wbRStruct('Quest Dialogue Conditions')`, then the required `wbEmpty(NEXT, 'Marker')`, then `wbRStruct('Story Manager Conditions')`). `root_window_limit` ends the QUST window at the first `NEXT` or the first `INDX`, so a Story Manager list is never read or written by the bare `Conditions` path. `root_insert_anchor` puts the insert anchor for a missing Quest Dialogue list at `NEXT`, so a new list lands immediately before the marker. Without a `NEXT` marker the anchor is absent, the window still ends at `INDX`, and an insert is refused.
 
 Corpus counts over the official masters: `NEXT` is present in 1,909 of 1,916 quests (the 7 without it have no conditions); 574 quests hold only a Story Manager list and 141 hold only a Dialogue list. Before this change a bare write on a Story-Manager-only quest overwrote the Story Manager list. `Radicle/tests/test_condition_scopes_records.cpp:QuestStoryManagerOnlyReadsEmptyAndInsertsDialogueBeforeNext`, `QuestDialogueOnlyBeforeNextReadsAndWrites` and `QuestDialogueAndStoryManagerListsEditDialogueOnly` pin the three cases. No descriptor addresses the Story Manager list, so it has no write path in this layer.
+## Radicle/src/schema/ctda.cpp:k_citc_list_owners
+
+Record types whose xEdit definition puts a `CITC` (Condition Count, u32) directly before a condition list. Verified against xEdit pinned at 93cc0bc5 (`source:xEdit Core/wbDefinitionsFO4.pas`):
+
+- `wbCITC` (optional) at 3279 and `wbCITCReq` (required) at 3280; `wbInteger`'s sixth argument sets `defRequired` (`wbInterface.pas:3624-3631`).
+- `wbConditions` at 5183-5254, with `.SetCountPath(CITC)` at 5254. `wbRArray` builds a `TwbSubRecordArrayDef` (`wbInterface.pas:8304-8311`).
+- ACTI: 5611 record, `wbCITC` 5667, `wbConditions` 5668 (optional, single list).
+- FACT: 6785 record, 6844-6845 (optional, single list).
+- FURN: 6848 record, 6880-6881 (optional, single list; the list at 7054 is HDPT).
+- MUST: 8795 record, 8814-8815 (optional, single list).
+- SMBN: 8720 record, 8724-8725 (required). SMQN: 8735 record, 8739-8740 (required). SMEN: 8762 record, 8766-8767 (required).
+- SCEN: 8879 record. The CITC is inside the Start Scene struct at 9073-9074 (predecessors INTT or SSPN). The record-level lists at 8903, 8905 and 9125 have no CITC (predecessors NAM0, NEXT, VNAM, CNAM in vanilla).
+- PACK: 10526 record. The CITC is inside the Branch struct at 10603-10607, required (predecessor ANAM). The record-level list at 10571 has no CITC (predecessor PSDT in vanilla).
+
+The table keys on record signature and, for nested lists, the predecessor. A default `after` accepts any predecessor for single-list records.
+
+## Radicle/src/schema/ctda.cpp:write_ctda_conditions_in CITC on insert
+
+xEdit count semantics (`source:xEdit Core/wbImplementation.pas @93cc0bc5`, `TwbSubRecordArray.UpdateCountViaPath` 21144-21172 and `BeforeActualRemove` 20774-20795):
+
+- A non-empty list writes the count and creates the counter if it is missing (21158-21172).
+- An empty list sets an existing counter to 0 and never creates or removes it (21164-21171).
+- Required members are created on new records (10217-10224), and a missing required member is reported (11157-11158).
+
+So when a non-empty list is inserted, the CITC must exist and equal the CTDA count. An existing CITC immediately before the insert point is updated in place. Otherwise, for a record in `k_citc_list_owners`, a CITC is written before the new run. Removing all conditions keeps the CITC and sets it to 0, which is what the replaced branch already did.
+
+Vanilla corpus, read-only scan of Fallout4.esm, DLCCoast, DLCNukaWorld, DLCRobot, DLCworkshop01/02/03 (Synthesis.esm excluded), run with `python -I`:
+
+| Record | CTDA runs | Run has CITC before it | Run without CITC | CITC with no CTDA (all value 0) |
+|---|---|---|---|---|
+| ACTI | 91 | 91 | 0 | 0 |
+| FACT | 1 | 1 | 0 | 0 |
+| FURN | 1 | 1 | 0 | 0 |
+| MUST | 103 | 103 | 0 | 0 |
+| SMBN | 90 | 90 | 0 | 46 |
+| SMQN | 294 | 294 | 0 | 52 |
+| SMEN | 1 | 1 | 0 | 17 |
+| SCEN | 3194 | 288 (predecessor INTT 157, SSPN 131) | 2906 (predecessor NAM0, NEXT, VNAM, CNAM) | 781 |
+| PACK | 3360 | 521 (predecessor ANAM) | 2839 (predecessor PSDT) | 931 |
+
+No CITC value differed from its CTDA count in any run. Vanilla always writes the CITC when a list of an owned type has CTDAs. Required and nested lists keep a CITC of 0 when empty. ACTI, FACT, FURN and MUST never have a CITC without CTDAs.
+
+Reachability: `condition_scopes.cpp` generates scopes only for ALCH, ENCH, INGR, SPEL and QUST, and `set_record_conditions` passes no anchor. So a non-empty write to a CITC record with no list returns `no_condition_list` (PET: `NoConditionList`), and an empty write returns `unchanged` with nothing staged, as documented above. The CITC insert path is reached only by a caller that passes `insert_anchor` for an owned record type; no production caller does today, so the owner table is exercised by the tests only.
+
 ## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition — stored reference by Run On
 
 `buildCondition` stores a nonzero reference only for Run On Reference (2). A new row with a nonzero reference and any other Run On is refused (`reference requires runOn Reference`). Editing Run On away from Reference without touching the reference zeroes it. Only an untouched preserved row keeps a stored reference under another Run On. This follows xEdit's union handling: `source:xEdit Core/wbDefinitionsCommon.pas:5495-5509 @93cc0bc5` (wbConditionReferenceDecider) picks the branch by Run On, and `:1310-1322 @93cc0bc5` (wbConditionRunOnAfterSet) zeroes the reference only when Run On is edited in the UI.
