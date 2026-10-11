@@ -98,6 +98,10 @@ managed byte ownership after disposal. This is not a decoded UI-content claim.
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
 
+## src/schema/form_links.cpp:visit_link_offsets (SCEN action Topic DATA)
+
+`src/schema/form_links.cpp:visit_link_offsets` with `src/schema/non_formid_slots.cpp:scene_action_topic_data`: SCEN `DATA` is a Topic form ID only in a Dialogue (type 0) or Radio (type 6) action, `wbFormIDCk(DATA, 'Topic', [DIAL,NULL])` at source:xEdit Core/wbDefinitionsFO4.pas:9014 and :9096 @93cc0bc5. The action type is the last 2-byte `ANAM` before the subrecord (`src/schema/non_formid_slots.cpp:scene_action_type`), as xEdit reads it through `wbSceneActionTypeDecider` (source:xEdit Core/wbDefinitionsCommon.pas:5403 @93cc0bc5) and the `ANAM` 'Type' field at source:xEdit Core/wbDefinitionsFO4.pas:8956 @93cc0bc5. The empty closing `ANAM` marker (`wbMarkerReq(ANAM)`, source:xEdit Core/wbDefinitionsFO4.pas:9103 @93cc0bc5) has no 2-byte payload, so it ends the type for later subrecords. SCEN has no top-level `DATA`, so no other `DATA` is visited. `DATA` is not in the generic `formid_subrecords.inc` table, so before this rule a cross-plugin remap left topic links pointing at the old master index. Under strict remap a `DATA` in these actions whose payload is not 4 bytes throws instead of being skipped.
+
 ## src/schema/form_links.cpp:visit_coed_formids
 
 `COED` is classified before the structured-slot table: owner at offset 0 always, offset 4 only when the owner record in the plugin being remapped is `NPC_`. Faction ranks are never FormIDs. Strict remap fails closed when owner type cannot be determined and the union dword is nonzero.
