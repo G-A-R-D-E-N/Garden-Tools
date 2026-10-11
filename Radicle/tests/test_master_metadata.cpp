@@ -128,6 +128,29 @@ const fo4::Group* find_group(const fo4::Plugin& plugin,
   return found;
 }
 
+std::vector<std::byte> make_single_master_plugin(bool light, std::uint32_t local) {
+  fo4::test::ByteWriter out;
+  const auto flags = light ? fo4::RecordFlags::small_file : 0u;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"First.esm\0", 10});
+  fo4::test::ByteWriter data;
+  write_u64(data, 0x1122334455667788ull);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  const auto record = fo4::test::begin_record(out, "MISC", 0, 0x01000000u | local);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Local\0", 6});
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 }  // namespace
 
 TEST(MasterMetadata, ReorderPreservesMatchingDataSizes) {
@@ -187,4 +210,29 @@ TEST(MasterMetadata, ReorderRemapsFormIdBearingCellGroupLabels) {
   EXPECT_EQ(reread_refs[0].record->form_key, reference_key);
   ASSERT_TRUE(reread_refs[0].base.has_value());
   EXPECT_EQ(reread_refs[0].base->to_string(), "000802:First.esm");
+}
+
+TEST(MasterMetadata, RemovingLastMasterOfLightPluginRefusesLowOwnIds) {
+  const auto plugin = fo4::read_plugin(make_single_master_plugin(true, 0x001), "Patch.esp");
+  ASSERT_TRUE(plugin.header.tes4_flags.is_small_file());
+  ASSERT_EQ(plugin.header.masters.size(), 1u);
+
+  EXPECT_THROW(fo4::remap_plugin_masters(plugin, std::vector<fo4::MasterDescriptor>{}),
+               fo4::FormIdError);
+}
+
+TEST(MasterMetadata, RemovingLastMasterOfLightPluginAllowsIdsAtTheFloor) {
+  auto plugin = fo4::read_plugin(make_single_master_plugin(true, 0x800), "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), std::vector<fo4::MasterDescriptor>{});
+
+  EXPECT_TRUE(plugin.header.masters.empty());
+  EXPECT_NE(fo4::find_record(plugin, fo4::FormKey::parse("000800:Patch.esp")), nullptr);
+}
+
+TEST(MasterMetadata, RemovingLastMasterOfFullPluginAllowsLowOwnIds) {
+  auto plugin = fo4::read_plugin(make_single_master_plugin(false, 0x001), "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), std::vector<fo4::MasterDescriptor>{});
+
+  EXPECT_TRUE(plugin.header.masters.empty());
+  EXPECT_NE(fo4::find_record(plugin, fo4::FormKey::parse("000001:Patch.esp")), nullptr);
 }
