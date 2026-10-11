@@ -1,10 +1,18 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <fo4ide/plugin/ConditionCodec.hpp>
+#include <fo4ide/plugin/ConditionFunctions.hpp>
 
+#include <cstring>
 #include <limits>
 
 namespace {
+
+std::uint32_t floatBits(float value) {
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
 
 fo4::Plugin context() {
     fo4::Plugin plugin;
@@ -176,6 +184,7 @@ TEST_CASE("condition codec round trips unresolvable form IDs through describe", 
     original.flags_byte = 0x44;
     original.comparison_raw = 0x0B000802u;
     original.param1 = static_cast<std::int32_t>(0x0A000801u);
+    original.run_on = 2;
     original.reference = 0x0A000803u;
     original.unknown3 = -1;
 
@@ -209,6 +218,90 @@ TEST_CASE("condition codec round trips a zero compareGlobal as raw zero", "[cond
     REQUIRE(rebuilt.has_value());
     CHECK(rebuilt->use_global());
     CHECK(rebuilt->comparison_raw == 0u);
+}
+
+TEST_CASE("condition codec zeroes a reference when runOn leaves Reference", "[condition-preservation]") {
+    const auto plugin = context();
+    auto original = storedCondition();
+    original.run_on = 2;
+    original.reference = 0x0A000803u;
+    auto json = fo4ide::plugin::describeCondition(original, plugin);
+    json["runOn"] = "Subject";
+    std::string failure;
+    const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(rebuilt.has_value());
+    CHECK(failure.empty());
+    CHECK(rebuilt->run_on == 0u);
+    CHECK(rebuilt->reference == 0u);
+}
+
+TEST_CASE("condition codec refuses a reference set alongside a non-Reference runOn", "[condition-preservation]") {
+    const auto plugin = context();
+    auto json = fo4ide::plugin::describeCondition(storedCondition(), plugin);
+    json["runOn"] = "Subject";
+    json["reference"] = "0A000803:";
+    std::string failure;
+    CHECK_FALSE(fo4ide::plugin::buildCondition(json, plugin, {}, failure).has_value());
+    CHECK(failure == "reference requires runOn Reference");
+}
+
+TEST_CASE("condition codec keeps a reference on a Reference runOn row when only param1 changes", "[condition-preservation]") {
+    const auto plugin = context();
+    auto original = storedCondition();
+    original.run_on = 2;
+    original.reference = 0x0A000803u;
+    auto json = fo4ide::plugin::describeCondition(original, plugin);
+    json["param1"] = 7;
+    std::string failure;
+    const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(rebuilt.has_value());
+    CHECK(failure.empty());
+    CHECK(rebuilt->run_on == 2u);
+    CHECK(rebuilt->reference == 0x0A000803u);
+}
+
+TEST_CASE("condition codec stores Float params as float bits", "[condition-preservation]") {
+    const auto plugin = context();
+    std::string failure;
+
+    const nlohmann::json fractional = {{"function", "GetWithinDistance"}, {"param2", 100.5}};
+    const auto fractionalCondition = fo4ide::plugin::buildCondition(fractional, plugin, {}, failure);
+    REQUIRE(fractionalCondition.has_value());
+    CHECK(static_cast<std::uint32_t>(fractionalCondition->param2) == floatBits(100.5f));
+
+    const nlohmann::json whole = {{"function", "GetWithinDistance"}, {"param2", 100}};
+    const auto wholeCondition = fo4ide::plugin::buildCondition(whole, plugin, {}, failure);
+    REQUIRE(wholeCondition.has_value());
+    CHECK(static_cast<std::uint32_t>(wholeCondition->param2) == floatBits(100.0f));
+
+    const nlohmann::json text = {{"function", "GetWithinDistance"}, {"param2", "100.5"}};
+    const auto textCondition = fo4ide::plugin::buildCondition(text, plugin, {}, failure);
+    REQUIRE(textCondition.has_value());
+    CHECK(static_cast<std::uint32_t>(textCondition->param2) == floatBits(100.5f));
+
+    const nlohmann::json notNumber = {{"function", "GetWithinDistance"}, {"param2", "far"}};
+    CHECK_FALSE(fo4ide::plugin::buildCondition(notNumber, plugin, {}, failure).has_value());
+    CHECK(failure == "param2 far is not a number");
+
+    const nlohmann::json notFinite = {{"function", "GetWithinDistance"}, {"param2", "nan"}};
+    CHECK_FALSE(fo4ide::plugin::buildCondition(notFinite, plugin, {}, failure).has_value());
+    CHECK(failure == "param2 must be a finite number");
+}
+
+TEST_CASE("condition codec round trips an unedited Float param through describe", "[condition-preservation]") {
+    const auto plugin = context();
+    auto original = storedCondition();
+    original.function = *fo4ide::plugin::functionIndex("GetWithinDistance");
+    original.run_on = 2;
+    original.reference = 0x0A000803u;
+    original.param2 = static_cast<std::int32_t>(floatBits(100.5f));
+    auto json = nlohmann::json::parse(fo4ide::plugin::describeCondition(original, plugin).dump());
+    CHECK(json.at("param2") == 100.5);
+    std::string failure;
+    const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(rebuilt.has_value());
+    CHECK(failure.empty());
+    checkSame(*rebuilt, original);
 }
 
 TEST_CASE("condition codec accepts only the exact placeholder form for unresolvable form IDs", "[condition-preservation]") {
