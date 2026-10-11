@@ -61,7 +61,7 @@ installed Fallout4.esm SHA-256
 `a3fa1e66d75f80f33f864bf471d25b27f48c1cdbb97acb55c4df83b64ccee1d9`
 contains one uncompressed DOBJ (`00000800`), one DNAM, 3168 bytes = 396
 rows. The six official DLC masters contain no DOBJ. Local raw inventory:
-`E:/Tools/FO4IDE/dobj-evidence/corpus.json`; no game payload is committed.
+`corpus.json (local evidence, not committed)`; no game payload is committed.
 
 Baseline `8d4c6685aa76a65e2a8e9ed408472769dc6aa3d9` trace:
 `formid_subrecords.inc` globally lists DNAM, but `visit_link_offsets` only
@@ -93,7 +93,7 @@ the initial seven DOBJ tests were built and run against unchanged
 passed. Object bytes stayed stale, collection omitted the packed lanes,
 direct rekey left its original serialization cache intact, malformed
 payloads were accepted, and 4-byte DNAM was collected as offset +0.
-Raw local output: `E:/Tools/FO4IDE/dobj-evidence/baseline-failing.txt`.
+Raw local output: `baseline-failing.txt (local evidence, not committed)`.
 
 Parity boundary for `visit_link_offsets` and issue #43, using the schema
 verified from the documentation above:
@@ -147,7 +147,7 @@ Focused filter `FormLink.DobjDnam*:FormLink.IpdsPnam*:FormLink.ClmtWlst*`:
 18/18 passed. Full `ctest --test-dir Radicle/build -C Release --output-on-failure`:
 549 discovered, 528 passed, 21 optional corpus tests skipped, zero failures.
 The corpus layout cross-check above ran separately against installed game
-data. Local logs are `E:/Tools/FO4IDE/dobj-evidence/focused-passing.txt`
+data. Local logs are `focused-passing.txt (local evidence, not committed)`
 and `full-radicle.txt`. `git diff --check` passed. No generic descriptor,
 selector cleanup/sorting, typed DOBJ authoring, or other parity family
 is included.
@@ -513,7 +513,7 @@ xEdit FO4 (`TES5Edit/TES5Edit` pin `9fb016884bec138ea6c7b872cec831537d464c3e`):
 
 These are uncounted `wbArray` members inside one subrecord, not `wbRArray`. Mutagen writes the same packed shape (`AObjectModification_Generated.cs:2767` `TargetOmodKeywords`/`MNAM`, `:2777` `FilterKeywords`/`FNAM`; `EquipType_Generated.cs:1511` `SlotParents`/`PNAM`; `MusicType_Generated.cs:1614` `Tracks`/`TNAM`).
 
-Fallout4.esm (`D:\Fallout4Backup\Fallout 4\Data\Fallout4.esm`) uncompressed top-level groups, 2026-09-13: OMOD 2409 / MNAM present 1615 (1326×4, 144×8, 145×12) / FNAM present 70 (67×4, 2×8, 1×12); EQUP 38 / PNAM present 23 (3×4, 17×8, 3×12); MUSC 111 / TNAM present 111 (4 through 108). Every present payload is one subrecord and `size % 4 == 0`. Multi-entry arrays are skipped by `formid_subrecords.inc` (4-byte only).
+Fallout4.esm (local copy, not committed) uncompressed top-level groups, 2026-09-13: OMOD 2409 / MNAM present 1615 (1326×4, 144×8, 145×12) / FNAM present 70 (67×4, 2×8, 1×12); EQUP 38 / PNAM present 23 (3×4, 17×8, 3×12); MUSC 111 / TNAM present 111 (4 through 108). Every present payload is one subrecord and `size % 4 == 0`. Multi-entry arrays are skipped by `formid_subrecords.inc` (4-byte only).
 
 `Radicle/src/schema/form_links.cpp:visit_link_offsets` dispatches `packed_formid_array_offsets` after IPDS/DOBJ and before the empty/global signature table. Foreign uses of the same signatures stay on their existing routes (NAVM PNAM vertices, QUST FNAM flags, MUST FNAM floats, NPC_ PNAM 4-byte listed FormID). Mixed NAVM/PROJ/EXPL/HAZD/OBTS/PERK helpers moved with this dispatch into `form_link_mixed.cpp` so `form_links.cpp` stays under the translation-unit size limit.
 
@@ -1293,7 +1293,7 @@ Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses ever
 
 `run_env_bench` also reports what the loaded plugins hold: the file bytes each `Plugin::original_data` retains, `Record::decompressed_payload` capacity, `Subrecord::data` capacity, the subrecord count, the group count, and the `GroupChild`/`Subrecord` slot bytes (`node bytes`). `tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` asserts that every plugin byte is retained and that subrecords were counted.
 
-Official masters, `D:/SteamLibrary/steamapps/common/Fallout 4/Data`, 2026-09-28:
+Official masters, `Data (local evidence, not committed)`, 2026-09-28:
 
 | Build | Load time | Peak working set |
 |---|---|---|
@@ -1387,7 +1387,7 @@ xEdit "Mark all files without ONAM as modified" and its ONAM-update tool mode (`
 
 ## PluginEditTool/native/tests/unit/PapyrusTargetTests.cpp — Papyrus compile tests do not depend on an installed Creation Kit
 
-`PapyrusTarget Compile uses the built-in engine with the Auto note` and `PapyrusTarget Compile with engine=creationkit and no exe explains itself` exercise the path where no `PapyrusCompiler.exe` is found. `src/app/PapyrusTarget.cpp:PapyrusTarget::compile` asks `src/tools/ToolLocator.cpp:Locator::resolve(Tool::PapyrusCompiler)`, which falls back to `Locator::fallout4Root` and, with no setting or `FALLOUT4_PATH`, to the Windows registry and a scan of every drive's Steam library. On a machine with the Creation Kit installed (for example `D:\SteamLibrary\steamapps\common\Fallout 4\Papyrus Compiler\PapyrusCompiler.exe`) both tests found that compiler and failed. They now set `Settings::fallout4Path` to their own empty temp root, as `tests/unit/ToolLocatorTests.cpp` already does, so the game install is never consulted. `PAPYRUS_COMPILER_PATH` and `PATH` are still searched; when either provides a compiler the tests `SKIP` with that reason instead of failing. Product behaviour is unchanged: Auto still prefers an installed Creation Kit compiler.
+`PapyrusTarget Compile uses the built-in engine with the Auto note` and `PapyrusTarget Compile with engine=creationkit and no exe explains itself` exercise the path where no `PapyrusCompiler.exe` is found. `src/app/PapyrusTarget.cpp:PapyrusTarget::compile` asks `src/tools/ToolLocator.cpp:Locator::resolve(Tool::PapyrusCompiler)`, which falls back to `Locator::fallout4Root` and, with no setting or `FALLOUT4_PATH`, to the Windows registry and a scan of every drive's Steam library. On a machine with the Creation Kit installed (for example `PapyrusCompiler.exe (local evidence, not committed)`) both tests found that compiler and failed. They now set `Settings::fallout4Path` to their own empty temp root, as `tests/unit/ToolLocatorTests.cpp` already does, so the game install is never consulted. `PAPYRUS_COMPILER_PATH` and `PATH` are still searched; when either provides a compiler the tests `SKIP` with that reason instead of failing. Product behaviour is unchanged: Auto still prefers an installed Creation Kit compiler.
 
 The Papyrus target tests moved out of `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp` (916 lines, over the 750-line limit) into `tests/unit/PapyrusTargetTests.cpp`, built as `fo4ide_test_papyrus_target`. The fakes both files use (`tempRoot`, `Cleanup`, `touch`, `FakeRunner`, `ThrowingRunner`, `FakePlatform`) moved to `tests/helpers/ServiceTargetFakes.hpp` (`fo4ide::app::test`). The 36 test cases are unchanged apart from the two above. `PapyrusTargetTests.cpp:PapyrusTargetFixture` owns the `Locator` so the target's reference to it stays valid for the test body, and `PapyrusTargetTests.cpp:buildPex` compiles a trivial script with the built-in engine and returns the written `.pex` path, so the decompile tests exercise the real `PexFile` I/O.
 
