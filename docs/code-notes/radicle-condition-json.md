@@ -6,7 +6,7 @@ The existing display JSON omits the native padding bytes, unknown scalar slots a
 
 ## Radicle/src/schema/ctda.cpp:read_ctda_conditions_in
 
-Editable reads must compare the source CTDA/CIS run with the existing serializer before returning values. Payloads that are not the fixed 32-byte CTDA struct (source:xEdit Core/wbDefinitionsFO4.pas:5186-5219 @93cc0bc5) and strings the native model would normalize cannot enter an editable round-trip. GetEventData (source:xEdit Core/wbDefinitionsFO4.pas:554 @93cc0bc5) has no shorter layout; its unchanged rows preserve the 32 bytes and edits are refused. The same shared boundary serves whole-record and scoped reads; additional ownership rules are outside this change.
+Editable reads must compare the source CTDA/CIS run with the existing serializer before returning values. Payloads that are not the fixed 32-byte CTDA struct (source:xEdit Core/wbDefinitionsFO4.pas:5186-5249 @93cc0bc5) and strings the native model would normalize cannot enter an editable round-trip. GetEventData (source:xEdit Core/wbDefinitionsFO4.pas:554 @93cc0bc5) has no shorter layout; its unchanged rows preserve the 32 bytes and edits are refused. The same shared boundary serves whole-record and scoped reads; additional ownership rules are outside this change.
 
 ## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition
 
