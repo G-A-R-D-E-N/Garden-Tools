@@ -1,6 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 
 #include "child_groups.hpp"
+#include "copy_hierarchy.hpp"
 #include "record_edit.hpp"
 
 #include "fo4/plugin/reader.hpp"
@@ -437,25 +438,30 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
   const bool target_exists = find_record(destination, record_key) != nullptr;
   if (target_exists && !overwrite) return RecordCopyStatus::already_exists;
 
-  // Replacing an existing target record is containment-safe because the
-  // destination node stays in its existing group. Inserting a missing record
-  // is only safe when the source is itself directly contained by a top-level
-  // group. Nested CELL/DIAL/world records need their full parent hierarchy and
-  // must fail closed until that insertion primitive exists.
   const auto* source_top_group =
       target_exists ? nullptr : source_top_group_for_record(source, source_record);
+  std::optional<NestedCopyPlan> nested_plan;
   if (!target_exists && source_top_group == nullptr) {
-    return RecordCopyStatus::source_containment_unsupported;
+    nested_plan = plan_nested_copy(source, source_record);
+    if (!nested_plan) return RecordCopyStatus::source_containment_unsupported;
   }
 
   auto copied_record = *source_record;
   auto next = destination;
 
+  std::vector<FormKey> required_keys{record_key};
+  if (nested_plan) {
+    required_keys.push_back(nested_plan->cell->form_key);
+    if (nested_plan->world != nullptr) required_keys.push_back(nested_plan->world->form_key);
+  }
+  const auto links = collect_form_links(source);
   std::set<PluginKey> required_owners;
-  if (!record_key.owner().empty()) required_owners.insert(record_key.owner());
-  for (const auto& link : collect_form_links(source)) {
-    if (link.record != record_key || link.key.owner().empty()) continue;
-    required_owners.insert(link.key.owner());
+  for (const auto& key : required_keys) {
+    if (!key.owner().empty()) required_owners.insert(key.owner());
+    for (const auto& link : links) {
+      if (link.record != key || link.key.owner().empty()) continue;
+      required_owners.insert(link.key.owner());
+    }
   }
 
   std::vector<MasterDescriptor> masters;
@@ -495,7 +501,11 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
     });
   }
 
-  if (!replaced) {
+  if (nested_plan) {
+    if (!insert_nested_copy(next, source, *nested_plan, std::move(copied_record))) {
+      return RecordCopyStatus::source_containment_unsupported;
+    }
+  } else if (!replaced) {
     Group* target_group = nullptr;
     for (auto& group : next.groups) {
       if (group.header.group_type == 0 &&

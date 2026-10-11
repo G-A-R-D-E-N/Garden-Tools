@@ -130,6 +130,7 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/copy_hierarchy.cpp
   src/plugin/field_writer.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/master_usage.cpp
@@ -288,6 +289,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_record_lifecycle.cpp
     tests/test_delete_child_groups.cpp
     tests/test_copy_containment.cpp
+    tests/test_copy_cell_children.cpp
     tests/test_scalar_mutation.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
