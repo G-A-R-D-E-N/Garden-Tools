@@ -131,6 +131,26 @@ std::optional<Error> existingStagesUnrepresentable(const fo4::Plugin& plugin,
     return std::nullopt;
 }
 
+std::vector<fo4::CtdaCondition> previousLogEntryConditions(const fo4::forms::QuestStages& previous,
+                                                           std::uint16_t index,
+                                                           std::size_t ordinal) {
+    const auto sameIndex = [index](const fo4::forms::QuestStage& stage) {
+        return stage.index == index;
+    };
+    std::vector<fo4::CtdaCondition> conditions;
+    if (std::count_if(previous.stages.begin(), previous.stages.end(), sameIndex) != 1) {
+        return conditions;
+    }
+    const auto found = std::find_if(previous.stages.begin(), previous.stages.end(), sameIndex);
+    if (ordinal >= found->log_entries.size()) return conditions;
+    std::size_t consumed = 0;
+    if (!fo4::forms::lossless_quest_log_entry_conditions(
+            found->log_entries[ordinal].members, conditions, consumed)) {
+        conditions.clear();
+    }
+    return conditions;
+}
+
 std::vector<std::byte> zstringBytes(std::string_view value) {
     std::vector<std::byte> data;
     data.reserve(value.size() + 1);
@@ -444,6 +464,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 cnam.data = fo4::schema::write_localized_string(value);
                 entry.members.push_back(std::move(cnam));
             }
+            const auto previousConditions = previousLogEntryConditions(
+                previousStages, stage.index, stage.log_entries.size());
             std::vector<PendingQuestCondition> parsedConditions;
             if (entryJson.contains("conditions") && !entryJson["conditions"].is_null()) {
                 if (!entryJson["conditions"].is_array()) {
@@ -457,6 +479,10 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     if (const auto error = parseQuestCondition(
                             conditionJson, graph_, pending, conditionKeys)) {
                         return std::unexpected(*error);
+                    }
+                    if (parsedConditions.size() < previousConditions.size()) {
+                        pending.condition.padding =
+                            previousConditions[parsedConditions.size()].padding;
                     }
                     parsedConditions.push_back(std::move(pending));
                 }
