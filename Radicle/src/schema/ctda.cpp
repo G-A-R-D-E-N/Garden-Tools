@@ -13,6 +13,33 @@ constexpr Signature sig_citc = Signature::from_string("CITC");
 constexpr Signature sig_cis1 = Signature::from_string("CIS1");
 constexpr Signature sig_cis2 = Signature::from_string("CIS2");
 
+struct CitcListOwner {
+  Signature record;
+  Signature after;
+};
+
+constexpr CitcListOwner k_citc_list_owners[] = {
+    {Signature::from_string("ACTI"), {}},
+    {Signature::from_string("FACT"), {}},
+    {Signature::from_string("FURN"), {}},
+    {Signature::from_string("MUST"), {}},
+    {Signature::from_string("SMBN"), {}},
+    {Signature::from_string("SMQN"), {}},
+    {Signature::from_string("SMEN"), {}},
+    {Signature::from_string("SCEN"), Signature::from_string("INTT")},
+    {Signature::from_string("SCEN"), Signature::from_string("SSPN")},
+    {Signature::from_string("PACK"), Signature::from_string("ANAM")},
+};
+
+bool owns_citc_list(Signature record, Signature after) {
+  for (const auto& owner : k_citc_list_owners) {
+    if (owner.record == record && (owner.after == Signature{} || owner.after == after)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Offsets into the CTDA payload (after the 4-byte subrecord header). These
 // match Radicle's existing CTDA remap table in form_links.cpp and Mutagen's
 // Condition layout (see Condition.xml + the overlay field offsets).
@@ -223,6 +250,18 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
     if (conditions.empty()) return CtdaScopeWrite::no_op;
     if (!insert_anchor.has_value()) return CtdaScopeWrite::no_list;
     const std::size_t anchor = std::min(*insert_anchor, record.subrecords.size());
+    const auto count = static_cast<std::uint32_t>(conditions.size());
+    if (anchor > begin && record.subrecords[anchor - 1].signature == sig_citc &&
+        record.subrecords[anchor - 1].data.size() == 4) {
+      write_u32(record.subrecords[anchor - 1].data, 0, count);
+    } else if (anchor > begin &&
+               owns_citc_list(record.header.signature, record.subrecords[anchor - 1].signature)) {
+      Subrecord citc;
+      citc.signature = sig_citc;
+      citc.data.resize(4);
+      write_u32(citc.data, 0, count);
+      replacement.insert(replacement.begin(), std::move(citc));
+    }
     record.subrecords.insert(
         record.subrecords.begin() + static_cast<std::ptrdiff_t>(anchor),
         std::make_move_iterator(replacement.begin()),
