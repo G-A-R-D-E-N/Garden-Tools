@@ -142,8 +142,11 @@ add_executable(
     unit/RadiclePluginEslTests.cpp
     unit/RadiclePluginCompactTests.cpp
     unit/RadiclePluginEditableTests.cpp
+    unit/RadiclePluginBackendHygieneTests.cpp
     unit/ConditionFunctionsTests.cpp
     unit/ConditionBackendTests.cpp
+    unit/ConditionCodecValidationTests.cpp
+    unit/RadiclePluginListReplaceTests.cpp
     unit/ConditionBackendParamTests.cpp
     unit/ConditionCodecTests.cpp
     unit/ConditionOwnerContextTests.cpp
@@ -193,6 +196,7 @@ add_executable(
     unit/RadiclePluginQuestEventDataTests.cpp
     unit/RadiclePluginQuestPartialFormTests.cpp
     unit/RadiclePluginQuestCreateLevelTests.cpp
+    unit/RadiclePluginQuestConditionDefaultsTests.cpp
     unit/RadiclePluginDeferredLocalizationTests.cpp
     unit/RadiclePluginPendingLifecycleTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"

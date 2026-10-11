@@ -74,6 +74,10 @@ const fo4::Record* deepTopLevelRecord(const fo4::Plugin& plugin,
     return nullptr;
 }
 
+std::string deepCapNotice(std::size_t cap) {
+    return " (capped at " + std::to_string(cap) + "; more remained in the FormLink graph)";
+}
+
 std::string typeSummary(const fo4::Plugin& source,
                         const std::vector<fo4::FormKey>& keys) {
     std::map<std::string, std::size_t> counts;
@@ -258,10 +262,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             std::string preview =
                 "DRY RUN: deep copy of " + rootKey.to_string() + " would bring " +
                 std::to_string(toCopy.size()) + " record(s) into " + targetName;
-            if (capped) {
-                preview += " (capped at " + std::to_string(cap) +
-                           "; more remained in the FormLink graph)";
-            }
+            if (capped) preview += deepCapNotice(cap);
             preview += ": " + typeSummary(source->plugin, toCopy) + ".";
             if (!existing.empty()) {
                 preview += " " + std::to_string(existing.size()) +
@@ -272,7 +273,8 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
                            targetName + " loads before other plugins that override them (" +
                            losingSample + ") and will require load-order confirmation.";
             }
-            preview += " Re-run with apply=true.";
+            preview += capped ? " Raise the cap, then re-run with apply=true."
+                              : " Re-run with apply=true.";
             return nlohmann::json(std::move(preview));
         }
 
@@ -280,6 +282,13 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             return std::unexpected(Error{
                 "TargetPluginNotLoaded",
                 "Target plugin disappeared before deep-copy apply: " + targetName
+            });
+        }
+        if (capped) {
+            return std::unexpected(Error{
+                "DeepCopyCapped",
+                "Deep copy of " + rootKey.to_string() + " refused" + deepCapNotice(cap) +
+                ": nothing was staged."
             });
         }
         if (const auto guard = writeGuard(*target)) return std::unexpected(*guard);

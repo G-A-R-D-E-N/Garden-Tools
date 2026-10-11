@@ -368,7 +368,7 @@ TEST_CASE("Saves that resolve to one file serialize their file IO") {
 
     auto saveAs = std::async(std::launch::async, [&] {
         return backend.invoke("backend.SavePlugin",
-                              nlohmann::json::array({"Alpha.esp", betaPath.string()}));
+                              nlohmann::json::array({"Alpha.esp", betaPath.string(), true}));
     });
     CHECK(saveAs.wait_for(200ms) == std::future_status::timeout);
     {
