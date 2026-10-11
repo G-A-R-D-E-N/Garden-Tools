@@ -185,6 +185,24 @@ TEST(ClimateWeatherAuthoring, PartialOptionalSpecularColorsStayAbsentAndUnchange
   }
 }
 
+TEST(ClimateWeatherAuthoring, WeatherSubrecordsBelowTheirXEditSizeRefuseScalarWrites) {
+  auto entries = fixture();
+  for (auto& [name, data] : entries[2].subs) {
+    if (name == "DATA") { data = filled(18, 0); }
+    if (name == "FNAM") { data = filled(31, 0); }
+  }
+  auto plugin = read(build(entries, true));
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(scalar(plugin, k_wthr, "WTHR\\WindSpeed", 0, "5"), k_missing);
+  EXPECT_EQ(scalar(plugin, k_wthr, "WTHR\\FogDayNear", 0, "1"), k_missing);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(scalar(plugin, k_wthr_old, "WTHR\\WindSpeed", 0, "5"), k_updated);
+
+  auto sized = read(build(fixture(), true));
+  EXPECT_EQ(scalar(sized, k_wthr, "WTHR\\WindSpeed", 0, "5"), k_updated);
+  EXPECT_EQ(scalar(sized, k_wthr, "WTHR\\FogDayNear", 0, "1"), k_updated);
+}
+
 TEST(ClimateWeatherAuthoring, LinksCheckTargetsNullabilityStrideAndOccurrence) {
   auto plugin = read(build(fixture(), true));
   EXPECT_EQ(link(plugin, k_clmt, "CLMT\\Weather", 1, key(k_wthr)), k_link_updated);
