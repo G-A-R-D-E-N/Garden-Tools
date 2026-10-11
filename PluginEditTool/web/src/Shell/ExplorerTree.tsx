@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, ChevronDown, Database, FileBox } from 'lucide-react';
 import type { AppInterop } from '../backend';
 import { errorText } from '../errors';
@@ -17,40 +17,35 @@ export default function ExplorerTree({ path, node, backend, onOpenRecord }: { pa
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [seenNode, setSeenNode] = useState(node);
+  const requests = useRef(0);
 
   if (seenNode !== node) {
     setSeenNode(node);
     if (!expanded) setChildren([]);
   }
 
-  const fetchChildren = (client: AppInterop) => client.GetChildren(path)
-    .then(json => { setChildren(JSON.parse(json)); setLoadError(''); })
-    .catch(err => setLoadError(errorText(err)));
+  const load = useCallback(async () => {
+    const mine = ++requests.current;
+    setLoading(true);
+    setLoadError('');
+    try {
+      if (!backend) throw new Error('Host bridge is not available');
+      const json = await backend.GetChildren(path);
+      if (mine === requests.current) setChildren(JSON.parse(json));
+    } catch (err) {
+      if (mine === requests.current) setLoadError(errorText(err));
+    } finally {
+      if (mine === requests.current) setLoading(false);
+    }
+  }, [backend, path]);
 
   useEffect(() => {
-    if (expanded && node.HasChildren && backend) void fetchChildren(backend);
-  }, [node]);
+    if (expanded && node.HasChildren) void load();
+  }, [node, expanded, load]);
 
-  const toggle = async () => {
-    if (!expanded) {
-      if (node.HasChildren && children.length === 0) {
-        setLoading(true);
-        setLoadError('');
+  const shown = node.HasChildren ? children : [];
 
-
-        try {
-          if (!backend) throw new Error('Host bridge is not available');
-          const json = await backend.GetChildren(path);
-          setChildren(JSON.parse(json));
-        } catch (err) {
-          setLoadError(errorText(err));
-        } finally {
-          setLoading(false);
-        }
-      }
-    }
-    setExpanded(!expanded);
-  };
+  const toggle = () => setExpanded(!expanded);
 
   return (
     <div className="tree-node">
@@ -72,14 +67,14 @@ export default function ExplorerTree({ path, node, backend, onOpenRecord }: { pa
             : node.ConflictStatus === 2 ? { color: '#b07a7a' }
             : undefined}
         >{node.Key}</span>
-        {loading && <span className="tree-loading">...</span>}
-        {!loading && loadError && (
+        {node.HasChildren && loading && <span className="tree-loading">...</span>}
+        {node.HasChildren && !loading && loadError && (
           <span className="tree-loading" style={{ color: '#f44747' }} title={loadError}>failed</span>
         )}
       </div>
       {expanded && (
         <div className="tree-children">
-          {children.map((c, i) => (
+          {shown.map((c, i) => (
             <ExplorerTree key={`${c.Key}:${i}`} path={`${path}\\${c.Key}`} node={c} backend={backend} onOpenRecord={onOpenRecord} />
           ))}
         </div>

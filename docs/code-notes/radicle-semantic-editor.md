@@ -30,7 +30,9 @@
 
 ## Explorer refresh
 
-`PluginEditTool/web/src/Shell/ExplorerTree.tsx:ExplorerTree` caches each node's children in component state under a `Key:index` key that survives a refresh, so a plugin-list refresh left group counts such as `CLMT (1)` stale. Every refresh path replaces the plugin list through `setPlugins` in `MainShell.tsx`, which hands each tree a new `node` object; that object identity is the refresh signal. A changed node drops collapsed children and refetches expanded ones; the same object causes no fetch.
+`PluginEditTool/web/src/Shell/ExplorerTree.tsx:ExplorerTree` caches each node's children in component state under a `Key:index` key that survives a refresh, so a plugin-list refresh left group counts such as `CLMT (1)` stale. Every refresh path replaces the plugin list through `setPlugins` in `PluginEditTool/web/src/MainShell.tsx`, which hands each tree a new `node` object; that object identity is the refresh signal. A changed node drops collapsed children; an expanded node refetches through `ExplorerTree:load`, and the same object causes no fetch. Expanding a node always fetches, so children are not reused across collapse and expand.
+
+`ExplorerTree:load` stamps each request with a counter in `requests` and applies its result only while it is still the newest request, so a slow response from an earlier refresh cannot overwrite a newer one. While a refetch is in flight the row shows the same `...` indicator as the first load. A refreshed node with `HasChildren` false renders no children, loading indicator or error (`ExplorerTree:shown`); the effect does not set state for it, which keeps `react-hooks/set-state-in-effect` quiet. Expanding always refetches. CI does not run the web lint or vitest, so these tests are local-only until it does. Tests: `PluginEditTool/web/src/Shell/ExplorerTree.test.tsx` (stale-response and no-children cases).
 
 ## PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:RadiclePluginBackend::setField — EDID text encoding (GT-168)
 
