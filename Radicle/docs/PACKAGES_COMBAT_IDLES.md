@@ -8,18 +8,18 @@ The pinned compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://git
 
 ## PACK
 
-The newer [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md) supersedes the older missing-layout index. Its local copy is `build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`; Q1 stamps the OG loader at RVA 0x719180 and schedule consumer at 0x71EC30.
+The newer [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md) supersedes the older missing-layout index. Its local copy is `build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`; Q1 stamps the OG loader at address 0x719180 and schedule consumer at 0x71EC30.
 
 PKDT is 12 bytes: u32 general flags, u8 type, interrupt override, preferred speed and unknown byte, u16 interrupt flags and an unnamed trailing u16. These are raw stored compatibility fields. The runtime uses that interpretation from form version 0x15; older forms follow a legacy path that forces effective preferred speed to 2. This reader still returns the stored byte, without claiming that effective value. PSDT is 12 bytes: signed bytes month, weekday, date, hour and minute, three unused bytes, then unsigned u32 duration in stored minutes. These stored values are returned unchanged. The reader does not apply the runtime's pre-version-122 month adjustment, defaults, or schedule evaluation.
 
-PKCU is 12 bytes: u32 data-input count, package-template FormID and u32 version counter. CNAM combat style and QNAM owner quest belong to the prelude before PKCU; later CNAM values are not mistaken for a record-level link. Only prelude CTDA/CIS lists are decoded with the existing condition model. POBA, POEA and POCA are empty on-begin/end/change markers, each with an optional four-byte INAM idle link in its own scope. All remaining post-PKCU subrecords are exposed as ordered opaque signature/payload views, including procedure and data-input condition lists, instead of flattening them into the top-level conditions. Duplicated known markers and malformed known sizes fail closed.
+PKCU is 12 bytes: u32 data-input count, package-template form ID and u32 version counter. CNAM combat style and QNAM owner quest belong to the prelude before PKCU; later CNAM values are not mistaken for a record-level link. Only prelude CTDA/CIS lists are decoded with the existing condition model. POBA, POEA and POCA are empty on-begin/end/change markers, each with an optional four-byte INAM idle link in its own scope. All remaining post-PKCU subrecords are exposed as ordered opaque signature/payload views, including procedure and data-input condition lists, instead of flattening them into the top-level conditions. Duplicated known markers and malformed known sizes fail closed.
 
-Q4/Q5 verify PLDT/PTDA constructors at OG RVAs 0x726520/0x729300.
+Q4/Q5 verify PLDT/PTDA constructors at OG addresses 0x726520/0x729300.
 The disk compatibility reader accepts PLDT 8/12/16 stored bytes: signed i32 type at 0, raw u32 value at 4,
 optional signed i32 radius at 8 and optional collection-item index at 12. PTDA accepts 12 bytes:
 signed i32 type, raw u32 value and i32 count-or-distance. Each view carries its original
 record subrecord index. PLDT types 0/1/4/6 and PTDA 0/1/3/7 resolve the value
-as a FormID; other supported variants keep it numeric. All stored values,
+as a form ID; other supported variants keep it numeric. All stored values,
 including unused nonzero fields, stay unchanged. Unknown types/shapes receive
 no typed view and retain their raw bytes. These views do not claim ownership
 by a particular data input or procedure. The dispatch/container grammar is
@@ -34,7 +34,7 @@ CSRA and CSCV are individual f32 ranged-accuracy and cover-search values. CSCR i
 
 ## IDLE
 
-ANAM is eight bytes: parent and previous FormID links. DATA is six bytes: loop minimum and maximum bytes, raw flag byte, raw padding byte and u16 replay delay. The compatibility API's `GroupSection` name does not establish a runtime meaning for the padding byte. DNAM behavior graph, ENAM animation event and GNAM animation file are strict NUL-terminated stored strings. The existing CTDA model supplies raw conditions and CIS operands. Loop/replay consumers remain unresolved in Q8; their units and selection effects are not invented. Strings follow the existing C ABI Windows-1252 to UTF-8 policy.
+ANAM is eight bytes: parent and previous form ID links. DATA is six bytes: loop minimum and maximum bytes, raw flag byte, raw padding byte and u16 replay delay. The compatibility API's `GroupSection` name does not establish a runtime meaning for the padding byte. DNAM behavior graph, ENAM animation event and GNAM animation file are strict NUL-terminated stored strings. The existing CTDA model supplies raw conditions and CIS operands. Loop/replay consumers remain unresolved in Q8; their units and selection effects are not invented. Strings follow the existing C ABI Windows-1252 to UTF-8 policy.
 
 ## Editing
 
