@@ -28,6 +28,7 @@ constexpr Signature sig_almi = Signature::from_string("ALMI");
 constexpr Signature sig_alcc = Signature::from_string("ALCC");
 constexpr Signature sig_citc = Signature::from_string("CITC");
 constexpr Signature sig_qsta = Signature::from_string("QSTA");
+constexpr Signature sig_prkc = Signature::from_string("PRKC");
 
 constexpr Signature k_package_branch_members[] = {
     sig_citc, sig_ctda, sig_cis1, sig_cis2, Signature::from_string("PRCB"),
@@ -38,6 +39,10 @@ constexpr Signature k_package_branch_members[] = {
 
 constexpr Signature k_quest_target_members[] = {
     sig_citc, sig_ctda, sig_cis1, sig_cis2,
+};
+
+constexpr Signature k_perk_tab_members[] = {
+    sig_ctda, sig_cis1, sig_cis2,
 };
 
 constexpr Signature k_reference_condition_successors[] = {
@@ -283,6 +288,21 @@ std::vector<ScopeRange> quest_target_ranges(const Record& record) {
   return ranges;
 }
 
+std::vector<ScopeRange> perk_effect_tab_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::vector<ScopeRange> ranges;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature != sig_prkc) continue;
+    std::size_t end = i + 1;
+    while (end < subs.size() &&
+           contains_signature(k_perk_tab_members, subs[end].signature)) {
+      ++end;
+    }
+    ranges.push_back(ScopeRange{i, end, i + 1, true});
+  }
+  return ranges;
+}
+
 enum class ScopeStatus { ok, out_of_range, not_conditioned, structure_invalid };
 
 struct ScopeResolution {
@@ -311,6 +331,9 @@ ScopeResolution resolve_scope(const Record& record,
       break;
     case ConditionScopeKind::quest_target:
       ranges = quest_target_ranges(record);
+      break;
+    case ConditionScopeKind::perk_effect_tab:
+      ranges = perk_effect_tab_ranges(record);
       break;
   }
   if (container_index >= ranges.size()) {
