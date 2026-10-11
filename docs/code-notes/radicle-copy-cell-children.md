@@ -43,10 +43,35 @@ copy back only on success, so a false return discards every partial change made 
   GRUP 1 that exists elsewhere is refused.
 - Blocks: GRUP 2, 3, 4 and 5 are found by type and label, or created. Labels of types 2, 3, 4 and 5 are block and
   grid values and are copied byte for byte.
-- Cell: the CELL record is found directly in the innermost container, or appended as a clone. A CELL that exists
+- Cell: the CELL record is found directly in the innermost container, or inserted as a clone. A CELL that exists
   elsewhere is refused. The GRUP 6 must sit directly after the CELL record, and a GRUP 6 with the same label
   elsewhere in the container is refused.
-- Leaf: the GRUP 8, 9 or 10 is found or created inside GRUP 6, and the copied record is appended.
+- Leaf: the GRUP 8, 9 or 10 is found or created inside GRUP 6 by `find_or_add_leaf_group`, and the copied record is
+  appended to it.
+
+## Radicle/src/plugin/copy_hierarchy.cpp:insert_nested_copy — persistent CELL position
+
+A new persistent CELL (path size 4, WRLD top, GRUP 1, GRUP 6, GRUP 8) is inserted at the start of the GRUP 1 children,
+with its GRUP 6 directly after it, and not appended. The reviewer's reading of vanilla layout is that the persistent
+CELL and its GRUP 6 come first in a WRLD's GRUP 1, before any type 4 block group. That layout was not checked against
+a Fallout4.esm sample here. The test `PersistentCellPrecedesBlockGroupsInWorldChildren` pins the order.
+
+## Radicle/src/plugin/copy_hierarchy.cpp:find_or_add_leaf_group — GRUP 6 order
+
+A new leaf group inside GRUP 6 is inserted before the first sibling with a higher group type, so the children stay in
+ascending type order (8, 9, 10). xEdit sorts a group's children by a sort key that starts with the group type
+(`source:xEdit Core/wbImplementation.pas:17999-18014 @93cc0bc5`). Only leaf groups are sorted this way, because
+`find_or_add_child_group` still appends the GRUP 1, 2, 3, 4 and 5 path groups. The test
+`CellChildGroupsStayInAscendingTypeOrder` copies a type 9 record and then a type 8 record and asserts 8 then 9.
+
+## Radicle/src/plugin/copy_hierarchy.cpp:insert_nested_copy — refusals stricter than xEdit
+
+The CELL-elsewhere and WRLD-elsewhere refusals are stricter than xEdit. xEdit's record add looks the source
+form ID up in the destination file and reuses the record it finds (`source:xEdit Core/wbImplementation.pas:17030-17034 @93cc0bc5`,
+reuse branch at `source:xEdit Core/wbImplementation.pas:17044 @93cc0bc5`), so an existing CELL or WRLD in another
+place is reused rather than refused. Radicle refuses in `insert_nested_copy` (the `record_index` and `find_record`
+checks for the WRLD and the CELL) because a copy into the expected group would duplicate a FormKey. They stay
+fail-closed as a guard for an anomalous layout where the parent record is outside the group the chain expects.
 
 Labels that carry a form ID (types 1, 6, 8, 9 and 10) are re-encoded for the destination by
 `Radicle/src/plugin/copy_hierarchy.cpp:destination_header`. Parent clones use `Radicle/src/plugin/copy_hierarchy.cpp:clone_record`,
