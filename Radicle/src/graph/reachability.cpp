@@ -151,7 +151,7 @@ Graph build_graph(std::span<const Plugin* const> load_order) {
   std::map<FormKey, std::size_t> winner_plugin;
   for (std::size_t index = 0; index < load_order.size(); ++index) {
     if (load_order[index] == nullptr) continue;
-    for (const auto* record : collect_records(*load_order[index])) {
+    for (const auto* record : collect_first_records(*load_order[index])) {
       if (record->header.signature == sig_tes4) continue;
       graph.winners[record->form_key] = record;
       winner_plugin[record->form_key] = index;
@@ -161,7 +161,7 @@ Graph build_graph(std::span<const Plugin* const> load_order) {
   for (std::size_t index = 0; index < load_order.size(); ++index) {
     if (load_order[index] == nullptr) continue;
     std::map<FormKey, const Record*> versions;
-    for (const auto* record : collect_records(*load_order[index])) versions[record->form_key] = record;
+    for (const auto* record : collect_records(*load_order[index])) versions.try_emplace(record->form_key, record);
     for (const auto& hit : collect_form_links(*load_order[index])) {
       const auto version = versions.find(hit.record);
       const auto owner = winner_plugin.find(hit.record);
@@ -237,7 +237,7 @@ std::vector<UnreachableRecord> find_unreachable(std::span<const Plugin* const> l
   }
 
   std::vector<UnreachableRecord> out;
-  for (const auto* record : collect_records(*load_order[plugin_index])) {
+  for (const auto* record : collect_first_records(*load_order[plugin_index])) {
     if (record->header.signature == sig_tes4 || reached.contains(record->form_key)) continue;
     out.push_back({record->form_key, record->header.signature});
   }

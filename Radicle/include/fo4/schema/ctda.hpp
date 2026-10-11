@@ -3,20 +3,24 @@
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace fo4 {
 
-// The discriminator stored in the function slot of a GetEventData condition.
-// xEdit/CK write 0x1240 there; Mutagen's ConditionBinaryCreateTranslation
-// uses the same magic (EventFunctionIndex = 4672) to pick the layout.
-inline constexpr std::uint16_t k_ctda_event_function_index = 4672;
+class CtdaMultipleListsError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+inline constexpr std::uint16_t k_ctda_event_function_index = 576;
 
 // Condition.Flag bits (Mutagen): OR=0x01, ParametersUseAliases=0x02,
 // UseGlobal=0x04, UsePackData=0x08, SwapSubjectAndTarget=0x10.
@@ -26,16 +30,17 @@ inline constexpr std::uint8_t k_ctda_flag_use_global = 0x04;
 inline constexpr std::uint8_t k_ctda_flag_pack_data = 0x08;
 inline constexpr std::uint8_t k_ctda_flag_swap = 0x10;
 
-// A parsed CTDA condition. Offsets are relative to the subrecord payload
-// (after the 4-byte header): flags/operator byte @0, comparison value @4,
-// function @8 (u16), unknown2/member @10, param1/parameter3 @12, param2 @16,
-// run-on @20, reference @24, unknown3 @28. GetEventData conditions omit
-// param2 and end at 28; everything else ends at 32.
+// A parsed CTDA condition. Offsets are relative to the 32-byte subrecord
+// payload (after the 4-byte header): flags/operator byte @0, padding @1-3,
+// comparison value @4, function @8 (u16), unknown2/member @10,
+// param1/parameter3 @12, param2 @16, run-on @20, reference @24, unknown3 @28.
 struct CtdaCondition {
   // Raw flags byte: low 5 bits are Condition.Flag, high 3 bits the compare
   // operator (EqualTo=0, NotEqualTo=1, GreaterThan=2, GreaterThanOrEqualTo=3,
   // LessThan=4, LessThanOrEqualTo=5).
   std::uint8_t flags_byte{0};
+
+  std::array<std::byte, 3> padding{};
 
   // Comparison value: float bits for float conditions, a raw FormID for
   // UseGlobal conditions. Interpretation is the caller's (the JSON contract
@@ -87,9 +92,6 @@ std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition);
 
 std::vector<Subrecord> serialize_ctda_run(std::span<const CtdaCondition> conditions);
 
-// Reads the record's condition list: every CTDA subrecord in order, each with
-// its trailing CIS1/CIS2 strings attached. Records without CTDA subrecords
-// yield an empty vector.
 std::vector<CtdaCondition> read_ctda_conditions(const Record& record);
 
 std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
