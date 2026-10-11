@@ -1,7 +1,9 @@
 #pragma once
 
 #include <filesystem>
+#include <mutex>
 #include <string>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -36,6 +38,26 @@ struct Settings {
 
 void to_json(nlohmann::json& json, const Settings& settings);
 void from_json(const nlohmann::json& json, Settings& settings);
+
+class SharedSettings {
+public:
+    explicit SharedSettings(Settings value = {}) : value_(std::move(value)) {}
+
+    Settings snapshot() const {
+        std::lock_guard lock(mutex_);
+        return value_;
+    }
+
+    template <class F>
+    decltype(auto) update(F&& fn) {
+        std::lock_guard lock(mutex_);
+        return std::forward<F>(fn)(value_);
+    }
+
+private:
+    mutable std::mutex mutex_;
+    Settings value_;
+};
 
 class Store {
 public:

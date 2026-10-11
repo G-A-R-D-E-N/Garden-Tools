@@ -1,6 +1,5 @@
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DialogProvider } from './dialogs';
-import ConflictResolver from './ConflictResolver';
 import MainShell from './MainShell';
 
 function App() {
@@ -8,7 +7,7 @@ function App() {
     <DialogProvider>
     <HashRouter>
       <Routes>
-        <Route path="/" element={<ConflictResolver />} />
+        <Route path="/" element={<Navigate to="/main" replace />} />
         <Route path="/main" element={<MainShell />} />
       </Routes>
     </HashRouter>

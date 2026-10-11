@@ -1,4 +1,4 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -21,6 +21,9 @@
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string deepStringArgument(const nlohmann::json& args, std::size_t index) {
@@ -59,17 +62,6 @@ std::string deepLower(std::string_view value) {
     return out;
 }
 
-std::string deepEditorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
-}
-
 const fo4::Record* deepTopLevelRecord(const fo4::Plugin& plugin,
                                       const fo4::FormKey& key) {
     for (const auto& group : plugin.groups) {
@@ -80,6 +72,10 @@ const fo4::Record* deepTopLevelRecord(const fo4::Plugin& plugin,
         }
     }
     return nullptr;
+}
+
+std::string deepCapNotice(std::size_t cap) {
+    return " (capped at " + std::to_string(cap) + "; more remained in the FormLink graph)";
 }
 
 std::string typeSummary(const fo4::Plugin& source,
@@ -159,7 +155,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
         if (!keyResolved) {
             const auto wanted = deepLower(recordId);
             fo4::visit_records(source->plugin, [&](const fo4::Record& record) {
-                if (!keyResolved && deepLower(deepEditorId(record)) == wanted) {
+                if (!keyResolved && deepLower(editorId(record)) == wanted) {
                     rootKey = record.form_key;
                     keyResolved = true;
                 }
@@ -175,7 +171,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
         const auto wanted = deepLower(recordId);
         for (auto it = plugins_.rbegin(); it != plugins_.rend() && source == nullptr; ++it) {
             fo4::visit_records(it->plugin, [&](const fo4::Record& record) {
-                if (source == nullptr && deepLower(deepEditorId(record)) == wanted) {
+                if (source == nullptr && deepLower(editorId(record)) == wanted) {
                     source = &*it;
                     rootKey = record.form_key;
                     keyResolved = true;
@@ -266,10 +262,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             std::string preview =
                 "DRY RUN: deep copy of " + rootKey.to_string() + " would bring " +
                 std::to_string(toCopy.size()) + " record(s) into " + targetName;
-            if (capped) {
-                preview += " (capped at " + std::to_string(cap) +
-                           "; more remained in the FormLink graph)";
-            }
+            if (capped) preview += deepCapNotice(cap);
             preview += ": " + typeSummary(source->plugin, toCopy) + ".";
             if (!existing.empty()) {
                 preview += " " + std::to_string(existing.size()) +
@@ -280,7 +273,8 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
                            targetName + " loads before other plugins that override them (" +
                            losingSample + ") and will require load-order confirmation.";
             }
-            preview += " Re-run with apply=true.";
+            preview += capped ? " Raise the cap, then re-run with apply=true."
+                              : " Re-run with apply=true.";
             return nlohmann::json(std::move(preview));
         }
 
@@ -288,6 +282,13 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             return std::unexpected(Error{
                 "TargetPluginNotLoaded",
                 "Target plugin disappeared before deep-copy apply: " + targetName
+            });
+        }
+        if (capped) {
+            return std::unexpected(Error{
+                "DeepCopyCapped",
+                "Deep copy of " + rootKey.to_string() + " refused" + deepCapNotice(cap) +
+                ": nothing was staged."
             });
         }
         if (const auto guard = writeGuard(*target)) return std::unexpected(*guard);
@@ -306,7 +307,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             for (std::size_t index = 0; index < shown; ++index) {
                 if (!sample.empty()) sample += ", ";
                 const auto* record = fo4::find_record(source->plugin, existing[index]);
-                const auto editor = record == nullptr ? std::string{} : deepEditorId(*record);
+                const auto editor = record == nullptr ? std::string{} : editorId(*record);
                 if (!editor.empty()) sample += editor + " ";
                 sample += "(" + existing[index].to_string() + ")";
             }

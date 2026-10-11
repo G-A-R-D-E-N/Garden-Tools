@@ -313,6 +313,24 @@ TEST_CASE("Native SetConditions refuses a record with no condition list without 
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
 }
 
+TEST_CASE("Native SetConditions accepts an empty list on a record with no condition list without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makePlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto result = backend.invokeBackend(
+        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "[]"}));
+    REQUIRE(result.has_value());
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
 TEST_CASE("Native bare condition reads skip nested lists and scoped reads report multiple lists without staging") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

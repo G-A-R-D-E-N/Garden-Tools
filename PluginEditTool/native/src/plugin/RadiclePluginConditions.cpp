@@ -219,6 +219,12 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
     if (recordId.empty()) {
         return std::unexpected(Error{"RecordMissing", "Record FormKey is empty"});
     }
+    if (conditionsJson.empty()) {
+        return std::unexpected(Error{
+            "InvalidConditionsJson",
+            "conditions JSON is empty; pass [] to clear"
+        });
+    }
 
     OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
@@ -275,7 +281,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
     nlohmann::json document;
     std::size_t writtenCount = 0;
     try {
-        document = nlohmann::json::parse(conditionsJson.empty() ? "[]" : conditionsJson);
+        document = nlohmann::json::parse(conditionsJson);
         if (!document.is_array()) {
             return std::unexpected(Error{"InvalidConditionsJson", "Could not parse conditions JSON: expected an array."});
         }
@@ -330,7 +336,9 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 "Record '" + recordId + "' not found in " + pluginName + "."
             });
         }
-        stagePluginMutationLocked(*loaded, std::move(mutated));
+        if (status == fo4::ConditionMutationStatus::updated) {
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+        }
     } catch (const fo4::CtdaMultipleListsError&) {
         return std::unexpected(Error{"ConditionScopeMultipleLists", "Record '" + recordId + "' has more than one condition list."});
     } catch (const fo4::CtdaNotLosslessError& error) {

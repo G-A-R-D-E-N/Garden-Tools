@@ -464,8 +464,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                 cnam.data = fo4::schema::write_localized_string(value);
                 entry.members.push_back(std::move(cnam));
             }
-            const auto previousConditions = previousLogEntryConditions(
-                previousStages, stage.index, stage.log_entries.size());
             std::vector<PendingQuestCondition> parsedConditions;
             if (entryJson.contains("conditions") && !entryJson["conditions"].is_null()) {
                 if (!entryJson["conditions"].is_array()) {
@@ -479,10 +477,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     if (const auto error = parseQuestCondition(
                             conditionJson, graph_, pending, conditionKeys)) {
                         return std::unexpected(*error);
-                    }
-                    if (parsedConditions.size() < previousConditions.size()) {
-                        pending.condition.padding =
-                            previousConditions[parsedConditions.size()].padding;
                     }
                     parsedConditions.push_back(std::move(pending));
                 }
@@ -586,6 +580,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestStages(const nlohmann::json
                     }
                     encoded.push_back(std::move(condition.condition));
                 }
+                carryConditionPadding(
+                    previousLogEntryConditions(previousStages, stage.index, entryIndex), encoded);
                 auto run = fo4::serialize_ctda_run(encoded);
                 auto& members = stage.log_entries[entryIndex].members;
                 members.insert(members.begin(), run.begin(), run.end());
