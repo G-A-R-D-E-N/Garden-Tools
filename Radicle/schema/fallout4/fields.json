@@ -1400,8 +1400,8 @@
           "storage": "i8",
           "offset": 2,
           "presentation": "identity",
-          "minimum": -128,
-          "maximum": 127,
+          "minimum": 0,
+          "maximum": 31,
           "insertion": "existing_only",
           "payload_size": 12
         },

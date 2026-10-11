@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <map>
 
 namespace {
@@ -97,6 +98,20 @@ TEST(BehaviorAuthoring, DiscriminatorsShortTailsAndMalformedWidthsRefuseWithoutM
   EXPECT_EQ(fo4::write_plugin(plugin), before);
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor("PACK\\LocationType"));
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor("PACK\\InputCount"));
+}
+
+TEST(BehaviorAuthoring, PackScheduleDateRefusesDaysOutsideXEditRange) {
+  auto plugin = load();
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key(), scalar("PACK\\Date"), "40"), fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key(), scalar("PACK\\Date"), "-5"), fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(), scalar("PACK\\Date"), "15"), fo4::ScalarMutationStatus::updated);
+  const auto* record = fo4::find_record(plugin, key());
+  const auto psdt = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+                                 [](const auto& sub) { return sub.signature == sig("PSDT"); });
+  ASSERT_NE(psdt, record->subrecords.end());
+  EXPECT_EQ(std::to_integer<int>(psdt->data[2]), 15);
 }
 
 TEST(BehaviorAuthoring, CreateAddRemoveDefaultsAndCoupledRefusals) {

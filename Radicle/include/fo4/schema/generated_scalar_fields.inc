@@ -81,7 +81,7 @@
 {Signature::from_string("IDLE"), "IDLE\\LoopMax", ScalarDescriptor{Signature::from_string("DATA"), "LoopMax", ScalarStorage::u8, ScalarPresentation::identity, 0.0, 255.0, 1, true, 6, FieldAddress{}}, false},
 {Signature::from_string("IDLE"), "IDLE\\LoopMin", ScalarDescriptor{Signature::from_string("DATA"), "LoopMin", ScalarStorage::u8, ScalarPresentation::identity, 0.0, 255.0, 0, true, 6, FieldAddress{}}, false},
 {Signature::from_string("IDLE"), "IDLE\\ReplayDelay", ScalarDescriptor{Signature::from_string("DATA"), "ReplayDelay", ScalarStorage::u16, ScalarPresentation::identity, 0.0, 65535.0, 4, true, 6, FieldAddress{}}, false},
-{Signature::from_string("PACK"), "PACK\\Date", ScalarDescriptor{Signature::from_string("PSDT"), "Date", ScalarStorage::i8, ScalarPresentation::identity, -128.0, 127.0, 2, true, 12, FieldAddress{}}, false},
+{Signature::from_string("PACK"), "PACK\\Date", ScalarDescriptor{Signature::from_string("PSDT"), "Date", ScalarStorage::i8, ScalarPresentation::identity, 0.0, 31.0, 2, true, 12, FieldAddress{}}, false},
 {Signature::from_string("PACK"), "PACK\\DurationMinutes", ScalarDescriptor{Signature::from_string("PSDT"), "DurationMinutes", ScalarStorage::u32, ScalarPresentation::identity, 0.0, 4294967295.0, 8, true, 12, FieldAddress{}}, false},
 {Signature::from_string("PACK"), "PACK\\Flags", ScalarDescriptor{Signature::from_string("PKDT"), "Flags", ScalarStorage::u32, ScalarPresentation::identity, 0.0, 4294967295.0, 0, true, 12, FieldAddress{}}, false},
 {Signature::from_string("PACK"), "PACK\\Hour", ScalarDescriptor{Signature::from_string("PSDT"), "Hour", ScalarStorage::i8, ScalarPresentation::identity, -128.0, 127.0, 3, true, 12, FieldAddress{}}, false},
