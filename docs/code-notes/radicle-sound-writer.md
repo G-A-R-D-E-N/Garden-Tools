@@ -118,7 +118,7 @@ All `existing_only`, `presentation: identity`, f32 bounds +-1e9.
 
 ## Link remapping (`Radicle/src/schema/form_link_mixed.cpp:packed_formid_array_offsets`)
 
-- FSTP DATA and FSTS DATA are now scanned as packed FormID arrays (beside MUSC TNAM; a DATA that is not a multiple of four bytes throws on strict remap). Before, the generic signature table did not treat
+- FSTP DATA and FSTS DATA are now scanned as packed form ID arrays (beside MUSC TNAM; a DATA that is not a multiple of four bytes throws on strict remap). Before, the generic signature table did not treat
   DATA as a link in these records, so master remapping and rekeying skipped every footstep link and impact data set.
   The rest was already covered: SNDR GNAM/SNAM/ONAM/DNAM and the 4-byte AutoWeapon BNAM by the generic table (the
   6-byte values BNAM never matches its size-4 rule; SNDR CNAM and LNAM are on the corpus deny list), SOUN SDSC, and
