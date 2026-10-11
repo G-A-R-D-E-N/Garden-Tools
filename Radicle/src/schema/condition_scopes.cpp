@@ -337,6 +337,7 @@ ScopedConditionStatus set_record_scoped_conditions(
     plugin.original_range.clear();
     return ScopedConditionStatus::updated;
   }
+  if (result == CtdaScopeWrite::multiple_lists) return ScopedConditionStatus::multiple_lists;
   return ScopedConditionStatus::unchanged;
 }
 

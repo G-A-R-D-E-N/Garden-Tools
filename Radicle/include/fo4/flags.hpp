@@ -47,6 +47,16 @@ enum class GroupType : std::int32_t {
   cell_persistent_children = 8,
   cell_temporary_children = 9,
   cell_visible_distant_children = 10,
+  quest_children = 10,
 };
+
+inline bool group_label_is_form_id(std::int32_t type) {
+  return type == static_cast<std::int32_t>(GroupType::world_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_children) ||
+         type == static_cast<std::int32_t>(GroupType::topic_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_persistent_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_temporary_children) ||
+         type == static_cast<std::int32_t>(GroupType::cell_visible_distant_children);
+}
 
 }  // namespace fo4

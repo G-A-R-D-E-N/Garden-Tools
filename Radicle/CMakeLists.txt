@@ -130,6 +130,8 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/field_writer.cpp
+  src/plugin/subrecord_authoring.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp
@@ -146,6 +148,7 @@ add_library(fo4
   src/schema/preflight.cpp
   src/schema/non_formid_slots.cpp
   src/schema/scalar.cpp
+  src/schema/field_address.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
@@ -158,6 +161,9 @@ add_library(fo4
   src/environment/strings.cpp
   src/environment/base_records.cpp
   src/environment/material_swap.cpp
+  src/pex/pex.cpp
+  src/seq/seq.cpp
+  src/quest/runtime.cpp
 )
 
 if(TARGET radicle_schema_check)
@@ -185,7 +191,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_seq.cpp src/c_api_quest.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -195,6 +201,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -309,6 +316,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_proj_expl_hazd_creation.cpp
     tests/test_proj_expl_hazd_reencode_real.cpp
     tests/test_scalar_embedded.cpp
+    tests/test_field_writer.cpp
+    tests/test_subrecord_authoring.cpp
+    tests/test_c_api_authoring.cpp
+    tests/test_c_api_fields.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
@@ -358,6 +369,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_maintenance.cpp
     tests/test_maintenance_nested.cpp
     tests/test_c_api_maintenance.cpp
+    tests/test_c_api_pex.cpp
+    tests/test_c_api_seq.cpp
+    tests/test_c_api_quest.cpp
     tests/test_ba2.cpp
     tests/test_ba2_hardening.cpp
     tests/test_ba2_texture.cpp
@@ -379,6 +393,13 @@ if(RADICLE_BUILD_TESTS)
     tests/test_env_bench_real.cpp
     tests/test_text_boundary.cpp
     tests/test_parity_dds.cpp
+    tests/test_pex.cpp
+    tests/test_pex_hardening.cpp
+    tests/test_pex_corpus.cpp
+    tests/test_pex_oracle.cpp
+    tests/test_seq.cpp
+    tests/test_seq_corpus.cpp
+    tests/test_quest_runtime.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
@@ -396,6 +417,8 @@ if(RADICLE_BUILD_TESTS)
   include(GoogleTest)
   gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME radicle_field_address_codegen
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_env_bench_non_ansi_data_dir
              COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
@@ -427,6 +450,10 @@ if(RADICLE_BUILD_TESTS)
   add_library(radicle_abi_stub_v1 SHARED bindings/csharp/tests/abi_stub.cpp)
   target_include_directories(radicle_abi_stub_v1 PRIVATE include)
   target_compile_definitions(radicle_abi_stub_v1 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=1u)
+  # ABI 4 is the last generation without the record payload and topic exports.
+  add_library(radicle_abi_stub_v4 SHARED bindings/csharp/tests/abi_stub.cpp)
+  target_include_directories(radicle_abi_stub_v4 PRIVATE include)
+  target_compile_definitions(radicle_abi_stub_v4 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=4u)
 
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(Python3_Interpreter_FOUND)
@@ -454,13 +481,13 @@ if(RADICLE_BUILD_TESTS)
                      -P ${_interop_dir}/tools/check_generated_eol.cmake)
   endif()
 
-  option(RADICLE_CSHARP_TESTS "Run the C# binding tests with dotnet (needs the .NET 8 SDK and NuGet access)" OFF)
+  option(RADICLE_CSHARP_TESTS "Run the C# binding tests with the .NET 8 SDK and checked-in package feed" OFF)
   if(RADICLE_CSHARP_TESTS)
     find_program(DOTNET_EXECUTABLE dotnet REQUIRED)
     add_test(NAME radicle_csharp_bindings
-             COMMAND ${DOTNET_EXECUTABLE} test ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/Radicle.Interop.Tests
-                     --nologo -v q)
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/tools/run_managed_tests.py
+                     --dotnet ${DOTNET_EXECUTABLE})
     set_tests_properties(radicle_csharp_bindings PROPERTIES
-      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>;RADICLE_ABI_STUB_V4=$<TARGET_FILE:radicle_abi_stub_v4>")
   endif()
 endif()

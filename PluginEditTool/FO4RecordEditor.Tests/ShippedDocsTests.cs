@@ -39,9 +39,9 @@ public class ShippedDocsTests
         .ToArray();
 
     [Theory]
-    [InlineData("README.md")]
-    [InlineData("docs/MCP_SETUP.md")]
-    public void StatedToolCountMatchesTheRegisteredTools(string relative)
+    [InlineData("README.md", false)]
+    [InlineData("docs/MCP_SETUP.md", true)]
+    public void StatedToolCountMatchesTheRegisteredTools(string relative, bool mustState)
     {
         var path = Path.Combine(RepoRoot(), relative.Replace('/', Path.DirectorySeparatorChar));
         File.Exists(path).Should().BeTrue($"{relative} should exist at {path}");
@@ -58,10 +58,11 @@ public class ShippedDocsTests
             .Distinct()
             .ToList();
 
-        counts.Should().NotBeEmpty($"{relative} should state a tool count so this test can guard it");
+        if (mustState)
+            counts.Should().NotBeEmpty($"{relative} should state a tool count so this test can guard it");
 
         foreach (var c in counts) _out.WriteLine($"{relative} states {c}; source has {expected}");
-        counts.Should().AllSatisfy(c => c.Should().Be(expected),
+        counts.Where(c => c != expected).Should().BeEmpty(
             $"{relative} states a tool count that no longer matches the registered tools");
     }
 

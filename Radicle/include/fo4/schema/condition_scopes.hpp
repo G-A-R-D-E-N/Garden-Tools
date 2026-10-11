@@ -40,6 +40,7 @@ enum class ScopedConditionStatus {
   container_index_out_of_range,
   element_not_conditioned,
   alias_structure_invalid,
+  multiple_lists,
 };
 
 struct ScopedConditionsRead {
