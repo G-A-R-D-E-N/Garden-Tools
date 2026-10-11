@@ -319,36 +319,24 @@ bool is_placed_reference_signature(Signature signature) noexcept {
   return false;
 }
 
-std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Record& record,
-                                                                       const Subrecord& sub,
-                                                                       bool strict_remap) {
-  if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
-  // stride: bytes per element; slots: form ID offsets within one element; exact: payload must be one element.
-  struct Layout {
-    const char* signature;
-    std::size_t stride;
-    std::initializer_list<std::size_t> slots;
-    bool exact;
-    std::size_t short_size;
-  };
-  static const Layout k_layouts[] = {
-      {"XPOD", 8, {0, 4}, false, 0},  // Portal Data: array of {Origin, Destination}
-      {"XORD", 4, {0}, false, 0},     // Linked Occlusion References
-      {"XLRT", 4, {0}, false, 0},     // Location Ref Type
-      {"XPWR", 8, {0}, true, 4},      // Reflected/Refracted By: {Reference, Type}
-      {"XAPR", 8, {0}, true, 0},      // Activate Parent Ref: {Reference, Delay}
-      {"XPLK", 8, {0}, true, 4},      // Spline Connection: {Ref, Unknown}
-      {"XWPN", 12, {0, 4, 8}, true, 0},  // Power Grid Connection: {Node 1, Node 2, Line}
-  };
-  for (const auto& layout : k_layouts) {
+struct FixedStrideLayout {
+  const char* signature;
+  std::size_t stride;
+  std::initializer_list<std::size_t> slots;
+  bool exact;
+  std::size_t short_size;
+};
+
+std::optional<std::vector<std::size_t>> fixed_stride_formid_offsets(
+    const Subrecord& sub, std::span<const FixedStrideLayout> layouts, bool strict_remap) {
+  for (const auto& layout : layouts) {
     if (sub.signature != Signature::from_string(layout.signature)) continue;
     const auto size = sub.data.size();
     const bool valid = layout.exact ? size == layout.stride || (layout.short_size != 0 && size == layout.short_size)
                                     : size % layout.stride == 0;
     if (!valid) {
       if (strict_remap) {
-        throw FormIdError("cannot safely remap malformed placed-reference " + sub.signature.to_string() +
-                          " payload");
+        throw FormIdError("cannot safely remap malformed " + sub.signature.to_string() + " payload");
       }
       return std::vector<std::size_t>{};
     }
@@ -363,10 +351,36 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
   return std::nullopt;
 }
 
+const FixedStrideLayout k_placed_reference_layouts[] = {
+    {"XPOD", 8, {0, 4}, false, 0},
+    {"XORD", 4, {0}, false, 0},
+    {"XLRT", 4, {0}, false, 0},
+    {"XPWR", 8, {0}, true, 4},
+    {"XAPR", 8, {0}, true, 0},
+    {"XPLK", 8, {0}, true, 4},
+    {"XWPN", 12, {0, 4, 8}, true, 0},
+};
+
+const FixedStrideLayout k_repeated_struct_layouts[] = {
+    {"PRPS", 8, {0}, false, 0},
+    {"DAMC", 8, {0}, false, 0},
+    {"DAMA", 8, {0}, false, 0},
+};
+
+std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Record& record,
+                                                                       const Subrecord& sub,
+                                                                       bool strict_remap) {
+  if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
+  return fixed_stride_formid_offsets(sub, k_placed_reference_layouts, strict_remap);
+}
+
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
   if (auto packed = packed_formid_array_offsets(record, sub, strict_remap)) return packed;
+  if (auto repeated = fixed_stride_formid_offsets(sub, k_repeated_struct_layouts, strict_remap)) {
+    return repeated;
+  }
   return placed_reference_formid_offsets(record, sub, strict_remap);
 }
 
