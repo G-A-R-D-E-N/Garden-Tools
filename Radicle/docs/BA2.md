@@ -122,10 +122,22 @@ DDS builder for a `.dds` DX10 entry (`Core/wbBSArchive.pas:2195-2211` calls
   `DDSCAPS_COMPLEX` for any cubemap, including one mip; caps2 `0xFE00` for a
   cubemap (`wbDDS.pas:593-606`).
 
-Open mismatch, code not changed here: the DX10 path keeps block rounding
-(`((w+3)/4)*((h+3)/4)*bytes`), while xEdit writes `width*height` for DX10 BC
-formats (`wbDDS.pas:665`). The two agree only when width and height are multiples
-of 4.
+The DX10 path follows xEdit's per-format table for `dwPitchOrLinearSize` and the
+size flag (`Core/wbDDS.pas:610-764`, pinned 93cc0bc5), with 32-bit unsigned
+arithmetic (`dwWidth`/`dwHeight` are Cardinal). Non-DX9 formats:
+
+- `DDSD_LINEARSIZE`: BC1_UNORM_SRGB (72) `width*height div 2` (`wbDDS.pas:653-658`);
+  BC2/BC3 SRGB (75, 78), BC6H UF16/SF16 (95, 96) and BC7 UNORM/UNORM_SRGB (98, 99)
+  `width*height` (`wbDDS.pas:659-666`).
+- `DDSD_PITCH`: R8G8B8A8 SRGB/UINT/SINT (29, 30, 32), B8G8R8A8 SRGB and B8G8R8X8 SRGB
+  (91, 93) `width*4` (`wbDDS.pas:667-674`); R8G8 UINT/SINT (50, 52) `width*2`
+  (`wbDDS.pas:731-736`); R8 UINT/SNORM/SINT (62-64) `width` (`wbDDS.pas:737-742`).
+- Every other format, including the typeless ones: `DDSD_PITCH` with
+  `(width * bits per pixel) shr 3`, where bits per pixel is `TwbDDS.GetBitsPerPixel`
+  (`wbDDS.pas:788-928`, indexed by the DXGI number).
+
+The DX9 set keeps its own formulas (`dx9_format`). Radicle's width and height are
+16-bit, so the 32-bit products cannot wrap.
 
 Radicle policy differences from xEdit, pending an owner decision (code unchanged):
 

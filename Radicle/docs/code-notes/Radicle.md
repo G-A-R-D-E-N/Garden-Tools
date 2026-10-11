@@ -36,6 +36,14 @@ DX10 extension. Cubemaps set `DDSCAPS_COMPLEX` even with one mip
 (`Core/wbDDS.pas:600-606`). The rule, its xEdit citations and the Radicle policy
 differences are in `Radicle/docs/BA2.md` under "DDS header rule".
 
+## src/archive/ba2_texture.cpp:dds_pitch_and_flag
+
+DX10 formats outside the DX9 set take `dwPitchOrLinearSize` and the size flag from
+xEdit's per-format case table (`Core/wbDDS.pas:610-764`); the default branch uses
+`k_bits_per_pixel`, a copy of `TwbDDS.GetBitsPerPixel` (`Core/wbDDS.pas:788-928`).
+`Radicle/docs/BA2.md` under "DDS header rule" groups the cases by flag with their
+line ranges. Radicle's zero-width refusal stays in `dds_header_for`.
+
 ## tools/corpus/ba2_measure.py:measure
 
 Read-only, stdlib-only corpus check for `docs/BA2.md`. It walks each root-level

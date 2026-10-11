@@ -183,6 +183,43 @@ TEST(Ba2Texture, ExtractRebuildsDdsHeaderFromDx10Metadata) {
   EXPECT_EQ(std::vector<std::byte>(extracted.begin() + 148, extracted.end()), payload);
 }
 
+TEST(Ba2Texture, ExtractUsesXEditLinearSizeForBc7NonMultipleOf4) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {10, 6, 1, 98, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 148u + 8u);
+  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
+  EXPECT_EQ(read_u32(extracted, 20), 60u);
+}
+
+TEST(Ba2Texture, ExtractUsesXEditHalfAreaForBc1Srgb) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {10, 6, 1, 72, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 148u + 8u);
+  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
+  EXPECT_EQ(read_u32(extracted, 20), 30u);
+}
+
+TEST(Ba2Texture, ExtractUsesBitsPerPixelForUnlistedDx10Format) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {10, 6, 1, 10, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 148u + 8u);
+  EXPECT_EQ(read_u32(extracted, 8), 0x2100Fu);
+  EXPECT_EQ(read_u32(extracted, 20), 48u);
+  EXPECT_EQ(read_u32(extracted, 128), 10u);
+}
+
 TEST(Ba2Texture, ExtractWritesClassicDdsHeaderForBc1) {
   Ba2TextureEntry entry;
   entry.path = "textures\\x.dds";
@@ -258,7 +295,7 @@ TEST(Ba2Texture, ExtractLeavesAlreadyCompleteDdsPayloadAlone) {
 TEST(Ba2Texture, ExtractReturnsNonDdsPayloadUnchanged) {
   Ba2TextureEntry entry;
   entry.path = "textures\\x.bin";
-  entry.texture = {4, 4, 1, 71, 0, 8};
+  entry.texture = {4, 4, 1, 98, 0, 8};
   const auto payload = repeated(8, 0x5A);
   entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
 

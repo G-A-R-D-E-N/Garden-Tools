@@ -7,6 +7,7 @@
 #include "fo4/io/atomic_write.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <fstream>
 #include <limits>
@@ -75,52 +76,41 @@ bool is_dds_path(std::string_view path) {
          std::tolower(static_cast<unsigned char>(suffix[3])) == 's';
 }
 
-struct DdsLayout {
-  bool block_compressed{false};
-  std::uint32_t bytes_per_unit{0};
+// indexed by DXGI_FORMAT value, same order as TwbDDS.GetBitsPerPixel
+constexpr std::array<std::uint32_t, 116> k_bits_per_pixel = {
+    0, 128, 128, 128, 128, 96, 96, 96, 96, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+    32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+    16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 8, 8, 8, 8,
+    8, 8, 1, 32, 32, 32, 4, 4, 4, 8, 8, 8, 8, 8, 8, 4,
+    4, 4, 8, 8, 8, 16, 16, 32, 32, 32, 32, 32, 32, 32, 8, 8,
+    8, 8, 8, 8, 32, 32, 64, 12, 24, 24, 12, 32, 64, 64, 12, 8,
+    8, 8, 16, 16,
 };
 
-std::optional<DdsLayout> dds_layout(std::uint8_t dxgi) {
-  switch (dxgi) {
-    case 70: case 71: case 72:
-    case 79: case 80: case 81:
-      return DdsLayout{true, 8};
-    case 73: case 74: case 75:
-    case 76: case 77: case 78:
-    case 82: case 83: case 84:
-    case 94: case 95: case 96:
-    case 97: case 98: case 99:
-      return DdsLayout{true, 16};
-    case 2:  return DdsLayout{false, 16};
-    case 10: return DdsLayout{false, 8};
-    case 24: case 28: case 29: case 34: case 41:
-    case 87: case 88: case 91: case 93:
-      return DdsLayout{false, 4};
-    case 49: case 54: case 56: case 85: case 86: case 115:
-      return DdsLayout{false, 2};
-    case 61: case 65:
-      return DdsLayout{false, 1};
-    default:
-      return std::nullopt;
-  }
-}
-
 std::pair<std::uint32_t, std::uint32_t> dds_pitch_and_flag(const Ba2TextureInfo& info) {
-  const auto layout = dds_layout(info.dxgi_format);
-  if (!layout) return {0u, 0u};
-  const std::uint64_t width = std::max<std::uint32_t>(1u, info.width);
-  const std::uint64_t height = std::max<std::uint32_t>(1u, info.height);
-  std::uint64_t value = 0;
-  std::uint32_t flag = 0;
-  if (layout->block_compressed) {
-    value = ((width + 3u) / 4u) * ((height + 3u) / 4u) * layout->bytes_per_unit;
-    flag = 0x80000u;
-  } else {
-    value = width * layout->bytes_per_unit;
-    flag = 0x8u;
+  constexpr std::uint32_t linear = 0x80000u;
+  constexpr std::uint32_t pitch = 0x8u;
+  const std::uint32_t w = info.width;
+  const std::uint32_t h = info.height;
+  switch (info.dxgi_format) {
+    case 72:
+      return {w * h / 2, linear};
+    case 75: case 78: case 95: case 96: case 98: case 99:
+      return {w * h, linear};
+    case 29: case 30: case 32: case 91: case 93:
+      return {w * 4, pitch};
+    case 50: case 52:
+      return {w * 2, pitch};
+    case 62: case 63: case 64:
+      return {w, pitch};
+    default: {
+      const std::uint32_t bits = info.dxgi_format < k_bits_per_pixel.size()
+                                     ? k_bits_per_pixel[info.dxgi_format]
+                                     : 0u;
+      return {(w * bits) >> 3u, pitch};
+    }
   }
-  if (value > std::numeric_limits<std::uint32_t>::max()) return {0u, 0u};
-  return {static_cast<std::uint32_t>(value), flag};
 }
 
 struct Dx9Format {
