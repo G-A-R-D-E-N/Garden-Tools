@@ -35,7 +35,7 @@ The existing private J13/J14 installed-record captures and the static OG report 
 | SNAM, NNAM | xEdit 7603–7604; J13 resolved next links; OG report next-rank consumer | Verified observed link fields; chain ordering and cycle interpretation are consumer behavior, not decoder constants. |
 | FNAM | xEdit 7605; OG report correlates the stored path with a grid display field | Partial beyond the observed path; no arbitrary asset/runtime behavior claim. |
 | PRKE header | xEdit 7608–7612; J13 observed type/rank/priority bytes | Verified observed three-byte framing, partial type/rank semantics. The type byte selects the DATA shape below. Unknown variants must remain opaque. |
-| Effect DATA union | xEdit 7613–7642 and `wbPerkDATADecider` (line 1411); J14 fingerprints quest/stage payload; J13 captures entry-point payload | Verified observed quest/stage shape; general union and unsupported variants remain partial. Quest and Ability FormIDs are remapped by PRKE type (see the remap rules below). |
+| Effect DATA union | xEdit 7613–7642 and `wbPerkDATADecider` (line 1411); J14 fingerprints quest/stage payload; J13 captures entry-point payload | Verified observed quest/stage shape; general union and unsupported variants remain partial. Quest and Ability form IDs are remapped by PRKE type (see the remap rules below). |
 | PRKC and effect CTDA | xEdit 7643–7647; J13 observed tab and condition scopes | Verified observed boundaries; tab semantics beyond the captures remain partial. |
 | EPFT, EPFD | xEdit 7648–7687 and `wbEPFDDecider` (line 1430); existing qualified FormLink handling and tests | Partial general union. Four-byte EPFT 3/4/5 FormLink variants and the AVIF + float shapes (EPFT 8, and EPFT 2 with entry Function 5/12/13/14) are promoted; the two-float shape stays opaque. See the remap rules below. |
 | EPFB fragment/entry identifier | xEdit 7661 calls it a unique perk entry ID; J13 observes the bytes | Partial. Do not equate this identifier with a VMAD fragment index without a loader trace. |
@@ -43,21 +43,21 @@ The existing private J13/J14 installed-record captures and the static OG report 
 | PRKF end marker | xEdit 7689; J13/J14 observed empty marker | Verified observed scope delimiter; malformed, missing and duplicate delimiters require a fail-closed typed decoder policy. |
 | VMAD fragments | Existing `Radicle/src/schema/vmad.cpp` PERK routing | Partial for this issue; reuse the existing parser, then prove EPFB/fragment correspondence separately. |
 
-## PERK FormID remap rules
+## PERK form ID remap rules
 
-Status: partial. Shapes are taken from the pinned xEdit source cited below; the corpus counts are reviewer-reported and TODO-verify against the official-master run.
+Status: partial. Shapes are taken from the pinned xEdit source cited below; the corpus counts come from a read-only scan of the seven official masters (2026-10-11): 656 PERK, 993 PRKE.
 
 Anchors: `Radicle/src/schema/form_link_mixed.cpp:perk_formid_offsets`, `Radicle/src/schema/form_link_mixed.cpp:mixed_formid_offsets`, `Radicle/tests/test_perk_entrypoints.cpp:PerkEntryPointRemapsOnlyFormIdEpfdVariants`, `Radicle/tests/test_perk_entrypoints.cpp:PerkEffectDataRemapsOnlyQuestAndAbilityFormIds`.
 
 Each effect starts at PRKE, whose type byte at offset 0 selects its DATA shape. A DATA or EPFD payload is classified by the nearest preceding PRKE. The EPFT is the nearest preceding EPFT, and the EPFT state resets at each PRKE.
 
-- PRKE type 0 (Quest + u16 stage, `wbDefinitionsFO4.pas:7614-7617`): the Quest FormID at offset 0 is remapped; the stage is not. TODO-verify: 101 six-byte DATA payloads in vanilla masters.
-- PRKE type 1 (Ability, `wbDefinitionsFO4.pas:7618`): the four-byte SPEL FormID at offset 0 is remapped. TODO-verify: 64 four-byte DATA payloads.
-- PRKE type 2 (Entry Point, `wbDefinitionsFO4.pas:7619-7640`): three bytes and no FormID. TODO-verify: 828 three-byte DATA payloads. Its Function byte (offset 1) feeds the EPFD rule.
-- Top-level PERK DATA (five bytes, before the first PRKE) is not a FormID payload.
-- EPFD (`wbDefinitionsFO4.pas:7671-7687`; decider `wbEPFDDecider`, line 1430): EPFT 3, 4 or 5 with a four-byte EPFD is a FormID at offset 0. EPFT 8 (AVIF + float) is a FormID at offset 0 when the EPFD is at least eight bytes. EPFT 2 has the same shape when its entry-point Function is 5, 12, 13 or 14, read from the type-2 effect DATA. Other EPFT 2 Functions and the two-float shape stay opaque. TODO-verify: 70 EPFT 8 records in vanilla masters, all with eight-byte EPFD.
-- EPFD is optional. TODO-verify: EPFT 4 occurs 27 times with no EPFD; EPFT 3 never occurs; the only four-byte FormID EPFD observed is EPFT 5.
-- Malformed sizes stay opaque without a strict-remap error, as the existing EPFD path already did. Known ceiling: a malformed PERK DATA or EPFD payload can keep a stale FormID under master remap.
+- PRKE type 0 (Quest + u16 stage, `wbDefinitionsFO4.pas:7614-7617`): the Quest form ID at offset 0 is remapped; the stage is not. Vanilla: 101 six-byte DATA payloads.
+- PRKE type 1 (Ability, `wbDefinitionsFO4.pas:7618`): the four-byte SPEL form ID at offset 0 is remapped. Vanilla: 64 four-byte DATA payloads.
+- PRKE type 2 (Entry Point, `wbDefinitionsFO4.pas:7619-7640`): three bytes and no form ID. Vanilla: 828 three-byte DATA payloads. Its Function byte (offset 1) feeds the EPFD rule.
+- Top-level PERK DATA (five bytes, before the first PRKE) is not a form ID payload.
+- EPFD (`wbDefinitionsFO4.pas:7671-7687`; decider `wbEPFDDecider`, line 1430): EPFT 3, 4 or 5 with a four-byte EPFD is a form ID at offset 0. EPFT 8 (AVIF + float) is a form ID at offset 0 when the EPFD is at least eight bytes. EPFT 2 has the same shape when its entry-point Function is 5, 12, 13 or 14, read from the type-2 effect DATA. Other EPFT 2 Functions and the two-float shape stay opaque. Vanilla: 70 EPFT 8 entries, all with eight-byte EPFD, under entry-point Functions 5 (16), 12 (1), 13 (11) and 14 (42); vanilla never stores EPFT 2 with those Functions, so that branch follows xEdit only.
+- EPFD is optional. Vanilla: EPFT 4 occurs 27 times with no EPFD; EPFT 3 never occurs; the only four-byte form ID EPFD observed is EPFT 5.
+- Malformed sizes stay opaque without a strict-remap error, as the existing EPFD path already did. Known ceiling: a malformed PERK DATA or EPFD payload can keep a stale form ID under master remap.
 - NO-EQUIVALENT: Num Ranks and Playable defaults. `wbDefinitionsFO4.pas:7595-7601` declares Num Ranks with `wbPERKNumRanksAfterLoad` (`wbDefinitionsCommon.pas:1033`), which rewrites 0 to 1 on load; Playable defaults to True. Radicle's generic payload API does not interpret DATA, so neither default is reproduced.
 
 ## Next implementation gate
