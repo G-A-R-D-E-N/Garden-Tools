@@ -24,7 +24,7 @@ public class F4SERegionMergeTests
         {{stub}}
         		{{F4SERegionMerge.End(name)}}
         }
-        """;
+        """.Replace("\r\n", "\n");
 
     [Fact]
     public void New_body_markers_are_preprocessor_directives()
@@ -50,8 +50,8 @@ public class F4SERegionMergeTests
     public void A_first_emit_with_no_previous_file_is_unchanged()
     {
         var generated = Generated("Alpha");
-        F4SERegionMerge.Merge(generated, null).Should().Be(generated.Replace("\r\n", "\n"));
-        F4SERegionMerge.Merge(generated, "").Should().Be(generated.Replace("\r\n", "\n"));
+        F4SERegionMerge.Merge(generated, null).Should().Be(generated);
+        F4SERegionMerge.Merge(generated, "").Should().Be(generated);
     }
 
     [Fact]
