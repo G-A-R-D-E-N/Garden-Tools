@@ -8,7 +8,7 @@ u16 distance from water, two unused bytes, u32 water-distance discriminator,
 four f32 placement/color/wave values and one flag byte plus three unused bytes.
 The [verified loader record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md)
 and local copy `build/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`
-stamp `TESGrass::Load` at OG RVA 0x31AA00. Present DATA is copied into a
+stamp `TESGrass::Load` at OG address 0x31AA00. Present DATA is copied into a
 zero-filled 32-byte prefix, including short or oversized fields. The read
 surface keeps absent DATA distinct from present zero-length DATA. Untouched
 original bytes, including surplus bytes and padding, remain in the container.
@@ -52,9 +52,9 @@ separately for each published head.
 
 GardenEngine main `5cb5e18131a53e3c7c6fa049ce8fde6a9ad9f742` pins Radicle
 `34d16d50de68e7da079745240fd247310ea730f6`, before these getters, and has no
-LTEX GNAM or GRAS/TREE/FLOR getter consumer. GardenEngine #148 must add that
-consumer and update its pin before the probe required by GARDEN-TOOLS #342 can
-run. Existing foliage HLOD support does not establish that grass-reader proof.
+LTEX GNAM or GRAS/TREE/FLOR getter consumer. The probe source for GARDEN-TOOLS
+#342 is in `Radicle/probes/gardenengine/`; it has not been run. It cannot run
+until GardenEngine #148 adds that consumer and moves its Radicle pin. Existing foliage HLOD support does not establish that grass-reader proof.
 The audit and ABI 12 integration are recorded in
 `docs/code-notes/radicle-vegetation.md` at the repository root.
 

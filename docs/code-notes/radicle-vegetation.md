@@ -38,7 +38,7 @@ requires a C ABI getter consumed by a GardenEngine probe. At GardenEngine main
 `opencw/OpenCommonwealth.csproj` references that pinned source's managed binding
 project. No call to these vegetation getters or managed wrappers is present in
 the tracked application sources; existing foliage HLOD work is a separate path.
-The required GardenEngine vegetation probe and its Radicle pin update are missing.
+The GardenEngine vegetation probe source is in `Radicle/probes/gardenengine/`. It has not been run, and GardenEngine still pins `34d16d50` (ABI 9), so it cannot run until GardenEngine moves its Radicle pin.
 Radicle native/C ABI and managed tests do not substitute for that consumer proof.
 Report the missing integration under #148/#342 rather than expanding #404 into
 GardenEngine rendering work or closing either issue.

@@ -4,7 +4,7 @@
 
 The pinned private evidence at RE commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
 `RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`, section
-3.1, verifies the OG grass loader RVA 0x31AA00 and bounded copy helper 0x1523A0:
+3.1, verifies the OG grass loader address 0x31AA00 and bounded copy helper 0x1523A0:
 present DATA copies at most 32 bytes into zeroed storage. The typed view will
 zero-fill a short present DATA and read the prefix of a long one; original
 bytes remain available through the lossless container and payload getter.
