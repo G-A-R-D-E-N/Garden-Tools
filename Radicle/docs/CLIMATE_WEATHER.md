@@ -41,8 +41,7 @@ Six DATA blocks are 19 bytes and 101 are 20 bytes. All seven unchanged
 masters serialize byte-identically after both decoders are exercised.
 
 The private [verified timing record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/README.md)
-and local copy `build/RE-Work/6916afb/weather-climate-397-343/README.md`
-resolve all four time consumers and moon packing. Sections 3.2 and 3.4 stamp
+resolves all four time consumers and moon packing (local copy not committed). Sections 3.2 and 3.4 stamp
 the OG loader and consumers at 0x3989B0, 0x658090 and 0x648A50.
 Each unsigned clock byte is multiplied by 1/6 to obtain game hours, including
 128 through 255 without signed conversion or clamping. The low six moon bits

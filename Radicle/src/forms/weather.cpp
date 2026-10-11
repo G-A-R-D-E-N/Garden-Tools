@@ -317,9 +317,7 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature != k_tnam) continue;
     if (subrecord.data.size() != 4) throw WeatherError("TNAM must be exactly 4 bytes");
-    const auto raw = RawFormId{read_u32(subrecord.data, 0)};
-    if (raw.is_null()) throw WeatherError("TNAM FormID cannot be null");
-    result.tnam.push_back(resolve_plugin_form_id(raw, context));
+    result.tnam.push_back(decode_optional_form(context, subrecord.data, 0, "TNAM"));
   }
 
   const auto* imsp = unique_required(*record, k_imsp, "IMSP");
@@ -341,8 +339,17 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
 
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature != k_dalc) continue;
-    if (subrecord.data.size() != 32) throw WeatherError("DALC must be exactly 32 bytes");
-    result.dalc.push_back(subrecord.data);
+    const auto& data = subrecord.data;
+    if (data.size() != 24 && data.size() != 28 && data.size() != 32) {
+      throw WeatherError("DALC must be 24, 28, or 32 bytes");
+    }
+    WeatherAmbientColors ambient;
+    for (std::size_t i = 0; i < ambient.directional.size(); ++i) {
+      ambient.directional[i] = read_u32(data, i * 4);
+    }
+    if (data.size() >= 28) ambient.specular = read_u32(data, 24);
+    if (data.size() == 32) ambient.fresnel = read_f32(data, 28);
+    result.dalc.push_back(ambient);
   }
   if (result.dalc.size() != 4 && result.dalc.size() != 8) {
     throw WeatherError("WTHR must contain 4 or 8 DALC subrecords");

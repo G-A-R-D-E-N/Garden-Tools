@@ -141,7 +141,9 @@ WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
     out.colors = WeatherColors{times, groups, sub->data};
   }
   if (const auto* sub = reader.unique(sig("FNAM"))) {
-    if (sub->data.size() % 4 != 0 || sub->data.size() < 16) reader.fail(sub->signature, "is not a float array");
+    if (sub->data.size() != 32 && sub->data.size() != 56 && sub->data.size() != 72) {
+      reader.fail(sub->signature, "must be 32, 56, or 72 bytes");
+    }
     for (std::size_t offset = 0; offset < sub->data.size(); offset += 4) {
       out.fog_distances.push_back(Reader::f32(*sub, offset));
     }
