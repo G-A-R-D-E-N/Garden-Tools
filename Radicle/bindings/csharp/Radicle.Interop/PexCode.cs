@@ -57,9 +57,9 @@ public sealed partial class PexFile
 {
     public unsafe PexObjectCode ReadCode(int objectIndex)
     {
-        if (_handle == IntPtr.Zero) throw new ObjectDisposedException(nameof(PexFile));
+        using var use = Use();
         Native.PexObjectCode raw = default;
-        Call.Check(Native.RadicleNative.PexObjectCodeGet(_handle, (nuint)objectIndex, &raw));
+        Call.Check(Native.RadicleNative.PexObjectCodeGet(use.Pointer, (nuint)objectIndex, &raw));
         try
         {
             var values = (Native.PexValue*)raw.Values;

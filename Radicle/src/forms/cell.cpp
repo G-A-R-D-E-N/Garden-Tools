@@ -342,7 +342,7 @@ FormKey create_exterior_cell(Plugin& plugin, const ExteriorCellCreation& creatio
   const auto key = create_local_record(next, k_cell);
   auto record = detach_created_cell(next, key);
   if (creation.editor_id.has_value()) {
-    record.subrecords.push_back(Subrecord{sig_edid, zstring(*creation.editor_id), false});
+    record.subrecords.push_back(Subrecord{sig_edid, zstring(stored_editor_id(*creation.editor_id)), false});
   }
 
   // CK LoadRecord accepts CELL DATA as either char or short; the in-memory

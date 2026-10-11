@@ -146,13 +146,10 @@ Result<void> Store::save(const Settings& settings) const {
         }
         std::error_code ec;
         std::filesystem::rename(temp, path_, ec);
-        if (ec) {
-            std::filesystem::remove(path_, ec);
-            ec.clear();
-            std::filesystem::rename(temp, path_, ec);
-        }
-        if (ec) return std::unexpected(Error{"SettingsWriteFailed", ec.message()});
-        return {};
+        if (!ec) return {};
+        std::error_code cleanupEc;
+        std::filesystem::remove(temp, cleanupEc);
+        return std::unexpected(Error{"SettingsWriteFailed", ec.message()});
     } catch (const std::exception& ex) {
         return std::unexpected(Error{"SettingsWriteFailed", ex.what()});
     }

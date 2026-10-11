@@ -296,8 +296,10 @@ internal sealed partial class AssistantUi
             CodexLoginChallenge challenge = await _connection.BeginChatGptLoginAsync().ConfigureAwait(true);
             if (challenge.HasBrowserUrl)
             {
-                OpenUrl(challenge.AuthUrl);
-                _pane.SetStatus("Waiting for browser sign-in to finish...", Ux.MetaBrush);
+                if (OpenUrl(challenge.AuthUrl))
+                    _pane.SetStatus("Waiting for browser sign-in to finish...", Ux.MetaBrush);
+                else
+                    _pane.SetStatus("Could not open the sign-in page: the URL is not an http/https address or the browser failed to start.", Ux.WarnBrush);
             }
             else
             {
@@ -340,8 +342,10 @@ internal sealed partial class AssistantUi
                 ? "Enter code " + challenge.UserCode + " at " + challenge.VerificationUrl
                 : challenge.VerificationUrl;
             RefreshSettingsWindow();
-            OpenUrl(challenge.VerificationUrl);
-            _pane.SetStatus("Waiting for device-code sign-in to finish...", Ux.MetaBrush);
+            if (OpenUrl(challenge.VerificationUrl))
+                _pane.SetStatus("Waiting for device-code sign-in to finish...", Ux.MetaBrush);
+            else
+                _pane.SetStatus("Could not open the sign-in page: the URL is not an http/https address or the browser failed to start.", Ux.WarnBrush);
         }
         catch (CodexProtocolException exception)
         {
