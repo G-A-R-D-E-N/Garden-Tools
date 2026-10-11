@@ -242,18 +242,18 @@ std::ostream& operator<<(std::ostream& out, const WeatherLayoutCase& value) {
 }
 
 const std::array<WeatherLayoutCase, 13> kWeatherLayoutCases{{
-    {"default512", {}, 16u, 8u, 20u, 8u, true, true, 72u, 608u},
+    {"default512", {}, 32u, 8u, 20u, 8u, true, true, 72u, 608u},
     {"pnam1024", make_options([](WeatherPluginOptions& o) { o.pnam_jnam_size = 1024; }), 32u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"imsp16", make_options([](WeatherPluginOptions& o) { o.imsp_size = 16; }), 16u, 4u, 20u, 8u, true, true, 72u, 608u},
-    {"data19", make_options([](WeatherPluginOptions& o) { o.data_size = 19; }), 16u, 8u, 19u, 8u, true, true, 72u, 608u},
-    {"dalc4", make_options([](WeatherPluginOptions& o) { o.dalc_count = 4; }), 16u, 8u, 20u, 4u, true, true, 72u, 608u},
-    {"noNam4", make_options([](WeatherPluginOptions& o) { o.include_nam4 = false; }), 16u, 8u, 20u, 8u, false, true, 72u, 608u},
-    {"unam12", make_options([](WeatherPluginOptions& o) { o.unam_size = 12; }), 16u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"noUnam", make_options([](WeatherPluginOptions& o) { o.unam_size = 0; }), 16u, 8u, 20u, 8u, true, false, 72u, 608u},
-    {"fnam32", make_options([](WeatherPluginOptions& o) { o.fnam_size = 32; }), 16u, 8u, 20u, 8u, true, true, 32u, 608u},
-    {"fnam56", make_options([](WeatherPluginOptions& o) { o.fnam_size = 56; }), 16u, 8u, 20u, 8u, true, true, 56u, 608u},
-    {"nam0272", make_options([](WeatherPluginOptions& o) { o.nam0_size = 272; }), 16u, 8u, 20u, 8u, true, true, 72u, 272u},
-    {"nam0544", make_options([](WeatherPluginOptions& o) { o.nam0_size = 544; }), 16u, 8u, 20u, 8u, true, true, 72u, 544u},
+    {"imsp16", make_options([](WeatherPluginOptions& o) { o.imsp_size = 16; }), 32u, 4u, 20u, 8u, true, true, 72u, 608u},
+    {"data19", make_options([](WeatherPluginOptions& o) { o.data_size = 19; }), 32u, 8u, 19u, 8u, true, true, 72u, 608u},
+    {"dalc4", make_options([](WeatherPluginOptions& o) { o.dalc_count = 4; }), 32u, 8u, 20u, 4u, true, true, 72u, 608u},
+    {"noNam4", make_options([](WeatherPluginOptions& o) { o.include_nam4 = false; }), 32u, 8u, 20u, 8u, false, true, 72u, 608u},
+    {"unam12", make_options([](WeatherPluginOptions& o) { o.unam_size = 12; }), 32u, 8u, 20u, 8u, true, true, 72u, 608u},
+    {"noUnam", make_options([](WeatherPluginOptions& o) { o.unam_size = 0; }), 32u, 8u, 20u, 8u, true, false, 72u, 608u},
+    {"fnam32", make_options([](WeatherPluginOptions& o) { o.fnam_size = 32; }), 32u, 8u, 20u, 8u, true, true, 32u, 608u},
+    {"fnam56", make_options([](WeatherPluginOptions& o) { o.fnam_size = 56; }), 32u, 8u, 20u, 8u, true, true, 56u, 608u},
+    {"nam0272", make_options([](WeatherPluginOptions& o) { o.nam0_size = 272; }), 32u, 8u, 20u, 8u, true, true, 72u, 272u},
+    {"nam0544", make_options([](WeatherPluginOptions& o) { o.nam0_size = 544; }), 32u, 8u, 20u, 8u, true, true, 72u, 544u},
     {"full1024",
      make_options([](WeatherPluginOptions& o) {
        o.pnam_jnam_size = 1024;
@@ -292,7 +292,7 @@ TEST(WeatherConcept, DecodesProvenCloudAndLinkSlots) {
   EXPECT_EQ(*model.editor_id, "TestWeather");
   ASSERT_TRUE(model.cloud_textures[0].has_value());
   EXPECT_EQ(*model.cloud_textures[0], "Textures\\Sky\\Clouds\\Test.dds");
-  EXPECT_EQ(model.cloud_color_layer_count, 16u);
+  EXPECT_EQ(model.cloud_color_layer_count, 32u);
   EXPECT_FALSE(model.mnam.has_value());
   EXPECT_FALSE(model.nnam.has_value());
   ASSERT_EQ(model.snam.size(), 1u);
@@ -629,7 +629,7 @@ TEST(WeatherConcept, RealFallout4EsmDecodesWhenPresent) {
   const auto key = fo4::FormKey::parse("0000015E:Fallout4.esm");
   const auto model = fo4::forms::decode_weather(plugin, key);
   EXPECT_TRUE(model.editor_id.has_value());
-  EXPECT_TRUE(model.cloud_color_layer_count == 16u || model.cloud_color_layer_count == 32u);
+  EXPECT_EQ(model.cloud_color_layer_count, 32u);
   EXPECT_TRUE(model.data.size() == 19 || model.data.size() == 20);
   EXPECT_TRUE(model.dalc.size() == 4u || model.dalc.size() == 8u);
 }
