@@ -81,6 +81,9 @@ public class GlobalStateIsolationTests
 
         try
         {
+            MutagenLoader.LooseMods.Clear();
+            MutagenLoader.LooseModPaths.Clear();
+            MutagenLoader.EditableMods.Clear();
 
             MutagenLoader.LooseMods["A.esp"] = "loose-mod";
             MutagenLoader.LooseModPaths["A.esp"] = @"C:\mods\A.esp";
@@ -109,9 +112,9 @@ public class GlobalStateIsolationTests
 
 
                 MutagenLoader.LooseMods.Keys.Should().BeEquivalentTo("B.esp");
-                MutagenLoader.LooseModPaths.Keys.Should().BeEquivalentTo("B.esp");
+                MutagenLoader.LooseModPaths.Keys.Should().BeEquivalentTo("A.esp", "B.esp");
                 MutagenLoader.PluginSourcePaths.Keys.Should().BeEquivalentTo("B.esp");
-                MutagenLoader.EditableMods.Keys.Should().BeEquivalentTo("B.esp");
+                MutagenLoader.EditableMods.Keys.Should().BeEquivalentTo("MyPatch.esp", "B.esp");
                 MutagenLoader.MasterIsEsl.Keys.Should().BeEquivalentTo("B.esp");
                 MutagenLoader.MaxCachedModIndexes.Should().Be(99);
                 MutagenLoader.MaxCachedIndexRecords.Should().Be(99);
