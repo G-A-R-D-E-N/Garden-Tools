@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -89,6 +90,41 @@ std::vector<std::byte> makeConditionedPlugin() {
     return out.bytes;
 }
 
+void writeLvlo(fo4::test::ByteWriter& out, std::uint32_t target) {
+    fo4::test::ByteWriter lvlo;
+    lvlo.u16(1);
+    lvlo.u16(0);
+    lvlo.u32(target);
+    lvlo.u16(1);
+    lvlo.u8(100);
+    lvlo.u8(0);
+    fo4::test::write_subrecord(out, "LVLO", lvlo.bytes);
+}
+
+std::vector<std::byte> makeCircularLeveledPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(0);
+    hedr.u32(0x802u);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "LVLI", 0);
+    const auto first = fo4::test::begin_record(out, "LVLI", 0, 0x800u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"Caf\xE9\0", 5});
+    writeLvlo(out, 0x801u);
+    fo4::test::end_record(out, first);
+
+    const auto second = fo4::test::begin_record(out, "LVLI", 0, 0x801u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"ListB\0", 6});
+    writeLvlo(out, 0x800u);
+    fo4::test::end_record(out, second);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 nlohmann::json pluginEntry(std::string name,
                            const std::filesystem::path& path,
                            std::string source) {
@@ -156,4 +192,21 @@ TEST_CASE("Native EditorId reads decode Windows-1252 for listings and lookups") 
         REQUIRE(conditions.size() == 1);
         CHECK(conditions[0].at("function") == "GetAngle");
     }
+}
+
+TEST_CASE("Native leveled-list cycle report decodes a Windows-1252 EditorID") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "mods" / "MyMod" / "Cycle.esp";
+    writeBytes(path, makeCircularLeveledPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{
+        {"plugins", nlohmann::json::array({pluginEntry("Cycle.esp", path, "MyMod")})}
+    }).has_value());
+    const auto report = backend.checkCircularLeveledLists(nlohmann::json::array({"Cycle.esp", 200}));
+    REQUIRE(report.has_value());
+    REQUIRE(report->is_string());
+    CHECK(report->get<std::string>().find(
+        "Caf\xC3\xA9 [000800:Cycle.esp] -> ListB [000801:Cycle.esp]") != std::string::npos);
 }

@@ -2,7 +2,6 @@
 #include "RadiclePluginSupport.hpp"
 
 #include <fo4/plugin/subrecord_authoring.hpp>
-#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin {
 
