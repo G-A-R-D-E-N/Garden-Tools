@@ -198,6 +198,23 @@ TEST_CASE("Vegetation semantic reads refuse malformed grass link payloads", "[ve
     fixture.checkNotPending();
 }
 
+TEST_CASE("Vegetation semantic grids list a flora with a wrong-size ingredient as unavailable", "[vegetation-semantic]") {
+    auto entries = localFixture();
+    for (auto& record : entries) {
+        for (auto& [name, data] : record.subs) {
+            if (record.id == veg::k_flor && name == "PFIG") data = veg::words({veg::k_misc, veg::k_misc});
+        }
+    }
+    Fixture fixture{entries};
+    const auto flora = fixture.grid("FLOR");
+    CHECK(cell(flora, veg::k_flor, "FLOR\\Ingredient").at("value") == "<opaque>");
+    CHECK(cell(flora, veg::k_flor, "FLOR\\Ingredient").at("editable") == false);
+    CHECK(cell(flora, veg::k_flor, "FLOR\\Winter").at("value") == "4");
+    CHECK(cell(flora, veg::k_flor, "FLOR\\HarvestSound").at("value") == veg::key(veg::k_sndr).to_string());
+    CHECK_FALSE(fixture.edit(veg::k_flor, "FLOR\\Ingredient", "NULL").has_value());
+    fixture.checkNotPending();
+}
+
 TEST_CASE("Vegetation structural permissions use native coupling and list removal", "[vegetation-semantic]") {
     Fixture fixture;
     CHECK(fixture.describe(veg::k_flor, "Authoring\\PFPC[0]").at("canRemove") == false);

@@ -38,6 +38,7 @@ Result<fo4::FormKey> RadiclePluginBackend::createProjectileLocked(fo4::Plugin& m
     creation.muzzle_flash_model = muzzleFlashModel.value_or(std::string{});
     if (!lifecycleBoundsField(payload, creation.bounds) ||
         !lifecycleUnsignedField(payload, "flags", creation.flags, creation.flags) ||
+        !lifecycleUnsignedField(payload, "type", creation.type, creation.type) ||
         !lifecycleFloatField(payload, "gravity", creation.gravity, creation.gravity) ||
         !lifecycleFloatField(payload, "speed", creation.speed, creation.speed) ||
         !lifecycleFloatField(payload, "range", creation.range, creation.range) ||
