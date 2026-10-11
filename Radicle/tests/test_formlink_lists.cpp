@@ -365,3 +365,22 @@ TEST(FormLinkListMutation, MalformedExistingElementFailsClosed) {
           plugin, race_key, parsed->descriptor, 0)),
       fo4::schema::FormLinkListError);
 }
+
+TEST(FormLinkListRead, PreservesStoredOrderAndRefusesMalformedOrWrongRecord) {
+  const auto plugin = fo4::read_plugin(plugin_with_race_hair_colors(), "HeadLists.esp");
+  const auto parsed = fo4::schema::indexed_formlink_list_path("RACE\\MaleHairColors[0]");
+  ASSERT_TRUE(parsed.has_value());
+  const auto key = fo4::FormKey::parse("000803:HeadLists.esp");
+  const auto values = fo4::schema::record_formlink_list_values(plugin, key, parsed->descriptor);
+  ASSERT_TRUE(values.has_value());
+  ASSERT_EQ(values->size(), 2u);
+  EXPECT_EQ((*values)[0], fo4::FormKey::parse("000800:HeadLists.esp"));
+  EXPECT_EQ((*values)[1], fo4::FormKey::parse("000800:HeadLists.esp"));
+  EXPECT_FALSE(fo4::schema::record_formlink_list_values(
+      plugin, fo4::FormKey::parse("000900:HeadLists.esp"), parsed->descriptor));
+  EXPECT_THROW(fo4::schema::record_formlink_list_values(
+      plugin, fo4::FormKey::parse("000800:HeadLists.esp"), parsed->descriptor), fo4::schema::FormLinkListError);
+  const auto malformed = fo4::read_plugin(plugin_with_race_hair_colors(true), "HeadLists.esp");
+  EXPECT_THROW(fo4::schema::record_formlink_list_values(malformed, key, parsed->descriptor),
+               fo4::schema::FormLinkListError);
+}

@@ -67,13 +67,14 @@ TEST(QuestAliasRealData, DecodesEveryShippedQuest) {
     ++files;
 
     const auto plugin = fo4::read_plugin_file(path);
+    const fo4::RecordIndex index{plugin};
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != k_qust) continue;
       ++quests;
 
       const auto expected = marker_count(*record);
       try {
-        const auto decoded = fo4::forms::decode_quest_aliases(plugin, record->form_key);
+        const auto decoded = fo4::forms::decode_quest_aliases(index, record->form_key);
         aliases += decoded.aliases.size();
         // Every start marker has to surface as exactly one modelled alias, or
         // the decoder is silently dropping or merging entries.

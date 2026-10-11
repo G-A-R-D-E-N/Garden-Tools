@@ -9,6 +9,7 @@ import { useSavedDoc } from './useSavedDoc';
 import { graphReducer, initialState } from './graphReducer';
 import type { CanvasApi } from './BlueprintCanvas';
 import BlueprintCanvas from './BlueprintCanvas';
+import { useDialogs } from '../useDialogs';
 import '../PapyrusPanel.css';
 import '../NifPanel.css';
 import './BlueprintPanel.css';
@@ -23,6 +24,7 @@ const setLS = (key: string, value: string) =>
 export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
   const graph = getGraph();
   const unavailable = !graph;
+  const { confirm: askConfirm } = useDialogs();
 
   const [state, dispatch] = useReducer(graphReducer, undefined, () =>
     initialState(emptyDocument(LS('scriptName', 'MyScript'))));
@@ -42,6 +44,14 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
 
   const canvasApi = useRef<CanvasApi | null>(null);
   const { dirty, markSaved } = useSavedDoc(state.doc);
+
+  const requestClose = async () => {
+    if (dirty && !await askConfirm({
+      title: 'Discard unsaved changes?', danger: true, confirmLabel: 'Discard',
+      message: 'Closing the Blueprint editor discards the unsaved graph changes.',
+    })) return;
+    onClose();
+  };
 
 
 
@@ -190,6 +200,10 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
     if (!graph) return;
     const path = await graph.BrowseForScript();
     if (!path) return;
+    if (dirty && !await askConfirm({
+      title: 'Discard unsaved changes?', danger: true, confirmLabel: 'Discard',
+      message: 'Opening another graph replaces the current one and discards its unsaved changes.',
+    })) return;
 
     const isScript = /\.(psc|pex)$/i.test(path);
     let doc: BpDocument;
@@ -308,7 +322,7 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
               Compile
             </button>
           </div>
-          <button className="papyrus-close" onClick={onClose}><X size={18} /></button>
+          <button className="papyrus-close" onClick={requestClose}><X size={18} /></button>
         </div>
 
         {unavailable && (

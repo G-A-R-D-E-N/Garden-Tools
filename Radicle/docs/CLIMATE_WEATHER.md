@@ -9,7 +9,10 @@ CLMT in `Core/wbDefinitionsFO4.pas:6115–6126` uses the shared timing helper
 sunrise begin/end, sunset begin/end, volatility, and packed moons/phase length.
 The timing callback `Core/wbDefinitionsCommon.pas:wbClmtTime` displays ordinary time values in
 ten-minute steps. Radicle preserves all six encoded bytes and exposes the
-verified conversion below without clamping out-of-range clock values.
+verified conversion below without clamping out-of-range clock values. This differs from xEdit's
+display, which subtracts 143 while a value is above 143 (`Core/wbDefinitionsCommon.pas:3349-3359`,
+`wbClmtTime`, at `93cc0bc5`). The 2026-10-11 scan of the seven official masters found no CLMT TNAM
+with a sunrise or sunset byte above 143 (11 records), so the two agree on all official data.
 
 WTHR DATA is defined at FO4 lines 13057–13087. Lightning color is three bytes
 by `Core/wbDefinitionsCommon.pas:9612–9621`.
@@ -55,7 +58,7 @@ partial or unverified in sections 5–6. They are outside these stored timing
 conversions; no transition-duration calculation is added.
 
 `src/environment/base_records.cpp:decode_climate` and `decode_weather` expose
-these optional fields through the existing environment decoders. C ABI 12
+these optional fields through the existing environment decoders. C ABI 25
 extends `radicle_climate` and `radicle_weather_info`; generated C# bindings and
 the friendly `Climate.Timing` / `Weather.Parameters` properties follow those
 declarations after integrating main `c50ad4d5405e1571113019654b10e3d4a05ca0f1`
@@ -95,7 +98,7 @@ zero errors and 83 warnings. Godot
 and exited zero: Commonwealth timing converted to 5/9/17/21 hours, four days
 per phase, Secunda enabled and Masser disabled. The existing sky conversion
 still used the C ABI path. This remains conversion proof, not simulation.
-These dated probes have not been rerun against this ABI-12 head; current-head
+These dated probes have not been rerun against this ABI-25 head; current-head
 consumer acceptance is separate GardenEngine work.
 
 ## Editing
