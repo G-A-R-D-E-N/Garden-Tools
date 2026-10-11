@@ -57,6 +57,29 @@ it('drops the reference when a row moves off Reference run-on', async () => {
   expect(saved[0]).not.toHaveProperty('reference');
 });
 
+it('marks runOn edited when a preserved row leaves Reference run-on', async () => {
+  const row = { function: 'GetScale', operator: '==', value: 1, runOn: 'Reference', reference: '000803:Patch.esp',
+    _native: { ctda: [1, 2, 3], cis1: null, cis2: null } };
+  const set = vi.fn(async (..._arguments: string[]) => 'staged');
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
+    GetConditionsAt: vi.fn(async () => JSON.stringify([row])),
+    GetConditionFunctions: vi.fn(async () => '["GetScale"]'),
+    GetConditionRunOnTypes: vi.fn(async () => '["Subject","Reference"]'),
+    GetConditionFunctionParams: vi.fn(async () => '{}'),
+    ResolveFormKeyLabels: vi.fn(async () => '{}'),
+    SetConditionsAt: set,
+  } } } });
+  render(<ConditionsEditor plugin="Patch.esp" record="000800:Patch.esp"
+    path="Conditions" label="Test" onClose={() => {}} onSaved={() => {}} />);
+  fireEvent.change(await screen.findByDisplayValue('Reference'), { target: { value: 'Subject' } });
+  fireEvent.click(screen.getByText('Save'));
+  await waitFor(() => expect(set).toHaveBeenCalledOnce());
+  const saved = JSON.parse(set.mock.calls[0][3]);
+  expect(saved[0].runOn).toBe('Subject');
+  expect(saved[0]).not.toHaveProperty('reference');
+  expect(saved[0]._edited).toContain('runOn');
+});
+
 it('locks the function select on preserved rows only', async () => {
   const native = { function: 'GetScale', operator: '==', value: 1, runOn: 'Subject',
     _native: { ctda: [1, 2, 3], cis1: null, cis2: null } };

@@ -74,7 +74,7 @@ TEST_CASE("condition codec: GetEventData rows keep param1 and param2 through des
 TEST_CASE("condition codec: float parameter is a JSON number") {
     fo4::CtdaCondition condition;
     condition.function = fo4ide::plugin::functionIndex("GetWithinDistance").value();
-    condition.param1 = 0x00000800;
+    condition.param1 = 0;
     condition.param2 = floatBits(5.5f);
     const fo4::Plugin plugin{};
 
