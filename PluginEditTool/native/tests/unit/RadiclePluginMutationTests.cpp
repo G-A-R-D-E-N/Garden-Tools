@@ -275,8 +275,17 @@ TEST_CASE("Native SetConditions refuses a record whose lists are all nested with
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
 
+    const nlohmann::json rows = nlohmann::json::array({
+        {
+            {"function", "GetStage"},
+            {"operator", ">="},
+            {"value", 5},
+            {"param1", 2},
+            {"runOn", "Subject"},
+        },
+    });
     const auto result = backend.invokeBackend(
-        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "[]"}));
+        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", rows.dump()}));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "NoConditionList");
     const auto active = parseStringResult(
