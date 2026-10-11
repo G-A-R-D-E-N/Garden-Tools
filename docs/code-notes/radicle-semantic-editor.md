@@ -28,6 +28,10 @@
 
 `PluginEditTool/native/src/plugin/RadiclePluginReadApi.cpp:RadiclePluginBackend::getRecordsGrid` clamps all grid permissions to the existing plugin protection policy. `PluginEditTool/native/tests/unit/RadiclePluginReadApiTests.cpp` reproduces the protected editor-ID cell advertising editability (test: `Native grid refuses all cell edits on protected plugins` in that file), while native writes already refuse it. This applies to the typed grids and the generated semantic grid alike.
 
+## Climate and weather acceptance
+
+`Radicle/tests/climate_record_fixture.hpp:fo4::test::sky::fixture` retains the existing verified climate/weather fixture independently of the GoogleTest assertion helpers in `climate_weather_fixture.hpp`. `PluginEditTool/native/tests/unit/RadiclePluginClimateSemanticTests.cpp` exercises the actual backend against these bytes: climate weather-table indices, weather arrays and legacy optional-field slots, strings and FormLinks, structural permissions, refusal without staging, and save/reparse preservation. It adds no family layout parser to PluginTool. It builds on writer #427 (ABI 25) and adapter #438, which land on main before it. The fixture extraction keeps every builder, data table, snapshot and assertion helper of the original header. CI runs these cases on Linux and Windows MSVC.
+
 ## Explorer refresh
 
 `PluginEditTool/web/src/Shell/ExplorerTree.tsx:ExplorerTree` caches each node's children in component state under a `Key:index` key that survives a refresh, so a plugin-list refresh left group counts such as `CLMT (1)` stale. Every refresh path replaces the plugin list through `setPlugins` in `PluginEditTool/web/src/Shell/useEnvironment.ts`, which hands each tree a new `node` object; that object identity is the refresh signal. A changed node drops collapsed children; an expanded node refetches through `PluginEditTool/web/src/Shell/ExplorerTree.tsx:ExplorerTree`, and the same object causes no fetch. Expanding a node always fetches, so children are not reused across collapse and expand.
