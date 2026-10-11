@@ -1,10 +1,12 @@
 #include "RadiclePluginQuestInternal.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <limits>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -19,6 +21,32 @@ namespace fo4ide::plugin {
 using namespace questinternal;
 
 namespace {
+
+std::vector<fo4::CtdaCondition> previousAliasConditions(const fo4::forms::QuestAliases& previous,
+                                                        std::uint32_t id) {
+    const auto sameId = [id](const fo4::forms::QuestAlias& alias) { return alias.id == id; };
+    std::vector<fo4::CtdaCondition> conditions;
+    if (std::count_if(previous.aliases.begin(), previous.aliases.end(), sameId) != 1) {
+        return conditions;
+    }
+    const auto& members =
+        std::find_if(previous.aliases.begin(), previous.aliases.end(), sameId)->subrecords;
+    const auto isCondition = [](const fo4::Subrecord& member) {
+        return member.signature == fo4::sig_ctda ||
+               member.signature == fo4::Signature::from_string("CIS1") ||
+               member.signature == fo4::Signature::from_string("CIS2");
+    };
+    const auto first = std::find_if(members.begin(), members.end(), isCondition);
+    const auto last = std::find_if_not(first, members.end(), isCondition);
+    const std::span<const fo4::Subrecord> run{
+        members.data() + (first - members.begin()), static_cast<std::size_t>(last - first)};
+    std::size_t consumed = 0;
+    if (!fo4::forms::lossless_quest_log_entry_conditions(run, conditions, consumed) ||
+        consumed != run.size()) {
+        conditions.clear();
+    }
+    return conditions;
+}
 
 bool knownCollectionEntryKey(std::string_view key) {
     return key == "id" || key == "maxInitialFillCount";
@@ -105,11 +133,13 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
     if (const auto error = existingQuestVmadUnrepresentable(*record, true, false)) {
         return std::unexpected(*error);
     }
+    fo4::forms::QuestAliases previousAliases;
     try {
         if (const auto error =
                 existingAliasesUnrepresentable(loaded->plugin, questKey, graph_)) {
             return std::unexpected(*error);
         }
+        previousAliases = fo4::forms::decode_quest_aliases(loaded->plugin, questKey);
     } catch (const fo4::forms::QuestError& error) {
         return std::unexpected(Error{"QuestAuthoringCoverageIncomplete", error.what()});
     }
@@ -547,6 +577,7 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 creation.linked_aliases.push_back(std::move(linked));
             }
         }
+        const auto previousConditions = previousAliasConditions(previousAliases, creation.id);
         std::vector<PendingQuestCondition> parsedConditions;
         if (element.contains("conditions") && !element["conditions"].is_null()) {
             if (creation.kind == fo4::forms::QuestAliasKind::collection) {
@@ -572,6 +603,10 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                         return std::unexpected(std::move(remapped));
                     }
                     return std::unexpected(*error);
+                }
+                if (parsedConditions.size() < previousConditions.size()) {
+                    pending.condition.padding =
+                        previousConditions[parsedConditions.size()].padding;
                 }
                 parsedConditions.push_back(std::move(pending));
             }
