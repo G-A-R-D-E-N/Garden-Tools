@@ -45,6 +45,11 @@ public:
     u32(bits);
   }
   void u8(std::uint8_t value) { bytes_.push_back(std::byte{value}); }
+  void u16(std::uint16_t value) {
+    std::array<std::byte, 2> raw{};
+    std::memcpy(raw.data(), &value, 2);
+    bytes_.insert(bytes_.end(), raw.begin(), raw.end());
+  }
   void i16(std::int16_t value) {
     std::array<std::byte, 2> raw{};
     std::memcpy(raw.data(), &value, 2);
@@ -60,6 +65,12 @@ private:
 std::uint32_t read_u32(std::span<const std::byte> data, std::size_t offset) {
   std::uint32_t value = 0;
   std::memcpy(&value, data.data() + offset, 4);
+  return value;
+}
+
+std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
+  std::uint16_t value = 0;
+  std::memcpy(&value, data.data() + offset, 2);
   return value;
 }
 
@@ -243,7 +254,8 @@ namespace {
 std::vector<std::byte> encode_projectile_dnam_with(const ProjectileCreation& c,
                                                    const PluginFormIdContext& context) {
   PayloadWriter out{k_proj_dnam_size};
-  out.u32(c.flags);                                  // +0
+  out.u16(c.flags);                                  // +0
+  out.u16(c.type);                                   // +2
   out.f32(c.gravity);                                // +4
   out.f32(c.speed);                                  // +8
   out.f32(c.range);                                  // +12
@@ -496,7 +508,8 @@ ProjectileCreation decode_projectile(const Plugin& plugin, const FormKey& key) {
     out.sound_level = read_u32(vnam->data, 0);
   }
 
-  out.flags = read_u32(dnam, 0);
+  out.flags = read_u16(dnam, 0);
+  out.type = read_u16(dnam, 2);
   out.gravity = read_f32(dnam, 4);
   out.speed = read_f32(dnam, 8);
   out.range = read_f32(dnam, 12);
