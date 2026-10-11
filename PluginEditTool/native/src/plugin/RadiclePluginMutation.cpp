@@ -447,9 +447,7 @@ Result<nlohmann::json> RadiclePluginBackend::setField(const nlohmann::json& argu
         std::string status;
 
         if (edidField) {
-            const auto stored = support::encodeEditorId(value);
-            if (!stored) return std::unexpected(stored.error());
-            if (!fo4::set_record_editor_id(mutated, key, *stored)) {
+            if (!fo4::set_record_editor_id(mutated, key, value)) {
                 return std::unexpected(Error{
                     "RecordNotFound",
                     "Record is not present in " + pluginName + ": " + formKeyText

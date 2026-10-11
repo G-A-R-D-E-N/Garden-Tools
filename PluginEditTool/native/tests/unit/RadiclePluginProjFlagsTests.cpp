@@ -83,6 +83,32 @@ void savePlugin(fo4ide::plugin::RadiclePluginBackend& backend) {
 
 }
 
+TEST_CASE("Native PROJ create stores a UTF-8 EditorID as Windows-1252") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginWithLight());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    REQUIRE(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{{"editorId", "Caf\xC3\xA9"}}
+        })).has_value());
+    savePlugin(backend);
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000801:Patch.esp"));
+    REQUIRE(record != nullptr);
+    const auto* edid = findSub(*record, "EDID");
+    REQUIRE(edid != nullptr);
+    CHECK(edid->data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}});
+}
+
 TEST_CASE("Native PROJ Flags SetField writes its u16 and leaves the embedded Type bytes") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
