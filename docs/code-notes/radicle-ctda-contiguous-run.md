@@ -26,9 +26,9 @@ Records with several condition lists remain refused by whole-record writes: QUST
 
 The caller search across Radicle and PluginEditTool found the backend and native tests only. No C ABI source/header exposes this setter; its C++ result change does not change the C ABI or ABI version.
 
-## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition — reference needs Run On Reference
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition — stored reference for any Run On
 
-xEdit reads a condition's Reference field only when Run On is Reference (2) (`source:xEdit Core/wbDefinitionsCommon.pas:5495-5509 @93cc0bc5`), and `wbConditionRunOnAfterSet` zeroes it on any other Run On (`source:xEdit Core/wbDefinitionsCommon.pas:1310-1322 @93cc0bc5`). `buildCondition` therefore refuses a nonzero reference on any other run-on with `reference '<text>' requires runOn Reference`, before anything is staged. A zero reference is stored as 0. Covered by `PluginEditTool/native/tests/unit/ConditionCodecValidationTests.cpp` and the `ConditionBackendTests.cpp` fixture, which now uses Reference for its reference entry. The quest-path condition parser (`RadiclePluginQuest.cpp`) has its own reference handling and is not changed here.
+buildCondition stores the reference for any Run On, as xEdit round-trips it (`source:xEdit Core/wbDefinitionsCommon.pas:5495-5509 @93cc0bc5` picks the union branch by Run On, and `:1310-1322 @93cc0bc5` zeroes the reference only when Run On is edited in the UI); refusing or zeroing a reference that does not go with Run On is an owner decision.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:copyAsOverrideLocked — Initially Disabled is per signature
 

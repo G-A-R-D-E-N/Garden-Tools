@@ -67,8 +67,6 @@ std::optional<std::uint32_t> flagValue(std::string_view name) {
     return std::nullopt;
 }
 
-constexpr std::uint32_t kRunOnReference = 2;
-
 constexpr std::int64_t kParamMin = std::numeric_limits<std::int32_t>::min();
 constexpr std::int64_t kParamMax = std::numeric_limits<std::uint32_t>::max();
 
@@ -198,11 +196,6 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         if (!raw.has_value()) {
             failure = "reference '" + scalarText(element["reference"]) +
                       "' does not resolve to a form ID";
-            return std::nullopt;
-        }
-        if (raw->value() != 0 && condition.run_on != kRunOnReference) {
-            failure = "reference '" + scalarText(element["reference"]) +
-                      "' requires runOn Reference";
             return std::nullopt;
         }
         condition.reference = raw->value();

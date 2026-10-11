@@ -175,7 +175,7 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
             {"operator", "="},
             {"compareGlobal", "000800:CondEdit.esp"},
             {"param1", "000800:CondEdit.esp"},
-            {"runOn", "Reference"},
+            {"runOn", "Target"},
             {"reference", "000801:CondEdit.esp"},
             {"flags", "OR"},
         },
@@ -205,7 +205,7 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
     CHECK(conditions[1].at("operator") == "==");
     CHECK(conditions[1].at("compareGlobal") == "000800:CondEdit.esp");
     CHECK(conditions[1].at("param1") == "000800:CondEdit.esp");
-    CHECK(conditions[1].at("runOn") == "Reference");
+    CHECK(conditions[1].at("runOn") == "Target");
     CHECK(conditions[1].at("reference") == "000801:CondEdit.esp");
     CHECK(conditions[1].at("flags") == "OR");
 
