@@ -27,10 +27,6 @@ constexpr std::size_t k_ctda_reference = 24;
 constexpr std::size_t k_ctda_unknown3 = 28;
 constexpr std::size_t k_ctda_size = 32;
 
-// GetEventData layout: function+member (4), parameter3 (4), then the common
-// run-on/reference/unknown3 tail — 28 bytes total.
-constexpr std::size_t k_event_data_size = 28;
-
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value{0};
   std::memcpy(&value, data.data() + offset, sizeof(value));
@@ -91,42 +87,20 @@ CtdaCondition parse_ctda_condition(std::span<const std::byte> payload) {
   CtdaCondition condition;
   condition.flags_byte = std::to_integer<std::uint8_t>(payload[k_ctda_flags]);
   condition.function = read_u16(payload, k_ctda_function);
-  if (condition.is_event_data()) {
-    if (payload.size() < k_event_data_size) {
-      throw std::out_of_range("GetEventData CTDA payload too short");
-    }
-    condition.unknown2 = read_u16(payload, k_ctda_unknown2);
-    condition.param1 = read_i32(payload, k_ctda_param1);
-    condition.run_on = read_u32(payload, k_ctda_run_on - 4);
-    condition.reference = read_u32(payload, k_ctda_reference - 4);
-    condition.unknown3 = read_i32(payload, k_ctda_unknown3 - 4);
-  } else {
-    if (payload.size() < k_ctda_size) {
-      throw std::out_of_range("CTDA payload too short");
-    }
-    condition.comparison_raw = read_u32(payload, k_ctda_compare);
-    condition.unknown2 = read_u16(payload, k_ctda_unknown2);
-    condition.param1 = read_i32(payload, k_ctda_param1);
-    condition.param2 = read_i32(payload, k_ctda_param2);
-    condition.run_on = read_u32(payload, k_ctda_run_on);
-    condition.reference = read_u32(payload, k_ctda_reference);
-    condition.unknown3 = read_i32(payload, k_ctda_unknown3);
+  if (payload.size() < k_ctda_size) {
+    throw std::out_of_range("CTDA payload too short");
   }
+  condition.comparison_raw = read_u32(payload, k_ctda_compare);
+  condition.unknown2 = read_u16(payload, k_ctda_unknown2);
+  condition.param1 = read_i32(payload, k_ctda_param1);
+  condition.param2 = read_i32(payload, k_ctda_param2);
+  condition.run_on = read_u32(payload, k_ctda_run_on);
+  condition.reference = read_u32(payload, k_ctda_reference);
+  condition.unknown3 = read_i32(payload, k_ctda_unknown3);
   return condition;
 }
 
 std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) {
-  if (condition.is_event_data()) {
-    std::vector<std::byte> out(k_event_data_size);
-    out[k_ctda_flags] = std::byte{condition.flags_byte};
-    write_u16(out, k_ctda_function, condition.function);
-    write_u16(out, k_ctda_unknown2, condition.unknown2);
-    write_i32(out, k_ctda_param1, condition.param1);
-    write_u32(out, k_ctda_run_on - 4, condition.run_on);
-    write_u32(out, k_ctda_reference - 4, condition.reference);
-    write_i32(out, k_ctda_unknown3 - 4, condition.unknown3);
-    return out;
-  }
   std::vector<std::byte> out(k_ctda_size);
   out[k_ctda_flags] = std::byte{condition.flags_byte};
   write_u32(out, k_ctda_compare, condition.comparison_raw);

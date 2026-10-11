@@ -39,26 +39,6 @@ fo4::test::ByteWriter make_ctda(std::uint8_t flags_byte, std::uint32_t compariso
   return ctda;
 }
 
-// 28-byte GetEventData payload: flags, comparison, discriminator 4672,
-// member, parameter3, run-on, reference, unknown3.
-fo4::test::ByteWriter make_event_data(std::uint8_t flags_byte, std::uint16_t member,
-                                      std::uint32_t parameter3, std::uint32_t run_on,
-                                      std::uint32_t reference, std::int32_t unknown3) {
-  fo4::test::ByteWriter ctda;
-  ctda.u8(flags_byte);
-  ctda.u8(0);
-  ctda.u8(0);
-  ctda.u8(0);
-  ctda.u32(0);
-  ctda.u16(4672);
-  ctda.u16(member);
-  ctda.u32(parameter3);
-  ctda.u32(run_on);
-  ctda.u32(reference);
-  ctda.u32(static_cast<std::uint32_t>(unknown3));
-  return ctda;
-}
-
 // Mutable record lookup: find_record is const-only, so walk via visit_records.
 fo4::Record* find_record_mutable(fo4::Plugin& plugin, std::string_view key) {
   fo4::Record* found = nullptr;
@@ -127,18 +107,28 @@ TEST(CtdaModel, ParseSerializesFunctionConditionByteIdentically) {
 }
 
 TEST(CtdaModel, GetEventDataLayoutParsesAndSerializes) {
-  auto bytes = make_event_data(0, 0x314F, 0x02000812, 7, 0x01000800, -1).bytes;
+  auto bytes = make_ctda(0, 0x3F800000u, 576, 0x314F, 0x02000812, 0x55, 7, 0x01000800, -1).bytes;
   const auto condition = fo4::parse_ctda_condition(bytes);
 
   EXPECT_TRUE(condition.is_event_data());
-  EXPECT_EQ(condition.function, 4672);
-  EXPECT_EQ(condition.unknown2, 0x314F);  // EventMember.CreatedObject
+  EXPECT_EQ(condition.function, 576);
+  EXPECT_EQ(condition.comparison_raw, 0x3F800000u);
+  EXPECT_EQ(condition.unknown2, 0x314F);
+  EXPECT_EQ(condition.param2, 0x55);
   EXPECT_EQ(condition.param1, 0x02000812);
   EXPECT_EQ(condition.run_on, 7);
   EXPECT_EQ(condition.reference, 0x01000800);
   EXPECT_EQ(condition.unknown3, -1);
 
   EXPECT_EQ(fo4::serialize_ctda_condition(condition), bytes);
+}
+
+TEST(CtdaModel, FunctionFourThousandSixHundredSeventyTwoIsNotGetEventData) {
+  auto bytes = make_ctda(0, 0, 4672, 0, 0x314B0000, 0, 0, 0, -1).bytes;
+  const auto condition = fo4::parse_ctda_condition(bytes);
+
+  EXPECT_FALSE(condition.is_event_data());
+  EXPECT_EQ(condition.function, 4672);
 }
 
 TEST(CtdaModel, TruncatedPayloadThrows) {

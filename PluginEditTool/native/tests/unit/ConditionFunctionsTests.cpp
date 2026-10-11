@@ -209,9 +209,7 @@ TEST_CASE("condition functions: index<->name lookups match the Mutagen enum") {
     using namespace fo4ide::plugin;
 
     // Known spot checks from the enum: GetWantBlocking=0, GetDistance=1,
-    // GetAngle=8. 4672 is the binary EventFunctionIndex discriminator, not a
-    // Condition.Function member, so it has no name here (the CTDA codec maps
-    // it to the GetEventData type via is_event_data).
+    // GetAngle=8. 4672 is not a CTDA function index (GetEventData is 576), so it has no name.
     CHECK(functionName(0) == "GetWantBlocking");
     CHECK(functionName(1) == "GetDistance");
     CHECK(functionName(8) == "GetAngle");
