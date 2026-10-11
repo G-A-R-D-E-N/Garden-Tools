@@ -57,3 +57,30 @@ consumer and update its pin before the probe required by GARDEN-TOOLS #342 can
 run. Existing foliage HLOD support does not establish that grass-reader proof.
 The audit and ABI 12 integration are recorded in
 `docs/code-notes/radicle-vegetation.md` at the repository root.
+
+## GardenEngine consumer probe
+
+Copy `Radicle/probes/gardenengine/VegetationProbe.cs` and
+`Radicle/probes/gardenengine/vegetation_probe.tscn` into `opencw/tools/` of a
+GardenEngine checkout. Build `opencw/OpenCommonwealth.csproj` with
+`RadicleSourceDir` set to this Radicle checkout. Set `FO4_DATA_DIR` to the
+installed data folder and `RADICLE_NATIVE_PATH` to the built library of the
+matching ABI, then run `--headless --path opencw tools/vegetation_probe.tscn`.
+
+Exit codes: 0 means `vegetation_probe PASS` with a one-line JSON summary;
+77 means `vegetation_probe SKIP` because `FO4_DATA_DIR` is unset; 1 means
+`vegetation_probe FAIL` on stderr with the exception text.
+
+The probe loads only `Fallout4.esm` and asserts:
+- the first GRAS winner with DATA decodes through `RadicleEnvironment.Grass`;
+- the base-master TREE decodes through `Tree` with exactly twelve CNAM wind
+  values, matching the 48-byte CNAM inventory above;
+- the first FLOR winner with FNAM decodes through `Flora` with non-null flags;
+- the first LTEX winner with GNAM links decodes through `LandscapeGrasses`,
+  and every link is non-null, resolves through `Winner`, and is a GRAS.
+
+No vanilla EDIDs for these signatures are cited in this repository, so the probe
+walks `WinnersOf` and prints the EDIDs it finds in the PASS line instead of
+hard-coding names.
+
+Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (GardenEngine pins ABI 9 at 34d16d50).
