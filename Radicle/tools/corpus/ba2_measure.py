@@ -61,7 +61,11 @@ def main() -> int:
     args = ap.parse_args()
     if not args.data_dir:
         ap.error("pass a Data folder or set FO4_DATA_DIR")
-    archives = sorted(p for p in Path(args.data_dir).iterdir() if p.suffix.lower() == ".ba2")
+    try:
+        archives = sorted(p for p in Path(args.data_dir).iterdir() if p.suffix.lower() == ".ba2")
+    except OSError as e:
+        print(f"{args.data_dir}: {e.strerror or e}", file=sys.stderr)
+        return 1
     totals: Counter = Counter()
     failures = 0
     for path in archives:

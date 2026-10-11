@@ -197,6 +197,16 @@ TEST(Ba2Texture, ExtractLeavesAlreadyCompleteDdsPayloadAlone) {
   EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(entry), payload);
 }
 
+TEST(Ba2Texture, ExtractReturnsNonDdsPayloadUnchanged) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.bin";
+  entry.texture = {4, 4, 1, 71, 0, 8};
+  const auto payload = repeated(8, 0x5A);
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
+
+  EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(entry), payload);
+}
+
 TEST(Ba2Texture, FindIsCaseAndSeparatorInsensitive) {
   Ba2TextureArchive archive;
   Ba2TextureEntry entry;
