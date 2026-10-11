@@ -194,6 +194,32 @@ TEST(RaceCreation, EmptyDescriptionStillCreatesRequiredDescSubrecord) {
   EXPECT_EQ(desc->data[0], std::byte{0});
 }
 
+TEST(RaceCreation, InlineFullNameStoresWindows1252AndRefusesUnencodableText) {
+  auto plugin = fo4::read_plugin(empty_plugin(), "RacePatch.esp");
+  fo4::forms::RaceCreation creation;
+  creation.full_name = std::string_view{"Caf\xC3\xA9"};
+  creation.description = "";
+
+  const auto key = fo4::forms::create_race(plugin, creation);
+  const auto reread =
+      fo4::read_plugin(fo4::write_plugin(plugin), "RacePatch.esp");
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* full = find_subrecord(*record, "FULL");
+  ASSERT_NE(full, nullptr);
+  const std::vector<std::byte> expected{
+      std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}};
+  EXPECT_EQ(full->data, expected);
+
+  auto refused = fo4::read_plugin(empty_plugin(), "RacePatch.esp");
+  const auto original = fo4::test::original_bytes(refused);
+  creation.full_name = std::string_view{"Smile \xF0\x9F\x98\x80"};
+  EXPECT_THROW(
+      static_cast<void>(fo4::forms::create_race(refused, creation)),
+      fo4::FormIdError);
+  EXPECT_EQ(fo4::test::original_bytes(refused), original);
+}
+
 TEST(RaceCreation, InvalidNumericInputDoesNotConsumeFormId) {
   auto plugin = fo4::read_plugin(empty_plugin(), "RacePatch.esp");
   const auto original = fo4::test::original_bytes(plugin);

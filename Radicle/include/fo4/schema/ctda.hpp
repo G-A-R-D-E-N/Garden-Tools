@@ -3,6 +3,7 @@
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -32,16 +33,17 @@ inline constexpr std::uint8_t k_ctda_flag_use_global = 0x04;
 inline constexpr std::uint8_t k_ctda_flag_pack_data = 0x08;
 inline constexpr std::uint8_t k_ctda_flag_swap = 0x10;
 
-// A parsed CTDA condition. Offsets are relative to the subrecord payload
-// (after the 4-byte header): flags/operator byte @0, comparison value @4,
-// function @8 (u16), unknown2/member @10, param1/parameter3 @12, param2 @16,
-// run-on @20, reference @24, unknown3 @28. GetEventData conditions omit
-// param2 and end at 28; everything else ends at 32.
+// A parsed CTDA condition. Offsets are relative to the 32-byte subrecord
+// payload (after the 4-byte header): flags/operator byte @0, padding @1-3,
+// comparison value @4, function @8 (u16), unknown2/member @10,
+// param1/parameter3 @12, param2 @16, run-on @20, reference @24, unknown3 @28.
 struct CtdaCondition {
   // Raw flags byte: low 5 bits are Condition.Flag, high 3 bits the compare
   // operator (EqualTo=0, NotEqualTo=1, GreaterThan=2, GreaterThanOrEqualTo=3,
   // LessThan=4, LessThanOrEqualTo=5).
   std::uint8_t flags_byte{0};
+
+  std::array<std::byte, 3> padding{};
 
   // Comparison value: float bits for float conditions, a raw FormID for
   // UseGlobal conditions. Interpretation is the caller's (the JSON contract

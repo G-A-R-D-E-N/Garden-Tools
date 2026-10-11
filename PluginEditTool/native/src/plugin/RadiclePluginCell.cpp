@@ -1,4 +1,5 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
+
 #include <fo4ide/core/JsonInt.hpp>
 
 #include <algorithm>
@@ -21,6 +22,9 @@
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 constexpr auto k_cell = fo4::Signature::from_string("CELL");
@@ -116,7 +120,7 @@ std::optional<fo4::FormKey> resolveRecordKey(
     for (const auto& loaded : plugins) {
         fo4::visit_records(loaded.plugin, [&](const fo4::Record& record) {
             if (record.header.signature != requiredSignature) return;
-            if (lower(zstring(record, fo4::sig_edid)) == wanted) result = record.form_key;
+            if (lower(editorId(record)) == wanted) result = record.form_key;
         });
     }
     return result;
@@ -218,7 +222,7 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
             for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
                 const auto* baseRecord = fo4::find_record(it->plugin, *ref.base);
                 if (baseRecord == nullptr) continue;
-                baseEditorId = zstring(*baseRecord, fo4::sig_edid);
+                baseEditorId = editorId(*baseRecord);
                 baseType = friendlyBaseType(baseRecord->header.signature);
                 modelPath = zstring(*baseRecord, k_modl);
                 if (baseRecord->header.signature == k_scol) {
@@ -256,7 +260,7 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
     const auto cellName = winningCellLocalized ? std::string{} : zstring(*winningCell, k_full);
     return {
         {"cellFormKey", cellKey.to_string()},
-        {"cellEditorId", zstring(*winningCell, fo4::sig_edid)},
+        {"cellEditorId", editorId(*winningCell)},
         {"cellName", cellName},
         {"interior", cellInterior(*winningCell)},
         {"referenceCount", references.size()},
