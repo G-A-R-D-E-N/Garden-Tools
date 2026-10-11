@@ -215,6 +215,34 @@ TEST_CASE("Vegetation semantic grids list a flora with a wrong-size ingredient a
     fixture.checkNotPending();
 }
 
+TEST_CASE("Vegetation semantic grids list wrong-size flora and tree payloads as unavailable", "[vegetation-semantic]") {
+    auto entries = localFixture();
+    for (auto& record : entries) {
+        for (auto& [name, data] : record.subs) {
+            if (record.id == veg::k_flor && name == "PFPC") data = veg::Bytes{std::byte{1}, std::byte{2}, std::byte{3}};
+            if (record.id == veg::k_flor && name == "FNAM") data = veg::filled(1, 0);
+            if (record.id == veg::k_tree && name == "PFPC") data = veg::Bytes{std::byte{1}, std::byte{2}, std::byte{3}};
+            if (record.id == veg::k_tree && name == "CNAM") data = veg::filled(47, 0);
+        }
+    }
+    Fixture fixture{entries};
+    const auto flora = fixture.grid("FLOR");
+    CHECK(cell(flora, veg::k_flor, "FLOR\\Winter").at("value") == "<opaque>");
+    CHECK(cell(flora, veg::k_flor, "FLOR\\Winter").at("editable") == false);
+    CHECK(cell(flora, veg::k_flor, "FLOR\\Flags").at("value") == "<opaque>");
+    CHECK(cell(flora, veg::k_flor, "FLOR\\Ingredient").at("value") == veg::key(veg::k_misc).to_string());
+    CHECK(cell(flora, veg::k_flor, "FLOR\\HarvestSound").at("value") == veg::key(veg::k_sndr).to_string());
+    const auto tree = fixture.grid("TREE");
+    CHECK(cell(tree, veg::k_tree, "TREE\\Summer").at("value") == "<opaque>");
+    CHECK(cell(tree, veg::k_tree, "TREE\\TrunkFlexibility").at("value") == "<opaque>");
+    CHECK(cell(tree, veg::k_tree, "TREE\\TrunkFlexibility").at("editable") == false);
+    CHECK(cell(tree, veg::k_tree_bare, "TREE\\Summer").at("editable") == false);
+    CHECK_FALSE(fixture.edit(veg::k_flor, "FLOR\\Winter", "1").has_value());
+    CHECK_FALSE(fixture.edit(veg::k_flor, "FLOR\\Flags", "1").has_value());
+    CHECK_FALSE(fixture.edit(veg::k_tree, "TREE\\Summer", "1").has_value());
+    fixture.checkNotPending();
+}
+
 TEST_CASE("Vegetation structural permissions use native coupling and list removal", "[vegetation-semantic]") {
     Fixture fixture;
     CHECK(fixture.describe(veg::k_flor, "Authoring\\PFPC[0]").at("canRemove") == false);

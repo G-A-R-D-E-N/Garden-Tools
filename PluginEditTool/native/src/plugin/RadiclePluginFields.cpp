@@ -56,6 +56,13 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
             return std::unexpected(Error{"ScalarReadFailed", error.what()});
         }
         const auto& scalar = field.scalar;
+        if (scalar.payload_size != 0 && std::any_of(record.subrecords.begin(), record.subrecords.end(),
+                [&](const auto& subrecord) {
+                    return subrecord.signature == scalar.subrecord && subrecord.data.size() != scalar.payload_size;
+                })) {
+            cells.push_back(SemanticFieldCell{std::string(field.path), "<opaque>", false, false});
+            continue;
+        }
         const auto resolved = fo4::schema::resolve_field_slots(
             record, fo4::schema::scalar_field_shape(scalar), scalar.address);
         if (resolved.misaligned) {
