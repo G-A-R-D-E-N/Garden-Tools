@@ -9,7 +9,10 @@ CLMT in `Core/wbDefinitionsFO4.pas:6115–6126` uses the shared timing helper
 sunrise begin/end, sunset begin/end, volatility, and packed moons/phase length.
 The timing callback `Core/wbDefinitionsCommon.pas:wbClmtTime` displays ordinary time values in
 ten-minute steps. Radicle preserves all six encoded bytes and exposes the
-verified conversion below without clamping out-of-range clock values.
+verified conversion below without clamping out-of-range clock values. This differs from xEdit's
+display, which subtracts 143 while a value is above 143 (`Core/wbDefinitionsCommon.pas:3349-3359`,
+`wbClmtTime`, at `93cc0bc5`). The 2026-10-11 scan of the seven official masters found no CLMT TNAM
+with a sunrise or sunset byte above 143 (11 records), so the two agree on all official data.
 
 WTHR DATA is defined at FO4 lines 13057–13087. Lightning color is three bytes
 by `Core/wbDefinitionsCommon.pas:9612–9621`.
@@ -55,7 +58,7 @@ partial or unverified in sections 5–6. They are outside these stored timing
 conversions; no transition-duration calculation is added.
 
 `src/environment/base_records.cpp:decode_climate` and `decode_weather` expose
-these optional fields through the existing environment decoders. C ABI 12
+these optional fields through the existing environment decoders. C ABI 25
 extends `radicle_climate` and `radicle_weather_info`; generated C# bindings and
 the friendly `Climate.Timing` / `Weather.Parameters` properties follow those
 declarations after integrating main `c50ad4d5405e1571113019654b10e3d4a05ca0f1`
@@ -95,7 +98,7 @@ zero errors and 83 warnings. Godot
 and exited zero: Commonwealth timing converted to 5/9/17/21 hours, four days
 per phase, Secunda enabled and Masser disabled. The existing sky conversion
 still used the C ABI path. This remains conversion proof, not simulation.
-These dated probes have not been rerun against this ABI-12 head; current-head
+These dated probes have not been rerun against this ABI-25 head; current-head
 consumer acceptance is separate GardenEngine work.
 
 ## Editing
@@ -115,8 +118,8 @@ are also type-checked on write (local targets) and by the error check after save
 | CLMT records | n/a | n/a | n/a | n/a | `CreateRecord("CLMT")`: EDID + TNAM | n/a |
 | WTHR LNAM, NAM1, VNAM, WNAM | `forms::Weather` raw | `MaxCloudLayers`, `DisabledCloudLayers`, `VolatilityMult`, `VisibilityMult` (4-byte payloads) | VNAM, WNAM refused (version-gated, coupled) | LNAM, NAM1 refused (required); VNAM, WNAM refused | refused | none |
 | WTHR RNAM, QNAM cloud speeds | `Weather::cloud_speed_y/x` (stored u8) | `CloudSpeedY`, `CloudSpeedX` index 0..31 (32-byte payload) | required | refused | refused | none |
-| WTHR PNAM, JNAM cloud colours and alphas | `Weather::cloud_colors`, `cloud_alphas` | `CloudColor<Time><RGB>`, `CloudAlpha<Time>` by layer, 1024-byte payloads only | required | refused | refused | none |
-| WTHR NAM0 weather colours | `decode_weather` colours, `Weather.Color` | `WeatherColor<Time><RGB>` by colour group, 608-byte payload only | required | refused | refused | none |
+| WTHR PNAM, JNAM cloud colors and alphas | `Weather::cloud_colors`, `cloud_alphas` | `CloudColor<Time><RGB>`, `CloudAlpha<Time>` by layer, 1024-byte payloads only | required | refused | refused | none |
+| WTHR NAM0 weather colors | `decode_weather` colors, `Weather.Color` | `WeatherColor<Time><RGB>` by color group, 608-byte payload only | required | refused | refused | none |
 | WTHR NAM4 | raw | `UnknownNAM4` index 0..31 (128 bytes) | refused (coupled) | refused (coupled) | refused | none |
 | WTHR FNAM fog | `fog_distances` | 18 `Fog*` floats, prefix semantics (32/56/72) | required | refused | refused | none |
 | WTHR DATA parameters | `Weather.Parameters` | 18 u8 fields, `WindTurbulence` only on 20-byte DATA | required | refused | refused | none |
@@ -124,14 +127,14 @@ are also type-checked on write (local targets) and by the error check after save
 | WTHR SNAM sounds | `Weather::snam` | `Sound` (SNDR or SOUN, nullable), `SoundType` (0..3) by occurrence | yes, zeroed (NULL, Default) | yes | refused | yes |
 | WTHR TNAM sky statics | `Weather::tnam` (NULL allowed) | `SkyStatic` (STAT, nullable) by occurrence | yes, NULL | yes | refused | yes |
 | WTHR IMSP, WGDR | `Weather::imsp`, `wgdr` | `ImageSpace` (IMGS), `GodRays` (GDRY) by time of day, nullable; 16-byte IMSP has 4 elements | IMSP required; WGDR refused (coupled) | refused | refused | yes |
-| WTHR DALC ambient colours | `Weather::dalc` (24/28/32 bytes) | 22 `Ambient*` fields by occurrence; specular/fresnel only when stored | refused (count 4 or 8 by version) | refused | refused | none |
+| WTHR DALC ambient colors | `Weather::dalc` (24/28/32 bytes) | 22 `Ambient*` fields by occurrence; specular/fresnel only when stored | refused (count 4 or 8 by version) | refused | refused | none |
 | WTHR UNAM magic | `Weather::unam` | `LightningSpell`, `ActivateSpell` (SPEL, nullable), `LightningThreshold`; `ActivateThreshold` on 24-byte UNAM only | refused (coupled) | refused (coupled) | refused | yes |
 | WTHR cloud textures 00TX .. O0TX | `Weather::cloud_textures` | `CloudTexture0` .. `CloudTexture31` | yes, empty string | yes | refused | none |
 | WTHR aurora model MODL | `Weather::modl` | `AuroraModel` | refused (coupled) | refused (coupled) | refused | none |
 | WTHR records | n/a | n/a | n/a | n/a | refused (`no_default`; DALC count and version-sized tables) | n/a |
 
 Stays opaque: PNAM/JNAM at 512 bytes, PNAM at 64 bytes and NAM0 at 272 or 544 bytes (readable, not field-writable),
-DATA bytes 1-2, UNAM bytes 16-23, colour pad bytes, MODT/MODC/MODS/MODF, insertion or removal of single
+DATA bytes 1-2, UNAM bytes 16-23, color pad bytes, MODT/MODC/MODS/MODF, insertion or removal of single
 WLST entries, and DALC count changes. All official CLMT and WTHR records are listed and ordered in the
 authoring schema (0 violators). Field list, size rules, defaults provenance and refusal reasons are in
 `docs/code-notes/radicle-climate-writer.md`.

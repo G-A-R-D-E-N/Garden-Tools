@@ -22,7 +22,7 @@ execution remain raw; no transition simulation or assumed GMST override is added
 TNAM and `decode_weather` decodes the measured 19/20-byte WTHR DATA variants.
 `docs/CLIMATE_WEATHER.md` pins the field-layout evidence and explicitly limits
 interpretation to stored bytes. `src/c_api_base_records.cpp:radicle_climate_decode`
-and `radicle_weather_decode` expose them in ABI 12; managed properties preserve
+and `radicle_weather_decode` expose them in ABI 24; managed properties preserve
 the raw encoding. `include/fo4/forms/weather.hpp:Weather` provides a stable
 include name while `weather_concept.hpp` keeps existing consumers building.
 
@@ -58,7 +58,8 @@ adding a physical scroll-rate conversion. The editor callback at lines
 `tests/test_weather_concept.cpp:CloudSpeedsPreserveUnsignedStoredBytes`
 covers 0, 127, 128, 254 and 255 on both axes. These fields have no C ABI or
 managed exposure; the climate/weather C containers' separately added fields
-remain governed by ABI 12.
+remain governed by ABI 24.
+
 ## tests/test_ba2_versions_real.cpp:Ba2NamedRealData
 
 Six installed archive fixtures cover GNRL and DX10 at versions 1, 7 and 8.
