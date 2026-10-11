@@ -337,15 +337,15 @@ Historical local final validation for those tranches (registered CTest checks in
 
 | PR | Registered checks, zero failures | Official passes / skips | Managed passes | Proof in the single task worktree |
 |---|---:|---:|---:|---|
-| #406 | 884 | 872 / 12 | 81 | `build/evidence/dialogue-full-review-fixes.log`, `dialogue-official-review-fixes.log`, `dialogue-push-guard.log` |
-| #408 | 874 | 863 / 11 | 86 | `build/evidence/packages-final-full.log`, `packages-final-official-full.log`, `packages-push-guard.log` |
-| #402 | 865 | 854 / 11 | 81 | `build/evidence/navmesh-final-full.log`, `navmesh-final-official-full.log`, `navmesh-push-guard.log` |
-| #409 | 857 | 846 / 11 | 80 | `build/evidence/vmad-final-full.log`, `vmad-official-full.log`, `vmad-push-guard.log` |
-| #432 | 843 | 832 / 11 | 75 | `build/evidence/w0-port-full.log`, `w0-port-official-full.log`, `w0-port-push-guard.log` |
+| #406 | 884 | 872 / 12 | 81 | local run; not committed |
+| #408 | 874 | 863 / 11 | 86 | local run; not committed |
+| #402 | 865 | 854 / 11 | 81 | local run; not committed |
+| #409 | 857 | 846 / 11 | 80 | local run; not committed |
+| #432 | 843 | 832 / 11 | 75 | local run; not committed |
 
 Official data was read-only through `FO4_DATA_DIR`. The tranche tests inspect official order/grammar and cap mutation work, then save/reparse and compare all untouched body records. The last four full MSVC warning-as-error builds and full suites passed at the historical heads above; independent read-only reviews were completed and findings applied. The registered check count is not a runtime-acceptance count. Local corpus proof and runner CI are separate evidence. Existing optional third-party/archive/compiler corpora remain skipped where unavailable.
 
-`build/evidence/native-backend-progress.json` retains the historical branch heads, validation, relative proof paths and integration decision. Evidence logs are local ignored artifacts from the original task checkout. CI links and committed regression tests provide the remote reproducible checks; current PR descriptions report subsequent validation.
+(local run; not committed) retains the historical branch heads, validation, relative proof paths and integration decision. Evidence logs are local ignored artifacts from the original task checkout. CI links and committed regression tests provide the remote reproducible checks; current PR descriptions report subsequent validation.
 
 Before any future approved integration, renumber provisional ABIs in dependency merge order against then-current main, regenerate bindings/probes, resolve schema unions and placement-enum extensions, then rerun exact-head CI. No merge is authorized by this delivery. The VMAD variable-layout follow-up still relies on the existing verified private evidence recorded on #409 in `Radicle/docs/VMAD_VARIABLE_EVIDENCE.md`; no nonempty variable or runtime-binding behavior is inferred.
 
