@@ -2,11 +2,19 @@
 
 ## PluginEditTool/native/src/plugin/ConditionCodec.cpp:describeCondition / buildCondition
 
-The existing display JSON omits opaque native bytes, unknown scalar slots and CIS strings. Rebuilding that JSON therefore changes even an unchanged condition. A synthetic probe at b6f3e918 reproduces the loss through whole-record and scoped Get/Set/Save operations and compares saved raw CTDA payloads. Each displayed row needs validated native preservation data; rebuild from that seed and apply only supported changed fields. Metadata stays on the row so the existing editor's spread, reorder and stringify operations keep it attached. Preserve unknown codes and comparison bits when unchanged, and refuse unsupported edits rather than guessing their meaning.
+The existing display JSON omits the native padding bytes, unknown scalar slots and CIS strings. Rebuilding that JSON therefore changes even an unchanged condition. A synthetic probe at b6f3e918 reproduces the loss through whole-record and scoped Get/Set/Save operations and compares saved raw CTDA payloads. Each displayed row needs validated native preservation data; rebuild from that seed and apply only supported changed fields. Metadata stays on the row so the existing editor's spread, reorder and stringify operations keep it attached. Preserve unknown codes and comparison bits when unchanged, and refuse unsupported edits rather than guessing their meaning.
 
 ## Radicle/src/schema/ctda.cpp:read_ctda_conditions_in
 
-Editable reads must compare the source CTDA/CIS run with the existing serializer before returning values. Oversized payloads and strings the native model would normalize cannot enter an editable round-trip. The same shared boundary serves whole-record and scoped reads; additional ownership rules and new event layouts are outside this change.
+Editable reads must compare the source CTDA/CIS run with the existing serializer before returning values. Payloads that are not the fixed 32-byte CTDA struct (source:xEdit Core/wbDefinitionsFO4.pas:5186-5219 @93cc0bc5) and strings the native model would normalize cannot enter an editable round-trip. GetEventData (source:xEdit Core/wbDefinitionsFO4.pas:554 @93cc0bc5) has no shorter layout; its unchanged rows preserve the 32 bytes and edits are refused. The same shared boundary serves whole-record and scoped reads; additional ownership rules are outside this change.
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition
+
+Integer parameters (`param1`, `param2`, JSON integers or integer text) accept -2147483648 through 4294967295. Values in that range are stored as their uint32 bit pattern in the int32 field, so 3000000000 is stored as -1294967296. Values outside it are refused with `<key> <value> is outside [-2147483648, 4294967295]`. Form-ID text still resolves through the existing path when it is not an integer.
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:formIdString / placeholderFormId
+
+A raw that does not resolve in the plugin's master context is written as eight uppercase hex digits and a colon with the full raw value, master byte included (`0A000801:`, `00000000:` for zero). This replaces the earlier six-digit fallback, which dropped the master byte and could not be parsed back to the same raw. `placeholderFormId` accepts exactly that nine-character form, and `resolveConditionFormId` checks it before FormKey parsing and editor-ID resolution. Describe then build round-trips the raw bits, and a zero `compareGlobal` is accepted as raw zero.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginConditions.cpp:setConditions / PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:setConditionsAtPath
 
@@ -18,4 +26,4 @@ An invalid row refuses the whole replacement before staging. Skipping a refused 
 
 ## PluginEditTool/native/tests/unit/ConditionPreservationBackendTests.cpp / PluginEditTool/native/tests/unit/ConditionCodecTests.cpp
 
-Synthetic regressions compare saved raw CTDA and CIS payloads through both routes, supported scalar edits and reordering, and no pending edit on malformed or forged preservation data and unsupported rows. They also cover browser zero normalization and explicit positive-zero editing. Native read guards compare raw runs to serializer output and refuse payloads that cannot round-trip. These proofs establish byte preservation, not runtime interpretation of opaque fields.
+Synthetic regressions compare saved raw CTDA and CIS payloads through both routes, supported scalar edits and reordering, and no pending edit on malformed or forged preservation data and unsupported rows. They also cover browser zero normalization and explicit positive-zero editing. Native read guards compare raw runs to serializer output and refuse payloads that cannot round-trip. `ConditionCodecTests.cpp` also covers the 32-bit integer range edges and describe-then-build round trips of unresolved form IDs and zero `compareGlobal`. These proofs establish byte preservation, not runtime interpretation of padding fields.
