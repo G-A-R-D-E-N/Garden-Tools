@@ -47,13 +47,13 @@ Optional:
 | `PNAM` / `JNAM` | 512 or 1024 | 32 layers x 4 or 8 time-of-day entries x 4 bytes |
 | `NAM0` | 272 / 544 / 608 | `colorData` width variants; 608 = 19x8x4 matches `colorData[19][8]` |
 | `FNAM` | 32 / 56 / 72 | 72 = 18x4 matches `fogData[18]` |
-| `DATA` | 19 / 20 | 20 matches `weatherData[20]`; 19 is legacy without final byte |
+| `DATA` | 19 (form version below 119) / 20 (from 119) | 20 matches `weatherData[20]`; 19 is legacy without final byte |
 | `NAM1` | 4 | `cloudLayerDisabledBits` |
-| `DALC` | 24, 28 or 32 bytes x 4 or 8 | one `BGSDirectionalAmbientLightingColors` per time slot |
-| `IMSP` | 16 or 32 | 4 or 8 ImageSpace FormIDs |
+| `DALC` | 24, 28 or 32 bytes x 4 (form version below 111) or 8 (from 111) | one `BGSDirectionalAmbientLightingColors` per time slot |
+| `IMSP` | 16 (form version below 111) / 32 (from 111) | 4 or 8 ImageSpace form IDs |
 | `WGDR` | 32 | 8 GodRays FormIDs |
 | `SNAM` | 8 | `{FormID, SoundType u32}` |
-| `UNAM` | 12 or 24 | two spell slots; short form omits trailing threshold/unknown |
+| `UNAM` | 12 (form version below 130) / 24 (from 130) | two spell slots; short form omits trailing threshold/unknown |
 
 Unsupported / divergent sizes must fail closed or stay opaque.
 
