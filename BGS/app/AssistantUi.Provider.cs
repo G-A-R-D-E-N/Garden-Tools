@@ -299,7 +299,7 @@ internal sealed partial class AssistantUi
                 if (OpenUrl(challenge.AuthUrl))
                     _pane.SetStatus("Waiting for browser sign-in to finish...", Ux.MetaBrush);
                 else
-                    _pane.SetStatus("The sign-in URL is not an http/https address, so the browser was not opened.", Ux.WarnBrush);
+                    _pane.SetStatus("Could not open the sign-in page: the URL is not an http/https address or the browser failed to start.", Ux.WarnBrush);
             }
             else
             {
@@ -345,7 +345,7 @@ internal sealed partial class AssistantUi
             if (OpenUrl(challenge.VerificationUrl))
                 _pane.SetStatus("Waiting for device-code sign-in to finish...", Ux.MetaBrush);
             else
-                _pane.SetStatus("The sign-in URL is not an http/https address, so the browser was not opened.", Ux.WarnBrush);
+                _pane.SetStatus("Could not open the sign-in page: the URL is not an http/https address or the browser failed to start.", Ux.WarnBrush);
         }
         catch (CodexProtocolException exception)
         {
