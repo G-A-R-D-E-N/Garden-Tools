@@ -16,7 +16,7 @@ xEdit definitions, official plugin measurements, existing typed implementations,
 
 Historical inventory baseline: main `cca4b080309053cff127b7202d388df00060388a`, inspected 2026-10-05. The record and named-field matrices below retain that snapshot; they are not a fresh inventory of current main. PR #424 now includes main `c50ad4d5405e1571113019654b10e3d4a05ca0f1` (ABI 11) through a merge without rewriting history. Current validation belongs to the exact documentation head reported on the PR, separately from the historical branch ledgers below.
 
-Definition inventory from the documentation in [TES5Edit 93cc0bc5a1251936c3c7859eee3150eda12a62d7, Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas). SHA-256: `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`.
+Definition inventory from the documentation in [TES5Edit 93cc0bc5a1251936c3c7859eee3150eda12a62d7, Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas). SHA-256 of the file with LF line endings: `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`.
 
 Extraction excludes Pascal line/block comments while retaining string literals, then collects literal signatures passed to wbRecord, wbRefRecord and ReferenceRecord. It finds 147 unique active registration sites. It does not expand shared field helpers or evaluate conditional compilation. The older 140-signature checkpoint omitted CAMS, EYES, LVLI, PROJ, REVB, SCOL and SMBN.
 
