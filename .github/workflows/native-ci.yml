@@ -230,6 +230,13 @@ jobs:
         if: always()
         run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
+      - name: Write artifact metadata
+        if: always()
+        run: |
+          printf 'commit=%s\nref=%s\nrun_id=%s\ntarget=%s\n' \
+            "${{ github.sha }}" "${{ github.ref }}" "${{ github.run_id }}" x86_64-pc-windows-msvc \
+            > build/radicle-win/build-info.txt
+
       - name: Upload Windows binaries
         if: always()
         continue-on-error: true
@@ -240,6 +247,7 @@ jobs:
             build/radicle-win/**/*.exe
             build/radicle-win/**/*.dll
             build/radicle-win/**/*.lib
+            build/radicle-win/build-info.txt
           if-no-files-found: warn
           retention-days: 7
 
@@ -516,6 +524,14 @@ jobs:
           if "%FO4_DATA_DIR%"=="" set FO4_DATA_DIR=
           ctest --test-dir build\native --output-on-failure --parallel 4
 
+      - name: Write artifact metadata
+        if: always()
+        run: |
+          echo commit=${{ github.sha }}> build\native\build-info.txt
+          echo ref=${{ github.ref }}>> build\native\build-info.txt
+          echo run_id=${{ github.run_id }}>> build\native\build-info.txt
+          echo target=x86_64-pc-windows-msvc>> build\native\build-info.txt
+
       - name: Upload Radicle Release test executable
         if: always()
         continue-on-error: true
@@ -525,6 +541,7 @@ jobs:
           path: |
             build/native/**/fo4_tests.exe
             build/native/**/radicle.dll
+            build/native/build-info.txt
           if-no-files-found: warn
           retention-days: 7
 
