@@ -185,6 +185,24 @@ TEST(ClimateWeatherAuthoring, PartialOptionalSpecularColorsStayAbsentAndUnchange
   }
 }
 
+TEST(ClimateWeatherAuthoring, WeatherSubrecordsBelowTheirXEditSizeRefuseScalarWrites) {
+  auto entries = fixture();
+  for (auto& [name, data] : entries[2].subs) {
+    if (name == "DATA") { data = filled(18, 0); }
+    if (name == "FNAM") { data = filled(31, 0); }
+  }
+  auto plugin = read(build(entries, true));
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(scalar(plugin, k_wthr, "WTHR\\WindSpeed", 0, "5"), k_missing);
+  EXPECT_EQ(scalar(plugin, k_wthr, "WTHR\\FogDayNear", 0, "1"), k_missing);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(scalar(plugin, k_wthr_old, "WTHR\\WindSpeed", 0, "5"), k_updated);
+
+  auto sized = read(build(fixture(), true));
+  EXPECT_EQ(scalar(sized, k_wthr, "WTHR\\WindSpeed", 0, "5"), k_updated);
+  EXPECT_EQ(scalar(sized, k_wthr, "WTHR\\FogDayNear", 0, "1"), k_updated);
+}
+
 TEST(ClimateWeatherAuthoring, LinksCheckTargetsNullabilityStrideAndOccurrence) {
   auto plugin = read(build(fixture(), true));
   EXPECT_EQ(link(plugin, k_clmt, "CLMT\\Weather", 1, key(k_wthr)), k_link_updated);
@@ -393,9 +411,12 @@ TEST(ClimateWeatherReader, NullSkyStaticsAndShortAmbientColorsDecode) {
   EXPECT_EQ(modern.tnam[1], std::nullopt);
   const auto old = fo4::forms::decode_weather(plugin, key(k_wthr_old));
   ASSERT_EQ(old.dalc.size(), 4u);
-  EXPECT_EQ(old.dalc[0].size(), 24u);
-  EXPECT_EQ(old.dalc[1].size(), 28u);
-  EXPECT_EQ(old.dalc[2].size(), 32u);
+  EXPECT_FALSE(old.dalc[0].specular.has_value());
+  EXPECT_FALSE(old.dalc[0].fresnel.has_value());
+  EXPECT_TRUE(old.dalc[1].specular.has_value());
+  EXPECT_FALSE(old.dalc[1].fresnel.has_value());
+  EXPECT_TRUE(old.dalc[2].specular.has_value());
+  EXPECT_TRUE(old.dalc[2].fresnel.has_value());
 
   for (const std::size_t size : {20u, 30u, 36u}) {
     auto entries = fixture();

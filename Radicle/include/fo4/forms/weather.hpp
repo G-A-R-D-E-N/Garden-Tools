@@ -36,6 +36,12 @@ struct WeatherUnamSlot {
   float threshold{0.0f};
 };
 
+struct WeatherAmbientColors {
+  std::array<std::uint32_t, 6> directional{};
+  std::optional<std::uint32_t> specular;
+  std::optional<float> fresnel;
+};
+
 struct Weather {
   FormKey key{};
   RecordFlags record_flags{};
@@ -66,7 +72,7 @@ struct Weather {
   std::uint8_t imsp_count{0};
   std::array<std::optional<FormKey>, k_weather_god_ray_slots> wgdr{};
   bool has_wgdr{false};
-  std::vector<std::vector<std::byte>> dalc;
+  std::vector<WeatherAmbientColors> dalc;
   std::optional<std::string> modl;
   std::vector<std::byte> modt;
   std::array<WeatherUnamSlot, 2> unam{};
