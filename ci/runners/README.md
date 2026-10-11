@@ -38,7 +38,7 @@ junction, no HTTP(S) proxy. Linux runners keep a per-runner `workdir_parent` und
 |---|---|
 | ccache hit 0.5-0.9%: workflow-level `CCACHE_BASEDIR: ${{ github.workspace }}` is empty on host-mode runners, so every per-job directory hashed differently | PR 413: each ccache step writes `CCACHE_BASEDIR=$PWD`. Hits went to 93-98%, Linux job ~25 min to ~4-8 min. |
 | clang-cl/xwin cross lanes compiled without a cache | PR 414 |
-| Up to seven builds at once, each one compile per core, on 12 threads | PR 415 + runner env: `CMAKE_BUILD_PARALLEL_LEVEL=4`; Windows Debug pass on main only |
+| Up to seven builds at once, each one compile per core, on 12 threads | PR 415 + runner env: `CMAKE_BUILD_PARALLEL_LEVEL=4`; Windows Debug pass on main pushes and manual runs |
 | 63 graph tests failed after PR 413: fixtures located via `__FILE__`, which ccache's base_dir made build-relative | PR 417: `FO4IDE_TEST_FIXTURES_DIR` from CMake. (PR 416, reverting parallel ctest, was a wrong diagnosis.) |
 | Merges cancelled main's previous run; four jobs without time limits; serial ctest; MSVC Debug `/Zi` uncacheable; BGS downloaded .NET every job | PR 418: per-commit main concurrency groups, timeouts, `ctest --parallel 4`, `/Z7`, .NET in the runner tool cache |
 | Main's MSVC job could only use one runner slot | runner: `self-hosted` label on `GARDEN-MSVC-Windows` |

@@ -8,7 +8,7 @@ try {
             Get-ChildItem -Directory -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -match '^[0-9a-f]{62}$' } |
             Get-ChildItem -Recurse -Force -File -Filter *.lock -ErrorAction SilentlyContinue |
-            Where-Object { $_.LastWriteTime -lt $cutoff } |
+            Where-Object { $_.FullName -like '*\.git\*' -and $_.LastWriteTime -lt $cutoff } |
             Remove-Item -Force -ErrorAction SilentlyContinue
     }
 } catch { }

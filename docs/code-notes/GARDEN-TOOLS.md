@@ -1558,7 +1558,7 @@ Path length: the longest tracked path under `PluginEditTool` is 145 characters, 
 
 On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the `plugin-editor-ci.yml` Windows steps set TEMP and TMP to `runner.temp`; the `native-windows-tests` job in `native-ci.yml` does not set them.
 
-The checkout step uses the full URL `https://code.forgejo.org/actions/checkout@v7` (the same v7 commit, 3d3c42e5, as the `actions/checkout@v7` that resolves to data.forgejo.org). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
+The checkout step uses `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7` (`.github/workflows/native-ci.yml`). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
 
 ## GT-089 plugin selection resets panel state
 
@@ -1760,7 +1760,7 @@ The test is tagged `[large]`. `tests/integration/CMakeLists.txt:catch_discover_t
 
 ## ci/runners/clear-stale-git-locks.ps1:try block — stale action-cache lock cleanup
 
-Removes git lock files left in the shared action cache when a fetch was killed, for example when the runner restarted mid-download. A leftover `shallow.lock` makes every job that uses that action fail during "workflow prepared" with "Unable to create ...shallow.lock: File exists". Called from each Windows `start-runner.ps1` and every 5 minutes by the `ForgejoRunner-clear-stale-git-locks` scheduled task. Searches the cache roots `C:\ci\act` and `C:\ci\home\.cache\act` (runner host paths, examples); repos live at `<root>\<2 hex>\<62 hex>` of a sha256.
+Removes git lock files under a `.git` directory (path match `*\.git\*`; other `*.lock` files such as `yarn.lock` are left alone) from the shared action cache when a fetch was killed, for example when the runner restarted mid-download. A leftover `shallow.lock` makes every job that uses that action fail during "workflow prepared" with "Unable to create ...shallow.lock: File exists". Called from each Windows `start-runner.ps1` and every 5 minutes by the `ForgejoRunner-clear-stale-git-locks` scheduled task. Searches the cache roots `C:\ci\act` and `C:\ci\home\.cache\act` (runner host paths, examples); repos live at `<root>\<2 hex>\<62 hex>` of a sha256.
 
 ## ci/runners/clear-stale-git-locks.ps1:$cutoff — five-minute age gate
 
