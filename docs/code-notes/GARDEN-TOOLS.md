@@ -1558,7 +1558,7 @@ Path length: the longest tracked path under `PluginEditTool` is 145 characters, 
 
 On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the `plugin-editor-ci.yml` Windows steps set TEMP and TMP to `runner.temp`; the `native-windows-tests` job in `native-ci.yml` does not set them.
 
-The checkout step uses `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7` (`.github/workflows/native-ci.yml`). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
+plugin-editor-ci checks out with the full URL `https://code.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7` (`.github/workflows/plugin-editor-ci.yml`), while native-ci uses `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7` (`.github/workflows/native-ci.yml`). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
 
 ## GT-089 plugin selection resets panel state
 
