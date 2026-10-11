@@ -269,7 +269,8 @@ TEST(CtdaModel, SetRecordConditionsRoundTripsThroughWriter) {
 
 namespace {
 
-fo4::Plugin make_plugin_with_layout(const std::vector<std::string_view>& layout) {
+fo4::Plugin make_plugin_with_layout(const std::vector<std::string_view>& layout,
+                                    std::string_view record_type = "WEAP") {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
@@ -278,8 +279,8 @@ fo4::Plugin make_plugin_with_layout(const std::vector<std::string_view>& layout)
   hedr.u32(0x800);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
-  const auto group = fo4::test::begin_group(out, "WEAP", 0);
-  const auto record = fo4::test::begin_record(out, "WEAP", 0, 0x00000800);
+  const auto group = fo4::test::begin_group(out, record_type, 0);
+  const auto record = fo4::test::begin_record(out, record_type, 0, 0x00000800);
   std::uint16_t function = 1;
   for (const auto sig : layout) {
     if (sig == "CTDA") {
@@ -446,6 +447,87 @@ TEST(CtdaModel, WriteIgnoresLeadingCisBeforeFirstCtda) {
   const std::vector<std::string> expected{"EDID", "CIS1", "CTDA"};
   EXPECT_EQ(signatures_of(*record), expected);
   EXPECT_EQ(fo4::read_ctda_conditions(*record)[0].function, 99);
+}
+
+TEST(CtdaModel, InsertSetsCountOnExistingRequiredCitc) {
+  auto plugin = make_plugin_with_layout({"EDID", "CITC", "DNAM"}, "SMBN");
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  std::memset(record->subrecords[1].data.data(), 0, 4);
+  const auto condition = replacement_condition();
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*record, 0, record->subrecords.size(),
+                                          std::span<const fo4::CtdaCondition>{&condition, 1},
+                                          std::size_t{2}),
+            fo4::CtdaScopeWrite::inserted);
+  const std::vector<std::string> expected{"EDID", "CITC", "CTDA", "DNAM"};
+  EXPECT_EQ(signatures_of(*record), expected);
+  std::uint32_t count = 0;
+  std::memcpy(&count, record->subrecords[1].data.data(), 4);
+  EXPECT_EQ(count, 1u);
+}
+
+TEST(CtdaModel, InsertAddsCitcToRequiredTypeWithoutOne) {
+  auto plugin = make_plugin_with_layout({"EDID", "SNAM", "DNAM"}, "SMQN");
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto condition = replacement_condition();
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*record, 0, record->subrecords.size(),
+                                          std::span<const fo4::CtdaCondition>{&condition, 1},
+                                          std::size_t{2}),
+            fo4::CtdaScopeWrite::inserted);
+  const std::vector<std::string> expected{"EDID", "SNAM", "CITC", "CTDA", "DNAM"};
+  EXPECT_EQ(signatures_of(*record), expected);
+  std::uint32_t count = 0;
+  std::memcpy(&count, record->subrecords[2].data.data(), 4);
+  EXPECT_EQ(count, 1u);
+}
+
+TEST(CtdaModel, InsertAddsCitcToOptionalTypeWithoutOne) {
+  auto plugin = make_plugin_with_layout({"EDID", "FNAM", "NVNM"}, "ACTI");
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  const auto condition = replacement_condition();
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*record, 0, record->subrecords.size(),
+                                          std::span<const fo4::CtdaCondition>{&condition, 1},
+                                          std::size_t{2}),
+            fo4::CtdaScopeWrite::inserted);
+  const std::vector<std::string> expected{"EDID", "FNAM", "CITC", "CTDA", "NVNM"};
+  EXPECT_EQ(signatures_of(*record), expected);
+}
+
+TEST(CtdaModel, InsertAddsCitcOnlyToOwnedNestedList) {
+  auto branch = make_plugin_with_layout({"EDID", "ANAM", "PRCB"}, "PACK");
+  auto* branch_record = find_record_mutable(branch, "000800:Cond.esp");
+  ASSERT_NE(branch_record, nullptr);
+  const auto condition = replacement_condition();
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*branch_record, 0, branch_record->subrecords.size(),
+                                          std::span<const fo4::CtdaCondition>{&condition, 1},
+                                          std::size_t{2}),
+            fo4::CtdaScopeWrite::inserted);
+  const std::vector<std::string> branch_expected{"EDID", "ANAM", "CITC", "CTDA", "PRCB"};
+  EXPECT_EQ(signatures_of(*branch_record), branch_expected);
+
+  auto record_level = make_plugin_with_layout({"EDID", "PSDT", "NAM0"}, "PACK");
+  auto* package = find_record_mutable(record_level, "000800:Cond.esp");
+  ASSERT_NE(package, nullptr);
+  EXPECT_EQ(fo4::write_ctda_conditions_in(*package, 0, package->subrecords.size(),
+                                          std::span<const fo4::CtdaCondition>{&condition, 1},
+                                          std::size_t{2}),
+            fo4::CtdaScopeWrite::inserted);
+  const std::vector<std::string> package_expected{"EDID", "PSDT", "CTDA", "NAM0"};
+  EXPECT_EQ(signatures_of(*package), package_expected);
+}
+
+TEST(CtdaModel, RemovingAllConditionsKeepsCitcAtZero) {
+  auto plugin = make_plugin_with_layout({"EDID", "CITC", "CTDA", "CTDA", "NAM0"});
+  auto* record = find_record_mutable(plugin, "000800:Cond.esp");
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(fo4::write_ctda_conditions(*record, {}));
+  const std::vector<std::string> expected{"EDID", "CITC", "NAM0"};
+  EXPECT_EQ(signatures_of(*record), expected);
+  std::uint32_t count = 1;
+  std::memcpy(&count, record->subrecords[1].data.data(), 4);
+  EXPECT_EQ(count, 0u);
 }
 
 TEST(CtdaModel, WriteRefusesTwoCitcLists) {
