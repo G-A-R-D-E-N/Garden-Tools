@@ -334,3 +334,21 @@ TEST_CASE("Invalid ARMA creation is transactional through PluginEditTool") {
     CHECK(created.error().type == "ArmorCreateFailed");
     CHECK(readBytes(path) == before);
 }
+
+TEST_CASE("PluginEditTool refuses an ARMO EditorID that Windows-1252 cannot store without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto before = readBytes(path);
+    const auto refused = backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Patch.esp", "ARMO", nlohmann::json{{"editorId", "\xe6\x97\xa5"}}}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "InvalidEditorId");
+    const auto pending = parseResult(backend.invoke("appInterop.GetPlugins", nlohmann::json::array()));
+    CHECK(pending.at(0).at("Pending") == false);
+    CHECK(readBytes(path) == before);
+}
