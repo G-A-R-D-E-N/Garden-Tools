@@ -96,7 +96,8 @@ class PapyrusDumpTests(unittest.TestCase):
     def test_flagged_fragments_and_scene_phase_entries(self):
         for signature in ("PACK", "INFO", "SCEN"):
             with self.subTest(signature=signature):
-                extras = bytes([3, 0b10000001]) + text("Fragments") + struct.pack("<BH", 0, 0)
+                flags = 0b101 if signature == "PACK" else 0b11
+                extras = bytes([3, flags]) + text("Fragments") + struct.pack("<BH", 0, 0)
                 extras += (bytes([0]) + text("Fragments") + text("Fragment")) * 2
                 if signature == "SCEN":
                     extras += struct.pack("<H", 3)

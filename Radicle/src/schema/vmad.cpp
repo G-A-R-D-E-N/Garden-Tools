@@ -284,13 +284,13 @@ void walk_indexed_fragments(Slice& slice, std::int16_t object_format,
 }
 
 void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
-                            VmadScan& result, bool scene) {
+                            VmadScan& result, bool scene, unsigned flag_bits) {
   slice.u8();  // extra bind
   const auto flags = slice.u8();
   result.fragment_script_count = walk_script_entry(slice, object_format, result.offsets) ? 1u : 0u;
   unsigned count = 0;
   auto bits = flags;
-  for (int i = 0; i < 8; ++i) {
+  for (unsigned i = 0; i < flag_bits; ++i) {
     if ((bits & 1u) != 0) {
       ++count;
     }
@@ -335,9 +335,10 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
       } else if (record_signature == sig_perk || record_signature == sig_term) {
         walk_indexed_fragments(slice, object_format, result);
       } else if (record_signature == sig_pack || record_signature == sig_info) {
-        walk_flagged_fragments(slice, object_format, result, false);
+        walk_flagged_fragments(slice, object_format, result, false,
+                               record_signature == sig_pack ? 3u : 2u);
       } else if (record_signature == sig_scen) {
-        walk_flagged_fragments(slice, object_format, result, true);
+        walk_flagged_fragments(slice, object_format, result, true, 2u);
       }
     }
     result.fully_consumed = slice.at_end();
