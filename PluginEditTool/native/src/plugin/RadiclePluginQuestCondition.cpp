@@ -18,6 +18,7 @@
 
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/ctda.hpp>
+#include <fo4ide/plugin/ConditionCodec.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 
 namespace fo4ide::plugin::questinternal {
@@ -433,11 +434,11 @@ std::optional<Error> parseQuestCondition(
         if (!element[key].is_string()) {
             return fail(std::string(key) + " must be a string");
         }
-        auto text = element[key].get<std::string>();
-        if (text.find('\0') != std::string::npos) {
-            return fail(std::string(key) + " cannot contain an embedded NUL");
+        const auto stored = conditionCisFromUtf8(element[key].get<std::string>());
+        if (!stored) {
+            return fail(std::string(key) + " is not valid UTF-8 text representable in Windows-1252");
         }
-        target = std::move(text);
+        target = *stored;
         return std::nullopt;
     };
     const auto cisAllowed = [&](std::size_t index) {

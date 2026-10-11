@@ -50,3 +50,23 @@ Regression tests for the typed behaviour: "float parameter is a JSON number", "i
 ## PluginEditTool/native/tests/unit/ConditionBackendParamTests.cpp:condition backend: GetConditions serializes the CTDA list
 
 This test was moved out of `PluginEditTool/native/tests/unit/ConditionBackendTests.cpp` (which is over the 750-line guard) into its own file. Its GetAngle param1 assertion now expects the Axis integer 1 instead of the old FormKey text. The GetDistance (Reference) param1 assertion is unchanged.
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:describeCondition / buildCondition (GT-217, GT-188)
+
+CIS1 and CIS2 are Windows-1252 bytes on disk. GT-188 records that xEdit reads non-localized plugin strings this way, and Radicle keeps the raw bytes in `parameter1_string` / `parameter2_string`. Those bytes are not valid UTF-8, so putting them into nlohmann::json and calling dump() threw on a byte such as 0xE9 (GT-217).
+
+The JSON is UTF-8. describe emits `cis1` / `cis2` when the string is present and the same text under `_native.cis1` / `_native.cis2`, both through `fo4::text::windows1252_to_utf8`. `_native` only travels in the JSON transport and is never persisted. build converts back with `fo4::text::utf8_to_windows1252`. That mapping is a byte-exact inverse, including the five bytes Radicle maps to U+0081, U+008D, U+008F, U+0090 and U+009D, so an unchanged row keeps its original bytes.
+
+Text that Windows-1252 cannot represent (for example U+4E2D) is refused, not substituted: `cis1 is not valid UTF-8 text representable in Windows-1252`, or the same wording with `cis2`. The `_native` restore path uses `preserved CIS string is not valid UTF-8 text representable in Windows-1252`.
+
+Top-level `cis1` / `cis2` in buildCondition (`applyCis`) are read on a new row when present, and on a preserved row when present and different from the native baseline. On a preserved row an omitted key keeps the native bytes unless it is listed in `_edited`, which clears the string. Native metadata alone therefore restores the original bytes. They are refused on a slot that is not String or Event (`ConditionFunctions::editorFor` text kind), matching the quest codec in `RadiclePluginQuestCondition.cpp`.
+
+The shared conversion is `PluginEditTool/native/src/plugin/ConditionCodec.cpp:conditionCisFromUtf8` (declared in `PluginEditTool/native/include/fo4ide/plugin/ConditionCodec.hpp`). It returns nullopt for text Windows-1252 cannot represent and for an embedded NUL, so a NUL is now refused with the same not-representable wording instead of its own message. Every caller uses it: `buildCondition` (`applyCis` and the `_native` `restoreString`) and the quest path below.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQuestCondition.cpp:parseQuestCondition (GT-217, GT-188)
+
+Quest log-entry and alias conditions take `cis1` / `cis2` as UTF-8 JSON text. `parseQuestCondition` (its `parseCis` lambda) converts it with `conditionCisFromUtf8` before storing it in `parameter1_string` / `parameter2_string`, so the bytes written to CTDA/CIS1 are Windows-1252 as GT-188 requires. Before this, the UTF-8 bytes were written as-is. Unrepresentable text is refused with `cis1 is not valid UTF-8 text representable in Windows-1252` and nothing is written.
+
+The quest codebase has no JSON writer for conditions. A read of quest conditions goes through the condition backend (`RadiclePluginConditions.cpp:getConditions` / `getConditionsAtPath`) and `ConditionCodec.cpp:describeCondition`, which is the function fixed above, so the read path needs no separate change.
+
+Test anchor: `PluginEditTool/native/tests/unit/QuestOpaqueConditionTests.cpp` (TEST_CASE "quest log entry CIS1 is stored as Windows-1252 and reads back as UTF-8") sets a `GetGraphVariableInt` log-entry condition with `cis1` "café", checks the saved CIS1 subrecord is `caf\xE9` plus its NUL terminator (5 bytes, from `Radicle/src/schema/ctda.cpp:zstring_bytes`), decodes it with `lossless_quest_log_entry_conditions`, and checks `describeCondition` gives `café`.

@@ -473,3 +473,90 @@ TEST_CASE("condition codec accepts only the exact placeholder form for unresolva
         CHECK(failure == "unresolved condition reference");
     }
 }
+
+TEST_CASE("condition codec keeps CIS text as UTF-8 in JSON and Windows-1252 on disk", "[condition-preservation]") {
+    const auto plugin = context();
+    auto original = storedCondition();
+    original.function = *fo4ide::plugin::functionIndex("HasVMScript");
+    original.parameter1_string = "caf\xE9";
+    original.parameter2_string.reset();
+    auto json = fo4ide::plugin::describeCondition(original, plugin);
+    CHECK_NOTHROW(json.dump());
+    CHECK(json.at("cis1") == "caf\xC3\xA9");
+    CHECK(json.at("_native").at("cis1") == "caf\xC3\xA9");
+    std::string failure;
+    const auto unchanged = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(unchanged.has_value());
+    CHECK(unchanged->parameter1_string == "caf\xE9");
+    CHECK_FALSE(unchanged->parameter2_string.has_value());
+    json["cis1"] = "na\xC3\xAFve";
+    const auto edited = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(edited.has_value());
+    CHECK(edited->parameter1_string == "na\xEFve");
+    json["cis1"] = "\xE4\xB8\xAD";
+    CHECK_FALSE(fo4ide::plugin::buildCondition(json, plugin, {}, failure).has_value());
+    CHECK(failure == "cis1 is not valid UTF-8 text representable in Windows-1252");
+    const nlohmann::json fresh = {{"function", "HasVMScript"}, {"cis1", "caf\xC3\xA9"}};
+    const auto built = fo4ide::plugin::buildCondition(fresh, plugin, {}, failure);
+    REQUIRE(built.has_value());
+    CHECK(built->parameter1_string == "caf\xE9");
+    CHECK_FALSE(fo4ide::plugin::buildCondition({{"function", "GetDistance"}, {"cis1", "x"}}, plugin, {}, failure).has_value());
+    CHECK(failure == "cis1 is only valid when parameter 1 is String or Event");
+}
+
+TEST_CASE("condition codec round trips CIS2 on a String slot both ways", "[condition-preservation]") {
+    const auto plugin = context();
+    fo4::CtdaCondition condition;
+    condition.function = *fo4ide::plugin::functionIndex("GetVMScriptVariable");
+    condition.parameter2_string = "caf\xE9";
+    auto json = fo4ide::plugin::describeCondition(condition, plugin);
+    CHECK(json.at("cis2") == "caf\xC3\xA9");
+    CHECK_FALSE(json.contains("cis1"));
+    std::string failure;
+    const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(rebuilt.has_value());
+    CHECK(rebuilt->parameter2_string == "caf\xE9");
+    const nlohmann::json fresh = {{"function", "GetVMScriptVariable"}, {"cis2", "caf\xC3\xA9"}};
+    const auto built = fo4ide::plugin::buildCondition(fresh, plugin, {}, failure);
+    REQUIRE(built.has_value());
+    CHECK(built->parameter2_string == "caf\xE9");
+    CHECK_FALSE(built->parameter1_string.has_value());
+}
+
+TEST_CASE("condition codec restores a preserved CIS1 from native metadata alone", "[condition-preservation]") {
+    const auto plugin = context();
+    auto original = storedCondition();
+    original.function = *fo4ide::plugin::functionIndex("HasVMScript");
+    original.parameter1_string = "caf\xE9";
+    original.parameter2_string.reset();
+    auto json = fo4ide::plugin::describeCondition(original, plugin);
+    json.erase("cis1");
+    std::string failure;
+    const auto rebuilt = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(rebuilt.has_value());
+    checkSame(*rebuilt, original);
+    CHECK(rebuilt->parameter1_string == "caf\xE9");
+}
+
+TEST_CASE("condition codec refuses a top-level CIS1 with an embedded NUL", "[condition-preservation]") {
+    const auto plugin = context();
+    const auto element = nlohmann::json::parse(R"({"function":"HasVMScript","cis1":"\u0000"})");
+    std::string failure;
+    CHECK_FALSE(fo4ide::plugin::buildCondition(element, plugin, {}, failure).has_value());
+    CHECK(failure == "cis1 is not valid UTF-8 text representable in Windows-1252");
+}
+
+TEST_CASE("condition codec clears a preserved CIS1 when cis1 is omitted and listed as edited", "[condition-preservation]") {
+    const auto plugin = context();
+    auto original = storedCondition();
+    original.function = *fo4ide::plugin::functionIndex("HasVMScript");
+    original.parameter1_string = "caf\xE9";
+    original.parameter2_string.reset();
+    auto json = fo4ide::plugin::describeCondition(original, plugin);
+    json.erase("cis1");
+    json["_edited"] = nlohmann::json::array({"cis1"});
+    std::string failure;
+    const auto cleared = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(cleared.has_value());
+    CHECK_FALSE(cleared->parameter1_string.has_value());
+}
