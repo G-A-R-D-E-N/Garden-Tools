@@ -136,6 +136,9 @@ TEST(Reader, FindRecordReturnsTheFirstMatchInTraversalOrder) {
   EXPECT_EQ(&index.plugin(), &plugin);
   EXPECT_EQ(index.find(fo4::FormKey{fallout, fo4::LocalFormId{0x800}}), master_owned);
   EXPECT_EQ(index.find(fo4::FormKey{self, fo4::LocalFormId{0x800}}), plugin_owned);
+  EXPECT_EQ(index.find(fo4::FormKey{fo4::PluginKey::from_filename("DUPES.ESP"),
+                                    fo4::LocalFormId{0x800}}),
+            plugin_owned);
   EXPECT_EQ(index.find(fo4::FormKey{self, fo4::LocalFormId{0x801}}), nullptr);
   for (const auto* record : fo4::collect_records(plugin)) {
     EXPECT_EQ(index.find(record->form_key), fo4::find_record(plugin, record->form_key));
