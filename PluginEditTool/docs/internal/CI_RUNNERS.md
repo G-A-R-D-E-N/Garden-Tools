@@ -230,7 +230,7 @@ and was nothing of the sort.
 `native-ci.yml` runs the C++ tests that need a Fallout 4 `Data` folder when one is configured. Two repo variables feed them:
 
 - `FO4_DATA_DIR_LINUX`, read by the `Test` step of `Native (Linux, Debug)`. It is unset today.
-- `FO4_DATA_DIR_WINDOWS`, read by `Native real-data tests (Windows, MSVC, Fallout 4 data)` (`native-windows-real-data`). That job runs only on the runner labelled `fo4-data`, the machine with the Steam install's `Fallout 4\Data` folder. It builds `fo4_tests` in Release and runs only the 31 tests that read `FO4_DATA_DIR`. `Native tests (Windows, MSVC)` (`self-hosted, Windows, X64`) sets no `FO4_DATA_DIR` and needs no game files; its real-data tests skip.
+- `FO4_DATA_DIR_WINDOWS`, read by `Native real-data tests (Windows, MSVC, Fallout 4 data)` (`native-windows-real-data`). That job runs only on the runner labelled `fo4-data`, the machine with the Steam install's `Fallout 4\Data` folder. It builds `fo4_tests` in Release and runs only the tests that read `FO4_DATA_DIR` (those matching `REAL_DATA_TEST_REGEX`). `Native tests (Windows, MSVC)` (`self-hosted, Windows, X64`) sets no `FO4_DATA_DIR` and needs no game files; its real-data tests skip.
 
 The folder must hold the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in its root. The `Check FO4 data folder` step enforces this. Unset: the Windows real-data job succeeds with a notice and skips its later steps. A set but bad value makes that step exit 1 and turns the `Native real-data tests` check red; that job is not a required context.
 
