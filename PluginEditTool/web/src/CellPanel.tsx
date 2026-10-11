@@ -310,7 +310,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const pollTimer = setInterval(async () => {
         try {
           const raw = await cell.GetGeometryBatchProgress();
-          setGeoProgress(JSON.parse(raw) as { done: number; total: number });
+          if (live()) setGeoProgress(JSON.parse(raw) as { done: number; total: number });
         } catch {  }
       }, 200);
       let geoRaw: string;
