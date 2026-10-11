@@ -6,7 +6,7 @@ These declarations establish stored-field compatibility, not runtime playback.
 The authenticated private runtime evidence index at commit
 `f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a`, section a-340, confirms CK tag
 inventories. The newer [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md)
-supplies the OG component-hook grammar: Standard loader RVA 0x4C1C10,
+supplies the OG component-hook grammar: Standard loader address 0x4C1C10,
 AutoWeapon loader 0x2CB540 and SOUN loader 0x55A1E0. The verified local copy
 is `build/RE-Work/6916afb/sound-399-340/README.md`.
 

@@ -5,7 +5,7 @@
 The pinned loader record is
 `build/RE-Work/6916afb/sound-399-340/README.md`
 at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 5.2–5.5 (OG
-RVAs 0x4C1C10, 0x2CB540 and 0x55A1E0). The OG Standard loader would accept a
+addresses 0x4C1C10, 0x2CB540 and 0x55A1E0). The OG Standard loader would accept a
 top-level FNAM as legacy flags, but xEdit defines FNAM only inside rate groups
 and no official record has one, so the read surface no longer exposes it (see
 `docs/code-notes/radicle-sound-writer.md`). Repeated LNAM retains its last
