@@ -358,7 +358,11 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 std::memcpy(&target, &number, sizeof(number));
                 return;
             }
-            if (value.is_number_integer()) {
+            if (value.is_number_unsigned()) {
+                const auto unsignedValue = value.get<std::uint64_t>();
+                if (unsignedValue > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
+                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(unsignedValue));
+            } else if (value.is_number_integer()) {
                 if (value < kParamMin || value > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
                 target = static_cast<std::int32_t>(static_cast<std::uint32_t>(value.get<std::int64_t>()));
             } else if (value.is_number_float()) {

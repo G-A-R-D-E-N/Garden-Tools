@@ -339,6 +339,10 @@ TEST_CASE("condition codec rejects integer params outside the 32-bit range", "[c
     const nlohmann::json textAbove = {{"function", "GetAngle"}, {"param1", "4294967296"}};
     CHECK_FALSE(fo4ide::plugin::buildCondition(textAbove, plugin, {}, failure).has_value());
     CHECK(failure == "param1 4294967296 is outside [-2147483648, 4294967295]");
+
+    const nlohmann::json wrapped = {{"function", "GetAngle"}, {"param1", std::numeric_limits<std::uint64_t>::max()}};
+    CHECK_FALSE(fo4ide::plugin::buildCondition(wrapped, plugin, {}, failure).has_value());
+    CHECK(failure == "param1 18446744073709551615 is outside [-2147483648, 4294967295]");
 }
 
 TEST_CASE("condition codec round trips unresolvable form IDs through describe", "[condition-preservation]") {
