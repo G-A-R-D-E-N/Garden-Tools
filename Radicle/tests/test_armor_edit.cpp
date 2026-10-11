@@ -163,3 +163,23 @@ TEST(ArmorEdit, ReplacesExistingLegacyFieldWithoutGuessingInsertion) {
   ASSERT_NE(after_bod2, nullptr);
   EXPECT_EQ(after_bod2->data, bod2);
 }
+
+TEST(ArmorEdit, NonAsciiGenderedModelIsStoredAsWindows1252) {
+  auto plugin = fo4::read_plugin(legacy_armor(true), "Legacy.esp");
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+
+  ASSERT_TRUE(fo4::forms::set_armor_model_fields(
+      plugin,
+      key,
+      "Meshes\\Armor\\Caf\xC3\xA9.nif",
+      std::nullopt,
+      std::nullopt,
+      std::nullopt,
+      std::nullopt,
+      std::nullopt));
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Legacy.esp");
+  const auto model = fo4::forms::decode_armor(reread, key);
+  ASSERT_TRUE(model.male_world_model.has_value());
+  EXPECT_EQ(*model.male_world_model, "Meshes\\Armor\\Caf\xE9.nif");
+}

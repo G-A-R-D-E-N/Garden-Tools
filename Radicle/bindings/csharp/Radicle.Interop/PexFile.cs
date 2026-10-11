@@ -27,11 +27,11 @@ public sealed record PexObjectInfo(
 
 public sealed partial class PexFile : IDisposable
 {
-    private IntPtr _handle;
+    private readonly PexHandle _handle;
 
     private PexFile(IntPtr handle, PexHeader header, IReadOnlyList<PexObjectInfo> objects, IReadOnlyList<byte[]> stringTable)
     {
-        _handle = handle;
+        _handle = new PexHandle(handle);
         Header = header;
         Objects = objects;
         StringTable = stringTable;
@@ -60,21 +60,18 @@ public sealed partial class PexFile : IDisposable
         return Snapshot(handle);
     }
 
+    private HandleUse Use() => new(_handle, nameof(PexFile));
+
     public unsafe byte[] ToBytes()
     {
-        if (_handle == IntPtr.Zero) throw new ObjectDisposedException(nameof(PexFile));
+        using var use = Use();
         byte* bytes = null;
         nuint size = 0;
-        Call.Check(RadicleNative.PexWriteBytes(_handle, &bytes, &size));
+        Call.Check(RadicleNative.PexWriteBytes(use.Pointer, &bytes, &size));
         return Call.TakeBytes(bytes, size);
     }
 
-    public void Dispose()
-    {
-        if (_handle == IntPtr.Zero) return;
-        RadicleNative.PexDestroy(_handle);
-        _handle = IntPtr.Zero;
-    }
+    public void Dispose() => _handle.Dispose();
 
     private static unsafe PexFile Snapshot(IntPtr handle)
     {

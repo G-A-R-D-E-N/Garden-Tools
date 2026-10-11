@@ -1,5 +1,6 @@
 #include "fo4/forms/armor.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/preflight.hpp"
@@ -108,7 +109,7 @@ bool upsert_ordered_string(Plugin& plugin,
                            const FormKey& key,
                            Signature signature,
                            std::string_view value) {
-  const auto encoded = zstring(value);
+  const auto encoded = zstring(stored_inline_text(value, signature.to_string()));
   Subrecord* found = nullptr;
   for (auto& subrecord : record.subrecords) {
     if (subrecord.signature != signature) continue;
