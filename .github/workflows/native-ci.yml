@@ -151,7 +151,7 @@ jobs:
       - name: Prove clean managed tests without external networking
         run: unshare --user --map-root-user --net python3 Radicle/bindings/csharp/tools/run_managed_tests.py --build-dir build/native --network-isolated
 
-      - name: Upload logs and binaries on failure
+      - name: Upload logs on failure
         if: failure()
         continue-on-error: true
         uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
