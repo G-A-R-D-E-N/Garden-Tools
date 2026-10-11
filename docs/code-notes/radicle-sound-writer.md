@@ -32,7 +32,7 @@ measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673
   Standard descriptor carrying a rate group had its file name misread as flags (or failed on size). The official census
   has 120 FNAM, all inside the 24 AutoWeapon rate groups, and no top-level FNAM. FNAM is now only read as a rate file;
   one outside a group fails closed ("rate filename is out of order"). The RE record
-  (RE repo `RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md` at 6916afb, Standard loader 0x4C1C10) shows the
+  (`https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md`, Standard loader 0x4C1C10) shows the
   OG engine would accept a 4-byte top-level FNAM as legacy flags (remapped onto the LNAM looping bits); because nothing
   ships one and xEdit does not define it, Radicle does not expose it. Test:
   `Radicle/tests/test_sound.cpp:SoundTest.RateGroupFilenameIsNeverReadAsTopLevelFlags`.
@@ -151,3 +151,6 @@ Pinned FO4 lines 11965–11969 establish the eight/nine-byte SOUN REPT forms; li
 
 ## Radicle/tests/test_sound_real.cpp:SoundRealData.DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes
 Every official sound record compares native and C presence flags, numeric values, file strings (with the documented Windows-1252 to UTF-8 conversion), resolved link keys, arrays and category order. Zero-family masters report zero totals and still check preservation. `Radicle/tests/test_sound_writer_real.cpp:LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEveryOtherRecordByteIdentical` also validates byte identity when its family is absent instead of skipping. Missing installed data remains the only family-fixture skip condition. The new stateless parsing functions `Radicle/src/environment/sound.cpp:decode_sound_rate_files`, `decode_sound_repeat` and `decode_footstep_counts` share the existing readers' shape checks with writer count/edit paths; the C ABI is unchanged. The fixed-link payload-size metadata is shared with #427 and only applies after the kind discriminator selects the applicable layout.
+
+## Radicle/include/fo4/schema/non_formid_slots.inc:k_non_formid_slots
+Four `xedit` rows that the corpus scan cannot show are hand-listed in `XEDIT_DENIED` (`Radicle/tools/corpus/non_formid_slots.py`) and mirrored in `non_formid_slots.inc`, because xEdit types each as scalar data: SOPM `MNAM` (`source:xEdit Core/wbDefinitionsFO4.pas:9505 @93cc0bc5`, `wbInteger(MNAM, 'Type', itU32, ...)`), MUST `ANAM` (`wbDefinitionsFO4.pas:8806`, `wbString`), MUST `BNAM` (`wbDefinitionsFO4.pas:8807`, `wbString`), and MUST `FNAM` (`wbDefinitionsFO4.pas:8813`, `wbArray` of `wbFloat` cue points). Their 4-byte values are not links, so `RemapNonFormIdSlots.SopmAndMusicTrackFourByteSlotsStayUnchanged` checks they are not remapped. The rows were added by hand because regenerating needs `fo4inspect` and the game data; a regeneration keeps them.

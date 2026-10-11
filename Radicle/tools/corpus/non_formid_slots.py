@@ -47,6 +47,7 @@ XEDIT_DENIED = [
     ("MSWP", "SNAM"),  # xEdit wbDefinitionsFO4.pas:12446 wbString
     ("MUST", "ANAM"),  # xEdit wbDefinitionsFO4.pas:8806 wbString
     ("MUST", "BNAM"),  # xEdit wbDefinitionsFO4.pas:8807 wbString
+    ("MUST", "FNAM"),  # xEdit wbDefinitionsFO4.pas:8813 wbArray of wbFloat
     ("NOCM", "NAM1"),  # xEdit wbDefinitionsFO4.pas:12466 wbString
     ("NOTE", "PNAM"),  # xEdit wbDefinitionsFO4.pas:12498 wbString
     ("PARW", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
@@ -68,6 +69,7 @@ XEDIT_DENIED = [
     ("SNDR", "ANAM"),  # xEdit wbDefinitionsFO4.pas wbString, GT-173 (line not pinned)
     ("SNDR", "FNAM"),  # xEdit wbDefinitionsFO4.pas:9446 wbString
     ("SNDR", "NNAM"),  # xEdit wbDefinitionsFO4.pas:9408 wbString
+    ("SOPM", "MNAM"),  # xEdit wbDefinitionsFO4.pas:9505 wbInteger
     ("SPGD", "MNAM"),  # xEdit wbDefinitionsFO4.pas:6160 wbString
     ("TERM", "VNAM"),  # xEdit wbDefinitionsFO4.pas:12752 wbString
     ("TES4", "CNAM"),  # xEdit wbDefinitionsFO4.pas:12102 wbString
