@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <random>
+#include <string>
 
 namespace {
 
@@ -47,6 +49,21 @@ TEST(Compression, RejectsValidRawDeflateAndGzipFraming) {
   gzip.u32(declared);
   EXPECT_THROW(fo4::read_plugin(compressed_plugin(gzip.bytes, declared)), fo4::parse_error);
   EXPECT_NO_THROW(fo4::read_plugin(compressed_plugin(zlib, declared)));
+}
+
+TEST(Compression, OversizedDeclaredSizeIsRefusedBeforeAllocating) {
+  std::mt19937 rng{0x5EEDu};
+  std::vector<std::byte> compressed(1'100'000);
+  for (auto& byte : compressed) {
+    byte = std::byte{static_cast<std::uint8_t>(rng())};
+  }
+
+  try {
+    static_cast<void>(fo4::read_plugin(compressed_plugin(compressed, 0x40000001u)));
+    FAIL() << "expected the oversized declared size to be refused";
+  } catch (const fo4::parse_error& error) {
+    EXPECT_NE(std::string(error.what()).find("limit"), std::string::npos) << error.what();
+  }
 }
 
 TEST(Compression, RejectsBadZlibChecksum) {

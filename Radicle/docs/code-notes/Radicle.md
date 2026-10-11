@@ -2,7 +2,7 @@
 
 ## src/plugin/reader.cpp:inflate_record_payload
 
-The raw-deflate fallback is removed after the verified OG inflater record in `build/RE-Work/decompress-current-form-391.md` established zlib framing. `docs/COMPRESSION_EVIDENCE.md` states the source and remaining version/length limits. `tests/test_compression.cpp:RejectsValidRawDeflateAndGzipFraming` and `RejectsBadZlibChecksum` cover framing refusal. The existing zero-size early return and produced-length behavior remain outside this change.
+Only zlib framing (`MAX_WBITS`) is accepted; the raw-deflate retry is removed after the verified OG inflater record in `build/RE-Work/decompress-current-form-391.md` established zlib framing. The size guards match PR #462 (GT-138): the declared size is refused above `compressed.size() * 1032 + 64` and above `k_max_record_uncompressed_bytes` (1 GiB) before the single output allocation. `docs/COMPRESSION_EVIDENCE.md` states the source and remaining version/length limits. `tests/test_compression.cpp:RejectsValidRawDeflateAndGzipFraming` and `RejectsBadZlibChecksum` cover framing refusal; `tests/test_reader.cpp:ReaderLimits.CompressedUncompressedSizeBeyondZlibBoundIsRefusedBeforeAllocation` and `tests/test_compression.cpp:Compression.OversizedDeclaredSizeIsRefusedBeforeAllocating` cover the guards. The existing zero-size early return and produced-length behavior remain outside this change.
 
 ## tests/test_compression.cpp:CompressedExtendedSubrecordPreservesPhysicalMarker
 

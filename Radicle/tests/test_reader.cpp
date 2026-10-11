@@ -70,3 +70,22 @@ TEST(Reader, TruncatedInputFailsSafely) {
   std::vector<std::byte> bytes{std::byte{'T'}, std::byte{'E'}, std::byte{'S'}, std::byte{'4'}};
   EXPECT_THROW(fo4::read_plugin(bytes), fo4::parse_error);
 }
+
+TEST(ReaderLimits, CompressedUncompressedSizeBeyondZlibBoundIsRefusedBeforeAllocation) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::end_record(out, tes4);
+  const auto grup = fo4::test::begin_group(out, "MISC", 0);
+  const auto rec = fo4::test::begin_record(out, "MISC", fo4::RecordFlags::compressed, 0x01000801);
+  out.u32(0xFFFFFFFFu);
+  out.raw(std::string_view{"tiny"});
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+
+  try {
+    fo4::read_plugin(out.bytes);
+    FAIL() << "expected parse_error";
+  } catch (const fo4::parse_error& error) {
+    EXPECT_NE(error.parse_message().find("zlib expansion bound"), std::string::npos);
+  }
+}
