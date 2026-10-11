@@ -214,6 +214,9 @@ radicle_status radicle_record_get_info(const radicle_env* env,
   if (env == nullptr || record == nullptr || out_info == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_info are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   return guarded("unknown exception while reading record metadata", [&] {
     const auto meta = env->value.metadata(*to_ref(record));
     // Views point into immutable plugin data and are NUL-terminated wherever one was produced.

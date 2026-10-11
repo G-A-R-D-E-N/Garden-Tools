@@ -22,6 +22,14 @@ The fixture follows `Radicle/tests/test_condition_scopes.cpp:ConditionScopes.Ref
 
 ## Radicle/include/fo4/plugin/mutation.hpp:set_record_conditions follow-ups
 
-Records with several condition lists remain refused by whole-record writes: QUST top-level conditions alongside conditioned objectives/targets, PACK, PERK and INFO. Current scoped paths cover magic-effect entries and quest aliases. `Radicle/src/schema/ctda.cpp:read_ctda_conditions` still flattens all lists; a read-side multiple-list result and additional scoped paths are follow-ups, outside this change.
+Records with several condition lists remain refused by whole-record writes: QUST top-level conditions alongside conditioned objectives/targets, PACK, PERK and INFO. Current scoped paths cover magic-effect entries and quest aliases. Additional scoped paths remain follow-ups.
+
+## Radicle/src/schema/ctda.cpp:read_ctda_conditions_in / Radicle/include/fo4/schema/ctda.hpp:CtdaMultipleListsError
+
+The reader uses the same contiguous CTDA/CIS boundary as the writer. A later CTDA after another subrecord closes the first run throws `CtdaMultipleListsError`; no flattened vector is returned. CIS strings after a separator are not attached to the preceding condition; their raw subrecords remain untouched, outside the run the writer replaces. `CtdaModel.ReadDoesNotAttachCisAfterTheRunEnds` reproduces the old incorrect attachment. Whole-record reads and bounded reads share this check. One run and empty records keep their existing behavior, and callers can read separate runs with separate ranges. This changes the C++ read behavior without changing its function signatures or any C ABI export/layout.
+
+## Radicle/src/schema/condition_scopes.cpp:read_scoped_conditions / PluginEditTool/native/src/plugin/RadiclePluginConditions.cpp:RadiclePluginBackend::getConditions / getConditionsAtPath
+
+Scoped reads translate the shared multiple-list exception into the existing `ScopedConditionStatus::multiple_lists` with no condition values. Both PluginTool read routes report `ConditionScopeMultipleLists`, matching their writer routes. The existing two-list alias fixture reproduces success/flattening on unchanged main; native and backend regressions require refusal, unchanged bytes and no pending edit. The separate-run preservation assertions in `CtdaModel.ScopedWriteLeavesOtherListUntouched` and `ConditionScopes.SetAliasConditionsLeavesSiblingsAndDialogConditionsIntact` now use bounded reads rather than relying on the old flattening behavior.
 
 The caller search across Radicle and PluginEditTool found the backend and native tests only. No C ABI source/header exposes this setter; its C++ result change does not change the C ABI or ABI version.

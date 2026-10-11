@@ -270,7 +270,7 @@ Ordinary record-edit RPCs stage in-memory dirty state via `stagePluginMutationLo
 
 ## PluginEditTool/native/src/plugin/RadiclePluginOverridePatch.cpp:revertOverrides — skipped accounting
 
-The apply loop increments `skipped` for any copy result other than `inserted`/`already_exists` — chiefly `source_containment_unsupported`, which `copy_record_as_override` returns for a nested record (e.g. a REFR inside a CELL) the patch does not already contain. Without this, a record the dry run listed as revertible could fail to copy during apply and disappear from the result entirely, so `Reverted N` under-counted with nothing explaining the difference; it is now reported in the `skipped` total, matching the C# apply loop (which increments `skipped` on an `AddOverride` failure).
+The apply loop increments `skipped` for any copy result other than `inserted`/`already_exists` — chiefly `source_containment_unsupported`, which `copy_record_as_override` returns for a nested record (e.g. an INFO under a DIAL) the patch does not already contain. Without this, a record the dry run listed as revertible could fail to copy during apply and disappear from the result entirely, so `Reverted N` under-counted with nothing explaining the difference; it is now reported in the `skipped` total, matching the C# apply loop (which increments `skipped` on an `AddOverride` failure).
 
 In `RadiclePluginBackend::revertOverrides`, the `prior == nullptr` guard is a defensive `continue` that is **not** counted in `skipped`: the C# oracle has no equivalent (it holds the prior record directly), and the "no prior version" case is already excluded earlier during candidate-finding (`versions.size() < 2`), mirroring C#'s separate `noPrior` counter which is likewise absent from the reported `skipped` total. In current native control flow this guard is effectively unreachable — the prior comes from the loaded version stack under the same lock the apply loop holds.
 ## PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp:addListItem — target validation
@@ -1478,6 +1478,16 @@ The empty `catch` bodies are deliberate best-effort paths, and they carry no sou
 `src/errors.test.ts` pins that `errorText` produces the same text as the helper it replaced for `Error`s, message-carrying objects, empty messages, bare strings, `null`, `undefined` and numbers. `src/MainShellBridge.test.tsx` covers the startup `appInterop` wiring, the environment reload with its pending-changes prompt, and the batch-copy failure text.
 
 Validation: `vitest run` 122/122 in 15 files, `tsc -b` clean, `vite build` clean (the pre-existing 1.08 MB chunk warning only), `eslint .` 34 errors and 16 warnings, `git diff --check` clean. The 34 errors are the react-hooks and react-refresh findings the later tranches take; `no-explicit-any` and `no-empty` are 0. The 16th warning is the `NifPanel.tsx:onDrop` `exhaustive-deps` one above, which `main` also has and this tranche leaves in place.
+
+## .github/workflows/native-ci.yml:workflow_dispatch, native-linux, native-windows-tests, plugineditool-native-windows-cross
+
+The optional `lane=radicle-cross` dispatch runs only `radicle-windows-cross`, the existing Radicle clang-cl/xwin build. `native-linux`, `native-windows-tests` and `plugineditool-native-windows-cross` each have `github.event.inputs.lane != 'radicle-cross'` in their `if:` and are skipped; the default `full` runs them as before. Main has no gate job (`e4b8785a` removed the docs-only gate so every pull request runs the full build), so push and pull-request runs execute the same jobs as main and the `lane` input is only read on `workflow_dispatch`.
+
+The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency as `radicle-msvc-release-tests` for seven days. This permits official-data tests on the machine with Fallout 4 installed without rebuilding there. Artifact metadata must identify the tested commit: the upload carries `build-info.txt` (commit SHA, ref, run ID, target triple); downloading a binary is not a test result. No game payloads or debug symbols are uploaded.
+
+## Radicle/CMakeLists.txt:FO4_TESTDATA_DIR, gtest_discover_tests
+
+`fo4_tests` uses the relative `testdata` fixture directory, and CTest runs its discovered cases from the Radicle source directory. A downloaded CI executable must likewise run from the matching checkout's `Radicle` directory. This avoids embedding the CI checkout path in the fixture lookup while keeping committed fixtures separate from the installed-game directory supplied through `FO4_DATA_DIR`.
 
 ## Radicle/tests/test_pex_corpus.cpp:compareCode, Radicle/src/c_api_pex.cpp:CodeBuilder
 
