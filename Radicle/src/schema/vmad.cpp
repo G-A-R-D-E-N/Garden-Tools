@@ -205,12 +205,9 @@ bool walk_script_entry(Slice& slice, std::int16_t object_format,
                        std::vector<std::size_t>& offsets) {
   const auto name_len = slice.u16();
   slice.skip(name_len);
-  if (name_len == 0) {
-    return false;
-  }
   slice.u8();
   walk_properties(slice, object_format, slice.u16(), offsets);
-  return true;
+  return name_len != 0;
 }
 
 void walk_scripts(Slice& slice, std::int16_t object_format, std::uint16_t count,
@@ -609,17 +606,15 @@ VmadScripts read_vmad_scripts(std::span<const std::byte> data) {
   for (std::uint16_t i = 0; i < count; ++i) {
     VmadScript script;
     script.name = slice.wstring();
-    if (!script.name.empty()) {
-      script.flags = slice.u8();
-      const auto properties = slice.u16();
-      for (std::uint16_t p = 0; p < properties; ++p) {
-        try {
-          script.properties.push_back(read_property(slice, result.object_format));
-        } catch (const UnsupportedVmadProperty&) {
-          result.unsupported = true;
-          result.scripts.push_back(std::move(script));
-          return result;
-        }
+    script.flags = slice.u8();
+    const auto properties = slice.u16();
+    for (std::uint16_t p = 0; p < properties; ++p) {
+      try {
+        script.properties.push_back(read_property(slice, result.object_format));
+      } catch (const UnsupportedVmadProperty&) {
+        result.unsupported = true;
+        result.scripts.push_back(std::move(script));
+        return result;
       }
     }
     result.scripts.push_back(std::move(script));
@@ -676,12 +671,10 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
       for (std::uint16_t s = 0; s < scripts; ++s) {
         VmadScript script;
         script.name = slice.wstring();
-        if (!script.name.empty()) {
-          script.flags = slice.u8();
-          const auto properties = slice.u16();
-          for (std::uint16_t p = 0; p < properties; ++p) {
-            script.properties.push_back(read_property(slice, alias.script_format));
-          }
+        script.flags = slice.u8();
+        const auto properties = slice.u16();
+        for (std::uint16_t p = 0; p < properties; ++p) {
+          script.properties.push_back(read_property(slice, alias.script_format));
         }
         alias.scripts.push_back(std::move(script));
       }

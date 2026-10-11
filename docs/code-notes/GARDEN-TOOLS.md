@@ -1566,3 +1566,11 @@ The opt-in suites stay off in CI, because no CI variable sets them:
 - `FO4_SEQ_CORPUS`: `Radicle/tests/test_seq_corpus.cpp:EveryLooseSeqRoundTripsByteIdentically`.
 - `FO4_PAPYRUS_COMPILER` and `FO4_PAPYRUS_ASSEMBLER`: `Radicle/tests/test_pex_oracle.cpp:PexOracle.CompiledFixturesRoundTripByteIdentically` and `PexOracle.AssemblerDisassemblyAgreesWithTheCompiler`.
 - Optional `FO4_PAPYRUS_IMPORTS` and `FO4_PAPYRUS_FLAGS`: passed to the compiler by `Radicle/tests/test_pex_oracle.cpp:optionalArgument`.
+
+## Radicle/src/schema/vmad.cpp:walk_script_entry — empty-name script entries
+
+`source:xEdit Core/wbDefinitionsFO4.pas:3861-3865 @93cc0bc5` (`wbScriptEntry`) is a plain struct: length-prefixed ScriptName, Script Flags, Properties, with no empty-name branch. xEdit reads the flags byte and property count even when the name is empty. `walk_script_entry`, `read_vmad_scripts`, and the alias scripts in `read_quest_vmad_extras` follow that. The leading script list, quest aliases, and the INFO, PACK, PERK, and SCEN fragment headers all use `wbScriptEntry`. `walk_script_entry` still returns whether the name is nonempty, so `fragment_script_count` keeps its meaning.
+
+The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3984-3990 @93cc0bc5` (`wbVMADFragmentedQUST`) wraps Script Data in `wbUnion` with `source:xEdit Core/wbDefinitionsCommon.pas:5866-5876 @93cc0bc5` (`wbScriptFragmentsEmptyScriptDecider`), which picks `wbNull` for an empty ScriptName. So `walk_quest_extra` and `read_quest_vmad_extras` keep the empty-name guard for that header only.
+
+Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.

@@ -386,3 +386,24 @@ TEST(VmadArrayElements, StructWithUnexposedObjectWordStopsTheTypedReader) {
   EXPECT_TRUE(result.scripts[0].properties.empty());
   EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, fo4::Signature::from_string("REFR")).unsupported);
 }
+
+TEST(VmadArrayElements, EmptyNameScriptEntryStillWalksFlagsAndProperties) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "");
+  vmad.u8(0x01);
+  vmad.u16(1);
+  begin_property(vmad, "After", 3);
+  vmad.i32(9);
+  const auto result = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_FALSE(result.unsupported);
+  EXPECT_EQ(result.trailing_bytes, 0u);
+  ASSERT_EQ(result.scripts.size(), 1u);
+  EXPECT_TRUE(result.scripts[0].name.empty());
+  EXPECT_EQ(result.scripts[0].flags, 0x01);
+  ASSERT_EQ(result.scripts[0].properties.size(), 1u);
+  EXPECT_EQ(result.scripts[0].properties[0].name, "After");
+  EXPECT_EQ(result.scripts[0].properties[0].integer, 9);
+}
