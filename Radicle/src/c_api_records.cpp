@@ -21,12 +21,6 @@ bool find_topic_group(const fo4::Group& group, const fo4::Record* record,
   return false;
 }
 
-bool belongs_to_env(const radicle_env* env, const fo4::env::RecordRef* ref) {
-  const auto versions = env->value.versions(ref->record->form_key);
-  return std::any_of(versions.begin(), versions.end(),
-                     [&](const auto& candidate) { return &candidate == ref; });
-}
-
 }
 
 extern "C" {
@@ -105,19 +99,21 @@ radicle_status radicle_record_copy_subrecord(
   const auto* ref = to_ref(record);
   if (!belongs_to_env(env, ref))
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
-  const auto& subs = ref->record->subrecords;
-  if (index >= subs.size()) return fail(RADICLE_STATUS_NOT_FOUND, "subrecord index is out of range");
-  const auto& sub = subs[index];
-  if (!sub.data.empty()) {
-    auto* copy = static_cast<uint8_t*>(std::malloc(sub.data.size()));
-    if (copy == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to copy subrecord bytes");
-    std::memcpy(copy, sub.data.data(), sub.data.size());
-    *out_bytes = copy;
-  }
-  std::memcpy(out_signature, sub.signature.bytes().data(), 4);
-  *out_size = sub.data.size();
-  *out_extended_size = sub.extended_size ? 1 : 0;
-  return RADICLE_STATUS_OK;
+  return guarded("unknown exception while copying subrecord", [&] {
+    const auto& subs = ref->record->subrecords;
+    if (index >= subs.size()) return fail(RADICLE_STATUS_NOT_FOUND, "subrecord index is out of range");
+    const auto& sub = subs[index];
+    if (!sub.data.empty()) {
+      auto* copy = static_cast<uint8_t*>(std::malloc(sub.data.size()));
+      if (copy == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to copy subrecord bytes");
+      std::memcpy(copy, sub.data.data(), sub.data.size());
+      *out_bytes = copy;
+    }
+    std::memcpy(out_signature, sub.signature.bytes().data(), 4);
+    *out_size = sub.data.size();
+    *out_extended_size = sub.extended_size ? 1 : 0;
+    return RADICLE_STATUS_OK;
+  });
 }
 
 radicle_status radicle_record_resolve_form_id(

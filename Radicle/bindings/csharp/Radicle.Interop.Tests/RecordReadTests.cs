@@ -35,7 +35,7 @@ public class RecordReadTests
             Assert.Null(env.ResolveFormId(record, 0xffffffff));
             Assert.Throws<RadicleException>(() => env.ResolveFormId(record, 0x02000801));
             Assert.Throws<RadicleException>(() => env.ResolveFormId(record, 0xff000801));
-            Assert.Throws<RadicleException>(() => env.ReadPayload(default));
+            Assert.Throws<ArgumentException>(() => env.ReadPayload(default));
         }
         Assert.Equal(new byte[] { 1, 0, 255 }, payload.Subrecords[1].Bytes);
     }
@@ -54,11 +54,11 @@ public class RecordReadTests
         var record = owner.Winner(new FormKey("First.esp", 0x800))!.Value;
 
         Assert.Equal(new FormKey("First.esp", 0x800), owner.ResolveFormId(record, 0x800));
-        Assert.Throws<RadicleException>(() => other.ResolveFormId(record, 0x800));
-        Assert.Throws<RadicleException>(() => other.ResolveFormId(record, 0));
-        Assert.Throws<RadicleException>(() => other.ResolveFormId(record, 0xffffffff));
-        Assert.Throws<RadicleException>(() => other.ReadPayload(record));
-        Assert.Throws<RadicleException>(() => owner.ReadPayload(default));
+        Assert.Throws<ArgumentException>(() => other.ResolveFormId(record, 0x800));
+        Assert.Throws<ArgumentException>(() => other.ResolveFormId(record, 0));
+        Assert.Throws<ArgumentException>(() => other.ResolveFormId(record, 0xffffffff));
+        Assert.Throws<ArgumentException>(() => other.ReadPayload(record));
+        Assert.Throws<ArgumentException>(() => owner.ReadPayload(default));
     }
 
     [Fact]

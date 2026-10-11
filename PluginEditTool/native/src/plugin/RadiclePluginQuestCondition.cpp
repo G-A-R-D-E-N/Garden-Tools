@@ -1,11 +1,10 @@
-#include "RadiclePluginQuestConditions.hpp"
-#include "RadiclePluginSupport.hpp"
-
-#include <fo4ide/plugin/ConditionFunctions.hpp>
+#include "RadiclePluginQuestInternal.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -15,11 +14,26 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
-namespace fo4ide::plugin {
+#include <fo4/plugin/reader.hpp>
+#include <fo4/schema/ctda.hpp>
+#include <fo4ide/plugin/ConditionFunctions.hpp>
+
+namespace fo4ide::plugin::questinternal {
 
 namespace {
+
+constexpr std::uint16_t kMutagenGetEventData = 576;
+constexpr std::uint32_t kRunOnReference = 2;
+
+std::string asciiLower(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (const auto ch : text) {
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    return out;
+}
 
 bool parseEntireInt32(std::string_view text, std::int32_t& value) {
     if (text.empty()) return false;
@@ -68,51 +82,9 @@ bool knownConditionKey(std::string_view key) {
            key == "cis1" || key == "cis2";
 }
 
-}  // namespace
-
-bool isPlacedSignature(fo4::Signature signature) {
-    const auto text = signature.to_string();
-    return text == "REFR" || text == "ACHR" || text == "PGRE" || text == "PHZD" ||
-           text == "PMIS" || text == "PARW" || text == "PBAR" || text == "PBEA" ||
-           text == "PCON" || text == "PFLA";
-}
-
-std::optional<Error> requireLoadedFill(
-    const fo4::ConflictGraph& graph,
-    const fo4::FormKey& key,
-    std::initializer_list<std::string_view> accepted,
-    bool placedTargets,
-    std::string_view slotName) {
-    const auto* winner = graph.winner(key);
-    if (winner == nullptr) {
-        return Error{
-            "InvalidTypedFormKey",
-            std::string(slotName) + " must resolve to a loaded record: " + key.to_string()
-        };
-    }
-    const auto signature = winner->signature.to_string();
-    if (placedTargets && isPlacedSignature(winner->signature)) return std::nullopt;
-    for (const auto name : accepted) {
-        if (signature == name) return std::nullopt;
-    }
-    std::string expected;
-    if (placedTargets) expected = "placed reference";
-    for (const auto name : accepted) {
-        if (!expected.empty()) expected += " or ";
-        expected += std::string(name);
-    }
-    return Error{
-        "InvalidTypedFormKey",
-        std::string(slotName) + " " + key.to_string() + " is a " + signature +
-            ", but this slot holds a " + expected
-    };
-}
-
-namespace {
-
 bool editorTokenMatches(fo4::Signature signature, std::string_view token) {
     const auto name = signature.to_string();
-    const auto wanted = support::asciiLower(token);
+    const auto wanted = asciiLower(token);
     if (wanted == "placedobject") return isPlacedSignature(signature);
     if (wanted == "placednpc") return name == "ACHR";
     if (wanted == "npc") return name == "NPC_";
@@ -147,8 +119,6 @@ bool editorTokenMatches(fo4::Signature signature, std::string_view token) {
     if (wanted == "class") return name == "CLAS";
     return false;
 }
-
-}  // namespace
 
 std::optional<Error> requireConditionTarget(
     const fo4::ConflictGraph& graph,
@@ -188,23 +158,6 @@ bool conditionSlotIsNumeric(std::string_view paramType, std::uint8_t flags) {
 bool conditionSlotIsText(std::string_view paramType) {
     return ConditionFunctions::editorFor(paramType).first == "text";
 }
-
-std::optional<Error> rejectUnknownKeys(const nlohmann::json& object,
-                                       bool (*known)(std::string_view),
-                                       std::string_view label,
-                                       std::string_view errorType) {
-    for (auto it = object.begin(); it != object.end(); ++it) {
-        if (!known(it.key())) {
-            return Error{
-                std::string(errorType),
-                "Unsupported " + std::string(label) + " field '" + it.key() + "'"
-            };
-        }
-    }
-    return std::nullopt;
-}
-
-namespace {
 
 std::optional<Error> parseQuestConditionParam(
     const nlohmann::json& value,
@@ -253,7 +206,7 @@ std::optional<Error> parseQuestConditionParam(
     return std::nullopt;
 }
 
-}  // namespace
+}
 
 std::optional<Error> parseQuestCondition(
     const nlohmann::json& element,
@@ -281,7 +234,7 @@ std::optional<Error> parseQuestCondition(
     if (!function.has_value()) {
         return fail("unknown condition function '" + functionText + "'");
     }
-    if (support::asciiLower(functionText) == "geteventdata" ||
+    if (asciiLower(functionText) == "geteventdata" ||
         *function == kMutagenGetEventData ||
         *function == fo4::k_ctda_event_function_index) {
         return Error{
@@ -424,7 +377,7 @@ std::optional<Error> parseQuestCondition(
             return std::nullopt;
         }
         if (!present) {
-            if (support::asciiLower(paramType) == "factionnull") return std::nullopt;
+            if (asciiLower(paramType) == "factionnull") return std::nullopt;
             return fail(std::string(jsonKey) + " for " + functionText + " must be a FormKey");
         }
         std::int32_t ignored = 0;
@@ -498,4 +451,130 @@ std::optional<Error> parseQuestCondition(
     return std::nullopt;
 }
 
-}  // namespace fo4ide::plugin
+void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
+                           std::vector<fo4::CtdaCondition>& conditions) {
+    const auto withoutPadding = [](fo4::CtdaCondition condition) {
+        condition.padding = {};
+        return condition;
+    };
+    std::vector<bool> used(previous.size(), false);
+    std::vector<bool> carried(conditions.size(), false);
+    for (std::size_t k = 0; k < conditions.size(); ++k) {
+        auto& condition = conditions[k];
+        condition.padding = {};
+        const auto payload = fo4::serialize_ctda_condition(condition);
+        for (std::size_t index = 0; index < previous.size(); ++index) {
+            const auto& candidate = previous[index];
+            if (used[index] ||
+                fo4::serialize_ctda_condition(withoutPadding(candidate)) != payload ||
+                candidate.parameter1_string != condition.parameter1_string ||
+                candidate.parameter2_string != condition.parameter2_string) {
+                continue;
+            }
+            condition.padding = candidate.padding;
+            used[index] = true;
+            carried[k] = true;
+            break;
+        }
+    }
+    for (std::size_t k = 0; k < conditions.size() && k < previous.size(); ++k) {
+        if (carried[k] || used[k]) continue;
+        conditions[k].padding = previous[k].padding;
+        used[k] = true;
+    }
+}
+
+std::optional<Error> adapterConditionUnrepresentable(
+    const fo4::Plugin& plugin,
+    const fo4::ConflictGraph& graph,
+    const fo4::CtdaCondition& condition,
+    std::string_view surface) {
+    const auto existingFail = [&](std::string_view rest) {
+        return Error{
+            "QuestAuthoringCoverageIncomplete",
+            "existing QUST " + std::string(surface) + " " + std::string(rest)
+        };
+    };
+    if (condition.is_event_data() || condition.function == kMutagenGetEventData) {
+        return existingFail("uses GetEventData");
+    }
+    const auto name = functionName(condition.function);
+    if (name.empty() || asciiLower(name) == "geteventdata") {
+        return existingFail("has an unsupported condition function");
+    }
+    if (condition.unknown2 != 0 || condition.unknown3 != -1) {
+        return existingFail("CTDA has unknown fields");
+    }
+    if (condition.compare_operator() > 5) {
+        return existingFail("has an unsupported condition operator");
+    }
+    if (runOnName(condition.run_on).empty()) {
+        return existingFail("has an unsupported runOn");
+    }
+    const auto resolveRaw = [&](std::uint32_t raw,
+                                std::string_view paramType,
+                                std::string_view slot) -> std::optional<Error> {
+        if (raw == 0) {
+            if (asciiLower(paramType) == "factionnull") return std::nullopt;
+            return existingFail("has an unresolved condition FormLink");
+        }
+        try {
+            const auto key = fo4::resolve_plugin_form_id(
+                fo4::RawFormId{raw}, fo4::plugin_form_id_context(plugin));
+            if (const auto error = requireConditionTarget(graph, key, paramType, slot)) {
+                return Error{"QuestAuthoringCoverageIncomplete", error->message};
+            }
+            return std::nullopt;
+        } catch (const std::exception&) {
+            return existingFail("has an unresolved condition FormLink");
+        }
+    };
+    if (condition.use_global()) {
+        if (const auto error = resolveRaw(condition.comparison_raw, "Global", "compareGlobal")) {
+            return error;
+        }
+    }
+    if (condition.run_on == kRunOnReference) {
+        if (const auto error = resolveRaw(condition.reference, "Reference", "reference")) {
+            return error;
+        }
+    } else if (condition.reference != 0) {
+        return existingFail("stores a CTDA reference without runOn Reference");
+    }
+    const auto declared = ConditionFunctions::paramsOf(name);
+    const auto checkSlot = [&](std::size_t index,
+                               std::int32_t value,
+                               std::string_view slot) -> std::optional<Error> {
+        if (index >= declared.size()) {
+            if (value != 0) {
+                return existingFail("has unused condition parameter data");
+            }
+            return std::nullopt;
+        }
+        const auto& paramType = declared[index];
+        if (conditionSlotIsText(paramType)) {
+            if (value != 0) {
+                return existingFail("has nonzero raw data on a text condition parameter");
+            }
+            return std::nullopt;
+        }
+        if (conditionSlotIsNumeric(paramType, condition.flags())) {
+            return std::nullopt;
+        }
+        return resolveRaw(static_cast<std::uint32_t>(value), paramType, slot);
+    };
+    if (const auto error = checkSlot(0, condition.param1, "param1")) return error;
+    if (const auto error = checkSlot(1, condition.param2, "param2")) return error;
+    const auto cisAllowed = [&](std::size_t index) {
+        return index < declared.size() && conditionSlotIsText(declared[index]);
+    };
+    if (condition.parameter1_string.has_value() && !cisAllowed(0)) {
+        return existingFail("has CIS1 on a non-text condition parameter");
+    }
+    if (condition.parameter2_string.has_value() && !cisAllowed(1)) {
+        return existingFail("has CIS2 on a non-text condition parameter");
+    }
+    return std::nullopt;
+}
+
+}

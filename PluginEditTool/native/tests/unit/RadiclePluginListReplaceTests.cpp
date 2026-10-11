@@ -50,7 +50,6 @@ std::vector<std::byte> makeZString(std::string_view text) {
     return out;
 }
 
-// 32-byte function-condition CTDA payload.
 std::vector<std::byte> makeCtda(std::uint8_t flagsByte, std::uint32_t comparison,
                                 std::uint16_t function, std::uint16_t unknown2,
                                 std::int32_t param1, std::int32_t param2,
@@ -78,7 +77,6 @@ void appendAngleConditions(fo4::test::ByteWriter& out) {
     }
 }
 
-// A WEAP with three GetAngle conditions (values 1.0, 2.0, 3.0).
 std::vector<std::byte> makeWeaponWithThreeConditions() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -101,7 +99,6 @@ std::vector<std::byte> makeWeaponWithThreeConditions() {
     return out.bytes;
 }
 
-// A SPEL whose Effects[0] carries the same three GetAngle conditions.
 std::vector<std::byte> makeSpellWithThreeEffectConditions() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
@@ -132,8 +129,6 @@ std::vector<std::byte> makeSpellWithThreeEffectConditions() {
     return out.bytes;
 }
 
-// A MISC that already carries two components (CVPA: 0x801 x1, 0x802 x2),
-// plus the CMPO and WEAP records the component entries resolve against.
 std::vector<std::byte> makeMiscWithComponents() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
@@ -228,9 +223,9 @@ TEST_CASE("list replace: SetConditions refuses a partly bad list and stages noth
         "backend.SetConditions",
         nlohmann::json::array({"Patch.esp", "000800:Patch.esp", withBadEntry.dump()}));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "ConditionEntriesRefused");
+    CHECK(result.error().type == "InvalidConditionsJson");
     CHECK(result.error().message ==
-          "Refused: 1 of 3 condition entries failed: #2: unknown function 'NotARealFunction'.");
+          "#2: unknown function 'NotARealFunction'");
 
     CHECK_FALSE(isPending(backend));
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
@@ -325,9 +320,9 @@ TEST_CASE("list replace: SetConditionsAtPath refuses a partly bad list and stage
         nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Effects[0].Conditions",
                                withBadEntry.dump()}));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "ConditionEntriesRefused");
+    CHECK(result.error().type == "InvalidConditionsJson");
     CHECK(result.error().message ==
-          "Refused: 1 of 3 condition entries failed: #2: unknown function 'NotARealFunction'.");
+          "#2: unknown function 'NotARealFunction'");
 
     CHECK_FALSE(isPending(backend));
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);

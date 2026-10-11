@@ -1,4 +1,4 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -17,6 +17,9 @@
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string componentStringArg(const nlohmann::json& args, std::size_t index) {
@@ -32,17 +35,6 @@ std::string componentLower(std::string_view value) {
     return out;
 }
 
-std::string componentEditorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
-}
-
 const fo4::Record* resolveComponentRecord(const fo4::Plugin& plugin,
                                           std::string_view recordText,
                                           fo4::FormKey& outKey) {
@@ -56,7 +48,7 @@ const fo4::Record* resolveComponentRecord(const fo4::Plugin& plugin,
     }
     const auto wanted = componentLower(recordText);
     for (const auto* record : fo4::collect_records(plugin)) {
-        if (componentLower(componentEditorId(*record)) == wanted) {
+        if (componentLower(editorId(*record)) == wanted) {
             outKey = record->form_key;
             return record;
         }

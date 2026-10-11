@@ -1,4 +1,4 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -21,6 +21,9 @@
 #include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string deepStringArgument(const nlohmann::json& args, std::size_t index) {
@@ -57,17 +60,6 @@ std::string deepLower(std::string_view value) {
         return static_cast<char>(std::tolower(ch));
     });
     return out;
-}
-
-std::string deepEditorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
 }
 
 const fo4::Record* deepTopLevelRecord(const fo4::Plugin& plugin,
@@ -163,7 +155,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
         if (!keyResolved) {
             const auto wanted = deepLower(recordId);
             fo4::visit_records(source->plugin, [&](const fo4::Record& record) {
-                if (!keyResolved && deepLower(deepEditorId(record)) == wanted) {
+                if (!keyResolved && deepLower(editorId(record)) == wanted) {
                     rootKey = record.form_key;
                     keyResolved = true;
                 }
@@ -179,7 +171,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
         const auto wanted = deepLower(recordId);
         for (auto it = plugins_.rbegin(); it != plugins_.rend() && source == nullptr; ++it) {
             fo4::visit_records(it->plugin, [&](const fo4::Record& record) {
-                if (source == nullptr && deepLower(deepEditorId(record)) == wanted) {
+                if (source == nullptr && deepLower(editorId(record)) == wanted) {
                     source = &*it;
                     rootKey = record.form_key;
                     keyResolved = true;
@@ -315,7 +307,7 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
             for (std::size_t index = 0; index < shown; ++index) {
                 if (!sample.empty()) sample += ", ";
                 const auto* record = fo4::find_record(source->plugin, existing[index]);
-                const auto editor = record == nullptr ? std::string{} : deepEditorId(*record);
+                const auto editor = record == nullptr ? std::string{} : editorId(*record);
                 if (!editor.empty()) sample += editor + " ";
                 sample += "(" + existing[index].to_string() + ")";
             }

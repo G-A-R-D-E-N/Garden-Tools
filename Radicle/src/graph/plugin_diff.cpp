@@ -11,7 +11,7 @@ namespace {
 
 std::map<FormKey, const Record*> index_records(const Plugin& plugin) {
   std::map<FormKey, const Record*> out;
-  for (const auto* record : collect_records(plugin)) out[record->form_key] = record;
+  for (const auto* record : collect_records(plugin)) out.try_emplace(record->form_key, record);
   return out;
 }
 

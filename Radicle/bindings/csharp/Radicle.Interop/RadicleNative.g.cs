@@ -234,6 +234,7 @@ public unsafe struct ScriptProperty
     public int HasAlias;
     public short Alias;
     public IntPtr Text;
+    public nuint TextSize;
     public int HasInteger;
     public int Integer;
     public int HasReal;
@@ -743,6 +744,30 @@ public unsafe struct PexObjectCode
     public nuint StructMemberCount;
 }
 
+public enum MaterialFormat : int
+{
+    Bgsm = 0,
+    Bgem = 1,
+}
+
+public enum MaterialFieldType : int
+{
+    Bool = 0,
+    U8 = 1,
+    U32 = 2,
+    F32 = 3,
+    Color3 = 4,
+    String = 5,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct MaterialColor3
+{
+    public float R;
+    public float G;
+    public float B;
+}
+
 public enum QuestPropertyOwner : int
 {
     Script = 0,
@@ -778,19 +803,19 @@ public unsafe struct QuestProperty
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 11u;
+    public const uint CompiledAbiVersion = 22u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_read_file")]
-    public static extern Status PluginReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_plugin);
+    public static extern Status PluginReadFile([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr* out_plugin);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_destroy")]
     public static extern void PluginDestroy(IntPtr plugin);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_write_file")]
-    public static extern Status PluginWriteFile(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path);
+    public static extern Status PluginWriteFile(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_write_bytes")]
     public static extern Status PluginWriteBytes(IntPtr plugin, byte** out_bytes, nuint* out_size);
@@ -832,7 +857,7 @@ public static unsafe partial class RadicleNative
     public static extern Status EnvPluginMaster(IntPtr env, nuint plugin_index, nuint master_index, IntPtr* out_filename, int* out_resolved);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_plugin")]
-    public static extern Status EnvFindPlugin(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? filename, nuint* out_index);
+    public static extern Status EnvFindPlugin(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? filename, nuint* out_index);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_winner")]
     public static extern Status EnvWinner(IntPtr env, FormKey key, IntPtr* out_record);
@@ -841,16 +866,16 @@ public static unsafe partial class RadicleNative
     public static extern Status EnvVersions(IntPtr env, FormKey key, IntPtr** out_records, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_editor_id")]
-    public static extern Status EnvFindEditorId(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? editor_id, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, IntPtr* out_record);
+    public static extern Status EnvFindEditorId(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, IntPtr* out_record);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_winners_of")]
-    public static extern Status EnvWinnersOf(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, IntPtr** out_records, nuint* out_count);
+    public static extern Status EnvWinnersOf(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, IntPtr** out_records, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_record_array")]
     public static extern void FreeRecordArray(IntPtr* records);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_check_errors")]
-    public static extern Status EnvCheckErrors(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
+    public static extern Status EnvCheckErrors(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_get_info")]
     public static extern Status RecordGetInfo(IntPtr env, IntPtr record, RecordInfo* out_info);
@@ -907,10 +932,10 @@ public static unsafe partial class RadicleNative
     public static extern Status EnvLandscapeTextureDiffuse(IntPtr env, FormKey landscape_texture, IntPtr* out_path);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_string_source_for")]
-    public static extern Status StringSourceFor([MarshalAs(UnmanagedType.LPUTF8Str)] string? record_signature, [MarshalAs(UnmanagedType.LPUTF8Str)] string? subrecord_signature, StringSource* out_source);
+    public static extern Status StringSourceFor([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? record_signature, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? subrecord_signature, StringSource* out_source);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_strings_load")]
-    public static extern Status StringsLoad(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? strings_dir, [MarshalAs(UnmanagedType.LPUTF8Str)] string? language, IntPtr* out_strings);
+    public static extern Status StringsLoad(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? strings_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? language, IntPtr* out_strings);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_strings_destroy")]
     public static extern void StringsDestroy(IntPtr strings);
@@ -925,7 +950,7 @@ public static unsafe partial class RadicleNative
     public static extern Status StringsResolveName(IntPtr strings, IntPtr record, IntPtr* out_text, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_open")]
-    public static extern Status Ba2Open([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_ba2);
+    public static extern Status Ba2Open([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr* out_ba2);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_close")]
     public static extern void Ba2Close(IntPtr ba2);
@@ -937,16 +962,16 @@ public static unsafe partial class RadicleNative
     public static extern Status Ba2GetEntry(IntPtr ba2, nuint index, Ba2EntryInfo* out_entry);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_find")]
-    public static extern Status Ba2Find(IntPtr ba2, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint* out_index);
+    public static extern Status Ba2Find(IntPtr ba2, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint* out_index);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ba2_extract")]
     public static extern Status Ba2Extract(IntPtr ba2, nuint index, byte** out_bytes, nuint* out_size);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_archive_load_order")]
-    public static extern Status ArchiveLoadOrder([MarshalAs(UnmanagedType.LPUTF8Str)] string? data_dir, IntPtr* ini_archives, nuint ini_count, IntPtr* plugins, nuint plugin_count, IntPtr** out_paths, nuint* out_count);
+    public static extern Status ArchiveLoadOrder([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, IntPtr* ini_archives, nuint ini_count, IntPtr* plugins, nuint plugin_count, IntPtr** out_paths, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_open")]
-    public static extern Status AssetsOpen([MarshalAs(UnmanagedType.LPUTF8Str)] string? data_dir, IntPtr* archive_paths, nuint archive_count, IntPtr* out_assets);
+    public static extern Status AssetsOpen([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, IntPtr* archive_paths, nuint archive_count, IntPtr* out_assets);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_destroy")]
     public static extern void AssetsDestroy(IntPtr assets);
@@ -958,16 +983,16 @@ public static unsafe partial class RadicleNative
     public static extern Status AssetsGetArchive(IntPtr assets, nuint index, IntPtr* out_ba2);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_locate")]
-    public static extern Status AssetsLocate(IntPtr assets, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, AssetLocation* out_location);
+    public static extern Status AssetsLocate(IntPtr assets, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, AssetLocation* out_location);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_assets_read")]
-    public static extern Status AssetsRead(IntPtr assets, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, byte** out_bytes, nuint* out_size, AssetLocation* out_location);
+    public static extern Status AssetsRead(IntPtr assets, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, byte** out_bytes, nuint* out_size, AssetLocation* out_location);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_strings_load_with_assets")]
-    public static extern Status StringsLoadWithAssets(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? strings_dir, [MarshalAs(UnmanagedType.LPUTF8Str)] string? language, IntPtr assets, IntPtr* out_strings);
+    public static extern Status StringsLoadWithAssets(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? strings_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? language, IntPtr assets, IntPtr* out_strings);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create")]
-    public static extern Status PluginCreate([MarshalAs(UnmanagedType.LPUTF8Str)] string? filename, IntPtr* out_plugin);
+    public static extern Status PluginCreate([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? filename, IntPtr* out_plugin);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_placed_ref_override")]
     public static extern Status PluginCopyPlacedRefOverride(IntPtr plugin, IntPtr env, IntPtr record, int overwrite, PlacedCopyStatus* out_status);
@@ -985,13 +1010,13 @@ public static unsafe partial class RadicleNative
     public static extern Status PluginSortMasters(IntPtr plugin, IntPtr env);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_editor_id")]
-    public static extern Status PluginSetPlacedEditorId(IntPtr plugin, FormKey reference, [MarshalAs(UnmanagedType.LPUTF8Str)] string? editor_id);
+    public static extern Status PluginSetPlacedEditorId(IntPtr plugin, FormKey reference, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_record_flags")]
     public static extern Status PluginSetPlacedRecordFlags(IntPtr plugin, FormKey reference, uint flags);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_comments")]
-    public static extern Status PluginSetPlacedComments(IntPtr plugin, FormKey reference, [MarshalAs(UnmanagedType.LPUTF8Str)] string? comments);
+    public static extern Status PluginSetPlacedComments(IntPtr plugin, FormKey reference, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? comments);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_location_reference")]
     public static extern Status PluginSetPlacedLocationReference(IntPtr plugin, IntPtr env, FormKey reference, FormKey location);
@@ -1015,34 +1040,34 @@ public static unsafe partial class RadicleNative
     public static extern Status PluginSetPlacedActivateParentDelay(IntPtr plugin, FormKey reference, nuint index, float delay);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_scalar")]
-    public static extern Status PluginSetRecordScalar(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, [MarshalAs(UnmanagedType.LPUTF8Str)] string? value);
+    public static extern Status PluginSetRecordScalar(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_scalar_at")]
-    public static extern Status PluginSetRecordScalarAt(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint index, [MarshalAs(UnmanagedType.LPUTF8Str)] string? value);
+    public static extern Status PluginSetRecordScalarAt(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? value);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_formlink")]
-    public static extern Status PluginSetRecordFormlink(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint index, FormKey* target);
+    public static extern Status PluginSetRecordFormlink(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint index, FormKey* target);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_record_string")]
-    public static extern Status PluginSetRecordString(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint index, [MarshalAs(UnmanagedType.LPUTF8Str)] string? utf8);
+    public static extern Status PluginSetRecordString(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? utf8);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_record_field_count")]
-    public static extern Status PluginRecordFieldCount(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint* out_count);
+    public static extern Status PluginRecordFieldCount(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_size")]
-    public static extern Status PluginFormlinkListSize(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint* out_count);
+    public static extern Status PluginFormlinkListSize(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_insert")]
-    public static extern Status PluginFormlinkListInsert(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint at, FormKey* target);
+    public static extern Status PluginFormlinkListInsert(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint at, FormKey* target);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_remove")]
-    public static extern Status PluginFormlinkListRemove(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint at);
+    public static extern Status PluginFormlinkListRemove(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint at);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_set")]
-    public static extern Status PluginFormlinkListSet(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path, nuint at, FormKey* target);
+    public static extern Status PluginFormlinkListSet(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint at, FormKey* target);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_formlink_list_clear")]
-    public static extern Status PluginFormlinkListClear(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? path);
+    public static extern Status PluginFormlinkListClear(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_plugin_records")]
     public static extern Status EnvPluginRecords(IntPtr env, nuint plugin_index, IntPtr** out_records, nuint* out_count);
@@ -1114,22 +1139,22 @@ public static unsafe partial class RadicleNative
     public static extern Status RecordPrimaryModelColorRemappingIndex(IntPtr env, IntPtr record, float* out_index);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_identical_to_master")]
-    public static extern Status EnvIdenticalToMaster(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
+    public static extern Status EnvIdenticalToMaster(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_deleted_counts")]
-    public static extern Status EnvDeletedCounts(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_records, nuint* out_references, nuint* out_navmeshes);
+    public static extern Status EnvDeletedCounts(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin, nuint* out_records, nuint* out_references, nuint* out_navmeshes);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_unused_masters")]
-    public static extern Status EnvUnusedMasters(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, IntPtr** out_strings, nuint* out_count, int* out_complete);
+    public static extern Status EnvUnusedMasters(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin, IntPtr** out_strings, nuint* out_count, int* out_complete);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_esl_eligibility")]
-    public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.LPUTF8Str)] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
+    public static extern Status EnvEslEligibility(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin, nuint* out_native_records, nuint* out_out_of_range, nuint* out_capacity);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
     public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_read_file")]
-    public static extern Status PexReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_pex);
+    public static extern Status PexReadFile([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr* out_pex);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_destroy")]
     public static extern void PexDestroy(IntPtr pex);
@@ -1158,11 +1183,71 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_free_object_code")]
     public static extern void PexFreeObjectCode(PexObjectCode* code);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_read")]
+    public static extern Status MaterialFileRead(byte* bytes, nuint size, IntPtr* out_file);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_destroy")]
+    public static extern void MaterialFileDestroy(IntPtr file);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_write")]
+    public static extern Status MaterialFileWrite(IntPtr file, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_format")]
+    public static extern Status MaterialFileFormat(IntPtr file, MaterialFormat* out_format);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_version")]
+    public static extern Status MaterialFileVersion(IntPtr file, uint* out_version);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_field_count")]
+    public static extern Status MaterialFileFieldCount(IntPtr file, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_field_name")]
+    public static extern Status MaterialFileFieldName(IntPtr file, nuint index, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_field_type")]
+    public static extern Status MaterialFileFieldType(IntPtr file, nuint index, MaterialFieldType* out_type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_bool")]
+    public static extern Status MaterialFileGetBool(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_u8")]
+    public static extern Status MaterialFileGetU8(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_u32")]
+    public static extern Status MaterialFileGetU32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, uint* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_f32")]
+    public static extern Status MaterialFileGetF32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, float* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_color3")]
+    public static extern Status MaterialFileGetColor3(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, MaterialColor3* out_value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_get_string")]
+    public static extern Status MaterialFileGetString(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte** out_bytes, nuint* out_size);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_bool")]
+    public static extern Status MaterialFileSetBool(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_u8")]
+    public static extern Status MaterialFileSetU8(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_u32")]
+    public static extern Status MaterialFileSetU32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, uint value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_f32")]
+    public static extern Status MaterialFileSetF32(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, float value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_color3")]
+    public static extern Status MaterialFileSetColor3(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, MaterialColor3* value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_material_file_set_string")]
+    public static extern Status MaterialFileSetString(IntPtr file, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name, byte* bytes, nuint size);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_parse")]
     public static extern Status SeqParse(byte* bytes, nuint size, IntPtr* out_seq);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_read_file")]
-    public static extern Status SeqReadFile([MarshalAs(UnmanagedType.LPUTF8Str)] string? path, IntPtr* out_seq);
+    public static extern Status SeqReadFile([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr* out_seq);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_seq_destroy")]
     public static extern void SeqDestroy(IntPtr seq);
@@ -1177,21 +1262,21 @@ public static unsafe partial class RadicleNative
     public static extern Status SeqEntryFormId(IntPtr seq, nuint index, uint* out_form_id);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_runtime_rows")]
-    public static extern Status QuestRuntimeRows(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? form_key, IntPtr** out_rows, nuint* out_count);
+    public static extern Status QuestRuntimeRows(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? form_key, IntPtr** out_rows, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_runtime_properties")]
-    public static extern Status QuestRuntimeProperties(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? form_key, QuestProperty** out_properties, nuint* out_count);
+    public static extern Status QuestRuntimeProperties(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? form_key, QuestProperty** out_properties, nuint* out_count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_quest_properties")]
     public static extern void FreeQuestProperties(QuestProperty* properties, nuint count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_subrecord")]
-    public static extern Status PluginAddSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature);
+    public static extern Status PluginAddSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_subrecord")]
-    public static extern Status PluginRemoveSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, nuint occurrence);
+    public static extern Status PluginRemoveSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, nuint occurrence);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_create_record")]
-    public static extern Status PluginCreateRecord(IntPtr plugin, [MarshalAs(UnmanagedType.LPUTF8Str)] string? signature, [MarshalAs(UnmanagedType.LPUTF8Str)] string? editor_id_utf8, FormKey* out_key);
+    public static extern Status PluginCreateRecord(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id_utf8, FormKey* out_key);
 
 }

@@ -514,7 +514,11 @@ TEST(ConditionScopes, SetAliasConditionsLeavesSiblingsAndDialogConditionsIntact)
   EXPECT_EQ(read_opt(*record, descriptor, 3)->at(0).function, 8u);
 
   bool dialog_condition_present = false;
-  for (const auto& condition : fo4::read_ctda_conditions(*record)) {
+  const auto alias_begin = std::find_if(record->subrecords.begin(), record->subrecords.end(), [](const auto& member) {
+    return member.signature == fo4::Signature::from_string("ANAM");
+  });
+  for (const auto& condition : fo4::read_ctda_conditions_in(
+           *record, 0, static_cast<std::size_t>(alias_begin - record->subrecords.begin()))) {
     if (condition.function == 100u) dialog_condition_present = true;
   }
   EXPECT_TRUE(dialog_condition_present);
@@ -637,6 +641,12 @@ TEST(ConditionScopes, RefusesScopeHoldingSeveralConditionLists) {
       {"NNAM", {std::byte{0}}},
   });
   const auto before = plugin;
+  const auto* record = quest_record(plugin);
+  ASSERT_NE(record, nullptr);
+  const auto read = fo4::schema::read_scoped_conditions(*record, qust_descriptor(), 0);
+  EXPECT_FALSE(read.ok);
+  EXPECT_EQ(read.error, fo4::schema::ScopedConditionStatus::multiple_lists);
+  EXPECT_TRUE(read.conditions.empty());
   fo4::CtdaCondition replacement;
   replacement.function = 42;
   const std::vector<fo4::CtdaCondition> conditions{replacement};
