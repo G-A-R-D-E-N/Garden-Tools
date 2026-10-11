@@ -108,6 +108,27 @@ TEST_CASE("condition codec: non-string flags fail the entry") {
     CHECK(failureOf(element) == "flags must be a string");
 }
 
+TEST_CASE("condition codec: numeric flag carrying the Use Global bit fails the entry") {
+    const nlohmann::json element = {{"function", "GetAngle"}, {"flags", "4"}};
+    CHECK(failureOf(element) == "unknown flag '4'");
+}
+
+TEST_CASE("condition codec: numeric flag carrying an operator bit fails the entry") {
+    const nlohmann::json element = {{"function", "GetAngle"}, {"flags", "32"}};
+    CHECK(failureOf(element) == "unknown flag '32'");
+}
+
+TEST_CASE("condition codec: numeric flag equal to a named flag is accepted without touching the operator") {
+    const nlohmann::json element = {{"function", "GetAngle"}, {"operator", ">="}, {"flags", "8"}};
+    std::string failure;
+    const auto condition = buildFrom(element, failure);
+    REQUIRE(condition.has_value());
+    CHECK(failure.empty());
+    CHECK(condition->flags() == 0x08);
+    CHECK(condition->compare_operator() == 3);
+    CHECK_FALSE(condition->use_global());
+}
+
 TEST_CASE("condition codec: integer params store the 32-bit range edges") {
     std::string failure;
 

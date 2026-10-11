@@ -49,6 +49,9 @@ std::optional<fo4::RawFormId> placeholderFormId(std::string_view text) {
     return fo4::RawFormId{raw};
 }
 
+constexpr std::uint32_t kNamedFlagMask = fo4::k_ctda_flag_or | fo4::k_ctda_flag_aliases |
+                                         fo4::k_ctda_flag_pack_data | fo4::k_ctda_flag_swap;
+
 std::optional<std::uint32_t> flagValue(std::string_view name) {
     const auto needle = lower(name);
     if (needle == "or") return fo4::k_ctda_flag_or;
@@ -57,7 +60,7 @@ std::optional<std::uint32_t> flagValue(std::string_view name) {
     if (needle == "swapsubjectandtarget") return fo4::k_ctda_flag_swap;
     char* end = nullptr;
     const auto value = std::strtoul(name.data(), &end, 10);
-    if (end != name.data() && *end == '\0' && value <= 0xFFu) {
+    if (end != name.data() && *end == '\0' && (value | kNamedFlagMask) == kNamedFlagMask) {
         return static_cast<std::uint32_t>(value);
     }
     return std::nullopt;
