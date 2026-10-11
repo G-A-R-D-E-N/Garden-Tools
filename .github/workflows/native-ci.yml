@@ -14,7 +14,6 @@ on:
       - main
     paths-ignore:
       - "BGS/**"
-      - "F4LODGEN/**"
       - "PluginEditTool/web/**"
       - "PluginEditTool/FO4RecordEditor*/**"
       - "PluginEditTool/Mutagen/**"

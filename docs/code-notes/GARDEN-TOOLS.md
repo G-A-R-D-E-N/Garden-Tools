@@ -1893,3 +1893,8 @@ Rewrites PATH entries under the real Windows profile to the neutral runner host 
 The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3984-3990 @93cc0bc5` (`wbVMADFragmentedQUST`) wraps Script Data in `wbUnion` with `source:xEdit Core/wbDefinitionsCommon.pas:5866-5876 @93cc0bc5` (`wbScriptFragmentsEmptyScriptDecider`), which picks `wbNull` for an empty ScriptName. So `walk_quest_extra` and `read_quest_vmad_extras` keep the empty-name guard for that header only.
 
 Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.
+
+## F4LODGEN removed
+
+Anchored to `README.md` (tool table) and `.github/workflows/native-ci.yml:on.push.paths-ignore`. F4LODGEN was retired on 2026-10-11 and its tree was deleted. The last commit that contains it is 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3; recover files with `git show 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3:F4LODGEN/<path>`. The README tool table row and the native-ci paths-ignore entry `F4LODGEN/**` were removed with it.
+
