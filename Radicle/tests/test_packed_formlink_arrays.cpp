@@ -303,3 +303,30 @@ TEST(FormLink, FixedStrideStructArraysRemapFormIdsAndKeepValues) {
   EXPECT_EQ(links[4].record, fo4::FormKey::parse("000801:Patch.esp"));
   EXPECT_EQ(links[5].offset, 8);
 }
+
+TEST(FormLink, DamaCurveTableElementsRemapAtFormVersion152) {
+  auto out = plugin_header(1);
+  const auto group = fo4::test::begin_group(out, "ARMO", 0);
+  const auto record = fo4::test::begin_record(out, "ARMO", 0, 0x03000800, 152);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Record\0", 7});
+  fo4::test::write_subrecord(out, "DAMA",
+                             words({0x02000045, 0x02000044, 0x02000046, 0x00000099, 4, 0x00000047}));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* armo = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(armo, nullptr);
+  ASSERT_NE(find_sub(*armo, "DAMA"), nullptr);
+  EXPECT_EQ(find_sub(*armo, "DAMA")->data,
+            words({0x00000045, 0x02000044, 0x00000046, 0x01000099, 4, 0x01000047}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 4);
+  EXPECT_EQ(links[0].offset, 0);
+  EXPECT_EQ(links[1].offset, 8);
+  EXPECT_EQ(links[2].offset, 12);
+  EXPECT_EQ(links[3].offset, 20);
+}

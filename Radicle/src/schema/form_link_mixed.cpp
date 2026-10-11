@@ -325,12 +325,17 @@ struct FixedStrideLayout {
   std::initializer_list<std::size_t> slots;
   bool exact;
   std::size_t short_size;
+  std::uint16_t min_form_version{0};
 };
 
 std::optional<std::vector<std::size_t>> fixed_stride_formid_offsets(
-    const Subrecord& sub, std::span<const FixedStrideLayout> layouts, bool strict_remap) {
+    const Subrecord& sub, std::uint16_t form_version, std::span<const FixedStrideLayout> layouts,
+    bool strict_remap) {
   for (const auto& layout : layouts) {
-    if (sub.signature != Signature::from_string(layout.signature)) continue;
+    if (sub.signature != Signature::from_string(layout.signature) ||
+        form_version < layout.min_form_version) {
+      continue;
+    }
     const auto size = sub.data.size();
     const bool valid = layout.exact ? size == layout.stride || (layout.short_size != 0 && size == layout.short_size)
                                     : size % layout.stride == 0;
@@ -361,9 +366,12 @@ const FixedStrideLayout k_placed_reference_layouts[] = {
     {"XWPN", 12, {0, 4, 8}, true, 0},
 };
 
+constexpr std::uint16_t k_damage_curve_form_version = 152;
+
 const FixedStrideLayout k_repeated_struct_layouts[] = {
     {"PRPS", 8, {0}, false, 0},
     {"DAMC", 8, {0}, false, 0},
+    {"DAMA", 12, {0, 8}, false, 0, k_damage_curve_form_version},
     {"DAMA", 8, {0}, false, 0},
 };
 
@@ -371,14 +379,16 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
                                                                        const Subrecord& sub,
                                                                        bool strict_remap) {
   if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
-  return fixed_stride_formid_offsets(sub, k_placed_reference_layouts, strict_remap);
+  return fixed_stride_formid_offsets(sub, record.header.form_version, k_placed_reference_layouts,
+                                     strict_remap);
 }
 
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
   if (auto packed = packed_formid_array_offsets(record, sub, strict_remap)) return packed;
-  if (auto repeated = fixed_stride_formid_offsets(sub, k_repeated_struct_layouts, strict_remap)) {
+  if (auto repeated = fixed_stride_formid_offsets(sub, record.header.form_version,
+                                                  k_repeated_struct_layouts, strict_remap)) {
     return repeated;
   }
   return placed_reference_formid_offsets(record, sub, strict_remap);
