@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -256,6 +257,50 @@ TEST_CASE("Native lifecycle refuses a create EditorId outside Windows-1252 witho
     const auto disk = fo4::read_plugin_file(pluginPath);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp")) == nullptr);
     CHECK(disk.header.next_form_id == 0x900u);
+}
+
+TEST_CASE("Native lifecycle stores an LVSP UTF-8 EditorId as Windows-1252") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MagicMod" / "Patch.esp";
+    writeBytes(pluginPath, makeSpellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MagicMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const nlohmann::json payload{
+        {"editorId", "Caf\xC3\xA9"},
+        {"chanceNone", 20},
+        {"maxCount", 2},
+        {"flags", 5},
+        {"entries", nlohmann::json::array({
+            {
+                {"level", 10},
+                {"spell", "000800:Patch.esp"},
+                {"count", 1},
+                {"chanceNone", 3}
+            }
+        })}
+    };
+    const auto created = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVSP", payload})));
+    REQUIRE(created.at("formKey") == "000900:Patch.esp");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(pluginPath);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(record != nullptr);
+    const auto edid = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+        [](const fo4::Subrecord& sub) { return sub.signature == fo4::sig_edid; });
+    REQUIRE(edid != record->subrecords.end());
+    CHECK(edid->data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}});
 }
 
 TEST_CASE("Native lifecycle creates LVSP with validated initial entries") {

@@ -242,10 +242,8 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 const auto newEditorId = !requestedEditorId.empty()
                     ? requestedEditorId
                     : (originalEditorId.empty() ? std::string{} : originalEditorId + "DUP");
-                const auto storedEditorId = support::encodeEditorId(newEditorId);
-                if (!storedEditorId) return std::unexpected(storedEditorId.error());
                 if (!newEditorId.empty() &&
-                    !fo4::set_record_editor_id(mutated, newKey, *storedEditorId)) {
+                    !fo4::set_record_editor_id(mutated, newKey, newEditorId)) {
                     return std::unexpected(Error{
                         "CopyAsNewEditorIdFailed",
                         "Could not set EditorID on the duplicated record"});
@@ -309,10 +307,8 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             const auto newEditorId = !requestedEditorId.empty()
                 ? requestedEditorId
                 : (originalEditorId.empty() ? std::string{} : originalEditorId + "DUP");
-            const auto storedEditorId = support::encodeEditorId(newEditorId);
-            if (!storedEditorId) return std::unexpected(storedEditorId.error());
             if (!newEditorId.empty() &&
-                !fo4::set_record_editor_id(mutated, newKey, *storedEditorId)) {
+                !fo4::set_record_editor_id(mutated, newKey, newEditorId)) {
                 return std::unexpected(Error{
                     "CopyAsNewEditorIdFailed",
                     "Could not set EditorID on the duplicated record"

@@ -18,7 +18,6 @@
 
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
-#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin::support {
 
@@ -63,14 +62,6 @@ inline Result<std::string> encodeEditorId(std::string_view utf8) {
         });
     }
     return std::move(*stored);
-}
-
-inline Result<std::optional<std::string>> encodeOptionalEditorId(
-    const std::optional<std::string>& utf8) {
-    if (!utf8.has_value()) return std::optional<std::string>{};
-    auto stored = encodeEditorId(*utf8);
-    if (!stored) return std::unexpected(stored.error());
-    return std::optional<std::string>{std::move(*stored)};
 }
 
 inline std::string asciiLower(std::string_view value) {

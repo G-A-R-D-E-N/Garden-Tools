@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -347,8 +348,33 @@ TEST_CASE("PluginEditTool refuses an ARMO EditorID that Windows-1252 cannot stor
     const auto refused = backend.invokeBackend("CreateRecord", nlohmann::json::array({
         "Patch.esp", "ARMO", nlohmann::json{{"editorId", "\xe6\x97\xa5"}}}));
     REQUIRE_FALSE(refused.has_value());
-    CHECK(refused.error().type == "InvalidEditorId");
+    CHECK(refused.error().type == "ArmorCreateFailed");
     const auto pending = parseResult(backend.invoke("appInterop.GetPlugins", nlohmann::json::array()));
     CHECK(pending.at(0).at("Pending") == false);
     CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("PluginEditTool stores an ARMO UTF-8 EditorID as Windows-1252") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto created = parseResult(backend.invokeBackend("CreateRecord", nlohmann::json::array({
+        "Patch.esp", "ARMO", nlohmann::json{{"editorId", "Caf\xC3\xA9"}}})));
+    REQUIRE(created.at("formKey") == "000800:Patch.esp");
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(record != nullptr);
+    const auto edid = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+        [](const fo4::Subrecord& sub) { return sub.signature == fo4::sig_edid; });
+    REQUIRE(edid != record->subrecords.end());
+    CHECK(edid->data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}});
 }
