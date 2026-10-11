@@ -60,3 +60,13 @@ The JSON is UTF-8. describe emits `cis1` / `cis2` when the string is present and
 Text that Windows-1252 cannot represent (for example U+4E2D) is refused, not substituted: `cis1 is not valid UTF-8 text representable in Windows-1252`, or the same wording with `cis2`. The `_native` restore path uses `preserved CIS string is not valid UTF-8 text representable in Windows-1252`.
 
 Top-level `cis1` / `cis2` are read in buildCondition only when they differ from the native baseline or on a new row (`changed`). They are refused on a slot that is not String or Event (`ConditionFunctions::editorFor` text kind), matching the quest codec in `RadiclePluginQuestCondition.cpp`.
+
+The shared conversion is `PluginEditTool/native/src/plugin/ConditionCodec.cpp:conditionCisFromUtf8` (declared in `PluginEditTool/native/include/fo4ide/plugin/ConditionCodec.hpp`). It returns nullopt for text Windows-1252 cannot represent and for an embedded NUL, so a NUL is now refused with the same not-representable wording instead of its own message. Every caller uses it: `buildCondition` (`applyCis` and the `_native` `restoreString`) and the quest path below.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQuestCondition.cpp:parseQuestCondition (GT-217, GT-188)
+
+Quest log-entry and alias conditions take `cis1` / `cis2` as UTF-8 JSON text. `parseQuestCondition` (its `parseCis` lambda) converts it with `conditionCisFromUtf8` before storing it in `parameter1_string` / `parameter2_string`, so the bytes written to CTDA/CIS1 are Windows-1252 as GT-188 requires. Before this, the UTF-8 bytes were written as-is. Unrepresentable text is refused with `cis1 is not valid UTF-8 text representable in Windows-1252` and nothing is written.
+
+The quest codebase has no JSON writer for conditions. A read of quest conditions goes through the condition backend (`RadiclePluginConditions.cpp:getConditions` / `getConditionsAtPath`) and `ConditionCodec.cpp:describeCondition`, which is the function fixed above, so the read path needs no separate change.
+
+Test anchor: `PluginEditTool/native/tests/unit/QuestOpaqueConditionTests.cpp` (TEST_CASE "quest log entry CIS1 is stored as Windows-1252 and reads back as UTF-8") sets a `GetGraphVariableInt` log-entry condition with `cis1` "café", checks the saved CIS1 subrecord is `caf\xE9`, decodes it with `lossless_quest_log_entry_conditions`, and checks `describeCondition` gives `café`.

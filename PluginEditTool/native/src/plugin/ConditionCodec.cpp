@@ -131,6 +131,12 @@ nlohmann::json cisText(const std::optional<std::string>& bytes) {
 
 }  // namespace
 
+std::optional<std::string> conditionCisFromUtf8(std::string_view utf8) {
+    auto bytes = fo4::text::utf8_to_windows1252(utf8);
+    if (!bytes || bytes->find('\0') != std::string::npos) return std::nullopt;
+    return bytes;
+}
+
 std::string conditionOperatorString(std::uint8_t compareOperator) {
     switch (compareOperator) {
         case 1: return "!=";
@@ -263,10 +269,9 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 const auto& value = metadata[key];
                 if (value.is_null()) return;
                 if (!value.is_string()) reject("invalid preserved CIS string");
-                const auto stored = fo4::text::utf8_to_windows1252(value.get<std::string>());
+                const auto stored = conditionCisFromUtf8(value.get<std::string>());
                 if (!stored) reject("preserved CIS string is not valid UTF-8 text representable in Windows-1252");
                 target = *stored;
-                if (target->find('\0') != std::string::npos) reject("preserved CIS string contains a terminator");
             };
             restoreString("cis1", condition.parameter1_string);
             restoreString("cis2", condition.parameter2_string);
@@ -407,9 +412,8 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             target.reset();
             if (!element.contains(key)) return;
             if (!element[key].is_string()) reject(std::string(key) + " must be a string");
-            const auto stored = fo4::text::utf8_to_windows1252(element[key].get<std::string>());
+            const auto stored = conditionCisFromUtf8(element[key].get<std::string>());
             if (!stored) reject(std::string(key) + " is not valid UTF-8 text representable in Windows-1252");
-            if (stored->find('\0') != std::string::npos) reject(std::string(key) + " cannot contain an embedded NUL");
             if (slot >= declared.size() || ConditionFunctions::editorFor(declared[slot]).first != "text") {
                 reject(std::string(key) + " is only valid when parameter " + std::to_string(slot + 1) + " is String or Event");
             }
