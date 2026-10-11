@@ -177,7 +177,7 @@ Result<void> RadiclePluginBackend::persistPluginLocked(
                     "discard or reload before saving"
                 });
             }
-            const auto pluginBytes = fo4::write_plugin(loaded.plugin);
+            const auto pluginBytes = fo4::write_plugin(fo4::apply_extension_flags(loaded.plugin, output));
             fo4::io::write_file_pair_dependency_first(
                 staged.dlstringsPath,
                 staged.dlstringsBytes,

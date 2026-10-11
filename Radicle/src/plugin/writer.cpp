@@ -329,8 +329,27 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
   return out.bytes;
 }
 
+Plugin apply_extension_flags(Plugin plugin, const std::filesystem::path& path) {
+  auto extension = path.extension().string();
+  std::transform(extension.begin(), extension.end(), extension.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const bool light = extension == ".esl";
+  if (!light && extension != ".esm") return plugin;
+
+  if (light && !plugin.tes4.header.flags.is_small_file()) {
+    plugin = set_plugin_light_flag(std::move(plugin), true);
+  }
+  if (plugin.tes4.header.flags.is_master()) return plugin;
+
+  plugin.tes4.header.flags = RecordFlags{plugin.tes4.header.flags.value() | RecordFlags::master};
+  plugin.header.tes4_flags = RecordFlags{plugin.header.tes4_flags.value() | RecordFlags::master};
+  plugin.original_range.clear();
+  plugin.tes4.original_range.clear();
+  return plugin;
+}
+
 void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) {
-  const auto bytes = write_plugin(plugin);
+  const auto bytes = write_plugin(apply_extension_flags(plugin, path));
   io::write_file_atomic(path, bytes);
 }
 
