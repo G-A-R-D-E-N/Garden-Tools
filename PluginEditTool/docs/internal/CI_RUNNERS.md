@@ -230,11 +230,11 @@ and was nothing of the sort.
 `native-ci.yml` runs the C++ tests that need a Fallout 4 `Data` folder when one is configured. Two repo variables feed them:
 
 - `FO4_DATA_DIR_LINUX`, read by the `Test` step of `Native (Linux, Debug)`. It is unset today.
-- `FO4_DATA_DIR_WINDOWS`, read by the `Test` step of `Native tests (Windows, MSVC)`. It points at the Steam install's `Fallout 4\Data` folder on the Windows runner. The `Test (Debug)` step clears it, so the Debug pass runs without game data: with data it exceeds the job's 90-minute limit.
+- `FO4_DATA_DIR_WINDOWS`, read by `Native real-data tests (Windows, MSVC, Fallout 4 data)` (`native-windows-real-data`). That job runs only on the runner labelled `fo4-data`, the machine with the Steam install's `Fallout 4\Data` folder. It builds `fo4_tests` in Release and runs only the 31 tests that read `FO4_DATA_DIR`. `Native tests (Windows, MSVC)` (`self-hosted, Windows, X64`) sets no `FO4_DATA_DIR` and needs no game files; its real-data tests skip.
 
-The folder must hold the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in its root. Each job's `Check FO4 data folder` step enforces this. Unset means the real-data tests skip. A set but bad value makes that step exit 1, which turns the required native-ci contexts red on every PR.
+The folder must hold the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in its root. The `Check FO4 data folder` step enforces this. Unset: the Windows real-data job succeeds with a notice and skips its later steps. A set but bad value makes that step exit 1 and turns the `Native real-data tests` check red; that job is not a required context.
 
-Data adds test time. Windows Release `Test` took about 437 s with data and about 30 s without (run 764).
+Data adds test time. The Release real-data tests took about 437 s with data (run 764); the Windows job without data took about 30 s. The `fo4-data` runner must be online for the real-data job to start; otherwise it waits.
 
 This is separate from `FO4RE_TEST_DATA`, which [`WINDOWS_CI_RUNNER.md`](WINDOWS_CI_RUNNER.md) documents for the managed `FO4RecordEditor.Tests` fixture tests. Do not confuse the two variables.
 
