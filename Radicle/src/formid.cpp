@@ -89,18 +89,24 @@ RawFormId encode_plugin_form_id(const FormKey& key, const PluginFormIdContext& d
   const auto mask_for = [](PluginKind kind) {
     return kind == PluginKind::light ? k_light_local_mask : k_full_local_mask;
   };
+  const auto local_within = [&](PluginKind kind) {
+    if (key.local().value() > mask_for(kind)) {
+      throw FormIdError("local form ID is wider than the destination mask");
+    }
+    return key.local().value();
+  };
 
   if (key.owner() == dest.current_plugin) {
     const auto index = static_cast<std::uint32_t>(dest.masters.size());
     if (index > 0xFEu) {
       throw FormIdError("too many masters to encode a local FormID");
     }
-    return RawFormId{(index << 24) | (key.local().value() & mask_for(dest.current_kind))};
+    return RawFormId{(index << 24) | local_within(dest.current_kind)};
   }
 
   for (std::size_t i = 0; i < dest.masters.size(); ++i) {
     if (dest.masters[i].key == key.owner()) {
-      const auto local = key.local().value() & mask_for(dest.masters[i].kind);
+      const auto local = local_within(dest.masters[i].kind);
       return RawFormId{(static_cast<std::uint32_t>(i) << 24) | local};
     }
   }

@@ -74,7 +74,7 @@ TEST(FormId, MasterRemovalDoesNotCorruptRemainingReferences) {
   EXPECT_EQ(fo4::encode_plugin_form_id(local, ctx), RawFormId{0x03000800});
 }
 
-TEST(FormId, LightCurrentPluginMasksLocalToTwelveBits) {
+TEST(FormIdEncode, LightCurrentPluginRefusesLocalToTwelveBits) {
   PluginFormIdContext ctx;
   ctx.current_plugin = PluginKey::from_filename("FlaggedLight.esp");
   ctx.current_kind = PluginKind::light;
@@ -85,11 +85,17 @@ TEST(FormId, LightCurrentPluginMasksLocalToTwelveBits) {
   const auto key = FormKey{ctx.current_plugin, LocalFormId{0x812}};
   EXPECT_EQ(fo4::encode_plugin_form_id(key, ctx), RawFormId{0x01000812});
 
+  const auto widest = FormKey{ctx.current_plugin, LocalFormId{0xFFF}};
+  EXPECT_EQ(fo4::encode_plugin_form_id(widest, ctx), RawFormId{0x01000FFF});
+
+  const auto first_wide = FormKey{ctx.current_plugin, LocalFormId{0x1000}};
+  EXPECT_THROW(fo4::encode_plugin_form_id(first_wide, ctx), fo4::FormIdError);
+
   const auto fat = FormKey{ctx.current_plugin, LocalFormId{0x10812}};
-  EXPECT_EQ(fo4::encode_plugin_form_id(fat, ctx), RawFormId{0x01000812});
+  EXPECT_THROW(fo4::encode_plugin_form_id(fat, ctx), fo4::FormIdError);
 }
 
-TEST(FormId, EspFlaggedLightMasterMasksLocalToTwelveBits) {
+TEST(FormIdEncode, EspFlaggedLightMasterRefusesLocalToTwelveBits) {
   PluginFormIdContext ctx;
   ctx.current_plugin = PluginKey::from_filename("Patch.esp");
   ctx.masters = {
@@ -99,7 +105,7 @@ TEST(FormId, EspFlaggedLightMasterMasksLocalToTwelveBits) {
 
   const auto key =
       FormKey{PluginKey::from_filename("FlaggedLight.esp"), LocalFormId{0x10812}};
-  EXPECT_EQ(fo4::encode_plugin_form_id(key, ctx), RawFormId{0x01000812});
+  EXPECT_THROW(fo4::encode_plugin_form_id(key, ctx), fo4::FormIdError);
   EXPECT_FALSE(PluginKey::from_filename("FlaggedLight.esp").looks_light());
 }
 
@@ -155,7 +161,7 @@ TEST(FormId, ResolvingLightOwnerPreservesFullLocalUntilEncodeBoundary) {
 
   const auto key = fo4::resolve_plugin_form_id(RawFormId{0x01010812}, ctx);
   EXPECT_EQ(key.local(), LocalFormId{0x010812});
-  EXPECT_EQ(fo4::encode_plugin_form_id(key, ctx), RawFormId{0x01000812});
+  EXPECT_THROW(fo4::encode_plugin_form_id(key, ctx), fo4::FormIdError);
 }
 
 TEST(FormId, RuntimeFullCompileIndexIsNotCanonical) {
@@ -206,4 +212,17 @@ TEST(FormId, RuntimeLightSupportsTheHighestTwelveBitSlot) {
 TEST(FormId, RejectsUnknownMasterIndex) {
   const auto ctx = sample_plugin_context();
   EXPECT_THROW(fo4::resolve_plugin_form_id(RawFormId{0x08000001}, ctx), fo4::FormIdError);
+}
+
+TEST(FormIdEncode, EncodeKeepsWidestFullLocal) {
+  const auto ctx = sample_plugin_context();
+  const auto widest = FormKey{ctx.current_plugin, LocalFormId{fo4::k_full_local_mask}};
+  EXPECT_EQ(fo4::encode_plugin_form_id(widest, ctx).value() & fo4::k_full_local_mask,
+            fo4::k_full_local_mask);
+}
+
+TEST(FormIdEncode, EncodeRefusesOversizedLocal) {
+  const auto ctx = sample_plugin_context();
+  const auto oversized = FormKey{ctx.current_plugin, LocalFormId{fo4::k_full_local_mask + 1u}};
+  EXPECT_THROW(fo4::encode_plugin_form_id(oversized, ctx), fo4::FormIdError);
 }

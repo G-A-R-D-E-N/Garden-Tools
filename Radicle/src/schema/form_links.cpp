@@ -18,16 +18,8 @@
 #include <vector>
 
 namespace fo4 {
+std::vector<std::size_t> ctda_formid_offsets(const Subrecord& sub);
 namespace {
-
-struct CtdaFunction {
-  std::uint16_t index;
-  std::uint8_t flags;
-};
-
-constexpr CtdaFunction k_ctda_functions[] = {
-#include "fo4/schema/ctda_functions.inc"
-};
 
 constexpr std::uint32_t k_formid_subrecords[] = {
 #include "fo4/schema/formid_subrecords.inc"
@@ -42,18 +34,6 @@ struct StructuredFormIdSlot {
 constexpr StructuredFormIdSlot k_structured_formids[] = {
 #include "fo4/schema/structured_formids.inc"
 };
-
-constexpr std::uint8_t k_param1_formid = 1;
-constexpr std::uint8_t k_param2_formid = 2;
-constexpr std::uint8_t k_ctda_use_global = 0x04;
-constexpr std::size_t k_ctda_type = 0;
-constexpr std::size_t k_ctda_compare = 4;
-constexpr std::size_t k_ctda_function = 8;
-constexpr std::size_t k_ctda_param1 = 12;
-constexpr std::size_t k_ctda_param2 = 16;
-constexpr std::size_t k_ctda_run_on = 20;
-constexpr std::size_t k_ctda_reference = 24;
-constexpr std::uint32_t k_run_on_reference = 2;
 
 constexpr auto k_navm = Signature::from_string("NAVM");
 constexpr auto k_mnam = Signature::from_string("MNAM");
@@ -115,12 +95,6 @@ constexpr auto k_clmt = Signature::from_string("CLMT");
 constexpr auto k_wlst = Signature::from_string("WLST");
 constexpr auto k_ipds = Signature::from_string("IPDS");
 constexpr auto k_dobj = Signature::from_string("DOBJ");
-
-std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
-  std::uint16_t value = 0;
-  std::memcpy(&value, data.data() + offset, 2);
-  return value;
-}
 
 std::uint32_t read_u32(std::span<const std::byte> data, std::size_t offset) {
   std::uint32_t value = 0;
@@ -199,19 +173,6 @@ bool same_form_id_context(const PluginFormIdContext& left,
 
 void write_u32(std::span<std::byte> data, std::size_t offset, std::uint32_t value) {
   std::memcpy(data.data() + offset, &value, 4);
-}
-
-const CtdaFunction* find_ctda_function(std::uint16_t index) {
-  const auto begin = std::begin(k_ctda_functions);
-  const auto end = std::end(k_ctda_functions);
-  const auto it = std::lower_bound(begin, end, index,
-                                   [](const CtdaFunction& row, std::uint16_t value) {
-                                     return row.index < value;
-                                   });
-  if (it == end || it->index != index) {
-    return nullptr;
-  }
-  return &*it;
 }
 
 bool is_listed_formid_signature(Signature signature) {
@@ -603,24 +564,8 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     return;
   }
-  if (sub.signature != sig_ctda || sub.data.size() < 16) {
-    return;
-  }
-  if ((std::to_integer<std::uint8_t>(sub.data[k_ctda_type]) & k_ctda_use_global) != 0) {
-    fn(k_ctda_compare);
-  }
-  const auto function = read_u16(sub.data, k_ctda_function);
-  const auto* desc = find_ctda_function(function);
-  if (desc != nullptr) {
-    if ((desc->flags & k_param1_formid) != 0) {
-      fn(k_ctda_param1);
-    }
-    if ((desc->flags & k_param2_formid) != 0 && sub.data.size() >= 20) {
-      fn(k_ctda_param2);
-    }
-  }
-  if (sub.data.size() >= 28 && read_u32(sub.data, k_ctda_run_on) == k_run_on_reference) {
-    fn(k_ctda_reference);
+  for (const auto offset : ctda_formid_offsets(sub)) {
+    fn(offset);
   }
 }
 
