@@ -1044,17 +1044,31 @@ Tests: `Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders
 
 ## .github/workflows/native-ci.yml:native-windows-tests — native tests on Windows with MSVC
 
-The two Windows cross jobs build with clang-cl/xwin on the Linux runner and cannot execute anything. `native-windows-tests` runs on the registered Windows runner (`self-hosted, Windows, X64`, the runner `bgs-ci.yml:verify` already uses) and builds and runs the Radicle and PluginEditTool native ctest suites with MSVC. It finds Visual Studio with vswhere and puts its bundled CMake on the PATH, so the runner needs Visual Studio or Build Tools with the C++ x64 tools and the C++ CMake tools component; the step names what is missing. `PluginEditTool/native` builds Radicle as a subproject, so one configure covers both and Radicle's own tests, tools and warnings-as-errors are switched on here rather than compiling Radicle a second time in a separate job. Run steps use `cmd`; the step's exit code is the batch file's final errorlevel, so every fallible line ends in `|| exit /b 1`.
+The two Windows cross jobs build with clang-cl/xwin on the Linux runner and cannot execute anything. `native-windows-tests` runs on the registered Windows runner (`self-hosted, Windows, X64`, the runner `bgs-ci.yml:verify` already uses) and builds and runs the Radicle and PluginEditTool native ctest suites with MSVC. It finds Visual Studio with vswhere and puts its bundled CMake on the PATH, so the runner needs Visual Studio or Build Tools with the C++ x64 tools and the C++ CMake tools component; the step names what is missing. `PluginEditTool/native` builds Radicle as a subproject, so one configure covers both and Radicle's own tests, tools and warnings-as-errors are switched on here rather than compiling Radicle a second time in a separate job. Most run steps use `cmd`, where the step's exit code is the batch file's final errorlevel. The pinned zlib and configure steps are PowerShell: they check `$LASTEXITCODE`, and the configure steps retry up to three times.
 
-Each job builds from the workspace into its own directories: `build\native` for Release and `build\native-debug` for Debug. Nothing is carried between runs, because the host-mode runner gives every job a fresh workspace, so ccache is what makes a re-run cheap. The workflow sets `CCACHE_BASEDIR` to the workspace and `CCACHE_NOHASHDIR` so hits carry across the differing per-job paths. The MSVC setup step locates `ccache.exe` and exports `CCACHE`; each configure passes it as `CMAKE_C_COMPILER_LAUNCHER` and `CMAKE_CXX_COMPILER_LAUNCHER` through the same `%LAUNCHER%` variable, and a runner without ccache still builds, just without the cache.
+Each job builds from the workspace into its own directories: `build\native` for Release and `build\native-debug` for Debug. Nothing is carried between runs, because the host-mode runner gives every job a fresh workspace, so ccache is what makes a re-run cheap. The workflow sets `CCACHE_BASEDIR` to the workspace and `CCACHE_NOHASHDIR` so hits carry across the differing per-job paths. The MSVC setup step locates `ccache.exe` and exports `CCACHE`; each configure builds the launcher arguments from `$env:CCACHE` and passes them as `CMAKE_C_COMPILER_LAUNCHER` and `CMAKE_CXX_COMPILER_LAUNCHER`, and a runner without ccache still builds, just without the cache.
 
-`concurrency.cancel-in-progress` stops a superseded run, but no two jobs share a checkout or a build directory, so a cancelled run leaves nothing for the next one to recover. `CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON` keeps both configures off a system zlib, so no external zlib has to be built or pointed at, and the dependency path is identical in Release and Debug.
+`concurrency.cancel-in-progress` stops a superseded run, but no two jobs share a checkout or a build directory, so a cancelled run leaves nothing for the next one to recover. `CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON` keeps both configures off a system zlib. `-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB` points FetchContent at the cached pinned zlib copy from the `native-windows-tests` pinned zlib step instead of a GitHub clone, so the dependency path is identical in Release and Debug. Once that override is set, CMake ignores the `GIT_TAG` in `PluginEditTool/native/CMakeLists.txt:fo4ide_zlib`, so the cache step reads the pin from that line.
 
 `PluginEditTool/native/tests/unit/RadiclePluginEditableTests.cpp:symlinkNotPermitted` makes the two Save As symlink tests skip when Windows refuses the directory symlink with ERROR_PRIVILEGE_NOT_HELD (1314), which happens without Developer Mode or elevation. MSVC does not map 1314 to `std::errc::operation_not_permitted`, so the code is checked directly. Any other symlink error still fails the test, and Linux always runs them.
 
-`.github/workflows/native-ci.yml:native-windows-tests` also configures, builds and tests the same PluginEditTool native tree in Debug as `build\native-debug`, after the Release suite, so MSVC debug-only checks (iterator debugging, CRT asserts) run in CI. The Debug configure repeats the Release flags with `-DCMAKE_BUILD_TYPE=Debug` and the same `%LAUNCHER%`, so one build still covers Radicle and PluginEditTool native together through the same dependency path.
+`.github/workflows/native-ci.yml:native-windows-tests` also configures, builds and tests the same PluginEditTool native tree in Debug as `build\native-debug`, after the Release suite, so MSVC debug-only checks (iterator debugging, CRT asserts) run in CI. The Debug configure repeats the Release flags with `-DCMAKE_BUILD_TYPE=Debug` and the same launcher arguments, so one build still covers Radicle and PluginEditTool native together through the same dependency path.
 
 `Radicle/CMakeLists.txt:gtest_discover_tests` passes `DISCOVERY_TIMEOUT 120`. CMake's default is 5 seconds, and discovery runs `fo4_tests.exe --gtest_list_tests` as part of the build. The Debug executable is much larger than the Release one, and on the Windows runner its first, cold run exceeded that default, so the Debug build failed with `Process terminated due to timeout` right after linking `fo4_tests.exe`. The longer bound only matters when the executable is slow to start; Release discovery stays well inside it.
+
+## .github/scripts/pinned-zlib.sh — cached pinned zlib for CI
+
+Run 775 failed in the Radicle Windows cross job. That job cloned zlib from GitHub, and the GnuTLS handshake failed after a two-minute hang. Every run downloaded the same pinned zlib, so one network blip failed the job. The two cross lanes now run `.github/scripts/pinned-zlib.sh`, and the Windows step in `.github/workflows/native-ci.yml:native-windows-tests` follows the same rules in PowerShell.
+
+The pin is read from `PluginEditTool/native/CMakeLists.txt:fo4ide_zlib`, from the `GIT_TAG` line right after the zlib `GIT_REPOSITORY`. The script fails with `::error::` unless that line holds exactly one 40-hex sha. The tag lives in one place, so a bumped tag moves CI too.
+
+The cache is `${RUNNER_TOOL_CACHE:-$HOME/.cache}/garden-src/zlib/<sha>`. On Windows the step uses `RUNNER_TOOL_CACHE`, or `%LOCALAPPDATA%\garden-src` when that is empty. An entry counts as complete only when it holds `.installed`.
+
+A cache miss fetches into a temp sibling, `<cache>.tmp.<id>`, checks that HEAD is the pinned sha, writes `.installed`, and renames the directory into place. There is no lock file. The rename is atomic, so if another job renames first, this job deletes its temp copy and uses the existing entry.
+
+Each job copies the cache to `build/zlib-src` without `.git`, and exports `ZLIB_SRC`. zlib's CMake writes into its source directory, so no job builds from the shared cache. The fetch makes 5 attempts with 15, 30, 45 and 60 second waits. `http.lowSpeedLimit` and `http.lowSpeedTime` abort a stalled transfer.
+
+The PluginEditTool configure steps make 3 attempts with 30 and 60 second waits. That covers the other GitHub FetchContent dependencies, which `PluginEditTool/native/cmake/Dependencies.cmake` clones during every configure.
 
 ## Radicle/src/forms/placed_reference_edit.cpp / c_api_ref_fields.cpp — GardenEngine #114 writeback fields
 
@@ -1264,7 +1278,7 @@ Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses ever
   - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
   - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
   - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
-- **Test.** Gated on `FO4_DATA_DIR`; CI has no game files and skips. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+- **Test.** Gated on `FO4_DATA_DIR`; it skips unless the CI variable `FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
 - **Limits.** Archives and string tables are opened for `Fallout4.esm` only, so `archives_ms` and `strings_ms` leave out the DLC archives and their string tables even when the DLC masters are loaded (the installed game has no loose `Strings` folder, and each DLC's tables, such as `Strings/DLCRobot_en.STRINGS`, are only inside its `- Main.ba2`); `load_ms` covers every listed plugin. `tests/test_env_bench_real.cpp` reads `FO4_DATA_DIR` with `std::getenv`, so on Windows a Data path outside the ANSI code page makes the test skip; the standalone tool takes wide arguments.
 
 ## Radicle/src/c_api_version.cpp:radicle_abi_version — C ABI generation probe
@@ -1490,3 +1504,71 @@ The managed model types and the generated raw structs share names (`PexValue`, `
 The optional `lane=radicle-cross` dispatch runs the existing Radicle clang-cl/xwin build while skipping the Linux/MSVC suites, and the PluginEditTool cross build. The default remains `full`. Pull-request and main-triggered validation retain their existing jobs.
 
 The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency as `radicle-msvc-release-tests` for seven days. This permits official-data tests on the machine with Fallout 4 installed without rebuilding there. Artifact metadata must identify the tested commit; downloading a binary is not a test result. No game payloads or debug symbols are uploaded.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCompact.cpp:RadiclePluginBackend::compactToEsl (already in range)
+
+A plugin whose native FormIDs are all in the target range returns "already ESL-compatible". When nextFormID is above `last` and above the highest own local ID + 1, it is also lowered by `Radicle/src/plugin/mutation.cpp:set_hedr_next_form_id` to the highest own local ID + 1, or to the range floor when there are no own records, so `reserve_local_form_key` starts past every used ID. Otherwise the value and the message are unchanged. This is Radicle's choice, not xEdit's renumber value (last newly assigned ID + 1, see the `compactToEsl` note in `Radicle/docs/code-notes/Radicle.md`), because nothing is renumbered here. `set_hedr_next_form_id` clears the plugin-level `original_range` as well as the TES4 one, so the writer does not reuse the original bytes for a HEDR-only change.
+
+Out-of-range nested records and out-of-range top-level records that have form ID labelled child groups are refused before anything is staged, by `PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:eslCompactionBlockers`, which `checkEslEligibility` also runs (`PluginEditTool/native/src/plugin/RadiclePluginCompact.cpp:RadiclePluginBackend::compactToEsl`). The success message and, when the light flag is not set, the already-compatible message end with `RadiclePluginSupport.hpp:lightFlagHint`, which points to `masters.SetLight`. Radicle's save never sets the light flag from the file extension (see `Radicle/docs/code-notes/Radicle.md`).
+
+Performance (measured 2026-10-09, MSVC Release): compacting N out-of-range top-level records took 89 ms (500), 281 ms (1000), 1052 ms (2000) and 4430 ms (4000), roughly quadratic. Each `Radicle/src/plugin/mutation.cpp:renumber_local_record` call copies the whole plugin twice (once itself, once in `rekey_form_links`) and rescans every record and FormLink (`Radicle/src/schema/form_links.cpp:rekey_form_links`). The light range caps N at 4095, so the worst case is a few seconds for a one-off command; it is left as is. A batch renumber (one pass with an old-to-new map) is the fix if it ever matters. Tests: `PluginEditTool/native/tests/unit/RadiclePluginEslTests.cpp:Native CompactToEsl lowers an out-of-range HEDR next ID when every record is already in range` (sections: master with next 0x5000, masterless with next 0x2000, master with next exactly 0x1000).
+
+## .github/workflows/plugin-editor-ci.yml
+
+`native-ci.yml` runs only the native/CTest build and its push `paths-ignore` skips `PluginEditTool/FO4RecordEditor*/**` and `PluginEditTool/Mutagen/**`, so the managed tests had no CI. This workflow runs them on push to `main`, on every pull request and on `workflow_dispatch`, with the push filtered to `PluginEditTool/FO4RecordEditor*/**`, `PluginEditTool/Mutagen/**`, `PluginEditTool/README.md`, `PluginEditTool/docs/MCP_SETUP.md` and the workflow file. `.github/workflows/plugin-editor-ci.yml:on.pull_request` has no path filter so that both plugin-editor-ci contexts can be required status checks on `main`: a required check that never reports would block merging. They were added to the `main` protection rule on 2026-10-10 (GT-064 on the Issue-Tracking wiki); every pull request runs the jobs either way. The two docs are inputs: `FO4RecordEditor.Tests/ShippedDocsTests.cs` reads them. The test projects' `ProjectReference` graph is `FO4RecordEditor` -> `FO4RecordEditor.Core` -> `Mutagen.Bethesda.Fallout4` -> `Mutagen.Bethesda.Core` -> `Mutagen.Bethesda.Kernel`, all under those paths; nothing references `Radicle/` or `PluginEditTool/native`, so `native-ci.yml` needs no change.
+
+SDK pin: `10.0.401` builds `net9.0-windows` (`FO4RecordEditor.Tests`) and `net10.0` (`FO4RecordEditor.Core.Tests`) and the `net8.0` library projects through restored targeting packs. The `net9.0-windows` test host needs the 9.0 runtime and Windows Desktop runtime, which `setup-dotnet` only installs as part of an SDK, so the Windows job also installs SDK `9.0.317`, which bundles runtime `9.0.19` (the version the local validation ran on). `10.0.401` is the highest SDK installed, so `dotnet` resolves to it. Both are exact versions in the runner tool cache, matching `bgs-ci.yml`; no `global.json` exists under `PluginEditTool`, so nothing else selects an SDK.
+
+Locked restore: `RestorePackagesWithLockFile` is set only in `FO4RecordEditor.Tests/FO4RecordEditor.Tests.csproj` and `FO4RecordEditor.Core.Tests/FO4RecordEditor.Core.Tests.csproj`, and each has a committed `packages.lock.json`. A lock file records the whole transitive graph through `ProjectReference`, including the vendored Mutagen packages, so the shared libraries stay unlocked (the same reasoning as `Radicle/bindings/csharp`, see `radicle-managed-ci.md`). The workflow restores each test project with `--locked-mode`, then builds and tests with `--no-restore`/`--no-build`. Changing a package version without regenerating the lock fails with NU1004; regenerate with a plain `dotnet restore` of both projects. There is no `NuGet.config` under `PluginEditTool`, so restore uses the runner's configured sources (nuget.org on the development machine).
+
+GitVersion: `Mutagen/Directory.Build.props` references `GitVersion.MsBuild`, which fails on a shallow `actions/checkout` ("No base versions determined on the current branch") and shells out to `dotnet` through `cmd`. Both jobs set `DisableGitVersionTask=true`, which the package's targets honour; the tests read no assembly version. The same build was proven on a `--depth 1` clone. Do not remove it without also setting `fetch-depth: 0`.
+
+Coverage: the Windows job runs both test projects. The Linux job runs `FO4RecordEditor.Core.Tests` only, because `FO4RecordEditor.Tests` targets `net9.0-windows` with WPF. Linux was not run locally (no Linux host), so that job is unverified until its first CI run. Tests that need Fallout 4 data (`FO4RecordEditor.Tests/TestDataRoots.cs`, `Mo2ProfileLoaderTests`, `Ba2Version7Tests` and others) look for fixed local paths and return early with a "Skipped --" line when the data is absent, which xUnit reports as passed; four tests report as skipped. Do not set `FO4RE_REQUIRE_FIXTURES` in CI.
+
+Test fixes made with the workflow:
+
+- `FO4RecordEditor.Tests/ShippedDocsTests.cs:StatedToolCountMatchesTheRegisteredTools`: `PluginEditTool/README.md` states no tool count at any commit in this repository (the native README rewrite describes the native host, not the 109 registered C# tools), while `docs/MCP_SETUP.md` does. The README case now only requires that any count it states matches; `docs/MCP_SETUP.md` still must state one. `AllSatisfy` was replaced because FluentAssertions fails it on an empty set.
+- `FO4RecordEditor.Tests/GlobalStateIsolationTests.cs:Dispose_RestoresTheRegistryDictionariesCapsAndCaches`: `GlobalStateIsolation.Dispose` restores every dictionary, cap and cache correctly. The test failed for two test-side reasons. It assumed `MutagenLoader.LooseMods` started empty, but `WriteService.CreatePlugin` callers elsewhere in the project leave uniquely named plugins registered, so it now clears the dictionaries after taking the `pristine` snapshot and that snapshot restores whatever was there. Its in-scope assertions also expected `LooseModPaths` and `EditableMods` to hold only `B.esp`, although the test never removes `A.esp` from `LooseModPaths` or `MyPatch.esp` from `EditableMods`; they now state the real contents.
+- `FO4RecordEditor.Core.Tests/F4SERegionMergeTests.cs:Generated`: the fixture is a raw string literal, so its line endings follow the checkout. With `core.autocrlf=true` it contained CRLF and two tests failed; the fixture is normalised to LF. `F4SERegionMerge.Merge` still returns `generated` untouched when there is nothing to preserve, which is correct because the emitter produces LF.
+
+Path length: the longest tracked path under `PluginEditTool` is 145 characters, so a runner workspace root longer than about 115 characters can break the build unless Windows long paths are enabled. A GitVersion run on a deeply nested checkout failed with LibGit2Sharp "path too long".
+
+On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the Windows test steps set TEMP and TMP to `runner.temp`.
+
+The checkout step uses the full URL `https://code.forgejo.org/actions/checkout@v7` (the same v7 commit, 3d3c42e5, as the `actions/checkout@v7` that resolves to data.forgejo.org). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
+
+## .github/workflows/native-ci.yml — Test steps (real-data tests)
+
+The real-data tests read `FO4_DATA_DIR`. CI sets it from two Forgejo repository variables:
+
+- `FO4_DATA_DIR_LINUX` feeds the `Test` step of the Linux job `Native (Linux, Debug)`. It is unset today, so that step skips the real-data tests.
+- `FO4_DATA_DIR_WINDOWS` feeds the `Test` step of the Windows job `Native tests (Windows, MSVC)`.
+- `.github/workflows/native-ci.yml:native-windows-tests` `Test (Debug)` clears `FO4_DATA_DIR` (`set FO4_DATA_DIR=`), so the Debug pass runs without game data. It runs only on non-pull_request events.
+- Why: Debug with data does not finish within the job's 90-minute limit. In run 775, `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` took more than 34 CPU-minutes and 6.9 GB in Debug (289-421 s in Release). The `QuestAliasRealData`, `QuestStagesRealData` and `QuestObjectivesRealData` `DecodesEveryShippedQuest` tests each took about 60 CPU-minutes in Debug (131-320 s in Release). The run was still at test 358 of 1824 when the timeout neared.
+- Release keeps the full real-data coverage: the Windows `Test` step runs the real-data tests with the data.
+
+Each job's `Check FO4 data folder` step runs before its first Test step:
+
+- Unset or empty: prints one line saying the real-data tests will skip. The step passes.
+- Set: requires the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in the folder root. Missing names are printed and the step exits 1.
+- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files.
+
+`FO4_DATA_DIR_WINDOWS` points at the Steam install's `Fallout 4\Data` folder on the Windows runner. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
+
+The tests skip when `FO4_DATA_DIR` is unset, or when an expected file is missing or a list is empty. Examples:
+
+- `Radicle/tests/test_real_plugin.cpp:UnmodifiedFallout4MasterIsByteIdentical` skips on a null `getenv` (line 105) and when `Fallout4.esm` is absent (line 110).
+- `Radicle/tests/test_ba2_real.cpp:real_data` returns nothing when the variable is unset (line 22) or no archives load (line 26). The BA2 tests skip at lines 46 and 73.
+- `Radicle/tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` skips when unset (line 12) and when no masters are found (line 15).
+
+An empty value is not a null `getenv` result, so each Test step unsets `FO4_DATA_DIR` when the variable is empty.
+
+The opt-in suites stay off in CI, because no CI variable sets them:
+
+- `FO4_BA2_EXTRACT_ALL`: `Radicle/tests/test_ba2_real.cpp:ExtractsEveryVanillaEntry`.
+- `FO4_PEX_ARCHIVES`: `Radicle/tests/test_pex_corpus.cpp:EveryArchivedPexRoundTripsByteIdentically`.
+- `FO4_PEX_CORPUS`: `Radicle/tests/test_pex_corpus.cpp:EveryLoosePexRoundTripsByteIdentically`.
+- `FO4_PLUGIN_CORPUS`: `Radicle/tests/test_plugin_corpus.cpp:EveryDecoderSurvivesThirdPartyPlugins`.
+- `FO4_SEQ_CORPUS`: `Radicle/tests/test_seq_corpus.cpp:EveryLooseSeqRoundTripsByteIdentically`.
+- `FO4_PAPYRUS_COMPILER` and `FO4_PAPYRUS_ASSEMBLER`: `Radicle/tests/test_pex_oracle.cpp:PexOracle.CompiledFixturesRoundTripByteIdentically` and `PexOracle.AssemblerDisassemblyAgreesWithTheCompiler`.
+- Optional `FO4_PAPYRUS_IMPORTS` and `FO4_PAPYRUS_FLAGS`: passed to the compiler by `Radicle/tests/test_pex_oracle.cpp:optionalArgument`.
