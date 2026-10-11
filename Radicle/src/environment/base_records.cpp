@@ -156,7 +156,7 @@ WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("WTHR"));
   WeatherData out;
   if (const auto* sub = reader.unique(sig("DATA"))) {
-    if (sub->data.size() != weather_data_size(ref.record->header.form_version)) {
+    if (sub->data.size() != forms::weather_data_size(ref.record->header.form_version)) {
       reader.fail(sub->signature, "does not match its form version");
     }
     const auto byte = [&](std::size_t offset) { return std::to_integer<std::uint8_t>(sub->data[offset]); };
@@ -167,13 +167,13 @@ WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
   }
   if (const auto* sub = reader.unique(sig("NAM0"))) {
     const auto version = ref.record->header.form_version;
-    if (sub->data.size() != weather_nam0_size(version)) {
+    if (sub->data.size() != forms::weather_nam0_size(version)) {
       reader.fail(sub->signature, "does not match its form version");
     }
-    out.colors = WeatherColors{weather_time_slots(version), weather_color_groups(version), sub->data};
+    out.colors = WeatherColors{forms::weather_time_slots(version), forms::weather_color_groups(version), sub->data};
   }
   if (const auto* sub = reader.unique(sig("FNAM"))) {
-    if (sub->data.size() != weather_fnam_size(ref.record->header.form_version)) {
+    if (sub->data.size() != forms::weather_fnam_size(ref.record->header.form_version)) {
       reader.fail(sub->signature, "does not match its form version");
     }
     for (std::size_t offset = 0; offset < sub->data.size(); offset += 4) {
