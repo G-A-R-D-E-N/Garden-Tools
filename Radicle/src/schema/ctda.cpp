@@ -257,11 +257,11 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
       write_u32(record.subrecords[anchor - 1].data, 0, count);
     } else if (anchor > begin &&
                owns_citc_list(record.header.signature, record.subrecords[anchor - 1].signature)) {
-      Subrecord citc;
-      citc.signature = sig_citc;
-      citc.data.resize(4);
-      write_u32(citc.data, 0, count);
-      replacement.insert(replacement.begin(), std::move(citc));
+      Subrecord count_subrecord;
+      count_subrecord.signature = sig_citc;
+      count_subrecord.data.resize(4);
+      write_u32(count_subrecord.data, 0, count);
+      replacement.insert(replacement.begin(), std::move(count_subrecord));
     }
     record.subrecords.insert(
         record.subrecords.begin() + static_cast<std::ptrdiff_t>(anchor),
