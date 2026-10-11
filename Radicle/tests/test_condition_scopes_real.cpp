@@ -109,15 +109,21 @@ bool same_subrecords(const std::vector<fo4::Subrecord>& a, const std::vector<fo4
   return true;
 }
 
-void check_record(fo4::Plugin& plugin, const fo4::FormKey& key,
-                  const ConditionScopeDescriptor& descriptor, bool pack, Tally& tally) {
-  const auto* record = fo4::find_record(plugin, key);
-  ASSERT_NE(record, nullptr);
-  const auto& subs = record->subrecords;
-  const auto spans = scope_spans(*record, pack);
+fo4::Plugin single_record_plugin(const fo4::Record& record) {
+  fo4::Plugin plugin;
+  plugin.groups.emplace_back();
+  plugin.groups.back().children.emplace_back(record);
+  return plugin;
+}
+
+void check_record(const fo4::Record& record, const ConditionScopeDescriptor& descriptor, bool pack,
+                  Tally& tally) {
+  const auto& key = record.form_key;
+  const auto& subs = record.subrecords;
+  const auto spans = scope_spans(record, pack);
   const std::size_t tree_start = spans.empty() ? subs.size() : spans.front().begin;
-  const std::size_t objectives_begin = first_index(*record, "QOBJ");
-  const std::size_t objectives_end = first_index(*record, "ANAM");
+  const std::size_t objectives_begin = first_index(record, "QOBJ");
+  const std::size_t objectives_end = first_index(record, "ANAM");
   if (pack) {
     ++tally.packs;
   } else {
@@ -155,7 +161,7 @@ void check_record(fo4::Plugin& plugin, const fo4::FormKey& key,
         tally.sample(key, span.begin + 1, "CITC differs from CTDA count " + std::to_string(ctdas));
       }
     }
-    const auto read = fo4::schema::read_scoped_conditions(*record, descriptor, index);
+    const auto read = fo4::schema::read_scoped_conditions(record, descriptor, index);
     if (!read.ok || read.conditions.size() != ctdas) {
       ++tally.read_failures;
       tally.sample(key, span.begin, "scope " + std::to_string(index) + " read status " +
@@ -167,16 +173,19 @@ void check_record(fo4::Plugin& plugin, const fo4::FormKey& key,
     ++index;
   }
 
-  const auto past = fo4::schema::read_scoped_conditions(*record, descriptor, spans.size());
+  const auto past = fo4::schema::read_scoped_conditions(record, descriptor, spans.size());
   if (past.ok || past.error != ScopedConditionStatus::container_index_out_of_range) {
     ++tally.read_failures;
     tally.sample(key, 0, "index past the last scope was not rejected");
   }
 
+  auto writable = single_record_plugin(record);
+  const auto* live = fo4::find_record(writable, key);
+  ASSERT_NE(live, nullptr);
   for (std::size_t k = 0; k < spans.size(); ++k) {
-    const auto read = fo4::schema::read_scoped_conditions(*record, descriptor, k);
+    const auto read = fo4::schema::read_scoped_conditions(*live, descriptor, k);
     if (!read.ok) continue;
-    const auto status = fo4::schema::set_record_scoped_conditions(plugin, key, descriptor, k, read.conditions);
+    const auto status = fo4::schema::set_record_scoped_conditions(writable, key, descriptor, k, read.conditions);
     if (status != ScopedConditionStatus::updated && status != ScopedConditionStatus::unchanged) {
       ++tally.writeback_changes;
       tally.sample(key, spans[k].begin, "write-back of scope " + std::to_string(k) + " returned status " +
@@ -184,7 +193,7 @@ void check_record(fo4::Plugin& plugin, const fo4::FormKey& key,
     }
   }
 
-  const auto* after = fo4::find_record(plugin, key);
+  const auto* after = fo4::find_record(writable, key);
   ASSERT_NE(after, nullptr);
   if (!same_subrecords(snapshot, after->subrecords)) {
     ++tally.writeback_changes;
@@ -201,22 +210,22 @@ TEST_P(ConditionScopesReal, BranchAndTargetScopesMatchOfficialLayoutAndWriteBack
   }
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  auto plugin = fo4::read_plugin_file(path);
+  const auto plugin = fo4::read_plugin_file(path);
   const auto branch = fo4::schema::scoped_condition_path(Signature::from_string("PACK"), "Branches[0].Conditions");
   const auto target = fo4::schema::scoped_condition_path(Signature::from_string("QUST"), "Targets[0].Conditions");
   ASSERT_TRUE(branch.has_value());
   ASSERT_TRUE(target.has_value());
 
-  std::vector<fo4::FormKey> packs;
-  std::vector<fo4::FormKey> quests;
+  std::vector<const fo4::Record*> packs;
+  std::vector<const fo4::Record*> quests;
   for (const auto* record : fo4::collect_records(plugin)) {
-    if (record->header.signature == Signature::from_string("PACK")) packs.push_back(record->form_key);
-    if (record->header.signature == Signature::from_string("QUST")) quests.push_back(record->form_key);
+    if (record->header.signature == Signature::from_string("PACK")) packs.push_back(record);
+    if (record->header.signature == Signature::from_string("QUST")) quests.push_back(record);
   }
 
   Tally tally;
-  for (const auto& key : packs) check_record(plugin, key, branch->descriptor, true, tally);
-  for (const auto& key : quests) check_record(plugin, key, target->descriptor, false, tally);
+  for (const auto* record : packs) check_record(*record, branch->descriptor, true, tally);
+  for (const auto* record : quests) check_record(*record, target->descriptor, false, tally);
 
   std::cout << GetParam() << " PACK=" << tally.packs << " branches=" << tally.branches
             << " QUST=" << tally.quests << " targets=" << tally.targets
