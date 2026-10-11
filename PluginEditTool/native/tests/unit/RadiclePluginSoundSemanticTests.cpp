@@ -296,3 +296,22 @@ TEST_CASE("Sound protected records expose no editable semantic cells", "[sound-s
     CHECK(refused.error().type == "PluginReadOnly");
     fixture.checkNotPending();
 }
+
+TEST_CASE("Sound semantic EDID edits store Windows-1252 and refuse unrepresentable text", "[sound-semantic]") {
+    Fixture fixture;
+    const auto result = fixture.grid("SNDR");
+    REQUIRE(result.has_value());
+    CHECK(cell(nlohmann::json::parse(result->get<std::string>()), sound::k_std, "EDID").at("editable") == true);
+    SECTION("Representable text is stored as Windows-1252") {
+        REQUIRE(fixture.edit(sound::k_std, "EDID", "Caf\xC3\xA9").has_value());
+        fixture.save();
+        CHECK(sound::payloads(fo4::read_plugin_file(fixture.path), sound::k_std, "EDID") ==
+              std::vector<sound::Bytes>{sound::zstr("Caf\xE9")});
+    }
+    SECTION("Unrepresentable text is refused without a pending edit") {
+        const auto refused = fixture.edit(sound::k_std, "EDID", "\xE6\xBC\xA2");
+        REQUIRE_FALSE(refused.has_value());
+        CHECK(refused.error().type == "InvalidEditorId");
+        fixture.checkNotPending();
+    }
+}
