@@ -4,7 +4,7 @@ Partial work for [#29](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/is
 
 Verified source: [OG loader and CK record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a/RE-Work/subsystems/plugin-io-garden-tools/tes4-localized-flag-390/README.md), read 2026-10-04. Private copy: `tes4-localized-flag-390.md` (not committed, same note as the link above), SHA256 `7405934a8f6eb0b89542d41282fc4459ee2f8533caed998321a8d7d91ccf8329`. The record carries Ghidra 12.1.3 OG 1.10.163 decompile/disassembly addresses. This is static evidence, not live game acceptance.
 
-| OG RVA | Observed operation |
+| OG address | Observed operation |
 |---|---|
 | `0x132100` | Read runtime flags bit 7 |
 | `0x118750`, `0x1b3db0` | Open string-table readers when that bit is set |
