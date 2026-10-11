@@ -5,8 +5,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace fo4ide::plugin {
@@ -56,6 +59,83 @@ std::optional<std::uint32_t> flagValue(std::string_view name) {
     return std::nullopt;
 }
 
+enum class ParamKind { Form, Integer, Float };
+
+ParamKind paramKind(const std::string& name, std::size_t slot, std::uint8_t ctdaFlags,
+                    std::uint32_t runOn) {
+    if (name.empty()) return ParamKind::Form;
+    const auto declared = ConditionFunctions::paramsOf(name);
+    if (slot >= declared.size()) return ParamKind::Integer;
+    const auto type = lower(declared[slot]);
+    if (type == "float") return ParamKind::Float;
+    if (type == "reference" || type == "actor" || type == "package") {
+        if ((ctdaFlags & fo4::k_ctda_flag_aliases) != 0) {
+            const auto currentPackage =
+                slot == 0 && runOn == 5 && lower(name) == "getiscurrentpackage";
+            return currentPackage ? ParamKind::Form : ParamKind::Integer;
+        }
+        if ((ctdaFlags & fo4::k_ctda_flag_pack_data) != 0) return ParamKind::Integer;
+    }
+    static const std::vector<std::string> kIntegerTypes = {
+        "integer", "string", "alias", "event", "packdata", "queststage", "alignment",
+        "axis", "castingsource", "crimetype", "criticalstage", "formtype", "miscstat",
+        "sex", "wardstate"};
+    return std::find(kIntegerTypes.begin(), kIntegerTypes.end(), type) != kIntegerTypes.end()
+               ? ParamKind::Integer
+               : ParamKind::Form;
+}
+
+std::int32_t floatBits(float value) {
+    std::uint32_t raw{};
+    std::memcpy(&raw, &value, sizeof(raw));
+    return static_cast<std::int32_t>(raw);
+}
+
+float bitsFloat(std::int32_t raw) {
+    const auto bits = static_cast<std::uint32_t>(raw);
+    float value{};
+    std::memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+nlohmann::json describeParam(std::int32_t value, ParamKind kind, const fo4::Plugin& plugin) {
+    switch (kind) {
+        case ParamKind::Integer:
+            return value;
+        case ParamKind::Float: {
+            const auto number = bitsFloat(value);
+            if (std::isfinite(number)) return number;
+            std::ostringstream out;
+            out << "0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+                << static_cast<std::uint32_t>(value);
+            return out.str();
+        }
+        case ParamKind::Form:
+            break;
+    }
+    return formIdString(static_cast<std::uint32_t>(value), plugin);
+}
+
+bool isHexBits(const std::string& text) {
+    return text.size() > 2 && text.size() <= 10 && text.compare(0, 2, "0x") == 0 &&
+           std::all_of(text.begin() + 2, text.end(),
+                       [](unsigned char ch) { return std::isxdigit(ch) != 0; });
+}
+
+std::optional<std::int32_t> jsonInt32(const nlohmann::json& value) {
+    if (value.is_number_unsigned()) {
+        const auto raw = value.get<std::uint64_t>();
+        if (raw > std::numeric_limits<std::uint32_t>::max()) return std::nullopt;
+        return static_cast<std::int32_t>(raw);
+    }
+    const auto number = value.get<std::int64_t>();
+    if (number < std::numeric_limits<std::int32_t>::min() ||
+        number > std::numeric_limits<std::uint32_t>::max()) {
+        return std::nullopt;
+    }
+    return static_cast<std::int32_t>(number);
+}
+
 }  // namespace
 
 std::string conditionOperatorString(std::uint8_t compareOperator) {
@@ -90,8 +170,16 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
         if (condition.param1 != 0) d["param1"] = condition.param1;
         if (condition.param2 != 0) d["param2"] = condition.param2;
     } else {
-        if (condition.param1 != 0) d["param1"] = formIdString(condition.param1, plugin);
-        if (condition.param2 != 0) d["param2"] = formIdString(condition.param2, plugin);
+        const auto name = functionName(condition.function);
+        const auto flags = condition.flags();
+        if (condition.param1 != 0) {
+            d["param1"] = describeParam(condition.param1,
+                                        paramKind(name, 0, flags, condition.run_on), plugin);
+        }
+        if (condition.param2 != 0) {
+            d["param2"] = describeParam(condition.param2,
+                                        paramKind(name, 1, flags, condition.run_on), plugin);
+        }
     }
     if (condition.use_global()) {
         d["compareGlobal"] = formIdString(condition.comparison_raw, plugin);
@@ -158,29 +246,6 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         }
     }
 
-    // ApplyParam: numbers land as-is; strings try integer first, then a
-    // FormKey / editor-ID resolution.
-    const auto applyParam = [&](const char* key, std::int32_t& target) {
-        if (!element.contains(key)) return;
-        const auto& value = element[key];
-        if (value.is_number_integer()) {
-            target = value.get<std::int32_t>();
-        } else if (value.is_string()) {
-            const auto text = value.get<std::string>();
-            if (!text.empty()) {
-                char* end = nullptr;
-                const auto parsed = std::strtol(text.c_str(), &end, 10);
-                if (end != text.c_str() && *end == '\0') {
-                    target = static_cast<std::int32_t>(parsed);
-                } else if (const auto raw = resolveConditionFormId(text, plugin, resolveEditorId)) {
-                    target = static_cast<std::int32_t>(raw->value());
-                }
-            }
-        }
-    };
-    applyParam("param1", condition.param1);
-    applyParam("param2", condition.param2);
-
     // Compare operator: high 3 bits of the flags byte.
     const auto opText = element.contains("operator") && element["operator"].is_string()
                             ? element["operator"].get<std::string>()
@@ -218,6 +283,53 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             }
         }
     }
+
+    const auto applyParam = [&](const char* key, std::size_t slot, std::int32_t& target) {
+        if (!element.contains(key)) return;
+        const auto& value = element[key];
+        const auto kind = condition.is_event_data()
+                              ? ParamKind::Integer
+                              : paramKind(fnName, slot, condition.flags(), condition.run_on);
+        if (kind == ParamKind::Float && value.is_number()) {
+            target = floatBits(value.get<float>());
+        } else if (value.is_number_integer()) {
+            if (const auto raw = jsonInt32(value)) target = *raw;
+        } else if (value.is_number_float()) {
+            const auto number = value.get<double>();
+            if (kind == ParamKind::Integer && std::trunc(number) == number &&
+                number >= std::numeric_limits<std::int32_t>::min() &&
+                number <= std::numeric_limits<std::uint32_t>::max()) {
+                target = static_cast<std::int32_t>(
+                    static_cast<std::uint32_t>(static_cast<std::int64_t>(number)));
+            }
+        } else if (value.is_string()) {
+            const auto text = value.get<std::string>();
+            if (text.empty()) return;
+            if (isHexBits(text)) {
+                target = static_cast<std::int32_t>(std::strtoul(text.c_str() + 2, nullptr, 16));
+                return;
+            }
+            char* end = nullptr;
+            if (kind == ParamKind::Float) {
+                const auto number = std::strtof(text.c_str(), &end);
+                if (end != text.c_str() && *end == '\0') {
+                    target = floatBits(number);
+                    return;
+                }
+            } else {
+                const auto number = std::strtol(text.c_str(), &end, 10);
+                if (end != text.c_str() && *end == '\0') {
+                    target = static_cast<std::int32_t>(number);
+                    return;
+                }
+            }
+            if (const auto raw = resolveConditionFormId(text, plugin, resolveEditorId)) {
+                target = static_cast<std::int32_t>(raw->value());
+            }
+        }
+    };
+    applyParam("param1", 0, condition.param1);
+    applyParam("param2", 1, condition.param2);
 
     if (element.contains("compareGlobal") && element["compareGlobal"].is_string()) {
         if (const auto raw = resolveConditionFormId(element["compareGlobal"].get<std::string>(),
