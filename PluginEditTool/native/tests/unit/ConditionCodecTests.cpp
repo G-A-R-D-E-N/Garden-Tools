@@ -125,3 +125,56 @@ TEST_CASE("condition codec: non-finite float round trips through 0x hex") {
     REQUIRE(rebuilt.has_value());
     CHECK(rebuilt->param2 == condition.param2);
 }
+
+TEST_CASE("condition codec: GetIsCurrentPackage param1 under aliases is form ID text only on Run On 5") {
+    fo4::CtdaCondition condition;
+    condition.function = fo4ide::plugin::functionIndex("GetIsCurrentPackage").value();
+    condition.param1 = 0x00000812;
+    condition.flags_byte = fo4::k_ctda_flag_aliases;
+    const fo4::Plugin plugin{};
+
+    condition.run_on = 5;
+    CHECK(fo4ide::plugin::describeCondition(condition, plugin).at("param1").is_string());
+
+    condition.run_on = 0;
+    CHECK(fo4ide::plugin::describeCondition(condition, plugin).at("param1") == 0x812);
+}
+
+TEST_CASE("condition codec: GetDistance reference param1 with only UsePackData is an integer") {
+    fo4::CtdaCondition condition;
+    condition.function = fo4ide::plugin::functionIndex("GetDistance").value();
+    condition.param1 = 3;
+    condition.flags_byte = fo4::k_ctda_flag_pack_data;
+    const fo4::Plugin plugin{};
+
+    CHECK(fo4ide::plugin::describeCondition(condition, plugin).at("param1") == 3);
+}
+
+TEST_CASE("condition codec: negative and hex integer params on an Integer slot") {
+    const fo4::Plugin plugin{};
+    std::string failure;
+
+    fo4::CtdaCondition condition;
+    condition.function = fo4ide::plugin::functionIndex("GetAngle").value();
+    condition.param1 = -3;
+    const auto described = fo4ide::plugin::describeCondition(condition, plugin);
+    REQUIRE(described.at("param1") == -3);
+    const auto rebuilt = fo4ide::plugin::buildCondition(described, plugin, {}, failure);
+    REQUIRE(rebuilt.has_value());
+    CHECK(rebuilt->param1 == -3);
+
+    const nlohmann::json hex{{"function", "GetAngle"}, {"param1", "0x0000000A"}};
+    const auto fromHex = fo4ide::plugin::buildCondition(hex, plugin, {}, failure);
+    REQUIRE(fromHex.has_value());
+    CHECK(fromHex->param1 == 10);
+}
+
+TEST_CASE("condition codec: unsigned integral JSON double on an Integer slot keeps its bits") {
+    const fo4::Plugin plugin{};
+    std::string failure;
+
+    const nlohmann::json element{{"function", "GetAngle"}, {"param1", 3000000000.0}};
+    const auto built = fo4ide::plugin::buildCondition(element, plugin, {}, failure);
+    REQUIRE(built.has_value());
+    CHECK(built->param1 == static_cast<std::int32_t>(0xB2D05E00u));
+}
