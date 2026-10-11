@@ -851,7 +851,7 @@ is a `Fallout4ListGroup`, which does **not** implement `IGroup`, so CELLs / Plac
 worldspace sub-cells were silently skipped by the re-key loop while still entering the remap set —
 then `RemapLinks` repointed references onto FormKeys no record owned, and it reported success. It now
 refuses up front, naming the types. Compact those in xEdit, or keep cell-placed records within
-0x800-0xFFF when authoring. `renumber_formid` cannot move a cell-placed record either, and now says
+0x800-0xFFF when authoring (the native backend uses the policy range; see Radicle/docs/ESL_FORMIDS.md). `renumber_formid` cannot move a cell-placed record either, and now says
 so as an error.
 
 **6. `run_script` is bounded at 2 minutes.** It used to hang the server forever on `while(true){}`.

@@ -81,15 +81,25 @@ jobs:
           echo "ccache not found; building without a compiler cache"
 
       - name: Configure
-        run: >
-          cmake -S PluginEditTool/native -B build/native -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DFO4IDE_BUILD_TESTS=ON
-          -DRADICLE_BUILD_TESTS=ON
-          -DRADICLE_BUILD_TOOLS=ON
-          -DRADICLE_CSHARP_TESTS=ON
-          -DRADICLE_WARNINGS_AS_ERRORS=ON
-          ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
+        run: |
+          for attempt in 1 2 3; do
+            if cmake -S PluginEditTool/native -B build/native -G Ninja \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DFO4IDE_BUILD_TESTS=ON \
+              -DRADICLE_BUILD_TESTS=ON \
+              -DRADICLE_BUILD_TOOLS=ON \
+              -DRADICLE_CSHARP_TESTS=ON \
+              -DRADICLE_WARNINGS_AS_ERRORS=ON \
+              ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::configure failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::configure attempt $attempt failed, retrying"
+            sleep $((attempt * 30))
+          done
 
       - name: Build
         run: cmake --build build/native
@@ -98,8 +108,32 @@ jobs:
         if: always()
         run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
+      - name: Check FO4 data folder
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_LINUX }}
+        run: |
+          if [ -z "$FO4_DATA_DIR" ]; then
+            echo "FO4_DATA_DIR_LINUX is unset; real-data tests will skip."
+          else
+            missing=""
+            for m in Fallout4.esm DLCRobot.esm DLCworkshop01.esm DLCworkshop02.esm DLCworkshop03.esm DLCCoast.esm DLCNukaWorld.esm; do
+              [ -f "$FO4_DATA_DIR/$m" ] || missing="$missing $m"
+            done
+            [ -n "$(find "$FO4_DATA_DIR" -maxdepth 1 -type f -iname 'Fallout4 - *.ba2' -print -quit 2>/dev/null)" ] || missing="$missing Fallout4 - *.ba2"
+            if [ -n "$missing" ]; then
+              echo "FO4_DATA_DIR_LINUX ($FO4_DATA_DIR) is missing:$missing; point it at a Fallout 4 Data folder or unset it."
+              exit 1
+            fi
+            echo "FO4_DATA_DIR: $FO4_DATA_DIR"
+            echo "root *.esm: $(find "$FO4_DATA_DIR" -maxdepth 1 -iname '*.esm' | wc -l), *.ba2: $(find "$FO4_DATA_DIR" -maxdepth 1 -iname '*.ba2' | wc -l)"
+          fi
+
       - name: Test
-        run: ctest --test-dir build/native --output-on-failure --parallel 4
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_LINUX }}
+        run: |
+          if [ -z "$FO4_DATA_DIR" ]; then unset FO4_DATA_DIR; fi
+          ctest --test-dir build/native --output-on-failure --parallel 4
 
       - name: Prove clean managed tests without external networking
         run: unshare --user --map-root-user --net python3 Radicle/bindings/csharp/tools/run_managed_tests.py --build-dir build/native --network-isolated
@@ -132,7 +166,7 @@ jobs:
     # runs the tests with MSVC on the Windows runner.
     #
     # The xwin sysroot does not provide zlib, so this lane builds the pinned
-    # static zlib dependency first and points find_package(ZLIB) at it.
+    # static zlib dependency from the cached source and points find_package(ZLIB) at it.
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -152,17 +186,18 @@ jobs:
           done
           echo "ccache not found; building without a compiler cache"
 
+      - name: Pinned zlib source (cached)
+        run: bash .github/scripts/pinned-zlib.sh
+
       - name: Build Windows static zlib dependency
         run: |
-          git clone --filter=blob:none https://github.com/madler/zlib.git build/zlib-src
-          git -C build/zlib-src checkout 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
-          cmake -S build/zlib-src -B build/zlib-win -G Ninja \
+          cmake -S "$ZLIB_SRC" -B build/zlib-win -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=${GITHUB_WORKSPACE}/cmake/xwin-clang-cl.cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DZLIB_BUILD_EXAMPLES=OFF \
             ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
           cmake --build build/zlib-win --target zlibstatic
-          cp build/zlib-src/zlib.h build/zlib-win/zlib.h
+          cp "$ZLIB_SRC/zlib.h" build/zlib-win/zlib.h
           test -f build/zlib-win/zconf.h
           test -f build/zlib-win/zlibstatic.lib
 
@@ -205,8 +240,8 @@ jobs:
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 45
     # The native host now fetches the pinned WebView2 SDK itself. This lane also
-    # forces the pinned zlib fallback used by package.ps1, so the build matches
-    # a clean Windows release machine rather than depending on host packages.
+    # forces the pinned zlib fallback used by package.ps1 (built from the cached
+    # source), so the build matches a clean Windows release machine.
     # Tests are OFF here; native-windows-tests runs them with MSVC on the Windows
     # runner.
     steps:
@@ -228,15 +263,29 @@ jobs:
           done
           echo "ccache not found; building without a compiler cache"
 
+      - name: Pinned zlib source (cached)
+        run: bash .github/scripts/pinned-zlib.sh
+
       - name: Configure native Windows host
-        run: >
-          cmake -S PluginEditTool/native -B build/fo4ide-win -G Ninja
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake
-          -DCMAKE_BUILD_TYPE=Release
-          -DFO4IDE_BUILD_TESTS=OFF
-          -DFO4IDE_BUILD_HTTP=ON
-          -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
-          ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}
+        run: |
+          for attempt in 1 2 3; do
+            if cmake -S PluginEditTool/native -B build/fo4ide-win -G Ninja \
+              -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/xwin-clang-cl.cmake \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DFO4IDE_BUILD_TESTS=OFF \
+              -DFO4IDE_BUILD_HTTP=ON \
+              -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON \
+              -DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB="$ZLIB_SRC" \
+              ${CCACHE:+-DCMAKE_C_COMPILER_LAUNCHER=$CCACHE -DCMAKE_CXX_COMPILER_LAUNCHER=$CCACHE}; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::configure failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::configure attempt $attempt failed, retrying"
+            sleep $((attempt * 30))
+          done
 
       - name: Build FO4RecordEditor.exe
         run: cmake --build build/fo4ide-win --target fo4ide
@@ -335,11 +384,86 @@ jobs:
             "ccache not found; building without a compiler cache"
           }
 
-      - name: Configure
+      - name: Pinned zlib source (cached)
+        shell: powershell
         run: |
-          set "LAUNCHER="
-          if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
-          cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+          $ErrorActionPreference = 'Stop'
+          $cmakeText = Get-Content -Raw PluginEditTool\native\CMakeLists.txt
+          $revs = @([regex]::Matches($cmakeText, 'GIT_REPOSITORY[ \t]+https://github\.com/madler/zlib\.git\r?\n[ \t]*GIT_TAG[ \t]+([0-9a-f]{40})\r?\n') | ForEach-Object { $_.Groups[1].Value })
+          if ($revs.Count -ne 1) {
+            Write-Output "::error::expected exactly one 40-hex GIT_TAG after the zlib GIT_REPOSITORY in PluginEditTool/native/CMakeLists.txt"
+            exit 1
+          }
+          $zlibRev = $revs[0]
+          $base = if ($env:RUNNER_TOOL_CACHE) { Join-Path $env:RUNNER_TOOL_CACHE 'garden-src' } else { Join-Path $env:LOCALAPPDATA 'garden-src' }
+          $cache = Join-Path $base "zlib\$zlibRev"
+          if (Test-Path (Join-Path $cache '.installed')) {
+            Write-Output "Reusing cached zlib $zlibRev"
+          } else {
+            Write-Output "Fetching zlib $zlibRev into $cache"
+            New-Item -ItemType Directory -Force (Split-Path $cache) | Out-Null
+            $tmp = "$cache.tmp.$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+            git init -q $tmp
+            if ($LASTEXITCODE -ne 0) {
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp
+              Write-Output "::error::git init failed for $tmp"
+              exit 1
+            }
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+              git -C $tmp -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 fetch --depth 1 https://github.com/madler/zlib.git $zlibRev
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq 5) {
+                Remove-Item -Recurse -Force $tmp
+                Write-Output "::error::could not fetch zlib $zlibRev from GitHub after 5 attempts"
+                exit 1
+              }
+              Write-Output "::warning::zlib fetch attempt $attempt failed, retrying"
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+            git -C $tmp checkout -q --detach FETCH_HEAD
+            if ($LASTEXITCODE -ne 0) {
+              Remove-Item -Recurse -Force $tmp
+              Write-Output "::error::git checkout of zlib $zlibRev failed"
+              exit 1
+            }
+            $head = git -C $tmp rev-parse HEAD
+            if ($head -ne $zlibRev) {
+              Remove-Item -Recurse -Force $tmp
+              Write-Output "::error::zlib checkout is $head, not $zlibRev"
+              exit 1
+            }
+            New-Item -ItemType File -Path (Join-Path $tmp '.installed') | Out-Null
+            try {
+              [IO.Directory]::Move($tmp, $cache)
+            } catch {
+              Remove-Item -Recurse -Force $tmp
+              if (-not (Test-Path (Join-Path $cache '.installed'))) {
+                Write-Output "::error::zlib cache $cache is incomplete"
+                exit 1
+              }
+            }
+          }
+          New-Item -ItemType Directory -Force build | Out-Null
+          Copy-Item -Recurse -Force $cache build\zlib-src
+          Remove-Item -Recurse -Force build\zlib-src\.git
+          $zlibSrc = (Resolve-Path build\zlib-src).Path -replace '\\', '/'
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "ZLIB_SRC=$zlibSrc`n")
+
+      - name: Configure
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
 
       - name: Build
         run: cmake --build build\native
@@ -348,8 +472,39 @@ jobs:
         if: always()
         run: if defined CCACHE "%CCACHE%" --show-stats
 
+      - name: Check FO4 data folder
+        shell: powershell
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
+        run: |
+          if (-not $env:FO4_DATA_DIR) {
+            "FO4_DATA_DIR_WINDOWS is unset; real-data tests will skip."
+            exit 0
+          }
+          if (-not (Test-Path -LiteralPath $env:FO4_DATA_DIR -PathType Container)) {
+            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
+            exit 1
+          }
+          $missing = @()
+          foreach ($m in 'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm', 'DLCCoast.esm', 'DLCNukaWorld.esm') {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:FO4_DATA_DIR $m) -PathType Leaf)) { $missing += $m }
+          }
+          if (-not (Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter 'Fallout4 - *.ba2' -File -ErrorAction SilentlyContinue)) { $missing += 'Fallout4 - *.ba2' }
+          if ($missing) {
+            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
+            exit 1
+          }
+          "FO4_DATA_DIR: $env:FO4_DATA_DIR"
+          $esm = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.esm -File).Count
+          $ba2 = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.ba2 -File).Count
+          "root *.esm: $esm, *.ba2: $ba2"
+
       - name: Test
-        run: ctest --test-dir build\native --output-on-failure --parallel 4
+        env:
+          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
+        run: |
+          if "%FO4_DATA_DIR%"=="" set FO4_DATA_DIR=
+          ctest --test-dir build\native --output-on-failure --parallel 4
 
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.
@@ -357,18 +512,31 @@ jobs:
       # compiles that write to a shared PDB.
       - name: Configure (Debug)
         if: github.event_name != 'pull_request'
+        shell: powershell
         run: |
-          set "LAUNCHER="
-          if defined CCACHE set "LAUNCHER=-DCMAKE_C_COMPILER_LAUNCHER=%CCACHE% -DCMAKE_CXX_COMPILER_LAUNCHER=%CCACHE%"
-          cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON %LAUNCHER% || exit /b 1
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
 
       - name: Build (Debug)
         if: github.event_name != 'pull_request'
         run: cmake --build build\native-debug
 
+      # Real-data tests run in the Release pass only; Debug with game data exceeds the job timeout.
       - name: Test (Debug)
         if: github.event_name != 'pull_request'
-        run: ctest --test-dir build\native-debug --output-on-failure --parallel 4
+        run: |
+          set FO4_DATA_DIR=
+          ctest --test-dir build\native-debug --output-on-failure --parallel 4
 
       - name: Stop .NET build servers
         if: always()
