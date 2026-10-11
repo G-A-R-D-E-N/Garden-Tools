@@ -201,7 +201,6 @@ void walk_property(Slice& slice, std::int16_t object_format,
   }
 }
 
-// Unlike the QUST fragment header, an empty script name still has flags and properties.
 bool walk_script_entry(Slice& slice, std::int16_t object_format,
                        std::vector<std::size_t>& offsets) {
   const auto name_len = slice.u16();
