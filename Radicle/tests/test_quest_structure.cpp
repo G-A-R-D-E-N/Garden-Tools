@@ -11,6 +11,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -439,6 +440,71 @@ TEST(QuestStructure, DuplicateObjectiveFlagsAreUnsupported) {
   const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
   EXPECT_FALSE(native.objectives_supported);
   EXPECT_TRUE(native.objectives.objectives.empty());
+}
+
+TEST(QuestStructure, EightByteTargetReadsBeforeFormVersion82) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    record.header.form_version = 81;
+    for (auto& member : record.subrecords) {
+      if (member.signature == fo4::Signature::from_string("QSTA")) member.data.resize(8);
+    }
+  });
+  const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
+  EXPECT_TRUE(native.objectives_supported);
+  ASSERT_EQ(native.objectives.objectives.size(), 1u);
+  ASSERT_EQ(native.objectives.objectives[0].targets.size(), 1u);
+  const auto& target = native.objectives.objectives[0].targets[0];
+  EXPECT_EQ(target.alias, -1);
+  EXPECT_EQ(target.flags, 6u);
+  EXPECT_FALSE(target.keyword.has_value());
+  const Snapshot snapshot(plugin);
+  const auto view = snapshot.view();
+  EXPECT_EQ(view.objectives_supported, 1u);
+  ASSERT_EQ(view.target_count, 1u);
+  EXPECT_EQ(view.targets[0].alias, -1);
+  EXPECT_EQ(view.targets[0].keyword.plugin, nullptr);
+  EXPECT_EQ(view.unsupported_count, 0u);
+}
+
+TEST(QuestStructure, ObjectiveTargetWidthMustMatchFormVersion) {
+  const std::pair<std::uint16_t, std::size_t> cases[] = {{81, 12}, {131, 8}, {81, 9}};
+  for (const auto& test_case : cases) {
+    auto plugin = quest_structure_plugin();
+    change_quest(plugin, [&](fo4::Record& record) {
+      record.header.form_version = test_case.first;
+      for (auto& member : record.subrecords) {
+        if (member.signature == fo4::Signature::from_string("QSTA")) member.data.resize(test_case.second);
+      }
+    });
+    const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
+    EXPECT_FALSE(native.objectives_supported) << test_case.first << "/" << test_case.second;
+    EXPECT_TRUE(native.objectives.objectives.empty()) << test_case.first << "/" << test_case.second;
+  }
+}
+
+TEST(QuestStructure, EightByteTargetKeepsItsWidthOnRewrite) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    record.header.form_version = 81;
+    for (auto& member : record.subrecords) {
+      if (member.signature == fo4::Signature::from_string("QSTA")) member.data.resize(8);
+    }
+  });
+  auto objectives = fo4::forms::decode_quest_objectives(plugin, structure_quest_key());
+  fo4::forms::write_quest_objectives(plugin, structure_quest_key(), objectives);
+  const auto* record = fo4::find_record(plugin, structure_quest_key());
+  ASSERT_NE(record, nullptr);
+  std::size_t targets = 0;
+  for (const auto& member : record->subrecords) {
+    if (member.signature != fo4::Signature::from_string("QSTA")) continue;
+    ++targets;
+    EXPECT_EQ(member.data.size(), 8u);
+  }
+  EXPECT_EQ(targets, 1u);
+  objectives.objectives[0].targets[0].keyword = structure_quest_key();
+  EXPECT_THROW(fo4::forms::write_quest_objectives(plugin, structure_quest_key(), objectives),
+               fo4::forms::QuestError);
 }
 
 TEST(QuestStructure, MissingQuestReturnsNotFound) {
