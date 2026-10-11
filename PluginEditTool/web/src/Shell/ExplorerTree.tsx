@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ChevronDown, Database, FileBox } from 'lucide-react';
 import type { AppInterop } from '../backend';
 import { errorText } from '../errors';
@@ -22,30 +22,35 @@ export default function ExplorerTree({ path, node, backend, onOpenRecord }: { pa
   if (seenNode !== node) {
     setSeenNode(node);
     if (!expanded) setChildren([]);
+    else if (node.HasChildren) {
+      setLoading(true);
+      setLoadError('');
+    }
   }
 
-  const load = useCallback(async () => {
-    const mine = ++requests.current;
-    setLoading(true);
-    setLoadError('');
-    try {
-      if (!backend) throw new Error('Host bridge is not available');
-      const json = await backend.GetChildren(path);
-      if (mine === requests.current) setChildren(JSON.parse(json));
-    } catch (err) {
-      if (mine === requests.current) setLoadError(errorText(err));
-    } finally {
-      if (mine === requests.current) setLoading(false);
-    }
-  }, [backend, path]);
-
   useEffect(() => {
-    if (expanded && node.HasChildren) void load();
-  }, [node, expanded, load]);
+    if (!expanded || !node.HasChildren) return;
+    const mine = ++requests.current;
+    const current = () => mine === requests.current;
+    (backend ? backend.GetChildren(path) : Promise.reject(new Error('Host bridge is not available')))
+      .then(json => {
+        if (!current()) return;
+        setChildren(JSON.parse(json));
+        setLoadError('');
+      })
+      .catch(err => { if (current()) setLoadError(errorText(err)); })
+      .finally(() => { if (current()) setLoading(false); });
+  }, [node, expanded, backend, path]);
 
   const shown = node.HasChildren ? children : [];
 
-  const toggle = () => setExpanded(!expanded);
+  const toggle = () => {
+    if (!expanded && node.HasChildren) {
+      setLoading(true);
+      setLoadError('');
+    }
+    setExpanded(!expanded);
+  };
 
   return (
     <div className="tree-node">
