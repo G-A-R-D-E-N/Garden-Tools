@@ -52,9 +52,8 @@ radicle_status radicle_plugin_set_vmad_string(radicle_plugin* plugin, radicle_fo
                                               const char* value) {
   return edit(plugin, key, script, property, element, [&]() -> fo4::VmadValue {
     if (value == nullptr) throw fo4::schema::ScalarError("VMAD text is required");
-    const auto text = fo4::text::utf8_to_windows1252(value);
-    if (!text) throw fo4::schema::ScalarError("VMAD text must be UTF-8 representable in Windows-1252");
-    return *text;
+    if (!fo4::text::is_valid_utf8(value)) throw fo4::schema::ScalarError("VMAD text must be valid UTF-8");
+    return std::string(value);
   });
 }
 

@@ -81,10 +81,10 @@ std::vector<std::byte> make_vmad(bool with_variable) {
     out.u8(1);
     return out.bytes;
   }
-  wstring(out, "Label");
+  wstring(out, "Caf\xE9");
   out.u8(2);
   out.u8(1);
-  wstring(out, "hi");
+  wstring(out, "Caf\xC3\xA9");
   wstring(out, "Count");
   out.u8(3);
   out.u8(1);
@@ -291,7 +291,8 @@ TEST_F(PlacedEnvironmentTest, DecodesObjectReferenceFields) {
   ASSERT_EQ(script.properties.size(), 5u);
   EXPECT_EQ(script.properties[0].object, key(0x805));
   EXPECT_EQ(script.properties[0].alias, std::optional<std::int16_t>{-1});
-  EXPECT_EQ(script.properties[1].text, std::optional<std::string>{"hi"});
+  EXPECT_EQ(script.properties[1].name, "Caf\xE9");
+  EXPECT_EQ(script.properties[1].text, std::optional<std::string>{"Caf\xC3\xA9"});
   EXPECT_EQ(script.properties[2].integer, 7);
   EXPECT_EQ(script.properties[3].type, 16);
   EXPECT_EQ(script.properties[3].element_count, std::optional<std::uint32_t>{0});
@@ -419,7 +420,8 @@ TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
   EXPECT_EQ(ref->scripts_unsupported, 0);
   ASSERT_EQ(ref->scripts[0].property_count, 5u);
   EXPECT_EQ(ref->scripts[0].properties[0].object.local_id, 0x805u);
-  EXPECT_STREQ(ref->scripts[0].properties[1].text, "hi");
+  EXPECT_STREQ(ref->scripts[0].properties[1].name, "Caf\xC3\xA9");
+  EXPECT_STREQ(ref->scripts[0].properties[1].text, "Caf\xC3\xA9");
   EXPECT_EQ(ref->scripts[0].properties[2].has_integer, 1);
   EXPECT_EQ(ref->scripts[0].properties[3].type, 16);
   EXPECT_EQ(ref->scripts[0].properties[3].has_element_count, 1);

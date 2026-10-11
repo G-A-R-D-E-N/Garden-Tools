@@ -31,13 +31,13 @@ TEST(CApiVmadWriter, TypedSettersReparseAndRejectInvalidBoundaryValues) {
   EXPECT_EQ(radicle_plugin_set_vmad_bool(plugin, key, 0, 8, 0, 2), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_vmad_float(plugin, key, 0, 6, 0, std::numeric_limits<float>::quiet_NaN()), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_vmad_string(plugin, key, 0, 2, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
-  EXPECT_EQ(radicle_plugin_set_vmad_string(plugin, key, 0, 2, 0, "\xC4\x80"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_vmad_string(plugin, key, 0, 2, 0, "\xFF"), RADICLE_STATUS_INVALID_ARGUMENT);
   const auto unchanged = root / "Unchanged.esp";
   ASSERT_EQ(radicle_plugin_write_file(plugin, unchanged.string().c_str()), RADICLE_STATUS_OK);
   EXPECT_EQ(fo4::test::original_bytes(fo4::read_plugin_file(unchanged)), bytes);
   EXPECT_EQ(radicle_plugin_set_vmad_object(plugin, key, 0, 0, 0, {nullptr, 0}, -1), RADICLE_STATUS_OK);
-  EXPECT_EQ(radicle_plugin_set_vmad_string(plugin, key, 0, 2, 0, "caf\xC3\xA9"), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_vmad_string(plugin, key, 0, 2, 0, "Caf\xC3\xA9"), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_vmad_string(plugin, key, 0, 3, 0, "Caf\xC3\xA9"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_vmad_int(plugin, key, 0, 4, 0, -42), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_vmad_float(plugin, key, 0, 6, 0, 7.5f), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_set_vmad_bool(plugin, key, 0, 9, 1, 0), RADICLE_STATUS_OK);
@@ -48,7 +48,15 @@ TEST(CApiVmadWriter, TypedSettersReparseAndRejectInvalidBoundaryValues) {
   ASSERT_NE(record, nullptr);
   const auto properties = fo4::read_vmad_scripts(record->subrecords[0].data).scripts[0].properties;
   EXPECT_EQ(properties[0].object->value(), 0u); EXPECT_EQ(properties[0].alias, -1);
-  EXPECT_EQ(properties[2].text, "caf\xE9"); EXPECT_EQ(properties[4].integer, -42);
+  EXPECT_EQ(properties[2].text, "Caf\xC3\xA9"); EXPECT_EQ(properties[4].integer, -42);
   EXPECT_EQ(properties[6].real, 7.5f);
   EXPECT_EQ(record->subrecords[0].data[properties[9].value_offset + 5], std::byte{0});
+  const auto& data = record->subrecords[0].data;
+  const std::vector<std::byte> cafe{std::byte{0x43}, std::byte{0x61}, std::byte{0x66}, std::byte{0xC3}, std::byte{0xA9}};
+  const auto text_at = properties[2].value_offset;
+  EXPECT_EQ(data[text_at], std::byte{5}); EXPECT_EQ(data[text_at + 1], std::byte{0});
+  EXPECT_EQ(std::vector<std::byte>(data.begin() + text_at + 2, data.begin() + text_at + 7), cafe);
+  const auto element_at = properties[3].value_offset + 4;
+  EXPECT_EQ(data[element_at], std::byte{5}); EXPECT_EQ(data[element_at + 1], std::byte{0});
+  EXPECT_EQ(std::vector<std::byte>(data.begin() + element_at + 2, data.begin() + element_at + 7), cafe);
 }

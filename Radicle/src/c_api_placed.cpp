@@ -39,7 +39,6 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
       script.name = fo4::text::windows1252_to_utf8(script.name);
       for (auto& property : script.properties) {
         property.name = fo4::text::windows1252_to_utf8(property.name);
-        if (property.text) property.text = fo4::text::windows1252_to_utf8(*property.text);
       }
     }
   }
