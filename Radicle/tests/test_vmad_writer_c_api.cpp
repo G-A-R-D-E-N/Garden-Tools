@@ -60,3 +60,27 @@ TEST(CApiVmadWriter, TypedSettersReparseAndRejectInvalidBoundaryValues) {
   EXPECT_EQ(data[element_at], std::byte{5}); EXPECT_EQ(data[element_at + 1], std::byte{0});
   EXPECT_EQ(std::vector<std::byte>(data.begin() + element_at + 2, data.begin() + element_at + 7), cafe);
 }
+
+TEST(CApiVmadWriter, RefusesInvalidUtf8StringValueAndLeavesRecordUnchanged) {
+  namespace fixture = fo4::test::vmad;
+  const auto root = std::filesystem::temp_directory_path() /
+    ("radicle_vmad_writer_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  struct Cleanup {
+    std::filesystem::path path;
+    radicle_plugin* plugin{nullptr};
+    ~Cleanup() { radicle_plugin_destroy(plugin); std::error_code error; std::filesystem::remove_all(path, error); }
+  } cleanup{root, nullptr};
+  const auto input = root / "Vmad.esp";
+  const auto bytes = fixture::plugin_bytes();
+  std::ofstream stream(input, std::ios::binary);
+  stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  stream.close();
+  ASSERT_EQ(radicle_plugin_read_file(input.string().c_str(), &cleanup.plugin), RADICLE_STATUS_OK);
+  const radicle_form_key key{"Vmad.esp", 0x800};
+  auto* plugin = cleanup.plugin;
+  EXPECT_EQ(radicle_plugin_set_vmad_string(plugin, key, 0, 2, 0, "Caf\xE9"), RADICLE_STATUS_INVALID_ARGUMENT);
+  const auto output = root / "Refused.esp";
+  ASSERT_EQ(radicle_plugin_write_file(plugin, output.string().c_str()), RADICLE_STATUS_OK);
+  EXPECT_EQ(fo4::test::original_bytes(fo4::read_plugin_file(output)), bytes);
+}
