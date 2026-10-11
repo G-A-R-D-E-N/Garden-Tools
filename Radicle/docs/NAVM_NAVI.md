@@ -79,3 +79,33 @@ The earlier GardenEngine audit at `10ea81f1590b06dad962ff86721c0a55f00ef173`
 found vocabulary entries without a NAVM/NAVI geometry consumer. That audit
 was not rerun during this follow-up. Current consumer adoption and the
 GardenEngine #146 C ABI probe remain separate, unverified acceptance work.
+
+## GardenEngine consumer probe
+
+Copy `Radicle/probes/gardenengine/NavmeshProbe.cs` to `opencw/tools/NavmeshProbe.cs`
+and `Radicle/probes/gardenengine/navmesh_probe.tscn` to `opencw/tools/navmesh_probe.tscn`.
+Build GardenEngine with `RadicleSourceDir` set to this Radicle checkout so the probe
+compiles against the `Radicle.Interop` binding at this PR head.
+
+Run from the GardenEngine root with `FO4_DATA_DIR` set to the Fallout 4 `Data`
+directory and `RADICLE_NATIVE_PATH` set to the built Radicle native library:
+
+```
+godot --headless --path opencw tools/navmesh_probe.tscn
+```
+
+Exit codes: 0 prints `navmesh_probe PASS` with a one-line JSON summary; 77 prints
+`navmesh_probe SKIP: FO4_DATA_DIR unset`; 1 prints `navmesh_probe FAIL` with the exception.
+
+Assertions:
+
+- Exactly one NAVI record exists in `Fallout4.esm` (`WinnersOf("NAVI")`), matching the
+  installed-data table above, and `NavmeshInfos` decodes at least one NVMI entry.
+- Every present NVMI navmesh, parent world and parent cell link resolves through `env.Winner`.
+- The first NAVM whose `Navmesh` decodes with vertices and triangles greater than zero has every
+  triangle vertex index below its vertex count, and its present parent world and cell links resolve.
+
+No vanilla editor IDs are used: this repo cites none for NAVM or NAVI, so the probe walks
+records by signature instead.
+
+Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (GardenEngine pins ABI 9 at 34d16d50).
