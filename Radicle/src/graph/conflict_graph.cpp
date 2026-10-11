@@ -25,7 +25,7 @@ ConflictGraph ConflictGraph::build(std::span<const Plugin* const> load_order) {
       continue;
     }
 
-    for (const auto* record : collect_records(*plugin)) {
+    for (const auto* record : collect_first_records(*plugin)) {
       if (!has_identity(record->form_key)) {
         continue;
       }

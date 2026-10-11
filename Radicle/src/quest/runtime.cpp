@@ -43,13 +43,10 @@ bool read_start_game_enabled(const Record& record, std::vector<std::string>& uns
   return (flags & 0x0001u) != 0u;
 }
 
-}
-
-QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest) {
+QuestRuntimeData quest_runtime_data_record(const FormKey& quest, const Record* record) {
   QuestRuntimeData data;
   data.quest = quest;
 
-  const auto* record = find_record(plugin, quest);
   if (record == nullptr) {
     data.unsupported.push_back("QUST record " + quest.to_string() + " was not found");
     return data;
@@ -88,6 +85,16 @@ QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest) 
     data.unsupported.push_back(std::string("VMAD decode failed: ") + error.what());
   }
   return data;
+}
+
+}  // namespace
+
+QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest) {
+  return quest_runtime_data_record(quest, find_record(plugin, quest));
+}
+
+QuestRuntimeData quest_runtime_data(const RecordIndex& index, const FormKey& quest) {
+  return quest_runtime_data_record(quest, index.find(quest));
 }
 
 }
