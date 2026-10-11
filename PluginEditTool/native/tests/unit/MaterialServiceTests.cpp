@@ -221,3 +221,19 @@ TEST_CASE("Native material service refuses an embedded NUL in a string field wit
     CHECK(changed.error().type == "MaterialFieldParseFailed");
     CHECK(readFile(source) == original);
 }
+
+TEST_CASE("Native material save keeps an existing destination when the rename fails") {
+    const auto source = tempFile(".bgem");
+    const auto output = tempFile("_blocked.bgem");
+    Cleanup cleanup{{source, output}};
+    writeFile(source, minimalBgem());
+    std::filesystem::create_directories(output);
+
+    fo4ide::material::MaterialService service;
+    const std::map<std::string, std::string, std::less<>> changes{{"SoftDepth", "3.25"}};
+    const auto changed = service.setFields(source, changes, output);
+    REQUIRE_FALSE(changed.has_value());
+    CHECK(changed.error().type == "MaterialWriteFailed");
+    CHECK(std::filesystem::is_directory(output));
+    CHECK_FALSE(std::filesystem::exists(output.string() + ".tmp"));
+>}

@@ -31,7 +31,7 @@ fo4ide::mcp::ToolResult rpcToolText(const fo4ide::rpc::Response& response) {
     }
     if (response.value.is_string()) return {response.value.get<std::string>(), false};
     if (response.value.is_null()) return {"", false};
-    return {response.value.dump(), false};
+    return {response.value.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace), false};
 }
 
 struct PluginArgument {

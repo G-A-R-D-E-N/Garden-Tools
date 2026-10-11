@@ -35,7 +35,7 @@ std::map<FormKey, WinnerInfo> winning_records(std::span<const Plugin* const> loa
   std::map<FormKey, WinnerInfo> winners;
   for (const auto* plugin : load_order) {
     if (plugin == nullptr) continue;
-    for (const auto* record : collect_records(*plugin)) {
+    for (const auto* record : collect_first_records(*plugin)) {
       if (record->form_key.owner().filename().empty()) continue;
       winners[record->form_key] = {record->header.signature, record->header.flags.is_deleted(),
                                     plugin->key};
@@ -195,7 +195,7 @@ std::vector<std::vector<FormKey>> find_leveled_list_cycles(
     for (const auto& link : collect_form_links(*plugin)) {
       by_record[link.record].push_back(link.key);
     }
-    for (const auto* record : collect_records(*plugin)) {
+    for (const auto* record : collect_first_records(*plugin)) {
       if (!is_leveled(record->header.signature)) continue;
       edges[record->form_key] = std::move(by_record[record->form_key]);
     }
@@ -257,7 +257,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     if (plugin == nullptr || !selected(plugin->key)) continue;
     std::map<FormKey, const Record*> records;
     for (const auto* record : collect_records(*plugin)) {
-      records[record->form_key] = record;
+      records.try_emplace(record->form_key, record);
     }
     check_links(*plugin, records, winners, game_master, sink);
     check_preflight(*plugin, sink);

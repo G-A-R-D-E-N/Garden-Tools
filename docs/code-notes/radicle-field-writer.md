@@ -186,8 +186,8 @@ the first four characters of the path. The nested (terminator-scoped) lists are 
 
 ## Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:SetScalar
 
-`SetScalar`, `SetFormLink`, `SetString`, `FieldCount` and the `FormLinkList*` methods follow the existing
-`Edit` pattern: NOT_FOUND returns false (counts return 0), other failures throw `RadicleException`.
+`SetScalar`, `SetFormLink`, `SetString` and the `FormLinkList*` edit methods follow the existing
+`Edit` pattern: NOT_FOUND returns false, other failures throw `RadicleException`. The counts differ: see `Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:FieldCount` in `Radicle/docs/code-notes/Radicle.md`.
 `SetString` rejects an embedded NUL before the call because a C string cannot carry it. A negative index
 throws `ArgumentOutOfRangeException`. `SetScalar` always calls the indexed export; the unindexed export is
 kept for callers that built against the vegetation branch.

@@ -153,3 +153,12 @@ TEST(PluginDiff, ReferenceMovedBetweenCellsIsChanged) {
   EXPECT_EQ(diff[0].change, fo4::RecordChange::changed);
   EXPECT_TRUE(diff[0].placement_changed);
 }
+
+TEST(PluginDiff, DuplicateFormKeyInOnePluginKeepsTheFirstRecord) {
+  const auto before = make_plugin({{0x800, std::string_view{"Same\0", 5}},
+                                   {0x800, std::string_view{"Same\0", 5}}});
+  const auto after = make_plugin({{0x800, std::string_view{"Same\0", 5}},
+                                  {0x800, std::string_view{"Later\0", 6}}});
+  EXPECT_TRUE(fo4::diff_plugins(before, after).empty());
+  EXPECT_TRUE(fo4::diff_plugins(after, before).empty());
+}
