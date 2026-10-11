@@ -458,7 +458,9 @@ void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
         return condition;
     };
     std::vector<bool> used(previous.size(), false);
-    for (auto& condition : conditions) {
+    std::vector<bool> carried(conditions.size(), false);
+    for (std::size_t k = 0; k < conditions.size(); ++k) {
+        auto& condition = conditions[k];
         condition.padding = {};
         const auto payload = fo4::serialize_ctda_condition(condition);
         for (std::size_t index = 0; index < previous.size(); ++index) {
@@ -471,8 +473,14 @@ void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
             }
             condition.padding = candidate.padding;
             used[index] = true;
+            carried[k] = true;
             break;
         }
+    }
+    for (std::size_t k = 0; k < conditions.size() && k < previous.size(); ++k) {
+        if (carried[k] || used[k]) continue;
+        conditions[k].padding = previous[k].padding;
+        used[k] = true;
     }
 }
 

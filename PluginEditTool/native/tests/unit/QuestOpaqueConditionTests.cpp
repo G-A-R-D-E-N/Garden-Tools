@@ -25,7 +25,7 @@ struct Cleanup {
 
 TEST_CASE("quest stage and alias replacements carry opaque condition padding", "[quest-opaque-condition]") {
     const bool alias = GENERATE(false, true);
-    const auto scenario = GENERATE(0, 1, 2, 3, 4);
+    const auto scenario = GENERATE(0, 1, 2, 3, 4, 5);
     const auto root = std::filesystem::temp_directory_path() /
         ("quest_opaque_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     Cleanup cleanup{root};
@@ -97,7 +97,7 @@ TEST_CASE("quest stage and alias replacements carry opaque condition padding", "
     auto expected = std::vector<fo4::CtdaCondition>{condition};
     if (scenario == 1) {
         conditions = nlohmann::json::array({visible(2.0)});
-        expected = {makeCondition(0x40000000u, {})};
+        expected = {makeCondition(0x40000000u, padding)};
     } else if (scenario == 2) {
         conditions.push_back(visible(3.0));
         expected.push_back(makeCondition(0x40400000u, {}));
@@ -107,6 +107,9 @@ TEST_CASE("quest stage and alias replacements carry opaque condition padding", "
     } else if (scenario == 4) {
         conditions = nlohmann::json::array({visible(2.0)});
         expected = {second};
+    } else if (scenario == 5) {
+        conditions = nlohmann::json::array({visible(1.0), visible(4.0)});
+        expected = {condition, makeCondition(0x40800000u, otherPadding)};
     }
     const auto rows = alias ? nlohmann::json::array({
         {{"kind", "reference"}, {"id", 1}, {"name", "Existing"}, {"flags", 0}, {"conditions", conditions}}
