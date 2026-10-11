@@ -11,6 +11,7 @@
 namespace fo4 {
 
 std::vector<std::byte> write_plugin(const Plugin& plugin);
+std::vector<std::byte> write_plugin(const Plugin& plugin, const std::filesystem::path& path);
 void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path);
 Plugin apply_extension_flags(Plugin plugin, const std::filesystem::path& path);
 

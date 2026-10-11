@@ -298,6 +298,21 @@ void clear_original_bytes(Plugin& plugin) {
   plugin.original_structure_fingerprint = 0;
 }
 
+std::string lower_extension(const std::filesystem::path& path) {
+  auto extension = path.extension().string();
+  std::transform(extension.begin(), extension.end(), extension.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return extension;
+}
+
+bool extension_flags_missing(const Plugin& plugin, const std::filesystem::path& path) {
+  const auto extension = lower_extension(path);
+  const auto& flags = plugin.tes4.header.flags;
+  if (extension == ".esl") return !flags.is_small_file() || !flags.is_master();
+  if (extension == ".esm") return !flags.is_master();
+  return false;
+}
+
 }  // namespace
 
 std::vector<std::byte> write_plugin(const Plugin& plugin) {
@@ -329,12 +344,14 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
   return out.bytes;
 }
 
+std::vector<std::byte> write_plugin(const Plugin& plugin, const std::filesystem::path& path) {
+  return extension_flags_missing(plugin, path) ? write_plugin(apply_extension_flags(plugin, path))
+                                               : write_plugin(plugin);
+}
+
 Plugin apply_extension_flags(Plugin plugin, const std::filesystem::path& path) {
-  auto extension = path.extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  const bool light = extension == ".esl";
-  if (!light && extension != ".esm") return plugin;
+  if (!extension_flags_missing(plugin, path)) return plugin;
+  const bool light = lower_extension(path) == ".esl";
 
   if (light && !plugin.tes4.header.flags.is_small_file()) {
     plugin = set_plugin_light_flag(std::move(plugin), true);
@@ -349,8 +366,7 @@ Plugin apply_extension_flags(Plugin plugin, const std::filesystem::path& path) {
 }
 
 void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) {
-  const auto bytes = write_plugin(apply_extension_flags(plugin, path));
-  io::write_file_atomic(path, bytes);
+  io::write_file_atomic(path, write_plugin(plugin, path));
 }
 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
