@@ -89,7 +89,7 @@ std::string hash_key(std::uint32_t name, std::uint32_t extension, std::uint32_t 
 }
 
 std::string lookup_key(bool named, std::string_view path) {
-  if (named) return normalize_ba2_path(path);
+  if (named) return normalize_ba2_name(path);
   const auto hashes = compute_ba2_hashes(path);
   return hash_key(hashes.name, hashes.extension, hashes.directory);
 }
@@ -195,7 +195,7 @@ Ba2Reader Ba2Reader::open(const std::filesystem::path& path) {
     if (reader.has_name_table_) {
       std::string stored(file.u16(), '\0');
       if (!stored.empty()) file.read(stored.data(), stored.size());
-      key = normalize_ba2_path(stored);
+      key = normalize_ba2_name(stored);
       entry.path = text::windows1252_to_utf8(stored);
     } else {
       key = hash_key(entry.name_hash, entry.extension_hash, entry.directory_hash);

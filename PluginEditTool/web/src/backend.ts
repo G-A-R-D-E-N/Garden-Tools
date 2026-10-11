@@ -177,12 +177,16 @@ export interface ElementActions {
 
 
 export interface ConditionDto {
+  _native?: { ctda: number[]; cis1: string | null; cis2: string | null };
+  _edited?: string[];
   function: string;
   operator: string;
   value?: number;
   compareGlobal?: string;
   param1?: string | number;
   param2?: string | number;
+  cis1?: string | null;
+  cis2?: string | null;
   runOn?: string;
   reference?: string;
   flags?: string;

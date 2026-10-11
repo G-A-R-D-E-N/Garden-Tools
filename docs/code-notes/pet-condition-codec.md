@@ -1,0 +1,72 @@
+# PET condition codec: typed CTDA parameters
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:describeCondition
+
+Non-GetEventData conditions now render param1 and param2 by declared parameter kind (see `paramKind`). Before this, every nonzero param went through `formIdString`, so a Float such as GetWithinDistance param2 came out as FormKey text, an Integer came out as hex FormKey text, and Alias, QuestStage, Event and enum params came out as FormKey text too. Zero params are still omitted.
+
+- Form: `formIdString` (unchanged).
+- Integer: JSON integer (the int32 value).
+- Float: JSON number when finite; otherwise the string `0x` plus 8 uppercase hex digits of the bits (see `describeParam`).
+- Unknown function name: Form (old behaviour).
+
+Anchors for the declared types: source:xEdit Core/wbDefinitionsFO4.pas:192-248 @93cc0bc5 (TConditionParameterType, ptFloat at 195, ptInteger at 196, ptAlias at 198, ptEvent at 199, ptQuestStage at 201, enums 204-212, record types 215-247); source:xEdit Core/wbDefinitionsFO4.pas:261-741 @93cc0bc5 (wbConditionFunctions rows, for example GetEventData at 554 and GetWithinDistance at 603); source:xEdit Core/wbDefinitionsFO4.pas:5124-5181 @93cc0bc5 (wbConditionParameters: Float is wbFloat, Integer and Alias are itS32, Event, Packdata and QuestStage are itU32, enums are itU32 with a name enum, record types are wbFormIDCkNoReach).
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:paramKind
+
+The declared type comes from `ConditionFunctions::paramsOf` (table `kTable` in `PluginEditTool/native/src/plugin/ConditionFunctions.cpp`). Slots past the declared list are Integer; a function with no declared params therefore renders nonzero params as integers.
+
+- Float maps to Float. Integer, String, Alias, Event, Packdata, QuestStage and the nine enum names map to Integer. Everything else (record types) maps to Form.
+- Reference, Actor and Package with the aliases flag (0x02) become Integer; with only the UsePackData flag (0x08) they become Integer (Packdata).
+- Exception: slot 0 of GetIsCurrentPackage with Run On 5 stays Form, and only when the aliases flag is set. With only the UsePackData flag, xEdit's else-if still makes the slot Packdata, so that case is Integer.
+- Parameter 2 has no exception.
+
+Anchors: source:xEdit Core/wbDefinitionsFO4.pas:808-858 @93cc0bc5 (wbConditionParam1Decider and wbConditionParam2Decider; the aliases branch is at 824-829 and the packdata else-if at 830-831, so the exception only guards the aliases branch); source:xEdit Core/wbDefinitionsFO4.pas:823-831 @93cc0bc5 (the GetIsCurrentPackage Run On 5 exception).
+
+Table check: the 220 functions with a non-None declared parameter type in xEdit (wbDefinitionsFO4.pas:261-741 @93cc0bc5) have the same names as `kTable` in `PluginEditTool/native/src/plugin/ConditionFunctions.cpp:kTable`. The parameter types per name were compared with a script before this change; it was not re-run for this commit. The ConditionFunctions table is reused, not generated from Radicle's ctda_functions.inc (which stores link bits only).
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition
+
+Slots are applied after the flags byte is parsed, so `paramKind` sees the final flags. Accepted input per kind:
+
+- Any kind, JSON integer: raw int32 bits, accepted in -2147483648 to 4294967295 (cast to int32); values outside that range are refused with `<key> <value> is outside [-2147483648, 4294967295]`. The old code cast without a range check, so out-of-range values were truncated before. Unsigned JSON integers are range-checked as `uint64` first (`buildCondition`, `applyParam`): nlohmann's `get<std::int64_t>()` would wrap 18446744073709551615 to -1.
+- Any kind, string `0x` plus 1 to 8 hex digits: raw bits. This is how non-finite floats round-trip.
+- Form: strict whole-string decimal first, then FormKey or editor ID (`resolveConditionFormId`). A JSON float is refused.
+- Integer: strict decimal first, then FormKey or editor ID. A JSON float with an integral value in the JSON integer range is accepted (converted through uint32, so 3000000000.0 gives the bits of 3000000000); a non-integral one is refused.
+- Float: a JSON number (integer or float) is the float value (5 becomes 5.0f), stored as its bits. A string is parsed strictly as a decimal float (`std::from_chars`); a non-numeric or non-finite value is refused, and FormKey or editor-ID text is not accepted on a Float slot.
+- Empty string leaves the param at 0. Null, bool and object are refused.
+- GetEventData (`is_event_data`) uses the Integer rules for both params, so its raw JSON integers are unchanged.
+
+Behaviour change: a JSON integer on a Float slot is now a value, not raw bits. The old describe never emitted that shape for floats, so no stored round trip breaks. Every other input the old build accepted on Integer and Form slots (integers, decimal strings, FormKey strings, editor IDs) is still accepted.
+Anchors: source:xEdit Core/wbDefinitionsFO4.pas:554 @93cc0bc5 (GetEventData: ParamType1 ptEvent, ParamType2 ptEventData); source:xEdit Core/wbDefinitionsFO4.pas:860 @93cc0bc5 (wbConditionEventToStr: the event value is `function | member << 16`, so GetEventData params stay raw).
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:describeParam
+
+Non-finite floats render as the string `0x` plus 8 uppercase hex digits of the bits (for example `0x7FC00000`). `buildCondition` reads that string back as raw bits. This keeps NaN and infinity round-trippable without JSON support for them.
+
+## PluginEditTool/native/tests/unit/ConditionCodecTests.cpp
+
+Regression tests for the typed behaviour: "float parameter is a JSON number", "integer parameter round trips as a number", "alias parameter under ParametersUseAliases is an integer", "build accepts the old string forms and JSON integers on float slots", and "non-finite float round trips through 0x hex". On the old code, the first three tests, the non-finite test and the "2.5" and integer 3 cases of the build test fail: the old code returned FormKey text for those slots, and read a JSON integer on a Float slot as raw bits. The GetAngle "7" case already passed.
+
+## PluginEditTool/native/tests/unit/ConditionBackendParamTests.cpp:condition backend: GetConditions serializes the CTDA list
+
+This test was moved out of `PluginEditTool/native/tests/unit/ConditionBackendTests.cpp` (which is over the 750-line guard) into its own file. Its GetAngle param1 assertion now expects the Axis integer 1 instead of the old FormKey text. The GetDistance (Reference) param1 assertion is unchanged.
+
+## PluginEditTool/native/src/plugin/ConditionCodec.cpp:describeCondition / buildCondition (GT-217, GT-188)
+
+CIS1 and CIS2 are Windows-1252 bytes on disk. GT-188 records that xEdit reads non-localized plugin strings this way, and Radicle keeps the raw bytes in `parameter1_string` / `parameter2_string`. Those bytes are not valid UTF-8, so putting them into nlohmann::json and calling dump() threw on a byte such as 0xE9 (GT-217).
+
+The JSON is UTF-8. describe emits `cis1` / `cis2` when the string is present and the same text under `_native.cis1` / `_native.cis2`, both through `fo4::text::windows1252_to_utf8`. `_native` only travels in the JSON transport and is never persisted. build converts back with `fo4::text::utf8_to_windows1252`. That mapping is a byte-exact inverse, including the five bytes Radicle maps to U+0081, U+008D, U+008F, U+0090 and U+009D, so an unchanged row keeps its original bytes.
+
+Text that Windows-1252 cannot represent (for example U+4E2D) is refused, not substituted: `cis1 is not valid UTF-8 text representable in Windows-1252`, or the same wording with `cis2`. The `_native` restore path uses `preserved CIS string is not valid UTF-8 text representable in Windows-1252`.
+
+Top-level `cis1` / `cis2` in buildCondition (`applyCis`) are read on a new row when present, and on a preserved row when present and different from the native baseline. On a preserved row an omitted key keeps the native bytes unless it is listed in `_edited`, which clears the string. Native metadata alone therefore restores the original bytes. They are refused on a slot that is not String or Event (`ConditionFunctions::editorFor` text kind), matching the quest codec in `RadiclePluginQuestCondition.cpp`.
+
+The shared conversion is `PluginEditTool/native/src/plugin/ConditionCodec.cpp:conditionCisFromUtf8` (declared in `PluginEditTool/native/include/fo4ide/plugin/ConditionCodec.hpp`). It returns nullopt for text Windows-1252 cannot represent and for an embedded NUL, so a NUL is now refused with the same not-representable wording instead of its own message. Every caller uses it: `buildCondition` (`applyCis` and the `_native` `restoreString`) and the quest path below.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQuestCondition.cpp:parseQuestCondition (GT-217, GT-188)
+
+Quest log-entry and alias conditions take `cis1` / `cis2` as UTF-8 JSON text. `parseQuestCondition` (its `parseCis` lambda) converts it with `conditionCisFromUtf8` before storing it in `parameter1_string` / `parameter2_string`, so the bytes written to CTDA/CIS1 are Windows-1252 as GT-188 requires. Before this, the UTF-8 bytes were written as-is. Unrepresentable text is refused with `cis1 is not valid UTF-8 text representable in Windows-1252` and nothing is written.
+
+The quest codebase has no JSON writer for conditions. A read of quest conditions goes through the condition backend (`RadiclePluginConditions.cpp:getConditions` / `getConditionsAtPath`) and `ConditionCodec.cpp:describeCondition`, which is the function fixed above, so the read path needs no separate change.
+
+Test anchor: `PluginEditTool/native/tests/unit/QuestOpaqueConditionTests.cpp` (TEST_CASE "quest log entry CIS1 is stored as Windows-1252 and reads back as UTF-8") sets a `GetGraphVariableInt` log-entry condition with `cis1` "café", checks the saved CIS1 subrecord is `caf\xE9` plus its NUL terminator (5 bytes, from `Radicle/src/schema/ctda.cpp:zstring_bytes`), decodes it with `lossless_quest_log_entry_conditions`, and checks `describeCondition` gives `café`.

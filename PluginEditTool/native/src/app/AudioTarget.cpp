@@ -2,13 +2,14 @@
 #include <fo4ide/core/JsonInt.hpp>
 
 #include <chrono>
-#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include "ServiceTargetSupport.hpp"
 
 namespace fo4ide::app {
 namespace {
@@ -34,35 +35,6 @@ nlohmann::json serviceText(Result<std::string> result) {
 nlohmann::json pathResult(Result<std::filesystem::path> result) {
     if (!result) return std::string{};
     return result->string();
-}
-
-int base64Value(unsigned char c) {
-    if (c >= 'A' && c <= 'Z') return c - 'A';
-    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
-    if (c >= '0' && c <= '9') return c - '0' + 52;
-    if (c == '+') return 62;
-    if (c == '/') return 63;
-    return -1;
-}
-
-Result<std::vector<unsigned char>> decodeBase64(std::string_view input) {
-    std::vector<unsigned char> output;
-    output.reserve(input.size() * 3 / 4);
-    unsigned int value = 0;
-    int bits = -8;
-    for (const unsigned char c : input) {
-        if (std::isspace(c)) continue;
-        if (c == '=') break;
-        const int digit = base64Value(c);
-        if (digit < 0) return std::unexpected(Error{"InvalidBase64", "Dropped audio payload is not valid base64"});
-        value = (value << 6) | static_cast<unsigned int>(digit);
-        bits += 6;
-        if (bits >= 0) {
-            output.push_back(static_cast<unsigned char>((value >> bits) & 0xFFU));
-            bits -= 8;
-        }
-    }
-    return output;
 }
 
 std::filesystem::path uniqueStageDirectory() {
@@ -114,7 +86,7 @@ Result<nlohmann::json> AudioTarget::stageDroppedFile(const nlohmann::json& args)
     try {
         auto name = std::filesystem::path(stringArgument(args, 0)).filename();
         if (name.empty()) name = "dropped.audio";
-        auto decoded = decodeBase64(stringArgument(args, 1));
+        auto decoded = support::decodeBase64(stringArgument(args, 1));
         if (!decoded) return nlohmann::json("ERR:" + decoded.error().message);
 
         const auto directory = uniqueStageDirectory();

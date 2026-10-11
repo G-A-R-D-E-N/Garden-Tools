@@ -1,8 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
-  ChevronRight, ChevronDown, Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Star, Workflow,
+  Database, FileBox, X, Zap, Rocket,
+  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
@@ -13,7 +13,6 @@ import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
 import BlueprintPanel from './Blueprint/BlueprintPanel';
 import { readFavourites, removeFavourite, FAVOURITES_CHANGED } from './favourites';
-import { useDialogs } from './useDialogs';
 
 interface McpLiveMsg {
   Tool: string;
@@ -37,16 +36,21 @@ import ChatPanel from './ChatPanel';
 import TopBar, { type ShellTab } from './Shell/TopBar';
 import DetailRail from './Shell/DetailRail';
 import StatusBar from './Shell/StatusBar';
-import type {
-  AppInterop, ConflictMatrix, SearchHit, ConflictEntry, RecordTypeEntry, LoadOrderSummary, Mo2Status,
-} from './backend';
+import HelpModal from './Shell/HelpModal';
+import BrokenRefsModal from './Shell/BrokenRefsModal';
+import EnvLoadingOverlay from './Shell/EnvLoadingOverlay';
+import ConflictsPanel from './Shell/ConflictsPanel';
+import FavouritesList from './Shell/FavouritesList';
+import { useRecordOpening } from './Shell/useRecordOpening';
+import { useEnvironment } from './Shell/useEnvironment';
+import { useConflictBatch } from './Shell/useConflictBatch';
+import type { SearchHit } from './backend';
 import type { RecordTab } from './RecordView';
-import { errorMessage, errorText } from './errors';
-import ExplorerTree, { type RecordNode } from './Shell/ExplorerTree';
+import { errorMessage } from './errors';
+import ExplorerTree from './Shell/ExplorerTree';
 
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
-
 
   const [treeMode, setTreeMode] = useState<'files' | 'conflicts'>(
     () => (localStorage.getItem('treeMode') as 'files' | 'conflicts') || 'files');
@@ -61,9 +65,6 @@ export default function MainShell() {
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
   const [showBlueprint, setShowBlueprint] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-
-  const { pickPlugin: askForTarget, confirm: askConfirm } = useDialogs();
-
 
   const [shellTab, setShellTab] = useState<ShellTab>('home');
   const [railVisible, setRailVisible] = useState(true);
@@ -91,8 +92,6 @@ export default function MainShell() {
     document.body.style.userSelect = 'none';
   }, [chatWidth]);
 
-
-
   const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem('sidebarWidth') || 280));
 
   const onSidebarResizeStart = useCallback((e: React.MouseEvent) => {
@@ -116,27 +115,30 @@ export default function MainShell() {
     document.body.style.userSelect = 'none';
   }, [sidebarWidth]);
 
-
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light');
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
-
   const [recordTab, setRecordTab] = useState<RecordTab>('grid');
-  const [plugins, setPlugins] = useState<RecordNode[]>([]);
-  const [backend, setBackend] = useState<AppInterop | null>(null);
   const [errorStr, setErrorStr] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [progress, setProgress] = useState<number | null>(null);
 
+  const {
+    openRecords, activeKey, setActiveKey, recordLoading, openRecord, closeRecordTab,
+    openRecordInView, openHit, openByFormKey, reloadMatrix,
+  } = useRecordOpening(setErrorStr);
 
+  const {
+    plugins, setPlugins, backend, envLoading, mo2Status, recordTypes, loadOrderSummary,
+    refreshNavigator, refreshPlugins, handleLoadEnv, handleLoadMo2,
+  } = useEnvironment({ setErrorStr, setProgress });
 
-  const [envLoading, setEnvLoading] = useState(false);
-  const [mo2Status, setMo2Status] = useState<Mo2Status | null>(null);
-
-
+  const {
+    conflicts, setConflicts, conflictSel, setConflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
+  } = useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr });
 
   const [favourites, setFavourites] = useState(readFavourites);
   const [favouritesOpen, setFavouritesOpen] = useState(
@@ -147,45 +149,6 @@ export default function MainShell() {
     window.addEventListener(FAVOURITES_CHANGED, sync);
     return () => window.removeEventListener(FAVOURITES_CHANGED, sync);
   }, []);
-
-
-
-
-  interface OpenRec { title: string; plugin: string; matrix: ConflictMatrix }
-  const [openRecords, setOpenRecords] = useState<OpenRec[]>([]);
-  const [activeKey, setActiveKey] = useState<string>('');
-  const [recordLoading, setRecordLoading] = useState(false);
-
-
-
-
-
-  const openRecord = openRecords.find(r => r.matrix?.FormKey === activeKey) ?? null;
-
-
-  const putRecord = useCallback((rec: OpenRec) => {
-    if (!rec.matrix?.FormKey) return;
-    setOpenRecords(prev => {
-      const at = prev.findIndex(r => r.matrix?.FormKey === rec.matrix.FormKey);
-      if (at === -1) return [...prev, rec];
-      const next = [...prev];
-      next[at] = rec;
-      return next;
-    });
-    setActiveKey(rec.matrix.FormKey);
-  }, []);
-
-  const closeRecordTab = useCallback((formKey: string) => {
-    setOpenRecords(prev => {
-      const at = prev.findIndex(r => r.matrix?.FormKey === formKey);
-      if (at === -1) return prev;
-      const next = prev.filter(r => r.matrix?.FormKey !== formKey);
-
-      setActiveKey(cur => (cur !== formKey ? cur : (next[at] ?? next[at - 1])?.matrix?.FormKey ?? ''));
-      return next;
-    });
-  }, []);
-
 
   const [mcpFeed, setMcpFeed] = useState<McpLiveMsg[]>([]);
   const [mcpActive, setMcpActive] = useState(false);
@@ -200,62 +163,8 @@ export default function MainShell() {
   const openByFormKeyRef = useRef<(formKey: string, pluginName: string) => Promise<void>>(async () => {});
   useLayoutEffect(() => { openRecordRef.current = openRecord; });
 
-
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
-
-
-
-  const [recordTypes, setRecordTypes] = useState<RecordTypeEntry[]>([]);
-  const [loadOrderSummary, setLoadOrderSummary] = useState<LoadOrderSummary | null>(null);
-
-
-  const refreshNavigator = useCallback(async () => {
-    const b = window.chrome?.webview?.hostObjects?.backend;
-    if (!b) return;
-    try {
-      const [typesJson, summaryJson] = await Promise.all([
-        b.GetRecordTypeIndex(), b.GetLoadOrderSummary(),
-      ]);
-      setRecordTypes(JSON.parse(typesJson));
-      setLoadOrderSummary(JSON.parse(summaryJson));
-    } catch (e) {
-      setErrorStr(`Load-order summary failed: ${e}`);
-    }
-  }, []);
-
-  const parseMo2Status = (raw: unknown): Mo2Status | null => {
-    try {
-      const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (!value || typeof value !== 'object') return null;
-      return value as Mo2Status;
-    } catch {
-      return null;
-    }
-  };
-
-  const refreshMo2Status = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop as
-      | { GetMo2Status?: () => Promise<unknown> }
-      | undefined;
-    if (!b?.GetMo2Status) return;
-    try {
-      setMo2Status(parseMo2Status(await b.GetMo2Status()));
-    } catch {
-      setMo2Status(null);
-    }
-  };
-
-  const refreshPlugins = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop;
-    if (!b) return;
-    const json = await b.GetPlugins();
-    setPlugins(JSON.parse(json));
-    setErrorStr("");
-
-    await refreshNavigator();
-    await refreshMo2Status();
-  };
 
   useEffect(() => {
     const handleRejection = (event: PromiseRejectionEvent) => {
@@ -303,134 +212,18 @@ export default function MainShell() {
           reloadMatrixRef.current();
         }
       }
-
     };
 
     window.chrome?.webview?.addEventListener('message', onMessage);
 
-    const init = async () => {
-      try {
-
-        if (window.chrome?.webview?.hostObjects?.appInterop) {
-
-          const b = window.chrome.webview.hostObjects.appInterop;
-
-
-
-
-          setBackend(() => b);
-          await refreshPlugins();
-        }
-      } catch (err) {
-        console.error("Init Error:", err);
-        setErrorStr(errorMessage(err) ?? (JSON.stringify(err) || String(err)));
-      }
-    };
-    init();
-
     return () => {
       window.removeEventListener('unhandledrejection', handleRejection);
-
       window.chrome?.webview?.removeEventListener('message', onMessage);
     };
   }, []);
 
-
-
-
-  useEffect(() => {
-    let cancelled = false;
-    const tick = async () => {
-      const b = window.chrome?.webview?.hostObjects?.appInterop as
-        | { GetMo2Status?: () => Promise<unknown> }
-        | undefined;
-      if (!b?.GetMo2Status) return;
-      try {
-        const next = parseMo2Status(await b.GetMo2Status());
-        if (!cancelled) setMo2Status(next);
-      } catch {
-        if (!cancelled) setMo2Status(null);
-      }
-    };
-    void tick();
-    const id = window.setInterval(tick, 2500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [backend]);
-
-
-  const isPendingReloadError = (err: unknown) =>
-    String((err as { message?: string })?.message ?? err ?? '').includes('PluginHasPendingChanges');
-
-  const confirmDiscardPendingReload = async () => askConfirm({
-    title: 'Discard pending edits?',
-    message: 'Reloading the MO2 profile replaces every loaded plugin from disk and will discard unsaved edits. Save those plugins first, or discard them to continue.',
-    confirmLabel: 'Discard and reload',
-    cancelLabel: 'Cancel',
-    danger: true,
-  });
-
-  const handleLoadEnv = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop;
-    if (!b) return;
-    setEnvLoading(true);
-    try {
-      try {
-        await b.LoadEnvironment();
-      } catch (err) {
-        if (!isPendingReloadError(err)) throw err;
-        if (!(await confirmDiscardPendingReload())) return;
-        await b.LoadEnvironment(true);
-      }
-      await refreshPlugins();
-    } catch (err) {
-      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
-    } finally {
-      setProgress(null);
-      setEnvLoading(false);
-    }
-  };
-
-  const handleLoadMo2 = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop;
-    if (!b) return;
-    try {
-      const path = await b.BrowseForMo2Folder();
-      if (!path) return;
-      setEnvLoading(true);
-      try {
-        await b.OpenMo2Profile(path);
-      } catch (err) {
-        if (!isPendingReloadError(err)) throw err;
-        if (!(await confirmDiscardPendingReload())) return;
-        await b.OpenMo2Profile(path, true);
-      }
-      await refreshPlugins();
-    } catch (err) {
-      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
-    } finally {
-      setProgress(null);
-      setEnvLoading(false);
-    }
-  };
-
-
-
-  const handleRefresh = async () => {
-    const b = window.chrome?.webview?.hostObjects?.appInterop;
-    if (!b) return;
-    try {
-      const json = await b.RefreshTree();
-      setPlugins(JSON.parse(json));
-      await refreshNavigator();
-      if (openRecord) await reloadMatrix();
-      setStatus('Refreshed.');
-    } catch (err) {
-      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
-    }
-  };
+  const [brokenRefsReport, setBrokenRefsReport] = useState<string | null>(null);
+  const [brokenRefsScanning, setBrokenRefsScanning] = useState(false);
 
   const handleScanConflicts = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;
@@ -445,9 +238,6 @@ export default function MainShell() {
       setProgress(null);
     }
   };
-
-  const [brokenRefsReport, setBrokenRefsReport] = useState<string | null>(null);
-  const [brokenRefsScanning, setBrokenRefsScanning] = useState(false);
 
   const handleScanBrokenRefs = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;
@@ -466,40 +256,6 @@ export default function MainShell() {
     }
   };
 
-
-  const openRecordInView = async (path: string, node: RecordNode) => {
-    const app = window.chrome?.webview?.hostObjects?.appInterop;
-    const back = window.chrome?.webview?.hostObjects?.backend;
-    if (!app || !back) { setErrorStr("Record bridge unavailable."); return; }
-    setRecordLoading(true);
-    try {
-      const formKey = await app.OpenRecord(path);
-      if (!formKey) { setErrorStr(`Couldn't resolve a FormKey for ${node.Key}.`); return; }
-      const plugin = path.split(/[\\/]/)[0];
-
-
-
-
-
-      const raw = await back.GetConflictMatrix(formKey);
-      const matrix: ConflictMatrix | null = raw ? JSON.parse(raw) : null;
-      if (!matrix) {
-
-
-
-
-        setErrorStr(`Couldn't build a view of ${node.Key} (${formKey}). The environment may still be `
-          + `loading or was just reloaded -- try again, or reload it with Open MO2.`);
-        return;
-      }
-      putRecord({ title: node.Key, plugin, matrix });
-    } catch (err) {
-      setErrorStr(errorMessage(err) ?? String(err));
-    } finally {
-      setRecordLoading(false);
-    }
-  };
-
   useEffect(() => {
     const q = search.trim();
     if (q.length < 2) return;
@@ -513,144 +269,28 @@ export default function MainShell() {
   }, [search]);
   const changeSearch = (v: string) => { setSearch(v); if (v.trim().length < 2) setSearchResults(null); };
 
-  const [conflicts, setConflicts] = useState<ConflictEntry[] | null>(null);
-  const [conflictSel, setConflictSel] = useState<Record<string, boolean>>({});
-  const [conflictBusy, setConflictBusy] = useState(false);
-
-  const loadConflicts = () => window.chrome?.webview?.hostObjects?.backend?.GetConflicts()
-    .then(raw => setConflicts(JSON.parse(raw)))
-    .catch(e => { setErrorStr(errorText(e)); setConflicts([]); });
-
-
   useEffect(() => {
     if (activeTab === 'explorer' && treeMode === 'conflicts' && conflicts === null) loadConflicts();
-
   }, [activeTab, treeMode]);
 
-  const batchCopyAsOverride = async () => {
-    const b = window.chrome?.webview?.hostObjects?.backend;
-    if (!b || !conflicts) return;
-    const picked = conflicts.filter(c => conflictSel[c.FormKey]);
-    if (picked.length === 0) { setStatus('Select at least one conflict first.'); return; }
-    const chosen = await askForTarget({
-      title: `Copy ${picked.length} record(s) as override`,
-      description: 'Every selected conflict is copied into this plugin as an override. It still has to be saved and enabled last in the load order.',
-      confirmLabel: 'Copy',
-      defaultTarget: 'ConflictPatch.esp',
-    });
-    if (!chosen) return;
-    const patch = chosen.target;
-    setConflictBusy(true);
-    try {
-      const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
-      let overwrite = false;
-      let allowLosing = false;
-      let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
-      if (res.requiresOverwrite) {
-        const existing: { formKey: string; editorId?: string }[] = Array.isArray(res.existing) ? res.existing : [];
-        const sample = existing.slice(0, 5).map(x => `${x.editorId || x.formKey} (${x.formKey})`).join('\n');
-        const more = existing.length > 5 ? `\n...and ${existing.length - 5} more.` : '';
-        const proceed = await askConfirm({
-          title: 'Overwrite existing overrides?',
-          message: `${existing.length} of the ${res.total} selected records already exist in ${patch}. ` +
-            `Nothing has been copied yet.\n\n${sample}${more}`,
-          confirmLabel: 'Overwrite and copy',
-          danger: true,
-        });
-        if (!proceed) {
-          setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
-          return;
-        }
-        overwrite = true;
-        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
-      }
-      if (res.requiresLoadOrderConfirmation) {
-        const losing: { formKey: string; loadsAfter?: string[] }[] =
-          Array.isArray(res.losing) ? res.losing : [];
-        const sample = losing.slice(0, 5)
-          .map(x => `${x.formKey} (loses to ${(x.loadsAfter ?? []).join(', ')})`).join('\n');
-        const more = losing.length > 5 ? `\n...and ${losing.length - 5} more.` : '';
-        const proceed = await askConfirm({
-          title: 'Overrides will not win',
-          message: `${patch} loads before other plugins that override ${losing.length} of the ` +
-            `${res.total} selected records, so those copies will lose until ${patch} loads after them. ` +
-            `Nothing has been copied yet.\n\n${sample}${more}`,
-          confirmLabel: 'Copy anyway',
-        });
-        if (!proceed) {
-          setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
-          return;
-        }
-        allowLosing = true;
-        res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
-      }
-      const firstFailure = Array.isArray(res.failures) && res.failures.length ? res.failures[0]?.reason : '';
-      const failureNote = res.failed
-        ? ` ${res.failed} failed${firstFailure ? `: ${firstFailure}` : ''}.`
-        : '';
-      setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
-      if (!res.failed) setConflictSel({});
-    } catch (e) {
-      setStatus('Batch copy failed: ' + (errorMessage(e) ?? String(e)));
-    } finally { setConflictBusy(false); }
-  };
-
-
-  const openHit = async (hit: SearchHit) => {
-    const back = window.chrome?.webview?.hostObjects?.backend;
-    if (!back) return;
-    setRecordLoading(true);
-    try {
-      const json = await back.GetConflictMatrix(hit.FormKey);
-      const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
-      if (!matrix) { setErrorStr(`No record for ${hit.FormKey}.`); return; }
-      putRecord({ title: hit.EditorID || hit.FormKey, plugin: hit.Plugin, matrix });
-    } catch (err) {
-      setErrorStr(errorMessage(err) ?? String(err));
-    } finally {
-      setRecordLoading(false);
-    }
-  };
-
-
-  const openByFormKey = async (formKey: string, pluginName: string) => {
-    const b = window.chrome?.webview?.hostObjects?.backend;
+  const handleRefresh = async () => {
+    const b = window.chrome?.webview?.hostObjects?.appInterop;
     if (!b) return;
-    setRecordLoading(true);
     try {
-      const json = await b.GetConflictMatrix(formKey);
-      const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
-      if (!matrix) { setErrorStr(`No record for ${formKey}.`); return; }
-      putRecord({ title: matrix.EditorID || formKey, plugin: pluginName || matrix.Winner, matrix });
+      const json = await b.RefreshTree();
+      setPlugins(JSON.parse(json));
+      await refreshNavigator();
+      if (openRecord) await reloadMatrix();
+      setStatus('Refreshed.');
     } catch (err) {
-      setErrorStr(errorMessage(err) ?? String(err));
-    } finally {
-      setRecordLoading(false);
+      setErrorStr(errorMessage(err) ?? JSON.stringify(err));
     }
   };
-
-
-  const reloadMatrix = async () => {
-    const b = window.chrome?.webview?.hostObjects?.backend;
-    if (!b || !openRecord) return;
-    try {
-      const json = await b.GetConflictMatrix(openRecord.matrix.FormKey);
-      const matrix: ConflictMatrix | null = json ? JSON.parse(json) : null;
-
-      if (!matrix || !matrix.Plugins || matrix.Plugins.length === 0) closeRecordTab(openRecord.matrix.FormKey);
-      else setOpenRecords(prev => prev.map(r => (r.matrix.FormKey === matrix.FormKey ? { ...r, matrix } : r)));
-    } catch (err) {
-      setErrorStr(errorMessage(err) ?? String(err));
-    }
-  };
-
-
 
   useLayoutEffect(() => {
     reloadMatrixRef.current = reloadMatrix;
     openByFormKeyRef.current = openByFormKey;
   });
-
 
   const [prevOpenKey, setPrevOpenKey] = useState(activeKey);
   if (prevOpenKey !== activeKey) {
@@ -658,14 +298,12 @@ export default function MainShell() {
     if (openRecord) { setShellTab('record'); setRecordTab('grid'); }
   }
 
-
   const commandSearch = useCallback(async (q: string): Promise<SearchHit[]> => {
     const back = window.chrome?.webview?.hostObjects?.backend;
     if (!back) return [];
     try { return JSON.parse(await back.SearchRecords(q, '')); }
     catch { return []; }
   }, []);
-
 
   const closeRecord = () => {
     if (!openRecord) { setShellTab('home'); return; }
@@ -678,22 +316,7 @@ export default function MainShell() {
     <div
       className={`shell-container animate-fade-in ${railVisible ? 'rail-on' : 'rail-off'} ${chatVisible ? 'chat-on' : 'chat-off'}`}
     >
-      { }
-      {envLoading && (
-        <div className="env-loading-overlay" role="alertdialog" aria-busy="true" aria-live="polite">
-          <div className="env-loading-box">
-            <div className="env-loading-title">Loading environment…</div>
-            <div className="env-loading-msg">{status || 'Reading the load order. This can take a few seconds on a large modlist.'}</div>
-            <div className="env-loading-track">
-              <div
-                className={`env-loading-fill ${progress === null ? 'indeterminate' : ''}`}
-                style={progress === null ? undefined : { width: `${Math.max(2, Math.min(100, progress))}%` }}
-              />
-            </div>
-            <div className="env-loading-hint">The tool is locked until this finishes, so nothing is asked of a half-built environment.</div>
-          </div>
-        </div>
-      )}
+      {envLoading && <EnvLoadingOverlay status={status} progress={progress} />}
 
       <TopBar
         activeTab={shellTab}
@@ -803,37 +426,13 @@ export default function MainShell() {
 
         { }
         {activeTab === 'explorer' && treeMode === 'files' && favourites.length > 0 && (
-          <div className="sidebar-favourites">
-            <button
-              className="sidebar-fav-header"
-              onClick={() => setFavouritesOpen(o => !o)}
-              title={favouritesOpen ? 'Collapse favourites' : 'Expand favourites'}
-            >
-              {favouritesOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              <Star size={12} className="sidebar-fav-star" />
-              <span>FAVOURITES</span>
-              <span className="sidebar-fav-count">{favourites.length}</span>
-            </button>
-            {favouritesOpen && favourites.map(f => (
-              <div
-                key={f.formKey}
-                className="tree-row is-record sidebar-fav-row"
-                onClick={() => openByFormKey(f.formKey, f.plugin)}
-                title={`${f.formKey}${f.plugin ? ' - ' + f.plugin : ''}`}
-              >
-                <div className="tree-icon-container"><div style={{ width: 14 }} /></div>
-                <div className="tree-icon"><FileBox size={14} color="#569CD6" /></div>
-                <span className="tree-label">{f.label}</span>
-                <button
-                  className="sidebar-fav-remove"
-                  title="Remove from favourites"
-                  onClick={e => { e.stopPropagation(); removeFavourite(f.formKey); setFavourites(readFavourites()); }}
-                >
-                  <X size={11} />
-                </button>
-              </div>
-            ))}
-          </div>
+          <FavouritesList
+            favourites={favourites}
+            open={favouritesOpen}
+            onToggle={() => setFavouritesOpen(o => !o)}
+            onOpen={openByFormKey}
+            onRemove={key => { removeFavourite(key); setFavourites(readFavourites()); }}
+          />
         )}
 
         {activeTab === 'explorer' && treeMode === 'files' && (
@@ -877,36 +476,15 @@ export default function MainShell() {
         </div>
         )}
         {activeTab === 'explorer' && treeMode === 'conflicts' && (
-          <div className="conflicts-panel">
-            <div className="conflicts-actions">
-              <button className="sidebar-action-btn" onClick={() => { setConflicts(null); loadConflicts(); }}>Rescan</button>
-              <button className="sidebar-action-btn" disabled={conflictBusy} onClick={batchCopyAsOverride}>
-                Copy selected → patch
-              </button>
-            </div>
-            {conflicts === null ? (
-              <div className="sidebar-empty">Scanning conflicts…</div>
-            ) : conflicts.length === 0 ? (
-              <div className="sidebar-empty">No conflicts. Load a modlist and Scan Conflicts.</div>
-            ) : (
-              <div className="conflicts-list">
-                {conflicts.map((c, i) => (
-                  <div key={`${c.FormKey}:${i}`} className="conflict-row">
-                    <input
-                      type="checkbox"
-                      checked={!!conflictSel[c.FormKey]}
-                      onChange={e => setConflictSel(s => ({ ...s, [c.FormKey]: e.target.checked }))}
-                    />
-                    <span className="conflict-id" onClick={() => openByFormKey(c.FormKey, c.Winner)} title={`${c.FormKey} · ${c.Plugins.length} plugins`}>
-                      {c.EditorID || c.FormKey}
-                    </span>
-                    <span className="conflict-type">{c.Type}</span>
-                    <span className="conflict-count">{c.Plugins.length}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ConflictsPanel
+            conflicts={conflicts}
+            conflictSel={conflictSel}
+            conflictBusy={conflictBusy}
+            onRescan={() => { setConflicts(null); loadConflicts(); }}
+            onBatchCopy={batchCopyAsOverride}
+            onToggle={(key, checked) => setConflictSel(s => ({ ...s, [key]: checked }))}
+            onOpen={openByFormKey}
+          />
         )}
       </div>
       <div className="sidebar-resizer" onMouseDown={onSidebarResizeStart} />
@@ -1039,79 +617,10 @@ export default function MainShell() {
       />
 
       {brokenRefsReport !== null && (
-        <div className="broken-refs-overlay" onClick={() => setBrokenRefsReport(null)}>
-          <div className="broken-refs-modal" onClick={e => e.stopPropagation()}>
-            <div className="broken-refs-header">
-              <span>Crash Risk Report</span>
-              <div className="broken-refs-header-actions">
-                <button className="sidebar-action-btn" onClick={() => navigator.clipboard.writeText(brokenRefsReport)}>Copy</button>
-                <button className="sidebar-action-btn" onClick={() => {
-                  const blob = new Blob([brokenRefsReport], { type: 'text/plain' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'crash_risk_report.txt';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}>Export</button>
-                <button className="broken-refs-close" onClick={() => setBrokenRefsReport(null)}>✕</button>
-              </div>
-            </div>
-            <pre className="broken-refs-body">{brokenRefsReport}</pre>
-          </div>
-        </div>
+        <BrokenRefsModal report={brokenRefsReport} onClose={() => setBrokenRefsReport(null)} />
       )}
 
-      { }
-
-
-      {showHelp && (
-
-        <div className="papyrus-overlay" onClick={() => setShowHelp(false)}>
-
-          <div className="papyrus-modal glass-panel" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
-
-            <div className="papyrus-header">
-
-              <span className="papyrus-title">Help</span>
-
-              <button className="papyrus-close" onClick={() => setShowHelp(false)} title="Close"><X size={16} /></button>
-
-            </div>
-
-            <div style={{ padding: '14px 18px', fontSize: 13, lineHeight: 1.65 }}>
-
-              <p><strong>Loading a modlist.</strong> Use <em>Open MO2</em> and pick the instance folder
-
-                (the one holding <code>mods/</code> and <code>profiles/</code>). On Linux <em>Load Env</em>
-
-                cannot auto-detect a load order, because there is no game-managed <code>Plugins.txt</code>
-
-                outside a Proton prefix; it will say so rather than fail silently.</p>
-
-              <p><strong>Edits are in memory until saved.</strong> Changing a field marks the plugin dirty;
-
-                use Save on that plugin (or the Spreadsheet's Save Changes) to write it to disk.</p>
-
-              <p><strong>Favourites.</strong> Star a record in the right-hand rail and it appears under
-
-                FAVOURITES at the top of the Explorer.</p>
-
-              <p><strong>Search</strong> is <code>Ctrl</code>+<code>K</code>, or the box at the top.</p>
-
-              <p><strong>When something looks wrong,</strong> the log is at
-
-                <code>~/.config/FO4RecordEditor/debug.log</code>. A failed scan now says it failed --
-
-                an empty References tab means nothing references the record, not that the scan broke.</p>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      )}
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showPapyrus && <PapyrusPanel onClose={() => setShowPapyrus(false)} />}
