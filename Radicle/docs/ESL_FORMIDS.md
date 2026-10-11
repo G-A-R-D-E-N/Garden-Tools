@@ -18,7 +18,7 @@ into a runtime one:
 
 Build identification source: [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md), question 2's verified PE timestamps and predicate/conversion addresses. The assembly below is the older 1.10.155 image; the 1.10.163 conversion is at `0x131fa0`.
 
-The corresponding 1.10.163 conversion is recorded in `build/RE-Work/small-file-compile-index-389.md`; see `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for its pinned provenance.
+The corresponding 1.10.163 conversion is recorded in the RE note linked from `RUNTIME_PLUGIN_INDEX_EVIDENCE.md`; see `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for its pinned provenance.
 
 ```asm
 140131f90:  mov   byte [rdx+3], 0          ; drop the on-disk master-index byte
