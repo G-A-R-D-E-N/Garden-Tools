@@ -255,6 +255,7 @@ typedef struct radicle_script_property {
   int32_t has_alias;
   int16_t alias;
   const char* text;
+  size_t text_size; /* Byte length of text; text may hold embedded NUL bytes. */
   int32_t has_integer;
   int32_t integer;
   int32_t has_real;

@@ -115,7 +115,9 @@ add_library(fo4
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/proj_expl_hazd.cpp
-  src/forms/quest_aliases.cpp
+  src/forms/quest_aliases_decode.cpp
+  src/forms/quest_aliases_encode.cpp
+  src/forms/quest_aliases_extras.cpp
   src/forms/quest_stages.cpp
   src/forms/quest_objectives.cpp
   src/forms/quest_alias_edit.cpp
@@ -130,6 +132,7 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/copy_hierarchy.cpp
   src/plugin/field_writer.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/master_usage.cpp
@@ -140,6 +143,7 @@ add_library(fo4
   src/schema/condition_scopes.cpp
   src/schema/ctda.cpp
   src/schema/form_links.cpp
+  src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
@@ -149,6 +153,7 @@ add_library(fo4
   src/schema/non_formid_slots.cpp
   src/schema/scalar.cpp
   src/schema/field_address.cpp
+  src/schema/formlink_slots.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
@@ -162,6 +167,7 @@ add_library(fo4
   src/environment/base_records.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
+  src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
   src/quest/structure.cpp
@@ -192,7 +198,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -264,7 +270,9 @@ if(RADICLE_BUILD_TESTS)
   FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/refs/tags/${GTEST_VERSION}.zip
+    URL_HASH SHA256=40d4ec942217dcc84a9ebe2a68584ada7d4a33a8ee958755763278ea1c5e18ff
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    INACTIVITY_TIMEOUT 60
   )
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(googletest)
@@ -276,6 +284,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_reader.cpp
     tests/test_xxxx.cpp
     tests/test_compression.cpp
+    tests/test_reader_limits.cpp
     tests/test_real_plugin.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
@@ -283,12 +292,16 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
     tests/test_mutation.cpp
+    tests/test_editor_id_text.cpp
     tests/test_record_lifecycle.cpp
+    tests/test_delete_child_groups.cpp
     tests/test_copy_containment.cpp
+    tests/test_copy_cell_children.cpp
     tests/test_scalar_mutation.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
+    tests/test_tes4_masters_hedr.cpp
     tests/test_formlinks.cpp
     tests/test_clmt_formlinks.cpp
     tests/test_ipds_formlinks.cpp
@@ -344,6 +357,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
     tests/test_ctda_model.cpp
+    tests/test_ctda_alias_formids.cpp
     tests/test_condition_scopes.cpp
     tests/test_condition_scopes_records.cpp
     tests/test_condition_scopes_real.cpp
@@ -386,6 +400,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_terrain.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
+    tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
@@ -400,6 +415,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_pex_hardening.cpp
     tests/test_pex_corpus.cpp
     tests/test_pex_oracle.cpp
+    tests/test_material_file.cpp
+    tests/test_material_file_real.cpp
+    tests/test_c_api_material_file.cpp
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
     tests/test_quest_runtime.cpp
@@ -411,7 +429,7 @@ if(RADICLE_BUILD_TESTS)
   target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)
   target_compile_definitions(fo4_tests PRIVATE
-    FO4_TESTDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+    FO4_TESTDATA_DIR="testdata"
     _CRT_SECURE_NO_WARNINGS
   )
   target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
@@ -420,7 +438,8 @@ if(RADICLE_BUILD_TESTS)
   target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
-  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120)
+  gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
   if(RADICLE_BUILD_TOOLS)
@@ -483,6 +502,8 @@ if(RADICLE_BUILD_TESTS)
                      -DCOMMITTED_PROBE=${_interop_dir}/tests/abi_layout_probe.cpp
                      -DCHECK=${_interop_dir}/tools/check_generated.cmake
                      -P ${_interop_dir}/tools/check_generated_eol.cmake)
+    add_test(NAME radicle_run_managed_tests
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/tools/test_run_managed_tests.py)
   endif()
 
   option(RADICLE_CSHARP_TESTS "Run the C# binding tests with the .NET 8 SDK and checked-in package feed" OFF)

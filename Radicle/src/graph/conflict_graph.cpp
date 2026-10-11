@@ -14,12 +14,6 @@ bool has_identity(const FormKey& key) {
   return !key.owner().empty();
 }
 
-bool is_partial_form(const Record& record) {
-  const auto signature = record.header.signature.view();
-  return record.header.flags.test(RecordFlags::partial_form) &&
-         (signature == "CELL" || signature == "DIAL" || signature == "QUST" || signature == "WRLD");
-}
-
 }  // namespace
 
 ConflictGraph ConflictGraph::build(std::span<const Plugin* const> load_order) {
@@ -31,7 +25,7 @@ ConflictGraph ConflictGraph::build(std::span<const Plugin* const> load_order) {
       continue;
     }
 
-    for (const auto* record : collect_records(*plugin)) {
+    for (const auto* record : collect_first_records(*plugin)) {
       if (!has_identity(record->form_key)) {
         continue;
       }

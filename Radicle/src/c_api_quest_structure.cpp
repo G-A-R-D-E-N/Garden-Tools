@@ -166,7 +166,8 @@ struct radicle_quest_structure {
                    item.signature != fo4::Signature::from_string("CIS2");
           });
       fill(row, alias.fill);
-      row.has_level = std::any_of(alias.subrecords.begin(), alias.subrecords.end(), [](const auto& member) {
+      row.has_level = row.fill_type == RADICLE_QUEST_FILL_CREATE_REFERENCE &&
+          std::any_of(alias.subrecords.begin(), alias.subrecords.end(), [](const auto& member) {
         return member.signature == fo4::Signature::from_string("ALCL");
       });
       row.first_collection_entry = collection_entries.size();
