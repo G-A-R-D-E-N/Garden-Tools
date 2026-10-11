@@ -43,7 +43,7 @@ Optional:
 
 | Subrecord | Observed sizes | Runtime / packing note |
 |-----------|----------------|------------------------|
-| `RNAM` / `QNAM` | always 32 | 32 x int8 cloud layer speeds |
+| `RNAM` / `QNAM` | always 32 | 32 x encoded u8 cloud layer speeds |
 | `PNAM` / `JNAM` | 512 or 1024 | 16 or 32 layers x 8 time-of-day entries x 4 bytes |
 | `NAM0` | 272 / 544 / 608 | `colorData` width variants; 608 = 19x8x4 matches `colorData[19][8]` |
 | `FNAM` | 32 / 56 / 72 | 72 = 18x4 matches `fogData[18]` |

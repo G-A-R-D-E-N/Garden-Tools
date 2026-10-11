@@ -1,4 +1,4 @@
-#include "fo4/forms/weather_concept.hpp"
+#include "fo4/forms/weather.hpp"
 
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
@@ -37,6 +37,8 @@ constexpr auto k_wnam = Signature::from_string("WNAM");
 constexpr auto k_modl = Signature::from_string("MODL");
 constexpr auto k_modt = Signature::from_string("MODT");
 constexpr auto k_dalc = Signature::from_string("DALC");
+constexpr std::size_t k_weather_legacy_cloud_color_size = 64;
+constexpr std::uint16_t k_weather_legacy_cloud_form_version = 35;
 constexpr std::uint32_t k_cloud_tex_base = Signature::from_string("00TX").packed();
 
 Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
@@ -124,23 +126,23 @@ const Subrecord* unique_optional(const Record& record, Signature signature, std:
   return found;
 }
 
-void decode_speed_bytes(std::array<std::int8_t, k_weather_cloud_layer_slots>& out,
+void decode_speed_bytes(std::array<std::uint8_t, k_weather_cloud_layer_slots>& out,
                         const Subrecord& sub,
                         std::string_view name) {
   if (sub.data.size() != k_weather_cloud_layer_slots) {
     throw WeatherError(std::string(name) + " must be exactly 32 bytes");
   }
   for (std::size_t i = 0; i < k_weather_cloud_layer_slots; ++i) {
-    out[i] = static_cast<std::int8_t>(sub.data[i]);
+    out[i] = static_cast<std::uint8_t>(sub.data[i]);
   }
 }
 
 void decode_cloud_colors(Weather& result, const Subrecord& sub) {
-  if (sub.data.size() != 512 && sub.data.size() != 1024) {
-    throw WeatherError("PNAM size must be 512 or 1024");
+  const bool legacy = sub.data.size() == k_weather_legacy_cloud_color_size && result.form_version < k_weather_legacy_cloud_form_version;
+  if (sub.data.size() != 512 && sub.data.size() != 1024 && !legacy) {
+    throw WeatherError("PNAM size must be 512 or 1024 (64 before form version 35)");
   }
-  result.cloud_color_layer_count =
-      static_cast<std::uint32_t>(sub.data.size() / (k_weather_time_slots * 4));
+  result.cloud_color_layer_count = legacy ? 4u : static_cast<std::uint32_t>(k_weather_cloud_layer_slots);
   result.cloud_colors.resize(sub.data.size() / 4);
   for (std::size_t i = 0; i < result.cloud_colors.size(); ++i) {
     result.cloud_colors[i] = read_u32(sub.data, i * 4);
@@ -151,9 +153,8 @@ void decode_cloud_alphas(Weather& result, const Subrecord& sub) {
   if (sub.data.size() != 512 && sub.data.size() != 1024) {
     throw WeatherError("JNAM size must be 512 or 1024");
   }
-  const auto layers = sub.data.size() / (k_weather_time_slots * 4);
-  if (layers != result.cloud_color_layer_count) {
-    throw WeatherError("JNAM layer count does not match PNAM");
+  if (sub.data.size() / k_weather_cloud_layer_slots != result.cloud_colors.size() * 4 / result.cloud_color_layer_count) {
+    throw WeatherError("JNAM times per layer do not match PNAM");
   }
   result.cloud_alphas.resize(sub.data.size() / 4);
   for (std::size_t i = 0; i < result.cloud_alphas.size(); ++i) {
@@ -316,9 +317,7 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature != k_tnam) continue;
     if (subrecord.data.size() != 4) throw WeatherError("TNAM must be exactly 4 bytes");
-    const auto raw = RawFormId{read_u32(subrecord.data, 0)};
-    if (raw.is_null()) throw WeatherError("TNAM FormID cannot be null");
-    result.tnam.push_back(resolve_plugin_form_id(raw, context));
+    result.tnam.push_back(decode_optional_form(context, subrecord.data, 0, "TNAM"));
   }
 
   const auto* imsp = unique_required(*record, k_imsp, "IMSP");
@@ -340,8 +339,17 @@ Weather decode_weather(const Plugin& plugin, const FormKey& key) {
 
   for (const auto& subrecord : record->subrecords) {
     if (subrecord.signature != k_dalc) continue;
-    if (subrecord.data.size() != 32) throw WeatherError("DALC must be exactly 32 bytes");
-    result.dalc.push_back(subrecord.data);
+    const auto& data = subrecord.data;
+    if (data.size() != 24 && data.size() != 28 && data.size() != 32) {
+      throw WeatherError("DALC must be 24, 28, or 32 bytes");
+    }
+    WeatherAmbientColors ambient;
+    for (std::size_t i = 0; i < ambient.directional.size(); ++i) {
+      ambient.directional[i] = read_u32(data, i * 4);
+    }
+    if (data.size() >= 28) ambient.specular = read_u32(data, 24);
+    if (data.size() == 32) ambient.fresnel = read_f32(data, 28);
+    result.dalc.push_back(ambient);
   }
   if (result.dalc.size() != 4 && result.dalc.size() != 8) {
     throw WeatherError("WTHR must contain 4 or 8 DALC subrecords");

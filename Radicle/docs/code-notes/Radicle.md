@@ -1,5 +1,65 @@
 # Radicle code notes
 
+## include/fo4/environment/base_records.hpp:ClimateTiming
+
+The pinned private RE record at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
+`RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/README.md`,
+is linked from `Radicle/docs/CLIMATE_WEATHER.md`; the local copy is not committed.
+Its sections 3.2 and 3.4 verify the unsigned four timing bytes multiplied by
+the float32 one-sixth constant (OG getter addresses 0x648A50–0x648B40), plus the
+moon byte's low six phase-day bits and Secunda/Masser bits 6/7 (0x648A10,
+0x658B00 and 0x658B10). `ClimateTiming` exposes these interpretations alongside
+the raw bytes, without clock clamping or wrapping. The existing climate C ABI
+getter carries the same values; integrating main
+`c50ad4d5405e1571113019654b10e3d4a05ca0f1` advances ABI 11 to 12.
+Re-bump if another ABI PR merges first. Native and managed boundary checks
+include unsigned values 128/255 and moon byte 0xFF. Volatility and weather
+execution remain raw; no transition simulation or assumed GMST override is added.
+
+## Climate timing and weather parameters (#343)
+
+`src/environment/base_records.cpp:decode_climate` decodes the six-byte CLMT
+TNAM and `decode_weather` decodes the measured 19/20-byte WTHR DATA variants.
+`docs/CLIMATE_WEATHER.md` pins the field-layout evidence and explicitly limits
+interpretation to stored bytes. `src/c_api_base_records.cpp:radicle_climate_decode`
+and `radicle_weather_decode` expose them in ABI 24; managed properties preserve
+the raw encoding. `include/fo4/forms/weather.hpp:Weather` provides a stable
+include name while `weather_concept.hpp` keeps existing consumers building.
+
+`bindings/csharp/tools/generate_interop.py:emit_probe` names the authoritative
+public header directory in the generated probe's existing source constraint.
+Its `offsetof` values describe Radicle's own compiled ABI, not game layouts.
+
+`probes/gardenengine/ClimateProbe.cs:ClimateProbe._Ready` runs in the current
+GardenEngine project, reads Commonwealth's climate and chosen weather through
+the generated C ABI binding, and invokes `CellService.BuildExteriorSkyJson`
+to verify that actual consumer path. It serializes stored timing/parameters
+and the existing sky payload, without a Mutagen lookup or asset conversion.
+The reflection call is confined to this integration probe because the
+existing consumer is private. The probe does not validate live transitions.
+
+`src/environment/base_records.cpp:decode_weather` keeps transition delta
+encoded. The private record pinned above, section 3.5, confirms DATA byte 3
+in `Sky::UpdateWeather` (address `0x64E530`) and names the two transition settings.
+Its sections 5–6 retain GMST override and live-simulation uncertainty; the
+decoder supplies stored bytes without adding a duration formula.
+
+`src/environment/base_records.cpp:decode_weather` accepts WTHR FNAM only at 32, 56 or 72 bytes, the sizes xEdit allows (`source:xEdit Core/wbDefinitionsCommon.pas:9521-9572 @93cc0bc5`). The former check accepted any multiple of four from 16 bytes up, such as 20, 24 or 28 bytes, that the forms model refuses, so the two readers now agree. The reader does not check form version against the 56 and 72 byte layouts.
+
+## include/fo4/forms/weather.hpp:Weather.cloud_speed_y / Weather.cloud_speed_x
+
+At pinned xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
+`Core/wbDefinitionsCommon.pas:9366–9376` declares RNAM and QNAM as
+32-element `itU8` arrays. `src/forms/weather.cpp:decode_speed_bytes` must
+return their unsigned stored values: its signed arrays turned 128–255 into
+negative values. The shared helper and both arrays use `uint8_t`, without
+adding a physical scroll-rate conversion. The editor callback at lines
+4370–4376 is compatibility evidence, not a runtime rate specification.
+`tests/test_weather_concept.cpp:CloudSpeedsPreserveUnsignedStoredBytes`
+covers 0, 127, 128, 254 and 255 on both axes. These fields have no C ABI or
+managed exposure; the climate/weather C containers' separately added fields
+remain governed by ABI 24.
+
 ## tests/test_ba2_versions_real.cpp:Ba2NamedRealData
 
 Six installed archive fixtures cover GNRL and DX10 at versions 1, 7 and 8.
@@ -155,6 +215,12 @@ Owner and union dwords are read before `fn(0)` because `remap_raw` rewrites offs
 ## src/schema/vmad.cpp:inspect_quest_vmad
 
 QUST extras after the primary scripts: bind byte, fragment count, optional fragment script, then fragments `{u16 Stage, u16 unused, i32 StageIndex, u8, wstring, wstring}`, then alias extras `{object, i16 version, i16 objFormat, scripts}`. Object format 2 stores unused u16, alias i16, FormID. Rewrite patches alias i16 (format 2 only) and Stage u16. StageIndex bytes are preserved.
+
+## src/forms/weather.cpp:decode_weather (TNAM, DALC)
+
+`src/forms/weather.cpp:decode_weather` keeps each sky-static TNAM slot as `std::optional<FormKey>` in `Weather::tnam`, so a NULL slot is absent rather than an error. This matches `decode_optional_form` for MNAM, NNAM, IMSP and WGDR, and keeps slot positions. xEdit allows NULL in that array (`source:xEdit Core/wbDefinitionsFO4.pas:13090-13092 @93cc0bc5`).
+
+`src/forms/weather.cpp:decode_weather` reads each DALC payload of 24, 28 or 32 bytes into `WeatherAmbientColors`: six directional words always, Specular only when the payload has at least 28 bytes, and Fresnel only at 32. xEdit makes both optional from form version 30 inside the `SetOptionalFrom(1)` struct (`source:xEdit Core/wbDefinitionsCommon.pas:6635-6655 @93cc0bc5`, used by WTHR at `source:xEdit Core/wbDefinitionsCommon.pas:9485-9497 @93cc0bc5`). The reader decides by payload size and does not read the form version, so a 28 byte payload reports Fresnel absent at any version.
 
 ## src/forms/quest_vmad.cpp:sync_quest_vmad_stages
 

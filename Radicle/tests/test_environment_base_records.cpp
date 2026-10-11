@@ -203,7 +203,7 @@ std::vector<std::byte> make_base() {
                                                         {"FNAM", floats({100, 9000, 50, 4000, 1, 1, 1, 1, 0, 10000,
                                                                          0, 10000, 1, 1, 0, 0, 0, 0})}}),
                                    versioned(rec("WTHR", 0x842, {{"NAM0", weather_colors(17, 4)},
-                                                                 {"FNAM", floats({1, 2, 3, 4})}}),
+                                                                 {"FNAM", floats({1, 2, 3, 4, 5, 6, 7, 8})}}),
                                              100),
                                    rec("WTHR", 0x844, {{"NAM0", weather_colors(8, 8)}})}),
                       top("SCOL", {rec("SCOL", 0x860, {{"EDID", text("Pile")},
@@ -318,6 +318,17 @@ TEST_F(BaseRecordsTest, DecodesSkyRecords) {
   EXPECT_FALSE(old.colors->color(WeatherColorGroup::fog_near_high, 0).has_value());
   EXPECT_EQ(old.colors->color(WeatherColorGroup::sky_lower, 3)->blue, 10);
   EXPECT_THROW(fo4::env::decode_weather(env, *env.winner(key(0x844))), fo4::env::WorldDecodeError);
+}
+
+TEST_F(BaseRecordsTest, RejectsFogDistanceSizesOutsideTheFormSet) {
+  const auto data = make_plugin(0x1, {}, {top("WTHR", {rec("WTHR", 0x850, {{"FNAM", floats({1, 2, 3, 4, 5})}})})});
+  {
+    std::ofstream stream(path_, std::ios::binary | std::ios::trunc);
+    stream.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
+  }
+  const std::vector<std::filesystem::path> paths{path_};
+  const auto env = fo4::env::Environment::load(paths);
+  EXPECT_THROW(fo4::env::decode_weather(env, *env.winner(key(0x850))), fo4::env::WorldDecodeError);
 }
 
 TEST_F(BaseRecordsTest, DecodesStaticCollectionsAndListsPluginRecords) {
