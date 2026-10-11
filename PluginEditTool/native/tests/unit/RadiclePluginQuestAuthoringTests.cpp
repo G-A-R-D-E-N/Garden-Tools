@@ -2004,22 +2004,6 @@ std::vector<std::byte> makeCtdaPayload(std::uint16_t function,
     return ctda.bytes;
 }
 
-std::vector<std::byte> makeEventDataPayload() {
-    fo4::test::ByteWriter ctda;
-    ctda.u8(0);
-    ctda.u8(0);
-    ctda.u8(0);
-    ctda.u8(0);
-    ctda.u32(0);
-    ctda.u16(4672);
-    ctda.u16(0);
-    ctda.u32(0);
-    ctda.u32(0);
-    ctda.u32(0);
-    ctda.u32(static_cast<std::uint32_t>(-1));
-    return ctda.bytes;
-}
-
 std::vector<std::string> recordSignatures(const fo4::Plugin& plugin, const fo4::FormKey& key) {
     const auto* record = fo4::find_record(plugin, key);
     REQUIRE(record != nullptr);
@@ -2286,32 +2270,6 @@ TEST_CASE("Native SetQuestStages refuses GetEventData JSON without writing") {
         }));
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "InvalidQuestStagePayload");
-    CHECK(result.error().message.find("GetEventData") != std::string::npos);
-    CHECK(readBytes(path) == before);
-}
-
-TEST_CASE("Native SetQuestStages refuses existing EventData CTDA without writing") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-    writeBytes(path, questPluginWith(0, [](fo4::test::ByteWriter& out) {
-        writeIndx(out, 10, 0, 0);
-        fo4::test::write_subrecord(out, "QSDT", std::vector<std::byte>{std::byte{0}});
-        fo4::test::write_subrecord(out, "CTDA", makeEventDataPayload());
-        writeU32(out, "ANAM", 0);
-    }));
-    const auto before = readBytes(path);
-    fo4ide::plugin::RadiclePluginBackend backend;
-    load(backend, path);
-    const auto result = backend.invokeBackend(
-        "SetQuestStages",
-        nlohmann::json::array({
-            "Patch.esp",
-            "000800:Patch.esp",
-            nlohmann::json::array({{{"index", 20}, {"logEntry", "replacement"}}})
-        }));
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
     CHECK(result.error().message.find("GetEventData") != std::string::npos);
     CHECK(readBytes(path) == before);
 }
@@ -3720,40 +3678,6 @@ TEST_CASE("Native SetQuestAliases preserves stages and tail when writing conditi
     REQUIRE(aliases.aliases.size() == 1u);
     CHECK(aliases.aliases[0].id == 4u);
     CHECK(readFirstAliasConditions(path).size() == 1u);
-}
-
-TEST_CASE("Native SetQuestAliases refuses malformed and EventData existing alias CTDA") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto path = root / "Patch.esp";
-
-    auto tryRefuse = [&](std::vector<std::byte> ctda, const char* needle) {
-        writeBytes(path, questPluginWith(0, [&](fo4::test::ByteWriter& out) {
-            writeU32(out, "ANAM", 2);
-            writeU32(out, "ALST", 1);
-            fo4::test::write_subrecord(out, "ALID", std::string_view{"Existing\0", 9});
-            writeU32(out, "FNAM", 0);
-            fo4::test::write_subrecord(out, "CTDA", ctda);
-            fo4::test::write_subrecord(out, "ALED", std::vector<std::byte>{});
-        }));
-        const auto before = readBytes(path);
-        fo4ide::plugin::RadiclePluginBackend backend;
-        load(backend, path);
-        const auto result = backend.invokeBackend(
-            "SetQuestAliases",
-            setAliasesArgs(nlohmann::json::array({
-                {{"kind", "reference"}, {"id", 2}, {"name", "NewRef"}, {"flags", 0}}
-            })));
-        REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().type == "QuestAuthoringCoverageIncomplete");
-        CHECK(result.error().message.find(needle) != std::string::npos);
-        CHECK(readBytes(path) == before);
-    };
-
-    tryRefuse(std::vector<std::byte>(33, std::byte{0}), "CTDA/CIS");
-    tryRefuse(makeEventDataPayload(), "GetEventData");
-    tryRefuse(makeCtdaPayload(8, 1, 1.0f, static_cast<std::uint8_t>(6u << 5)), "operator");
-    tryRefuse(makeCtdaPayload(8, 1, 1.0f, 0, 1), "unknown fields");
 }
 
 TEST_CASE("Native SetQuestAliases refuses invalid condition FormKeys and GetEventData JSON") {

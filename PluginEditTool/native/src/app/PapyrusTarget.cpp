@@ -12,6 +12,7 @@
 #include <fo4ide/papyrus/AnalysisService.hpp>
 #include <fo4ide/papyrus/Decompiler.hpp>
 
+#include "PapyrusStaging.hpp"
 #include "ServiceTargetSupport.hpp"
 
 namespace fo4ide::app {
@@ -30,24 +31,6 @@ std::string stripQuotes(std::string value) {
 bool endsWithIgnoreCase(std::string_view value, std::string_view suffix) {
     return value.size() >= suffix.size() &&
            toLower(std::string(value.substr(value.size() - suffix.size()))) == toLower(std::string(suffix));
-}
-
-std::string extractScriptName(const std::string& text) {
-    std::istringstream stream(text);
-    std::string line;
-    while (std::getline(stream, line)) {
-        auto l = trim(line);
-        if (l.empty() || l.front() == ';') continue;
-        if (toLower(l).rfind("scriptname ", 0) == 0) {
-            std::istringstream tokens(l);
-            std::string token;
-            std::vector<std::string> parts;
-            while (tokens >> token) parts.push_back(token);
-            if (parts.size() >= 2) return parts[1];
-        }
-        break;
-    }
-    return "";
 }
 
 std::vector<std::uint8_t> readFileBytes(const std::filesystem::path& path) {
@@ -121,43 +104,6 @@ std::string namespacedOutPath(const std::string& outDir, const std::string& text
     std::error_code ec;
     std::filesystem::create_directories(full.parent_path(), ec);
     return full.string();
-}
-
-std::optional<std::filesystem::path> stageNamespacedFolder(const std::filesystem::path& folder) {
-    const auto files = enumeratePscFiles(folder);
-    if (files.empty()) return std::nullopt;
-
-    const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
-    const auto staging = std::filesystem::temp_directory_path() /
-        ("FO4RE_PapyrusStage_" + std::to_string(ticks));
-    try {
-        for (const auto& file : files) {
-            std::string obj;
-            try {
-                obj = extractScriptName(readFileText(file));
-            } catch (...) {
-            }
-            std::filesystem::path rel;
-            if (obj.find(':') != std::string::npos) {
-                std::istringstream stream(obj);
-                std::string part;
-                while (std::getline(stream, part, ':')) {
-                    if (!part.empty()) rel /= part;
-                }
-                rel += ".psc";
-            } else {
-                rel = file.filename();
-            }
-            const auto dest = staging / rel;
-            std::filesystem::create_directories(dest.parent_path());
-            std::filesystem::copy_file(file, dest, std::filesystem::copy_options::overwrite_existing);
-        }
-        return staging;
-    } catch (...) {
-        std::error_code ec;
-        std::filesystem::remove_all(staging, ec);
-        return std::nullopt;
-    }
 }
 
 struct CiLess {
@@ -456,7 +402,12 @@ Result<nlohmann::json> PapyrusTarget::compile(const nlohmann::json& args) {
     std::string target;
     std::optional<std::filesystem::path> stagingDir;
     if (isDir) {
-        stagingDir = stageNamespacedFolder(source);
+        const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+        auto staged = stageNamespacedScripts(
+            enumeratePscFiles(source),
+            std::filesystem::temp_directory_path() / ("FO4RE_PapyrusStage_" + std::to_string(ticks)));
+        if (!staged) return nlohmann::json(staged.error().message);
+        stagingDir = *staged;
         workDir = stagingDir ? stagingDir->string() : source;
         target = workDir;
     } else {

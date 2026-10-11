@@ -30,8 +30,7 @@ public class LifetimeTests
         temp.Write("Data/Strings/Base_en.STRINGS", StringsWriter.Table((0x10, "World")));
         var env = RadicleEnvironment.Load(new[] { plugin });
         using var strings = StringTables.Load(env, System.IO.Path.Combine(temp.Path, "Data", "Strings"));
-        using var other = RadicleEnvironment.Load(new[] { plugin });
-        var record = other.Winner(new FormKey("Base.esm", 0x800))!.Value;
+        var record = env.Winner(new FormKey("Base.esm", 0x800))!.Value;
         Assert.NotNull(strings.ResolveName(record));
         env.Dispose();
         Assert.Throws<ObjectDisposedException>(() => strings.ResolveName(record));

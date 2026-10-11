@@ -28,7 +28,7 @@ void place_group(const Group& group, const PluginFormIdContext& context, FormKey
       continue;
     }
     const auto& record = std::get<Record>(child);
-    out[record.form_key] = {parent, group.header.group_type};
+    out.try_emplace(record.form_key, RecordPlacement{parent, group.header.group_type});
   }
 }
 

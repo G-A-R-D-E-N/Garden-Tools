@@ -39,26 +39,6 @@ fo4::test::ByteWriter make_ctda(std::uint8_t flags_byte, std::uint32_t compariso
   return ctda;
 }
 
-// 28-byte GetEventData payload: flags, comparison, discriminator 4672,
-// member, parameter3, run-on, reference, unknown3.
-fo4::test::ByteWriter make_event_data(std::uint8_t flags_byte, std::uint16_t member,
-                                      std::uint32_t parameter3, std::uint32_t run_on,
-                                      std::uint32_t reference, std::int32_t unknown3) {
-  fo4::test::ByteWriter ctda;
-  ctda.u8(flags_byte);
-  ctda.u8(0);
-  ctda.u8(0);
-  ctda.u8(0);
-  ctda.u32(0);
-  ctda.u16(4672);
-  ctda.u16(member);
-  ctda.u32(parameter3);
-  ctda.u32(run_on);
-  ctda.u32(reference);
-  ctda.u32(static_cast<std::uint32_t>(unknown3));
-  return ctda;
-}
-
 // Mutable record lookup: find_record is const-only, so walk via visit_records.
 fo4::Record* find_record_mutable(fo4::Plugin& plugin, std::string_view key) {
   fo4::Record* found = nullptr;
@@ -127,18 +107,34 @@ TEST(CtdaModel, ParseSerializesFunctionConditionByteIdentically) {
 }
 
 TEST(CtdaModel, GetEventDataLayoutParsesAndSerializes) {
-  auto bytes = make_event_data(0, 0x314F, 0x02000812, 7, 0x01000800, -1).bytes;
+  auto bytes = make_ctda(0, 0x3F800000u, 576, 0x314F, 0x02000812, 0x55, 7, 0x01000800, -1).bytes;
   const auto condition = fo4::parse_ctda_condition(bytes);
 
   EXPECT_TRUE(condition.is_event_data());
-  EXPECT_EQ(condition.function, 4672);
-  EXPECT_EQ(condition.unknown2, 0x314F);  // EventMember.CreatedObject
+  EXPECT_EQ(condition.function, 576);
+  EXPECT_EQ(condition.comparison_raw, 0x3F800000u);
+  EXPECT_EQ(condition.unknown2, 0x314F);
   EXPECT_EQ(condition.param1, 0x02000812);
-  EXPECT_EQ(condition.run_on, 7);
-  EXPECT_EQ(condition.reference, 0x01000800);
+  EXPECT_EQ(condition.param2, 0x55);
+  EXPECT_EQ(condition.run_on, 7u);
+  EXPECT_EQ(condition.reference, 0x01000800u);
   EXPECT_EQ(condition.unknown3, -1);
 
   EXPECT_EQ(fo4::serialize_ctda_condition(condition), bytes);
+}
+
+TEST(CtdaModel, FunctionFourThousandSixHundredSeventyTwoIsNotGetEventData) {
+  auto bytes = make_ctda(0, 0, 4672, 0, 0x314B0000, 0, 0, 0, -1).bytes;
+  const auto condition = fo4::parse_ctda_condition(bytes);
+
+  EXPECT_FALSE(condition.is_event_data());
+  EXPECT_EQ(condition.function, 4672);
+}
+
+TEST(CtdaModel, TwentyEightBytePayloadIsRefused) {
+  auto bytes = make_ctda(0, 0, 576, 0x314F, 0x02000812, 0, 7, 0x01000800, -1).bytes;
+  bytes.resize(28);
+  EXPECT_THROW(fo4::parse_ctda_condition(bytes), std::out_of_range);
 }
 
 TEST(CtdaModel, TruncatedPayloadThrows) {
@@ -146,6 +142,27 @@ TEST(CtdaModel, TruncatedPayloadThrows) {
   EXPECT_THROW(fo4::parse_ctda_condition(
                    std::span<const std::byte>(bytes.data(), bytes.size() - 1)),
                std::out_of_range);
+}
+
+TEST(CtdaModel, OverlongPayloadThrows) {
+  auto bytes = make_ctda(0, 0, 1, 0, 0, 0, 0, 0, -1).bytes;
+  bytes.push_back(std::byte{0});
+  EXPECT_THROW(fo4::parse_ctda_condition(bytes), std::out_of_range);
+}
+
+TEST(CtdaModel, PaddingBytesSurviveAConditionEdit) {
+  auto bytes = make_ctda(0x40, 0x3F800000u, 8, 0, 1, 0, 2, 0x00000800, -1).bytes;
+  bytes[1] = std::byte{0xA1};
+  bytes[2] = std::byte{0xB2};
+  bytes[3] = std::byte{0xC3};
+  auto condition = fo4::parse_ctda_condition(bytes);
+  condition.comparison_raw = 0x40000000u;
+
+  auto expected = make_ctda(0x40, 0x40000000u, 8, 0, 1, 0, 2, 0x00000800, -1).bytes;
+  expected[1] = std::byte{0xA1};
+  expected[2] = std::byte{0xB2};
+  expected[3] = std::byte{0xC3};
+  EXPECT_EQ(fo4::serialize_ctda_condition(condition), expected);
 }
 
 TEST(CtdaModel, ReadAttachesCisStringsToPrecedingCondition) {
@@ -340,6 +357,31 @@ TEST(CtdaModel, WriteRefusesRecordWithSeveralConditionLists) {
   }
 }
 
+TEST(CtdaModel, ReadRefusesSeveralConditionListsButAllowsBoundedRuns) {
+  const auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "CTDA"});
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
+  ASSERT_NE(record, nullptr);
+  EXPECT_THROW(fo4::read_ctda_conditions(*record), std::runtime_error);
+  EXPECT_THROW(fo4::read_ctda_conditions_in(*record, 1, 5), std::runtime_error);
+  const auto first = fo4::read_ctda_conditions_in(*record, 1, 3);
+  ASSERT_EQ(first.size(), 2u);
+  EXPECT_EQ(first[0].function, 1);
+  EXPECT_EQ(first[1].function, 2);
+  const auto second = fo4::read_ctda_conditions_in(*record, 4, 5);
+  ASSERT_EQ(second.size(), 1u);
+  EXPECT_EQ(second[0].function, 3);
+}
+
+TEST(CtdaModel, ReadDoesNotAttachCisAfterTheRunEnds) {
+  const auto plugin = make_plugin_with_layout({"CTDA", "NAM0", "CIS1", "CIS2"});
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
+  ASSERT_NE(record, nullptr);
+  const auto conditions = fo4::read_ctda_conditions(*record);
+  ASSERT_EQ(conditions.size(), 1u);
+  EXPECT_FALSE(conditions[0].parameter1_string.has_value());
+  EXPECT_FALSE(conditions[0].parameter2_string.has_value());
+}
+
 TEST(CtdaModel, WriteKeepsSubrecordsAroundSingleRun) {
   auto plugin = make_plugin_with_layout({"EDID", "CTDA", "CTDA", "NAM0", "DESC"});
   auto* record = find_record_mutable(plugin, "000800:Cond.esp");
@@ -377,10 +419,12 @@ TEST(CtdaModel, ScopedWriteLeavesOtherListUntouched) {
             fo4::CtdaScopeWrite::replaced);
   const std::vector<std::string> expected{"EDID", "CTDA", "NAM0", "CTDA"};
   EXPECT_EQ(signatures_of(*record), expected);
-  const auto all = fo4::read_ctda_conditions(*record);
-  ASSERT_EQ(all.size(), 2u);
-  EXPECT_EQ(all[0].function, 99);
-  EXPECT_EQ(all[1].function, 3);
+  const auto first = fo4::read_ctda_conditions_in(*record, 1, 2);
+  ASSERT_EQ(first.size(), 1u);
+  EXPECT_EQ(first[0].function, 99);
+  const auto second = fo4::read_ctda_conditions_in(*record, 3, 4);
+  ASSERT_EQ(second.size(), 1u);
+  EXPECT_EQ(second[0].function, 3);
 }
 
 TEST(CtdaModel, WriteIgnoresLeadingCisBeforeFirstCtda) {

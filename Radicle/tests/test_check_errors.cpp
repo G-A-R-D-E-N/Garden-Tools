@@ -1,10 +1,13 @@
 #include "fo4/graph/check_errors.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/formlink_slots.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -91,6 +94,27 @@ fo4::Plugin make_dependent_plugin() {
   write_header(out, "Check.esp");
   write_misc_with_keywords(out, 0x01000820, {0x00000999});
   return fo4::read_plugin(out.bytes, "Other.esp");
+}
+
+fo4::Plugin make_expl_plugin(std::uint32_t selector) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "EXPL", 0);
+  const auto record = fo4::test::begin_record(out, "EXPL", 0, 0x000800);
+  fo4::test::ByteWriter data;
+  data.u32(selector);
+  data.u32(0x000800);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, "Variant.esp");
+}
+
+const fo4::Record* find_record(const fo4::Plugin& plugin, std::string_view signature) {
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->header.signature == fo4::Signature::from_string(signature)) return record;
+  }
+  return nullptr;
 }
 
 std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& findings,
@@ -261,6 +285,29 @@ TEST(CheckErrors, NoneFormIdIsNotALink) {
     EXPECT_NE(finding.code, fo4::CheckCode::unresolved_link) << finding.message;
     EXPECT_NE(finding.code, fo4::CheckCode::invalid_master_index) << finding.message;
   }
+}
+
+TEST(CheckErrors, VariantFormLinkSlotIsProvenOnlyForSelectedVariant) {
+  auto field = *fo4::schema::formlink_field_descriptor("EXPL\\Light");
+  field.offset = 4;
+  field.address.when.count = 1;
+  field.address.when.storage = fo4::schema::DiscriminatorStorage::u32;
+  field.address.when.equals[0] = 1;
+  const std::array<fo4::schema::FormLinkFieldDescriptor, 1> fields{field};
+  const auto subrecord = fo4::Signature::from_string("DATA");
+  const auto selected = make_expl_plugin(1);
+  const auto other = make_expl_plugin(2);
+  const auto* selected_record = find_record(selected, "EXPL");
+  const auto* other_record = find_record(other, "EXPL");
+  ASSERT_NE(selected_record, nullptr);
+  ASSERT_NE(other_record, nullptr);
+
+  const auto slot = fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 4);
+  ASSERT_TRUE(slot.has_value());
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("LIGH")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("KYWD")));
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *other_record, subrecord, 4).has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0).has_value());
 }
 
 TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
