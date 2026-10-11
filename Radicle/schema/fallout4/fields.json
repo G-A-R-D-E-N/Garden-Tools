@@ -656,7 +656,7 @@
           "storage": "u32",
           "presentation": "identity",
           "minimum": 0,
-          "maximum": 7,
+          "maximum": 4294967295,
           "insertion": "existing_only"
         },
         {
