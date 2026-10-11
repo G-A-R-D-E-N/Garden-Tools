@@ -63,9 +63,6 @@ std::vector<std::byte> encode_value(const Plugin& plugin, const VmadValue& value
     std::memcpy(&bits, real, 4);
     put(bytes, 0, bits, 4);
   } else {
-    if (std::to_integer<std::uint8_t>(old[0]) > 1) {
-      throw schema::ScalarError("VMAD boolean has an unsupported stored value");
-    }
     bytes[0] = std::byte{static_cast<std::uint8_t>(std::get<bool>(value))};
   }
   return bytes;

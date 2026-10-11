@@ -83,20 +83,33 @@ TEST(VmadWriter, RefusalsAreAtomicAndMissingIndicesAreDistinct) {
 TEST(VmadWriter, UnknownMalformedDuplicateAndFutureLayoutsRefuseMutation) {
   const auto valid = fixture::payload();
   const auto props = read_vmad_scripts(valid).scripts[0].properties;
-  for (int mode = 0; mode < 7; ++mode) {
+  for (int mode = 0; mode < 6; ++mode) {
     auto bytes = valid;
     if (mode == 0) bytes.push_back(std::byte{9});
     if (mode == 1) bytes.pop_back();
     if (mode == 2) bytes[0] = std::byte{7};
     if (mode == 3) bytes[2] = std::byte{3};
     if (mode == 4) bytes[props[2].value_offset - 2] = std::byte{6};
-    if (mode == 5) bytes[props[8].value_offset] = std::byte{2};
-    auto plugin = read_plugin(fixture::plugin_bytes(bytes, "REFR", mode == 6), "Vmad.esp");
+    auto plugin = read_plugin(fixture::plugin_bytes(bytes, "REFR", mode == 5), "Vmad.esp");
     const auto before = write_plugin(plugin);
-    EXPECT_THROW(set_vmad_property(plugin, fixture::key(), 0, mode == 5 ? 8 : 4,
-                                   mode == 5 ? VmadValue{false} : VmadValue{std::int32_t{9}}), schema::ScalarError);
+    EXPECT_THROW(set_vmad_property(plugin, fixture::key(), 0, 4, std::int32_t{9}), schema::ScalarError);
     EXPECT_EQ(write_plugin(plugin), before);
   }
+}
+
+TEST(VmadWriter, BoolWriteReplacesAnyStoredByteWithZeroOrOne) {
+  auto data = fixture::payload();
+  const auto offset = read_vmad_scripts(data).scripts[0].properties[8].value_offset;
+  data[offset] = std::byte{2};
+  auto plugin = read_plugin(fixture::plugin_bytes(data), "Vmad.esp");
+  const auto before = fixture::subrecord(plugin).data;
+  EXPECT_EQ(set_vmad_property(plugin, fixture::key(), 0, 8, true), ScalarMutationStatus::updated);
+  EXPECT_EQ(fixture::subrecord(plugin).data[offset], std::byte{1});
+  EXPECT_EQ(set_vmad_property(plugin, fixture::key(), 0, 8, false), ScalarMutationStatus::updated);
+  EXPECT_EQ(fixture::subrecord(plugin).data[offset], std::byte{0});
+  auto expected = before;
+  expected[offset] = std::byte{0};
+  EXPECT_EQ(fixture::subrecord(plugin).data, expected);
 }
 
 TEST(VmadWriter, LengthChangingStringPreservesKnownQuestFragmentTail) {
