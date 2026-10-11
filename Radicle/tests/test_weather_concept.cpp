@@ -243,41 +243,49 @@ std::ostream& operator<<(std::ostream& out, const WeatherLayoutCase& value) {
   return out << value.name;
 }
 
+void legacy_layout(WeatherPluginOptions& o) {
+  o.form_version = 110;
+  o.pnam_jnam_size = 512;
+  o.data_size = 19;
+  o.fnam_size = 32;
+  o.nam0_size = 272;
+  o.imsp_size = 16;
+  o.dalc_count = 4;
+  o.unam_size = 12;
+}
+
 const std::array<WeatherLayoutCase, 10> kWeatherLayoutCases{{
     {"default", {}, 32u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"imsp16", make_options([](WeatherPluginOptions& o) { o.imsp_size = 16; }), 32u, 4u, 20u, 8u, true, true, 72u, 608u},
+    {"imsp16", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
     {"pre119", make_options([](WeatherPluginOptions& o) {
        o.form_version = 118;
        o.data_size = 19;
        o.fnam_size = 32;
        o.nam0_size = 544;
+       o.unam_size = 12;
      }),
      32u, 8u, 19u, 8u, true, true, 32u, 544u},
-    {"dalc4", make_options([](WeatherPluginOptions& o) { o.dalc_count = 4; }), 32u, 8u, 20u, 4u, true, true, 72u, 608u},
+    {"dalc4", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
     {"noNam4", make_options([](WeatherPluginOptions& o) { o.include_nam4 = false; }), 32u, 8u, 20u, 8u, false, true, 72u, 608u},
-    {"unam12", make_options([](WeatherPluginOptions& o) { o.unam_size = 12; }), 32u, 8u, 20u, 8u, true, true, 72u, 608u},
+    {"unam12", make_options([](WeatherPluginOptions& o) {
+       o.form_version = 129;
+       o.unam_size = 12;
+     }),
+     32u, 8u, 20u, 8u, true, true, 72u, 608u},
     {"noUnam", make_options([](WeatherPluginOptions& o) { o.unam_size = 0; }), 32u, 8u, 20u, 8u, true, false, 72u, 608u},
     {"v119", make_options([](WeatherPluginOptions& o) {
        o.form_version = 119;
        o.fnam_size = 56;
-     }),
-     32u, 8u, 20u, 8u, true, true, 56u, 608u},
-    {"v110", make_options([](WeatherPluginOptions& o) {
-       o.form_version = 110;
-       o.pnam_jnam_size = 512;
-       o.data_size = 19;
-       o.fnam_size = 32;
-       o.nam0_size = 272;
-     }),
-     32u, 8u, 19u, 8u, true, true, 32u, 272u},
-    {"full",
-     make_options([](WeatherPluginOptions& o) {
-       o.imsp_size = 16;
-       o.dalc_count = 4;
-       o.include_nam4 = false;
        o.unam_size = 12;
      }),
-     32u, 4u, 20u, 4u, false, true, 72u, 608u},
+     32u, 8u, 20u, 8u, true, true, 56u, 608u},
+    {"v110", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
+    {"full",
+     make_options([](WeatherPluginOptions& o) {
+       legacy_layout(o);
+       o.include_nam4 = false;
+     }),
+     32u, 4u, 19u, 4u, false, true, 32u, 272u},
 }};
 
 std::vector<std::filesystem::path> corpus_plugin_paths(const char* dir) {
