@@ -193,7 +193,7 @@ TEST_CASE("W0 EDID is stored as Windows-1252 and refuses unrepresentable text", 
         "W0.esp", "000800:W0.esp", "EDID", "\xe6\x97\xa5"
     }));
     REQUIRE_FALSE(refused.has_value());
-    CHECK(refused.error().type == "InvalidEditorId");
+    CHECK(refused.error().type == "FieldWriteFailed");
     REQUIRE(fixture.backend.invokeBackend("SavePlugin", nlohmann::json::array({"W0.esp"})).has_value());
     const auto plugin = fo4::read_plugin_file(fixture.path);
     const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:W0.esp"));
@@ -219,7 +219,7 @@ TEST_CASE("W0 typed EYES creation round-trips a Windows-1252 EDID and refuses un
         "W0.esp", "EYES", payload("\xe6\x97\xa5")
     }));
     REQUIRE_FALSE(refused.has_value());
-    CHECK(refused.error().type == "InvalidEditorId");
+    CHECK(refused.error().type == "EyesCreateFailed");
     const auto afterRefusal = nlohmann::json::parse(fixture.backend.invokeBackend(
         "GetRecordsGrid", nlohmann::json::array({"W0.esp", "EYES", 20, 0}))->get<std::string>());
     CHECK(afterRefusal.at("rows").size() == 1);

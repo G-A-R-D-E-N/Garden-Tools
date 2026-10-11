@@ -106,9 +106,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "CELL editorId must be a string or null"
                 });
             }
-            const auto editorStored = support::encodeOptionalEditorId(editorId);
-            if (!editorStored) return std::unexpected(editorStored.error());
-            creation.editor_id = optionalStringView(*editorStored);
+            creation.editor_id = optionalStringView(editorId);
             key = fo4::forms::create_exterior_cell(mutated, creation);
         } else if (signatureText == "EYES") {
             const auto full = payload->find("fullText");
@@ -140,11 +138,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
 
-            const auto editorStored = support::encodeOptionalEditorId(editorId);
-            if (!editorStored) return std::unexpected(editorStored.error());
             key = fo4::forms::create_eyes(
                 mutated,
-                optionalStringView(*editorStored),
+                optionalStringView(editorId),
                 full->get_ref<const std::string&>(),
                 icon->get_ref<const std::string&>(),
                 dataFlags,
@@ -225,12 +221,10 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                 });
             }
 
-            const auto editorStored = support::encodeOptionalEditorId(editorId);
-            if (!editorStored) return std::unexpected(editorStored.error());
             key = fo4::forms::create_leveled_spell(
                 mutated, chanceNone, maxCount, flags, entries);
-            if (editorStored->has_value() &&
-                !fo4::set_record_editor_id(mutated, key, **editorStored)) {
+            if (editorId.has_value() &&
+                !fo4::set_record_editor_id(mutated, key, *editorId)) {
                 return std::unexpected(Error{
                     "RecordCreateFailed",
                     "Newly created LVSP record could not accept its editor ID"
@@ -253,9 +247,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "RACE fullName must be a string or null"});
 
             fo4::forms::RaceCreation creation;
-            const auto editorStored = support::encodeOptionalEditorId(editorId);
-            if (!editorStored) return std::unexpected(editorStored.error());
-            creation.editor_id = optionalStringView(*editorStored);
+            creation.editor_id = optionalStringView(editorId);
             creation.full_name = optionalStringView(fullName);
             creation.description = description->get_ref<const std::string&>();
             if (!lifecycleFloatField(*payload, "maleHeight", 0.0f, creation.male_height) ||
@@ -292,9 +284,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMO femaleMessageIcon must be a string or null"});
 
             fo4::forms::ArmorCreation creation;
-            const auto editorStored = support::encodeOptionalEditorId(editorId);
-            if (!editorStored) return std::unexpected(editorStored.error());
-            creation.editor_id = optionalStringView(*editorStored);
+            creation.editor_id = optionalStringView(editorId);
             creation.male_world_model = optionalStringView(maleWorld);
             creation.male_icon = optionalStringView(maleIcon);
             creation.male_message_icon = optionalStringView(maleMessage);
@@ -324,9 +314,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "ARMA femaleFirstPersonModel must be a string or null"});
 
             fo4::forms::ArmorAddonCreation creation;
-            const auto editorStored = support::encodeOptionalEditorId(editorId);
-            if (!editorStored) return std::unexpected(editorStored.error());
-            creation.editor_id = optionalStringView(*editorStored);
+            creation.editor_id = optionalStringView(editorId);
             creation.male_biped_model = optionalStringView(maleBiped);
             creation.female_biped_model = optionalStringView(femaleBiped);
             creation.male_first_person_model = optionalStringView(maleFirst);
