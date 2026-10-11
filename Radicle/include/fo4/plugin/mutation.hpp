@@ -4,6 +4,7 @@
 #include "fo4/plugin/container.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/condition_scopes.hpp"
 #include "fo4/schema/ctda.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -38,6 +39,7 @@ enum class ConditionMutationStatus {
   record_missing,
   multiple_lists,
   no_condition_list,
+  alias_structure_invalid,
 };
 
 enum class FormLinkFieldMutationStatus {
@@ -179,8 +181,17 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
       return;
     }
     status = ConditionMutationStatus::unchanged;
-    const auto result = write_ctda_conditions_in(record, 0, record.subrecords.size(),
-                                                 conditions, std::nullopt);
+    const auto window = schema::root_condition_window(record);
+    if (window.status == schema::RootConditionStatus::multiple_lists) {
+      status = ConditionMutationStatus::multiple_lists;
+      return;
+    }
+    if (window.status == schema::RootConditionStatus::alias_structure_invalid) {
+      status = ConditionMutationStatus::alias_structure_invalid;
+      return;
+    }
+    const auto result = write_ctda_conditions_in(record, window.begin, window.end,
+                                                 conditions, window.insert_anchor);
     if (result == CtdaScopeWrite::multiple_lists) {
       status = ConditionMutationStatus::multiple_lists;
       return;
@@ -189,7 +200,7 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
       status = ConditionMutationStatus::no_condition_list;
       return;
     }
-    if (result != CtdaScopeWrite::replaced) return;
+    if (result != CtdaScopeWrite::replaced && result != CtdaScopeWrite::inserted) return;
     record.original_range.clear();
     record.decompressed_payload.clear();
     record.header.data_size = 0;
