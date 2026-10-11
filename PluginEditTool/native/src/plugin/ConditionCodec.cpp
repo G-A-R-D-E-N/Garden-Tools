@@ -2,6 +2,7 @@
 
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/text/encoding.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -124,6 +125,10 @@ bool isHexBits(const std::string& text) {
                        [](unsigned char ch) { return std::isxdigit(ch) != 0; });
 }
 
+nlohmann::json cisText(const std::optional<std::string>& bytes) {
+    return bytes ? nlohmann::json(fo4::text::windows1252_to_utf8(*bytes)) : nlohmann::json(nullptr);
+}
+
 }  // namespace
 
 std::string conditionOperatorString(std::uint8_t compareOperator) {
@@ -190,9 +195,11 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
     for (const auto byte : fo4::serialize_ctda_condition(condition)) {
         bytes.push_back(std::to_integer<std::uint8_t>(byte));
     }
-    d["_native"] = {{"ctda", std::move(bytes)},
-                    {"cis1", condition.parameter1_string ? nlohmann::json(*condition.parameter1_string) : nlohmann::json(nullptr)},
-                    {"cis2", condition.parameter2_string ? nlohmann::json(*condition.parameter2_string) : nlohmann::json(nullptr)}};
+    const auto cis1 = cisText(condition.parameter1_string);
+    const auto cis2 = cisText(condition.parameter2_string);
+    if (!cis1.is_null()) d["cis1"] = cis1;
+    if (!cis2.is_null()) d["cis2"] = cis2;
+    d["_native"] = {{"ctda", std::move(bytes)}, {"cis1", cis1}, {"cis2", cis2}};
     return d;
 }
 
@@ -222,7 +229,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         const auto reject = [](const std::string& message) { throw std::invalid_argument(message); };
         if (!element.is_object()) reject("every condition must be an object");
         constexpr std::string_view keys[] = {"function", "operator", "param1", "param2", "value",
-                                             "compareGlobal", "runOn", "reference", "flags", "_native", "_edited"};
+                                             "compareGlobal", "runOn", "reference", "flags", "cis1", "cis2", "_native", "_edited"};
         for (const auto& [key, value] : element.items()) {
             (void)value;
             if (std::find(std::begin(keys), std::end(keys), key) == std::end(keys)) reject("unknown condition field '" + key + "'");
@@ -256,7 +263,9 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 const auto& value = metadata[key];
                 if (value.is_null()) return;
                 if (!value.is_string()) reject("invalid preserved CIS string");
-                target = value.get<std::string>();
+                const auto stored = fo4::text::utf8_to_windows1252(value.get<std::string>());
+                if (!stored) reject("preserved CIS string is not valid UTF-8 text representable in Windows-1252");
+                target = *stored;
                 if (target->find('\0') != std::string::npos) reject("preserved CIS string contains a terminator");
             };
             restoreString("cis1", condition.parameter1_string);
@@ -392,6 +401,22 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         };
         applyParam("param1", 0, condition.param1);
         applyParam("param2", 1, condition.param2);
+        const auto declared = ConditionFunctions::paramsOf(fnName);
+        const auto applyCis = [&](const char* key, std::size_t slot, std::optional<std::string>& target) {
+            if (!changed(key)) return;
+            target.reset();
+            if (!element.contains(key)) return;
+            if (!element[key].is_string()) reject(std::string(key) + " must be a string");
+            const auto stored = fo4::text::utf8_to_windows1252(element[key].get<std::string>());
+            if (!stored) reject(std::string(key) + " is not valid UTF-8 text representable in Windows-1252");
+            if (stored->find('\0') != std::string::npos) reject(std::string(key) + " cannot contain an embedded NUL");
+            if (slot >= declared.size() || ConditionFunctions::editorFor(declared[slot]).first != "text") {
+                reject(std::string(key) + " is only valid when parameter " + std::to_string(slot + 1) + " is String or Event");
+            }
+            target = *stored;
+        };
+        applyCis("cis1", 0, condition.parameter1_string);
+        applyCis("cis2", 1, condition.parameter2_string);
         if (changed("value") || changed("compareGlobal")) {
             if (element.contains("compareGlobal")) {
                 const auto raw = resolveConditionFormId(text("compareGlobal"), plugin, resolveEditorId);

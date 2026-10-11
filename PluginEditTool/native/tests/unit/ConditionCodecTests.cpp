@@ -473,3 +473,33 @@ TEST_CASE("condition codec accepts only the exact placeholder form for unresolva
         CHECK(failure == "unresolved condition reference");
     }
 }
+
+TEST_CASE("condition codec keeps CIS text as UTF-8 in JSON and Windows-1252 on disk", "[condition-preservation]") {
+    const auto plugin = context();
+    auto original = storedCondition();
+    original.function = *fo4ide::plugin::functionIndex("HasVMScript");
+    original.parameter1_string = "caf\xE9";
+    original.parameter2_string.reset();
+    auto json = fo4ide::plugin::describeCondition(original, plugin);
+    CHECK_NOTHROW(json.dump());
+    CHECK(json.at("cis1") == "caf\xC3\xA9");
+    CHECK(json.at("_native").at("cis1") == "caf\xC3\xA9");
+    std::string failure;
+    const auto unchanged = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(unchanged.has_value());
+    CHECK(unchanged->parameter1_string == "caf\xE9");
+    CHECK_FALSE(unchanged->parameter2_string.has_value());
+    json["cis1"] = "na\xC3\xAFve";
+    const auto edited = fo4ide::plugin::buildCondition(json, plugin, {}, failure);
+    REQUIRE(edited.has_value());
+    CHECK(edited->parameter1_string == "na\xEFve");
+    json["cis1"] = "\xE4\xB8\xAD";
+    CHECK_FALSE(fo4ide::plugin::buildCondition(json, plugin, {}, failure).has_value());
+    CHECK(failure == "cis1 is not valid UTF-8 text representable in Windows-1252");
+    const nlohmann::json fresh = {{"function", "HasVMScript"}, {"cis1", "caf\xC3\xA9"}};
+    const auto built = fo4ide::plugin::buildCondition(fresh, plugin, {}, failure);
+    REQUIRE(built.has_value());
+    CHECK(built->parameter1_string == "caf\xE9");
+    CHECK_FALSE(fo4ide::plugin::buildCondition({{"function", "GetDistance"}, {"cis1", "x"}}, plugin, {}, failure).has_value());
+    CHECK(failure == "cis1 is only valid when parameter 1 is String or Event");
+}
