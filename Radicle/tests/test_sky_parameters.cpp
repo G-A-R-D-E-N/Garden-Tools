@@ -36,7 +36,7 @@ protected:
   }
 
   void write(std::optional<std::vector<std::byte>> timing, std::optional<std::vector<std::byte>> data,
-             bool duplicate = false) {
+             bool duplicate = false, std::uint16_t weather_version = 131) {
     fo4::test::ByteWriter bytes;
     const auto tes4 = fo4::test::begin_record(bytes, "TES4", 1, 0);
     fo4::test::ByteWriter hedr;
@@ -46,9 +46,9 @@ protected:
     fo4::test::write_subrecord(bytes, "HEDR", hedr.bytes);
     fo4::test::end_record(bytes, tes4);
     const auto record = [&](const char* signature, const char* subrecord, std::uint32_t id,
-                            const std::optional<std::vector<std::byte>>& value) {
+                            const std::optional<std::vector<std::byte>>& value, std::uint16_t version) {
       const auto group = fo4::test::begin_group(bytes, signature, 0);
-      const auto rec = fo4::test::begin_record(bytes, signature, 0, id, 131);
+      const auto rec = fo4::test::begin_record(bytes, signature, 0, id, version);
       fo4::test::write_xxxx_subrecord(bytes, "XUNK", sequence(9));
       if (value) {
         fo4::test::write_subrecord(bytes, subrecord, *value);
@@ -57,8 +57,8 @@ protected:
       fo4::test::end_record(bytes, rec);
       fo4::test::end_group(bytes, group);
     };
-    record("CLMT", "TNAM", 0x800, timing);
-    record("WTHR", "DATA", 0x801, data);
+    record("CLMT", "TNAM", 0x800, timing, 131);
+    record("WTHR", "DATA", 0x801, data, weather_version);
     std::ofstream file(path_, std::ios::binary | std::ios::trunc);
     file.write(reinterpret_cast<const char*>(bytes.bytes.data()), static_cast<std::streamsize>(bytes.bytes.size()));
   }
@@ -78,7 +78,7 @@ protected:
 
 TEST_F(SkyParametersTest, DecodesEveryStoredByteAndLegacyTail) {
   for (const std::size_t size : {19u, 20u}) {
-    write(sequence(6), sequence(size));
+    write(sequence(6), sequence(size), false, size == 19 ? 118 : 131);
     const auto env = load();
     const auto timing = fo4::env::decode_climate(env, *env.winner(key(0x800))).timing;
     ASSERT_TRUE(timing.has_value());
