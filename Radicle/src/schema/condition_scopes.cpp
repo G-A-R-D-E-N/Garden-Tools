@@ -48,7 +48,9 @@ constexpr Signature k_quest_target_members[] = {
 };
 
 constexpr Signature k_pack_root_successors[] = {
-    Signature::from_string("IDLA"), Signature::from_string("CNAM"),
+    Signature::from_string("IDLF"), Signature::from_string("IDLC"),
+    Signature::from_string("IDLT"), Signature::from_string("IDLA"),
+    Signature::from_string("IDLB"), Signature::from_string("CNAM"),
     Signature::from_string("QNAM"), Signature::from_string("PKCU"),
 };
 
@@ -476,7 +478,7 @@ RootConditionWindow root_condition_window(const Record& record) {
 
   const auto anchor = root_insert_anchor(record);
   if (!anchor.has_value()) {
-    return RootConditionWindow{RootConditionStatus::no_list, 0, subs.size(), std::nullopt};
+    return RootConditionWindow{RootConditionStatus::no_list, 0, 0, std::nullopt};
   }
   std::size_t begin = 0;
   std::size_t end = subs.size();

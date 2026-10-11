@@ -646,3 +646,21 @@ TEST(ConditionScopesRecords, PerkRootListBesideEffectTabsReadsAndWritesRoot) {
   EXPECT_EQ(root_functions(*record), Functions{9});
   EXPECT_EQ(functions_in(*record, *tabs, 1), (Functions{2, 3}));
 }
+
+TEST(ConditionScopesRecords, EffectOnlyRecordRefusesBareWriteAndKeepsEffectList) {
+  auto plugin = make_plugin("SPEL", {
+      {"EFID", zeros(4)},
+      {"EFIT", zeros(12)},
+      {"CTDA", ctda_bytes(8)},
+  });
+  const auto before = plugin;
+  const auto read = fo4::schema::read_root_conditions(*cond_record(plugin));
+  EXPECT_TRUE(read.ok);
+  EXPECT_TRUE(read.conditions.empty());
+  for (const auto& conditions : {std::vector<fo4::CtdaCondition>{function_condition(9)},
+                                 std::vector<fo4::CtdaCondition>{}}) {
+    EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+              fo4::ConditionMutationStatus::no_condition_list);
+    EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(before));
+  }
+}
