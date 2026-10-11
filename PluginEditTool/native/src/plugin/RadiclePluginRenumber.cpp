@@ -1,5 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "RadiclePluginSupport.hpp"
+
 #include <algorithm>
 #include <charconv>
 #include <cstddef>
@@ -151,6 +153,12 @@ Result<nlohmann::json> RadiclePluginBackend::renumberPluginFormIds(
             "Target FormID is occupied by a record that is not being moved: " +
                 mapping.newKey.to_string()
         });
+    }
+
+    for (const auto& mapping : mappings) {
+        if (const auto refusal = support::parentGroupRelabelRefusal(loaded->plugin, mapping.oldKey)) {
+            return std::unexpected(*refusal);
+        }
     }
 
     if (!apply) {

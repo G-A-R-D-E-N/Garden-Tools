@@ -179,7 +179,8 @@ subblock label = (int16 floor(y /  8), int16 floor(x /  8))   bytes 0..1 = y, 2.
 This is the calculation #71 flags as "do not guess". `exterior_cell_grid_layout`
 and `exterior_grid_group_label_u32` in `fo4/forms/cell.hpp` implement it, and
 `tests/test_exterior_cell_grid_real.cpp` re-checks it against the shipped
-masters when `FO4_DATA_DIR` is set (it skips in CI, which has no game files).
+masters when `FO4_DATA_DIR` is set (it skips unless the CI variable
+`FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set).
 
 ## Localized string subrecords in shipped masters
 
