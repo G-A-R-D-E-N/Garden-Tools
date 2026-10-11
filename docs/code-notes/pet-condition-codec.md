@@ -28,7 +28,7 @@ Table check: the 220 functions with a non-None declared parameter type in xEdit 
 
 Slots are applied after the flags byte is parsed, so `paramKind` sees the final flags. Accepted input per kind:
 
-- Any kind, JSON integer: raw int32 bits, accepted in -2147483648 to 4294967295 (cast to int32); values outside that range are refused with `<key> <value> is outside [-2147483648, 4294967295]`. The old code cast without a range check, so out-of-range values were truncated before.
+- Any kind, JSON integer: raw int32 bits, accepted in -2147483648 to 4294967295 (cast to int32); values outside that range are refused with `<key> <value> is outside [-2147483648, 4294967295]`. The old code cast without a range check, so out-of-range values were truncated before. Unsigned JSON integers are range-checked as `uint64` first (`buildCondition`, `applyParam`): nlohmann's `get<std::int64_t>()` would wrap 18446744073709551615 to -1.
 - Any kind, string `0x` plus 1 to 8 hex digits: raw bits. This is how non-finite floats round-trip.
 - Form: strict whole-string decimal first, then FormKey or editor ID (`resolveConditionFormId`). A JSON float is refused.
 - Integer: strict decimal first, then FormKey or editor ID. A JSON float with an integral value in the JSON integer range is accepted (converted through uint32, so 3000000000.0 gives the bits of 3000000000); a non-integral one is refused.

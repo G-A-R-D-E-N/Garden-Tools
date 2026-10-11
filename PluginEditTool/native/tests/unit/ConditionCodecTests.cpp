@@ -54,12 +54,13 @@ TEST_CASE("condition codec: GetEventData rows keep param1 and param2 through des
     condition.param2 = 0x00012345;
     const fo4::Plugin plugin{};
 
-    const auto described = fo4ide::plugin::describeCondition(condition, plugin);
+    auto described = fo4ide::plugin::describeCondition(condition, plugin);
     REQUIRE(described.at("function") == "GetEventData");
     REQUIRE(described.contains("param1"));
     REQUIRE(described.contains("param2"));
     REQUIRE(described.at("param1").get<std::int32_t>() == condition.param1);
     REQUIRE(described.at("param2").get<std::int32_t>() == condition.param2);
+    described.erase("_native");
 
     std::string failure;
     const auto rebuilt = fo4ide::plugin::buildCondition(described, plugin, {}, failure);
@@ -77,9 +78,10 @@ TEST_CASE("condition codec: float parameter is a JSON number") {
     condition.param2 = floatBits(5.5f);
     const fo4::Plugin plugin{};
 
-    const auto described = fo4ide::plugin::describeCondition(condition, plugin);
+    auto described = fo4ide::plugin::describeCondition(condition, plugin);
     REQUIRE(described.at("param2").is_number_float());
     CHECK(described.at("param2") == 5.5);
+    described.erase("_native");
 
     std::string failure;
     const auto rebuilt = fo4ide::plugin::buildCondition(described, plugin, {}, failure);
@@ -94,9 +96,10 @@ TEST_CASE("condition codec: integer parameter round trips as a number") {
         condition.function = fo4ide::plugin::functionIndex("GetAngle").value();
         condition.param1 = axis;
 
-        const auto described = fo4ide::plugin::describeCondition(condition, plugin);
+        auto described = fo4ide::plugin::describeCondition(condition, plugin);
         REQUIRE(described.at("param1").is_number_integer());
         CHECK(described.at("param1") == axis);
+        described.erase("_native");
 
         std::string failure;
         const auto rebuilt = fo4ide::plugin::buildCondition(described, plugin, {}, failure);
@@ -144,8 +147,9 @@ TEST_CASE("condition codec: non-finite float round trips through 0x hex") {
     condition.param2 = 0x7FC00000;
     const fo4::Plugin plugin{};
 
-    const auto described = fo4ide::plugin::describeCondition(condition, plugin);
+    auto described = fo4ide::plugin::describeCondition(condition, plugin);
     REQUIRE(described.at("param2") == "0x7FC00000");
+    described.erase("_native");
 
     std::string failure;
     const auto rebuilt = fo4ide::plugin::buildCondition(described, plugin, {}, failure);
@@ -184,8 +188,9 @@ TEST_CASE("condition codec: negative and hex integer params on an Integer slot")
     fo4::CtdaCondition condition;
     condition.function = fo4ide::plugin::functionIndex("GetAngle").value();
     condition.param1 = -3;
-    const auto described = fo4ide::plugin::describeCondition(condition, plugin);
+    auto described = fo4ide::plugin::describeCondition(condition, plugin);
     REQUIRE(described.at("param1") == -3);
+    described.erase("_native");
     const auto rebuilt = fo4ide::plugin::buildCondition(described, plugin, {}, failure);
     REQUIRE(rebuilt.has_value());
     CHECK(rebuilt->param1 == -3);
@@ -339,6 +344,10 @@ TEST_CASE("condition codec rejects integer params outside the 32-bit range", "[c
     const nlohmann::json textAbove = {{"function", "GetAngle"}, {"param1", "4294967296"}};
     CHECK_FALSE(fo4ide::plugin::buildCondition(textAbove, plugin, {}, failure).has_value());
     CHECK(failure == "param1 4294967296 is outside [-2147483648, 4294967295]");
+
+    const nlohmann::json wrapped = {{"function", "GetAngle"}, {"param1", std::numeric_limits<std::uint64_t>::max()}};
+    CHECK_FALSE(fo4ide::plugin::buildCondition(wrapped, plugin, {}, failure).has_value());
+    CHECK(failure == "param1 18446744073709551615 is outside [-2147483648, 4294967295]");
 }
 
 TEST_CASE("condition codec round trips unresolvable form IDs through describe", "[condition-preservation]") {
@@ -459,8 +468,8 @@ TEST_CASE("condition codec accepts only the exact placeholder form for unresolva
     const auto plugin = context();
     for (const char* text : {"", "000801:", "0A000801", "0A0008010:", "0x0A000801:", "0A00080G:"}) {
         std::string failure;
-        const nlohmann::json element = {{"function", "GetAngle"}, {"reference", text}};
+        const nlohmann::json element = {{"function", "GetAngle"}, {"runOn", "Reference"}, {"reference", text}};
         CHECK_FALSE(fo4ide::plugin::buildCondition(element, plugin, {}, failure).has_value());
-        CHECK_FALSE(failure.empty());
+        CHECK(failure == "unresolved condition reference");
     }
 }
