@@ -73,8 +73,6 @@ public static partial class WriteService
             return $"'{plugin}' CANNOT fit the ESL range: {native.Count} native record(s) exceed the " +
                    $"{capacity}-slot capacity ({range}). compact_to_esl would refuse this plugin.";
 
-
-
         var topLevelGroups = mod.GetType().GetProperties()
             .Where(p => typeof(Mutagen.Bethesda.Plugins.Records.IGroup).IsAssignableFrom(p.PropertyType))
             .Select(p => p.GetValue(mod) as Mutagen.Bethesda.Plugins.Records.IGroup)
