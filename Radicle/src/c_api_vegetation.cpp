@@ -20,6 +20,8 @@ radicle_harvest_info harvest(const radicle_env& env, const fo4::env::HarvestData
 
 radicle_status invalid() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and output required"); }
 
+radicle_status foreign() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment"); }
+
 }
 
 extern "C" {
@@ -27,6 +29,7 @@ extern "C" {
 radicle_status radicle_grass_get_info(const radicle_env* env, const radicle_record* record, radicle_grass_info* out_info) {
   clear_error();
   if (!env || !record || !out_info) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding GRAS", [&] {
     const auto data = fo4::env::decode_grass(env->value, *to_ref(record)); radicle_grass_info v{};
     if (data) {
@@ -42,6 +45,7 @@ radicle_status radicle_grass_get_info(const radicle_env* env, const radicle_reco
 radicle_status radicle_tree_get_info(const radicle_env* env, const radicle_record* record, radicle_tree_info* out_info) {
   clear_error();
   if (!env || !record || !out_info) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding TREE", [&] {
     const auto data = fo4::env::decode_tree(env->value, *to_ref(record)); radicle_tree_info v{};
     v.harvest = harvest(*env, data.harvest);
@@ -53,6 +57,7 @@ radicle_status radicle_tree_get_info(const radicle_env* env, const radicle_recor
 radicle_status radicle_flora_get_info(const radicle_env* env, const radicle_record* record, radicle_flora_info* out_info) {
   clear_error();
   if (!env || !record || !out_info) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding FLOR", [&] {
     const auto data = fo4::env::decode_flora(env->value, *to_ref(record)); radicle_flora_info v{};
     v.harvest = harvest(*env, data.harvest); set_optional(data.flags, v.has_flags, v.flags);
@@ -65,6 +70,7 @@ radicle_status radicle_landscape_grasses_decode(const radicle_env* env, const ra
   clear_error();
   if (out_links) *out_links = nullptr;
   if (!env || !record || !out_links) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
   return guarded("unknown exception while decoding LTEX grasses", [&] {
     const auto data = fo4::env::decode_landscape_grasses(env->value, *to_ref(record));
     auto h = std::make_unique<GrassHolder>();

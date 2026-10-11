@@ -108,6 +108,7 @@ std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload
     return payload;
   }
   if (descriptor.payload_size != 0 && payload.size() != descriptor.payload_size) return {};
+  if (payload.size() < descriptor.minimum_payload_size) return {};
   if (payload.size() < descriptor.offset + width) return {};
   return payload.subspan(descriptor.offset, width);
 }
@@ -116,6 +117,7 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
   FieldShape shape;
   shape.subrecord = descriptor.subrecord;
   shape.payload_size = descriptor.payload_size;
+  shape.minimum_payload_size = descriptor.minimum_payload_size;
   shape.whole_payload = !descriptor.embedded;
   shape.offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
   shape.width = scalar_storage_size(descriptor.storage);
@@ -137,7 +139,7 @@ void patch_scalar_field(std::span<std::byte> payload,
     throw ScalarError(std::string(descriptor.field_name) + " encoded to the wrong width");
   }
   const auto offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
-  if (payload.size() < offset + width) {
+  if (payload.size() < descriptor.minimum_payload_size || payload.size() < offset + width) {
     throw ScalarError(std::string(descriptor.field_name) +
                       " does not fit in the subrecord payload");
   }

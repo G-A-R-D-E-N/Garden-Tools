@@ -111,7 +111,7 @@ add_library(fo4
   src/forms/placed_reference_edit.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
-  src/forms/weather_concept.cpp
+  src/forms/weather.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/proj_expl_hazd.cpp
@@ -336,6 +336,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
+    tests/test_climate_weather_authoring.cpp
+    tests/test_climate_weather_c_api.cpp
+    tests/test_climate_weather_real.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
@@ -414,6 +417,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
+    tests/test_sky_parameters.cpp
+    tests/test_sky_real.cpp
     tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
     tests/test_env_bench_real.cpp

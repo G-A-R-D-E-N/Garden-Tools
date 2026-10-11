@@ -478,13 +478,55 @@ public unsafe struct ClimateWeather
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct ClimateTiming
+{
+    public byte SunriseBegin;
+    public byte SunriseEnd;
+    public byte SunsetBegin;
+    public byte SunsetEnd;
+    public byte Volatility;
+    public byte MoonsPhaseLength;
+    public float SunriseBeginHours;
+    public float SunriseEndHours;
+    public float SunsetBeginHours;
+    public float SunsetEndHours;
+    public byte DaysPerPhase;
+    public int UsesSecunda;
+    public int UsesMasser;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct Climate
 {
     public IntPtr Weathers;
     public nuint WeatherCount;
     public IntPtr SunTexture;
     public IntPtr SunGlareTexture;
+    public int HasTiming;
+    public ClimateTiming Timing;
     public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct WeatherParameters
+{
+    public byte WindSpeed;
+    public byte TransitionDelta;
+    public byte SunGlare;
+    public byte SunDamage;
+    public byte PrecipitationBegin;
+    public byte PrecipitationEnd;
+    public byte LightningBegin;
+    public byte LightningEnd;
+    public byte LightningFrequency;
+    public byte Flags;
+    public ByteColor LightningColor;
+    public byte VisualEffectBegin;
+    public byte VisualEffectEnd;
+    public byte WindDirection;
+    public byte WindDirectionRange;
+    public int HasWindTurbulence;
+    public byte WindTurbulence;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -495,6 +537,8 @@ public unsafe struct WeatherInfo
     public nuint ColorTimes;
     public IntPtr FogDistances;
     public nuint FogDistanceCount;
+    public int HasParameters;
+    public WeatherParameters Parameters;
     public IntPtr Internal;
 }
 
@@ -598,6 +642,17 @@ public unsafe struct LightingTemplateInfo
     public int HasLighting;
     public CellLighting Lighting;
     public FormKey GodRays;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ClimateTimingEdit
+{
+    public byte SunriseBegin;
+    public byte SunriseEnd;
+    public byte SunsetBegin;
+    public byte SunsetEnd;
+    public byte Volatility;
+    public byte MoonsPhaseLength;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1038,7 +1093,7 @@ public unsafe struct GrassLinks
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 24u;
+    public const uint CompiledAbiVersion = 26u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1324,6 +1379,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_climate_free")]
     public static extern void ClimateFree(Climate* climate);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_climate_timing")]
+    public static extern Status PluginSetClimateTiming(IntPtr plugin, FormKey key, ClimateTimingEdit* timing);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_weather_decode")]
     public static extern Status WeatherDecode(IntPtr env, IntPtr record, WeatherInfo** out_weather);

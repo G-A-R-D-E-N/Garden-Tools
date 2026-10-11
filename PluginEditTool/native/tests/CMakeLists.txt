@@ -115,6 +115,7 @@ add_executable(
     unit/RadiclePluginW0Tests.cpp
     unit/RadiclePluginSchemaAuthoringTests.cpp
     unit/RadiclePluginVegetationSemanticTests.cpp
+    unit/RadiclePluginClimateSemanticTests.cpp
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp

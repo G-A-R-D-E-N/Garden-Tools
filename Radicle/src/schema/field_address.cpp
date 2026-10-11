@@ -77,7 +77,8 @@ FieldSlots resolve_field_slots(const Record& record,
 
   for (const auto index : candidates) {
     const auto& data = record.subrecords[index].data;
-    const bool sized = shape.payload_size == 0 || data.size() == shape.payload_size;
+    const bool sized = data.size() >= shape.minimum_payload_size &&
+                       (shape.payload_size == 0 || data.size() == shape.payload_size);
 
     if (shape.whole_payload) {
       FieldSlot slot{index, 0, false, false};

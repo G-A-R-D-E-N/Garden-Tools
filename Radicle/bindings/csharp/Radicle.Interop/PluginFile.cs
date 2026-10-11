@@ -148,6 +148,21 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedActivateParentDelay(plugin, key, at, delay));
     }
 
+    public bool SetClimateTiming(FormKey climate, ClimateTiming timing)
+    {
+        ArgumentNullException.ThrowIfNull(timing);
+        return Edit(climate, (plugin, s, key) =>
+        {
+            var value = new ClimateTimingEdit
+            {
+                SunriseBegin = timing.SunriseBegin, SunriseEnd = timing.SunriseEnd,
+                SunsetBegin = timing.SunsetBegin, SunsetEnd = timing.SunsetEnd,
+                Volatility = timing.Volatility, MoonsPhaseLength = timing.MoonsPhaseLength,
+            };
+            return RadicleNative.PluginSetClimateTiming(plugin, key, &value);
+        });
+    }
+
     public bool SetScalar(FormKey record, string path, string value, int index = 0)
     {
         ArgumentNullException.ThrowIfNull(path);
