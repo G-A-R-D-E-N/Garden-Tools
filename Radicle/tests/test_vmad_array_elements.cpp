@@ -367,7 +367,7 @@ TEST(VmadArrayElements, StructWithNonScalarMemberStaysDisengagedAndInSync) {
   EXPECT_EQ(result.scripts[0].properties[1].integer, 9);
 }
 
-TEST(VmadArrayElements, StructWithUnexposedObjectWordStaysDisengagedAndInSync) {
+TEST(VmadArrayElements, StructWithUnexposedObjectWordStopsTheTypedReader) {
   fo4::test::ByteWriter props;
   begin_property(props, "Holder", 7);
   props.u32(1);
@@ -379,13 +379,10 @@ TEST(VmadArrayElements, StructWithUnexposedObjectWordStaysDisengagedAndInSync) {
   props.u32(0x02000ABC);
   begin_property(props, "After", 3);
   props.i32(9);
-  const auto result = fo4::read_vmad_scripts(vmad_with_properties(2, 2, props).bytes);
-  EXPECT_FALSE(result.unsupported);
-  EXPECT_EQ(result.trailing_bytes, 0u);
+  const auto vmad = vmad_with_properties(2, 2, props);
+  const auto result = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_TRUE(result.unsupported);
   ASSERT_EQ(result.scripts.size(), 1u);
-  ASSERT_EQ(result.scripts[0].properties.size(), 2u);
-  const auto& holder = result.scripts[0].properties[0];
-  EXPECT_EQ(holder.element_count, 1u);
-  EXPECT_FALSE(holder.struct_elements.has_value());
-  EXPECT_EQ(result.scripts[0].properties[1].integer, 9);
+  EXPECT_TRUE(result.scripts[0].properties.empty());
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, fo4::Signature::from_string("REFR")).unsupported);
 }
