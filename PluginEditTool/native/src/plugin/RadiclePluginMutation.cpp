@@ -1,6 +1,7 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cctype>
 #include <cstdint>
@@ -55,6 +56,20 @@ std::string joinNames(const std::vector<std::string>& names) {
 }
 
 constexpr std::uint32_t kCopyInitiallyDisabled = 0x00000800u;
+
+constexpr std::array kInitiallyDisabledSignatures{
+    fo4::Signature::from_string("REFR"), fo4::Signature::from_string("ACHR"),
+    fo4::Signature::from_string("NAVM"), fo4::Signature::from_string("PARW"),
+    fo4::Signature::from_string("PBAR"), fo4::Signature::from_string("PBEA"),
+    fo4::Signature::from_string("PCON"), fo4::Signature::from_string("PFLA"),
+    fo4::Signature::from_string("PGRE"), fo4::Signature::from_string("PHZD"),
+    fo4::Signature::from_string("PMIS"),
+};
+
+bool supportsInitiallyDisabled(fo4::Signature signature) {
+    return std::find(kInitiallyDisabledSignatures.begin(), kInitiallyDisabledSignatures.end(),
+                     signature) != kInitiallyDisabledSignatures.end();
+}
 
 bool markCopyInitiallyDisabled(fo4::Plugin& plugin, const fo4::FormKey& key) {
     bool found = false;
@@ -649,10 +664,18 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideLocked(
         });
     }
 
-    if (fo4::find_record(source->plugin, key) == nullptr) {
+    const auto* sourceRecord = fo4::find_record(source->plugin, key);
+    if (sourceRecord == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",
             "Record is not present in " + sourceName + ": " + formKeyText
+        });
+    }
+    if (initiallyDisabled && !supportsInitiallyDisabled(sourceRecord->header.signature)) {
+        return std::unexpected(Error{
+            "DisabledOverrideUnsupported",
+            "Initially Disabled applies only to placed references and NAVM, not " +
+                sourceRecord->header.signature.to_string() + ": " + formKeyText
         });
     }
     if (!allowLosing) {

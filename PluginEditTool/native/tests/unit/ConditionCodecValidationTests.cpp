@@ -222,6 +222,21 @@ TEST_CASE("condition codec: a valid entry builds the same stored fields") {
     CHECK_FALSE(condition->parameter1_string.has_value());
 }
 
+TEST_CASE("condition codec: a reference on a non-Reference runOn fails the entry") {
+    const nlohmann::json element = {
+        {"function", "GetAngle"}, {"runOn", "Subject"}, {"reference", "CondWeapon"}};
+    CHECK(failureOf(element) == "reference 'CondWeapon' requires runOn Reference");
+}
+
+TEST_CASE("condition codec: a reference on the Reference runOn is stored") {
+    const nlohmann::json element = {
+        {"function", "GetAngle"}, {"runOn", "Reference"}, {"reference", "CondWeapon"}};
+    std::string failure;
+    const auto condition = buildFrom(element, failure);
+    REQUIRE(condition.has_value());
+    CHECK(condition->reference == 0x800u);
+}
+
 TEST_CASE("condition codec: unresolvable form IDs round trip through describeCondition exactly") {
     fo4::Plugin plugin{};
     plugin.key = fo4::PluginKey::from_filename("CondEdit.esp");

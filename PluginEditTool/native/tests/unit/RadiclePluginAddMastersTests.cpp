@@ -75,6 +75,30 @@ std::vector<std::byte> makeTarget() {
     return out.bytes;
 }
 
+std::vector<std::byte> makeDisabledMaster() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::master, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(2);
+    hedr.u32(0x802);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto weaponGroup = fo4::test::begin_group(out, "WEAP", 0);
+    const auto weapon = fo4::test::begin_record(out, "WEAP", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterWeapon\0", 13});
+    fo4::test::end_record(out, weapon);
+    fo4::test::end_group(out, weaponGroup);
+
+    const auto refrGroup = fo4::test::begin_group(out, "REFR", 0);
+    const auto refr = fo4::test::begin_record(out, "REFR", 0, 0x00000801);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterRef\0", 10});
+    fo4::test::end_record(out, refr);
+    fo4::test::end_group(out, refrGroup);
+    return out.bytes;
+}
+
 std::vector<std::byte> makeLightTarget() {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::small_file, 0);
@@ -487,6 +511,60 @@ TEST_CASE("Native CopyAsDisabledOverride leaves an existing override untouched")
     const auto* copy = fo4::find_record(reloaded, fo4::FormKey::parse("000800:Master.esm"));
     REQUIRE(copy != nullptr);
     CHECK((copy->header.flags.value() & 0x00000800u) == 0);
+}
+
+TEST_CASE("Native CopyAsDisabledOverride refuses a record type outside placed refs and NAVM") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(masterPath, makeDisabledMaster());
+    writeBytes(targetPath, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Master.esm", masterPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto args = nlohmann::json::array({"Master.esm", "000800:Master.esm", "Target.esp", false});
+    const auto rejected = backend.copyAsDisabledOverride(args);
+    REQUIRE_FALSE(rejected.has_value());
+    CHECK(rejected.error().type == "DisabledOverrideUnsupported");
+    const auto copied = textResult(backend.copyAsOverride(args));
+    CHECK(copied.starts_with("Copied "));
+}
+
+TEST_CASE("Native CopyAsDisabledOverride marks a placed reference Initially Disabled") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(masterPath, makeDisabledMaster());
+    writeBytes(targetPath, makeTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Master.esm", masterPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto message = textResult(backend.copyAsDisabledOverride(nlohmann::json::array(
+        {"Master.esm", "000801:Master.esm", "Target.esp", false})));
+    CHECK(message.find("Marked it Initially Disabled.") != std::string::npos);
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+
+    const auto reloaded = fo4::read_plugin_file(targetPath);
+    const auto* copy = fo4::find_record(reloaded, fo4::FormKey::parse("000801:Master.esm"));
+    REQUIRE(copy != nullptr);
+    CHECK((copy->header.flags.value() & 0x00000800u) != 0);
 }
 
 TEST_CASE("Native CheckForErrors reports an unresolved link in the selected plugin") {
