@@ -12,10 +12,10 @@
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
+#include <fo4ide/core/PayloadLimits.hpp>
+
 namespace fo4ide::http {
 namespace {
-
-constexpr std::size_t kMaxRequestBytes = 16 * 1024 * 1024;
 
 nlohmann::json eventJson(const events::Event& event) {
     nlohmann::json value;
@@ -114,7 +114,7 @@ Result<int> HttpServer::start(const Config& config) {
 
     impl_->config = config;
     auto& server = impl_->server;
-    server.set_payload_max_length(kMaxRequestBytes);
+    server.set_payload_max_length(core::kMaxRequestBytes);
 
     server.set_pre_routing_handler([this](const httplib::Request& request, httplib::Response& response) {
         const auto& token = impl_->config.token;

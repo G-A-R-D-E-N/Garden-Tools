@@ -1,13 +1,17 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <httplib.h>
 
+#include <fo4ide/core/Base64.hpp>
+#include <fo4ide/core/PayloadLimits.hpp>
 #include <fo4ide/events/EventBus.hpp>
 #include <fo4ide/http/HttpServer.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
@@ -135,11 +139,24 @@ TEST_CASE("HTTP refuses Host headers that are not this loopback server") {
     CHECK(local->status == 200);
 }
 
-TEST_CASE("HTTP RPC refuses request bodies over 16 MiB") {
+TEST_CASE("HTTP RPC accepts a body carrying the largest dropped file") {
+    ServerFixture fixture;
+    httplib::Client client("127.0.0.1", fixture.port);
+    const std::vector<std::byte> file(fo4ide::core::kMaxDroppedFileBytes);
+    const std::string body = R"({"target":"echo","method":"Run","args":[")" +
+                             fo4ide::core::encodeBase64(file) + R"("]})";
+
+    const auto response = client.Post("/rpc", httplib::Headers{{"X-FO4IDE-Token", kToken}},
+                                      body, "application/json");
+    REQUIRE(response);
+    CHECK(response->status == 200);
+}
+
+TEST_CASE("HTTP RPC refuses request bodies over the body cap") {
     ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
     const std::string body = R"({"target":"echo","method":"Run","args":[")" +
-                             std::string(16 * 1024 * 1024, 'a') + R"("]})";
+                             std::string(fo4ide::core::kMaxRequestBytes, 'a') + R"("]})";
 
     const auto response = client.Post("/rpc", httplib::Headers{{"X-FO4IDE-Token", kToken}},
                                       body, "application/json");
@@ -150,7 +167,7 @@ TEST_CASE("HTTP RPC refuses request bodies over 16 MiB") {
 TEST_CASE("HTTP refuses an unauthenticated oversized RPC body before reading it") {
     ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
-    const std::string body(16 * 1024 * 1024 + 1, 'a');
+    const std::string body(fo4ide::core::kMaxRequestBytes + 1, 'a');
 
     const auto response = client.Post("/rpc", body, "application/json");
     const bool sizeRejected = response && response->status == 413;
