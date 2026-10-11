@@ -8,9 +8,9 @@
 // the memory layout. docs/FORMAT_NOTES.md carries the measured tables and the
 // evidence; the field order here follows the file.
 //
-// Defaults are attested vanilla values rather than invented ones. Where the
-// shipped corpus offers no defensible default the field is required instead
-// (HAZD has no usable default model, so HazardCreation::model has no default).
+// Defaults follow xEdit's create defaults or attested vanilla values. Where
+// neither gives a defensible default the field is required instead (HAZD has
+// no usable default model, so HazardCreation::model has no default).
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
