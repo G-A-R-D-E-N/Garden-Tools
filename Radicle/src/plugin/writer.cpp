@@ -305,11 +305,11 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
     return {original.begin(), original.end()};
   }
 
-  // Clean plugins return the original source range above. Once a master-flagged plugin is
+  // Clean plugins return the original source range above. Once a master plugin is
   // dirty, rebuild ONAM from the current hierarchy before serialization so
   // stale temporary-override metadata cannot survive a mutation.
   auto prepared = plugin;
-  if (prepared.header.tes4_flags.is_master()) {
+  if (is_master_plugin(prepared.header.tes4_flags, prepared.key)) {
     rebuild_tes4_onam(prepared, true);
   }
 
