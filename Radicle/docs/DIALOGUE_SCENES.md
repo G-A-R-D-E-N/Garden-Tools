@@ -4,7 +4,7 @@ This slice addresses the stored-layout part of #344. It does not execute dialogu
 
 ## Evidence and validity
 
-The compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas), commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`: DIAL lines 6309–6474, INFO 9672–9791, SCEN 8879–9165. This source describes storage; it is not a runtime specification. The [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/dialogue-scenes-405-344/README.md) stamps the OG scene action loader at RVA 0x5975E0 (section 3) and its 16-bit runtime action storage/range consumer. That runtime representation is separate from the four-byte stored SNAM/ENAM fields defined by xEdit and exercised by official plugins. Verified local copy: `build/RE-Work/6916afb/dialogue-scenes-405-344/README.md`. Runtime scene execution remains outside this reader.
+The compatibility source is [xEdit Core/wbDefinitionsFO4.pas](https://github.com/TES5Edit/TES5Edit/blob/93cc0bc5a1251936c3c7859eee3150eda12a62d7/Core/wbDefinitionsFO4.pas), commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`: DIAL lines 6309–6474, INFO 9672–9791, SCEN 8879–9165. This source describes storage; it is not a runtime specification. The [verified runtime record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/dialogue-scenes-405-344/README.md) stamps the OG scene action loader at address 0x5975E0 (section 3) and its 16-bit runtime action storage/range consumer. That runtime representation is separate from the four-byte stored SNAM/ENAM fields defined by xEdit and exercised by official plugins. Verified local copy: `build/RE-Work/6916afb/dialogue-scenes-405-344/README.md`. Runtime scene execution remains outside this reader.
 
 Metadata-only measurement on the seven installed official masters on 2026-10-04:
 
@@ -23,7 +23,7 @@ There were no record/subrecord parse failures. Every DIAL DATA, PNAM, TIFC and S
 
 ## DIAL
 
-DATA stores byte flags, byte category and a little-endian u16 subtype. PNAM stores f32 priority. BNAM, QNAM and KNAM are branch, quest and keyword FormID links resolved in the owning plugin's master context. SNAM stores exactly four subtype-name bytes, including any padding; TIFC stores u32 info count. FULL/name handling uses the existing environment metadata and string-table API. Stored enum and flag values are returned without validation against guessed ranges.
+DATA stores byte flags, byte category and a little-endian u16 subtype. PNAM stores f32 priority. BNAM, QNAM and KNAM are branch, quest and keyword form ID links resolved in the owning plugin's master context. SNAM stores exactly four subtype-name bytes, including any padding; TIFC stores u32 info count. FULL/name handling uses the existing environment metadata and string-table API. Stored enum and flag values are returned without validation against guessed ranges.
 
 ## INFO
 
