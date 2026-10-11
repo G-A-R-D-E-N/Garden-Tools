@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -336,10 +337,12 @@ std::optional<Error> parseQuestCondition(
     } else {
         float value = 0.0f;
         if (hasValue) {
-            if (!element["value"].is_number()) {
-                return fail("condition value must be a number");
+            const auto number = element["value"].is_number() ? element["value"].get<double>() : 0.0;
+            if (!element["value"].is_number() || !std::isfinite(number) ||
+                std::fabs(number) > std::numeric_limits<float>::max()) {
+                return fail("comparison value must be a finite number");
             }
-            value = element["value"].get<float>();
+            value = static_cast<float>(number);
         }
         static_assert(sizeof(value) == sizeof(out.condition.comparison_raw));
         std::memcpy(&out.condition.comparison_raw, &value, sizeof(value));

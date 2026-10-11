@@ -90,3 +90,40 @@ TEST_CASE("Native SetQuestStages stores a quest condition without a value as com
     REQUIRE(conditions.size() == 1u);
     CHECK(conditions[0].comparison_float() == 0.0f);
 }
+
+TEST_CASE("Native SetQuestStages refuses a quest condition value outside float range") {
+    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto root = std::filesystem::temp_directory_path() /
+                      ("fo4ide_quest_condition_range_" + std::to_string(id));
+    Cleanup cleanup{root};
+    std::filesystem::create_directories(root);
+    const auto path = root / "Patch.esp";
+    const auto bytes = bareQuestPlugin();
+    std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()),
+                                                static_cast<std::streamsize>(bytes.size()));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{"plugins", nlohmann::json::array({{
+            {"name", "Patch.esp"}, {"path", path.string()},
+            {"source", "QuestTest"}, {"resolved", true}
+        }})}}).has_value());
+    const nlohmann::json stages = nlohmann::json::array({{
+        {"index", 10},
+        {"logEntries", nlohmann::json::array({{
+            {"flags", 0},
+            {"logText", "Start"},
+            {"conditions", nlohmann::json::array({{
+                {"function", "GetIsID"},
+                {"param1", "000800:Patch.esp"},
+                {"value", 1e39}
+            }})}
+        }})}
+    }});
+    const auto written = backend.invokeBackend(
+        "SetQuestStages",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", stages}));
+    REQUIRE_FALSE(written.has_value());
+    CHECK(written.error().message.find("comparison value must be a finite number") != std::string::npos);
+}
