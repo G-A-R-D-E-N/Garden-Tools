@@ -390,16 +390,16 @@ FormKey create_projectile(Plugin& plugin, const ProjectileCreation& creation) {
   }
 
   // Measured shipped order: EDID OBND [FULL] ... DATA DNAM NAM1 VNAM.
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
-    record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
+    record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
   // DATA is a zero-length marker in all 239 shipped records.
   record->subrecords.push_back(Subrecord{k_data, {}, false});
   record->subrecords.push_back(Subrecord{k_dnam, std::move(dnam), false});
   record->subrecords.push_back(
-      Subrecord{k_nam1, zstring(creation.muzzle_flash_model), false});
+      Subrecord{k_nam1, zstring(stored_inline_text(creation.muzzle_flash_model, "muzzle flash model path")), false});
   PayloadWriter vnam{4};
   vnam.u32(creation.sound_level);
   record->subrecords.push_back(Subrecord{k_vnam, vnam.take(), false});
@@ -432,10 +432,10 @@ FormKey create_explosion(Plugin& plugin, const ExplosionCreation& creation) {
     throw ProjExplHazdError("newly allocated EXPL record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
-    record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
+    record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
   record->subrecords.push_back(Subrecord{k_data, std::move(data), false});
 
@@ -471,12 +471,12 @@ FormKey create_hazard(Plugin& plugin, const HazardCreation& creation) {
     throw ProjExplHazdError("newly allocated HAZD record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
-    record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
+    record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
-  record->subrecords.push_back(Subrecord{k_modl, zstring(creation.model), false});
+  record->subrecords.push_back(Subrecord{k_modl, zstring(stored_inline_text(creation.model, "model path")), false});
   record->subrecords.push_back(
       Subrecord{k_modt,
                 creation.model_texture_data.value_or(empty_model_texture_data()),

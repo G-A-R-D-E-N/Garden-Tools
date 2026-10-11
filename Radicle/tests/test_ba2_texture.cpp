@@ -62,55 +62,91 @@ TEST(Ba2Hash, NormalizesSeparatorsCaseAndTrims) {
 }
 
 TEST(Ba2Texture, RoundTripStoredAndCompressed) {
-  Ba2TextureArchive archive;
-  archive.version = 8;
+  for (const std::uint32_t version : {1u, 7u, 8u}) {
+    SCOPED_TRACE(version);
+    Ba2TextureArchive archive;
+    archive.version = version;
 
-  Ba2TextureEntry stored;
-  stored.name_hash = 0xB465C424u;
-  stored.extension_hash = 0x00736464u;
-  stored.directory_hash = 0x055583E3u;
-  stored.path = "textures\\armor\\leather.dds";
-  stored.texture = {64, 256, 9, 71, 0, 8};
-  stored.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(bytes_of("stored-data")));
+    Ba2TextureEntry stored;
+    stored.name_hash = 0xB465C424u;
+    stored.extension_hash = 0x00736464u;
+    stored.directory_hash = 0x055583E3u;
+    stored.path = "textures\\armor\\leather.dds";
+    stored.texture = {64, 256, 9, 71, 0, 8};
+    stored.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(bytes_of("stored-data")));
 
-  Ba2TextureEntry compressed;
-  compressed.name_hash = 0x9E6C1278u;
-  compressed.extension_hash = 0x00736464u;
-  compressed.directory_hash = 0x055583E3u;
-  compressed.path = "textures\\armor\\main.dds";
-  compressed.texture = {16, 16, 5, 98, 0, 8};
-  const auto payload = repeated(4096, 0xAB);
-  auto chunk = fo4::archive::make_compressed_ba2_texture_chunk(payload);
-  chunk.mip_first = 0;
-  chunk.mip_last = 2;
-  compressed.chunks.push_back(std::move(chunk));
+    Ba2TextureEntry compressed;
+    compressed.name_hash = 0x9E6C1278u;
+    compressed.extension_hash = 0x00736464u;
+    compressed.directory_hash = 0x055583E3u;
+    compressed.path = "textures\\armor\\main.dds";
+    compressed.texture = {16, 16, 5, 98, 0, 8};
+    const auto payload = repeated(4096, 0xAB);
+    auto chunk = fo4::archive::make_compressed_ba2_texture_chunk(payload);
+    chunk.mip_first = 0;
+    chunk.mip_last = 2;
+    compressed.chunks.push_back(std::move(chunk));
 
-  archive.entries.push_back(std::move(stored));
-  archive.entries.push_back(std::move(compressed));
+    archive.entries.push_back(std::move(stored));
+    archive.entries.push_back(std::move(compressed));
 
-  const auto serialized = fo4::archive::write_ba2_texture(archive);
+    const auto serialized = fo4::archive::write_ba2_texture(archive);
 
-  const auto read = fo4::archive::read_ba2_texture(serialized);
-  EXPECT_EQ(read.version, 8u);
-  EXPECT_TRUE(read.has_string_table);
-  ASSERT_EQ(read.entries.size(), 2u);
+    const auto read = fo4::archive::read_ba2_texture(serialized);
+    EXPECT_EQ(read.version, version);
+    EXPECT_TRUE(read.has_string_table);
+    ASSERT_EQ(read.entries.size(), 2u);
 
-  EXPECT_EQ(read.entries[0].path, "textures\\armor\\leather.dds");
-  EXPECT_EQ(read.entries[0].name_hash, 0xB465C424u);
-  EXPECT_EQ(read.entries[0].texture.height, 64u);
-  EXPECT_EQ(read.entries[0].texture.width, 256u);
-  EXPECT_EQ(read.entries[0].texture.mip_count, 9u);
-  EXPECT_EQ(read.entries[0].texture.dxgi_format, 71u);
-  EXPECT_EQ(read.entries[0].texture.tile_mode, 8u);
-  ASSERT_EQ(read.entries[0].chunks.size(), 1u);
-  EXPECT_FALSE(read.entries[0].chunks[0].compressed);
-  EXPECT_EQ(read.entries[0].chunks[0].data, bytes_of("stored-data"));
+    EXPECT_EQ(read.entries[0].path, "textures\\armor\\leather.dds");
+    EXPECT_EQ(read.entries[0].name_hash, 0xB465C424u);
+    EXPECT_EQ(read.entries[0].texture.height, 64u);
+    EXPECT_EQ(read.entries[0].texture.width, 256u);
+    EXPECT_EQ(read.entries[0].texture.mip_count, 9u);
+    EXPECT_EQ(read.entries[0].texture.dxgi_format, 71u);
+    EXPECT_EQ(read.entries[0].texture.tile_mode, 8u);
+    ASSERT_EQ(read.entries[0].chunks.size(), 1u);
+    EXPECT_FALSE(read.entries[0].chunks[0].compressed);
+    EXPECT_EQ(read.entries[0].chunks[0].data, bytes_of("stored-data"));
 
-  ASSERT_EQ(read.entries[1].chunks.size(), 1u);
-  EXPECT_TRUE(read.entries[1].chunks[0].compressed);
-  EXPECT_EQ(read.entries[1].chunks[0].mip_first, 0u);
-  EXPECT_EQ(read.entries[1].chunks[0].mip_last, 2u);
-  EXPECT_EQ(read.entries[1].chunks[0].decompressed_size, 4096u);
+    ASSERT_EQ(read.entries[1].chunks.size(), 1u);
+    EXPECT_TRUE(read.entries[1].chunks[0].compressed);
+    EXPECT_EQ(read.entries[1].chunks[0].mip_first, 0u);
+    EXPECT_EQ(read.entries[1].chunks[0].mip_last, 2u);
+    EXPECT_EQ(read.entries[1].chunks[0].decompressed_size, 4096u);
+  }
+}
+
+TEST(Ba2Texture, CubemapFlagSurvivesRebuildAndMarksDdsHeader) {
+  for (const std::uint32_t version : {1u, 7u, 8u}) {
+    SCOPED_TRACE(version);
+    Ba2TextureArchive archive;
+    archive.version = version;
+
+    Ba2TextureEntry cube;
+    cube.name_hash = 0xB465C424u;
+    cube.extension_hash = 0x00736464u;
+    cube.directory_hash = 0x055583E3u;
+    cube.path = "textures\\armor\\sky.dds";
+    cube.texture = {4, 4, 1, 98, 0x1, 8};
+    const auto payload = repeated(48, 0x5A);
+    cube.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
+    archive.entries.push_back(std::move(cube));
+
+    const auto read = fo4::archive::read_ba2_texture(fo4::archive::write_ba2_texture(archive));
+    ASSERT_EQ(read.entries.size(), 1u);
+    EXPECT_EQ(read.entries[0].texture.flags & 0x1u, 0x1u);
+
+    const auto extracted = fo4::archive::extract_ba2_texture_entry(read.entries[0]);
+    ASSERT_EQ(extracted.size(), 148u + payload.size());
+    EXPECT_EQ(read_u32(extracted, 112), 0xFE00u);
+    EXPECT_EQ(read_u32(extracted, 136), 0x4u);
+    EXPECT_EQ(std::vector<std::byte>(extracted.begin() + 148, extracted.end()), payload);
+
+    const auto reread = fo4::archive::read_ba2_texture(fo4::archive::write_ba2_texture(read));
+    ASSERT_EQ(reread.entries.size(), 1u);
+    EXPECT_EQ(reread.entries[0].texture.flags, read.entries[0].texture.flags);
+    EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(reread.entries[0]), extracted);
+  }
 }
 
 TEST(Ba2Texture, ExtractConcatenatesNonTextureChunks) {
@@ -131,7 +167,7 @@ TEST(Ba2Texture, ExtractConcatenatesNonTextureChunks) {
 TEST(Ba2Texture, ExtractRebuildsDdsHeaderFromDx10Metadata) {
   Ba2TextureEntry entry;
   entry.path = "textures\\x.dds";
-  entry.texture = {4, 4, 1, 71, 0, 8};
+  entry.texture = {4, 4, 1, 98, 0, 8};
   const auto payload = repeated(8, 0x5A);
   entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
 
@@ -143,8 +179,103 @@ TEST(Ba2Texture, ExtractRebuildsDdsHeaderFromDx10Metadata) {
   EXPECT_EQ(read_u32(extracted, 16), 4u);
   EXPECT_EQ(read_u32(extracted, 28), 1u);
   EXPECT_EQ(read_u32(extracted, 84), 0x30315844u);
-  EXPECT_EQ(read_u32(extracted, 128), 71u);
+  EXPECT_EQ(read_u32(extracted, 128), 98u);
   EXPECT_EQ(std::vector<std::byte>(extracted.begin() + 148, extracted.end()), payload);
+}
+
+TEST(Ba2Texture, ExtractUsesXEditLinearSizeForBc7NonMultipleOf4) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {10, 6, 1, 98, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 148u + 8u);
+  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
+  EXPECT_EQ(read_u32(extracted, 20), 60u);
+}
+
+TEST(Ba2Texture, ExtractUsesXEditHalfAreaForBc1Srgb) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {10, 6, 1, 72, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 148u + 8u);
+  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
+  EXPECT_EQ(read_u32(extracted, 20), 30u);
+}
+
+TEST(Ba2Texture, ExtractUsesBitsPerPixelForUnlistedDx10Format) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {10, 6, 1, 10, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 148u + 8u);
+  EXPECT_EQ(read_u32(extracted, 8), 0x2100Fu);
+  EXPECT_EQ(read_u32(extracted, 20), 48u);
+  EXPECT_EQ(read_u32(extracted, 128), 10u);
+}
+
+TEST(Ba2Texture, ExtractWritesClassicDdsHeaderForBc1) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {4, 8, 1, 71, 0, 8};
+  const auto payload = repeated(8, 0x5A);
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 128u + payload.size());
+  EXPECT_EQ(read_u32(extracted, 8), 0xA1007u);
+  EXPECT_EQ(read_u32(extracted, 20), 16u);
+  EXPECT_EQ(read_u32(extracted, 76), 32u);
+  EXPECT_EQ(read_u32(extracted, 80), 0x4u);
+  EXPECT_EQ(read_u32(extracted, 84), 0x31545844u);
+  EXPECT_EQ(read_u32(extracted, 108), 0x1000u);
+  EXPECT_EQ(std::vector<std::byte>(extracted.begin() + 128, extracted.end()), payload);
+}
+
+TEST(Ba2Texture, ExtractWritesDxt5FourCcForBc3) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {4, 8, 1, 77, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 128u + 8u);
+  EXPECT_EQ(read_u32(extracted, 20), 32u);
+  EXPECT_EQ(read_u32(extracted, 84), 0x35545844u);
+}
+
+TEST(Ba2Texture, ExtractWritesBgraPixelMasksForUncompressedDx9) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.dds";
+  entry.texture = {4, 8, 1, 87, 0, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 128u + 8u);
+  EXPECT_EQ(read_u32(extracted, 8), 0x2100Fu);
+  EXPECT_EQ(read_u32(extracted, 20), 32u);
+  EXPECT_EQ(read_u32(extracted, 80), 0x41u);
+  EXPECT_EQ(read_u32(extracted, 88), 32u);
+  EXPECT_EQ(read_u32(extracted, 92), 0xFF0000u);
+  EXPECT_EQ(read_u32(extracted, 104), 0xFF000000u);
+}
+
+TEST(Ba2Texture, ExtractMarksSingleMipDx9CubemapWithComplex) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\sky.dds";
+  entry.texture = {4, 4, 1, 71, 0x1, 8};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(repeated(8, 0x5A)));
+
+  const auto extracted = fo4::archive::extract_ba2_texture_entry(entry);
+  ASSERT_EQ(extracted.size(), 128u + 8u);
+  EXPECT_EQ(read_u32(extracted, 108), 0x1008u);
+  EXPECT_EQ(read_u32(extracted, 112), 0xFE00u);
 }
 
 TEST(Ba2Texture, ExtractLeavesAlreadyCompleteDdsPayloadAlone) {
@@ -156,6 +287,16 @@ TEST(Ba2Texture, ExtractLeavesAlreadyCompleteDdsPayloadAlone) {
   payload[1] = std::byte{'D'};
   payload[2] = std::byte{'S'};
   payload[3] = std::byte{' '};
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
+
+  EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(entry), payload);
+}
+
+TEST(Ba2Texture, ExtractReturnsNonDdsPayloadUnchanged) {
+  Ba2TextureEntry entry;
+  entry.path = "textures\\x.bin";
+  entry.texture = {4, 4, 1, 98, 0, 8};
+  const auto payload = repeated(8, 0x5A);
   entry.chunks.push_back(fo4::archive::make_stored_ba2_texture_chunk(payload));
 
   EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(entry), payload);

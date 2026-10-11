@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "fo4/schema/ctda.hpp"
 #include "fo4/schema/localized_fields.hpp"
 
@@ -248,6 +249,7 @@ struct QuestStages {
 };
 
 QuestStages decode_quest_stages(const Plugin& plugin, const FormKey& quest);
+QuestStages decode_quest_stages(const RecordIndex& index, const FormKey& quest);
 
 bool lossless_quest_log_entry_conditions(std::span<const Subrecord> members,
                                          std::vector<CtdaCondition>& conditions,
@@ -260,7 +262,7 @@ bool lossless_quest_log_entry_conditions(std::span<const Subrecord> members,
  *   QOBJ (u16 objective index)
  *     FNAM (u32 objective flags)    -- exactly one per objective
  *     NNAM (display text, localized) -- exactly one; 4 bytes in all 1,198
- *     QSTA (12 bytes)               -- one target; 0..19 of them
+ *     QSTA (12 bytes; 8 before form version 82) -- one target; 0..19 of them
  *       CTDA / CIS1 / CIS2 per-target conditions
  */
 struct QuestObjectiveTarget {
@@ -269,6 +271,7 @@ struct QuestObjectiveTarget {
   std::int32_t alias{0};
   std::uint32_t flags{0};
   std::optional<FormKey> keyword;
+  bool keyword_unresolved{false};
   // Per-target conditions and anything unmodelled, kept in order.
   std::vector<Subrecord> subrecords;
 };
@@ -286,6 +289,7 @@ struct QuestObjectives {
 };
 
 QuestObjectives decode_quest_objectives(const Plugin& plugin, const FormKey& quest);
+QuestObjectives decode_quest_objectives(const RecordIndex& index, const FormKey& quest);
 
 /*
  * Authoring.
@@ -332,6 +336,7 @@ QuestAlias encode_quest_alias(const QuestAliasCreation& creation);
 QuestAlias encode_quest_alias(const Plugin& plugin,
                               const QuestAliasCreation& creation);
 QuestAliases decode_quest_aliases(const Plugin& plugin, const FormKey& key);
+QuestAliases decode_quest_aliases(const RecordIndex& index, const FormKey& key);
 
 void sync_quest_vmad_aliases(Record& record,
                              const QuestAliases& previous,

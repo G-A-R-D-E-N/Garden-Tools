@@ -39,7 +39,7 @@ std::string subrecordValue(const fo4::Subrecord& subrecord) {
         const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
         const auto* end = begin + subrecord.data.size();
         const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
+        return fo4::text::windows1252_to_utf8(std::string(begin, nul));
     }
     if (subrecord.data.empty()) return "<empty>";
 

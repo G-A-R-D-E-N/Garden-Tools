@@ -40,11 +40,12 @@ TEST(QuestObjectivesRealData, DecodesEveryShippedQuest) {
     if (!std::filesystem::exists(path)) continue;
     ++files;
     const auto plugin = fo4::read_plugin_file(path);
+    const fo4::RecordIndex index{plugin};
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != k_qust) continue;
       const auto expected = objective_markers(*record);
       try {
-        const auto decoded = fo4::forms::decode_quest_objectives(plugin, record->form_key);
+        const auto decoded = fo4::forms::decode_quest_objectives(index, record->form_key);
         if (decoded.objectives.size() != expected) {
           failures.push_back(std::string{name} + " " + record->form_key.to_string() +
                              ": decoded " + std::to_string(decoded.objectives.size()) +

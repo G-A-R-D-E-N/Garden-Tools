@@ -1,4 +1,4 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -20,11 +20,11 @@
 #include <fo4/plugin/writer.hpp>
 #include <fo4/schema/form_links.hpp>
 #include <fo4/signature.hpp>
-#include <fo4/text/encoding.hpp>
-
-#include "RadiclePluginSupport.hpp"
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 constexpr std::uint32_t kInitiallyDisabled = 0x00000800u;
@@ -55,17 +55,6 @@ std::string maintenanceLower(std::string_view value) {
         return static_cast<char>(std::tolower(ch));
     });
     return out;
-}
-
-std::string recordEditorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return fo4::text::windows1252_to_utf8(std::string(begin, nul));
-    }
-    return {};
 }
 
 const fo4::Record* topLevelRecord(const fo4::Plugin& plugin, const fo4::FormKey& key) {
@@ -156,7 +145,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             if (!keyResolved) {
                 const auto wanted = maintenanceLower(recordId);
                 fo4::visit_records(source->plugin, [&](const fo4::Record& record) {
-                    if (!keyResolved && maintenanceLower(recordEditorId(record)) == wanted) {
+                    if (!keyResolved && maintenanceLower(editorId(record)) == wanted) {
                         sourceKey = record.form_key;
                         keyResolved = true;
                     }
@@ -173,7 +162,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 const auto wanted = maintenanceLower(recordId);
                 for (auto it = plugins_.rbegin(); it != plugins_.rend() && source == nullptr; ++it) {
                     fo4::visit_records(it->plugin, [&](const fo4::Record& record) {
-                        if (source == nullptr && maintenanceLower(recordEditorId(record)) == wanted) {
+                        if (source == nullptr && maintenanceLower(editorId(record)) == wanted) {
                             source = &*it;
                             sourceKey = record.form_key;
                             keyResolved = true;
@@ -249,7 +238,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
 
                 auto* allocated = mutableRecord(mutated, newKey);
                 const auto originalEditorId =
-                    allocated != nullptr ? recordEditorId(*allocated) : std::string{};
+                    allocated != nullptr ? editorId(*allocated) : std::string{};
                 const auto newEditorId = !requestedEditorId.empty()
                     ? requestedEditorId
                     : (originalEditorId.empty() ? std::string{} : originalEditorId + "DUP");
@@ -316,7 +305,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             }
             *allocated = std::move(copied);
 
-            const auto originalEditorId = recordEditorId(*allocated);
+            const auto originalEditorId = editorId(*allocated);
             const auto newEditorId = !requestedEditorId.empty()
                 ? requestedEditorId
                 : (originalEditorId.empty() ? std::string{} : originalEditorId + "DUP");
@@ -432,7 +421,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 const auto* record = fo4::find_record(loaded->plugin, item.key);
                 identical.push_back({
                     .key = item.key,
-                    .editorId = record == nullptr ? std::string{} : recordEditorId(*record),
+                    .editorId = record == nullptr ? std::string{} : editorId(*record),
                     .type = item.signature.to_string(),
                     .previousPlugin = std::string(item.previous.filename()),
                 });

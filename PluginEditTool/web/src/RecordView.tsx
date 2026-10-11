@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Link2, AlertTriangle, Crown, Clock, Network, HelpCircle,
 } from 'lucide-react';
@@ -96,6 +96,8 @@ export default function RecordView(
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
 
   const [scanErrors, setScanErrors] = useState<Record<string, string>>({});
+  const loadSeq = useRef(0);
+  const menuSeq = useRef(0);
 
   const [anchors, setAnchors] = useState<[string, string] | null>(null);
   const [compareOnly, setCompareOnly] = useState(false);
@@ -133,18 +135,21 @@ export default function RecordView(
   useEffect(() => {
     const b = back();
     if (!b) return;
+    const mine = ++loadSeq.current;
+    const live = () => mine === loadSeq.current;
     (async () => {
 
-      const fail = (k: string, e: unknown) =>
-        setScanErrors(prev => ({ ...prev, [k]: e instanceof Error ? e.message : String(e) }));
-      try { setProblems(JSON.parse(await b.GetProblems(matrix.FormKey))); }
-      catch (e) { setProblems([]); fail('problems', e); }
-      try { setRefBy(JSON.parse(await b.GetReferencedBy(matrix.FormKey))); }
-      catch (e) { setRefBy([]); fail('refBy', e); }
-      try { setDeps(JSON.parse(await b.GetDependencies(matrix.FormKey))); }
-      catch (e) { setDeps([]); fail('deps', e); }
-      try { setHistory(JSON.parse(await b.GetHistory(matrix.FormKey))); }
-      catch (e) { setHistory([]); fail('history', e); }
+      const fail = (k: string, e: unknown) => {
+        if (live()) setScanErrors(prev => ({ ...prev, [k]: e instanceof Error ? e.message : String(e) }));
+      };
+      try { const raw = await b.GetProblems(matrix.FormKey); if (live()) setProblems(JSON.parse(raw)); }
+      catch (e) { if (live()) setProblems([]); fail('problems', e); }
+      try { const raw = await b.GetReferencedBy(matrix.FormKey); if (live()) setRefBy(JSON.parse(raw)); }
+      catch (e) { if (live()) setRefBy([]); fail('refBy', e); }
+      try { const raw = await b.GetDependencies(matrix.FormKey); if (live()) setDeps(JSON.parse(raw)); }
+      catch (e) { if (live()) setDeps([]); fail('deps', e); }
+      try { const raw = await b.GetHistory(matrix.FormKey); if (live()) setHistory(JSON.parse(raw)); }
+      catch (e) { if (live()) setHistory([]); fail('history', e); }
     })();
   }, [matrix.FormKey]);
 
@@ -244,14 +249,18 @@ export default function RecordView(
     if (!menu) return;
     const b = back();
     if (!b) return;
-    let cancelled = false;
-    b.GetEditablePlugins().then(json => { if (!cancelled) setEditablePlugins(JSON.parse(json)); })
-      .catch(() => { if (!cancelled) setEditablePlugins([]); });
-    b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field)
-      .then(json => { if (!cancelled) setElementActions(JSON.parse(json)); })
-      .catch(() => { if (!cancelled) setElementActions(null); });
-    return () => { cancelled = true; };
-  }, [menu, matrix.FormKey, matrix.Plugins]);
+    const mine = ++menuSeq.current;
+    const live = () => mine === menuSeq.current;
+    (async () => {
+      try { const raw = await b.GetEditablePlugins(); if (live()) setEditablePlugins(JSON.parse(raw)); }
+      catch { if (live()) setEditablePlugins([]); }
+      try {
+        const raw = await b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field);
+        if (live()) setElementActions(JSON.parse(raw));
+      } catch { if (live()) setElementActions(null); }
+    })();
+
+  }, [menu]);
 
   const actions = useRecordActions({
     matrix, editablePlugins, closeMenu: () => setMenu(null), setStatus, onReload, onPluginsChanged,

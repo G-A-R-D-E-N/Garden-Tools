@@ -148,7 +148,10 @@ TEST(FormLink, StructuredPayloadMalformedFailsClosedWithoutMutation) {
   for (const auto& [sig, sub, size] :
        {std::tuple{"EXPL", "DATA", std::size_t{20}},
         std::tuple{"PROJ", "DNAM", std::size_t{92}},
-        std::tuple{"HAZD", "DNAM", std::size_t{48}}}) {
+        std::tuple{"HAZD", "DNAM", std::size_t{48}},
+        std::tuple{"ACTI", "PRPS", std::size_t{20}},
+        std::tuple{"ACTI", "DAMC", std::size_t{20}},
+        std::tuple{"ARMO", "DAMA", std::size_t{20}}}) {
     SCOPED_TRACE(sig);
     std::vector<std::byte> malformed(size, std::byte{0x11});
     auto out = plugin_header();
@@ -239,4 +242,91 @@ TEST(FormLink, PackedArrayCollectionPreservesDocumentOrder) {
   EXPECT_EQ(links[1].offset, 0);
   EXPECT_EQ(links[2].offset, 4);
   EXPECT_EQ(links[3].record, fo4::FormKey::parse("000801:Patch.esp"));
+}
+
+TEST(FormLink, FixedStrideStructArraysRemapFormIdsAndKeepValues) {
+  auto out = plugin_header(2);
+  const auto group = fo4::test::begin_group(out, "ACTI", 0);
+  const auto record = fo4::test::begin_record(out, "ACTI", 0, 0x03000800);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Record\0", 7});
+  fo4::test::ByteWriter prps;
+  prps.u32(0x02000042);
+  prps.f32(1.5f);
+  prps.u32(0x00000099);
+  prps.f32(-2.25f);
+  fo4::test::write_subrecord(out, "PRPS", prps.bytes);
+  fo4::test::ByteWriter damc;
+  damc.u32(0x02000043);
+  damc.u32(0x02000044);
+  damc.u32(0x00000099);
+  damc.u32(7);
+  fo4::test::write_subrecord(out, "DAMC", damc.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  append_record(out, "ARMO", 0x03000801, "DAMA", words({0x02000045, 3, 0x00000099, 4}));
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* acti = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(acti, nullptr);
+  const auto* prps_after = find_sub(*acti, "PRPS");
+  const auto* damc_after = find_sub(*acti, "DAMC");
+  ASSERT_NE(prps_after, nullptr);
+  ASSERT_NE(damc_after, nullptr);
+  fo4::test::ByteWriter prps_expected;
+  prps_expected.u32(0x00000042);
+  prps_expected.f32(1.5f);
+  prps_expected.u32(0x01000099);
+  prps_expected.f32(-2.25f);
+  EXPECT_EQ(prps_after->data, prps_expected.bytes);
+  fo4::test::ByteWriter damc_expected;
+  damc_expected.u32(0x00000043);
+  damc_expected.u32(0x02000044);
+  damc_expected.u32(0x01000099);
+  damc_expected.u32(7);
+  EXPECT_EQ(damc_after->data, damc_expected.bytes);
+  const auto* armo = fo4::find_record(reread, fo4::FormKey::parse("000801:Patch.esp"));
+  ASSERT_NE(armo, nullptr);
+  ASSERT_NE(find_sub(*armo, "DAMA"), nullptr);
+  EXPECT_EQ(find_sub(*armo, "DAMA")->data, words({0x00000045, 3, 0x01000099, 4}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 6);
+  EXPECT_EQ(links[0].subrecord.to_string(), "PRPS");
+  EXPECT_EQ(links[0].offset, 0);
+  EXPECT_EQ(links[1].offset, 8);
+  EXPECT_EQ(links[2].subrecord.to_string(), "DAMC");
+  EXPECT_EQ(links[2].offset, 0);
+  EXPECT_EQ(links[3].offset, 8);
+  EXPECT_EQ(links[4].subrecord.to_string(), "DAMA");
+  EXPECT_EQ(links[4].record, fo4::FormKey::parse("000801:Patch.esp"));
+  EXPECT_EQ(links[5].offset, 8);
+}
+
+TEST(FormLink, DamaCurveTableElementsRemapAtFormVersion152) {
+  auto out = plugin_header(1);
+  const auto group = fo4::test::begin_group(out, "ARMO", 0);
+  const auto record = fo4::test::begin_record(out, "ARMO", 0, 0x03000800, 152);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Record\0", 7});
+  fo4::test::write_subrecord(out, "DAMA",
+                             words({0x02000045, 0x02000044, 0x02000046, 0x00000099, 4, 0x00000047}));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* armo = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(armo, nullptr);
+  ASSERT_NE(find_sub(*armo, "DAMA"), nullptr);
+  EXPECT_EQ(find_sub(*armo, "DAMA")->data,
+            words({0x00000045, 0x02000044, 0x00000046, 0x01000099, 4, 0x01000047}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 4);
+  EXPECT_EQ(links[0].offset, 0);
+  EXPECT_EQ(links[1].offset, 8);
+  EXPECT_EQ(links[2].offset, 12);
+  EXPECT_EQ(links[3].offset, 20);
 }

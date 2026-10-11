@@ -18,6 +18,7 @@
 
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin::support {
 

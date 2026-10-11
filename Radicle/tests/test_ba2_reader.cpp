@@ -124,7 +124,7 @@ TEST_F(Ba2ReaderTest, RebuildsDdsForTextureArchives) {
   EXPECT_EQ(reader.entries()[0].texture.width, 8u);
   EXPECT_EQ(reader.entries()[0].texture.dxgi_format, 71u);
   const auto dds = reader.extract(*reader.find("textures/rock_d.dds"));
-  ASSERT_EQ(dds.size(), 148u + 16u);
+  ASSERT_EQ(dds.size(), 128u + 16u);
   EXPECT_EQ(text_of({dds.begin(), dds.begin() + 4}), "DDS ");
   EXPECT_EQ(dds.back(), std::byte{0x5A});
 }

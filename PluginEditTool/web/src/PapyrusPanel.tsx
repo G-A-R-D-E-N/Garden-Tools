@@ -8,6 +8,7 @@ import {
   XCircle, Stethoscope, Save, ListTree, Crosshair,
 } from 'lucide-react';
 import { getPapyrus, type PapyrusAnalyzeResult, type PapyrusSymbolResult } from './backend';
+import { useDialogs } from './useDialogs';
 import './PapyrusPanel.css';
 
 type Mode = 'decompile' | 'compile' | 'lookup' | 'analyze';
@@ -64,6 +65,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
 
   const papyrus = getPapyrus();
   const unavailable = !papyrus;
+  const { confirm: askConfirm } = useDialogs();
 
 
   useEffect(() => setLS('mode', mode), [mode]);
@@ -99,11 +101,15 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   const loadIntoEditor = useCallback(async (path: string) => {
     if (!papyrus || !path.trim()) return;
     if (!/\.psc$/i.test(path.trim())) { appendLog('✗ analyze -- needs a .psc (this reads source, not compiled .pex)'); return; }
+    if (dirty && !await askConfirm({
+      title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
+      message: `Opening ${baseName(path)} replaces the buffer and discards unsaved edits to ${bufferPath ? baseName(bufferPath) : 'the untitled buffer'}.`,
+    })) return;
     const text = await papyrus.ReadScript(path.trim());
     if (text.startsWith('ERR:')) { appendLog('✗ open -- ' + text.slice(4)); return; }
     setBuffer(text); setBufferPath(path.trim()); setDirty(false); setSymbolInfo(null);
     appendLog('• opened ' + baseName(path));
-  }, [papyrus]);
+  }, [papyrus, dirty, bufferPath, askConfirm]);
 
 
 
@@ -179,30 +185,37 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
   };
 
 
-  const resolveAtCaret = async () => {
+  const resolveAtCaret = async (): Promise<PapyrusSymbolResult | null> => {
     const el = editorRef.current;
-    if (!papyrus || !el) return;
+    if (!papyrus || !el) return null;
+    let symbol: PapyrusSymbolResult;
     try {
       const json = await papyrus.SymbolAt(buffer, bufferPath, el.selectionStart, imports);
-      setSymbolInfo(JSON.parse(json) as PapyrusSymbolResult);
+      symbol = JSON.parse(json) as PapyrusSymbolResult;
     } catch (e) {
-      setSymbolInfo({ resolved: false, error: e instanceof Error ? e.message : String(e) });
+      symbol = { resolved: false, error: e instanceof Error ? e.message : String(e) };
     }
+    setSymbolInfo(symbol);
+    return symbol;
   };
 
-  const goToDefinition = async () => {
-    if (!symbolInfo?.resolved) return;
-    if (symbolInfo.sameFile) { revealRange(symbolInfo.start ?? 0, symbolInfo.length ?? 0); return; }
-    if (!symbolInfo.file) return;
+  const goToDefinition = async (symbol: PapyrusSymbolResult | null) => {
+    if (!symbol?.resolved) return;
+    if (symbol.sameFile) { revealRange(symbol.start ?? 0, symbol.length ?? 0); return; }
+    if (!symbol.file) return;
 
 
     if (!papyrus) return;
-    const text = await papyrus.ReadScript(symbolInfo.file);
+    if (dirty && !await askConfirm({
+      title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
+      message: `Opening ${baseName(symbol.file)} replaces the buffer and discards unsaved edits.`,
+    })) return;
+    const text = await papyrus.ReadScript(symbol.file);
     if (text.startsWith('ERR:')) { appendLog('✗ open -- ' + text.slice(4)); return; }
-    setBuffer(text); setBufferPath(symbolInfo.file); setDirty(false); setSource(symbolInfo.file);
-    appendLog('• followed ' + symbolInfo.name + ' -> ' + baseName(symbolInfo.file));
-    const start = symbolInfo.start ?? 0;
-    const length = symbolInfo.length ?? 0;
+    setBuffer(text); setBufferPath(symbol.file); setDirty(false); setSource(symbol.file);
+    appendLog('• followed ' + symbol.name + ' -> ' + baseName(symbol.file));
+    const start = symbol.start ?? 0;
+    const length = symbol.length ?? 0;
 
     setTimeout(() => {
       const el = editorRef.current;
@@ -291,10 +304,18 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
 
   const openOut = async () => { if (papyrus && lastOutDir) await papyrus.OpenFolder(lastOutDir); };
 
+  const requestClose = async () => {
+    if (dirty && !await askConfirm({
+      title: 'Discard unsaved edits?', danger: true, confirmLabel: 'Discard',
+      message: `${bufferPath ? baseName(bufferPath) : 'The untitled buffer'} has unsaved changes. Closing the panel discards them.`,
+    })) return;
+    onClose();
+  };
+
   const banner = result ? (mode === 'lookup' ? makeLookupBanner(result) : makeBanner(result, mode)) : null;
 
   return (
-    <div className="papyrus-overlay" onClick={onClose}>
+    <div className="papyrus-overlay" onClick={requestClose}>
       <div className="papyrus-modal glass-panel" onClick={e => e.stopPropagation()}>
         <div className="papyrus-header">
           <span className="papyrus-title"><ScrollText size={16} /> Papyrus</span>
@@ -304,7 +325,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
             <button className={`papyrus-mode ${mode === 'lookup' ? 'active' : ''}`} onClick={() => setMode('lookup')}><BookOpen size={14} /> Wiki Lookup</button>
             <button className={`papyrus-mode ${mode === 'analyze' ? 'active' : ''}`} onClick={() => setMode('analyze')}><Stethoscope size={14} /> Analyze</button>
           </div>
-          <button className="papyrus-close" onClick={onClose} title="Close"><X size={16} /></button>
+          <button className="papyrus-close" onClick={requestClose} title="Close"><X size={16} /></button>
         </div>
 
         {unavailable && <div className="papyrus-warn">Papyrus bridge not available -- run the desktop app (not the browser dev server).</div>}
@@ -504,7 +525,7 @@ export default function PapyrusPanel({ onClose }: { onClose: () => void }) {
                       <span className="papyrus-symbol-sig">{symbolInfo.signature}</span>
                       {symbolInfo.container && <span className="papyrus-symbol-in">in {symbolInfo.container}</span>}
                       {symbolInfo.documentation && <span className="papyrus-symbol-doc">{symbolInfo.documentation.trim()}</span>}
-                      <button className="papyrus-copy" onClick={goToDefinition}>
+                      <button className="papyrus-copy" onClick={() => void goToDefinition(symbolInfo)}>
                         {symbolInfo.sameFile ? 'Go to definition' : `Open ${baseName(symbolInfo.file || '')}`}
                       </button>
                     </>
