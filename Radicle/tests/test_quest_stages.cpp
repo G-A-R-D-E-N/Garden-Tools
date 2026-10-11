@@ -190,7 +190,7 @@ TEST(QuestStages, LosslessLogEntryConditionsRoundTripCtdaAndCis) {
   EXPECT_FALSE(fo4::forms::lossless_quest_log_entry_conditions(bad, decoded, consumed));
 }
 
-TEST(QuestStages, LosslessLogEntryConditionsRetainOpaquePrefixBytes) {
+TEST(QuestStages, LosslessLogEntryConditionsRetainPaddingBytes) {
   fo4::CtdaCondition condition;
   condition.function = 74;
   auto members = fo4::serialize_ctda_run(std::span<const fo4::CtdaCondition>(&condition, 1));
