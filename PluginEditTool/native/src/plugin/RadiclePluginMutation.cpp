@@ -13,6 +13,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "RadiclePluginSupport.hpp"
+
 #include <fo4ide/plugin/ConditionCodec.hpp>
 #include <fo4/forms/eyes.hpp>
 #include <fo4/forms/leveled_spell.hpp>
@@ -23,6 +25,9 @@
 #include <fo4/schema/ctda.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
@@ -135,21 +140,6 @@ bool isLvspField(std::string_view field) {
 bool isEyesField(std::string_view field) {
     return field == "EYES\\Full" || field == "EYES\\Icon" ||
            field == "EYES\\DataFlags";
-}
-
-std::string editorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        std::string out;
-        out.reserve(subrecord.data.size());
-        for (const auto byte : subrecord.data) {
-            const auto ch = static_cast<char>(std::to_integer<std::uint8_t>(byte));
-            if (ch == '\0') break;
-            out.push_back(ch);
-        }
-        return out;
-    }
-    return {};
 }
 
 }

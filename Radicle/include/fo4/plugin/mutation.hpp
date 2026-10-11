@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -77,6 +78,11 @@ enum class RecordRenumberStatus {
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 bool allows_hardcoded_range(const Plugin& plugin);
 
+// Writes the HEDR next object ID verbatim, including lowering it; callers own the range policy.
+void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id);
+
+std::optional<std::uint32_t> lowered_light_next_form_id(const Plugin& plugin);
+
 // Advances HEDR nextFormID and returns the reserved local key; creates no record.
 FormKey reserve_local_form_key(Plugin& plugin);
 
@@ -86,14 +92,21 @@ FormKey create_local_record(Plugin& plugin,
                             Signature signature,
                             std::vector<Subrecord> subrecords);
 
-// Refuses deletion when any schema-proven in-plugin FormLink still targets the
-// record. Unsupported remap surfaces fail closed before mutation. nextFormID
-// is never decremented or recycled.
+// Deletes the record with its owned child GRUP. Refuses deletion when any
+// schema-proven in-plugin FormLink still targets the record or a record inside
+// that GRUP from outside it. Unsupported remap surfaces fail closed before
+// mutation. next form ID is never decremented or recycled.
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key);
+std::vector<FormKey> records_removed_by_delete(const Plugin& plugin, const FormKey& record_key);
+
+bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& record_key);
 
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);
+
+std::string stored_editor_id(std::string_view editor_id);
+std::string stored_inline_text(std::string_view text, std::string_view field);
 
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,

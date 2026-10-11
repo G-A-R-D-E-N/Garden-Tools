@@ -92,6 +92,33 @@ public class WriteToolsTests
     }
 
     [Fact]
+    public void SetConditions_GetEventDataIsFunction576AndReadsAsFunctionData()
+    {
+        var name = $"WriteToolsEvent_{Guid.NewGuid():N}.esp";
+        WriteService.CreatePlugin(name);
+        WriteService.CreateRecord(name, "COBJ", "FWTest_Event", env: null);
+        WriteService.SetConditions(name, "FWTest_Event",
+            """[{"function":"GetEventData","operator":"==","value":1,"runOn":"Subject"}]""", env: null)
+            .Should().Contain("Set 1 condition(s)");
+
+        var path = Path.Combine(Path.GetTempPath(), name);
+        WriteService.SavePlugin(name, path, null).Should().Contain("Saved");
+
+        try
+        {
+            var payload = ReadSingleCtdaPayload(path);
+            BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(8, 2)).Should().Be(576);
+
+            var mod = Fallout4Mod.CreateFromBinary(ModPath.FromPath(path), Fallout4Release.Fallout4);
+            var cobj = mod.ConstructibleObjects.Single();
+            var condition = (ConditionFloat)cobj.Conditions[0];
+            condition.Data.Should().BeOfType<FunctionConditionData>();
+            ((FunctionConditionData)condition.Data).Function.Should().Be(Condition.Function.GetEventData);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
     public void GetRecord_RendersConditionsAndComponentsAsReadableLines()
     {
         var name = $"WriteToolsRead_{Guid.NewGuid():N}.esp";

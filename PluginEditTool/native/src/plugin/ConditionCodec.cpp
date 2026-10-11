@@ -7,10 +7,11 @@
 #include <cctype>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
-#include <sstream>
 #include <limits>
+#include <sstream>
 
 namespace fo4ide::plugin {
 namespace {
@@ -40,13 +41,6 @@ std::string formIdString(std::uint32_t raw, const fo4::Plugin& plugin) {
     return out.str();
 }
 
-nlohmann::json paramJson(std::int32_t raw, bool isFloat, const fo4::Plugin& plugin) {
-    if (!isFloat) return formIdString(static_cast<std::uint32_t>(raw), plugin);
-    float value = 0.0f;
-    std::memcpy(&value, &raw, sizeof(value));
-    return value;
-}
-
 std::optional<fo4::RawFormId> placeholderFormId(std::string_view text) {
     if (text.size() != 9 || text[8] != ':') return std::nullopt;
     std::uint32_t raw = 0;
@@ -57,6 +51,7 @@ std::optional<fo4::RawFormId> placeholderFormId(std::string_view text) {
 
 constexpr std::int64_t kParamMin = std::numeric_limits<std::int32_t>::min();
 constexpr std::int64_t kParamMax = std::numeric_limits<std::uint32_t>::max();
+constexpr std::uint32_t kRunOnReference = 2;
 
 std::optional<std::uint32_t> flagValue(std::string_view name) {
     const auto needle = lower(name);
@@ -72,11 +67,62 @@ std::optional<std::uint32_t> flagValue(std::string_view name) {
     return std::nullopt;
 }
 
-constexpr std::uint32_t kRunOnReference = 2;
+enum class ParamKind { Form, Integer, Float };
 
-bool isFloatParam(std::string_view function, std::size_t index) {
-    const auto params = ConditionFunctions::paramsOf(function);
-    return index < params.size() && lower(params[index]) == "float";
+ParamKind paramKind(const std::string& name, std::size_t slot, std::uint8_t ctdaFlags,
+                    std::uint32_t runOn) {
+    if (name.empty()) return ParamKind::Form;
+    const auto declared = ConditionFunctions::paramsOf(name);
+    if (slot >= declared.size()) return ParamKind::Integer;
+    const auto type = lower(declared[slot]);
+    if (type == "float") return ParamKind::Float;
+    if (type == "reference" || type == "actor" || type == "package") {
+        if ((ctdaFlags & fo4::k_ctda_flag_aliases) != 0) {
+            const auto currentPackage =
+                slot == 0 && runOn == 5 && lower(name) == "getiscurrentpackage";
+            return currentPackage ? ParamKind::Form : ParamKind::Integer;
+        }
+        if ((ctdaFlags & fo4::k_ctda_flag_pack_data) != 0) return ParamKind::Integer;
+    }
+    static const std::vector<std::string> kIntegerTypes = {
+        "integer", "string", "alias", "event", "packdata", "queststage", "alignment",
+        "axis", "castingsource", "crimetype", "criticalstage", "formtype", "miscstat",
+        "sex", "wardstate"};
+    return std::find(kIntegerTypes.begin(), kIntegerTypes.end(), type) != kIntegerTypes.end()
+               ? ParamKind::Integer
+               : ParamKind::Form;
+}
+
+
+float bitsFloat(std::int32_t raw) {
+    const auto bits = static_cast<std::uint32_t>(raw);
+    float value{};
+    std::memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+nlohmann::json describeParam(std::int32_t value, ParamKind kind, const fo4::Plugin& plugin) {
+    switch (kind) {
+        case ParamKind::Integer:
+            return value;
+        case ParamKind::Float: {
+            const auto number = bitsFloat(value);
+            if (std::isfinite(number)) return number;
+            std::ostringstream out;
+            out << "0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
+                << static_cast<std::uint32_t>(value);
+            return out.str();
+        }
+        case ParamKind::Form:
+            break;
+    }
+    return formIdString(static_cast<std::uint32_t>(value), plugin);
+}
+
+bool isHexBits(const std::string& text) {
+    return text.size() > 2 && text.size() <= 10 && text.compare(0, 2, "0x") == 0 &&
+           std::all_of(text.begin() + 2, text.end(),
+                       [](unsigned char ch) { return std::isxdigit(ch) != 0; });
 }
 
 }  // namespace
@@ -111,10 +157,20 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
     d["function"] = condition.is_event_data() ? "GetEventData" : functionName(condition.function);
     if (d["function"] == "") d["function"] = "Unknown (" + std::to_string(condition.function) + ")";
     d["operator"] = conditionOperatorString(condition.compare_operator());
-    if (!condition.is_event_data()) {
-        const auto function = functionName(condition.function);
-        if (condition.param1 != 0) d["param1"] = paramJson(condition.param1, isFloatParam(function, 0), plugin);
-        if (condition.param2 != 0) d["param2"] = paramJson(condition.param2, isFloatParam(function, 1), plugin);
+    if (condition.is_event_data()) {
+        if (condition.param1 != 0) d["param1"] = condition.param1;
+        if (condition.param2 != 0) d["param2"] = condition.param2;
+    } else {
+        const auto name = functionName(condition.function);
+        const auto flags = condition.flags();
+        if (condition.param1 != 0) {
+            d["param1"] = describeParam(condition.param1,
+                                        paramKind(name, 0, flags, condition.run_on), plugin);
+        }
+        if (condition.param2 != 0) {
+            d["param2"] = describeParam(condition.param2,
+                                        paramKind(name, 1, flags, condition.run_on), plugin);
+        }
     }
     if (condition.use_global()) {
         d["compareGlobal"] = formIdString(condition.comparison_raw, plugin);
@@ -218,7 +274,6 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         const auto fnIndex = functionIndex(fnName);
         if (!preserved) {
             if (!fnIndex) reject("unknown function '" + fnName + "'");
-            if (lower(fnName) == "geteventdata") reject("new GetEventData conditions are unsupported");
             condition.function = *fnIndex;
         } else {
             if (changed("function")) reject("changing a preserved condition function is unsupported; replace the row");
@@ -252,46 +307,6 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         const auto runOnReference = condition.run_on == kRunOnReference;
         if (!runOnReference && changed("reference") && condition.reference != 0) reject("reference requires runOn Reference");
         if (!runOnReference && changed("runOn") && !changed("reference")) condition.reference = 0;
-        const auto applyParam = [&](const char* key, std::size_t index, std::int32_t& target) {
-            if (!changed(key)) return;
-            target = 0;
-            if (!element.contains(key)) return;
-            const auto& value = element[key];
-            if (isFloatParam(fnName, index)) {
-                float number = 0.0f;
-                if (value.is_number()) {
-                    number = value.get<float>();
-                } else if (value.is_string()) {
-                    const auto source = value.get<std::string>();
-                    if (source.empty()) return;
-                    const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), number);
-                    if (error != std::errc{} || end != source.data() + source.size()) reject(std::string(key) + " " + source + " is not a number");
-                } else reject(std::string(key) + " must be a number or numeric string");
-                if (!std::isfinite(number)) reject(std::string(key) + " must be a finite number");
-                std::memcpy(&target, &number, sizeof(number));
-                return;
-            }
-            if (value.is_number_integer()) {
-                if (value < kParamMin || value > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
-                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(value.get<std::int64_t>()));
-            } else if (value.is_string()) {
-                const auto source = value.get<std::string>();
-                if (source.empty()) return;
-                std::int64_t integer = 0;
-                const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), integer);
-                if (error == std::errc{} && end == source.data() + source.size()) {
-                    if (integer < kParamMin || integer > kParamMax) reject(std::string(key) + " " + source + " is outside [-2147483648, 4294967295]");
-                    target = static_cast<std::int32_t>(static_cast<std::uint32_t>(integer));
-                    return;
-                }
-                if (const auto raw = resolveConditionFormId(source, plugin, resolveEditorId)) {
-                    const auto bits = raw->value();
-                    std::memcpy(&target, &bits, sizeof(target));
-                } else reject("unresolved condition parameter");
-            } else reject("condition parameter must be an integer or string");
-        };
-        applyParam("param1", 0, condition.param1);
-        applyParam("param2", 1, condition.param2);
         if (changed("operator")) {
             const auto op = text("operator", "==");
             std::uint8_t index = 0;
@@ -317,12 +332,69 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             }
             condition.flags_byte = static_cast<std::uint8_t>((condition.flags_byte & (0xe0u | fo4::k_ctda_flag_use_global)) | flags);
         }
+        const auto applyParam = [&](const char* key, std::size_t slot, std::int32_t& target) {
+            if (!changed(key)) return;
+            target = 0;
+            if (!element.contains(key)) return;
+            const auto& value = element[key];
+            const auto kind = condition.is_event_data()
+                                  ? ParamKind::Integer
+                                  : paramKind(fnName, slot, condition.flags(), condition.run_on);
+            if (kind == ParamKind::Float) {
+                float number = 0.0f;
+                if (value.is_number()) {
+                    number = value.get<float>();
+                } else if (value.is_string()) {
+                    const auto source = value.get<std::string>();
+                    if (source.empty()) return;
+                    if (isHexBits(source)) {
+                        target = static_cast<std::int32_t>(std::strtoul(source.c_str() + 2, nullptr, 16));
+                        return;
+                    }
+                    const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), number);
+                    if (error != std::errc{} || end != source.data() + source.size()) reject(std::string(key) + " " + source + " is not a number");
+                } else reject(std::string(key) + " must be a number or numeric string");
+                if (!std::isfinite(number)) reject(std::string(key) + " must be a finite number");
+                std::memcpy(&target, &number, sizeof(number));
+                return;
+            }
+            if (value.is_number_integer()) {
+                if (value < kParamMin || value > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
+                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(value.get<std::int64_t>()));
+            } else if (value.is_number_float()) {
+                const auto number = value.get<double>();
+                if (kind != ParamKind::Integer || std::trunc(number) != number || number < kParamMin || number > kParamMax) {
+                    reject(std::string(key) + " must be an integer or string");
+                }
+                target = static_cast<std::int32_t>(static_cast<std::uint32_t>(static_cast<std::int64_t>(number)));
+            } else if (value.is_string()) {
+                const auto source = value.get<std::string>();
+                if (source.empty()) return;
+                if (isHexBits(source)) {
+                    target = static_cast<std::int32_t>(std::strtoul(source.c_str() + 2, nullptr, 16));
+                    return;
+                }
+                std::int64_t integer = 0;
+                const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), integer);
+                if (error == std::errc{} && end == source.data() + source.size()) {
+                    if (integer < kParamMin || integer > kParamMax) reject(std::string(key) + " " + source + " is outside [-2147483648, 4294967295]");
+                    target = static_cast<std::int32_t>(static_cast<std::uint32_t>(integer));
+                    return;
+                }
+                if (const auto raw = resolveConditionFormId(source, plugin, resolveEditorId)) {
+                    const auto bits = raw->value();
+                    std::memcpy(&target, &bits, sizeof(target));
+                } else reject("unresolved condition parameter");
+            } else reject("condition parameter must be an integer or string");
+        };
+        applyParam("param1", 0, condition.param1);
+        applyParam("param2", 1, condition.param2);
         if (changed("value") || changed("compareGlobal")) {
             if (element.contains("compareGlobal")) {
                 const auto raw = resolveConditionFormId(text("compareGlobal"), plugin, resolveEditorId);
                 if (!raw) reject("unresolved comparison global");
                 condition.comparison_raw = raw->value();
-                condition.flags_byte |= fo4::k_ctda_flag_use_global;
+                condition.flags_byte = static_cast<std::uint8_t>(condition.flags_byte | fo4::k_ctda_flag_use_global);
             } else {
                 float value = 1.0f;
                 if (element.contains("value")) {
@@ -331,7 +403,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 }
                 if (!std::isfinite(value)) reject("comparison value must be a finite number");
                 std::memcpy(&condition.comparison_raw, &value, sizeof(value));
-                condition.flags_byte &= static_cast<std::uint8_t>(~fo4::k_ctda_flag_use_global);
+                condition.flags_byte = static_cast<std::uint8_t>(condition.flags_byte & ~fo4::k_ctda_flag_use_global);
             }
         }
         return condition;

@@ -162,7 +162,13 @@ void append_optional_string(Record& record,
 std::optional<std::vector<std::byte>> encode_optional(
     std::optional<std::string_view> value) {
   if (!value.has_value()) return std::nullopt;
-  return zstring(*value);
+  return zstring(stored_inline_text(*value, "ARMO/ARMA string field"));
+}
+
+std::optional<std::vector<std::byte>> encode_editor_id(
+    std::optional<std::string_view> value) {
+  if (!value.has_value()) return std::nullopt;
+  return zstring(stored_editor_id(*value));
 }
 
 void write_u32(std::vector<std::byte>& data,
@@ -313,7 +319,7 @@ FormKey create_armor(Plugin& plugin, const ArmorCreation& creation) {
         "ARMO DESC cannot be authored as inline text into a localized plugin");
   }
 
-  const auto editor = encode_optional(creation.editor_id);
+  const auto editor = encode_editor_id(creation.editor_id);
   const auto male_model = encode_optional(creation.male_world_model);
   const auto male_icon = encode_optional(creation.male_icon);
   const auto male_message_icon = encode_optional(creation.male_message_icon);
@@ -349,7 +355,7 @@ FormKey create_armor(Plugin& plugin, const ArmorCreation& creation) {
 FormKey create_armor_addon(Plugin& plugin, const ArmorAddonCreation& creation) {
   auto next = plugin;
 
-  const auto editor = encode_optional(creation.editor_id);
+  const auto editor = encode_editor_id(creation.editor_id);
   const auto male_biped = encode_optional(creation.male_biped_model);
   const auto female_biped = encode_optional(creation.female_biped_model);
   const auto male_first = encode_optional(creation.male_first_person_model);

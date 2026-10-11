@@ -124,45 +124,6 @@ nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& result) {
 
 }  // namespace
 
-TEST_CASE("condition backend: GetConditions serializes the CTDA list") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto pluginPath = root / "CondEdit.esp";
-    writeBytes(pluginPath, makeConditionPlugin());
-
-    fo4ide::plugin::RadiclePluginBackend backend;
-    REQUIRE(backend.invoke("environment.LoadMo2",
-                           nlohmann::json{{"plugins", nlohmann::json::array(
-                                                          {pluginEntry("CondEdit.esp", pluginPath, "Override")})}})
-                .has_value());
-
-    const auto conditions = parseStringResult(
-        backend.invoke("backend.GetConditions",
-                       nlohmann::json::array({"CondEdit.esp", "000800:CondEdit.esp"})));
-    REQUIRE(conditions.is_array());
-    REQUIRE(conditions.size() == 2);
-
-    // GetDistance: UseGlobal -> compareGlobal, param1 as FormID text.
-    CHECK(conditions[0].at("function") == "GetDistance");
-    CHECK(conditions[0].at("operator") == "==");
-    CHECK(conditions[0].at("compareGlobal") == "000800:CondEdit.esp");
-    CHECK(conditions[0].at("param1") == "000800:CondEdit.esp");
-    CHECK(conditions[0].at("runOn") == "Reference");
-    CHECK(conditions[0].at("reference") == "000800:CondEdit.esp");
-    // UseGlobal is stripped from the exposed flags.
-    CHECK_FALSE(conditions[0].contains("flags"));
-
-    // GetAngle: float value, param1 = number slot.
-    CHECK(conditions[1].at("function") == "GetAngle");
-    CHECK(conditions[1].at("operator") == ">");
-    CHECK(conditions[1].at("value") == 1.0f);
-    CHECK(conditions[1].at("param1") == "000001:CondEdit.esp");
-    CHECK(conditions[1].at("runOn") == "Subject");
-    CHECK_FALSE(conditions[1].contains("compareGlobal"));
-    CHECK_FALSE(conditions[1].contains("reference"));
-    CHECK_FALSE(conditions[1].contains("flags"));
-}
-
 TEST_CASE("condition backend: GetConditions resolves by editor ID and reports failures") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

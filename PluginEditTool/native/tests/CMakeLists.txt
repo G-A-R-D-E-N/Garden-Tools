@@ -75,11 +75,15 @@ fo4ide_add_test(fo4ide_test_papyrus_security unit/PapyrusSecurityTests.cpp fo4id
 fo4ide_add_test(fo4ide_test_papyrus_symbols unit/PapyrusSymbolsTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_papyrus_analysis unit/PapyrusAnalysisServiceTests.cpp fo4ide_papyrus)
 fo4ide_add_test(fo4ide_test_service_targets unit/ServiceTargetsTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_audio_service unit/AudioServiceTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_material_target unit/MaterialTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_settings_security unit/SettingsTargetSecurityTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_papyrus_target unit/PapyrusTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_backend_target unit/PluginBackendTargetTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_plugin_element_routing unit/PluginBackendElementRoutingTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_mo2 unit/Mo2ProfileTests.cpp fo4ide_mo2)
 fo4ide_add_test(fo4ide_test_app_interop unit/AppInteropTargetTests.cpp fo4ide_app)
+fo4ide_add_test(fo4ide_test_app_interop_rollback unit/AppInteropRollbackTests.cpp fo4ide_app)
 fo4ide_add_test(fo4ide_test_tools unit/ToolLocatorTests.cpp fo4ide_tools)
 
 # Fixture trees are found through an absolute path rather than __FILE__:
@@ -102,6 +106,8 @@ add_executable(
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
     unit/RadiclePluginLifecycleTests.cpp
+    unit/RadiclePluginDeleteChildGroupTests.cpp
+    unit/RadiclePluginEditorIdTextTests.cpp
     unit/RadiclePluginCreateTests.cpp
     unit/RadiclePluginMasterOverrideTests.cpp
     unit/RadiclePluginScalarTests.cpp
@@ -134,9 +140,11 @@ add_executable(
     unit/RadiclePluginReachableTests.cpp
     unit/RadiclePluginReadApiTests.cpp
     unit/RadiclePluginEslTests.cpp
+    unit/RadiclePluginCompactTests.cpp
     unit/RadiclePluginEditableTests.cpp
     unit/ConditionFunctionsTests.cpp
     unit/ConditionBackendTests.cpp
+    unit/ConditionBackendParamTests.cpp
     unit/ConditionCodecTests.cpp
     unit/ConditionPreservationBackendTests.cpp
     unit/RadiclePluginConcurrencyTests.cpp
@@ -179,6 +187,7 @@ catch_discover_tests(fo4ide_test_proj_expl_hazd PROPERTIES TIMEOUT 10)
 add_executable(
     fo4ide_test_quest_authoring
     unit/RadiclePluginQuestAuthoringTests.cpp
+    unit/RadiclePluginQuestEventDataTests.cpp
     unit/RadiclePluginQuestPartialFormTests.cpp
     unit/RadiclePluginQuestCreateLevelTests.cpp
     unit/RadiclePluginDeferredLocalizationTests.cpp

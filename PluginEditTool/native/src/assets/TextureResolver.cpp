@@ -562,16 +562,11 @@ std::optional<std::string> TextureResolver::resolveMaterialDiffuse(
     if (!bgsmFile) return std::nullopt;
     try {
         material::MaterialService service;
-        auto document = service.load(*bgsmFile);
-        if (!document) return std::nullopt;
-        for (const auto& field : document->fields) {
-            if (field.name != "DiffuseTexture") continue;
-            const auto* value = std::get_if<std::string>(&field.value);
-            if (value == nullptr) return std::nullopt;
-            std::string diffuse = *value;
-            while (!diffuse.empty() && diffuse.back() == '\0') diffuse.pop_back();
-            return diffuse;
-        }
+        auto file = service.load(*bgsmFile);
+        if (!file) return std::nullopt;
+        const auto diffuse = fo4::material::get_field<std::string>(*file, "DiffuseTexture");
+        if (!diffuse) return std::nullopt;
+        return std::string(fo4::material::text(*diffuse));
     } catch (const std::exception&) {
         return std::nullopt;
     }
