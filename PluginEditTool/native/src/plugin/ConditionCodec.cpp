@@ -40,6 +40,13 @@ std::string formIdString(std::uint32_t raw, const fo4::Plugin& plugin) {
     return out.str();
 }
 
+nlohmann::json paramJson(std::int32_t raw, bool isFloat, const fo4::Plugin& plugin) {
+    if (!isFloat) return formIdString(static_cast<std::uint32_t>(raw), plugin);
+    float value = 0.0f;
+    std::memcpy(&value, &raw, sizeof(value));
+    return value;
+}
+
 std::optional<fo4::RawFormId> placeholderFormId(std::string_view text) {
     if (text.size() != 9 || text[8] != ':') return std::nullopt;
     std::uint32_t raw = 0;
@@ -63,6 +70,13 @@ std::optional<std::uint32_t> flagValue(std::string_view name) {
         return value;
     }
     return std::nullopt;
+}
+
+constexpr std::uint32_t kRunOnReference = 2;
+
+bool isFloatParam(std::string_view function, std::size_t index) {
+    const auto params = ConditionFunctions::paramsOf(function);
+    return index < params.size() && lower(params[index]) == "float";
 }
 
 }  // namespace
@@ -98,8 +112,9 @@ nlohmann::json describeCondition(const fo4::CtdaCondition& condition,
     if (d["function"] == "") d["function"] = "Unknown (" + std::to_string(condition.function) + ")";
     d["operator"] = conditionOperatorString(condition.compare_operator());
     if (!condition.is_event_data()) {
-        if (condition.param1 != 0) d["param1"] = formIdString(condition.param1, plugin);
-        if (condition.param2 != 0) d["param2"] = formIdString(condition.param2, plugin);
+        const auto function = functionName(condition.function);
+        if (condition.param1 != 0) d["param1"] = paramJson(condition.param1, isFloatParam(function, 0), plugin);
+        if (condition.param2 != 0) d["param2"] = paramJson(condition.param2, isFloatParam(function, 1), plugin);
     }
     if (condition.use_global()) {
         d["compareGlobal"] = formIdString(condition.comparison_raw, plugin);
@@ -234,11 +249,28 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 condition.reference = raw->value();
             }
         }
-        const auto applyParam = [&](const char* key, std::int32_t& target) {
+        const auto runOnReference = condition.run_on == kRunOnReference;
+        if (!runOnReference && changed("reference") && condition.reference != 0) reject("reference requires runOn Reference");
+        if (!runOnReference && changed("runOn") && !changed("reference")) condition.reference = 0;
+        const auto applyParam = [&](const char* key, std::size_t index, std::int32_t& target) {
             if (!changed(key)) return;
             target = 0;
             if (!element.contains(key)) return;
             const auto& value = element[key];
+            if (isFloatParam(fnName, index)) {
+                float number = 0.0f;
+                if (value.is_number()) {
+                    number = value.get<float>();
+                } else if (value.is_string()) {
+                    const auto source = value.get<std::string>();
+                    if (source.empty()) return;
+                    const auto [end, error] = std::from_chars(source.data(), source.data() + source.size(), number);
+                    if (error != std::errc{} || end != source.data() + source.size()) reject(std::string(key) + " " + source + " is not a number");
+                } else reject(std::string(key) + " must be a number or numeric string");
+                if (!std::isfinite(number)) reject(std::string(key) + " must be a finite number");
+                std::memcpy(&target, &number, sizeof(number));
+                return;
+            }
             if (value.is_number_integer()) {
                 if (value < kParamMin || value > kParamMax) reject(std::string(key) + " " + value.dump() + " is outside [-2147483648, 4294967295]");
                 target = static_cast<std::int32_t>(static_cast<std::uint32_t>(value.get<std::int64_t>()));
@@ -258,8 +290,8 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
                 } else reject("unresolved condition parameter");
             } else reject("condition parameter must be an integer or string");
         };
-        applyParam("param1", condition.param1);
-        applyParam("param2", condition.param2);
+        applyParam("param1", 0, condition.param1);
+        applyParam("param2", 1, condition.param2);
         if (changed("operator")) {
             const auto op = text("operator", "==");
             std::uint8_t index = 0;
