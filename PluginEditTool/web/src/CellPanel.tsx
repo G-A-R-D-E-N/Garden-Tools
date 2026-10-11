@@ -77,6 +77,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const [matches, setMatches] = useState<CellSearchHit[] | null>(null);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const searchSeq = useRef(0);
+  const loadSeq = useRef(0);
 
 
 
@@ -272,9 +273,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
 
   const runLoad = async (fetchReferences: () => Promise<string>) => {
     if (!cell) return;
+    const mine = ++loadSeq.current;
+    const live = () => mine === loadSeq.current;
     setBusy(true);
     setResult(null);
     setGeometry({});
+    setGeoProgress(null);
     setTexStats(null);
     texStatsLoggedRef.current = '';
     setSelected(null);
@@ -284,6 +288,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
     setStatus('Reading placed references…');
     try {
       const raw = await fetchReferences();
+      if (!live()) return;
       const parsed = JSON.parse(raw) as CellReferencesResult;
       if (parsed.error) {
         setStatus(parsed.error);
@@ -306,7 +311,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const pollTimer = setInterval(async () => {
         try {
           const raw = await cell.GetGeometryBatchProgress();
-          setGeoProgress(JSON.parse(raw) as { done: number; total: number });
+          if (live()) setGeoProgress(JSON.parse(raw) as { done: number; total: number });
         } catch {  }
       }, 200);
       let geoRaw: string;
@@ -314,8 +319,9 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         geoRaw = await cell.GetGeometryBatch(JSON.stringify(uniqueModels));
       } finally {
         clearInterval(pollTimer);
-        setGeoProgress(null);
+        if (live()) setGeoProgress(null);
       }
+      if (!live()) return;
       const geoParsed = JSON.parse(geoRaw) as { count?: number; geometry?: CellGeoMap; error?: string };
       if (geoParsed.error) {
         appendLog('✗ geometry batch: ' + geoParsed.error);
@@ -331,11 +337,12 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         ? `Loaded ${refs.length} reference(s). ${ok}/${uniqueModels.length} unique meshes resolved -- ${failed} unavailable (see markers).`
         : `Loaded ${refs.length} reference(s), all ${ok} unique mesh(es) resolved.`);
     } catch (e) {
+      if (!live()) return;
       const msg = 'Error: ' + (e instanceof Error ? e.message : String(e));
       setStatus(msg);
       appendLog('✗ ' + msg);
     } finally {
-      setBusy(false);
+      if (live()) setBusy(false);
     }
   };
 

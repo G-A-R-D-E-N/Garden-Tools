@@ -16,7 +16,7 @@ public sealed record RecordInfo(FormKey FormKey, string Signature, int PluginInd
 
 public sealed record RecordContainer(int GroupType, FormKey? Worldspace, FormKey? Cell);
 
-public readonly record struct Record(IntPtr Handle);
+public readonly record struct Record(IntPtr Handle, RadicleEnvironment Owner);
 
 public readonly record struct CellChild(Record Record, bool Persistent);
 
@@ -103,13 +103,19 @@ public sealed record Water(byte? Flags, WaterVisual? Visual, IReadOnlyList<Water
 
 public sealed unsafe partial class RadicleEnvironment : IDisposable
 {
-    private IntPtr _handle;
+    private readonly EnvironmentHandle _handle;
 
     static RadicleEnvironment() => RadicleLibrary.Register();
 
-    private RadicleEnvironment(IntPtr handle) => _handle = handle;
+    private RadicleEnvironment(IntPtr handle) => _handle = new EnvironmentHandle(handle);
 
-    internal IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(RadicleEnvironment));
+    internal HandleUse Use() => new(_handle, nameof(RadicleEnvironment));
+
+    internal HandleUse Use(Record record)
+    {
+        if (record.Owner != this) throw new ArgumentException("The record does not belong to this environment.", nameof(record));
+        return Use();
+    }
 
     public static RadicleEnvironment Load(IEnumerable<string> orderedPaths)
     {
@@ -120,29 +126,26 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
         return new RadicleEnvironment(env);
     }
 
-    public void Dispose()
-    {
-        var handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero) RadicleNative.EnvDestroy(handle);
-    }
+    public void Dispose() => _handle.Dispose();
 
     public IReadOnlyList<PluginInfo> Plugins
     {
         get
         {
-            var count = (int)RadicleNative.EnvPluginCount(Handle);
+            using var use = Use();
+            var count = (int)RadicleNative.EnvPluginCount(use.Pointer);
             var result = new List<PluginInfo>(count);
             for (var i = 0; i < count; ++i)
             {
                 EnvPluginInfo info;
-                Call.Check(RadicleNative.EnvGetPluginInfo(Handle, (nuint)i, &info));
+                Call.Check(RadicleNative.EnvGetPluginInfo(use.Pointer, (nuint)i, &info));
                 var masters = new List<string>();
                 var unresolved = new List<string>();
                 for (var m = 0; m < (int)info.MasterCount; ++m)
                 {
                     IntPtr name;
                     int resolved;
-                    Call.Check(RadicleNative.EnvPluginMaster(Handle, (nuint)i, (nuint)m, &name, &resolved));
+                    Call.Check(RadicleNative.EnvPluginMaster(use.Pointer, (nuint)i, (nuint)m, &name, &resolved));
                     masters.Add(Utf8.Read(name)!);
                     if (resolved == 0) unresolved.Add(Utf8.Read(name)!);
                 }
@@ -155,52 +158,59 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public int? FindPlugin(string filename)
     {
+        using var use = Use();
         nuint index;
-        return Call.Found(RadicleNative.EnvFindPlugin(Handle, filename, &index)) ? (int)index : null;
+        return Call.Found(RadicleNative.EnvFindPlugin(use.Pointer, filename, &index)) ? (int)index : null;
     }
 
     public Record? Winner(FormKey key)
     {
+        using var use = Use();
         using var s = new NativeStrings();
         IntPtr record;
-        return Call.Found(RadicleNative.EnvWinner(Handle, s.Key(key), &record)) ? new Record(record) : null;
+        return Call.Found(RadicleNative.EnvWinner(use.Pointer, s.Key(key), &record)) ? new Record(record, this) : null;
     }
 
     public IReadOnlyList<Record> Versions(FormKey key)
     {
+        using var use = Use();
         using var s = new NativeStrings();
         IntPtr* items;
         nuint count;
-        Call.Check(RadicleNative.EnvVersions(Handle, s.Key(key), &items, &count));
+        Call.Check(RadicleNative.EnvVersions(use.Pointer, s.Key(key), &items, &count));
         return Records(items, count);
     }
 
     public Record? FindEditorId(string editorId, string? signature = null)
     {
+        using var use = Use();
         IntPtr record;
-        return Call.Found(RadicleNative.EnvFindEditorId(Handle, editorId, signature, &record)) ? new Record(record) : null;
+        return Call.Found(RadicleNative.EnvFindEditorId(use.Pointer, editorId, signature, &record)) ? new Record(record, this) : null;
     }
 
     public IReadOnlyList<Record> WinnersOf(string signature)
     {
+        using var use = Use();
         IntPtr* items;
         nuint count;
-        Call.Check(RadicleNative.EnvWinnersOf(Handle, signature, &items, &count));
+        Call.Check(RadicleNative.EnvWinnersOf(use.Pointer, signature, &items, &count));
         return Records(items, count);
     }
 
     public IReadOnlyList<Record> PluginRecords(int pluginIndex)
     {
+        using var use = Use();
         IntPtr* items;
         nuint count;
-        Call.Check(RadicleNative.EnvPluginRecords(Handle, (nuint)pluginIndex, &items, &count));
+        Call.Check(RadicleNative.EnvPluginRecords(use.Pointer, (nuint)pluginIndex, &items, &count));
         return Records(items, count);
     }
 
     public RecordInfo Info(Record record)
     {
+        using var use = Use(record);
         Native.RecordInfo info;
-        Call.Check(RadicleNative.RecordGetInfo(Handle, record.Handle, &info));
+        Call.Check(RadicleNative.RecordGetInfo(use.Pointer, record.Handle, &info));
         Bounds? bounds = info.HasBounds != 0
             ? new Bounds(info.BoundsMin[0], info.BoundsMin[1], info.BoundsMin[2], info.BoundsMax[0], info.BoundsMax[1], info.BoundsMax[2])
             : null;
@@ -211,22 +221,25 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public string? PrimaryModelPath(Record record)
     {
+        using var use = Use(record);
         IntPtr path;
-        return Call.Found(RadicleNative.RecordPrimaryModelPath(Handle, record.Handle, &path)) ? Utf8.Read(path) : null;
+        return Call.Found(RadicleNative.RecordPrimaryModelPath(use.Pointer, record.Handle, &path)) ? Utf8.Read(path) : null;
     }
 
     public RecordContainer Container(Record record)
     {
+        using var use = Use(record);
         int group;
         Native.FormKey world, cell;
-        Call.Check(RadicleNative.RecordGetContainer(Handle, record.Handle, &group, &world, &cell));
+        Call.Check(RadicleNative.RecordGetContainer(use.Pointer, record.Handle, &group, &world, &cell));
         return new RecordContainer(group, FormKey.FromNative(world), FormKey.FromNative(cell));
     }
 
     public WorldspaceInfo Worldspace(Record record)
     {
+        using var use = Use(record);
         Native.WorldspaceInfo w;
-        Call.Check(RadicleNative.WorldspaceGetInfo(Handle, record.Handle, &w));
+        Call.Check(RadicleNative.WorldspaceGetInfo(use.Pointer, record.Handle, &w));
         return new WorldspaceInfo(FormKey.FromNative(w.Parent), w.HasParentFlags != 0 ? w.ParentFlags : null,
                                   FormKey.FromNative(w.Climate), FormKey.FromNative(w.Water),
                                   FormKey.FromNative(w.LightingTemplate),
@@ -240,8 +253,9 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public CellInfo Cell(Record record)
     {
+        using var use = Use(record);
         Native.CellInfo c;
-        Call.Check(RadicleNative.CellGetInfo(Handle, record.Handle, &c));
+        Call.Check(RadicleNative.CellGetInfo(use.Pointer, record.Handle, &c));
         return new CellInfo(c.HasFlags != 0 ? c.Flags : null, c.HasGrid != 0 ? (c.GridX, c.GridY) : null,
                             c.HasLandFlags != 0 ? c.LandFlags : null, c.HasLighting != 0 ? ToLighting(c.Lighting) : null,
                             FormKey.FromNative(c.LightingTemplate), c.HasWaterHeight != 0 ? c.WaterHeight : null,
@@ -251,51 +265,57 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public Record? WorldspaceTopCell(FormKey worldspace)
     {
+        using var use = Use();
         using var s = new NativeStrings();
         IntPtr record;
-        return Call.Found(RadicleNative.EnvWorldspaceTopCell(Handle, s.Key(worldspace), &record)) ? new Record(record) : null;
+        return Call.Found(RadicleNative.EnvWorldspaceTopCell(use.Pointer, s.Key(worldspace), &record)) ? new Record(record, this) : null;
     }
 
     public IReadOnlyList<Record> WorldspaceCells(FormKey worldspace)
     {
+        using var use = Use();
         using var s = new NativeStrings();
         IntPtr* items;
         nuint count;
-        Call.Check(RadicleNative.EnvWorldspaceCells(Handle, s.Key(worldspace), &items, &count));
+        Call.Check(RadicleNative.EnvWorldspaceCells(use.Pointer, s.Key(worldspace), &items, &count));
         return Records(items, count);
     }
 
     public IReadOnlyList<Record> InteriorCells()
     {
+        using var use = Use();
         IntPtr* items;
         nuint count;
-        Call.Check(RadicleNative.EnvInteriorCells(Handle, &items, &count));
+        Call.Check(RadicleNative.EnvInteriorCells(use.Pointer, &items, &count));
         return Records(items, count);
     }
 
     public IReadOnlyList<CellChild> CellChildren(FormKey cell)
     {
+        using var use = Use();
         using var s = new NativeStrings();
         Native.CellChild* items;
         nuint count;
-        Call.Check(RadicleNative.EnvCellChildren(Handle, s.Key(cell), &items, &count));
+        Call.Check(RadicleNative.EnvCellChildren(use.Pointer, s.Key(cell), &items, &count));
         var result = new CellChild[(int)count];
-        for (var i = 0; i < result.Length; ++i) result[i] = new CellChild(new Record(items[i].Record), items[i].Persistent != 0);
+        for (var i = 0; i < result.Length; ++i) result[i] = new CellChild(new Record(items[i].Record, this), items[i].Persistent != 0);
         if (items != null) RadicleNative.FreeCellChildren(items);
         return result;
     }
 
     public Record? CellLandscape(FormKey cell)
     {
+        using var use = Use();
         using var s = new NativeStrings();
         IntPtr record;
-        return Call.Found(RadicleNative.EnvCellLandscape(Handle, s.Key(cell), &record)) ? new Record(record) : null;
+        return Call.Found(RadicleNative.EnvCellLandscape(use.Pointer, s.Key(cell), &record)) ? new Record(record, this) : null;
     }
 
     public Landscape Landscape(Record record)
     {
+        using var use = Use(record);
         Native.Landscape* land;
-        Call.Check(RadicleNative.LandscapeDecode(Handle, record.Handle, &land));
+        Call.Check(RadicleNative.LandscapeDecode(use.Pointer, record.Handle, &land));
         try
         {
             const int vertices = 33 * 33;
@@ -320,15 +340,17 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public FormKey? LandscapeTextureSet(Record record)
     {
+        using var use = Use(record);
         Native.FormKey key;
-        Call.Check(RadicleNative.LandscapeTextureGetSet(Handle, record.Handle, &key));
+        Call.Check(RadicleNative.LandscapeTextureGetSet(use.Pointer, record.Handle, &key));
         return FormKey.FromNative(key);
     }
 
     public TextureSetInfo TextureSet(Record record)
     {
+        using var use = Use(record);
         Native.TextureSetInfo t;
-        Call.Check(RadicleNative.TextureSetGetInfo(Handle, record.Handle, &t));
+        Call.Check(RadicleNative.TextureSetGetInfo(use.Pointer, record.Handle, &t));
         var textures = new[] { t.Textures0, t.Textures1, t.Textures2, t.Textures3, t.Textures4, t.Textures5, t.Textures6, t.Textures7 }
             .Select(Utf8.Read).ToArray();
         var decal = new float[(int)t.DecalCount];
@@ -338,16 +360,18 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public string? LandscapeTextureDiffuse(FormKey landscapeTexture)
     {
+        using var use = Use();
         using var s = new NativeStrings();
         IntPtr path;
-        return Call.Found(RadicleNative.EnvLandscapeTextureDiffuse(Handle, s.Key(landscapeTexture), &path)) ? Utf8.Read(path) : null;
+        return Call.Found(RadicleNative.EnvLandscapeTextureDiffuse(use.Pointer, s.Key(landscapeTexture), &path)) ? Utf8.Read(path) : null;
     }
 
     public LightRecord Light(Record record)
     {
+        using var use = Use(record);
         LightInfo? data = null;
         Native.LightInfo l;
-        Call.Check(RadicleNative.LightGetInfo(Handle, record.Handle, &l));
+        Call.Check(RadicleNative.LightGetInfo(use.Pointer, record.Handle, &l));
         if (l.HasData != 0)
         {
             data = new LightInfo(l.Time, l.Radius, ToColor(l.Color), l.Flags, l.FalloffExponent, l.Fov, l.NearClip,
@@ -362,8 +386,9 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public BendableSpline BendableSpline(Record record)
     {
+        using var use = Use(record);
         BendableSplineInfo b;
-        Call.Check(RadicleNative.BendableSplineGetInfo(Handle, record.Handle, &b));
+        Call.Check(RadicleNative.BendableSplineGetInfo(use.Pointer, record.Handle, &b));
         return new BendableSpline(b.HasDefaultTiles != 0 ? b.DefaultTiles : null,
                                   b.HasDefaultSlices != 0 ? b.DefaultSlices : null,
                                   b.HasTilesRelativeToLength != 0 ? b.TilesRelativeToLength != 0 : null,
@@ -374,22 +399,25 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public FormKey? LayerParent(Record record)
     {
+        using var use = Use(record);
         Native.FormKey key;
-        Call.Check(RadicleNative.LayerGetParent(Handle, record.Handle, &key));
+        Call.Check(RadicleNative.LayerGetParent(use.Pointer, record.Handle, &key));
         return FormKey.FromNative(key);
     }
 
     public LightingTemplate LightingTemplate(Record record)
     {
+        using var use = Use(record);
         LightingTemplateInfo t;
-        Call.Check(RadicleNative.LightingTemplateGetInfo(Handle, record.Handle, &t));
+        Call.Check(RadicleNative.LightingTemplateGetInfo(use.Pointer, record.Handle, &t));
         return new LightingTemplate(t.HasLighting != 0 ? ToLighting(t.Lighting) : null, FormKey.FromNative(t.GodRays));
     }
 
     public Climate Climate(Record record)
     {
+        using var use = Use(record);
         Native.Climate* c;
-        Call.Check(RadicleNative.ClimateDecode(Handle, record.Handle, &c));
+        Call.Check(RadicleNative.ClimateDecode(use.Pointer, record.Handle, &c));
         try
         {
             var weathers = Call.Copy<Native.ClimateWeather>(c->Weathers, c->WeatherCount)
@@ -406,8 +434,9 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public Weather Weather(Record record)
     {
+        using var use = Use(record);
         WeatherInfo* w;
-        Call.Check(RadicleNative.WeatherDecode(Handle, record.Handle, &w));
+        Call.Check(RadicleNative.WeatherDecode(use.Pointer, record.Handle, &w));
         try
         {
             var colors = Utf8.Raw(w->Colors, w->ColorGroups * w->ColorTimes * 4);
@@ -423,8 +452,9 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public IReadOnlyList<StaticPart> StaticCollection(Record record)
     {
+        using var use = Use(record);
         Native.StaticCollection* c;
-        Call.Check(RadicleNative.StaticCollectionDecode(Handle, record.Handle, &c));
+        Call.Check(RadicleNative.StaticCollectionDecode(use.Pointer, record.Handle, &c));
         try
         {
             var parts = new List<StaticPart>();
@@ -446,22 +476,25 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     public DistantLod StaticDistantLod(Record record)
     {
+        using var use = Use(record);
         Native.StaticDistantLod d;
-        Call.Check(RadicleNative.StaticGetDistantLod(Handle, record.Handle, &d));
+        Call.Check(RadicleNative.StaticGetDistantLod(use.Pointer, record.Handle, &d));
         return new DistantLod((int)d.LevelCount, new[] { Utf8.Read(d.Meshes0), Utf8.Read(d.Meshes1), Utf8.Read(d.Meshes2), Utf8.Read(d.Meshes3) });
     }
 
     public FormKey? ActivatorWaterType(Record record)
     {
+        using var use = Use(record);
         Native.FormKey key;
-        Call.Check(RadicleNative.ActivatorGetWaterType(Handle, record.Handle, &key));
+        Call.Check(RadicleNative.ActivatorGetWaterType(use.Pointer, record.Handle, &key));
         return FormKey.FromNative(key);
     }
 
     public Water Water(Record record)
     {
+        using var use = Use(record);
         WaterInfo w;
-        Call.Check(RadicleNative.WaterGetInfo(Handle, record.Handle, &w));
+        Call.Check(RadicleNative.WaterGetInfo(use.Pointer, record.Handle, &w));
         var textures = new[] { Utf8.Read(w.NoiseTextures0), Utf8.Read(w.NoiseTextures1), Utf8.Read(w.NoiseTextures2) };
         var noise = new WaterNoiseLayer[3];
         for (var i = 0; i < 3; ++i)
@@ -493,6 +526,6 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
 
     internal static string Signature(byte* text) => System.Text.Encoding.ASCII.GetString(text, 4);
 
-    private static Record[] Records(IntPtr* items, nuint count) =>
-        Call.TakeRecords(items, count).Select(handle => new Record(handle)).ToArray();
+    private Record[] Records(IntPtr* items, nuint count) =>
+        Call.TakeRecords(items, count).Select(handle => new Record(handle, this)).ToArray();
 }

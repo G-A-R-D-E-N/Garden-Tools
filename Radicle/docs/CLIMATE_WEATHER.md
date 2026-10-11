@@ -57,7 +57,7 @@ partial or unverified in sections 5–6. They are outside these stored timing
 conversions; no transition-duration calculation is added.
 
 `src/environment/base_records.cpp:decode_climate` and `decode_weather` expose
-these optional fields through the existing environment decoders. C ABI 12
+these optional fields through the existing environment decoders. C ABI 24
 extends `radicle_climate` and `radicle_weather_info`; generated C# bindings and
 the friendly `Climate.Timing` / `Weather.Parameters` properties follow those
 declarations after integrating main `c50ad4d5405e1571113019654b10e3d4a05ca0f1`

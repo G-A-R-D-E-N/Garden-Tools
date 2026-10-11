@@ -30,7 +30,8 @@ TEST_CASE("SettingsTarget returns the existing JSON string contract") {
     FakeRunner runner;
     FakePlatform platform;
 
-    fo4ide::app::SettingsTarget target(store, settings, platform, runner);
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::app::SettingsTarget target(store, shared, platform, runner);
     auto result = target.invoke("GetSettings", nlohmann::json::array());
 
     REQUIRE(result.has_value());
@@ -50,7 +51,8 @@ TEST_CASE("SettingsTarget applies partial updates and persists them") {
     FakeRunner runner;
     FakePlatform platform;
 
-    fo4ide::app::SettingsTarget target(store, settings, platform, runner);
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::app::SettingsTarget target(store, shared, platform, runner);
     const nlohmann::json payload{
         {"Model", "after"},
         {"DataFolder", (root / "Data").string()}
@@ -59,9 +61,9 @@ TEST_CASE("SettingsTarget applies partial updates and persists them") {
 
     REQUIRE(result.has_value());
     CHECK(*result == "Settings saved.");
-    CHECK(settings.model == "after");
-    CHECK(settings.dataFolder == root / "Data");
-    CHECK(settings.archive2Path == root / "Archive2.exe");
+    CHECK(shared.snapshot().model == "after");
+    CHECK(shared.snapshot().dataFolder == root / "Data");
+    CHECK(shared.snapshot().archive2Path == root / "Archive2.exe");
 
     auto loaded = store.load();
     REQUIRE(loaded.has_value());
@@ -77,7 +79,8 @@ TEST_CASE("SettingsTarget delegates folder selection to native platform services
     FakePlatform platform;
     platform.folderSelection = root / "MO2";
 
-    fo4ide::app::SettingsTarget target(store, settings, platform, runner);
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::app::SettingsTarget target(store, shared, platform, runner);
     auto result = target.invoke("BrowseFolder", nlohmann::json::array({"Choose MO2", ""}));
 
     REQUIRE(result.has_value());
@@ -93,7 +96,8 @@ TEST_CASE("SettingsTarget routes Claude version checks through ProcessRunner") {
     runner.output.stdOut = "claude-native 1.0\n";
     FakePlatform platform;
 
-    fo4ide::app::SettingsTarget target(store, settings, platform, runner);
+    fo4ide::settings::SharedSettings shared(settings);
+    fo4ide::app::SettingsTarget target(store, shared, platform, runner);
     auto result = target.invoke("TestClaude", nlohmann::json::array({"claude"}));
 
     REQUIRE(result.has_value());

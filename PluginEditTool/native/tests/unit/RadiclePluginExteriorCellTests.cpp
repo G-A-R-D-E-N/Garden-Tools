@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
@@ -92,6 +93,37 @@ nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& result) {
     return nlohmann::json::parse(result->get<std::string>());
 }
 
+}
+
+TEST_CASE("PluginEditTool stores a CELL UTF-8 EditorID as Windows-1252") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "mods" / "CellMod" / "Patch.esp";
+    writeBytes(path, worldspacePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const nlohmann::json payload{
+        {"worldspace", "000800:Patch.esp"},
+        {"x", -33},
+        {"y", 32},
+        {"editorId", "Caf\xC3\xA9"}
+    };
+    REQUIRE(backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({"Patch.esp", "CELL", payload})).has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000900:Patch.esp"));
+    REQUIRE(record != nullptr);
+    const auto edid = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+        [](const fo4::Subrecord& sub) { return sub.signature == fo4::sig_edid; });
+    REQUIRE(edid != record->subrecords.end());
+    CHECK(edid->data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}});
 }
 
 TEST_CASE("PluginEditTool creates a new exterior CELL in the WRLD hierarchy") {
