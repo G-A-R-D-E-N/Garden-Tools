@@ -15,8 +15,68 @@ SCALAR_TYPES = {"wbFloat", "wbInteger", "wbString", "wbLString", "wbRGBA", "wbBy
                 "wbByteColors", "wbByteABGR", "wbFloatColors", "wbLStringKC", "wbStringKC",
                 "wbLenString", "wbStringForward", "wbUnknown"}
 XEDIT_DENIED = [
+    ("AACT", "DNAM"),  # xEdit wbDefinitionsFO4.pas:6976 wbString
+    ("ACHR", "MNAM"),  # xEdit wbDefinitionsFO4.pas:4623 wbString
+    ("AMMO", "NAM1"),  # xEdit wbDefinitionsFO4.pas:5773 wbString
+    ("ANIO", "BNAM"),  # xEdit wbDefinitionsFO4.pas:5783 wbString
+    ("BOOK", "CNAM"),  # xEdit wbDefinitionsFO4.pas:5929 wbLStringKC
+    ("BPTD", "NAM1"),  # xEdit wbDefinitionsFO4.pas:7776 wbString
+    ("CLMT", "FNAM"),  # xEdit wbDefinitionsFO4.pas:6122 wbString
+    ("CLMT", "GNAM"),  # xEdit wbDefinitionsFO4.pas:6123 wbString
+    ("COLL", "MNAM"),  # xEdit wbDefinitionsFO4.pas:9557 wbString
+    ("DOOR", "CNAM"),  # xEdit wbDefinitionsFO4.pas:6506 wbLStringKC
+    ("EFSH", "NAM7"),  # xEdit wbDefinitionsFO4.pas:6514 wbString
+    ("EFSH", "NAM8"),  # xEdit wbDefinitionsFO4.pas:6515 wbString
+    ("EYES", "FNAM"),  # xEdit wbDefinitionsFO4.pas:6775 wbLString
+    ("EYES", "INAM"),  # xEdit wbDefinitionsFO4.pas:6776 wbString
+    ("EYES", "MNAM"),  # xEdit wbDefinitionsFO4.pas:6774 wbLString
     ("FACT", "RNAM"),  # xEdit wbDefinitionsFO4.pas:6773 wbFactionRank Rank# wbInteger(RNAM), used by FACT:6830
     ("FLOR", "RNAM"),  # xEdit wbDefinitionsFO4.pas:12179 wbLStringKC(RNAM) in FLOR:12167
+    ("FSTP", "ANAM"),  # xEdit wbDefinitionsFO4.pas:8689 wbString
+    ("HDPT", "NAM1"),  # xEdit wbDefinitionsFO4.pas:7049 wbString
+    ("IDLE", "DNAM"),  # xEdit wbDefinitionsFO4.pas:9649 wbString
+    ("IDLE", "GNAM"),  # xEdit wbDefinitionsFO4.pas:9669 wbString
+    ("KYWD", "DNAM"),  # xEdit wbDefinitionsFO4.pas:6953 wbString
+    ("KYWD", "NNAM"),  # xEdit wbDefinitionsFO4.pas:6959 wbString
+    ("LENS", "FNAM"),  # xEdit wbDefinitionsFO4.pas:12413 wbString
+    ("LIGH", "NAM0"),  # xEdit wbDefinitionsFO4.pas:9940 wbString
+    ("MATT", "ANAM"),  # xEdit wbDefinitionsFO4.pas:7974 wbString
+    ("MESG", "SNAM"),  # xEdit wbDefinitionsFO4.pas:8197 wbString
+    ("MSWP", "BNAM"),  # xEdit wbDefinitionsFO4.pas:12445 wbString
+    ("MSWP", "FNAM"),  # xEdit wbDefinitionsFO4.pas:12442 wbString
+    ("MSWP", "SNAM"),  # xEdit wbDefinitionsFO4.pas:12446 wbString
+    ("MUST", "ANAM"),  # xEdit wbDefinitionsFO4.pas:8806 wbString
+    ("MUST", "BNAM"),  # xEdit wbDefinitionsFO4.pas:8807 wbString
+    ("NOCM", "NAM1"),  # xEdit wbDefinitionsFO4.pas:12466 wbString
+    ("NOTE", "PNAM"),  # xEdit wbDefinitionsFO4.pas:12498 wbString
+    ("PARW", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PBAR", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PBEA", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PCON", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PERK", "FNAM"),  # xEdit wbDefinitionsFO4.pas:7605 wbString
+    ("PFLA", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PGRE", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PHZD", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PMIS", "MNAM"),  # xEdit wbDefinitionsFO4.pas:3264 wbString(ReferenceRecord)
+    ("PROJ", "NAM1"),  # xEdit wbDefinitionsFO4.pas:7173 wbString
+    ("RACE", "ANAM"),  # xEdit wbDefinitionsFO4.pas:11196 wbString
+    ("RACE", "HNAM"),  # xEdit wbDefinitionsFO4.pas:11340 wbString
+    ("RACE", "NAME"),  # xEdit wbDefinitionsFO4.pas:11248 wbString
+    ("RACE", "ZNAM"),  # xEdit wbDefinitionsFO4.pas:11033 wbString(wbEquipSlot)
+    ("REFR", "MNAM"),  # xEdit wbDefinitionsFO4.pas:11865 wbString
+    ("SCEN", "NNAM"),  # xEdit wbDefinitionsFO4.pas:9130 wbString
+    ("SNDR", "FNAM"),  # xEdit wbDefinitionsFO4.pas:9446 wbString
+    ("SNDR", "NNAM"),  # xEdit wbDefinitionsFO4.pas:9408 wbString
+    ("SPGD", "MNAM"),  # xEdit wbDefinitionsFO4.pas:6160 wbString
+    ("TERM", "VNAM"),  # xEdit wbDefinitionsFO4.pas:12752 wbString
+    ("TES4", "CNAM"),  # xEdit wbDefinitionsFO4.pas:12102 wbString
+    ("TES4", "SNAM"),  # xEdit wbDefinitionsFO4.pas:12103 wbString
+    ("TXST", "MNAM"),  # xEdit wbDefinitionsFO4.pas:7003 wbString
+    ("WATR", "NAM2"),  # xEdit wbDefinitionsFO4.pas:12872 wbString
+    ("WATR", "NAM3"),  # xEdit wbDefinitionsFO4.pas:12873 wbString
+    ("WATR", "NAM4"),  # xEdit wbDefinitionsFO4.pas:12874 wbString
+    ("WRLD", "NNAM"),  # xEdit wbDefinitionsFO4.pas:13170 wbString
+    ("WRLD", "TNAM"),  # xEdit wbDefinitionsFO4.pas:13172 wbString
 ]
 
 
