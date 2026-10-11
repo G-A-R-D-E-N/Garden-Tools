@@ -1,6 +1,6 @@
 #include "fo4/c_api_quest.h"
 
-#include "c_api_internal.hpp"
+#include "c_api_env_internal.hpp"
 #include "fo4/quest/structure.hpp"
 
 #include <algorithm>
@@ -14,6 +14,8 @@
 #include <string_view>
 #include <type_traits>
 #include <vector>
+
+using namespace radicle_c_env_detail;
 
 struct radicle_quest_structure {
   std::deque<std::string> strings;
