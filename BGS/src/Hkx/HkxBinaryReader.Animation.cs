@@ -83,6 +83,10 @@ public partial class HkxBinaryReader
             maskAndQuantSize = Align(4 * anim.NumTracks, 4);
         if (anim.NumFrames == 0 && anim.FrameDuration > 0 && anim.Duration > 0)
             anim.NumFrames = (int)Math.Round(anim.Duration / anim.FrameDuration) + 1;
+        if (anim.NumFrames < 0 || anim.NumTracks < 0 || anim.MaxFramesPerBlock < 0)
+            throw new InvalidDataException($"Spline animation has a negative frame count {anim.NumFrames}, track count {anim.NumTracks} or frames per block {anim.MaxFramesPerBlock}.");
+        if ((long)anim.NumFrames * anim.NumTracks > MaxFrameTracks)
+            throw new InvalidDataException($"Spline animation declares {anim.NumFrames} frames for {anim.NumTracks} tracks, more than the decoder accepts.");
 
         int blockOffsetsCount = SafeReadI32(data, a + 0x60);
         List<int> blockOffsets = new();
@@ -102,6 +106,8 @@ public partial class HkxBinaryReader
 
         if (blobAbs > 0 && blockOffsets.Count > 0 && anim.NumTracks > 0 && anim.NumFrames > 0)
         {
+            if ((long)anim.NumTracks * 4 > data.Length - blobAbs)
+                throw new InvalidDataException($"Spline animation declares {anim.NumTracks} tracks, each needing a 4-byte mask past the end of the file.");
             DecompressSpline(data, blobAbs, blobCount, anim.NumTracks, anim.NumFrames,
                 anim.NumBlocks, anim.MaxFramesPerBlock, blockOffsets, maskAndQuantSize, anim);
         }
@@ -186,6 +192,8 @@ public partial class HkxBinaryReader
             int evtCount = SafeReadI32(data, dataAbs + trackRel + 0x10);
             if (evtCount > 0 && fixups.TryGetValue(trackRel + 0x08, out int evtRel))
             {
+                if (evtCount > MaxAnnotationEvents - anim.Annotations.Count)
+                    throw new InvalidDataException($"Annotation tracks declare more than {MaxAnnotationEvents} events in total, more than the reader accepts.");
                 for (int j = 0; j < evtCount; j++)
                 {
                     int e = dataAbs + evtRel + j * 0x10;
@@ -201,7 +209,8 @@ public partial class HkxBinaryReader
     }
 
     private const int LosslessDuration = 20, LosslessTransformTracks = 24, LosslessNumFrames = 216;
-    private const long MaxLosslessFrameTracks = 1L << 22;
+    private const long MaxFrameTracks = 1L << 22;
+    private const int MaxAnnotationEvents = 1 << 16;
 
     private const int AnimationAnnotationTracks = 0x28;
     private const int LosslessDynamicTranslations = 56, LosslessStaticTranslations = 72, LosslessTranslationWords = 88;
@@ -222,7 +231,7 @@ public partial class HkxBinaryReader
         if (anim.NumFrames < 0 || anim.NumTracks < 0)
             throw new InvalidDataException($"Lossless animation has a negative frame count {anim.NumFrames} or track count {anim.NumTracks}.");
         if (anim.NumFrames == 0 || anim.NumTracks == 0) return;
-        if ((long)anim.NumFrames * anim.NumTracks > MaxLosslessFrameTracks)
+        if ((long)anim.NumFrames * anim.NumTracks > MaxFrameTracks)
             throw new InvalidDataException($"Lossless animation declares {anim.NumFrames} frames for {anim.NumTracks} tracks, more than the decoder accepts.");
 
         anim.NumBlocks = 1;

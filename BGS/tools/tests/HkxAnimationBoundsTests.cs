@@ -11,6 +11,7 @@ public sealed class HkxAnimationBoundsTests
     private const string LosslessClass = "hkaLosslessCompressedAnimation";
     private const string InterleavedClass = "hkaInterleavedUncompressedAnimation";
     private const string BindingClass = "hkaAnimationBinding";
+    private const string SplineClass = "hkaSplineCompressedAnimation";
 
     [Fact]
     public void HugeDeclaredArrayCountIsRejectedBeforeAllocation()
@@ -113,6 +114,62 @@ public sealed class HkxAnimationBoundsTests
     }
 
     [Fact]
+    public void AnnotationEventsSharedByTracksStayWithinBudget()
+    {
+        const int tracks = 1024, events = 1024;
+        byte[] bytes = Packfile(LosslessClass, (c, a) =>
+        {
+            SetLossless(c, a, frames: 4, tracks: 1);
+            int run = c.AppendBlock(events * 0x10);
+            int array = c.AppendBlock(tracks * 0x18);
+            for (int t = 0; t < tracks; t++)
+            {
+                c.SetPointer(array + t * 0x18 + 0x08, run);
+                c.SetWord(array + t * 0x18 + 0x10, events);
+            }
+            c.SetArray(a, "hkaAnimation", "annotationTracks", tracks, array);
+        }, out _);
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadAnimation(bytes));
+    }
+
+    [Fact]
+    public void HugeSplineTrackCountIsRejectedBeforeAllocation()
+    {
+        byte[] bytes = Packfile(SplineClass, (c, a) =>
+        {
+            c.SetWord(a.Offset + 0x18, 1 << 20);
+            c.SetWord(a.Offset + 0x38, 1);
+            c.SetWord(a.Offset + 0x3C, 1);
+            c.SetWord(a.Offset + 0x40, 1);
+            c.SetWord(a.Offset + 0x60, 1);
+            c.SetPointer(a.Offset + 0x58, a.Offset);
+            c.SetPointer(a.Offset + 0x98, a.Offset);
+        }, out _);
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadAnimation(bytes));
+    }
+
+    [Fact]
+    public void SplineBlockFramesAreCappedAtNumFrames()
+    {
+        byte[] bytes = Packfile(SplineClass, (c, a) =>
+        {
+            c.SetWord(a.Offset + 0x18, 1);
+            c.SetWord(a.Offset + 0x38, 2);
+            c.SetWord(a.Offset + 0x3C, 2);
+            c.SetWord(a.Offset + 0x40, int.MaxValue);
+            c.SetWord(a.Offset + 0x60, 2);
+            c.SetPointer(a.Offset + 0x58, a.Offset);
+            c.SetPointer(a.Offset + 0x98, a.Offset);
+        }, out _);
+
+        var animation = new HkxBinaryReader().ReadAnimation(bytes);
+
+        Assert.Equal(2, animation.Tracks[0].Translations.Count);
+    }
+
+    [Fact]
     public void TryReadAnimationReportsHugeCountAsInvalidData()
     {
         byte[] bytes = Packfile(LosslessClass, (c, a) =>
@@ -170,13 +227,24 @@ public sealed class HkxAnimationBoundsTests
 
         public NativeAppend.Added Object(string className) => NativeAppend.Object(_image, className);
 
-        public void SetArray(NativeAppend.Added obj, string className, string member, int count)
+        public void SetArray(NativeAppend.Added obj, string className, string member, int count, int? target = null)
         {
             var data = _image.Section("__data__")!;
             int field = obj.Offset + HavokClasses.Shipped.Field(className, member)!.Offset;
-            data.SetLocal(field, obj.Offset);
+            data.SetLocal(field, target ?? obj.Offset);
             BitConverter.GetBytes(count).CopyTo(data.Data, field + _image.Layout.PointerSize);
         }
+
+        public int AppendBlock(int size)
+        {
+            var data = _image.Section("__data__")!;
+            data.AlignData(16);
+            return data.AppendData(new byte[size]);
+        }
+
+        public void SetPointer(int at, int target) => _image.Section("__data__")!.SetLocal(at, target);
+
+        public void SetWord(int at, int value) => BitConverter.GetBytes(value).CopyTo(_image.Section("__data__")!.Data, at);
 
         public void SetScalar(NativeAppend.Added obj, string className, string member, int value) =>
             BitConverter.GetBytes(value).CopyTo(_image.Section("__data__")!.Data,
