@@ -149,6 +149,7 @@ add_library(fo4
   src/schema/non_formid_slots.cpp
   src/schema/scalar.cpp
   src/schema/field_address.cpp
+  src/schema/formlink_slots.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
