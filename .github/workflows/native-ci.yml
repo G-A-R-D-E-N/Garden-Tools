@@ -536,7 +536,7 @@ jobs:
             Write-Output "::warning::could not fetch base branch $env:GITHUB_BASE_REF; running all real-data tests."
             exit 0
           }
-          $changed = @(git diff --name-only FETCH_HEAD HEAD)
+          $changed = @(git diff --name-only --no-renames FETCH_HEAD HEAD)
           if ($LASTEXITCODE -ne 0 -or -not $changed) {
             Write-Output '::warning::could not determine the changed files; running all real-data tests.'
             exit 0
