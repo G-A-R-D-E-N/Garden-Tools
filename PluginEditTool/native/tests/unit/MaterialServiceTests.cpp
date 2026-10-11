@@ -207,3 +207,17 @@ TEST_CASE("Native material edit keeps raw bool and tile flag bytes on unrelated 
     f32(expected, 3.25F);
     CHECK(readFile(output) == expected);
 }
+
+TEST_CASE("Native material service refuses an embedded NUL in a string field without writing") {
+    const auto source = tempFile(".bgem");
+    Cleanup cleanup{{source}};
+    const auto original = minimalBgem();
+    writeFile(source, original);
+
+    fo4ide::material::MaterialService service;
+    const std::map<std::string, std::string, std::less<>> changes{{"BaseTexture", std::string("a\0b", 3)}};
+    const auto changed = service.setFields(source, changes);
+    REQUIRE_FALSE(changed.has_value());
+    CHECK(changed.error().type == "MaterialFieldParseFailed");
+    CHECK(readFile(source) == original);
+}

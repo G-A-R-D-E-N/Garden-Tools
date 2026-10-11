@@ -139,6 +139,7 @@ void assign(MaterialFile& file, const MaterialField& field, const std::string& v
         return;
     }
     case FieldType::string:
+        if (value.find('\0') != std::string::npos) throw std::runtime_error("material string values cannot contain an embedded NUL byte");
         fo4::material::set_text(file, field.name, value);
         return;
     }
@@ -255,7 +256,7 @@ Result<std::string> MaterialService::setFields(
     try {
         for (const auto& [name, value] : fields) {
             if (!applyField(*file, name, value)) {
-                return std::unexpected(Error{"MaterialUnknownField", "Unknown material field '" + name + "'"});
+                return std::unexpected(Error{"MaterialUnknownField", "Unknown material field '" + name + "'. A conditional field such as EmittanceColor is listed only when its switch (EmitEnabled) is already true in the saved file. Setting the switch in the same call does not add it, so set the switch first and the field in a later call."});
             }
             applied.push_back(name);
         }

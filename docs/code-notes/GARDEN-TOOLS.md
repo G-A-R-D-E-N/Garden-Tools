@@ -1594,3 +1594,8 @@ Behaviour changes from the old native codec:
 - `Version` and `Signature`: a request equal to the current value is a no-op. Any other value is `MaterialFieldParseFailed`, as before.
 - The "Set N field(s)" message lists the names as requested, not the canonical spelling of a case-insensitive name.
 - `Document` is removed. `load` returns `fo4::material::MaterialFile` directly.
+- A string field value with an embedded NUL is refused with `MaterialFieldParseFailed` before anything is written (`MaterialService.cpp:assign`, string case). Test: `PluginEditTool/native/tests/unit/MaterialServiceTests.cpp` "Native material service refuses an embedded NUL in a string field without writing". Without the check, `set_text` stores `a`, NUL, `b`, NUL and the file would hold a path that a NUL-terminated consumer reads as `a`.
+
+## Radicle/src/material/material_file.cpp:set_text
+
+`set_text` stores the value plus exactly one NUL, and `text` (`Radicle/src/material/material_file.cpp:text`) strips exactly one. The codec therefore reads back any value it wrote, including one with an embedded NUL, and a value with trailing NULs keeps all but the last one (`a.dds` plus two NULs reads back as `a.dds` plus one NUL). This is deliberate. The old PET code stripped every trailing NUL, so that malformed case now differs. The codec does not refuse embedded NULs; PET's `MaterialService.cpp:assign` does, because the texture path consumers treat the string as NUL-terminated and would truncate it. Keep the two rules separate when changing either side.
