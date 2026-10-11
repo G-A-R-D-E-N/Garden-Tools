@@ -139,7 +139,7 @@ TEST_CASE("HTTP refuses Host headers that are not this loopback server") {
     CHECK(local->status == 200);
 }
 
-TEST_CASE("HTTP RPC accepts a body carrying the largest dropped file") {
+TEST_CASE("HTTP RPC accepts a body carrying the largest dropped file", "[large]") {
     ServerFixture fixture;
     httplib::Client client("127.0.0.1", fixture.port);
     const std::vector<std::byte> file(fo4ide::core::kMaxDroppedFileBytes);
