@@ -451,6 +451,31 @@ std::optional<Error> parseQuestCondition(
     return std::nullopt;
 }
 
+void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
+                           std::vector<fo4::CtdaCondition>& conditions) {
+    const auto withoutPadding = [](fo4::CtdaCondition condition) {
+        condition.padding = {};
+        return condition;
+    };
+    std::vector<bool> used(previous.size(), false);
+    for (auto& condition : conditions) {
+        condition.padding = {};
+        const auto payload = fo4::serialize_ctda_condition(condition);
+        for (std::size_t index = 0; index < previous.size(); ++index) {
+            const auto& candidate = previous[index];
+            if (used[index] ||
+                fo4::serialize_ctda_condition(withoutPadding(candidate)) != payload ||
+                candidate.parameter1_string != condition.parameter1_string ||
+                candidate.parameter2_string != condition.parameter2_string) {
+                continue;
+            }
+            condition.padding = candidate.padding;
+            used[index] = true;
+            break;
+        }
+    }
+}
+
 std::optional<Error> adapterConditionUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::ConflictGraph& graph,
