@@ -52,7 +52,14 @@ std::optional<SlotTargets> slot_targets(Signature record,
                                         Signature subrecord,
                                         std::size_t offset) noexcept {
   for (const auto& field : schema::formlink_fields(record)) {
-    if (field.subrecord == subrecord && field.offset == offset) {
+    const auto& address = field.address;
+    if (address.when.count != 0) continue;
+    const bool strided = address.stride != 0;
+    const bool slot_matches =
+        strided ? offset >= address.array_offset &&
+                      (offset - address.array_offset) % address.stride == field.offset
+                : field.offset == offset;
+    if (field.subrecord == subrecord && slot_matches) {
       return SlotTargets{false, schema::formlink_field_targets(field)};
     }
   }

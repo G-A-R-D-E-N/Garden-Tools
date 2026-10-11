@@ -1,6 +1,7 @@
 #include "fo4/plugin/writer.hpp"
 
 #include "fo4/io/atomic_write.hpp"
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/onam.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
@@ -268,15 +269,6 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
   tes4.original_range.clear();
 }
 
-bool group_label_is_form_id(std::int32_t type) {
-  return type == static_cast<std::int32_t>(GroupType::world_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_children) ||
-         type == static_cast<std::int32_t>(GroupType::topic_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_persistent_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_temporary_children) ||
-         type == static_cast<std::int32_t>(GroupType::cell_visible_distant_children);
-}
-
 void set_group_label_u32(GroupHeader& header, std::uint32_t value) {
   header.label[0] = std::byte{static_cast<std::uint8_t>(value)};
   header.label[1] = std::byte{static_cast<std::uint8_t>(value >> 8)};
@@ -344,6 +336,19 @@ void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) 
 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
   assign_record_form_keys(plugin);
+  if (plugin.header.tes4_flags.is_small_file() && new_masters.empty() &&
+      allows_hardcoded_range(plugin)) {
+    std::size_t stranded = 0;
+    for (const auto* record : collect_records(plugin)) {
+      if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;
+      if (record->form_key.local().value() < k_first_full_local_id) ++stranded;
+    }
+    if (stranded > 0) {
+      throw FormIdError("removing the last master from light plugin " +
+                        std::string(plugin.key.filename()) + " would invalidate " +
+                        std::to_string(stranded) + " own record(s) below 0x800; renumber them first");
+    }
+  }
   const auto old_context = plugin_form_id_context(plugin);
   const auto old_masters = plugin.header.masters;
 

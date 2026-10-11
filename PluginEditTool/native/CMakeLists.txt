@@ -36,9 +36,9 @@ if(NOT TARGET ZLIB::ZLIB)
     set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(
         fo4ide_zlib
-        URL https://github.com/madler/zlib/archive/51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf.tar.gz
-        URL_HASH SHA256=d9e270d46252734aa49770fbc544125391617956266f220bd63216c834f3a522
-        INACTIVITY_TIMEOUT 60
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+        GIT_SHALLOW FALSE
     )
     FetchContent_MakeAvailable(fo4ide_zlib)
     if(TARGET zlibstatic)
