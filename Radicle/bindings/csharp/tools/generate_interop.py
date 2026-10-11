@@ -135,7 +135,7 @@ def param_cs(model, ctype, name, array):
             return f"{type_name(base)} {ident}"
         raise SystemExit(f"unmapped parameter {ctype} {name}")
     if base == "char" and depth == 1 and "const" in ctype:
-        return f"[MarshalAs(UnmanagedType.LPUTF8Str)] string? {ident}"
+        return f"[MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? {ident}"
     if base in model.opaque or base == "char" or base == "void":
         return "IntPtr" + "*" * (depth - 1) + f" {ident}"
     if base in SCALARS or base in model.enums or base in model.structs:

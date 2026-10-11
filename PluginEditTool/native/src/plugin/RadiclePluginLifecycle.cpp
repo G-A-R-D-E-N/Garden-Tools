@@ -340,6 +340,14 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         return std::unexpected(Error{"RaceCreateFailed", error.what()});
     } catch (const fo4::forms::ProjExplHazdError& error) {
         return std::unexpected(Error{"ProjExplHazdCreateFailed", error.what()});
+    } catch (const fo4::FormIdError& error) {
+        const auto code = signatureText == "CELL" ? "CellCreateFailed"
+            : signatureText == "EYES"             ? "EyesCreateFailed"
+            : signatureText == "RACE"             ? "RaceCreateFailed"
+            : (signatureText == "ARMO" || signatureText == "ARMA") ? "ArmorCreateFailed"
+            : signatureText == "LVSP"             ? "LeveledSpellCreateFailed"
+                                                  : "ProjExplHazdCreateFailed";
+        return std::unexpected(Error{code, error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"RecordCreateFailed", error.what()});
     }
@@ -405,6 +413,28 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
                 "RecordReferenced",
                 "Cannot delete a record while loaded records still reference it: " + formKeyText
             });
+        }
+        for (const auto& removed : fo4::records_removed_by_delete(loaded->plugin, key)) {
+            const bool ownedElsewhere = removed.owner() != loaded->plugin.key;
+            for (const auto& version : graph_.versions(removed)) {
+                if (ownedElsewhere || version.plugin == loaded->plugin.key) continue;
+                return std::unexpected(Error{
+                    "RecordHasExternalVersions",
+                    "Cannot delete " + formKeyText + ": " + std::string(version.plugin.filename()) +
+                        " overrides " + removed.to_string() + " inside it"
+                });
+            }
+            const bool masterKeepsRecord = ownedElsewhere && std::ranges::any_of(
+                graph_.versions(removed),
+                [&](const auto& version) { return version.plugin == removed.owner(); });
+            for (const auto& reference : graph_.referenced_by(removed)) {
+                if (reference.plugin == loaded->plugin.key || masterKeepsRecord) continue;
+                return std::unexpected(Error{
+                    "RecordReferenced",
+                    "Cannot delete " + formKeyText + ": " + reference.source.to_string() + " in " +
+                        std::string(reference.plugin.filename()) + " refers to " + removed.to_string() + " inside it"
+                });
+            }
         }
 
         auto mutated = loaded->plugin;

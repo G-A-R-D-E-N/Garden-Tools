@@ -17,6 +17,7 @@ constexpr Signature sig_cis2 = Signature::from_string("CIS2");
 // match Radicle's existing CTDA remap table in form_links.cpp and Mutagen's
 // Condition layout (see Condition.xml + the overlay field offsets).
 constexpr std::size_t k_ctda_flags = 0;
+constexpr std::size_t k_ctda_padding = 1;
 constexpr std::size_t k_ctda_compare = 4;
 constexpr std::size_t k_ctda_function = 8;
 constexpr std::size_t k_ctda_unknown2 = 10;
@@ -81,16 +82,14 @@ std::vector<std::byte> zstring_bytes(std::string_view text) {
 }  // namespace
 
 CtdaCondition parse_ctda_condition(std::span<const std::byte> payload) {
-  if (payload.size() < k_ctda_function + 2) {
-    throw std::out_of_range("CTDA payload too short for the function slot");
+  if (payload.size() != k_ctda_size) {
+    throw std::out_of_range("CTDA payload must be 32 bytes");
   }
   CtdaCondition condition;
   condition.flags_byte = std::to_integer<std::uint8_t>(payload[k_ctda_flags]);
-  condition.function = read_u16(payload, k_ctda_function);
-  if (payload.size() < k_ctda_size) {
-    throw std::out_of_range("CTDA payload too short");
-  }
+  std::memcpy(condition.padding.data(), payload.data() + k_ctda_padding, condition.padding.size());
   condition.comparison_raw = read_u32(payload, k_ctda_compare);
+  condition.function = read_u16(payload, k_ctda_function);
   condition.unknown2 = read_u16(payload, k_ctda_unknown2);
   condition.param1 = read_i32(payload, k_ctda_param1);
   condition.param2 = read_i32(payload, k_ctda_param2);
@@ -103,6 +102,7 @@ CtdaCondition parse_ctda_condition(std::span<const std::byte> payload) {
 std::vector<std::byte> serialize_ctda_condition(const CtdaCondition& condition) {
   std::vector<std::byte> out(k_ctda_size);
   out[k_ctda_flags] = std::byte{condition.flags_byte};
+  std::memcpy(out.data() + k_ctda_padding, condition.padding.data(), condition.padding.size());
   write_u32(out, k_ctda_compare, condition.comparison_raw);
   write_u16(out, k_ctda_function, condition.function);
   write_u16(out, k_ctda_unknown2, condition.unknown2);
@@ -142,12 +142,14 @@ std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
                                                    std::size_t begin,
                                                    std::size_t end) {
   std::vector<CtdaCondition> conditions;
+  bool run_open = true;
   end = std::min(end, record.subrecords.size());
   for (std::size_t i = begin; i < end; ++i) {
     const auto& subrecord = record.subrecords[i];
     if (subrecord.signature == sig_ctda) {
+      if (!run_open) throw CtdaMultipleListsError("condition scope has more than one list");
       conditions.push_back(parse_ctda_condition(subrecord.data));
-    } else if (!conditions.empty() &&
+    } else if (run_open && !conditions.empty() &&
                (subrecord.signature == sig_cis1 || subrecord.signature == sig_cis2)) {
       auto& last = conditions.back();
       if (subrecord.signature == sig_cis1) {
@@ -155,6 +157,8 @@ std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
       } else {
         last.parameter2_string = zstring_of(subrecord.data);
       }
+    } else if (!conditions.empty()) {
+      run_open = false;
     }
   }
   return conditions;
