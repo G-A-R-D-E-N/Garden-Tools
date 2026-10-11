@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <fstream>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <utility>
 
@@ -328,6 +329,17 @@ std::vector<const Record*> collect_records(const Plugin& plugin) {
   out.push_back(&plugin.tes4);
   for (const auto& group : plugin.groups) {
     collect_records_in_group(group, out);
+  }
+  return out;
+}
+
+std::vector<const Record*> collect_first_records(const Plugin& plugin) {
+  std::vector<const Record*> out;
+  std::set<FormKey> seen;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->header.signature == sig_tes4 || seen.insert(record->form_key).second) {
+      out.push_back(record);
+    }
   }
   return out;
 }
