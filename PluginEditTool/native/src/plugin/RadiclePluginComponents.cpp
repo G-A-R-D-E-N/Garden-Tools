@@ -114,6 +114,12 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
     if (recordText.empty()) {
         return std::unexpected(Error{"RecordMissing", "Record is empty"});
     }
+    if (componentsJson.empty()) {
+        return std::unexpected(Error{
+            "InvalidComponentsJson",
+            "conditions JSON is empty; pass [] to clear"
+        });
+    }
 
     OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
@@ -141,7 +147,7 @@ Result<nlohmann::json> RadiclePluginBackend::setComponents(
 
     nlohmann::json document;
     try {
-        document = nlohmann::json::parse(componentsJson.empty() ? "[]" : componentsJson);
+        document = nlohmann::json::parse(componentsJson);
     } catch (const std::exception& error) {
         return std::unexpected(Error{
             "InvalidComponentsJson",

@@ -192,6 +192,12 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
     if (recordId.empty()) {
         return std::unexpected(Error{"RecordMissing", "Record FormKey is empty"});
     }
+    if (conditionsJson.empty()) {
+        return std::unexpected(Error{
+            "InvalidConditionsJson",
+            "conditions JSON is empty; pass [] to clear"
+        });
+    }
 
     OpLock lock(*this, OpLock::Mode::Write, {pluginName});
     auto* loaded = findPlugin(pluginName);
@@ -248,8 +254,7 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
     std::vector<fo4::CtdaCondition> built;
     std::vector<std::string> failures;
     try {
-        nlohmann::json document = nlohmann::json::parse(
-            conditionsJson.empty() ? "[]" : conditionsJson);
+        nlohmann::json document = nlohmann::json::parse(conditionsJson);
         if (!document.is_array()) {
             return std::unexpected(Error{
                 "InvalidConditionsJson",

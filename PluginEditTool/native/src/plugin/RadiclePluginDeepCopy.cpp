@@ -281,7 +281,8 @@ Result<nlohmann::json> RadiclePluginBackend::deepCopyAsOverride(
                            targetName + " loads before other plugins that override them (" +
                            losingSample + ") and will require load-order confirmation.";
             }
-            preview += " Re-run with apply=true.";
+            preview += capped ? " Raise the cap, then re-run with apply=true."
+                              : " Re-run with apply=true.";
             return nlohmann::json(std::move(preview));
         }
 

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
@@ -211,6 +212,7 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
         std::int64_t parsed = 0;
         if (value.is_string()) {
             text = value.get<std::string>();
+            if (text.empty()) return true;
             char* end = nullptr;
             parsed = std::strtoll(text.c_str(), &end, 10);
             if (end == text.c_str() || *end != '\0') {
@@ -296,7 +298,12 @@ std::optional<fo4::CtdaCondition> buildCondition(const nlohmann::json& element,
             failure = "value must be a number";
             return std::nullopt;
         }
-        value = element["value"].get<float>();
+        const auto number = element["value"].get<double>();
+        if (!std::isfinite(number) || std::fabs(number) > std::numeric_limits<float>::max()) {
+            failure = "value out of float range";
+            return std::nullopt;
+        }
+        value = static_cast<float>(number);
     }
     if (isPresent(element, "compareGlobal")) {
         const auto raw = element["compareGlobal"].is_string()

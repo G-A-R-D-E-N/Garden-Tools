@@ -261,6 +261,51 @@ TEST_CASE("list replace: SetConditions with an explicit empty list clears the re
     CHECK(conditions.empty());
 }
 
+TEST_CASE("list replace: SetConditions refuses an empty string and keeps the list") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeWeaponWithThreeConditions());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+
+    const auto result = backend.invoke(
+        "backend.SetConditions",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", ""}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidConditionsJson");
+    CHECK(result.error().message == "conditions JSON is empty; pass [] to clear");
+
+    CHECK_FALSE(isPending(backend));
+    const auto conditions = parseStringResult(backend.invoke(
+        "backend.GetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"})));
+    REQUIRE(conditions.size() == 3);
+    CHECK(conditions[0].at("value") == 1.0f);
+}
+
+TEST_CASE("list replace: SetConditionsAtPath refuses an empty string and keeps the scope") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeSpellWithThreeEffectConditions());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPatch(backend, path);
+
+    const auto result = backend.invoke(
+        "backend.SetConditionsAtPath",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Effects[0].Conditions", ""}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "InvalidConditionsJson");
+    CHECK(result.error().message == "conditions JSON is empty; pass [] to clear");
+
+    CHECK_FALSE(isPending(backend));
+    const auto conditions = parseStringResult(backend.invoke(
+        "backend.GetConditionsAtPath",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Effects[0].Conditions"})));
+    REQUIRE(conditions.size() == 3);
+    CHECK(conditions[0].at("value") == 1.0f);
+}
+
 TEST_CASE("list replace: SetConditionsAtPath refuses a partly bad list and stages nothing") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

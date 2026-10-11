@@ -311,6 +311,8 @@ TEST_CASE("Native DeepCopyAsOverride refuses to apply a capped copy and stages n
     REQUIRE(preview.has_value());
     REQUIRE(preview->is_string());
     CHECK(preview->get<std::string>().find(capText) != std::string::npos);
+    CHECK(preview->get<std::string>().find("Raise the cap, then re-run with apply=true.") !=
+          std::string::npos);
 
     const auto refused = backend.deepCopyAsOverride(nlohmann::json::array({
         "Base.esm", "000801:Base.esm", "Patch.esp", true, false, 1

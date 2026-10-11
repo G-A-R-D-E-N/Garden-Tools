@@ -85,6 +85,11 @@ TEST_CASE("condition codec: string value fails the entry") {
     CHECK(failureOf(element) == "value must be a number");
 }
 
+TEST_CASE("condition codec: value outside the float range fails the entry") {
+    const nlohmann::json element = {{"function", "GetAngle"}, {"value", 1e39}};
+    CHECK(failureOf(element) == "value out of float range");
+}
+
 TEST_CASE("condition codec: unknown runOn fails the entry") {
     const nlohmann::json element = {{"function", "GetAngle"}, {"runOn", "Nowhere"}};
     CHECK(failureOf(element) == "unknown runOn 'Nowhere'");
@@ -278,10 +283,12 @@ TEST_CASE("condition codec: an integer param string that is neither integer nor 
     const nlohmann::json unknown = {{"function", "GetAngle"}, {"param1", "NoSuchForm"}};
     CHECK(failureOf(unknown) == "param1 'NoSuchForm' is not an integer or form ID");
 
-    const nlohmann::json empty = {{"function", "GetAngle"}, {"param2", ""}};
-    CHECK(failureOf(empty) == "param2 '' is not an integer or form ID");
-
     std::string failure;
+    const nlohmann::json empty = {{"function", "GetAngle"}, {"param2", ""}};
+    const auto emptyCondition = buildFrom(empty, failure);
+    REQUIRE(emptyCondition.has_value());
+    CHECK(emptyCondition->param2 == 0);
+
     const nlohmann::json integerText = {{"function", "GetAngle"}, {"param1", "12"}};
     const auto integer = buildFrom(integerText, failure);
     REQUIRE(integer.has_value());
