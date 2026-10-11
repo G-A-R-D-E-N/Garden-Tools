@@ -138,3 +138,24 @@ TEST(Maintenance, EslEligibilityKeepsTheFullFloorWithoutHedrOneAndAMaster) {
   EXPECT_EQ(fo4::esl_eligibility(make_plugin("Mod.esp", {"Base.esm"}, mastered, 0.95f)).capacity, 0x800u);
   EXPECT_EQ(fo4::esl_eligibility(make_plugin("Mod.esp", {"Base.esm"}, mastered)).capacity, 0xFFEu);
 }
+
+TEST(Maintenance, EslEligibilityCountsNativeIdsBelowTheTargetFloor) {
+  const auto masterless = [](std::uint32_t id) {
+    return fo4::esl_eligibility(make_plugin("Mod.esp", {}, {{"MISC", id, std::string_view{"M\0", 2}}}));
+  };
+  EXPECT_EQ(masterless(0x7FF).out_of_range, 1u);
+  EXPECT_EQ(masterless(0x7FF).capacity, 0x800u);
+  EXPECT_EQ(masterless(0x800).out_of_range, 0u);
+  EXPECT_EQ(masterless(0xFFF).out_of_range, 0u);
+  EXPECT_EQ(masterless(0x1000).out_of_range, 1u);
+
+  const auto mastered = [](std::uint32_t id, float version = 1.0f) {
+    return fo4::esl_eligibility(
+        make_plugin("Mod.esp", {"Base.esm"}, {{"MISC", 0x01000000u | id, std::string_view{"M\0", 2}}}, version));
+  };
+  EXPECT_EQ(mastered(0x000).out_of_range, 1u);
+  EXPECT_EQ(mastered(0x001).out_of_range, 0u);
+  EXPECT_EQ(mastered(0x7FF).out_of_range, 0u);
+  EXPECT_EQ(mastered(0x7FF, 0.95f).out_of_range, 1u);
+  EXPECT_EQ(mastered(0x800, 0.95f).out_of_range, 0u);
+}

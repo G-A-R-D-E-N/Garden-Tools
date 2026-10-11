@@ -536,6 +536,9 @@ Result<nlohmann::json> RadiclePluginBackend::renumberRecord(const nlohmann::json
         }
 
         auto mutated = loaded->plugin;
+        if (newKey != oldKey && fo4::find_record(mutated, newKey) == nullptr) {
+            if (const auto refusal = support::parentGroupRelabelRefusal(mutated, oldKey)) return std::unexpected(*refusal);
+        }
         const auto status = fo4::renumber_local_record(mutated, oldKey, newKey.local());
         switch (status) {
             case fo4::RecordRenumberStatus::record_missing:
