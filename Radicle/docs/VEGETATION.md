@@ -57,7 +57,7 @@ GardenEngine main `5cb5e18131a53e3c7c6fa049ce8fde6a9ad9f742` pins Radicle
 LTEX GNAM or GRAS/TREE/FLOR getter consumer. The probe source for GARDEN-TOOLS
 #342 is in `Radicle/probes/gardenengine/`; it has not been run. It cannot run
 until GardenEngine #148 adds that consumer and moves its Radicle pin. Existing foliage HLOD support does not establish that grass-reader proof.
-The audit and ABI 12 integration are recorded in
+The audit and ABI 26 integration are recorded in
 `docs/code-notes/radicle-vegetation.md` at the repository root.
 
 ## GardenEngine consumer probe

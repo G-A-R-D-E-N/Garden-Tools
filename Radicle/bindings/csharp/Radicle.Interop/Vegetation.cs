@@ -14,8 +14,9 @@ public sealed unsafe partial class RadicleEnvironment
 {
     public Grass? Grass(Record record)
     {
+        using var use = Use(record);
         Native.GrassInfo g;
-        Call.Check(RadicleNative.GrassGetInfo(Handle, record.Handle, &g));
+        Call.Check(RadicleNative.GrassGetInfo(use.Pointer, record.Handle, &g));
         return g.HasData == 0 ? null : new(g.Density, g.MinSlope, g.MaxSlope, g.UnitsFromWater, g.WaterType,
             g.PositionRange, g.HeightRange, g.ColorRange, g.WavePeriod, g.Flags);
     }
@@ -25,8 +26,9 @@ public sealed unsafe partial class RadicleEnvironment
 
     public Tree Tree(Record record)
     {
+        using var use = Use(record);
         Native.TreeInfo t;
-        Call.Check(RadicleNative.TreeGetInfo(Handle, record.Handle, &t));
+        Call.Check(RadicleNative.TreeGetInfo(use.Pointer, record.Handle, &t));
         float[]? wind = null;
         if (t.HasWind != 0) { wind = new float[12]; for (var i = 0; i < wind.Length; ++i) wind[i] = t.Wind[i]; }
         return new(HarvestInfo(t.Harvest), wind);
@@ -34,15 +36,17 @@ public sealed unsafe partial class RadicleEnvironment
 
     public Flora Flora(Record record)
     {
+        using var use = Use(record);
         Native.FloraInfo f;
-        Call.Check(RadicleNative.FloraGetInfo(Handle, record.Handle, &f));
+        Call.Check(RadicleNative.FloraGetInfo(use.Pointer, record.Handle, &f));
         return new(HarvestInfo(f.Harvest), f.HasFlags == 0 ? null : f.Flags);
     }
 
     public IReadOnlyList<FormKey?> LandscapeGrasses(Record record)
     {
+        using var use = Use(record);
         Native.GrassLinks* g;
-        Call.Check(RadicleNative.LandscapeGrassesDecode(Handle, record.Handle, &g));
+        Call.Check(RadicleNative.LandscapeGrassesDecode(use.Pointer, record.Handle, &g));
         try { return Call.Copy<Native.FormKey>(g->Grasses, g->GrassCount).Select(FormKey.FromNative).ToArray(); }
         finally { RadicleNative.LandscapeGrassesFree(g); }
     }

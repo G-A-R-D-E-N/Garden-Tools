@@ -11,7 +11,7 @@ from field_address_codegen import parse_address, reject_overlaps, render_address
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
-STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "offset", "payload_size", "stride", "array_offset"}
+STRING_FORBIDDEN = {"storage", "presentation", "minimum", "maximum", "offset", "payload_size", "minimum_payload_size", "stride", "array_offset"}
 PRESENTATIONS = {"identity", "percent_0_100"}
 # Missing-field insertion is intentionally not generated yet. Safe insertion
 # requires record-level subrecord ordering metadata, not only a scalar field row.
@@ -140,6 +140,17 @@ def load_fields(schema_path: Path):
                 if address["stride"] and (payload_size - address["array_offset"]) % address["stride"] != 0:
                     raise ValueError(f"payload_size does not hold whole stride elements: {path!r}")
 
+            minimum_payload_size = field.get("minimum_payload_size", 0)
+            if "minimum_payload_size" in field:
+                if not embedded:
+                    raise ValueError(f"minimum_payload_size requires an embedded field: {path!r}")
+                if type(minimum_payload_size) is not int or minimum_payload_size <= 0:
+                    raise ValueError(f"minimum_payload_size must be a positive integer: {path!r}")
+                if minimum_payload_size < offset + WIDTHS[storage]:
+                    raise ValueError(f"minimum_payload_size is smaller than the field end: {path!r}")
+                if payload_size and minimum_payload_size > payload_size:
+                    raise ValueError(f"minimum_payload_size exceeds payload_size: {path!r}")
+
             if is_string:
                 minimum = maximum = 0.0
             else:
@@ -172,6 +183,7 @@ def load_fields(schema_path: Path):
                 "offset": offset,
                 "embedded": embedded,
                 "payload_size": payload_size,
+                "minimum_payload_size": minimum_payload_size,
                 "address": address,
                 "can_insert": False,
             })
@@ -201,6 +213,7 @@ def render(fields) -> str:
             f"{field['offset']}, " +
             ("true" if field["embedded"] else "false") + f", {field['payload_size']}, " +
             render_address(field["address"]) +
+            (f", {field['minimum_payload_size']}" if field["minimum_payload_size"] else "") +
             "}, " +
             ("true" if field["can_insert"] else "false") +
             "},"

@@ -151,14 +151,37 @@ TEST_CASE("Native Spreadsheet grid exposes only safe EDID writes") {
 
     const auto grid = parseResult(backend.invokeBackend(
         "GetRecordsGrid", nlohmann::json::array({"Base.esp", "MISC", 200, 0})));
-    REQUIRE(grid.at("columns").size() == 1);
+    REQUIRE(grid.at("columns").size() == 2);
     CHECK(grid.at("columns")[0] == "EDID");
+    CHECK(grid.at("columns")[1] == "MISC\\Keywords\\Count");
     CHECK(grid.at("total") == 1);
     CHECK(grid.at("offset") == 0);
     REQUIRE(grid.at("rows").size() == 1);
     CHECK(grid.at("rows")[0].at("formKey") == "000800:Base.esp");
     CHECK(grid.at("rows")[0].at("editorId") == "BaseMisc");
     CHECK(grid.at("rows")[0].at("cells")[0] == "BaseMisc");
+    CHECK(grid.at("rows")[0].at("cells")[1] == "0");
+    CHECK(grid.at("rows")[0].at("editable")[0] == true);
+    CHECK(grid.at("rows")[0].at("editable")[1] == false);
+}
+
+TEST_CASE("Native grid refuses all cell edits on protected plugins", "[w0]") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Fallout4.esm";
+    writeBytes(path, makeBase());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{
+        {"plugins", nlohmann::json::array({pluginEntry("Fallout4.esm", path)})}
+    }).has_value());
+    const auto grid = parseResult(backend.invokeBackend(
+        "GetRecordsGrid", nlohmann::json::array({"Fallout4.esm", "MISC", 200, 0})));
+    REQUIRE(grid.at("rows").size() == 1);
+    for (const auto& editable : grid.at("rows")[0].at("editable")) CHECK(editable == false);
+    const auto refused = backend.setFieldValue(nlohmann::json::array({
+        "Fallout4.esm", "000800:Fallout4.esm", "EDID", "Changed"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "PluginReadOnly");
 }
 
 TEST_CASE("Native records-of-type returns winning load-order version") {

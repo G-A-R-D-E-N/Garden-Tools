@@ -32,6 +32,9 @@ radicle_status require(const radicle_env* env, const radicle_record* record, con
   if (env == nullptr || record == nullptr || out == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and an output are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   return RADICLE_STATUS_OK;
 }
 
@@ -164,6 +167,13 @@ radicle_status radicle_climate_decode(const radicle_env* env, const radicle_reco
     v.weather_count = holder->weathers.size();
     v.sun_texture = stored_text(*env, holder->data.sun_texture);
     v.sun_glare_texture = stored_text(*env, holder->data.sun_glare_texture);
+    if (const auto& t = holder->data.timing) {
+      v.has_timing = 1;
+      v.timing = {t->sunrise_begin, t->sunrise_end, t->sunset_begin, t->sunset_end,
+                  t->volatility, t->moons_phase_length,
+                  t->sunrise_begin_hours(), t->sunrise_end_hours(), t->sunset_begin_hours(), t->sunset_end_hours(),
+                  t->days_per_phase(), t->uses_secunda() ? 1 : 0, t->uses_masser() ? 1 : 0};
+    }
     v.internal = holder.get();
     *out_climate = &holder.release()->view;
     return RADICLE_STATUS_OK;
@@ -173,6 +183,22 @@ radicle_status radicle_climate_decode(const radicle_env* env, const radicle_reco
 void radicle_climate_free(radicle_climate* climate) {
   clear_error();
   if (climate != nullptr) delete static_cast<ClimateHolder*>(climate->internal);
+}
+
+radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
+                                                 radicle_form_key key,
+                                                 const radicle_climate_timing_edit* timing) {
+  clear_error();
+  if (plugin == nullptr || timing == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and timing are required");
+  return guarded("unknown exception while editing CLMT timing", [&] {
+    const auto form_key = to_form_key(key);
+    if (!form_key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid climate key is required");
+    const fo4::env::ClimateTiming value{timing->sunrise_begin, timing->sunrise_end,
+                                        timing->sunset_begin, timing->sunset_end,
+                                        timing->volatility, timing->moons_phase_length};
+    return fo4::env::set_climate_timing(plugin->value, *form_key, value)
+               ? RADICLE_STATUS_OK : RADICLE_STATUS_NOT_FOUND;
+  });
 }
 
 radicle_status radicle_weather_decode(const radicle_env* env,
@@ -192,6 +218,14 @@ radicle_status radicle_weather_decode(const radicle_env* env,
     }
     v.fog_distances = data_or_null(holder->data.fog_distances);
     v.fog_distance_count = holder->data.fog_distances.size();
+    if (const auto& p = holder->data.parameters) {
+      v.has_parameters = 1;
+      v.parameters = {p->wind_speed, p->transition_delta, p->sun_glare, p->sun_damage,
+                      p->precipitation_begin, p->precipitation_end, p->lightning_begin, p->lightning_end,
+                      p->lightning_frequency, p->flags, to_c_color(p->lightning_color),
+                      p->visual_effect_begin, p->visual_effect_end, p->wind_direction, p->wind_direction_range,
+                      p->wind_turbulence.has_value() ? 1 : 0, p->wind_turbulence.value_or(0)};
+    }
     v.internal = holder.get();
     *out_weather = &holder.release()->view;
     return RADICLE_STATUS_OK;

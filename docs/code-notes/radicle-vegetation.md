@@ -4,12 +4,12 @@
 
 The #404 integration merges main `c50ad4d5405e1571113019654b10e3d4a05ca0f1` into
 published head `890158cc21dd2626eeda36740ca9fa68274ba913` without rewriting it.
-Main is ABI 11; the five vegetation exports are additive at ABI 12. Preserve all
+Main was ABI 11 at c50ad4d5; the five vegetation exports are additive at ABI 26. Preserve all
 main declarations, append `fo4/c_api_vegetation.h` to the generator's header list,
 and regenerate the managed declarations and native layout probe. The CMake
 source union retains both `c_api_fields.cpp` and `c_api_vegetation.cpp`.
-`Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwelve` pins the native value and
-header together; the generated managed constant is 12 too.
+`Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwentySix` pins the native value and
+header together; the generated managed constant is 26 too.
 
 ## Radicle/src/environment/vegetation.cpp:decode_grass / decode_tree / decode_flora / decode_landscape_grasses
 
@@ -61,7 +61,7 @@ The GRAS DATA raw offsets (density 0, min slope 1, max slope 2, units from water
 ## Radicle/tests/test_c_api_quest.cpp:findProperty
 
 Restore the blank line after `hasRow` removed by merge conflict resolution; the
-diff against main then contains only the ABI 12 test update in this file.
+diff against main then contains only the ABI 26 test update in this file.
 
 ## Radicle/src/environment/vegetation.cpp:decode_landscape_grasses
 

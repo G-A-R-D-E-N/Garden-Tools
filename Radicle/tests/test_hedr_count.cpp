@@ -9,11 +9,23 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace {
+
+std::vector<std::byte> make_short_hedr_plugin() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  return out.bytes;
+}
 
 std::vector<std::byte> make_nested_plugin(std::uint32_t stored_count) {
   fo4::test::ByteWriter out;
@@ -120,6 +132,19 @@ TEST(HedrCount, DirtyRebuildCountsAllGroupsAndNonTes4RecordsRecursively) {
   EXPECT_EQ(reread.header.record_count, 4u);
   EXPECT_EQ(fo4::collect_records(reread).size(), 3u);  // TES4 + two MISC
   EXPECT_EQ(fo4::collect_groups(reread).size(), 2u);
+}
+
+TEST(HedrCount, ShortHedrIsRefusedWhenRebuilt) {
+  auto plugin = fo4::read_plugin(make_short_hedr_plugin(), "ShortHedr.esp");
+  plugin.original_range.clear();
+  plugin.tes4.original_range.clear();
+  try {
+    static_cast<void>(fo4::write_plugin(plugin));
+    ADD_FAILURE() << "write_plugin accepted a TES4 HEDR shorter than 12 bytes";
+  } catch (const std::runtime_error& error) {
+    EXPECT_EQ(dynamic_cast<const fo4::FormIdError*>(&error), nullptr);
+    EXPECT_STREQ(error.what(), "TES4 HEDR must be at least 12 bytes on rebuild");
+  }
 }
 
 TEST(HedrCount, CommittedRealPluginsRebuildStaleCounts) {

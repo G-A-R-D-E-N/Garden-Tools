@@ -2,6 +2,7 @@
 
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "fo4/schema/vmad.hpp"
 
 #include <string>
@@ -33,5 +34,6 @@ struct QuestRuntimeData {
 };
 
 QuestRuntimeData quest_runtime_data(const Plugin& plugin, const FormKey& quest);
+QuestRuntimeData quest_runtime_data(const RecordIndex& index, const FormKey& quest);
 
 }
