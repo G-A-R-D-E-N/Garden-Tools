@@ -720,10 +720,10 @@
           "kind": "scalar",
           "subrecord": "DNAM",
           "offset": 0,
-          "storage": "u32",
+          "storage": "u16",
           "presentation": "identity",
           "minimum": 0,
-          "maximum": 4294967295,
+          "maximum": 65535,
           "insertion": "existing_only"
         },
         {
