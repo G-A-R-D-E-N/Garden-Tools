@@ -43,6 +43,7 @@ TEST(MaterialFileRealData, RoundTripsEveryVanillaMaterialByteIdentically) {
     }
     const auto bytes = fo4::archive::extract_ba2_general_entry(entry);
     const auto file = fo4::material::read_material_file(bytes);
+    EXPECT_TRUE(file.trailing.empty()) << entry.path;
     EXPECT_TRUE(fo4::material::write_material_file(file) == bytes) << entry.path;
     if (extension == ".bgsm") {
       ++bgsm_count;
