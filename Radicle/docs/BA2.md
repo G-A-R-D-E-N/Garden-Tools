@@ -114,10 +114,10 @@ DDS builder for a `.dds` DX10 entry (`Core/wbBSArchive.pas:2195-2211` calls
   (`wbDDS.pas:675-756`).
 - Every other format gets the 148-byte header: `DX10` FourCC, DXGI format, and
   the DX10 extension (`wbDDS.pas:767-773`).
-- Flags: `DDSD_LINEARSIZE` (0x80000) for BC formats, `DDSD_PITCH` (0x8) for
-  uncompressed (`wbDDS.pas:612-744`). DX9 pitch or linear size: BC1 and BC4
+- DX9-set flags: `DDSD_LINEARSIZE` (0x80000) for BC formats, `DDSD_PITCH` (0x8)
+  for uncompressed (`wbDDS.pas:612-756`). DX9 pitch or linear size: BC1 and BC4
   `width*height/2`, BC2, BC3 and BC5 `width*height`, uncompressed
-  `width*bytes per pixel`.
+  `width*bytes per pixel`. DX10-path flags follow the per-format list below.
 - Caps: `DDSCAPS_TEXTURE`; `DDSCAPS_MIPMAP|DDSCAPS_COMPLEX` when mips > 1;
   `DDSCAPS_COMPLEX` for any cubemap, including one mip; caps2 `0xFE00` for a
   cubemap (`wbDDS.pas:593-606`).
