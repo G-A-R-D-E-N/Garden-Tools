@@ -3,7 +3,7 @@
 ## src/environment/behavior.cpp:decode_package
 
 The private loader record at
-`build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`
+[packages-combat-idle-407-345/README.md](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md)
 commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 Q1, stamps
 the OG loader at address 0x719180 and schedule consumer at 0x71EC30. xEdit types PSDT duration as unsigned u32 minutes (`source:xEdit Core/wbDefinitionsFO4.pas:10569 @93cc0bc5`, `wbInteger('Duration (Hours)', itU32, wbDiv(60, 4))`), and `decode_package` keeps the raw u32, so 0xFFFFFFFF stays 4294967295 and is not read as -1. Whether the OG schedule consumer reads it as signed is an RE question (RE #407), not settled by xEdit.
 PKDT's final u16 is exposed as an unnamed trailing value rather
@@ -251,7 +251,7 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 
 `src/environment/behavior.cpp:decode_package` returns indexed PLDT/PTDA views
 without assigning them to an unproven procedure/input scope. The verified
-`build/RE-Work/6916afb/packages-combat-idle-407-345/README.md`
+[packages-combat-idle-407-345/README.md](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md)
 sections Q4/Q5 stamp OG addresses 0x726520 and 0x729300: The disk compatibility views accept PLDT 8/12/16 bytes with
 signed i32 type, raw u32 value, optional signed i32 radius and optional u32 item
 index; PTDA is 12 bytes with signed i32 type, raw u32 value and signed
