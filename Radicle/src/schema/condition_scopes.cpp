@@ -416,8 +416,12 @@ std::optional<std::size_t> first_member_index(const std::vector<Subrecord>& subs
 std::optional<std::size_t> root_insert_anchor(const Record& record) {
   const auto& subs = record.subrecords;
   if (record.header.signature == sig_pack) return first_member_index(subs, k_pack_root_successors);
-  if (record.header.signature == sig_info) return first_member_index(subs, k_info_root_successors);
-  if (record.header.signature == sig_perk) return first_member_index(subs, k_perk_root_successors);
+  if (record.header.signature == sig_info) {
+    return first_member_index(subs, k_info_root_successors).value_or(subs.size());
+  }
+  if (record.header.signature == sig_perk) {
+    return first_member_index(subs, k_perk_root_successors).value_or(subs.size());
+  }
   if (record.header.signature == sig_qust) return first_member_index(subs, k_qust_root_successors);
   return std::nullopt;
 }

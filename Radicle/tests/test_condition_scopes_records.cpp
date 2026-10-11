@@ -396,7 +396,7 @@ TEST(ConditionScopesRecords, PackRootInsertsBeforeCombatStyleSlotAndKeepsBranch)
   EXPECT_EQ(functions_in(*record, *descriptor, 0), Functions{1});
 }
 
-TEST(ConditionScopesRecords, InfoRootInsertsBeforePromptAndRefusesWithoutAnchor) {
+TEST(ConditionScopesRecords, InfoRootInsertsBeforePrompt) {
   auto plugin = make_plugin("INFO", {
       {"TRDT", zeros(24)},
       {"RNAM", zstring("Prompt")},
@@ -410,12 +410,6 @@ TEST(ConditionScopesRecords, InfoRootInsertsBeforePromptAndRefusesWithoutAnchor)
   ASSERT_NE(record, nullptr);
   EXPECT_EQ(index_of_nth(*record, "CTDA", 0) + 1, index_of_nth(*record, "RNAM", 0));
   EXPECT_EQ(root_functions(*record), Functions{7});
-
-  auto bare = make_plugin("INFO", {{"TRDT", zeros(24)}});
-  const auto before = bare;
-  EXPECT_EQ(fo4::set_record_conditions(bare, fo4::FormKey::parse("000800:Cond.esp"), conditions),
-            fo4::ConditionMutationStatus::no_condition_list);
-  EXPECT_EQ(fo4::write_plugin(bare), fo4::write_plugin(before));
 }
 
 TEST(ConditionScopesRecords, RecordWithoutNestedScopesKeepsWholeRecordRules) {
