@@ -29,6 +29,33 @@ and layouts are retained.
 validated in CI. The existing test supplies the branch's native library,
 layout probe and ABI stubs; the workflow supplies the .NET 8 SDK.
 
+## src/plugin/navmesh_writer.cpp:set_navmesh_triangle and set_navmesh_door
+
+`edit` reads the NVNM counts for all four blocks (vertices, triangles, edge
+links, doors) before patching, so each setter checks its index against the
+live counts and throws before the candidate bytes are copied back; a refused
+write leaves the plugin bytes identical. Triangle edges follow xEdit's
+decider `wbEdgeLinksTo` (`source:xEdit Core/wbDefinitionsCommon.pas:2611-2662 @93cc0bc5`):
+for edge i, if bit i of the triangle's u16 Flags is set (`Flags and (1 shl aEdge)`,
+line 2636) the value indexes NVNM `Edge Links` (count checked at 2640); otherwise it
+indexes NVNM `Triangles` (count checked at 2658). Both reject negatives (2643, 2661).
+The decider resolves no link for a negative value, so the setter accepts -1
+(none) and refuses -2 and any index at or past the selected count. The
+selector is the low 16 bits of `NavmeshTriangle::flags` (the u16 Flags at
+triangle offset 17 in `source:xEdit Core/wbDefinitionsFO4.pas:4387-4397 @93cc0bc5`),
+and the flags word is preserved against the stored bytes before this check runs.
+Door triangles use `wbTriangleLinksTo` (`source:xEdit Core/wbDefinitionsCommon.pas:2813-2843 @93cc0bc5`,
+index checked at 2837 and 2840) against NVNM `Triangles`, so the setter requires
+`0 <= triangle < triangle count` (Door Links at `source:xEdit Core/wbDefinitionsFO4.pas:4412-4418 @93cc0bc5`).
+Refusing a door triangle of -1 is Radicle policy, stricter than xEdit: the decider
+returns no link for -1 (2840) without rejecting it, and the setter refuses it so a
+door always names a triangle.
+Deliberate policy: `src/environment/navmesh.cpp:decode_navmesh_info` requires NAVI NVER
+== 15 (`version 15 is required`), while xEdit reads NVER as a plain u32
+(`source:xEdit Core/wbDefinitionsFO4.pas:7242 @93cc0bc5`). The tighter check is kept so
+that only the measured version-15 grammar is written; widen it only with evidence for
+other versions.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children

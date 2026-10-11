@@ -46,17 +46,20 @@ ScalarMutationStatus edit(Plugin& plugin, const FormKey& key, std::size_t block,
   }
   cursor.read_bytes(12);
   const std::size_t widths[] = {12, 21, 11, 10};
-  const auto vertex_count = cursor.read_u32();
-  std::size_t count = vertex_count;
-  for (std::size_t b = 0; b < block; ++b) {
-    cursor.read_bytes(count * widths[b]);
-    count = cursor.read_u32();
+  std::array<std::size_t, 4> counts{};
+  std::array<std::size_t, 4> starts{};
+  counts[0] = cursor.read_u32();
+  starts[0] = cursor.position();
+  for (std::size_t b = 0; b < 3; ++b) {
+    cursor.read_bytes(counts[b] * widths[b]);
+    counts[b + 1] = cursor.read_u32();
+    starts[b + 1] = cursor.position();
   }
-  if (index >= count) return ScalarMutationStatus::subrecord_missing;
-  const auto at = cursor.position() + index * widths[block];
+  if (index >= counts[block]) return ScalarMutationStatus::subrecord_missing;
+  const auto at = starts[block] + index * widths[block];
   std::vector<std::byte> candidate(geometry->data.begin() + at,
                                  geometry->data.begin() + at + widths[block]);
-  patch(std::span{candidate}, vertex_count);
+  patch(std::span{candidate}, counts);
   if (std::equal(candidate.begin(), candidate.end(), geometry->data.begin() + at)) {
     return ScalarMutationStatus::unchanged;
   }
@@ -76,7 +79,7 @@ ScalarMutationStatus set_navmesh_vertex(Plugin& plugin, const FormKey& key, std:
 
 ScalarMutationStatus set_navmesh_triangle(Plugin& plugin, const FormKey& key, std::size_t index,
                                         const env::NavmeshTriangle& value) {
-  return edit(plugin, key, 1, index, [&](auto data, auto vertices) {
+  return edit(plugin, key, 1, index, [&](auto data, auto counts) {
     finite(value.clearance);
     if (std::to_integer<std::uint8_t>(data[16]) != value.traversal) {
       throw schema::ScalarError("unknown triangle byte must be preserved");
@@ -87,7 +90,9 @@ ScalarMutationStatus set_navmesh_triangle(Plugin& plugin, const FormKey& key, st
       throw schema::ScalarError("triangle and cover flags must be preserved");
     }
     for (std::size_t i = 0; i < 3; ++i) {
-      if (value.vertices[i] >= vertices) throw schema::ScalarError("triangle vertex is out of range");
+      if (value.vertices[i] >= counts[0]) throw schema::ScalarError("triangle vertex is out of range");
+      const auto limit = static_cast<std::int64_t>(((value.flags >> i) & 1) ? counts[2] : counts[1]);
+      if (value.edges[i] < -1 || value.edges[i] >= limit) throw schema::ScalarError("triangle edge is out of range");
       store(data, i * 2, value.vertices[i]); store(data, 6 + i * 2, value.edges[i]);
     }
     store(data, 12, value.clearance);
@@ -96,7 +101,8 @@ ScalarMutationStatus set_navmesh_triangle(Plugin& plugin, const FormKey& key, st
 
 ScalarMutationStatus set_navmesh_door(Plugin& plugin, const FormKey& key, std::size_t index,
                                     const env::NavmeshDoorLink& value) {
-  return edit(plugin, key, 3, index, [&](auto data, auto) {
+  return edit(plugin, key, 3, index, [&](auto data, auto counts) {
+    if (value.triangle < 0 || value.triangle >= static_cast<std::int64_t>(counts[1])) throw schema::ScalarError("door triangle is out of range");
     if (value.door.owner().empty() || value.door.local().value() == 0) throw schema::ScalarError("door reference cannot be null");
     if (value.door.owner() == plugin.key) {
       const auto* target = find_record(plugin, value.door);
