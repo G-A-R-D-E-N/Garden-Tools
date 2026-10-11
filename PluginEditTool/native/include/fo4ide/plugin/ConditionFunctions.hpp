@@ -51,8 +51,8 @@ std::string conditionRunOnNames();
 std::string functionName(std::uint16_t index);
 std::optional<std::uint16_t> functionIndex(std::string_view name);
 
-// Port of the Condition.RunOnType enum value<->name mapping (values are not
-// contiguous: 0-7, 9, 10, 11). runOnName returns the name for a binary run-on
+// Port of the Condition.RunOnType enum value<->name mapping (values 0-10).
+// runOnName returns the name for a binary run-on
 // value (empty when unknown); runOnValue is the case-insensitive reverse.
 std::string runOnName(std::uint32_t value);
 std::optional<std::uint32_t> runOnValue(std::string_view name);

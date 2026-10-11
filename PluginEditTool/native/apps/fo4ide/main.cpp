@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <random>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -27,9 +29,7 @@
 #include <fo4ide/assets/TextureResolver.hpp>
 #include <fo4ide/audio/AudioService.hpp>
 #include <fo4ide/events/EventBus.hpp>
-#if defined(FO4IDE_HAS_HTTP)
 #include <fo4ide/http/HttpServer.hpp>
-#endif
 #include <fo4ide/logging/Logger.hpp>
 #include <fo4ide/material/MaterialService.hpp>
 #include <fo4ide/mcp/McpServer.hpp>
@@ -132,7 +132,7 @@ private:
 class RefreshingSettingsTarget final : public fo4ide::rpc::Target {
 public:
     RefreshingSettingsTarget(fo4ide::settings::Store& store,
-                             fo4ide::settings::Settings& settings,
+                             fo4ide::settings::SharedSettings& settings,
                              fo4ide::platform::Services& platform,
                              fo4ide::process::Runner& runner,
                              fo4ide::assets::TextureResolver& textures)
@@ -145,21 +145,21 @@ public:
         auto result = inner_.invoke(method, args);
         if (method == "SaveSettings" && result && result->is_string() &&
             result->get<std::string>() == "Settings saved.") {
-            textures_.setSessionRoots(textureRootsForSettings(settings_));
+            textures_.setSessionRoots(textureRootsForSettings(settings_.snapshot()));
         }
         return result;
     }
 
 private:
     fo4ide::app::SettingsTarget inner_;
-    fo4ide::settings::Settings& settings_;
+    fo4ide::settings::SharedSettings& settings_;
     fo4ide::assets::TextureResolver& textures_;
 };
 
 class RefreshingAppInteropTarget final : public fo4ide::rpc::Target {
 public:
     RefreshingAppInteropTarget(std::shared_ptr<fo4ide::app::AppInteropTarget> inner,
-                               fo4ide::settings::Settings& settings,
+                               fo4ide::settings::SharedSettings& settings,
                                fo4ide::assets::TextureResolver& textures)
         : inner_(std::move(inner)), settings_(settings), textures_(textures) {}
 
@@ -170,14 +170,14 @@ public:
                                     method == "LoadEnvironment" ||
                                     method == "ReloadMo2Profile";
         if (profileChanged && result) {
-            textures_.setSessionRoots(textureRootsForSettings(settings_));
+            textures_.setSessionRoots(textureRootsForSettings(settings_.snapshot()));
         }
         return result;
     }
 
 private:
     std::shared_ptr<fo4ide::app::AppInteropTarget> inner_;
-    fo4ide::settings::Settings& settings_;
+    fo4ide::settings::SharedSettings& settings_;
     fo4ide::assets::TextureResolver& textures_;
 };
 
@@ -190,6 +190,21 @@ bool registerTarget(fo4ide::rpc::Dispatcher& rpc,
     log->error("RPC setup failed: {}", registered.error().message);
     return false;
 }
+
+#if defined(FO4IDE_HAS_HTTP)
+std::string newAccessToken() {
+    static constexpr std::string_view digits = "0123456789abcdef";
+    std::random_device device;
+    std::string token;
+    token.reserve(32);
+    for (int i = 0; i < 16; ++i) {
+        const auto byte = static_cast<unsigned char>(device() & 0xFF);
+        token.push_back(digits[byte >> 4]);
+        token.push_back(digits[byte & 0x0F]);
+    }
+    return token;
+}
+#endif
 
 
 }
@@ -206,12 +221,13 @@ int main(int argc, char** argv) {
     log->info("FO4IDE native host starting");
 
     fo4ide::settings::Store settingsStore(configDir / "settings.json");
-    fo4ide::settings::Settings currentSettings;
+    fo4ide::settings::Settings loadedSettings;
     if (auto loaded = settingsStore.load()) {
-        currentSettings = std::move(*loaded);
+        loadedSettings = std::move(*loaded);
     } else {
         log->warn("Settings load failed: {}", loaded.error().message);
     }
+    fo4ide::settings::SharedSettings currentSettings(std::move(loadedSettings));
 
     fo4ide::process::ReprocRunner processRunner;
     fo4ide::platform::NativeServices platformServices(processRunner);
@@ -223,7 +239,7 @@ int main(int argc, char** argv) {
     fo4ide::archive::RadicleArchiveBackend archiveBackend;
     fo4ide::archive::ArchiveService archiveService(processRunner, toolLocator, archiveBackend);
     fo4ide::assets::TextureResolver textureResolver;
-    textureResolver.setSessionRoots(textureRootsForSettings(currentSettings));
+    textureResolver.setSessionRoots(textureRootsForSettings(currentSettings.snapshot()));
     fo4ide::events::EventBus events;
     fo4ide::plugin::RadiclePluginBackend plugins;
     if (const auto falloutRoot = toolLocator.fallout4Root(); !falloutRoot.empty()) {
@@ -284,7 +300,16 @@ int main(int argc, char** argv) {
                 return 6;
             }
         }
-        if (arg == "--port" && i + 1 < argc) requestedPort = std::stoi(argv[++i]);
+        if (arg == "--port") {
+            const auto port = i + 1 < argc ? fo4ide::http::parsePort(argv[i + 1]) : std::nullopt;
+            if (!port) {
+                std::cerr << "--port requires a whole number from 0 to 65535\n";
+                fo4ide::logging::shutdown();
+                return 6;
+            }
+            requestedPort = *port;
+            ++i;
+        }
     }
 
     if (!mo2Instance.empty()) {
@@ -317,7 +342,7 @@ int main(int argc, char** argv) {
 
     if (printHealth) {
         const auto response = rpc.invoke({"app", "GetHealth", nlohmann::json::array()});
-        std::cout << response.toJson().dump(2) << '\n';
+        std::cout << response.toJson().dump(2, ' ', false, nlohmann::json::error_handler_t::replace) << '\n';
     }
 
 #if defined(FO4IDE_HAS_HTTP)
@@ -329,11 +354,13 @@ int main(int argc, char** argv) {
             return 2;
         }
 
+        const auto token = newAccessToken();
         fo4ide::http::HttpServer server(rpc, events);
         auto started = server.start({
             .host = "127.0.0.1",
             .port = requestedPort,
             .webRoot = webRoot,
+            .token = token,
         });
         if (!started) {
             std::cerr << "HTTP server failed: " << started.error().message << '\n';
@@ -341,9 +368,10 @@ int main(int argc, char** argv) {
             return 3;
         }
 
-        const auto url = "http://127.0.0.1:" + std::to_string(*started) + "/#/main";
+        const auto baseUrl = "http://127.0.0.1:" + std::to_string(*started) + "/#/main";
+        const auto url = baseUrl + "?t=" + token;
         std::cout << "FO4IDE native server: " << url << '\n';
-        log->info("HTTP server listening at {}", url);
+        log->info("HTTP server listening at {}", baseUrl);
 
         int exitCode = 0;
         if (openWindow) {

@@ -45,6 +45,11 @@ public:
     u32(bits);
   }
   void u8(std::uint8_t value) { bytes_.push_back(std::byte{value}); }
+  void u16(std::uint16_t value) {
+    std::array<std::byte, 2> raw{};
+    std::memcpy(raw.data(), &value, 2);
+    bytes_.insert(bytes_.end(), raw.begin(), raw.end());
+  }
   void i16(std::int16_t value) {
     std::array<std::byte, 2> raw{};
     std::memcpy(raw.data(), &value, 2);
@@ -60,6 +65,12 @@ private:
 std::uint32_t read_u32(std::span<const std::byte> data, std::size_t offset) {
   std::uint32_t value = 0;
   std::memcpy(&value, data.data() + offset, 4);
+  return value;
+}
+
+std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
+  std::uint16_t value = 0;
+  std::memcpy(&value, data.data() + offset, 2);
   return value;
 }
 
@@ -243,7 +254,8 @@ namespace {
 std::vector<std::byte> encode_projectile_dnam_with(const ProjectileCreation& c,
                                                    const PluginFormIdContext& context) {
   PayloadWriter out{k_proj_dnam_size};
-  out.u32(c.flags);                                  // +0
+  out.u16(c.flags);                                  // +0
+  out.u16(c.type);                                   // +2
   out.f32(c.gravity);                                // +4
   out.f32(c.speed);                                  // +8
   out.f32(c.range);                                  // +12
@@ -378,16 +390,16 @@ FormKey create_projectile(Plugin& plugin, const ProjectileCreation& creation) {
   }
 
   // Measured shipped order: EDID OBND [FULL] ... DATA DNAM NAM1 VNAM.
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
-    record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
+    record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
   // DATA is a zero-length marker in all 239 shipped records.
   record->subrecords.push_back(Subrecord{k_data, {}, false});
   record->subrecords.push_back(Subrecord{k_dnam, std::move(dnam), false});
   record->subrecords.push_back(
-      Subrecord{k_nam1, zstring(creation.muzzle_flash_model), false});
+      Subrecord{k_nam1, zstring(stored_inline_text(creation.muzzle_flash_model, "muzzle flash model path")), false});
   PayloadWriter vnam{4};
   vnam.u32(creation.sound_level);
   record->subrecords.push_back(Subrecord{k_vnam, vnam.take(), false});
@@ -420,10 +432,10 @@ FormKey create_explosion(Plugin& plugin, const ExplosionCreation& creation) {
     throw ProjExplHazdError("newly allocated EXPL record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
-    record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
+    record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
   record->subrecords.push_back(Subrecord{k_data, std::move(data), false});
 
@@ -459,12 +471,12 @@ FormKey create_hazard(Plugin& plugin, const HazardCreation& creation) {
     throw ProjExplHazdError("newly allocated HAZD record could not be resolved");
   }
 
-  record->subrecords.push_back(Subrecord{k_edid, zstring(creation.editor_id), false});
+  record->subrecords.push_back(Subrecord{k_edid, zstring(stored_editor_id(creation.editor_id)), false});
   record->subrecords.push_back(Subrecord{k_obnd, encode_bounds(creation.bounds), false});
   if (creation.name.has_value()) {
-    record->subrecords.push_back(Subrecord{k_full, zstring(*creation.name), false});
+    record->subrecords.push_back(Subrecord{k_full, zstring(stored_inline_text(*creation.name, "full name")), false});
   }
-  record->subrecords.push_back(Subrecord{k_modl, zstring(creation.model), false});
+  record->subrecords.push_back(Subrecord{k_modl, zstring(stored_inline_text(creation.model, "model path")), false});
   record->subrecords.push_back(
       Subrecord{k_modt,
                 creation.model_texture_data.value_or(empty_model_texture_data()),
@@ -496,7 +508,8 @@ ProjectileCreation decode_projectile(const Plugin& plugin, const FormKey& key) {
     out.sound_level = read_u32(vnam->data, 0);
   }
 
-  out.flags = read_u32(dnam, 0);
+  out.flags = read_u16(dnam, 0);
+  out.type = read_u16(dnam, 2);
   out.gravity = read_f32(dnam, 4);
   out.speed = read_f32(dnam, 8);
   out.range = read_f32(dnam, 12);

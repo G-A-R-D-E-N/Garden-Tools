@@ -49,8 +49,9 @@ public sealed unsafe partial class RadicleEnvironment
 {
     public PlacedReference PlacedReference(Record record)
     {
+        using var use = Use(record);
         PlacedRef* r;
-        Call.Check(RadicleNative.PlacedRefDecode(Handle, record.Handle, &r));
+        Call.Check(RadicleNative.PlacedRefDecode(use.Pointer, record.Handle, &r));
         try
         {
             return Convert(r);
@@ -85,7 +86,8 @@ public sealed unsafe partial class RadicleEnvironment
                                     Call.Copy<Native.ScriptProperty>(s.Properties, s.PropertyCount)
                                         .Select(p => new ScriptProperty(
                                             Utf8.Read(p.Name) ?? string.Empty, p.Type, p.Flags, FormKey.FromNative(p.Object),
-                                            p.HasAlias != 0 ? p.Alias : null, Utf8.Read(p.Text),
+                                            p.HasAlias != 0 ? p.Alias : null,
+                                            p.Text == IntPtr.Zero ? null : System.Text.Encoding.UTF8.GetString(Utf8.Raw(p.Text, p.TextSize)),
                                             p.HasInteger != 0 ? p.Integer : null, p.HasReal != 0 ? p.Real : null,
                                             p.HasBoolean != 0 ? p.Boolean != 0 : null,
                                             p.HasElementCount != 0 ? p.ElementCount : null))

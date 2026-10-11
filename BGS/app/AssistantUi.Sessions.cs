@@ -75,19 +75,29 @@ internal sealed partial class AssistantUi
             ? ""
             : char.ToUpperInvariant(planType[0]) + planType[1..].ToLowerInvariant();
 
-    private static void OpenUrl(string url)
+    internal static bool IsWebUrl(string? url) => WebUrlToOpen(url) is not null;
+
+    internal static string? WebUrlToOpen(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? uri.AbsoluteUri
+            : null;
+
+    private static bool OpenUrl(string url)
     {
-        if (string.IsNullOrWhiteSpace(url)) return;
+        if (WebUrlToOpen(url) is not { } launch) return false;
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = url,
+                FileName = launch,
                 UseShellExecute = true,
             });
+            return true;
         }
         catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
+            return false;
         }
     }
 }
