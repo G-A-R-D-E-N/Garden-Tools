@@ -67,7 +67,7 @@ public class ClimateWeatherAuthoringTests
                     new Rec("CLMT", 0x800, new[] { ("EDID", Z("Clim")), ("WLST", U32(0x801, 60, 0, 0x802, 40, 0x810)), ("FNAM", Z("sun.dds")),
                         ("GNAM", Z("glare.dds")), ("MODL", Z("m.nif")), ("MODT", Fill(12, 3)), ("TNAM", timing) }),
                     new Rec("CLMT", 0x803, new[] { ("EDID", Z("Bare")), ("TNAM", timing) })),
-                Top("WTHR", new Rec("WTHR", 0x801, Weather(true)), new Rec("WTHR", 0x802, Weather(false))),
+                Top("WTHR", new Rec("WTHR", 0x801, Weather(true)), new Rec("WTHR", 0x802, Weather(false), FormVersion: 110)),
             }.Concat(others.Select(o => Top(o.Item1, new Rec(o.Item1, o.Item2, new[] { edid })))).ToArray());
     }
 
