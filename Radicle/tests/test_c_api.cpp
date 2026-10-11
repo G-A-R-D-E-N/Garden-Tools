@@ -317,6 +317,42 @@ TEST(CApi, RemapsMastersWritesAndReloadsStableFormKeys) {
   radicle_plugin_destroy(plugin);
 }
 
+TEST(CApi, FailedRemapMastersLeavesThePluginUnchanged) {
+  const auto root = temp_root();
+  Cleanup cleanup{root};
+  const auto input = root / "input" / "Patch.esp";
+  const auto output = root / "output" / "Patch.esp";
+  write_bytes(input, make_remap_fixture());
+  std::filesystem::create_directories(output.parent_path());
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(input.string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(plugin, nullptr);
+
+  const auto before = collect_form_keys(plugin);
+  EXPECT_TRUE(before.contains("00009A:Keep.esp"));
+
+  const radicle_master_descriptor masters[] = {
+      {"Fallout4.esm", RADICLE_PLUGIN_FULL},
+  };
+  EXPECT_NE(radicle_plugin_remap_masters(plugin, masters, 1), RADICLE_STATUS_OK);
+  EXPECT_NE(std::string(radicle_last_error()).find("destination master table"),
+            std::string::npos);
+  EXPECT_EQ(collect_form_keys(plugin), before);
+
+  ASSERT_EQ(radicle_plugin_write_file(plugin, output.string().c_str()), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+  plugin = nullptr;
+
+  ASSERT_EQ(radicle_plugin_read_file(output.string().c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_NE(plugin, nullptr);
+  EXPECT_EQ(collect_form_keys(plugin), before);
+  radicle_plugin_destroy(plugin);
+}
+
 TEST(CApi, HeatherRealFixtureDropsInsertedMasterWritesAndReloadsStableIdentity) {
   const auto root = temp_root();
   Cleanup cleanup{root};
