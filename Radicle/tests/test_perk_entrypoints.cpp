@@ -189,16 +189,20 @@ TEST(FormLink, PerkEffectDataRemapsOnlyQuestAndAbilityFormIds) {
   ASSERT_NE(record, nullptr);
 
   const auto data = find_subs(*record, "DATA");
-  ASSERT_EQ(data.size(), 4u);
+  ASSERT_EQ(data.size(), 9u);
   EXPECT_EQ(data[0]->data.size(), 5u);
   EXPECT_EQ(read_u32(data[0]->data), 0x02000850u);
-  ASSERT_EQ(data[1]->data.size(), 6u);
-  EXPECT_EQ(read_u32(data[1]->data), 0x01000860u);
-  EXPECT_EQ(data[1]->data[4], std::byte{5});
-  EXPECT_EQ(data[1]->data[5], std::byte{0});
-  ASSERT_EQ(data[2]->data.size(), 4u);
-  EXPECT_EQ(read_u32(data[2]->data), 0x01000870u);
-  EXPECT_EQ(data[3]->data, entry_point(4));
+  EXPECT_EQ(data[1]->data, entry_point(4));
+  for (std::size_t at = 1; at < 6; ++at) {
+    EXPECT_EQ(data[at]->data.size(), 3u);
+  }
+  ASSERT_EQ(data[6]->data.size(), 6u);
+  EXPECT_EQ(read_u32(data[6]->data), 0x01000860u);
+  EXPECT_EQ(data[6]->data[4], std::byte{5});
+  EXPECT_EQ(data[6]->data[5], std::byte{0});
+  ASSERT_EQ(data[7]->data.size(), 4u);
+  EXPECT_EQ(read_u32(data[7]->data), 0x01000870u);
+  EXPECT_EQ(data[8]->data, entry_point(4));
 }
 
 TEST(FormLink, PerkEntryPointCollectionReportsOnlyFormIdEpfdVariants) {
