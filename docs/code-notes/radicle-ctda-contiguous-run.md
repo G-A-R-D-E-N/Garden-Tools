@@ -10,7 +10,7 @@ The seven official-master cases check each contiguous CTDA/CIS run on every phys
 
 ## Radicle/src/schema/ctda.cpp:write_ctda_conditions_in
 
-The replaced run is the first CTDA plus the consecutive CTDA/CIS1/CIS2 subrecords after it; the first other subrecord ends it. Previously every later CTDA extended the erased range, so subrecords between separate condition lists (SCEN phases, PACK, INFO, QUST, PERK) were deleted. A CTDA after the run has ended means the scope holds several lists, so the function returns `multiple_lists` and leaves the record untouched (fail closed). Callers scope the write to one list with a begin/end range.
+The replaced run is the first CTDA plus the consecutive CTDA/CIS1/CIS2 subrecords after it; the first other subrecord ends it. Previously every later CTDA extended the erased range, so subrecords between separate condition lists (SCEN phases, PACK, QUST, PERK) were deleted. A CTDA after the run has ended means the scope holds several lists, so the function returns `multiple_lists` and leaves the record untouched (fail closed). Callers scope the write to one list with a begin/end range.
 
 ## Radicle/include/fo4/schema/ctda.hpp:CtdaScopeWrite
 
@@ -30,7 +30,7 @@ The fixture follows `Radicle/tests/test_condition_scopes.cpp:ConditionScopes.Ref
 
 ## Radicle/include/fo4/plugin/mutation.hpp:set_record_conditions follow-ups
 
-The bare path now reads the root list only (`Radicle/src/schema/condition_scopes.cpp:root_condition_window`); the remaining refusals and their xEdit reasons are in `docs/code-notes/GARDEN-TOOLS.md` under `root_condition_window`. For QUST the bare path addresses only the Quest Dialogue list (see the QUST section below). The `root_condition_window` text in `docs/code-notes/GARDEN-TOOLS.md` predates that change and still describes both QUST lists as one window.
+The bare path now reads the root list only (`Radicle/src/schema/condition_scopes.cpp:root_condition_window`); the remaining refusals and their xEdit reasons are in `docs/code-notes/GARDEN-TOOLS.md` under `root_condition_window`. For QUST the bare path addresses only the Quest Dialogue list (see the QUST section below). The `root_condition_window` text in `docs/code-notes/GARDEN-TOOLS.md` predates that change and still describes both QUST lists as one window. INFO has a single condition list in xEdit (`wbDefinitionsFO4.pas:9754` at 93cc0bc5), and the official masters agree: 60,230 INFO records have no CTDA run and 42,232 have exactly one. `Targets[k]` (`Radicle/src/schema/condition_scopes.cpp:quest_target_ranges`) is a flat ordinal across all objectives, while xEdit nests targets under each objective (`wbDefinitionsFO4.pas:10772`, `:10779`); this is a path-grammar choice with no RE or corpus proof, so the owner decides whether to keep it.
 
 ## Radicle/src/schema/ctda.cpp:read_ctda_conditions_in / Radicle/include/fo4/schema/ctda.hpp:CtdaMultipleListsError
 
