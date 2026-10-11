@@ -2,11 +2,19 @@
 
 ## Radicle/include/fo4/schema/ctda.hpp:CtdaCondition / Radicle/src/schema/ctda.cpp:parse_ctda_condition / serialize_ctda_condition
 
+<<<<<<< HEAD
 The three bytes following the type byte are stored padding (`CtdaCondition::padding`), not new semantic fields. source:xEdit Core/wbDefinitionsFO4.pas:5188 @93cc0bc5 declares `wbUnused(3)`. The official MQ101 record has nonzero values there in eight log-entry CTDA payloads; for example, stage ordinal 0/log 0 contains `00ac9313000000004a000000317d0a00000000000000000000000000ffffffff`. Dropping those bytes makes the existing lossless log-entry check reject otherwise supported payloads. Retain them through native parse/serialize and native scalar edits; new conditions default to zero. No runtime meaning is assigned. Existing C ABI layouts and PluginTool JSON fields are unchanged; JSON replacement does not transfer padding bytes absent from its input. The CTDA payload is a fixed 32-byte struct (source:xEdit Core/wbDefinitionsFO4.pas:5186-5219 @93cc0bc5), so `parse_ctda_condition` accepts only 32 bytes and the run reader reports any other size as `CtdaNotLosslessError`. GetEventData (function 576, source:xEdit Core/wbDefinitionsFO4.pas:554 @93cc0bc5) uses the same 32-byte payload. Truncated, oversized or malformed runs remain subject to the existing lossless refusal checks. The measured counterexample and remaining loader/runtime evidence are tracked in RE #445.
 
 ## Radicle/tests/test_quest_stages_real.cpp:QuestConditionCorpus.EveryStoredRunIsLossless
 
 The seven official-master cases check each contiguous CTDA/CIS run on every physical QUST. The existing lossless codec must consume the whole run and return one condition per raw CTDA; its byte comparison covers both CTDA payloads and the ordered CIS strings. Counts and nonzero padding totals (`RecordProperty` `OpaquePrefixCount`) are derived from the source records, including an empty condition corpus in DLCworkshop02.esm. Only an unset `FO4_DATA_DIR` permits a skip; configured missing masters fail. This verifies the codec across the stored corpus, not list ownership, C ABI integration or runtime evaluation.
+=======
+The three bytes following the type byte are padding (`CtdaCondition::padding`), not semantic fields. A CTDA is one fixed 32-byte struct: source:xEdit Core/wbDefinitionsFO4.pas:5186-5188 @93cc0bc5 declares them `wbUnused(3)`. `parse_ctda_condition` throws `std::out_of_range` ("CTDA payload must be 32 bytes") for any other length. The official MQ101 record has nonzero values there in eight log-entry CTDA payloads; for example, stage ordinal 0/log 0 contains `00ac9313000000004a000000317d0a00000000000000000000000000ffffffff`. Dropping those bytes makes the existing lossless log-entry check reject otherwise supported payloads. Retain them through native parse/serialize and native scalar edits; new conditions default to zero. No runtime meaning is assigned. Existing C ABI layouts and PluginTool JSON fields are unchanged; JSON replacement does not transfer padding bytes absent from its input. Malformed runs remain subject to the existing lossless refusal checks. The measured counterexample and remaining loader/runtime evidence are tracked in RE #445.
+
+## Radicle/tests/test_quest_stages_real.cpp:QuestConditionCorpus.EveryStoredRunIsLossless
+
+The seven official-master cases check each contiguous CTDA/CIS run on every physical QUST. The existing lossless codec must consume the whole run and return one condition per raw CTDA; its byte comparison covers both CTDA payloads and the ordered CIS strings. Counts and nonzero padding totals are derived from the source records, including an empty condition corpus in DLCworkshop02.esm. Only an unset `FO4_DATA_DIR` permits a skip; configured missing masters fail. This verifies the codec across the stored corpus, not list ownership, C ABI integration or runtime evaluation.
+>>>>>>> d2926510
 
 ## Radicle/src/schema/ctda.cpp:write_ctda_conditions_in
 
