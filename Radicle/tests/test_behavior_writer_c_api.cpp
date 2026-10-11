@@ -80,4 +80,33 @@ TEST_F(BehaviorWriterAbi, WritersSaveReparseAndExposeSignedOptionalValues) {
   EXPECT_STREQ(decoded->animation_event, "edited"); EXPECT_EQ(decoded->replay_delay, 65535);
 }
 
+TEST_F(BehaviorWriterAbi, RecordFromAnotherEnvironmentIsRejectedByBehaviorDecoders) {
+  const auto path = input.string();
+  const char* paths[]{path.c_str()};
+  radicle_env* raw_a = nullptr; radicle_env* raw_b = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_a), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env_a(raw_a, radicle_env_destroy);
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_b), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env_b(raw_b, radicle_env_destroy);
+  const radicle_form_key pack_key{"Behavior.esp",0x800}, style_key{"Behavior.esp",0x801}, idle_key{"Behavior.esp",0x802};
+  const radicle_record *pack = nullptr, *style = nullptr, *idle = nullptr;
+  ASSERT_EQ(radicle_env_winner(raw_a, pack_key, &pack), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_winner(raw_a, style_key, &style), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_winner(raw_a, idle_key, &idle), RADICLE_STATUS_OK);
+  const radicle_package_info* package_out = nullptr;
+  EXPECT_EQ(radicle_package_decode(raw_b, pack, &package_out), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(package_out, nullptr);
+  radicle_combat_style_info combat{};
+  combat.throw_max_targets = 7u;
+  EXPECT_EQ(radicle_combat_style_get_info(raw_b, style, &combat), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(combat.throw_max_targets, 7u);
+  const radicle_idle_info* idle_out = nullptr;
+  EXPECT_EQ(radicle_idle_decode(raw_b, idle, &idle_out), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(idle_out, nullptr);
+  ASSERT_EQ(radicle_package_decode(raw_a, pack, &package_out), RADICLE_STATUS_OK);
+  const std::unique_ptr<const radicle_package_info, decltype(&radicle_package_free)> owned(package_out, radicle_package_free);
+  ASSERT_EQ(radicle_combat_style_get_info(raw_a, style, &combat), RADICLE_STATUS_OK);
+  EXPECT_NE(combat.throw_max_targets, 7u);
+}
+
 }

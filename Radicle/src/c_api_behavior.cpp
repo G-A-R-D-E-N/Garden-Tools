@@ -42,6 +42,9 @@ radicle_status radicle_package_decode(const radicle_env* env, const radicle_reco
                                        const radicle_package_info** out_package) {
   clear_error(); if (out_package) *out_package = nullptr;
   if (!env || !record || !out_package) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   return guarded("unknown exception while decoding PACK", [&] {
     const auto p = fo4::env::decode_package(env->value, *to_ref(record)); auto h = std::make_unique<PackageHolder>(); auto& v = h->view;
     if (p.data) {
@@ -83,6 +86,9 @@ void radicle_package_free(const radicle_package_info* package) {
 radicle_status radicle_combat_style_get_info(const radicle_env* env, const radicle_record* record,
                                              radicle_combat_style_info* out_info) {
   clear_error(); if (!env || !record || !out_info) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   return guarded("unknown exception while decoding CSTY", [&] {
     const auto c = fo4::env::decode_combat_style(env->value, *to_ref(record)); radicle_combat_style_info v{};
     if (c.general) { v.has_general = 1; std::copy(c.general->begin(), c.general->end(), v.general); }
@@ -102,6 +108,9 @@ radicle_status radicle_combat_style_get_info(const radicle_env* env, const radic
 radicle_status radicle_idle_decode(const radicle_env* env, const radicle_record* record, const radicle_idle_info** out_idle) {
   clear_error(); if (out_idle) *out_idle = nullptr;
   if (!env || !record || !out_idle) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   return guarded("unknown exception while decoding IDLE", [&] {
     const auto idle = fo4::env::decode_idle(env->value, *to_ref(record)); auto h = std::make_unique<IdleHolder>(); auto& v = h->view;
     if (idle.data) {

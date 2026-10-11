@@ -59,10 +59,15 @@ Unknown four-byte signatures use reversible Latin1 in managed snapshots.
 
 A `radicle_record` handle is only meaningful to the environment that produced it: it
 is a pointer to one of that environment's own `RecordRef` versions, and the plugin
-index it carries is an index into that environment's plugin list. All four exports
-therefore call `src/c_api_records.cpp:belongs_to_env` first, which looks the record's
+index it carries is an index into that environment's plugin list. All seven exports
+therefore call `src/c_api_env_internal.hpp:belongs_to_env` first, which looks the record's
 FormKey up in `env->value.versions` and compares addresses. That is the same
-pointer-identity test `radicle_record_topic_children` already used, now shared.
+pointer-identity test `radicle_record_topic_children` already used, now shared. The
+package, combat-style and idle exports (`src/c_api_behavior.cpp:radicle_package_decode`,
+`radicle_combat_style_get_info`, `radicle_idle_decode`) run the same check after their
+null checks and before decoding, with the same `INVALID_ARGUMENT` status and message. A
+rejected package or idle output stays null, and a rejected combat-style output keeps its
+caller value.
 `ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
 handle from a second live environment resolved through the supplied environment:
 `ResolveFormId` read `env->value.plugins().at(ref.plugin)` from the wrong plugin list
@@ -233,3 +238,5 @@ stay preserved in the original container; input and leaf boundaries remain
 opaque. `src/c_api_behavior.cpp:PackageHolder` owns the copied view arrays,
 and `bindings/csharp/Radicle.Interop/Behavior.cs:RadicleEnvironment.Package`
 copies them before freeing the holder.
+
+`src/schema/behavior_layout.cpp:behavior_formid_offsets` remaps only the PLDT/PTDA branches that xEdit defines as form links, and strict remap refuses the xEdit Unknown branches only when their stored 4-byte value at offset 4 is nonzero. The branch is chosen by the Type integer through `source:xEdit Core/wbDefinitionsFO4.pas:2273 @93cc0bc5` (`wbTypeDecider`). PLDT (`source:xEdit Core/wbDefinitionsFO4.pas:4177-4194 @93cc0bc5`): links are 0 Reference, 1 Cell, 4 Object ID and 6 Keyword; 2 and 3 are four-byte ByteArrays, 5 and 8-11 are integers, 7 is `wbUnused(4)`, and 14 is the Ref Collection Alias integer, all kept numeric and unremapped; 12 and 13 are `wbByteArray('Unknown', 4)` branches; the enum at `source:xEdit Core/wbDefinitionsFO4.pas:4139-4140 @93cc0bc5` names them Near self and Near Editor Location Cell. PTDA (`source:xEdit Core/wbDefinitionsFO4.pas:4223-4245 @93cc0bc5`): links are 0 Specific Reference, 1 Object ID, 3 Keyword and 7 Keyword; 2 Object Type, 4 Alias and 5 Interrupt Data are integers; 6 and 8 are `wbByteArray('Unknown', 4, cpIgnore)` branches; the Type enum names them Self at `source:xEdit Core/wbDefinitionsFO4.pas:4231 @93cc0bc5` and Unknown 8 at line 4233, and the union branch decides. Zero in the 4-byte value means no link and is never refused, so strict remap leaves it unchanged. Non-strict remap leaves every refused branch unchanged. `src/schema/behavior_layout.cpp:behavior_field_payload_valid` is unchanged, so these variants keep their payload-valid status.

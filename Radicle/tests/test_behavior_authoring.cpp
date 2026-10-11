@@ -150,4 +150,23 @@ TEST(BehaviorAuthoring, AmbiguousCounterOwnershipRefusesStrictRemapTransactional
   }
 }
 
+TEST(BehaviorAuthoring, NonzeroUnknownVariantsRefuseStrictRemapWhileZeroAndLinkVariantsRemap) {
+  for (const auto& [tag, kind] : std::vector<std::pair<std::string, std::uint32_t>>{
+           {"PLDT", 12}, {"PLDT", 13}, {"PTDA", 6}, {"PTDA", 8}}) {
+    auto pack = package(); pack.emplace_back(tag, words({kind, 0x804, 0}));
+    auto plugin = load(pack);
+    const auto bytes = fo4::write_plugin(plugin);
+    EXPECT_THROW(fo4::rekey_form_links(plugin, key(0x804), key(0x808)), fo4::FormIdError);
+    EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+    auto zero = package(); zero.emplace_back(tag, words({kind, 0, 0}));
+    auto zero_plugin = load(zero);
+    EXPECT_NO_THROW(fo4::rekey_form_links(zero_plugin, key(0x804), key(0x808)));
+    EXPECT_EQ(fo4::find_record(zero_plugin, key())->subrecords.back().data, words({kind, 0, 0}));
+  }
+  auto pack = package(); pack.emplace_back("PLDT", words({1, 0x804, 0}));
+  auto plugin = load(pack);
+  fo4::rekey_form_links(plugin, key(0x804), key(0x808));
+  EXPECT_EQ(fo4::find_record(plugin, key())->subrecords.back().data, words({1, 0x808, 0}));
+}
+
 }

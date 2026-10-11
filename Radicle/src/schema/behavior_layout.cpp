@@ -106,6 +106,10 @@ std::optional<std::vector<std::size_t>> behavior_formid_offsets(const Record& re
   if (tag == "PLDT" || tag == "PTDA") {
     if (!behavior_field_payload_valid(record, sub)) return checked({}, false);
     const auto kind = type(sub);
+    std::uint32_t target = 0;
+    std::memcpy(&target, sub.data.data() + 4, sizeof(target));
+    const bool unknown = (tag == "PLDT" ? kind == 12 || kind == 13 : kind == 6 || kind == 8) && target != 0;
+    if (unknown) return checked({}, false);
     const bool link = tag == "PLDT" ? kind == 0 || kind == 1 || kind == 4 || kind == 6
                                      : kind == 0 || kind == 1 || kind == 3 || kind == 7;
     return link ? std::vector<std::size_t>{4} : std::vector<std::size_t>{};
