@@ -207,7 +207,7 @@ The main integration preserves the existing exports, generated PEX additions, st
 
 ## Radicle/src/plugin/field_writer.cpp:formlink_slots; Radicle/schema/fallout4/fields.json:DIAL,INFO
 
-The eleven top-level DIAL/INFO FormIDs require exactly four-byte payloads, matching xEdit 93cc0bc5 lines 6318-6320 and 9724-9786 and the native decoder. Previously the shared writer accepted five- or eight-byte payloads and overwrote the first four bytes. The existing payload_sizes mechanism from the climate/weather writer is reused to fail closed before any mutation or field count. INFO TRDA keeps its existing complete-response guard. `Radicle/tests/test_dialogue_writer_c_api.cpp:MalformedTopLevelLinksRefuseNativeAndCApiWritesWithoutChangingBytes` covers all eleven paths at sizes 0, 3, 5 and 8 through native and C ABI writers.
+The eleven top-level DIAL/INFO form IDs require exactly four-byte payloads, matching xEdit 93cc0bc5 lines 6318-6320 and 9724-9786 and the native decoder. Previously the shared writer accepted five- or eight-byte payloads and overwrote the first four bytes. The existing payload_sizes mechanism from the climate/weather writer is reused to fail closed before any mutation or field count. INFO TRDA keeps its existing complete-response guard. `Radicle/tests/test_dialogue_writer_c_api.cpp:MalformedTopLevelLinksRefuseNativeAndCApiWritesWithoutChangingBytes` covers all eleven paths at sizes 0, 3, 5 and 8 through native and C ABI writers.
 
 ## Radicle/tests/test_dialogue_real.cpp:EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentical; Radicle/tests/test_dialogue_writer_real.cpp:CappedFieldSceneAndSubrecordEditsKeepEveryOtherRecordByteIdentical
 
