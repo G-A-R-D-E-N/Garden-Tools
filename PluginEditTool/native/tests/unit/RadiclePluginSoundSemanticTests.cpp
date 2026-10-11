@@ -311,7 +311,7 @@ TEST_CASE("Sound semantic EDID edits store Windows-1252 and refuse unrepresentab
     SECTION("Unrepresentable text is refused without a pending edit") {
         const auto refused = fixture.edit(sound::k_std, "EDID", "\xE6\xBC\xA2");
         REQUIRE_FALSE(refused.has_value());
-        CHECK(refused.error().type == "InvalidEditorId");
+        CHECK(refused.error().type == "FieldWriteFailed");
         fixture.checkNotPending();
     }
 }
