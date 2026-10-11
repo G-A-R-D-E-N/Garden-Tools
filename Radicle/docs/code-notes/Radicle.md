@@ -6,7 +6,7 @@ The pinned private RE record at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7
 `RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/README.md`,
 is linked from `Radicle/docs/CLIMATE_WEATHER.md`; the local copy is not committed.
 Its sections 3.2 and 3.4 verify the unsigned four timing bytes multiplied by
-the float32 one-sixth constant (OG getter RVAs 0x648A50–0x648B40), plus the
+the float32 one-sixth constant (OG getter addresses 0x648A50–0x648B40), plus the
 moon byte's low six phase-day bits and Secunda/Masser bits 6/7 (0x648A10,
 0x658B00 and 0x658B10). `ClimateTiming` exposes these interpretations alongside
 the raw bytes, without clock clamping or wrapping. The existing climate C ABI
@@ -40,7 +40,7 @@ existing consumer is private. The probe does not validate live transitions.
 
 `src/environment/base_records.cpp:decode_weather` keeps transition delta
 encoded. The private record pinned above, section 3.5, confirms DATA byte 3
-in `Sky::UpdateWeather` (RVA `0x64E530`) and names the two transition settings.
+in `Sky::UpdateWeather` (address `0x64E530`) and names the two transition settings.
 Its sections 5–6 retain GMST override and live-simulation uncertainty; the
 decoder supplies stored bytes without adding a duration formula.
 
