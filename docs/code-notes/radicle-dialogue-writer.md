@@ -68,7 +68,7 @@ over the seven shipped masters: 46,427 DIAL, 102,462 INFO, 4,778 SCEN (DLCworksh
 All `existing_only`, `presentation: identity`, f32 bounds +-1e9, enum bounds only where xEdit's enum is contiguous.
 
 - DIAL: string `Name` (FULL, localized); `Priority` (PNAM f32), `TopicFlags` (DATA u8 @0), `Category` (DATA u8 @1, 0..7,
-  xEdit enum Player..Miscellaneous; official values 0, 2, 3, 4, 5, 7), `Subtype` (DATA u16 @2, raw: the enum has 125
+  xEdit enum Player..Miscellaneous; official masters use all eight values 0-7, with 1 on 20 topics and 6 on 2), `Subtype` (DATA u16 @2, raw: the enum has 125
   entries with gaps of meaning, official max 124), `SubtypeName` (SNAM as a raw u32, see below), all `payload_size` 4.
   Links `Branch` (BNAM, DLBR), `Quest` (QNAM, QUST), `Keyword` (KNAM, KYWD), none nullable as in xEdit. Official targets:
   1,672 DLBR, 46,427 QUST, 1,588 KYWD.
@@ -207,7 +207,7 @@ The main integration preserves the existing exports, generated PEX additions, st
 
 ## Radicle/src/plugin/field_writer.cpp:formlink_slots; Radicle/schema/fallout4/fields.json:DIAL,INFO
 
-The eleven top-level DIAL/INFO form IDs require exactly four-byte payloads, matching xEdit 93cc0bc5 lines 6318-6320 and 9724-9786 and the native decoder. Previously the shared writer accepted five- or eight-byte payloads and overwrote the first four bytes. The existing payload_sizes mechanism from the climate/weather writer is reused to fail closed before any mutation or field count. INFO TRDA keeps its existing complete-response guard. `Radicle/tests/test_dialogue_writer_c_api.cpp:MalformedTopLevelLinksRefuseNativeAndCApiWritesWithoutChangingBytes` covers all eleven paths at sizes 0, 3, 5 and 8 through native and C ABI writers.
+The eleven top-level DIAL/INFO form IDs require exactly four-byte payloads, matching xEdit 93cc0bc5 lines 6318-6320 and 9725-9778 and the native decoder. Previously the shared writer accepted five- or eight-byte payloads and overwrote the first four bytes. The existing payload_sizes mechanism from the climate/weather writer is reused to fail closed before any mutation or field count. INFO TRDA keeps its existing complete-response guard. `Radicle/tests/test_dialogue_writer_c_api.cpp:MalformedTopLevelLinksRefuseNativeAndCApiWritesWithoutChangingBytes` covers all eleven paths at sizes 0, 3, 5 and 8 through native and C ABI writers.
 
 ## Radicle/tests/test_dialogue_real.cpp:EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentical; Radicle/tests/test_dialogue_writer_real.cpp:CappedFieldSceneAndSubrecordEditsKeepEveryOtherRecordByteIdentical
 
