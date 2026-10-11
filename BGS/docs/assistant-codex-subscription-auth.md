@@ -39,7 +39,7 @@ Baseline commit: `d33f9e1d` (origin/main, `feat(bgs): add read-only MCP and appr
 
 ## 2. Codex CLI / App Server version tested
 
-- Installed binary: `C:\ci\home\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe`
+- Installed binary: `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`
 - `codex --version` -> `codex-cli 0.154.0`
 - `initialize` response `userAgent` -> `bgs-probe/0.154.0 (Windows 10.0.26200; x86_64) unknown (bgs-probe; 0.0.1)`
 - `codex app-server --help` -> `app-server [experimental] Run the app server or related tooling`, with
