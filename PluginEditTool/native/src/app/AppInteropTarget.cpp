@@ -56,7 +56,7 @@ Error combinedRestoreError(const Error& backend, const Error& root) {
 }
 
 AppInteropTarget::AppInteropTarget(settings::Store& store,
-                                   settings::Settings& settings,
+                                   settings::SharedSettings& settings,
                                    platform::Services& platform,
                                    plugin::IPluginBackend& plugins)
     : store_(store), settings_(settings), platform_(platform), plugins_(plugins) {}
@@ -79,8 +79,9 @@ Result<nlohmann::json> AppInteropTarget::invoke(std::string_view method,
 Result<nlohmann::json> AppInteropTarget::browseForMo2Folder() {
     platform::FileDialogOptions options;
     options.title = "Select your Mod Organizer 2 instance folder";
-    if (!settings_.mo2InstancePath.empty() && std::filesystem::is_directory(settings_.mo2InstancePath)) {
-        options.initialPath = settings_.mo2InstancePath;
+    const auto configured = settings_.snapshot().mo2InstancePath;
+    if (!configured.empty() && std::filesystem::is_directory(configured)) {
+        options.initialPath = configured;
     }
 
     auto selected = platform_.pickFolder(options);
@@ -98,10 +99,11 @@ Result<nlohmann::json> AppInteropTarget::openMo2Profile(const nlohmann::json& ar
 }
 
 Result<nlohmann::json> AppInteropTarget::loadEnvironment(const nlohmann::json& args) {
-    if (settings_.mo2InstancePath.empty()) {
+    const auto configured = settings_.snapshot().mo2InstancePath;
+    if (configured.empty()) {
         return std::unexpected(Error{"EnvironmentUnavailable", "No MO2 instance is configured"});
     }
-    auto loaded = loadProfile(settings_.mo2InstancePath, boolArgument(args, 0));
+    auto loaded = loadProfile(configured, boolArgument(args, 0));
     if (!loaded) return std::unexpected(loaded.error());
     return nlohmann::json(nullptr);
 }
@@ -173,7 +175,6 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
         std::scoped_lock lock(mutex_);
         previous = snapshot_;
     }
-    const auto previousSettings = settings_;
     const auto previousRoot = previous ? previous->instance.overwriteFolder
                                        : std::filesystem::path{};
 
@@ -188,11 +189,15 @@ Result<void> AppInteropTarget::loadProfile(const std::filesystem::path& instance
         }
     }
 
-    settings_.mo2InstancePath = loaded->instance.instancePath;
-    if (!loaded->instance.gameDataFolder.empty()) settings_.dataFolder = loaded->instance.gameDataFolder;
-    auto saved = store_.save(settings_);
+    auto saved = settings_.update([&](settings::Settings& current) {
+        const auto previousSettings = current;
+        current.mo2InstancePath = loaded->instance.instancePath;
+        if (!loaded->instance.gameDataFolder.empty()) current.dataFolder = loaded->instance.gameDataFolder;
+        auto stored = store_.save(current);
+        if (!stored) current = previousSettings;
+        return stored;
+    });
     if (!saved) {
-        settings_ = previousSettings;
         if (!plugins_.capabilities().available) return std::unexpected(saved.error());
         return std::unexpected(
             withRollback(saved.error(), restoreLoadedProfile(previous, previousRoot)));
@@ -245,7 +250,7 @@ Result<nlohmann::json> AppInteropTarget::getMo2Status() const {
     if (!current) {
         return nlohmann::json{
             {"loaded", false},
-            {"configuredInstance", settings_.mo2InstancePath.string()},
+            {"configuredInstance", settings_.snapshot().mo2InstancePath.string()},
             {"stale", false},
             {"staleConfig", false},
             {"staleLoadOrder", false},
@@ -294,7 +299,7 @@ Result<nlohmann::json> AppInteropTarget::reloadMo2Profile(const nlohmann::json& 
         std::scoped_lock lock(mutex_);
         if (snapshot_) instance = snapshot_->instance.instancePath;
     }
-    if (instance.empty()) instance = settings_.mo2InstancePath;
+    if (instance.empty()) instance = settings_.snapshot().mo2InstancePath;
     if (instance.empty()) {
         return std::unexpected(Error{"Mo2InstanceMissing", "No MO2 instance is configured"});
     }

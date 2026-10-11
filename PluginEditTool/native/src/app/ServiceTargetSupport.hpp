@@ -19,6 +19,7 @@
 #include <nlohmann/json.hpp>
 
 #include <fo4ide/core/JsonInt.hpp>
+#include <fo4ide/core/PayloadLimits.hpp>
 #include <fo4ide/core/Result.hpp>
 
 namespace fo4ide::app::support {
@@ -59,6 +60,14 @@ inline int base64Value(unsigned char c) {
 }
 
 inline Result<std::vector<unsigned char>> decodeBase64(std::string_view input) {
+    std::size_t digits = 0;
+    for (const unsigned char c : input) {
+        if (c == '=') break;
+        if (!std::isspace(c)) ++digits;
+    }
+    if (digits * 3 / 4 > core::kMaxDroppedFileBytes) {
+        return std::unexpected(Error{"DroppedFileTooLarge", "Dropped file payload exceeds the 16 MiB limit"});
+    }
     std::vector<unsigned char> output;
     output.reserve(input.size() * 3 / 4);
     unsigned int value = 0;

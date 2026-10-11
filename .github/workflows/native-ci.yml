@@ -93,6 +93,7 @@ jobs:
           echo "ccache not found; building without a compiler cache"
 
       - name: Configure
+        timeout-minutes: 15
         run: |
           for attempt in 1 2 3; do
             if cmake -S PluginEditTool/native -B build/native -G Ninja \
@@ -471,6 +472,7 @@ jobs:
           [IO.File]::AppendAllText($env:GITHUB_ENV, "ZLIB_SRC=$zlibSrc`n")
 
       - name: Configure
+        timeout-minutes: 15
         shell: powershell
         run: |
           $launcher = @()
@@ -553,6 +555,7 @@ jobs:
       # /Z7 (Embedded) instead of CMake's default /Zi: ccache can't cache
       # compiles that write to a shared PDB.
       - name: Configure (Debug)
+        timeout-minutes: 15
         if: github.event_name != 'pull_request'
         shell: powershell
         run: |
