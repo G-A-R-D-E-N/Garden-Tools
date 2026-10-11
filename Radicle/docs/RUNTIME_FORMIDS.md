@@ -34,7 +34,7 @@ Inside an ESP/ESM/ESL, the high byte is a `MAST` ordinal, not the runtime compil
 
 This means `0xFE` must not be special-cased by `resolve_plugin_form_id`. At the extreme master-table boundary it can simply be ordinal 254, including the current plugin when it has 254 masters. Runtime `0xFE` interpretation belongs only in `resolve_runtime_form_id`.
 
-Likewise, Radicle does not currently truncate a light plugin's `LocalFormId` when reading on-disk identity. Until `TESFile::CheckValidIDForSmallFile` is fully recovered, the library retains the local value and applies the 12-bit mask only when encoding for a known light owner.
+Likewise, Radicle does not truncate a light plugin's `LocalFormId` when reading on-disk identity. `TESFile::CheckValidIDForSmallFile` (`(id & 0x00FFF000) == 0`, recovered; see `FORMID_MODEL.md` and `ESL_FORMIDS.md`) corroborates the 12-bit ceiling. The library retains the local value and applies the 12-bit mask only when encoding for a known light owner.
 
 ## Tests
 
