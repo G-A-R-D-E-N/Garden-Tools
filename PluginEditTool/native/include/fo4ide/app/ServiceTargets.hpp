@@ -30,7 +30,7 @@ namespace fo4ide::app {
 class SettingsTarget final : public rpc::Target {
 public:
     SettingsTarget(settings::Store& store,
-                   settings::Settings& current,
+                   settings::SharedSettings& current,
                    platform::Services& platform,
                    process::Runner& runner);
 
@@ -45,7 +45,7 @@ private:
     Result<nlohmann::json> testClaude(const nlohmann::json& args);
 
     settings::Store& store_;
-    settings::Settings& current_;
+    settings::SharedSettings& shared_;
     platform::Services& platform_;
     process::Runner& runner_;
 };

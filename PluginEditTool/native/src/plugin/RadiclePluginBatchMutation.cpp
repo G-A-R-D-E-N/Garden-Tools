@@ -19,6 +19,15 @@ std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     return args[index].get<std::string>();
 }
 
+bool stringFieldIfPresent(const nlohmann::json& object, const char* key, std::string& value) {
+    value.clear();
+    const auto field = object.find(key);
+    if (field == object.end()) return true;
+    if (!field->is_string()) return false;
+    value = field->get<std::string>();
+    return true;
+}
+
 bool boolArgument(const nlohmann::json& args, std::size_t index, bool& value) {
     if (!args.is_array() || index >= args.size() || !args[index].is_boolean()) return false;
     value = args[index].get<bool>();
@@ -81,8 +90,17 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsOverrideMany(
             parseFailures.push_back({{"formKey", ""}, {"source", ""}, {"reason", "item is not an object"}});
             continue;
         }
-        const auto source = raw.value("source", std::string{});
-        const auto formKeyText = raw.value("formKey", std::string{});
+        std::string source;
+        std::string formKeyText;
+        if (!stringFieldIfPresent(raw, "source", source) ||
+            !stringFieldIfPresent(raw, "formKey", formKeyText)) {
+            parseFailures.push_back({
+                {"formKey", ""},
+                {"source", ""},
+                {"reason", "source and formKey must be strings"}
+            });
+            continue;
+        }
         if (source.empty() || formKeyText.empty()) {
             parseFailures.push_back({
                 {"formKey", formKeyText},

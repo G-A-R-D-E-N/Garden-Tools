@@ -140,6 +140,40 @@ std::vector<std::byte> makeTargetPlugin() {
     return out.bytes;
 }
 
+std::vector<std::byte> makeRootAndBranchPackPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+    const auto group = fo4::test::begin_group(out, "PACK", 0);
+    const auto record = fo4::test::begin_record(out, "PACK", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"RootPack\0", 9});
+    fo4::test::ByteWriter condition;
+    condition.u32(0);
+    condition.f32(1.0f);
+    condition.u16(8);
+    condition.u16(0);
+    condition.u32(0);
+    condition.u32(0);
+    condition.u32(0);
+    condition.u32(0);
+    condition.u32(0xFFFFFFFFu);
+    fo4::test::write_subrecord(out, "CTDA", condition.bytes);
+    fo4::test::write_subrecord(out, "ANAM", std::string_view{"Sandbox\0", 8});
+    fo4::test::ByteWriter count;
+    count.u32(1);
+    fo4::test::write_subrecord(out, "CITC", count.bytes);
+    fo4::test::write_subrecord(out, "CTDA", condition.bytes);
+    fo4::test::write_subrecord(out, "PRCB", std::span<const std::byte>{});
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 std::string editorId(const fo4::Record& record) {
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != fo4::sig_edid) continue;
@@ -232,7 +266,7 @@ TEST_CASE("Native SetField persists EDID and refreshes the record matrix") {
     CHECK(record->subrecords[1].signature.to_string() == "FULL");
 }
 
-TEST_CASE("Native SetConditions reports multiple lists without staging") {
+TEST_CASE("Native SetConditions refuses a record whose lists are all nested without staging") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto path = root / "Patch.esp";
@@ -241,10 +275,90 @@ TEST_CASE("Native SetConditions reports multiple lists without staging") {
     fo4ide::plugin::RadiclePluginBackend backend;
     loadBackend(backend, path);
 
+    const nlohmann::json rows = nlohmann::json::array({
+        {
+            {"function", "GetStage"},
+            {"operator", ">="},
+            {"value", 5},
+            {"param1", 2},
+            {"runOn", "Subject"},
+        },
+    });
+    const auto result = backend.invokeBackend(
+        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", rows.dump()}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "NoConditionList");
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
+TEST_CASE("Native SetConditions refuses a record with no condition list without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makePlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const nlohmann::json rows = nlohmann::json::array({
+        {
+            {"function", "GetStage"},
+            {"operator", ">="},
+            {"value", 5},
+            {"param1", 2},
+            {"runOn", "Subject"},
+        },
+    });
+    const auto result = backend.invokeBackend(
+        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", rows.dump()}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "NoConditionList");
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
+TEST_CASE("Native SetConditions accepts an empty list on a record with no condition list without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makePlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
     const auto result = backend.invokeBackend(
         "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "[]"}));
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().type == "ConditionScopeMultipleLists");
+    REQUIRE(result.has_value());
+    const auto active = parseStringResult(
+        backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    CHECK_FALSE(active.at(0).at("Pending").get<bool>());
+    CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
+TEST_CASE("Native bare condition reads skip nested lists and scoped reads report multiple lists without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    const auto before = makeMultipleConditionListsPlugin();
+    writeBytes(path, before);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto whole = backend.invokeBackend(
+        "GetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE(whole.has_value());
+    CHECK(whole->get<std::string>() == "[]");
+    const auto scoped = backend.invokeBackend(
+        "GetConditionsAtPath", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Aliases[0].Conditions"}));
+    CHECK_FALSE(scoped.has_value());
+    if (!scoped.has_value()) {
+        CHECK(scoped.error().type == "ConditionScopeMultipleLists");
+    }
     const auto active = parseStringResult(
         backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
     CHECK_FALSE(active.at(0).at("Pending").get<bool>());
@@ -269,6 +383,45 @@ TEST_CASE("Native SetConditionsAtPath reports multiple lists without staging") {
         backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
     CHECK_FALSE(active.at(0).at("Pending").get<bool>());
     CHECK(fo4::test::original_bytes(fo4::read_plugin_file(path)) == before);
+}
+
+TEST_CASE("Native bare Conditions edits the PACK root list and leaves the branch identical") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, makeRootAndBranchPackPlugin());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBackend(backend, path);
+
+    const auto branchArgs = nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "Branches[0].Conditions"});
+    const auto branchBefore = backend.invokeBackend("GetConditionsAtPath", branchArgs);
+    REQUIRE(branchBefore.has_value());
+    const auto rootBefore = parseStringResult(backend.invokeBackend(
+        "GetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"})));
+    REQUIRE(rootBefore.size() == 1);
+    CHECK(rootBefore[0].at("function") == "GetAngle");
+
+    const nlohmann::json rows = nlohmann::json::array({
+        {
+            {"function", "GetStage"},
+            {"operator", ">="},
+            {"value", 5},
+            {"param1", 2},
+            {"runOn", "Subject"},
+        },
+    });
+    const auto message = backend.invokeBackend(
+        "SetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp", rows.dump()}));
+    REQUIRE(message.has_value());
+    CHECK(message->get<std::string>().find("Set 1 condition(s)") == 0);
+
+    const auto rootAfter = parseStringResult(backend.invokeBackend(
+        "GetConditions", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"})));
+    REQUIRE(rootAfter.size() == 1);
+    CHECK(rootAfter[0].at("function") == "GetStage");
+    const auto branchAfter = backend.invokeBackend("GetConditionsAtPath", branchArgs);
+    REQUIRE(branchAfter.has_value());
+    CHECK(branchAfter->get<std::string>() == branchBefore->get<std::string>());
 }
 
 TEST_CASE("Native SetField rejects opaque raw fields without touching disk") {
