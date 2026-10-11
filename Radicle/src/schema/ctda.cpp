@@ -168,12 +168,14 @@ std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
                                                    std::size_t begin,
                                                    std::size_t end) {
   std::vector<CtdaCondition> conditions;
+  bool run_open = true;
   end = std::min(end, record.subrecords.size());
   for (std::size_t i = begin; i < end; ++i) {
     const auto& subrecord = record.subrecords[i];
     if (subrecord.signature == sig_ctda) {
+      if (!run_open) throw CtdaMultipleListsError("condition scope has more than one list");
       conditions.push_back(parse_ctda_condition(subrecord.data));
-    } else if (!conditions.empty() &&
+    } else if (run_open && !conditions.empty() &&
                (subrecord.signature == sig_cis1 || subrecord.signature == sig_cis2)) {
       auto& last = conditions.back();
       if (subrecord.signature == sig_cis1) {
@@ -181,6 +183,8 @@ std::vector<CtdaCondition> read_ctda_conditions_in(const Record& record,
       } else {
         last.parameter2_string = zstring_of(subrecord.data);
       }
+    } else if (!conditions.empty()) {
+      run_open = false;
     }
   }
   return conditions;
