@@ -244,17 +244,17 @@ TEST_CASE("condition functions: index<->name lookups match the Mutagen enum") {
 TEST_CASE("condition functions: run-on value<->name lookups match the Mutagen enum") {
     using namespace fo4ide::plugin;
 
-    // RunOnType values are not contiguous: Subject=0..EventData=7, then
-    // CommandTarget=9, EventCameraRef=10, MyKiller=11.
     CHECK(runOnName(0) == "Subject");
     CHECK(runOnName(7) == "EventData");
-    CHECK(runOnName(8).empty());  // 8 is unused
-    CHECK(runOnName(9) == "CommandTarget");
-    CHECK(runOnName(11) == "MyKiller");
+    CHECK(runOnName(8) == "CommandTarget");
+    CHECK(runOnName(9) == "EventCameraRef");
+    CHECK(runOnName(10) == "MyKiller");
+    CHECK(runOnName(11).empty());
     CHECK(runOnName(99).empty());
 
     CHECK(runOnValue("Target") == std::optional<std::uint32_t>{1});
     CHECK(runOnValue("reference") == std::optional<std::uint32_t>{2});  // ignoreCase
-    CHECK(runOnValue("MyKiller") == std::optional<std::uint32_t>{11});
+    CHECK(runOnValue("CommandTarget") == std::optional<std::uint32_t>{8});
+    CHECK(runOnValue("MyKiller") == std::optional<std::uint32_t>{10});
     CHECK(runOnValue("NotARunOn") == std::nullopt);
 }
