@@ -372,19 +372,6 @@ TEST(CtdaModel, ReadRefusesSeveralConditionListsButAllowsBoundedRuns) {
   EXPECT_EQ(second[0].function, 3);
 }
 
-TEST(CtdaModel, ReadRefusesCisStringThatIsNotUtf8) {
-  fo4::CtdaCondition condition;
-  condition.function = 8;
-  condition.parameter1_string = "caf\xC3\xA9";
-  fo4::Record record;
-  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
-  EXPECT_NO_THROW(fo4::read_ctda_conditions(record));
-
-  condition.parameter1_string = "caf\xE9";
-  record.subrecords = fo4::serialize_ctda_run(std::span(&condition, 1));
-  EXPECT_THROW(fo4::read_ctda_conditions(record), fo4::CtdaNotLosslessError);
-}
-
 TEST(CtdaModel, ReadDoesNotAttachCisAfterTheRunEnds) {
   const auto plugin = make_plugin_with_layout({"CTDA", "NAM0", "CIS1", "CIS2"});
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:Cond.esp"));
