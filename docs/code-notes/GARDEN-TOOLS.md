@@ -1527,7 +1527,7 @@ Test fixes made with the workflow:
 
 Path length: the longest tracked path under `PluginEditTool` is 145 characters, so a runner workspace root longer than about 115 characters can break the build unless Windows long paths are enabled. A GitVersion run on a deeply nested checkout failed with LibGit2Sharp "path too long".
 
-On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the Windows test steps set TEMP and TMP to `runner.temp`.
+On the Windows runner the default TEMP lives under the runner home folder, which is a reparse point; `ArchiveExtraction` and `ArchiveService` refuse output paths with a reparse-point ancestor, so the `plugin-editor-ci.yml` Windows steps set TEMP and TMP to `runner.temp`; the `native-windows-tests` job in `native-ci.yml` does not set them.
 
 The checkout step uses the full URL `https://code.forgejo.org/actions/checkout@v7` (the same v7 commit, 3d3c42e5, as the `actions/checkout@v7` that resolves to data.forgejo.org). On a pull_request event native-ci and plugin-editor-ci start together, and their Windows jobs fetched the shared cached checkout action at the same moment, failing in about 2 s with `shallow.lock` / "shallow file has changed since we read it" before any step ran (runs 691 and 694). A different action URL gets its own cache directory, so the two jobs no longer touch the same clone.
 
