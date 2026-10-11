@@ -34,6 +34,7 @@ constexpr Signature sig_info = Signature::from_string("INFO");
 constexpr Signature sig_perk = Signature::from_string("PERK");
 constexpr Signature sig_qust = Signature::from_string("QUST");
 constexpr Signature sig_indx = Signature::from_string("INDX");
+constexpr Signature sig_next = Signature::from_string("NEXT");
 constexpr Signature sig_prkc = Signature::from_string("PRKC");
 
 constexpr Signature k_package_branch_members[] = {
@@ -67,6 +68,10 @@ constexpr Signature k_perk_root_successors[] = {
     Signature::from_string("DATA"), Signature::from_string("SNAM"),
     Signature::from_string("NNAM"), Signature::from_string("FNAM"),
     Signature::from_string("PRKE"),
+};
+
+constexpr Signature k_qust_root_successors[] = {
+    sig_next,
 };
 
 constexpr Signature k_perk_tab_members[] = {
@@ -413,13 +418,15 @@ std::optional<std::size_t> root_insert_anchor(const Record& record) {
   if (record.header.signature == sig_pack) return first_member_index(subs, k_pack_root_successors);
   if (record.header.signature == sig_info) return first_member_index(subs, k_info_root_successors);
   if (record.header.signature == sig_perk) return first_member_index(subs, k_perk_root_successors);
+  if (record.header.signature == sig_qust) return first_member_index(subs, k_qust_root_successors);
   return std::nullopt;
 }
 
 std::size_t root_window_limit(const Record& record) {
   if (record.header.signature != sig_qust) return record.subrecords.size();
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
-    if (record.subrecords[i].signature == sig_indx) return i;
+    const auto signature = record.subrecords[i].signature;
+    if (signature == sig_next || signature == sig_indx) return i;
   }
   return record.subrecords.size();
 }
@@ -481,7 +488,7 @@ RootConditionWindow root_condition_window(const Record& record) {
     return RootConditionWindow{RootConditionStatus::no_list, 0, 0, std::nullopt};
   }
   std::size_t begin = 0;
-  std::size_t end = subs.size();
+  std::size_t end = limit;
   for (const auto& range : *nested) {
     if (range.end <= *anchor) begin = std::max(begin, range.end);
     if (range.begin >= *anchor) end = std::min(end, range.begin);
