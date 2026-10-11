@@ -32,7 +32,7 @@ shared check also covers native insertion. Existing nullable lists retain
 their null behavior. The file reuses `Radicle/src/plugin/record_edit.hpp` for
 record lookup and modification bookkeeping instead of keeping duplicate helpers.
 
-Source: pinned xEdit `wbDefinitionsFO4.pas` (local copy, not committed) and `wbDefinitionsCommon.pas`; every statement below about a layout, a default or a required entry is taken from those files.
+Source: pinned xEdit `wbDefinitionsFO4.pas` and `wbDefinitionsCommon.pas`; every statement below about a layout, a default or a required entry is taken from those files.
 
 - `Radicle/schema/fallout4/fields.json` `formlink_fields`: `TREE\Ingredient` (PFIG) and `FLOR\Ingredient` (PFIG) are nullable; `TREE\HarvestSound` (SNAM, `SNDR`, nullable) and `FLOR\HarvestSound` (SNAM, `SNDR`, not nullable) follow the pinned xEdit lines `wbFormIDCK(PFIG, 'Ingredient', sigBaseObjects)`, `wbFormIDCK(SNAM, 'Harvest Sound', [SNDR, NULL])` (TREE 12134-12165) and `wbFormIDCk(PFIG, ..., [ALCH, AMMO, ARMO, BOOK, INGR, KEYM, LIGH, LVLI, MISC, NOTE, WEAP, NULL])`, `wbFormIDCK(SNAM, 'Harvest Sound', [SNDR])` (FLOR 12167-12197). `LTEX\Grasses` (GNAM list, `GRAS`, not nullable) supplies count and indexed replacement through the list APIs; there is no overlapping single-field descriptor.
 - `TREE\Ingredient` lists the 43 `sigBaseObjects` targets of `target_unions` plus `ENCH` explicitly: the pinned xEdit `sigBaseObjects` (line 74) contains `ENCH`, the repo's shared union does not. The shared union was left alone because it also drives CNTO, EXPL and quest items; this is a finding for the owner of that union, not a vegetation decision.
