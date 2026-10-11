@@ -235,29 +235,25 @@ radicle_status radicle_quest_structure_read(const radicle_plugin* plugin, const 
   if (!plugin || !form_key || !out_structure) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, form_key and out_structure are required");
   }
-  try {
+  return guarded("unknown exception while reading quest structure", [&] {
     fo4::FormKey key;
     try {
       key = fo4::FormKey::parse(form_key);
     } catch (const fo4::FormIdError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
-    const auto source = fo4::quest::read_quest_structure(plugin->value, key);
-    auto result = std::make_unique<radicle_quest_structure>();
-    result->build(plugin->value, source);
-    *out_structure = result.release();
-    return RADICLE_STATUS_OK;
-  } catch (const std::bad_alloc& error) {
-    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
-  } catch (const std::out_of_range& error) {
-    return fail_exception(RADICLE_STATUS_NOT_FOUND, error);
-  } catch (const std::invalid_argument& error) {
-    return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
-  } catch (const std::exception& error) {
-    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
-  } catch (...) {
-    return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown exception while reading quest structure");
-  }
+    try {
+      const auto source = fo4::quest::read_quest_structure(plugin->value, key);
+      auto result = std::make_unique<radicle_quest_structure>();
+      result->build(plugin->value, source);
+      *out_structure = result.release();
+      return RADICLE_STATUS_OK;
+    } catch (const std::out_of_range& error) {
+      return fail_exception(RADICLE_STATUS_NOT_FOUND, error);
+    } catch (const std::invalid_argument& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
 }
 
 radicle_status radicle_quest_structure_get_view(const radicle_quest_structure* structure,

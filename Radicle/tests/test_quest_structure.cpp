@@ -373,3 +373,48 @@ TEST(QuestStructure, ObjectiveFlagsAfterTargetsDoNotBecomeDefaultFlags) {
   EXPECT_FALSE(native.objectives_supported);
   EXPECT_TRUE(native.objectives.objectives.empty());
 }
+
+TEST(QuestStructure, ObjectiveWithoutFlagsReadsAsZeroFlags) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    const auto flags = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& member) {
+      return member.signature == fo4::Signature::from_string("FNAM");
+    });
+    record.subrecords.erase(flags);
+  });
+  const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
+  EXPECT_TRUE(native.objectives_supported);
+  ASSERT_EQ(native.objectives.objectives.size(), 1u);
+  EXPECT_EQ(native.objectives.objectives[0].flags, 0u);
+  EXPECT_EQ(native.objectives.objectives[0].targets.size(), 1u);
+}
+
+TEST(QuestStructure, DuplicateObjectiveFlagsAreUnsupported) {
+  auto plugin = quest_structure_plugin();
+  change_quest(plugin, [](fo4::Record& record) {
+    const auto flags = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& member) {
+      return member.signature == fo4::Signature::from_string("FNAM");
+    });
+    record.subrecords.insert(flags + 1, quest_u32("FNAM", 4));
+  });
+  const auto native = fo4::quest::read_quest_structure(plugin, structure_quest_key());
+  EXPECT_FALSE(native.objectives_supported);
+  EXPECT_TRUE(native.objectives.objectives.empty());
+}
+
+TEST(QuestStructure, MissingQuestReturnsNotFound) {
+  const auto plugin = quest_structure_plugin();
+  const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto dir = std::filesystem::temp_directory_path() / ("quest_structure_missing_" + std::to_string(id));
+  std::filesystem::create_directories(dir);
+  const auto path = dir / "Quests.esp";
+  fo4::write_plugin_file(plugin, path);
+  radicle_plugin* raw = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_quest_structure* handle = nullptr;
+  EXPECT_EQ(radicle_quest_structure_read(raw, "000801:Quests.esp", &handle), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(handle, nullptr);
+  radicle_plugin_destroy(raw);
+  std::error_code error;
+  std::filesystem::remove_all(dir, error);
+}

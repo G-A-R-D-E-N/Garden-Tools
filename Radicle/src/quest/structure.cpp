@@ -97,8 +97,8 @@ void validate_objective_flags(const Record& record) {
   std::size_t flags = 0;
   for (const auto& member : record.subrecords) {
     if (is(member, "QOBJ") || is(member, "ANAM")) {
-      if (objective && flags != 1) {
-        throw forms::QuestError("objective requires exactly one FNAM Flags member");
+      if (objective && flags > 1) {
+        throw forms::QuestError("objective allows at most one FNAM Flags member");
       }
       if (is(member, "ANAM")) return;
       objective = true;
@@ -111,8 +111,8 @@ void validate_objective_flags(const Record& record) {
       ++flags;
     }
   }
-  if (objective && flags != 1) {
-    throw forms::QuestError("objective requires exactly one FNAM Flags member");
+  if (objective && flags > 1) {
+    throw forms::QuestError("objective allows at most one FNAM Flags member");
   }
 }
 
