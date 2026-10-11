@@ -75,6 +75,29 @@ std::vector<std::byte> makeTarget() {
     return out.bytes;
 }
 
+std::vector<std::byte> makeLightTarget() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", fo4::RecordFlags::small_file, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x811);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::write_subrecord(out, "MAST", std::string_view{"Master.esm\0", 11});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "MISC", 0);
+    const auto record = fo4::test::begin_record(out, "MISC", 0, 0x01000001u);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"LightLocal\0", 11});
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
 nlohmann::json pluginEntry(std::string name,
                            const std::filesystem::path& path,
                            std::string source = "test") {
@@ -318,6 +341,32 @@ TEST_CASE("Native CleanUnusedMasters removes an unreferenced master and keeps lo
     const auto again = textResult(
         backend.cleanUnusedMasters(nlohmann::json::array({"Target.esp"})));
     CHECK(again == "No unused masters in Target.esp.");
+}
+
+TEST_CASE("Native CleanUnusedMasters refuses to drop the last master of a light plugin with low own IDs") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto masterPath = root / "Master.esm";
+    const auto targetPath = root / "Target.esp";
+    writeBytes(masterPath, makeMaster());
+    writeBytes(targetPath, makeLightTarget());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Master.esm", masterPath),
+            pluginEntry("Target.esp", targetPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto result = backend.cleanUnusedMasters(nlohmann::json::array({"Target.esp", true}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "CleanMastersFailed");
+
+    const auto listed = backend.invoke("masters.List", nlohmann::json::array({"Target.esp"}));
+    REQUIRE(listed.has_value());
+    CHECK(listed->get<std::string>().find("Master.esm") != std::string::npos);
 }
 
 TEST_CASE("Native ComparePluginTo diffs a loaded plugin against another file without loading it") {

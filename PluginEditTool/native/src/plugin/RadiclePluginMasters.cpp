@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <exception>
+#include <format>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <fo4/plugin/master_usage.hpp>
+#include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/onam.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
@@ -205,6 +207,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
     if (!isEditable(*loaded)) return readOnlyError(loaded->name);
 
     try {
+        const auto lowered = light ? fo4::lowered_light_next_form_id(loaded->plugin) : std::nullopt;
         auto mutated = fo4::set_plugin_light_flag(loaded->plugin, light);
         if (!loaded->dirty) loaded->originalPlugin = loaded->plugin;
         loaded->plugin = std::move(mutated);
@@ -222,8 +225,11 @@ Result<nlohmann::json> RadiclePluginBackend::setLight(const nlohmann::json& argu
         for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, known);
         rebuildGraphLocked();
 
+        const auto loweredNote = lowered
+            ? "; lowered HEDR nextFormID to " + std::format("0x{:03X}", *lowered)
+            : std::string{};
         return nlohmann::json(
-            light ? "Set the ESL flag on " + name + ". Save Plugin to persist it."
+            light ? "Set the ESL flag on " + name + loweredNote + ". Save Plugin to persist it."
                   : "Cleared the ESL flag on " + name + ". Save Plugin to persist it.");
     } catch (const std::exception& error) {
         return std::unexpected(Error{"SetLightFailed", error.what()});
