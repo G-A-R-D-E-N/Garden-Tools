@@ -366,12 +366,12 @@ TEST_CASE("Radicle archive backend extracts a compressed DX10 texture entry") {
     });
     REQUIRE(result.has_value());
     const auto extracted = readBytes(output);
-    REQUIRE(extracted.size() == 148 + payload.size());
+    REQUIRE(extracted.size() == 128 + payload.size());
     CHECK(extracted[0] == std::byte{'D'});
     CHECK(extracted[1] == std::byte{'D'});
     CHECK(extracted[2] == std::byte{'S'});
     CHECK(extracted[3] == std::byte{' '});
-    CHECK(std::vector<std::byte>(extracted.begin() + 148, extracted.end()) == bytes(payload));
+    CHECK(std::vector<std::byte>(extracted.begin() + 128, extracted.end()) == bytes(payload));
 }
 
 TEST_CASE("Radicle archive backend previews a DDS entry as a PNG data URL") {

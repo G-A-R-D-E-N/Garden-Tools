@@ -7,6 +7,7 @@
 #include "fo4/io/atomic_write.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <fstream>
 #include <limits>
@@ -28,6 +29,7 @@ constexpr std::size_t k_entry_size = 24;
 constexpr std::size_t k_chunk_record_size = 24;
 constexpr std::uint32_t k_dds_magic = 0x20534444u;     // "DDS "
 constexpr std::uint32_t k_dds_dx10_fourcc = 0x30315844u;
+constexpr std::size_t k_dds_header_size = 128;
 constexpr std::size_t k_dds_dx10_header_size = 148;
 
 constexpr std::size_t k_max_extract_total_bytes = std::size_t{1} << 30;
@@ -74,52 +76,76 @@ bool is_dds_path(std::string_view path) {
          std::tolower(static_cast<unsigned char>(suffix[3])) == 's';
 }
 
-struct DdsLayout {
-  bool block_compressed{false};
-  std::uint32_t bytes_per_unit{0};
+// indexed by DXGI_FORMAT value, same order as TwbDDS.GetBitsPerPixel
+constexpr std::array<std::uint32_t, 116> k_bits_per_pixel = {
+    0, 128, 128, 128, 128, 96, 96, 96, 96, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+    32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+    16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 8, 8, 8, 8,
+    8, 8, 1, 32, 32, 32, 4, 4, 4, 8, 8, 8, 8, 8, 8, 4,
+    4, 4, 8, 8, 8, 16, 16, 32, 32, 32, 32, 32, 32, 32, 8, 8,
+    8, 8, 8, 8, 32, 32, 64, 12, 24, 24, 12, 32, 64, 64, 12, 8,
+    8, 8, 16, 16,
 };
 
-std::optional<DdsLayout> dds_layout(std::uint8_t dxgi) {
-  switch (dxgi) {
-    case 70: case 71: case 72:
-    case 79: case 80: case 81:
-      return DdsLayout{true, 8};
-    case 73: case 74: case 75:
-    case 76: case 77: case 78:
-    case 82: case 83: case 84:
-    case 94: case 95: case 96:
-    case 97: case 98: case 99:
-      return DdsLayout{true, 16};
-    case 2:  return DdsLayout{false, 16};
-    case 10: return DdsLayout{false, 8};
-    case 24: case 28: case 29: case 34: case 41:
-    case 87: case 88: case 91: case 93:
-      return DdsLayout{false, 4};
-    case 49: case 54: case 56: case 85: case 86: case 115:
-      return DdsLayout{false, 2};
-    case 61: case 65:
-      return DdsLayout{false, 1};
-    default:
-      return std::nullopt;
+std::pair<std::uint32_t, std::uint32_t> dds_pitch_and_flag(const Ba2TextureInfo& info) {
+  constexpr std::uint32_t linear = 0x80000u;
+  constexpr std::uint32_t pitch = 0x8u;
+  const std::uint32_t w = info.width;
+  const std::uint32_t h = info.height;
+  switch (info.dxgi_format) {
+    case 72:
+      return {w * h / 2, linear};
+    case 75: case 78: case 95: case 96: case 98: case 99:
+      return {w * h, linear};
+    case 29: case 30: case 32: case 91: case 93:
+      return {w * 4, pitch};
+    case 50: case 52:
+      return {w * 2, pitch};
+    case 62: case 63: case 64:
+      return {w, pitch};
+    default: {
+      const std::uint32_t bits = info.dxgi_format < k_bits_per_pixel.size()
+                                     ? k_bits_per_pixel[info.dxgi_format]
+                                     : 0u;
+      return {(w * bits) >> 3u, pitch};
+    }
   }
 }
 
-std::pair<std::uint32_t, std::uint32_t> dds_pitch_and_flag(const Ba2TextureInfo& info) {
-  const auto layout = dds_layout(info.dxgi_format);
-  if (!layout) return {0u, 0u};
-  const std::uint64_t width = std::max<std::uint32_t>(1u, info.width);
-  const std::uint64_t height = std::max<std::uint32_t>(1u, info.height);
-  std::uint64_t value = 0;
-  std::uint32_t flag = 0;
-  if (layout->block_compressed) {
-    value = ((width + 3u) / 4u) * ((height + 3u) / 4u) * layout->bytes_per_unit;
-    flag = 0x80000u;
-  } else {
-    value = width * layout->bytes_per_unit;
-    flag = 0x8u;
+struct Dx9Format {
+  std::uint32_t pitch_or_linear;
+  std::uint32_t size_flag;
+  std::uint32_t pixel_flags;
+  std::uint32_t fourcc;
+  std::uint32_t bit_count;
+  std::uint32_t masks[4];
+};
+
+std::optional<Dx9Format> dx9_format(const Ba2TextureInfo& info) {
+  constexpr std::uint32_t linear = 0x80000u;
+  constexpr std::uint32_t pitch = 0x8u;
+  constexpr std::uint32_t fourcc_flag = 0x4u;
+  const std::uint32_t w = info.width;
+  const std::uint32_t h = info.height;
+  switch (info.dxgi_format) {
+    case 71: return Dx9Format{w * h / 2, linear, fourcc_flag, 0x31545844u, 0, {}};
+    case 74: return Dx9Format{w * h, linear, fourcc_flag, 0x33545844u, 0, {}};
+    case 77: return Dx9Format{w * h, linear, fourcc_flag, 0x35545844u, 0, {}};
+    case 80: return Dx9Format{w * h / 2, linear, fourcc_flag, 0x55344342u, 0, {}};
+    case 81: return Dx9Format{w * h / 2, linear, fourcc_flag, 0x53344342u, 0, {}};
+    case 83: return Dx9Format{w * h, linear, fourcc_flag, 0x55354342u, 0, {}};
+    case 84: return Dx9Format{w * h, linear, fourcc_flag, 0x53354342u, 0, {}};
+    case 28: return Dx9Format{w * 4, pitch, 0x41u, 0, 32, {0xFFu, 0xFF00u, 0xFF0000u, 0xFF000000u}};
+    case 87: return Dx9Format{w * 4, pitch, 0x41u, 0, 32, {0xFF0000u, 0xFF00u, 0xFFu, 0xFF000000u}};
+    case 88: return Dx9Format{w * 4, pitch, 0x40u, 0, 32, {0xFF0000u, 0xFF00u, 0xFFu, 0}};
+    case 85: return Dx9Format{w * 2, pitch, 0x40u, 0, 16, {0xF800u, 0x7E0u, 0x1Fu, 0}};
+    case 86: return Dx9Format{w * 2, pitch, 0x41u, 0, 16, {0x7C00u, 0x3E0u, 0x1Fu, 0x8000u}};
+    case 49: return Dx9Format{w * 2, pitch, 0x20001u, 0, 16, {0xFFu, 0, 0, 0xFF00u}};
+    case 65: return Dx9Format{w, pitch, 0x2u, 0, 8, {0, 0, 0, 0xFFu}};
+    case 61: return Dx9Format{w, pitch, 0x20000u, 0, 8, {0xFFu, 0, 0, 0}};
+    default: return std::nullopt;
   }
-  if (value > std::numeric_limits<std::uint32_t>::max()) return {0u, 0u};
-  return {static_cast<std::uint32_t>(value), flag};
 }
 
 std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
@@ -127,12 +153,14 @@ std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
     throw Ba2Error("DX10 BA2 texture has zero width or height");
   }
 
-  const auto [pitch_or_linear, size_flag] = dds_pitch_and_flag(entry.texture);
+  const auto dx9 = dx9_format(entry.texture);
+  const auto [pitch_or_linear, size_flag] =
+      dx9 ? std::make_pair(dx9->pitch_or_linear, dx9->size_flag) : dds_pitch_and_flag(entry.texture);
   const auto mip_count = std::max<std::uint32_t>(1u, entry.texture.mip_count);
   const bool cube = (entry.texture.flags & 0x1u) != 0;
 
   std::vector<std::byte> out;
-  out.reserve(k_dds_dx10_header_size);
+  out.reserve(dx9 ? k_dds_header_size : k_dds_dx10_header_size);
   append_u32(out, k_dds_magic);
   append_u32(out, 124u);
   append_u32(out, 0x1u | 0x2u | 0x4u | 0x1000u | 0x20000u | size_flag);
@@ -143,24 +171,27 @@ std::vector<std::byte> dds_header_for(const Ba2TextureEntry& entry) {
   append_u32(out, mip_count);
   for (int i = 0; i < 11; ++i) append_u32(out, 0u);
   append_u32(out, 32u);
-  append_u32(out, 0x4u);
-  append_u32(out, k_dds_dx10_fourcc);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0x1000u | (mip_count > 1 ? 0x400008u : 0u));
+  if (dx9) {
+    append_u32(out, dx9->pixel_flags);
+    append_u32(out, dx9->fourcc);
+    append_u32(out, dx9->bit_count);
+    for (const auto mask : dx9->masks) append_u32(out, mask);
+  } else {
+    append_u32(out, 0x4u);
+    append_u32(out, k_dds_dx10_fourcc);
+    for (int i = 0; i < 5; ++i) append_u32(out, 0u);
+  }
+  append_u32(out, 0x1000u | (mip_count > 1 ? 0x400008u : 0u) | (cube ? 0x8u : 0u));
   append_u32(out, cube ? (0x200u | 0xFC00u) : 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, 0u);
-  append_u32(out, entry.texture.dxgi_format);
-  append_u32(out, 3u);
-  append_u32(out, cube ? 0x4u : 0u);
-  append_u32(out, 1u);
-  append_u32(out, 0u);
-  if (out.size() != k_dds_dx10_header_size) {
+  for (int i = 0; i < 3; ++i) append_u32(out, 0u);
+  if (!dx9) {
+    append_u32(out, entry.texture.dxgi_format);
+    append_u32(out, 3u);
+    append_u32(out, cube ? 0x4u : 0u);
+    append_u32(out, 1u);
+    append_u32(out, 0u);
+  }
+  if (out.size() != (dx9 ? k_dds_header_size : k_dds_dx10_header_size)) {
     throw Ba2Error("internal DDS header size mismatch");
   }
   return out;

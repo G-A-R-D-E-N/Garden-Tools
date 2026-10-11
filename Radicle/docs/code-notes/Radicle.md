@@ -1,5 +1,63 @@
 # Radicle code notes
 
+## tests/test_ba2_versions_real.cpp:Ba2NamedRealData
+
+Six installed archive fixtures cover GNRL and DX10 at versions 1, 7 and 8.
+The streaming reader and full models must extract identical first-entry
+bytes, and rebuilding that entry must preserve extracted content (including
+the reconstructed DDS header), the name/extension/directory hashes, and for
+DX10 the six texture info fields and each chunk's mip range. This does not
+require byte-identical archive padding. `docs/BA2.md` records the named fixture files (checked by `Ba2NamedRealData`)
+and the totals printed by `tools/corpus/ba2_measure.py`. The test reads game
+data only through `FO4_DATA_DIR` and runs only when it is set. CI sets it from
+`FO4_DATA_DIR_WINDOWS` in the Windows Release pass of `native-ci`; the Windows Debug
+pass clears it. The Linux job passes `FO4_DATA_DIR_LINUX`, which is currently unset,
+so the test skips there. Missing data or a
+missing named archive skips without committing payloads. A present archive whose
+version, kind or entry count differs fails the test.
+
+## tests/test_ba2_texture.cpp:Ba2Texture.RoundTripStoredAndCompressed
+
+The synthetic DX10 stored and compressed round trip runs once per supported
+version (1, 7, 8) because the writer emits the same field widths for all three;
+a version-specific regression in the writer or reader shows up under its
+`SCOPED_TRACE` value. `Ba2Texture.CubemapFlagSurvivesRebuildAndMarksDdsHeader`
+covers the same three versions for a flags bit 0 (cubemap) entry: the flag
+survives write and read, the extracted DDS header sets caps2 `0xFE00` and DX10
+miscFlag `0x4` (`ba2_texture.cpp:dds_header_for`), and a rebuild keeps flags and
+extracted bytes unchanged.
+
+## src/archive/ba2_texture.cpp:dds_header_for
+
+DX10 extraction picks the DDS header the way xEdit's writer does. Formats in
+`dx9_format` (the xEdit `TwbDDS.DXGI_DX9` set, `Core/wbDDS.pas:249-265`) get the
+128-byte classic header with a FourCC or pixel masks; the rest get the 148-byte
+DX10 extension. Cubemaps set `DDSCAPS_COMPLEX` even with one mip
+(`Core/wbDDS.pas:600-606`). The rule, its xEdit citations and the Radicle policy
+differences are in `Radicle/docs/BA2.md` under "DDS header rule".
+
+## src/archive/ba2_texture.cpp:dds_pitch_and_flag
+
+DX10 formats outside the DX9 set take `dwPitchOrLinearSize` and the size flag from
+xEdit's per-format case table (`Core/wbDDS.pas:610-764`); the default branch uses
+`k_bits_per_pixel`, a copy of `TwbDDS.GetBitsPerPixel` (`Core/wbDDS.pas:788-928`).
+`Radicle/docs/BA2.md` under "DDS header rule" groups the cases by flag with their
+line ranges. Radicle's zero-width refusal stays in `dds_header_for`.
+
+## tools/corpus/ba2_measure.py:measure
+
+Read-only, stdlib-only corpus check for `docs/BA2.md`. It walks each root-level
+`.ba2` header and entry/chunk table without reading payloads, except that
+`--first-chunk` reads and decodes one chunk per archive. The entry's
+chunk-header-size field (`0x10` GNRL, `0x18` DX10) is a stored value checked
+against the expected one, not the chunk record length: GNRL chunk records are
+20 bytes, so the script reads each record by its struct size. An archive that
+cannot be opened or parsed (`OSError`, `struct.error`, `zlib.error`, or a
+`ValueError`/`OverflowError` from seeking to an out-of-range first-chunk offset)
+and a name-table offset past the end of the file are recorded as problems for that
+archive. Archives with problems are left out of the totals; the run continues and
+exits non-zero. It is not wired into CMake or CI.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children
