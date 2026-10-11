@@ -24,8 +24,9 @@ public sealed unsafe partial class RadicleEnvironment
 {
     public SoundDescriptor SoundDescriptor(Record record)
     {
+        using var use = Use(record);
         Native.SoundDescriptor* d;
-        Call.Check(RadicleNative.SoundDescriptorDecode(Handle, record.Handle, &d));
+        Call.Check(RadicleNative.SoundDescriptorDecode(use.Pointer, record.Handle, &d));
         try
         {
             var p = d->Playback;
@@ -44,16 +45,18 @@ public sealed unsafe partial class RadicleEnvironment
 
     public SoundMarker SoundMarker(Record record)
     {
+        using var use = Use(record);
         Native.SoundMarkerInfo m;
-        Call.Check(RadicleNative.SoundMarkerGetInfo(Handle, record.Handle, &m));
+        Call.Check(RadicleNative.SoundMarkerGetInfo(use.Pointer, record.Handle, &m));
         return new(FormKey.FromNative(m.Descriptor), m.HasRepeat == 0 ? null :
             new SoundRepeat(m.MinTime, m.MaxTime, m.HasStackable == 0 ? null : m.Stackable));
     }
 
     public MusicType MusicType(Record record)
     {
+        using var use = Use(record);
         Native.MusicType* m;
-        Call.Check(RadicleNative.MusicTypeDecode(Handle, record.Handle, &m));
+        Call.Check(RadicleNative.MusicTypeDecode(use.Pointer, record.Handle, &m));
         try
         {
             return new(m->HasFlags == 0 ? null : m->Flags, m->HasPriority == 0 ? null : m->Priority,
@@ -65,15 +68,17 @@ public sealed unsafe partial class RadicleEnvironment
 
     public Footstep Footstep(Record record)
     {
+        using var use = Use(record);
         Native.FootstepInfo f;
-        Call.Check(RadicleNative.FootstepGetInfo(Handle, record.Handle, &f));
+        Call.Check(RadicleNative.FootstepGetInfo(use.Pointer, record.Handle, &f));
         return new(FormKey.FromNative(f.ImpactSet), Utf8.Read(f.Tag));
     }
 
     public FootstepSet FootstepSet(Record record)
     {
+        using var use = Use(record);
         Native.FootstepSet* f;
-        Call.Check(RadicleNative.FootstepSetDecode(Handle, record.Handle, &f));
+        Call.Check(RadicleNative.FootstepSetDecode(use.Pointer, record.Handle, &f));
         try
         {
             var steps = Call.Copy<Native.FormKey>(f->Steps, f->StepCount).Select(FormKey.FromNative).ToArray();

@@ -4,6 +4,7 @@
 #include "fo4/plugin/container.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/condition_scopes.hpp"
 #include "fo4/schema/ctda.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -11,6 +12,7 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -36,6 +38,8 @@ enum class ConditionMutationStatus {
   unchanged,
   record_missing,
   multiple_lists,
+  no_condition_list,
+  alias_structure_invalid,
 };
 
 enum class FormLinkFieldMutationStatus {
@@ -91,16 +95,21 @@ FormKey create_local_record(Plugin& plugin,
                             Signature signature,
                             std::vector<Subrecord> subrecords);
 
-// Refuses deletion when any schema-proven in-plugin FormLink still targets the
-// record. Unsupported remap surfaces fail closed before mutation. nextFormID
-// is never decremented or recycled.
+// Deletes the record with its owned child GRUP. Refuses deletion when any
+// schema-proven in-plugin FormLink still targets the record or a record inside
+// that GRUP from outside it. Unsupported remap surfaces fail closed before
+// mutation. next form ID is never decremented or recycled.
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key);
+std::vector<FormKey> records_removed_by_delete(const Plugin& plugin, const FormKey& record_key);
 
 bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& record_key);
 
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);
+
+std::string stored_editor_id(std::string_view editor_id);
+std::string stored_inline_text(std::string_view text, std::string_view field);
 
 bool set_record_editor_id(Plugin& plugin,
                           const FormKey& record_key,
@@ -172,13 +181,26 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
       return;
     }
     status = ConditionMutationStatus::unchanged;
-    const auto result = write_ctda_conditions_in(record, 0, record.subrecords.size(),
-                                                 conditions, std::nullopt);
+    const auto window = schema::root_condition_window(record);
+    if (window.status == schema::RootConditionStatus::multiple_lists) {
+      status = ConditionMutationStatus::multiple_lists;
+      return;
+    }
+    if (window.status == schema::RootConditionStatus::alias_structure_invalid) {
+      status = ConditionMutationStatus::alias_structure_invalid;
+      return;
+    }
+    const auto result = write_ctda_conditions_in(record, window.begin, window.end,
+                                                 conditions, window.insert_anchor);
     if (result == CtdaScopeWrite::multiple_lists) {
       status = ConditionMutationStatus::multiple_lists;
       return;
     }
-    if (result != CtdaScopeWrite::replaced) return;
+    if (result == CtdaScopeWrite::no_list) {
+      status = ConditionMutationStatus::no_condition_list;
+      return;
+    }
+    if (result != CtdaScopeWrite::replaced && result != CtdaScopeWrite::inserted) return;
     record.original_range.clear();
     record.decompressed_payload.clear();
     record.header.data_size = 0;

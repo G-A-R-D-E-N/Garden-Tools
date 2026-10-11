@@ -55,6 +55,31 @@ std::string pathKey(const std::filesystem::path& path) {
     return value;
 }
 
+std::filesystem::path searchPath(const std::vector<std::string>& names) {
+    const auto value = environmentValue("PATH");
+    if (value.empty()) return {};
+#if defined(_WIN32)
+    constexpr char separator = ';';
+#else
+    constexpr char separator = ':';
+#endif
+    std::size_t begin = 0;
+    while (begin <= value.size()) {
+        const auto end = value.find(separator, begin);
+        const auto entry = trim(value.substr(begin, end == std::string::npos ? std::string::npos : end - begin));
+        if (!entry.empty()) {
+            for (const auto& name : names) {
+                const auto candidate = std::filesystem::path(entry) / name;
+                std::error_code ec;
+                if (std::filesystem::is_regular_file(candidate, ec)) return candidate;
+            }
+        }
+        if (end == std::string::npos) break;
+        begin = end + 1;
+    }
+    return {};
+}
+
 #if defined(_WIN32)
 std::filesystem::path registryFallout4Root() {
     constexpr const wchar_t* keys[] = {
@@ -81,7 +106,7 @@ std::filesystem::path registryFallout4Root() {
 
 }
 
-Locator::Locator(const settings::Settings& settings, std::filesystem::path executablePath)
+Locator::Locator(const settings::SharedSettings& settings, std::filesystem::path executablePath)
     : settings_(settings), executablePath_(std::move(executablePath)) {
     std::error_code ec;
     auto absolute = std::filesystem::absolute(executablePath_, ec);
@@ -119,34 +144,14 @@ std::filesystem::path Locator::firstDirectory(std::initializer_list<std::filesys
 }
 
 std::filesystem::path Locator::onPath(std::initializer_list<std::string_view> names) const {
-    const auto value = environmentValue("PATH");
-    if (value.empty()) return {};
-#if defined(_WIN32)
-    constexpr char separator = ';';
-#else
-    constexpr char separator = ':';
-#endif
-    std::size_t begin = 0;
-    while (begin <= value.size()) {
-        const auto end = value.find(separator, begin);
-        const auto entry = trim(value.substr(begin, end == std::string::npos ? std::string::npos : end - begin));
-        if (!entry.empty()) {
-            for (const auto name : names) {
-                const auto candidate = std::filesystem::path(entry) / std::string(name);
-                std::error_code ec;
-                if (std::filesystem::is_regular_file(candidate, ec)) return candidate;
-            }
-        }
-        if (end == std::string::npos) break;
-        begin = end + 1;
-    }
-    return {};
+    return searchPath(std::vector<std::string>(names.begin(), names.end()));
 }
 
 std::filesystem::path Locator::fallout4Root() const {
+    const auto current = settings_.snapshot();
     std::error_code ec;
-    if (!settings_.fallout4Path.empty() && std::filesystem::is_directory(settings_.fallout4Path, ec)) {
-        return settings_.fallout4Path;
+    if (!current.fallout4Path.empty() && std::filesystem::is_directory(current.fallout4Path, ec)) {
+        return current.fallout4Path;
     }
     const auto env = environmentPath("FALLOUT4_PATH");
     if (!env.empty() && std::filesystem::is_directory(env, ec)) return env;
@@ -180,44 +185,45 @@ std::filesystem::path Locator::fallout4Root() const {
 }
 
 std::filesystem::path Locator::resolve(Tool tool) const {
+    const auto current = settings_.snapshot();
     const auto root = fallout4Root();
     switch (tool) {
         case Tool::NifTool:
 #if defined(_WIN32)
-            return firstFile({environmentPath("NIFTOOL_PATH"), settings_.nifToolPath,
+            return firstFile({environmentPath("NIFTOOL_PATH"), current.nifToolPath,
                               appPath({"tools", "niftool", "niftool.exe"}),
                               appPath({"niftool", "niftool.exe"}), onPath({"niftool.exe"})});
 #else
-            return firstFile({environmentPath("NIFTOOL_PATH"), settings_.nifToolPath,
+            return firstFile({environmentPath("NIFTOOL_PATH"), current.nifToolPath,
                               appPath({"tools", "niftool", "niftool"}),
                               appPath({"niftool", "niftool"}), onPath({"niftool", "niftool.exe"})});
 #endif
         case Tool::Texconv:
-            return firstFile({environmentPath("TEXCONV_PATH"), settings_.texconvPath,
+            return firstFile({environmentPath("TEXCONV_PATH"), current.texconvPath,
                               appPath({"tools", "texconv", "Texconvx64.exe"}),
                               appPath({"tools", "texconv", "Texconv.exe"}),
                               onPath({"Texconvx64.exe", "Texconv.exe", "texconv"})});
         case Tool::PapyrusCompiler:
-            return firstFile({environmentPath("PAPYRUS_COMPILER_PATH"), settings_.papyrusCompilerPath,
+            return firstFile({environmentPath("PAPYRUS_COMPILER_PATH"), current.papyrusCompilerPath,
                               root.empty() ? std::filesystem::path{} : root / "Papyrus Compiler" / "PapyrusCompiler.exe",
                               onPath({"PapyrusCompiler.exe"})});
         case Tool::Archive2:
-            return firstFile({environmentPath("ARCHIVE2_PATH"), settings_.archive2Path,
+            return firstFile({environmentPath("ARCHIVE2_PATH"), current.archive2Path,
                               root.empty() ? std::filesystem::path{} : root / "Tools" / "Archive2" / "Archive2.exe",
                               onPath({"Archive2.exe"})});
         case Tool::CkWiki:
-            return firstDirectory({environmentPath("CK_WIKI_PATH"), settings_.ckWikiPath,
+            return firstDirectory({environmentPath("CK_WIKI_PATH"), current.ckWikiPath,
                                    appPath({"tools", "ckwiki", "fallout4"})});
         case Tool::Ffmpeg:
 #if defined(_WIN32)
-            return firstFile({environmentPath("FFMPEG_PATH"), settings_.ffmpegPath,
+            return firstFile({environmentPath("FFMPEG_PATH"), current.ffmpegPath,
                               appPath({"tools", "audio", "ffmpeg.exe"}), onPath({"ffmpeg.exe"})});
 #else
-            return firstFile({environmentPath("FFMPEG_PATH"), settings_.ffmpegPath,
+            return firstFile({environmentPath("FFMPEG_PATH"), current.ffmpegPath,
                               appPath({"tools", "audio", "ffmpeg"}), onPath({"ffmpeg", "ffmpeg.exe"})});
 #endif
         case Tool::XwmaEncode:
-            return firstFile({environmentPath("XWMAENCODE_PATH"), settings_.xwmaEncodePath,
+            return firstFile({environmentPath("XWMAENCODE_PATH"), current.xwmaEncodePath,
                               appPath({"tools", "audio", "xWMAEncode.exe"}), onPath({"xWMAEncode.exe"})});
         case Tool::BmlFuzEncode:
             return firstFile({environmentPath("BMLFUZENCODE_PATH"),
@@ -227,10 +233,10 @@ std::filesystem::path Locator::resolve(Tool tool) const {
                               appPath({"tools", "audio", "BmlFuzDecode.exe"}), onPath({"BmlFuzDecode.exe"})});
         case Tool::ClaudeCode:
 #if defined(_WIN32)
-            return firstFile({environmentPath("CLAUDE_CODE_PATH"), settings_.claudeCodePath,
+            return firstFile({environmentPath("CLAUDE_CODE_PATH"), current.claudeCodePath,
                               onPath({"claude.exe", "claude.cmd"})});
 #else
-            return firstFile({environmentPath("CLAUDE_CODE_PATH"), settings_.claudeCodePath,
+            return firstFile({environmentPath("CLAUDE_CODE_PATH"), current.claudeCodePath,
                               onPath({"claude"})});
 #endif
     }
@@ -238,6 +244,7 @@ std::filesystem::path Locator::resolve(Tool tool) const {
 }
 
 std::vector<std::filesystem::path> Locator::papyrusBaseImports() const {
+    const auto current = settings_.snapshot();
     std::vector<std::filesystem::path> result;
     std::unordered_set<std::string> seen;
     auto add = [&](const std::filesystem::path& path) {
@@ -258,7 +265,7 @@ std::vector<std::filesystem::path> Locator::papyrusBaseImports() const {
     };
 
     if (const auto raw = environmentValue("PAPYRUS_BASE_IMPORTS"); !raw.empty()) addDelimited(raw);
-    if (!settings_.papyrusBaseImports.empty()) addDelimited(settings_.papyrusBaseImports.string());
+    if (!current.papyrusBaseImports.empty()) addDelimited(current.papyrusBaseImports.string());
     add(appPath({"tools", "papyrus", "F4SE"}));
     add(appPath({"tools", "papyrus", "Base"}));
 
@@ -283,6 +290,31 @@ std::string_view Locator::describe(Tool tool) const noexcept {
         case Tool::ClaudeCode: return "set CLAUDE_CODE_PATH or put claude on PATH";
     }
     return {};
+}
+
+std::filesystem::path resolveCommand(const std::filesystem::path& command) {
+    if (!command.parent_path().empty()) return command;
+    std::vector<std::string> names;
+#if defined(_WIN32)
+    if (command.extension().empty()) {
+        auto list = environmentValue("PATHEXT");
+        if (list.empty()) list = ".COM;.EXE;.BAT;.CMD";
+        std::size_t begin = 0;
+        while (begin <= list.size()) {
+            const auto end = list.find(';', begin);
+            const auto extension = trim(list.substr(begin, end == std::string::npos ? std::string::npos : end - begin));
+            if (!extension.empty()) names.push_back(command.string() + extension);
+            if (end == std::string::npos) break;
+            begin = end + 1;
+        }
+    } else {
+        names.push_back(command.string());
+    }
+#else
+    names.push_back(command.string());
+#endif
+    auto found = searchPath(names);
+    return found.empty() ? command : found;
 }
 
 }

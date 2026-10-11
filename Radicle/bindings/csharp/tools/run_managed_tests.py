@@ -7,7 +7,17 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
+
+
+def parent_build_files(bindings):
+    found = []
+    for parent in bindings.parents:
+        found += [path for path in [*parent.glob('Directory.Build.*'), parent / 'NuGet.Config'] if path.is_file()]
+        if (parent / '.git').exists():
+            break
+    return found
 
 
 def main():
@@ -28,11 +38,17 @@ def main():
     if args.build_dir:
         listing = subprocess.check_output(
             ['ctest', '--test-dir', str(args.build_dir), '--show-only=json-v1'], text=True)
-        test = next(test for test in json.loads(listing)['tests']
-                    if test['name'] == 'radicle_csharp_bindings')
-        values = next(prop['value'] for prop in test['properties']
-                      if prop['name'] == 'ENVIRONMENT')
+        test = next((test for test in json.loads(listing)['tests']
+                     if test['name'] == 'radicle_csharp_bindings'), {})
+        values = next((prop['value'] for prop in test.get('properties', [])
+                       if prop['name'] == 'ENVIRONMENT'), None)
+        if values is None:
+            sys.exit(f"{args.build_dir}: CTest has no radicle_csharp_bindings entry with ENVIRONMENT; "
+                     "configure with -DRADICLE_CSHARP_TESTS=ON")
         env.update(value.split('=', 1) for value in values)
+    parents = parent_build_files(bindings)
+    if parents:
+        raise RuntimeError('Consumer check does not copy parent build files: ' + ', '.join(map(str, parents)))
     if args.network_isolated:
         if socket.if_nameindex() != [(1, 'lo')]:
             raise RuntimeError('Offline proof requires a fresh network namespace with only loopback')

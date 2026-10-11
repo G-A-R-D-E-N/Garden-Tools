@@ -41,6 +41,7 @@ struct FieldShape {
   std::size_t width{0};
   std::size_t payload_size{0};
   bool whole_payload{false};
+  std::size_t minimum_payload_size{0};
 };
 
 struct FieldSlot {

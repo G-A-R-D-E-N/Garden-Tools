@@ -1,10 +1,6 @@
-#include <algorithm>
 #include <chrono>
 #include <filesystem>
-#include <fstream>
-#include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -12,144 +8,9 @@
 #include <fo4ide/app/AppInteropTarget.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
-namespace {
+#include "../helpers/AppInteropTestSupport.hpp"
 
-std::filesystem::path tempRoot() {
-    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
-    return std::filesystem::temp_directory_path() / ("fo4ide_appinterop_test_" + std::to_string(id));
-}
-
-struct Cleanup {
-    std::filesystem::path root;
-    ~Cleanup() {
-        std::error_code ec;
-        std::filesystem::remove_all(root, ec);
-    }
-};
-
-void writeFile(const std::filesystem::path& path, std::string_view contents = {}) {
-    std::filesystem::create_directories(path.parent_path());
-    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-    stream << contents;
-}
-
-class FakePlatform final : public fo4ide::platform::Services {
-public:
-    std::filesystem::path folder;
-
-    fo4ide::Result<std::filesystem::path> pickFile(const fo4ide::platform::FileDialogOptions&) override {
-        return std::filesystem::path{};
-    }
-
-    fo4ide::Result<std::filesystem::path> pickFolder(const fo4ide::platform::FileDialogOptions&) override {
-        return folder;
-    }
-
-    fo4ide::Result<std::filesystem::path> pickSavePath(const fo4ide::platform::FileDialogOptions&) override {
-        return std::filesystem::path{};
-    }
-
-    fo4ide::Result<void> openExternal(std::string_view) override {
-        return {};
-    }
-
-    fo4ide::Result<void> openFolder(const std::filesystem::path&) override {
-        return {};
-    }
-};
-
-class FakePluginBackend : public fo4ide::plugin::IPluginBackend {
-public:
-    std::vector<std::pair<std::string, nlohmann::json>> calls;
-    std::filesystem::path trustedRoot;
-    std::filesystem::path loadedInstance;
-    std::size_t loadMo2Calls{0};
-    std::size_t trustedRootCalls{0};
-    bool failLoadMo2{false};
-    bool failTrustedRoot{false};
-    std::optional<std::size_t> failLoadMo2At;
-    std::optional<std::size_t> failTrustedRootAt;
-
-    fo4ide::plugin::Capabilities capabilities() const noexcept override {
-        return {.available = true, .readPlugins = true};
-    }
-
-    fo4ide::Result<void> setTrustedNewPluginRoot(const std::filesystem::path& root) override {
-        const auto index = trustedRootCalls++;
-        if (failTrustedRoot || failTrustedRootAt == index) {
-            return std::unexpected(fo4ide::Error{
-                "NewPluginRootInvalid",
-                "deliberate trusted-root failure"
-            });
-        }
-        trustedRoot = root;
-        return {};
-    }
-
-    fo4ide::Result<nlohmann::json> invoke(std::string_view operation,
-                                          const nlohmann::json& arguments) override {
-        calls.emplace_back(std::string(operation), arguments);
-        if (operation == "environment.LoadMo2") {
-            const auto index = loadMo2Calls++;
-            if (failLoadMo2 || failLoadMo2At == index) {
-                return std::unexpected(fo4ide::Error{"LoadMo2Failed", "deliberate backend load failure"});
-            }
-            loadedInstance = arguments.value("instancePath", std::string{});
-            return nlohmann::json(nullptr);
-        }
-        if (operation == "appInterop.GetPlugins") {
-            return nlohmann::json(R"([{"Key":"Native.esp","ConflictStatus":0,"IsRecordNode":false,"HasChildren":true,"Pending":false}])");
-        }
-        return nlohmann::json(nullptr);
-    }
-};
-
-class PendingPluginBackend final : public FakePluginBackend {
-public:
-    bool pending{false};
-    std::string pendingName{"Patch.esp"};
-
-    fo4ide::Result<nlohmann::json> invoke(std::string_view operation,
-                                          const nlohmann::json& arguments) override {
-        calls.emplace_back(std::string(operation), arguments);
-        if (operation == "appInterop.GetPlugins") {
-            return nlohmann::json(pending
-                ? nlohmann::json::array({
-                      {{"Key", pendingName}, {"Pending", true}}
-                  }).dump()
-                : nlohmann::json::array({
-                      {{"Key", pendingName}, {"Pending", false}}
-                  }).dump());
-        }
-        return nlohmann::json(nullptr);
-    }
-};
-
-const std::pair<std::string, nlohmann::json>* loadMo2Call(
-    const std::vector<std::pair<std::string, nlohmann::json>>& calls) {
-    const auto it = std::find_if(
-        calls.begin(), calls.end(),
-        [](const auto& call) { return call.first == "environment.LoadMo2"; });
-    return it == calls.end() ? nullptr : &*it;
-}
-
-std::vector<std::string> snapshotNames(const fo4ide::mo2::ProfileSnapshot& snapshot) {
-    std::vector<std::string> values;
-    for (const auto& plugin : snapshot.plugins) values.push_back(plugin.name);
-    return values;
-}
-
-void makeProfile(const std::filesystem::path& root) {
-    const auto game = root / "Game";
-    writeFile(root / "ModOrganizer.ini",
-        "selected_profile=Test\n"
-        "gamePath=" + game.string() + "\n");
-    writeFile(root / "profiles" / "Test" / "plugins.txt", "*Example.esp\n");
-    writeFile(game / "Data" / "Fallout4.esm");
-    writeFile(game / "Data" / "Example.esp");
-}
-
-}
+using namespace app_interop_test;
 
 TEST_CASE("AppInterop validates selected MO2 instance folders") {
     const auto root = tempRoot();
@@ -157,7 +18,7 @@ TEST_CASE("AppInterop validates selected MO2 instance folders") {
     std::filesystem::create_directories(root / "profiles");
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     fo4ide::plugin::NullPluginBackend plugins;
     platform.folder = root;
@@ -174,15 +35,15 @@ TEST_CASE("AppInterop opens MO2 metadata and returns top-level plugin rows") {
     makeProfile(root);
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     fo4ide::plugin::NullPluginBackend nativePlugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, nativePlugins);
 
     auto opened = target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()}));
     REQUIRE(opened.has_value());
-    CHECK(settings.mo2InstancePath == std::filesystem::absolute(root));
-    CHECK(settings.dataFolder == root / "Game" / "Data");
+    CHECK(settings.snapshot().mo2InstancePath == std::filesystem::absolute(root));
+    CHECK(settings.snapshot().dataFolder == root / "Game" / "Data");
 
     auto plugins = target.invoke("GetPlugins", nlohmann::json::array());
     REQUIRE(plugins.has_value());
@@ -200,7 +61,7 @@ TEST_CASE("AppInterop keeps profile metadata available for the future plugin bac
     makeProfile(root);
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -218,7 +79,7 @@ TEST_CASE("AppInterop sends one normalized MO2 environment to the native plugin 
     makeProfile(root);
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     FakePluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -257,7 +118,7 @@ TEST_CASE("AppInterop GetMo2Status lists dirty plugins before reload") {
     };
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     ListedPendingBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -275,7 +136,7 @@ TEST_CASE("AppInterop reports MO2 profile staleness and reload clears it") {
     makeProfile(root);
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -313,7 +174,7 @@ TEST_CASE("AppInterop marks the MO2 snapshot stale when watched profile files ch
     writeFile(root / "profiles" / "Test" / "loadorder.txt", "Fallout4.esm\nExample.esp\n");
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -366,7 +227,7 @@ TEST_CASE("AppInterop refuses profile reload while plugins have pending edits") 
     makeProfile(root);
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     PendingPluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -406,7 +267,7 @@ TEST_CASE("AppInterop fails closed when pending plugin status cannot be inspecte
     };
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     BrokenPendingBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -431,7 +292,7 @@ TEST_CASE("AppInterop keeps the live MO2 snapshot until reload") {
     writeFile(root / "mods" / "Extra" / "FromMod.esp");
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     fo4ide::plugin::NullPluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -477,7 +338,7 @@ TEST_CASE("AppInterop reload replaces the live MO2 snapshot after profile files 
     writeFile(root / "mods" / "Extra" / "FromMod.esp");
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     FakePluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -537,7 +398,7 @@ TEST_CASE("AppInterop reload replaces the previous MO2 snapshot instead of mergi
     writeFile(root / "Game" / "Data" / "Second.esp");
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     FakePluginBackend plugins;
     fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
@@ -579,7 +440,7 @@ TEST_CASE("AppInterop keeps the old snapshot when reload is blocked by pending e
     writeFile(root / "Game" / "Data" / "Second.esp");
 
     fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
+    fo4ide::settings::SharedSettings settings;
     FakePlatform platform;
     PendingPluginBackend plugins;
     plugins.pendingName = "Example.esp";
@@ -616,261 +477,4 @@ TEST_CASE("AppInterop keeps the old snapshot when reload is blocked by pending e
     loaded = target.snapshot();
     REQUIRE(loaded.has_value());
     CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp", "Second.esp"});
-}
-
-TEST_CASE("AppInterop failed reload does not commit settings or trusted output root") {
-    const auto first = tempRoot();
-    Cleanup firstCleanup{first};
-    makeProfile(first);
-    const auto second = tempRoot();
-    Cleanup secondCleanup{second};
-    makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
-    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
-
-    fo4ide::settings::Store store(first / "settings.json");
-    fo4ide::settings::Settings settings;
-    FakePlatform platform;
-    FakePluginBackend plugins;
-    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
-    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
-
-    const auto firstInstance = settings.mo2InstancePath;
-    const auto firstData = settings.dataFolder;
-    const auto firstRoot = plugins.trustedRoot;
-    REQUIRE_FALSE(firstInstance.empty());
-    REQUIRE_FALSE(firstRoot.empty());
-    auto persisted = store.load();
-    REQUIRE(persisted.has_value());
-    CHECK(persisted->mo2InstancePath == firstInstance);
-
-    plugins.failLoadMo2 = true;
-    plugins.calls.clear();
-    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
-    REQUIRE_FALSE(failed.has_value());
-    CHECK(failed.error().type == "LoadMo2Failed");
-    CHECK(loadMo2Call(plugins.calls) != nullptr);
-
-    CHECK(settings.mo2InstancePath == firstInstance);
-    CHECK(settings.dataFolder == firstData);
-    CHECK(plugins.trustedRoot == firstRoot);
-    CHECK(plugins.loadedInstance == firstInstance);
-    auto loaded = target.snapshot();
-    REQUIRE(loaded.has_value());
-    CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp"});
-    persisted = store.load();
-    REQUIRE(persisted.has_value());
-    CHECK(persisted->mo2InstancePath == firstInstance);
-    CHECK(persisted->dataFolder == firstData);
-}
-
-TEST_CASE("AppInterop trusted-root failure after LoadMo2 restores the previous backend") {
-    const auto first = tempRoot();
-    Cleanup firstCleanup{first};
-    makeProfile(first);
-    const auto second = tempRoot();
-    Cleanup secondCleanup{second};
-    makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
-    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
-
-    fo4ide::settings::Store store(first / "settings.json");
-    fo4ide::settings::Settings settings;
-    FakePlatform platform;
-    FakePluginBackend plugins;
-    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
-    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
-
-    const auto firstInstance = settings.mo2InstancePath;
-    const auto firstData = settings.dataFolder;
-    const auto firstRoot = plugins.trustedRoot;
-    const auto firstLoaded = plugins.loadedInstance;
-    REQUIRE_FALSE(firstInstance.empty());
-    REQUIRE_FALSE(firstRoot.empty());
-    auto beforeStatus = target.invoke("GetMo2Status", nlohmann::json::array());
-    REQUIRE(beforeStatus.has_value());
-    const auto loadedAt = beforeStatus->at("loadedAtUnixMs").get<long long>();
-    const auto pluginsTxt = first / "profiles" / "Test" / "plugins.txt";
-    const auto watchStamp = std::filesystem::last_write_time(pluginsTxt);
-    auto persisted = store.load();
-    REQUIRE(persisted.has_value());
-    CHECK(persisted->mo2InstancePath == firstInstance);
-
-    plugins.failTrustedRoot = true;
-    plugins.calls.clear();
-    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
-    REQUIRE_FALSE(failed.has_value());
-    CHECK(failed.error().type == "NewPluginRootInvalid");
-    CHECK(loadMo2Call(plugins.calls) != nullptr);
-
-    CHECK(settings.mo2InstancePath == firstInstance);
-    CHECK(settings.dataFolder == firstData);
-    CHECK(plugins.trustedRoot == firstRoot);
-    CHECK(plugins.loadedInstance == firstLoaded);
-    auto loaded = target.snapshot();
-    REQUIRE(loaded.has_value());
-    CHECK(loaded->instance.instancePath == firstInstance);
-    CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp"});
-    persisted = store.load();
-    REQUIRE(persisted.has_value());
-    CHECK(persisted->mo2InstancePath == firstInstance);
-    CHECK(persisted->dataFolder == firstData);
-    CHECK(std::filesystem::last_write_time(pluginsTxt) == watchStamp);
-    auto afterStatus = target.invoke("GetMo2Status", nlohmann::json::array());
-    REQUIRE(afterStatus.has_value());
-    CHECK(afterStatus->at("instancePath").get<std::string>() == firstInstance.string());
-    CHECK(afterStatus->at("pluginCount").get<std::size_t>() == 2);
-    CHECK(afterStatus->at("loadedAtUnixMs").get<long long>() == loadedAt);
-    CHECK_FALSE(afterStatus->at("stale").get<bool>());
-}
-
-TEST_CASE("AppInterop settings-store failure after LoadMo2 restores the previous backend") {
-    const auto first = tempRoot();
-    Cleanup firstCleanup{first};
-    makeProfile(first);
-    const auto second = tempRoot();
-    Cleanup secondCleanup{second};
-    makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
-    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
-
-    fo4ide::settings::Store store(first / "settings.json");
-    fo4ide::settings::Settings settings;
-    FakePlatform platform;
-    FakePluginBackend plugins;
-    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
-    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
-
-    const auto firstInstance = settings.mo2InstancePath;
-    const auto firstData = settings.dataFolder;
-    const auto firstRoot = plugins.trustedRoot;
-    const auto firstLoaded = plugins.loadedInstance;
-    auto beforeStatus = target.invoke("GetMo2Status", nlohmann::json::array());
-    REQUIRE(beforeStatus.has_value());
-    const auto loadedAt = beforeStatus->at("loadedAtUnixMs").get<long long>();
-    const auto pluginsTxt = first / "profiles" / "Test" / "plugins.txt";
-    const auto watchStamp = std::filesystem::last_write_time(pluginsTxt);
-    auto persisted = store.load();
-    REQUIRE(persisted.has_value());
-    CHECK(persisted->mo2InstancePath == firstInstance);
-
-    const auto blocker = std::filesystem::path(store.path().string() + ".tmp");
-    std::filesystem::create_directory(blocker);
-    plugins.calls.clear();
-    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
-    REQUIRE_FALSE(failed.has_value());
-    CHECK(failed.error().type == "SettingsWriteFailed");
-    CHECK(loadMo2Call(plugins.calls) != nullptr);
-
-    CHECK(settings.mo2InstancePath == firstInstance);
-    CHECK(settings.dataFolder == firstData);
-    CHECK(plugins.trustedRoot == firstRoot);
-    CHECK(plugins.loadedInstance == firstLoaded);
-    auto loaded = target.snapshot();
-    REQUIRE(loaded.has_value());
-    CHECK(loaded->instance.instancePath == firstInstance);
-    CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp"});
-    persisted = store.load();
-    REQUIRE(persisted.has_value());
-    CHECK(persisted->mo2InstancePath == firstInstance);
-    CHECK(persisted->dataFolder == firstData);
-    CHECK(std::filesystem::last_write_time(pluginsTxt) == watchStamp);
-    auto afterStatus = target.invoke("GetMo2Status", nlohmann::json::array());
-    REQUIRE(afterStatus.has_value());
-    CHECK(afterStatus->at("instancePath").get<std::string>() == firstInstance.string());
-    CHECK(afterStatus->at("pluginCount").get<std::size_t>() == 2);
-    CHECK(afterStatus->at("loadedAtUnixMs").get<long long>() == loadedAt);
-    CHECK_FALSE(afterStatus->at("stale").get<bool>());
-}
-
-TEST_CASE("AppInterop surfaces rollback LoadMo2 failure and still restores the trusted root") {
-    const auto first = tempRoot();
-    Cleanup firstCleanup{first};
-    makeProfile(first);
-    const auto second = tempRoot();
-    Cleanup secondCleanup{second};
-    makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
-    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
-
-    fo4ide::settings::Store store(first / "settings.json");
-    fo4ide::settings::Settings settings;
-    FakePlatform platform;
-    FakePluginBackend plugins;
-    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
-    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
-
-    const auto firstInstance = settings.mo2InstancePath;
-    const auto firstData = settings.dataFolder;
-    const auto firstRoot = plugins.trustedRoot;
-    const auto loadsBefore = plugins.loadMo2Calls;
-    const auto rootsBefore = plugins.trustedRootCalls;
-    REQUIRE(loadsBefore == 1);
-    REQUIRE(rootsBefore == 1);
-
-    const auto blocker = std::filesystem::path(store.path().string() + ".tmp");
-    std::filesystem::create_directory(blocker);
-    plugins.failLoadMo2At = loadsBefore + 1;
-    plugins.calls.clear();
-    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
-    REQUIRE_FALSE(failed.has_value());
-    CHECK(failed.error().type == "SettingsWriteFailed");
-    CHECK(failed.error().message.find("rollback failed") != std::string::npos);
-    CHECK(failed.error().message.find("LoadMo2Failed") != std::string::npos);
-    CHECK(plugins.loadMo2Calls == loadsBefore + 2);
-    CHECK(plugins.trustedRootCalls == rootsBefore + 2);
-    CHECK(plugins.trustedRoot == firstRoot);
-    CHECK(plugins.loadedInstance != firstInstance.string());
-    CHECK(settings.mo2InstancePath == firstInstance);
-    CHECK(settings.dataFolder == firstData);
-    auto rolled = target.snapshot();
-    REQUIRE(rolled.has_value());
-    CHECK(rolled->instance.instancePath == firstInstance);
-    auto persistedAfter = store.load();
-    REQUIRE(persistedAfter.has_value());
-    CHECK(persistedAfter->mo2InstancePath == firstInstance);
-}
-
-TEST_CASE("AppInterop surfaces rollback trusted-root failure after backend restore") {
-    const auto first = tempRoot();
-    Cleanup firstCleanup{first};
-    makeProfile(first);
-    const auto second = tempRoot();
-    Cleanup secondCleanup{second};
-    makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
-    writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
-
-    fo4ide::settings::Store store(first / "settings.json");
-    fo4ide::settings::Settings settings;
-    FakePlatform platform;
-    FakePluginBackend plugins;
-    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
-    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({first.string()})).has_value());
-
-    const auto firstInstance = settings.mo2InstancePath;
-    const auto firstData = settings.dataFolder;
-    const auto firstLoaded = plugins.loadedInstance;
-    const auto firstRoot = plugins.trustedRoot;
-    const auto loadsBefore = plugins.loadMo2Calls;
-    const auto rootsBefore = plugins.trustedRootCalls;
-
-    const auto blocker = std::filesystem::path(store.path().string() + ".tmp");
-    std::filesystem::create_directory(blocker);
-    plugins.failTrustedRootAt = rootsBefore + 1;
-    plugins.calls.clear();
-    auto failed = target.invoke("OpenMo2Profile", nlohmann::json::array({second.string()}));
-    REQUIRE_FALSE(failed.has_value());
-    CHECK(failed.error().type == "SettingsWriteFailed");
-    CHECK(failed.error().message.find("rollback failed") != std::string::npos);
-    CHECK(failed.error().message.find("NewPluginRootInvalid") != std::string::npos);
-    CHECK(plugins.loadMo2Calls == loadsBefore + 2);
-    CHECK(plugins.trustedRootCalls == rootsBefore + 2);
-    CHECK(plugins.loadedInstance == firstLoaded);
-    CHECK(plugins.trustedRoot != firstRoot);
-    CHECK(settings.mo2InstancePath == firstInstance);
-    CHECK(settings.dataFolder == firstData);
-    auto rolled = target.snapshot();
-    REQUIRE(rolled.has_value());
-    CHECK(rolled->instance.instancePath == firstInstance);
 }

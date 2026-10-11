@@ -145,6 +145,7 @@ TEST(QuestRuntimeReal, EveryShippedQuestDecodesOrReportsUnsupported) {
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "Fallout4.esm not found under " << dir;
 
   const auto plugin = fo4::read_plugin_file(path);
+  const fo4::RecordIndex index{plugin};
   std::size_t quests = 0;
   std::size_t clean = 0;
   std::size_t reported = 0;
@@ -156,7 +157,7 @@ TEST(QuestRuntimeReal, EveryShippedQuestDecodesOrReportsUnsupported) {
   for (const auto* record : fo4::collect_records(plugin)) {
     if (record->header.signature != fo4::sig_qust) continue;
     ++quests;
-    const auto data = fo4::quest::quest_runtime_data(plugin, record->form_key);
+    const auto data = fo4::quest::quest_runtime_data(index, record->form_key);
     if (data.unsupported.empty()) {
       ++clean;
     } else {

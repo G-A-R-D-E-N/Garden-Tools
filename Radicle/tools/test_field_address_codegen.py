@@ -88,6 +88,17 @@ class SchemaCodegenTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, message):
             self.load(*fields)
 
+    def test_minimum_payload_size_for_optional_struct_members(self):
+        field = self.load(scalar(minimum_payload_size=12))[0]
+        self.assertEqual(field["minimum_payload_size"], 12)
+        self.assertIn("FieldAddress{}, 12}", schema_codegen.render([field]))
+        for value in (0, -1, True, "12", 7):
+            with self.subTest(value=value):
+                self.rejects("minimum_payload_size", scalar(minimum_payload_size=value))
+        self.rejects("minimum_payload_size", scalar(offset=None, minimum_payload_size=12))
+        self.rejects("minimum_payload_size", scalar(payload_size=8, minimum_payload_size=12))
+        self.rejects("string field", string(minimum_payload_size=12))
+
     def test_signed_storages_accept_their_range_and_reject_beyond(self):
         self.assertEqual(self.load(scalar(storage="i8", minimum=-128, maximum=127))[0]["storage"], "i8")
         self.assertEqual(self.load(scalar(storage="i16", minimum=-32768, maximum=32767))[0]["storage"], "i16")

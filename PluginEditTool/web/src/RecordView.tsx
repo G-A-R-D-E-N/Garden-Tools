@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Link2, AlertTriangle, Crown, Clock, Network, HelpCircle,
 } from 'lucide-react';
@@ -58,6 +58,7 @@ export default function RecordView(
   const [valueFilter, setValueFilter] = useState('');
   const [legendOpen, setLegendOpen] = useState(false);
   const [onlyDiffing, setOnlyDiffing] = useState(false);
+  const [rawView, setRawView] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [ov, setOv] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -95,6 +96,8 @@ export default function RecordView(
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
 
   const [scanErrors, setScanErrors] = useState<Record<string, string>>({});
+  const loadSeq = useRef(0);
+  const menuSeq = useRef(0);
 
   const [anchors, setAnchors] = useState<[string, string] | null>(null);
   const [compareOnly, setCompareOnly] = useState(false);
@@ -132,18 +135,21 @@ export default function RecordView(
   useEffect(() => {
     const b = back();
     if (!b) return;
+    const mine = ++loadSeq.current;
+    const live = () => mine === loadSeq.current;
     (async () => {
 
-      const fail = (k: string, e: unknown) =>
-        setScanErrors(prev => ({ ...prev, [k]: e instanceof Error ? e.message : String(e) }));
-      try { setProblems(JSON.parse(await b.GetProblems(matrix.FormKey))); }
-      catch (e) { setProblems([]); fail('problems', e); }
-      try { setRefBy(JSON.parse(await b.GetReferencedBy(matrix.FormKey))); }
-      catch (e) { setRefBy([]); fail('refBy', e); }
-      try { setDeps(JSON.parse(await b.GetDependencies(matrix.FormKey))); }
-      catch (e) { setDeps([]); fail('deps', e); }
-      try { setHistory(JSON.parse(await b.GetHistory(matrix.FormKey))); }
-      catch (e) { setHistory([]); fail('history', e); }
+      const fail = (k: string, e: unknown) => {
+        if (live()) setScanErrors(prev => ({ ...prev, [k]: e instanceof Error ? e.message : String(e) }));
+      };
+      try { const raw = await b.GetProblems(matrix.FormKey); if (live()) setProblems(JSON.parse(raw)); }
+      catch (e) { if (live()) setProblems([]); fail('problems', e); }
+      try { const raw = await b.GetReferencedBy(matrix.FormKey); if (live()) setRefBy(JSON.parse(raw)); }
+      catch (e) { if (live()) setRefBy([]); fail('refBy', e); }
+      try { const raw = await b.GetDependencies(matrix.FormKey); if (live()) setDeps(JSON.parse(raw)); }
+      catch (e) { if (live()) setDeps([]); fail('deps', e); }
+      try { const raw = await b.GetHistory(matrix.FormKey); if (live()) setHistory(JSON.parse(raw)); }
+      catch (e) { if (live()) setHistory([]); fail('history', e); }
     })();
   }, [matrix.FormKey]);
 
@@ -161,13 +167,15 @@ export default function RecordView(
 
   const filtering = f.length > 0 || vf.length > 0;
 
-  const matched = useMemo(() => matrix.Rows.filter(r => {
+  const viewRows = useMemo(() => matrix.Rows.filter(r => rawView ? r.Group === 'Raw' : r.Group !== 'Raw'), [matrix.Rows, rawView]);
+
+  const matched = useMemo(() => viewRows.filter(r => {
     if (onlyDiffing && !r.Differs) return false;
     if (f && !(r.DisplayLabel || r.Field).toLowerCase().includes(f)) return false;
     if (vf && !r.Values.some(v => v.toLowerCase().includes(vf))) return false;
     if (severityFilter !== 'all' && !SEVERITY_SETS[severityFilter].has(r.Severity ?? 'none')) return false;
     return true;
-  }), [matrix, f, vf, onlyDiffing, severityFilter]);
+  }), [viewRows, f, vf, onlyDiffing, severityFilter]);
 
   const rows = useMemo(() => {
     if (filtering) return matched;
@@ -191,9 +199,9 @@ export default function RecordView(
   };
 
   const conflictLeafRows = useMemo(
-    () => matrix.Rows.filter(isGenuineConflict),
+    () => viewRows.filter(isGenuineConflict),
 
-    [matrix.Rows]
+    [viewRows]
   );
 
   const conflictGroups = useMemo(() => {
@@ -201,7 +209,7 @@ export default function RecordView(
     const groups: CGroup[] = [];
     let cur: CGroup | null = null;
 
-    for (const r of matrix.Rows) {
+    for (const r of viewRows) {
       if (r.HasChildren && r.Level <= 1) {
         if (cur && cur.rows.length > 0) groups.push(cur);
         cur = { label: r.DisplayLabel || r.Field, rows: [], severity: 'none' };
@@ -214,11 +222,11 @@ export default function RecordView(
     }
     if (cur && cur.rows.length > 0) groups.push(cur);
     return groups;
-  }, [matrix.Rows]);
+  }, [viewRows]);
 
   const startEdit = (r: ConflictFieldRow, col: number) => {
     setMenu(null);
-    if (r.HasChildren) return;
+    if (r.HasChildren || r.Editable?.[col] === false) return;
     if (r.EditKind === 'Ref') { setPicker({ row: r, col }); return; }
     setEdit({ field: r.Field, col });
     setEditVal(r.Values[col] ?? '');
@@ -226,6 +234,7 @@ export default function RecordView(
 
   const commitEdit = async (r: ConflictFieldRow, col: number, value = editVal) => {
     setEdit(null);
+    if (r.Editable?.[col] === false) return;
     const b = back();
     if (!b) return;
     if (value === (r.Values[col] ?? '')) return;
@@ -240,12 +249,15 @@ export default function RecordView(
     if (!menu) return;
     const b = back();
     if (!b) return;
+    const mine = ++menuSeq.current;
+    const live = () => mine === menuSeq.current;
     (async () => {
-      try { setEditablePlugins(JSON.parse(await b.GetEditablePlugins())); } catch { setEditablePlugins([]); }
+      try { const raw = await b.GetEditablePlugins(); if (live()) setEditablePlugins(JSON.parse(raw)); }
+      catch { if (live()) setEditablePlugins([]); }
       try {
-        setElementActions(JSON.parse(
-          await b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field)));
-      } catch { setElementActions(null); }
+        const raw = await b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field);
+        if (live()) setElementActions(JSON.parse(raw));
+      } catch { if (live()) setElementActions(null); }
     })();
 
   }, [menu]);
@@ -396,6 +408,9 @@ export default function RecordView(
       {recordTab === 'grid' && (
         <>
           <div className="rv-toolbar">
+            <button className={`rv-toggle-btn ${rawView ? 'on' : ''}`} aria-pressed={rawView} onClick={() => setRawView(v => !v)}>
+              Raw / Advanced
+            </button>
             <span className="rv-tb-label">Filter by name</span>
             <div className="rv-filter">
               <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="field name…" />
@@ -588,7 +603,7 @@ export default function RecordView(
               <tr><th>Field</th><th>Value</th><th>Kind</th><th>Group</th></tr>
             </thead>
             <tbody>
-              {matrix.Rows.map(r => (
+              {viewRows.map(r => (
                 <tr key={r.Field} className={r.Differs ? 'rv-row-diff' : ''}>
                   <td className="rv-mono" title={r.Field}>{r.DisplayLabel || r.Field}</td>
                   <td>{r.Values[winnerIdx] ?? <em>not set</em>}</td>

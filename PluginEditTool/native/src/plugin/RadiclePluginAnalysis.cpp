@@ -1,4 +1,4 @@
-#include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -19,6 +19,9 @@
 #include <fo4/schema/preflight.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
@@ -60,17 +63,6 @@ Result<fo4::FormKey> formKeyArgument(const nlohmann::json& args) {
     } catch (const std::exception& error) {
         return std::unexpected(Error{"InvalidFormKey", error.what()});
     }
-}
-
-std::string editorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
 }
 
 using SubrecordMap = std::map<std::pair<std::string, std::size_t>, std::vector<std::byte>>;

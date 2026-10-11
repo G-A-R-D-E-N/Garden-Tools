@@ -1,6 +1,8 @@
 #include "RadiclePluginLifecycleFields.hpp"
 #include "RadiclePluginSupport.hpp"
 
+#include <fo4/plugin/subrecord_authoring.hpp>
+
 namespace fo4ide::plugin {
 
 using namespace lifecycle;
@@ -18,7 +20,9 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             "Record signature must contain exactly four characters"
         });
     }
-    if (signatureText != "ARMA" && signatureText != "ARMO" &&
+    const bool schemaCreation = payload != nullptr && payload->contains("schema") &&
+        payload->at("schema").is_boolean() && payload->at("schema").get<bool>();
+    if (!schemaCreation && signatureText != "ARMA" && signatureText != "ARMO" &&
         signatureText != "CELL" && signatureText != "EXPL" &&
         signatureText != "EYES" && signatureText != "HAZD" &&
         signatureText != "LVSP" && signatureText != "PROJ" &&
@@ -50,7 +54,27 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         auto mutated = loaded->plugin;
         fo4::FormKey key;
 
-        if (signatureText == "CELL") {
+        if (schemaCreation) {
+            const auto editor = payload->find("editorId");
+            if (editor != payload->end() && !editor->is_string()) {
+                return std::unexpected(Error{"InvalidRecordCreationPayload", "Schema editorId must be a string"});
+            }
+            const auto editorId = editor == payload->end() ? support::encodeEditorId(std::string_view{}) :
+                support::encodeEditorId(editor->get_ref<const std::string&>());
+            if (!editorId) return std::unexpected(editorId.error());
+            const auto created = fo4::create_record(mutated, fo4::Signature::from_string(signatureText), *editorId);
+            switch (created.status) {
+                case fo4::RecordCreateStatus::created: key = created.key; break;
+                case fo4::RecordCreateStatus::not_authorable:
+                    return std::unexpected(Error{"RecordNotAuthorable", "Record has no independent schema creation rule"});
+                case fo4::RecordCreateStatus::no_default:
+                    return std::unexpected(Error{"RecordNoDefault", "Required subrecords have no usable default"});
+                case fo4::RecordCreateStatus::invalid_editor_id:
+                    return std::unexpected(Error{"InvalidEditorId", "Editor ID is not valid for this record"});
+                case fo4::RecordCreateStatus::preflight_failed:
+                    return std::unexpected(Error{"RecordPreflightFailed", "Generated record failed schema validation"});
+            }
+        } else if (signatureText == "CELL") {
             const auto worldspace = payload->find("worldspace");
             if (worldspace == payload->end() || !worldspace->is_string() ||
                 !payload->contains("x") || !payload->contains("y")) {
@@ -340,6 +364,14 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         return std::unexpected(Error{"RaceCreateFailed", error.what()});
     } catch (const fo4::forms::ProjExplHazdError& error) {
         return std::unexpected(Error{"ProjExplHazdCreateFailed", error.what()});
+    } catch (const fo4::FormIdError& error) {
+        const auto code = signatureText == "CELL" ? "CellCreateFailed"
+            : signatureText == "EYES"             ? "EyesCreateFailed"
+            : signatureText == "RACE"             ? "RaceCreateFailed"
+            : (signatureText == "ARMO" || signatureText == "ARMA") ? "ArmorCreateFailed"
+            : signatureText == "LVSP"             ? "LeveledSpellCreateFailed"
+                                                  : "ProjExplHazdCreateFailed";
+        return std::unexpected(Error{code, error.what()});
     } catch (const std::exception& error) {
         return std::unexpected(Error{"RecordCreateFailed", error.what()});
     }
@@ -405,6 +437,28 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
                 "RecordReferenced",
                 "Cannot delete a record while loaded records still reference it: " + formKeyText
             });
+        }
+        for (const auto& removed : fo4::records_removed_by_delete(loaded->plugin, key)) {
+            const bool ownedElsewhere = removed.owner() != loaded->plugin.key;
+            for (const auto& version : graph_.versions(removed)) {
+                if (ownedElsewhere || version.plugin == loaded->plugin.key) continue;
+                return std::unexpected(Error{
+                    "RecordHasExternalVersions",
+                    "Cannot delete " + formKeyText + ": " + std::string(version.plugin.filename()) +
+                        " overrides " + removed.to_string() + " inside it"
+                });
+            }
+            const bool masterKeepsRecord = ownedElsewhere && std::ranges::any_of(
+                graph_.versions(removed),
+                [&](const auto& version) { return version.plugin == removed.owner(); });
+            for (const auto& reference : graph_.referenced_by(removed)) {
+                if (reference.plugin == loaded->plugin.key || masterKeepsRecord) continue;
+                return std::unexpected(Error{
+                    "RecordReferenced",
+                    "Cannot delete " + formKeyText + ": " + reference.source.to_string() + " in " +
+                        std::string(reference.plugin.filename()) + " refers to " + removed.to_string() + " inside it"
+                });
+            }
         }
 
         auto mutated = loaded->plugin;

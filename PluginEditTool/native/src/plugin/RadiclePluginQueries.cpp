@@ -1,4 +1,5 @@
 #include "RadiclePluginSupport.hpp"
+#include "RadiclePluginFields.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -38,7 +39,7 @@ std::string subrecordValue(const fo4::Subrecord& subrecord) {
         const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
         const auto* end = begin + subrecord.data.size();
         const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
+        return fo4::text::windows1252_to_utf8(std::string(begin, nul));
     }
     if (subrecord.data.empty()) return "<empty>";
 
@@ -66,7 +67,8 @@ const fo4::Subrecord* nthSubrecord(const fo4::Record& record,
     return nullptr;
 }
 
-nlohmann::json matrixStatuses(const std::vector<const fo4::Subrecord*>& cells) {
+template <class Cell, class Value>
+nlohmann::json matrixStatuses(const std::vector<const Cell*>& cells, Value value) {
     nlohmann::json statuses = nlohmann::json::array();
     std::vector<std::size_t> present;
     present.reserve(cells.size());
@@ -76,9 +78,9 @@ nlohmann::json matrixStatuses(const std::vector<const fo4::Subrecord*>& cells) {
 
     bool allSame = present.size() > 1;
     if (allSame) {
-        const auto& first = cells[present.front()]->data;
+        const auto& first = value(*cells[present.front()]);
         for (const auto index : present) {
-            if (cells[index]->data != first) {
+            if (value(*cells[index]) != first) {
                 allSame = false;
                 break;
             }
@@ -97,7 +99,7 @@ nlohmann::json matrixStatuses(const std::vector<const fo4::Subrecord*>& cells) {
             statuses.push_back("win");
         } else if (i == present.front()) {
             statuses.push_back("master");
-        } else if (cells[i]->data == cells[winner]->data) {
+        } else if (value(*cells[i]) == value(*cells[winner])) {
             statuses.push_back("override");
         } else {
             statuses.push_back("lose");
@@ -106,15 +108,17 @@ nlohmann::json matrixStatuses(const std::vector<const fo4::Subrecord*>& cells) {
     return statuses;
 }
 
-bool matrixDiffers(const std::vector<const fo4::Subrecord*>& cells) {
+template <class Cell, class Value>
+bool matrixDiffers(const std::vector<const Cell*>& cells, Value value) {
     if (cells.empty()) return false;
     const auto present = static_cast<std::size_t>(
         std::count_if(cells.begin(), cells.end(), [](const auto* cell) { return cell != nullptr; }));
+    if (present == 0) return false;
     if (present != cells.size()) return true;
     if (present < 2) return false;
-    const auto& first = cells.front()->data;
+    const auto& first = value(*cells.front());
     return std::any_of(cells.begin() + 1, cells.end(), [&](const auto* cell) {
-        return cell->data != first;
+        return value(*cell) != first;
     });
 }
 
@@ -179,14 +183,14 @@ nlohmann::json buildRawMatrixRows(const std::vector<const fo4::Record*>& records
             values.push_back(subrecord == nullptr ? std::string{} : subrecordValue(*subrecord));
         }
 
-        const auto differs = matrixDiffers(cells);
+        const auto differs = matrixDiffers(cells, [](const auto& cell) -> const auto& { return cell.data; });
         rows.push_back({
             {"Field", "Subrecords\\" + signature + "[" + std::to_string(ordinal) + "]"},
             {"DisplayLabel", signature + (ordinal == 0 ? std::string{} : " [" + std::to_string(ordinal) + "]")},
             {"Level", 1},
             {"Values", std::move(values)},
             {"Differs", differs},
-            {"Statuses", matrixStatuses(cells)},
+            {"Statuses", matrixStatuses(cells, [](const auto& cell) -> const auto& { return cell.data; })},
             {"Severity", differs ? "conflict" : "none"},
             {"Kind", "Value"},
             {"Group", "Raw"},
@@ -330,7 +334,64 @@ Result<nlohmann::json> RadiclePluginBackend::getConflictMatrix(const nlohmann::j
 
     std::string editor;
     if (!records.empty() && records.back() != nullptr) editor = editorId(*records.back());
-    auto rows = buildRawMatrixRows(records);
+    auto rows = nlohmann::json::array();
+    std::vector<std::vector<SemanticFieldCell>> projected;
+    std::vector<bool> writable;
+    std::vector<std::string> paths{"EDID"};
+    for (std::size_t index = 0; index < records.size(); ++index) {
+        const auto* loaded = findPlugin(versions[index].plugin.filename());
+        std::vector<SemanticFieldCell> cells;
+        if (loaded != nullptr && records[index] != nullptr) {
+            auto semantic = semanticFieldCells(loaded->plugin, *records[index]);
+            if (semantic) {
+                cells = std::move(*semantic);
+            } else {
+                cells.push_back(SemanticFieldCell{"SemanticUnavailable", semantic.error().message, false, false});
+            }
+            cells.insert(cells.begin(), SemanticFieldCell{"EDID", editorId(*records[index]), true, false});
+        }
+        for (const auto& cell : cells) {
+            if (std::find(paths.begin(), paths.end(), cell.path) == paths.end()) paths.push_back(cell.path);
+        }
+        projected.push_back(std::move(cells));
+        writable.push_back(loaded != nullptr && isEditable(*loaded));
+    }
+    for (const auto& path : paths) {
+        std::vector<const SemanticFieldCell*> cells;
+        auto values = nlohmann::json::array();
+        auto editable = nlohmann::json::array();
+        bool reference = false;
+        for (std::size_t index = 0; index < projected.size(); ++index) {
+            const auto& version = projected[index];
+            const auto found = std::find_if(version.begin(), version.end(), [&](const auto& cell) {
+                return cell.path == path;
+            });
+            const auto* cell = found == version.end() ? nullptr : &*found;
+            cells.push_back(cell == nullptr || !cell->available ? nullptr : cell);
+            values.push_back(cell == nullptr ? std::string{} : cell->value);
+            editable.push_back(cell != nullptr && cell->available && cell->writable && writable[index]);
+            reference = reference || (cell != nullptr && cell->reference);
+        }
+        const auto value = [](const auto& cell) -> const auto& { return cell.value; };
+        const auto differs = matrixDiffers(cells, value);
+        rows.push_back({
+            {"Field", path}, {"DisplayLabel", path}, {"Level", 0},
+            {"Values", std::move(values)}, {"Editable", std::move(editable)},
+            {"Differs", differs}, {"Statuses", matrixStatuses(cells, value)},
+            {"Severity", differs ? "conflict" : "none"},
+            {"Kind", reference ? "FormID" : "Value"},
+            {"Group", "Semantic"}, {"GroupLabel", "Semantic fields"},
+            {"IsSummary", false}, {"HasChildren", false},
+            {"EditKind", reference ? "Ref" : "Text"}, {"EnumOptions", nullptr},
+            {"RefType", nullptr}, {"RefTypes", nullptr}
+        });
+    }
+    auto raw = buildRawMatrixRows(records);
+    for (auto& row : raw) {
+        row["Editable"] = nlohmann::json::array();
+        for (std::size_t index = 0; index < records.size(); ++index) row["Editable"].push_back(false);
+        rows.push_back(std::move(row));
+    }
     const auto hasDifferences = std::any_of(rows.begin(), rows.end(), [](const auto& row) {
         return row.is_object() && row.value("Differs", false) && !row.value("HasChildren", false);
     });

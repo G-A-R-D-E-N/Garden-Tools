@@ -1,7 +1,7 @@
 #include "fo4/schema/formlink_lists.hpp"
 
 #include "fo4/plugin/reader.hpp"
-#include "fo4/plugin/visit.hpp"
+#include "../plugin/record_edit.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -29,17 +29,6 @@ bool iequals_ascii(std::string_view a, std::string_view b) {
   return true;
 }
 
-Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
-  Record* found = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (found == nullptr && record.header.signature != sig_tes4 &&
-        record.form_key == key) {
-      found = &record;
-    }
-  });
-  return found;
-}
-
 std::uint32_t read_u32(const std::vector<std::byte>& data) {
   std::uint32_t value = 0;
   std::memcpy(&value, data.data(), sizeof(value));
@@ -50,24 +39,19 @@ void write_u32(std::vector<std::byte>& data, std::uint32_t value) {
   std::memcpy(data.data(), &value, sizeof(value));
 }
 
-void mark_modified(Plugin& plugin, Record& record) {
-  record.original_range.clear();
-  record.decompressed_payload.clear();
-  record.header.data_size = 0;
-  record.uncompressed_size = 0;
-  plugin.original_range.clear();
-}
-
 FormLinkListMutationStatus validate_record_and_target(
     Plugin& plugin,
     const FormKey& record_key,
     const FormLinkListDescriptor& descriptor,
     const FormKey* target,
     Record*& record) {
-  record = find_mutable_record(plugin, record_key);
-  if (record == nullptr) return FormLinkListMutationStatus::record_missing;
+  record = detail::find_mutable_record(plugin, record_key);
+  if (record == nullptr || record->header.signature == sig_tes4) return FormLinkListMutationStatus::record_missing;
   if (record->header.signature != descriptor.record) {
     return FormLinkListMutationStatus::record_mismatch;
+  }
+  if (target != nullptr && target->owner().empty() && target->local().value() == 0 && !descriptor.nullable) {
+    throw FormLinkListError(std::string(descriptor.path) + " does not allow null FormLink elements");
   }
   if (target != nullptr && target->owner() == plugin.key) {
     const auto* local_target = find_record(plugin, *target);
@@ -177,7 +161,7 @@ FormLinkListMutationStatus insert_encoded_element(
   record->subrecords.insert(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(insertion),
       encoded_element(descriptor, encoded));
-  mark_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }
 
@@ -262,7 +246,7 @@ FormLinkListMutationStatus set_packed_element(
     return FormLinkListMutationStatus::unchanged;
   }
   packed_write(array->data, index, encoded.value());
-  mark_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }
 
@@ -311,7 +295,7 @@ FormLinkListMutationStatus insert_packed_element(
                 bytes, bytes + 4);
   }
   reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(count + 1));
-  mark_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }
 
@@ -337,7 +321,7 @@ FormLinkListMutationStatus remove_packed_element(
   } else {
     reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(count - 1));
   }
-  mark_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }
 
@@ -372,7 +356,7 @@ std::size_t remove_packed_elements_matching(
     data = std::move(kept);
     reconcile_counter(*record, descriptor, static_cast<std::uint32_t>(count - removed));
   }
-  mark_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *record);
   return removed;
 }
 
@@ -402,7 +386,7 @@ FormLinkListMutationStatus move_packed_element(
     }
   }
   packed_write(data, to, moving);
-  mark_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }
 
@@ -423,7 +407,7 @@ FormLinkListMutationStatus clear_packed(
         record->subrecords.begin() + static_cast<std::ptrdiff_t>(*array_index));
   }
   reconcile_counter(*record, descriptor, 0);
-  mark_modified(plugin, *record);
+  detail::mark_record_modified(plugin, *record);
   return FormLinkListMutationStatus::updated;
 }
 
@@ -590,7 +574,7 @@ FormLinkListMutationStatus set_record_formlink_list_element(
     return FormLinkListMutationStatus::unchanged;
   }
   write_u32(subrecord.data, encoded.value());
-  mark_modified(next, *record);
+  detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
 }
@@ -653,7 +637,7 @@ FormLinkListMutationStatus remove_record_formlink_list_element(
 
   record->subrecords.erase(
       record->subrecords.begin() + static_cast<std::ptrdiff_t>(positions[index]));
-  mark_modified(next, *record);
+  detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
 }
@@ -690,7 +674,7 @@ std::size_t remove_record_formlink_list_elements_matching(
     record->subrecords.erase(
         record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
   }
-  mark_modified(next, *record);
+  detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return victims.size();
 }
@@ -731,7 +715,7 @@ FormLinkListMutationStatus move_record_formlink_list_element(
     }
   }
   record->subrecords[positions[to]].data = std::move(moving);
-  mark_modified(next, *record);
+  detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
 }
@@ -757,7 +741,7 @@ FormLinkListMutationStatus clear_record_formlink_list(
     record->subrecords.erase(
         record->subrecords.begin() + static_cast<std::ptrdiff_t>(*it));
   }
-  mark_modified(next, *record);
+  detail::mark_record_modified(next, *record);
   plugin = std::move(next);
   return FormLinkListMutationStatus::updated;
 }

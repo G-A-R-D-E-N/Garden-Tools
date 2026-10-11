@@ -4,7 +4,11 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <string>
+#include <system_error>
 #include <vector>
 
 namespace {
@@ -53,6 +57,19 @@ std::vector<std::byte> make_plugin_with_owned_record(std::uint32_t form_id,
                                                      bool has_master = false) {
   return make_plugin_with_owned_records({form_id}, version, has_master, 0x800);
 }
+
+struct TempDir {
+  TempDir() {
+    const auto id = std::chrono::steady_clock::now().time_since_epoch().count();
+    path = std::filesystem::temp_directory_path() / ("radicle_plugin_flags_" + std::to_string(id));
+    std::filesystem::create_directories(path);
+  }
+  ~TempDir() {
+    std::error_code ec;
+    std::filesystem::remove_all(path, ec);
+  }
+  std::filesystem::path path;
+};
 
 }  // namespace
 
@@ -162,4 +179,49 @@ TEST(PluginFlags, ClearingLightFlagNeverChangesHedrNext) {
 
   EXPECT_FALSE(plugin.header.tes4_flags.is_small_file());
   EXPECT_EQ(plugin.header.next_form_id, 0x5000u);
+}
+
+TEST(PluginFlags, WriteFileToEslSetsMasterAndLightFlags) {
+  const TempDir dir;
+  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Save.esp");
+  const auto target = dir.path / "Save.esl";
+
+  fo4::write_plugin_file(plugin, target);
+
+  const auto reloaded = fo4::read_plugin_file(target);
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_master());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
+}
+
+TEST(PluginFlags, WriteFileToEsmSetsMasterFlagOnly) {
+  const TempDir dir;
+  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00000800u), "Save.esp");
+  const auto target = dir.path / "Save.esm";
+
+  fo4::write_plugin_file(plugin, target);
+
+  const auto reloaded = fo4::read_plugin_file(target);
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_master());
+  EXPECT_FALSE(reloaded.header.tes4_flags.is_small_file());
+}
+
+TEST(PluginFlags, WriteFileToEspKeepsFlags) {
+  const TempDir dir;
+  const auto master = fo4::read_plugin(make_plugin(fo4::RecordFlags::master), "Master.esp");
+  const auto plain = fo4::read_plugin(make_plugin(0), "Plain.esp");
+
+  fo4::write_plugin_file(master, dir.path / "Master.esp");
+  fo4::write_plugin_file(plain, dir.path / "Plain.esp");
+
+  EXPECT_TRUE(fo4::read_plugin_file(dir.path / "Master.esp").header.tes4_flags.is_master());
+  EXPECT_FALSE(fo4::read_plugin_file(dir.path / "Plain.esp").header.tes4_flags.is_master());
+}
+
+TEST(PluginFlags, WriteFileToEslRefusesOutOfRangeFormIds) {
+  const TempDir dir;
+  const auto plugin = fo4::read_plugin(make_plugin_with_owned_record(0x00001000u), "TooLarge.esp");
+  const auto target = dir.path / "TooLarge.esl";
+
+  EXPECT_THROW(fo4::write_plugin_file(plugin, target), fo4::FormIdError);
+  EXPECT_FALSE(std::filesystem::exists(target));
 }
