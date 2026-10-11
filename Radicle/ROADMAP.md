@@ -1,12 +1,12 @@
 # Radicle roadmap
 
-Radicle is the native xEdit-style Fallout 4 plugin backend for PluginTool / PluginEditTool and GardenEngine. Canonical identity is `FormKey`, never a raw load-order FormID. Unknown bytes are preserved.
+Radicle is the native xEdit-style Fallout 4 plugin backend for PluginTool / PluginEditTool and GardenEngine. Canonical identity is `FormKey`, never a raw load-order form ID. Unknown bytes are preserved.
 
 Use [#86](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/86) as the product roadmap, [#287](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/287) and [FO4_PARITY.md](docs/FO4_PARITY.md) as the operation coverage matrix, and [#43](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/43) for reusable infrastructure justified by proven gaps. The phases below are a historical foundation outline, not the current completion ledger.
 
 Evidence must establish the stored layout and safe operation. xEdit definitions, official-plugin measurements, CK/CKRE, existing typed paths and synthetic tests can suffice. Runtime evidence takes precedence when relevant, but missing executable RE does not automatically block stored-format work. Require RE for unresolved layouts, unsafe mutation or actual runtime reproduction.
 
-The editing contract comes from the documentation in [#287](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/287): parse -> expose -> edit -> serialize -> reparse, including valid add/remove structure, FormID/master remap, rejected unsafe writes and preservation of untouched fields. Read surfaces may land separately; they do not complete authoring parity.
+The editing contract comes from the documentation in [#287](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/287): parse -> expose -> edit -> serialize -> reparse, including valid add/remove structure, form ID/master remap, rejected unsafe writes and preservation of untouched fields. Read surfaces may land separately; they do not complete authoring parity.
 
 GitHub milestones, labels, and issues live on [GARDEN-TOOLS](https://github.com/G-A-R-D-E-N/GARDEN-TOOLS/milestones).
 

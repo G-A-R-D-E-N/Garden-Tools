@@ -198,7 +198,7 @@ The P entries refer to the bounded surfaces below, not every xEdit member. Keywo
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | Other record members and whole-record creation |
 | WTHR MNAM | forms/weather_concept.hpp; tests/test_weather_concept.cpp | Other weather fields; missing/duplicate MNAM refuses mutation |
 | FLST / generated keywords | schema/formlink_lists.hpp; tests/test_formlink_lists.cpp | Each record's empty-list anchors and save/reload proof; unrelated fields |
-| FormIDs / masters | schema/form_links.hpp; tests/test_formlinks.cpp, test_navmesh_formlinks.cpp, test_remap_non_formid_slots.cpp | Mixed/opaque containers require complete ownership proof; unsupported VMAD refuses remap |
+| Form IDs / masters | schema/form_links.hpp; tests/test_formlinks.cpp, test_navmesh_formlinks.cpp, test_remap_non_formid_slots.cpp | Mixed/opaque containers require complete ownership proof; unsupported VMAD refuses remap |
 
 These are existing test sources, not a new claim that this documentation head has run every suite. The open PR validation ledger records exact heads separately.
 
@@ -261,7 +261,7 @@ Snapshot: 2026-10-05. Columns apply to the new named fields, not unrelated metad
 | #396 / #341 | WATR visual data; effective cell/world selection | Partial C++/C/C# | WATR visual mutation and creation absent; derived effective selection is not a stored field to write | Existing raw links; unknown visual layouts preserved; runtime selection evidence separate |
 | #398 / #343 | CLMT timing and moon byte; WTHR DATA | Partial C++/C/C# | CLMT timing edit/write/reparse first; WTHR MNAM already writable; other fields remain follow-ups | WLST/WTHR known links remap; raw bytes retained; weather execution separate |
 | #400 / #340 | SNDR variants, SOUN, MUSC, FSTP/FSTS | Partial C++/C/C# | Variant-aware existing edits, file/link add/remove and valid creation absent | Discriminator-specific references must be proved; playback is separate |
-| #402 / #339 | NAVM geometry and NAVI maps | Partial C++/C/C# | Geometry/container mutation and valid grouped creation absent | Existing FormID grammar only; opaque NVPP/island/cover data cannot be reconstructed by guessing |
+| #402 / #339 | NAVM geometry and NAVI maps | Partial C++/C/C# | Geometry/container mutation and valid grouped creation absent | Existing form ID grammar only; opaque NVPP/island/cover data cannot be reconstructed by guessing |
 | #404 / #342 | GRAS DATA, TREE CNAM, FLOR seasons/links, LTEX grass | Partial C++/C/C# | Existing value edits first, then proven optional insertion/deletion and creation | FLOR keywords exist separately; numeric bytes cannot be remapped as links; placement algorithms separate |
 | #406 / #344 | DIAL, INFO responses, SCEN phases/actions | Partial C++/C/C# | Response/action editing and container add/remove/create absent | INFO copy-as-new and SCEN keyword editing already exist; action/VMAD ownership remains scoped |
 | #408 / #345 | PACK headers/schedule/locations/targets, CSTY, IDLE | Partial C++/C/C# | Existing fixed data edits first; procedure/input/tree mutation and creation unproven | Discriminators distinguish IDs from numeric values; preserve opaque procedure streams |
