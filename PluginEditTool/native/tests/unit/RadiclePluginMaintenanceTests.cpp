@@ -209,7 +209,7 @@ std::vector<std::byte> identicalOverrideBytes() {
     return out.bytes;
 }
 
-std::vector<std::byte> copySourceBytes() {
+std::vector<std::byte> copySourceBytes(std::string_view raceEditorId = "SourceRace") {
     fo4::test::ByteWriter out;
     writeHeader(out, 0x802);
 
@@ -220,7 +220,7 @@ std::vector<std::byte> copySourceBytes() {
 
     const auto races = fo4::test::begin_group(out, "RACE", 0);
     const auto race = fo4::test::begin_record(out, "RACE", 0, 0x00000801u, 131);
-    fo4::test::write_subrecord(out, "EDID", std::string_view{"SourceRace\0", 11});
+    fo4::test::write_subrecord(out, "EDID", std::string{raceEditorId} + '\0');
     fo4::test::ByteWriter link;
     link.u32(0x00000800u);
     fo4::test::write_subrecord(out, "AHCM", link.bytes);
@@ -441,6 +441,34 @@ TEST_CASE("Native CopyAsNewRecord allocates a local record and remaps source For
     CHECK(rawSubrecord(*duplicate, "AHCM") == 0x00000800u);
 }
 
+TEST_CASE("Native CopyAsNewRecord duplicates a Windows-1252 EditorID as UTF-8 text") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto sourcePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    writeBytes(sourcePath, copySourceBytes(std::string_view{"Caf\xE9", 4}));
+    writeBytes(patchPath, emptyPatchBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, nlohmann::json::array({
+        pluginEntry("Base.esm", sourcePath),
+        pluginEntry("Patch.esp", patchPath)
+    }));
+
+    const auto result = backend.invokeLegacyBackend(
+        "CopyAsNewRecord",
+        nlohmann::json::array({"Base.esm", "000801:Base.esm", "Patch.esp", ""}));
+    REQUIRE(result.has_value());
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto patch = fo4::read_plugin_file(patchPath);
+    const auto* duplicate = fo4::find_record(
+        patch, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(duplicate != nullptr);
+    CHECK(editorId(*duplicate) == std::string{"Caf\xE9" "DUP"});
+}
+
 TEST_CASE("Native CompactToEsl remaps top-level records and their in-plugin references") {
     bool hasMaster = false;
     SECTION("Masterless plugins keep the full plugin floor") {}
@@ -535,7 +563,7 @@ TEST_CASE("Native CompactToEsl at full capacity leaves no ID and creation fails 
         "CreateRecord",
         nlohmann::json::array({"Patch.esp", "EYES", eyesPayload()}));
     REQUIRE_FALSE(created.has_value());
-    CHECK(created.error().type == "RecordCreateFailed");
+    CHECK(created.error().type == "EyesCreateFailed");
     CHECK(created.error().message.find("no local ") != std::string::npos);
 
     REQUIRE(backend.invoke(

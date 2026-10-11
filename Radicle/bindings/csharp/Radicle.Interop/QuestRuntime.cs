@@ -74,7 +74,8 @@ public static class QuestRuntime
     {
         IntPtr* rows = null;
         nuint count = 0;
-        Call.Check(RadicleNative.QuestRuntimeRows(plugin.Handle, quest.ToString(), &rows, &count));
+        using var use = plugin.Use();
+        Call.Check(RadicleNative.QuestRuntimeRows(use.Pointer, quest.ToString(), &rows, &count));
         return Call.TakeStrings(rows, count);
     }
 
@@ -82,7 +83,8 @@ public static class QuestRuntime
     {
         QuestProperty* properties = null;
         nuint count = 0;
-        Call.Check(RadicleNative.QuestRuntimeProperties(plugin.Handle, quest.ToString(), &properties, &count));
+        using var use = plugin.Use();
+        Call.Check(RadicleNative.QuestRuntimeProperties(use.Pointer, quest.ToString(), &properties, &count));
         try
         {
             var entries = new QuestRuntimePropertyEntry[checked((int)count)];

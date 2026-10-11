@@ -71,7 +71,7 @@ no form ID and leaves HEDR untouched, and only then handed to
 whole plugin; the old overload delegates to it). Refused before any allocation when the signature has no authoring schema (`not_authorable`), the editor ID contains a NUL
 or the schema lists no EDID but an ID was given (`invalid_editor_id`), or any required subrecord other than EDID
 has no usable default (`no_default`). EDID is written when listed and either required or non-empty; the editor ID
-bytes are stored as given, the same convention as `Radicle/src/plugin/mutation.cpp:set_record_editor_id`, and the C
+bytes are stored as given. Unlike `Radicle/src/plugin/mutation.cpp:set_record_editor_id`, which takes UTF-8, converts it itself and refuses an embedded NUL, this path expects Windows-1252 already, so the C
 ABI converts UTF-8 to Windows-1252 first. Every other subrecord with `minimum >= 1` is written `minimum` times
 at its default, in authoring order, and the result must pass the same `layout_valid` check as an add before the
 record is appended.
@@ -129,3 +129,75 @@ and offline managed/RID consumer checks from main remain enabled.
 Pass the loaded plugin's localized flag to the merged `preflight_record` API, as the Radicle plugin-aware
 callers do. The current scalar string registrations do not overlap localized fields; this aligns the caller
 for subsequent reader registrations without adding a new field or claiming a current localized-data failure.
+
+## Radicle/src/plugin/mutation.cpp:stored_inline_text
+
+xEdit writes every inline (non-localized) string through the file code page: `Core/wbInterface.pas:15695`
+(`GetBytes`) with `wbEncoding := wbMBCSEncoding(1252)` at `Core/wbInterface.pas:23867` (xEdit 93cc0bc5).
+`stored_inline_text` applies the same UTF-8 to Windows-1252 conversion for any inline zstring and refuses
+text outside the code page with `FormIdError`, naming the field. `stored_editor_id` delegates with the label
+"editor ID", so its message is unchanged. Test: `Radicle/tests/test_race_creation.cpp` (see the race entry).
+
+## Radicle/src/forms/race.cpp:create_race
+
+FULL and DESC are stored with `stored_inline_text`. Localized plugins are refused before this point, so DESC
+is always inline here. Test: `Radicle/tests/test_race_creation.cpp:InlineFullNameStoresWindows1252AndRefusesUnencodableText`
+(stores `é` as 0xE9 and refuses `😀` without mutating the plugin).
+
+## Radicle/include/fo4/forms/proj_expl_hazd.hpp:ProjectileCreation
+
+The create defaults for `range`, `collision_radius` and `relaunch_interval` follow xEdit `build/xedit/wbDefinitionsFO4.pas`: Range `SetDefaultEditValue('4000.0')` at line 7150, Collision Radius `'10.0'` at 7164 and Relaunch Interval `'0.25'` at 7166 (PROJ DNAM, `wbStruct(DNAM` at 7122). The header's claim that defaults are attested vanilla values does not hold for these three. A vanilla corpus scan (7 official masters, 239 PROJ, 2026-10-11) counted Range 15000=132, 10000=59, 5000=5; Collision Radius 5=129, 10=56, 1.0=22; Relaunch Interval 0.25=161, 1.0=11. The old defaults (5000, 1.0, 1.0) are therefore not the common values, and the creator follows xEdit.
+
+## Radicle/src/forms/proj_expl_hazd.cpp:create_projectile
+
+FULL and NAM1 are stored with `stored_inline_text`; EDID already was. No dedicated test in this change.
+
+## Radicle/src/forms/proj_expl_hazd.cpp:create_explosion
+
+FULL is stored with `stored_inline_text`; EDID already was. No dedicated test in this change.
+
+## Radicle/src/forms/proj_expl_hazd.cpp:create_hazard
+
+FULL and MODL are stored with `stored_inline_text`; EDID already was. No dedicated test in this change.
+
+## Radicle/src/forms/armor.cpp:encode_optional
+
+Model, icon, message icon, and description values all pass through `stored_inline_text`. `create_armor`
+refuses inline DESC in a localized plugin before encoding, so this path only sees inline text. No dedicated
+test in this change.
+
+## Radicle/src/forms/eyes.cpp:create_eyes
+
+EDID, FULL, and ICON are stored as Windows-1252 through `stored_editor_id` and `stored_inline_text`. Tests:
+`Radicle/tests/test_eyes_creation.cpp:StoresEditorIdAsWindows1252` (EDID only).
+
+## Radicle/src/forms/eyes.cpp:set_eyes_text_fields
+
+EDID is converted once with `stored_editor_id`; FULL and ICON are converted once with `stored_inline_text`. xEdit
+writes every inline string through the file encoding, Windows-1252 (`Core/wbInterface.pas:15695`, `:23867`). The
+compare against `decode_eyes` (which returns the stored bytes undecoded) and the write all use those Windows-1252
+bytes. Before this, a non-ASCII EDID never matched and was rewritten on every edit, and FULL and ICON were written
+as raw UTF-8. A character outside Windows-1252 throws `FormIdError` before the plugin changes. Tests:
+`Radicle/tests/test_eyes.cpp:NonAsciiEditorIdIsStoredAsWindows1252AndRepeatEditStaysClean` and
+`Radicle/tests/test_eyes.cpp:NonAsciiFullAndIconAreStoredAsWindows1252AndRepeatEditStaysClean`.
+
+## Radicle/src/forms/armor_edit.cpp:upsert_ordered_string
+
+The upserted value is converted with `stored_inline_text`, with the subrecord signature as the field name, so ARMO and
+ARMA model and icon subrecords are stored as Windows-1252 like EDID. The PET caller passes UTF-8 from JSON. The
+compare uses the same converted bytes. A character outside Windows-1252 throws `FormIdError` before the plugin
+changes. Test: `Radicle/tests/test_armor_edit.cpp:ArmorEdit.NonAsciiGenderedModelIsStoredAsWindows1252`.
+
+## Radicle/src/plugin/child_groups.hpp:quest_child_group
+
+xEdit gives a QUST record a child group of type 10 when `wbVWDAsQuestChildren` is set for FO4
+(`xEdit/xeInit.pas:1095`, `Core/wbImplementation.pas:11245-11246`), and `TwbMainRecord.Remove` removes that
+group with the record (`Core/wbImplementation.pas:13549-13551`, xEdit 93cc0bc5). `quest_child_group` names
+the type-10 group directly after a QUST as its child group. Only `erase_record` uses it; maintenance and
+reachability still treat types 1, 6, and 7 alone as owned child groups.
+
+## Radicle/src/plugin/mutation.cpp:erase_record
+
+For a QUST, a type-10 group after the record is removed with it when its label matches the record's form ID,
+the same check used for types 1, 6, and 7. Without this the group stayed behind and reattached to the previous
+record on reload. Test: `Radicle/tests/test_delete_child_groups.cpp:DeleteQuestRemovesItsQuestChildrenGroup`.

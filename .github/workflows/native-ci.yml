@@ -24,6 +24,17 @@ on:
       - "**/*.md"
   pull_request:
   workflow_dispatch:
+    inputs:
+      lane:
+        description: Validation to run
+        type: choice
+        default: full
+        options:
+          - full
+          - radicle-cross
+
+permissions:
+  contents: read
 
 # A newer push supersedes a pull request or branch run, but main runs always
 # finish: cancelling them on every merge left main itself untested.
@@ -50,14 +61,15 @@ jobs:
   # instead of compiling Radicle a second time in a separate job.
   native-linux:
     name: Native (Linux, Debug)
+    if: github.event.inputs.lane != 'radicle-cross'
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: Radicle/bindings/csharp/global.json
 
@@ -142,7 +154,7 @@ jobs:
       - name: Upload logs and binaries on failure
         if: failure()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: native-linux-failure
           path: |
@@ -170,7 +182,7 @@ jobs:
     # static zlib dependency from the cached source and points find_package(ZLIB) at it.
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: recursive
 
@@ -222,22 +234,30 @@ jobs:
         if: always()
         run: if [ -n "$CCACHE" ]; then "$CCACHE" --show-stats; fi
 
+      - name: Write artifact metadata
+        if: always()
+        run: |
+          printf 'commit=%s\nref=%s\nrun_id=%s\ntarget=%s\n' \
+            "${{ github.sha }}" "${{ github.ref }}" "${{ github.run_id }}" x86_64-pc-windows-msvc \
+            > build/radicle-win/build-info.txt
+
       - name: Upload Windows binaries
         if: always()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: radicle-windows-x64
           path: |
             build/radicle-win/**/*.exe
             build/radicle-win/**/*.dll
             build/radicle-win/**/*.lib
+            build/radicle-win/build-info.txt
           if-no-files-found: warn
           retention-days: 7
 
   plugineditool-native-windows-cross:
     name: PluginEditTool native (Windows cross, clang-cl/xwin)
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.event.inputs.lane != 'radicle-cross'
     runs-on: [self-hosted, Linux, X64, garden]
     timeout-minutes: 45
     # The native host now fetches the pinned WebView2 SDK itself. This lane also
@@ -247,7 +267,7 @@ jobs:
     # runner.
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: recursive
 
@@ -301,7 +321,7 @@ jobs:
       - name: Upload native Windows executable
         if: always()
         continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        uses: https://code.forgejo.org/forgejo/upload-artifact@cb8afe72b42edc798abfb8fcb556cf660d894245 # v5
         with:
           name: fo4recordeditor-windows-x64
           path: build/fo4ide-win/bin/FO4RecordEditor.exe
@@ -312,6 +332,7 @@ jobs:
   # never share a build directory.
   native-windows-tests:
     name: Native tests (Windows, MSVC)
+    if: github.event.inputs.lane != 'radicle-cross'
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     defaults:
@@ -319,10 +340,10 @@ jobs:
         shell: cmd
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         env:
           DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
         with:
@@ -507,6 +528,27 @@ jobs:
         run: |
           if "%FO4_DATA_DIR%"=="" set FO4_DATA_DIR=
           ctest --test-dir build\native --output-on-failure --parallel 4
+
+      - name: Write artifact metadata
+        if: always()
+        run: |
+          echo commit=${{ github.sha }}> build\native\build-info.txt
+          echo ref=${{ github.ref }}>> build\native\build-info.txt
+          echo run_id=${{ github.run_id }}>> build\native\build-info.txt
+          echo target=x86_64-pc-windows-msvc>> build\native\build-info.txt
+
+      - name: Upload Radicle Release test executable
+        if: always()
+        continue-on-error: true
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        with:
+          name: radicle-msvc-release-tests
+          path: |
+            build/native/**/fo4_tests.exe
+            build/native/**/radicle.dll
+            build/native/build-info.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.

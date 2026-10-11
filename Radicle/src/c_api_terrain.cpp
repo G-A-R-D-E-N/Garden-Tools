@@ -30,6 +30,9 @@ radicle_status radicle_landscape_decode(const radicle_env* env,
   if (env == nullptr || record == nullptr || out_landscape == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_landscape are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   *out_landscape = nullptr;
   return guarded("unknown exception while decoding LAND", [&] {
     auto holder = std::make_unique<LandscapeHolder>();
@@ -72,6 +75,9 @@ radicle_status radicle_landscape_texture_get_set(const radicle_env* env,
   if (env == nullptr || record == nullptr || out_texture_set == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_texture_set are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   return guarded("unknown exception while decoding LTEX", [&] {
     const auto set = fo4::env::decode_landscape_texture_set(env->value, *to_ref(record));
     *out_texture_set = to_c_key(*env, set);
@@ -85,6 +91,9 @@ radicle_status radicle_texture_set_get_info(const radicle_env* env,
   clear_error();
   if (env == nullptr || record == nullptr || out_info == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_info are required");
+  }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
   }
   return guarded("unknown exception while decoding TXST", [&] {
     const auto data = fo4::env::decode_texture_set(env->value, *to_ref(record));
