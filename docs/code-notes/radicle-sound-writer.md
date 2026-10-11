@@ -32,7 +32,7 @@ measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673
   Standard descriptor carrying a rate group had its file name misread as flags (or failed on size). The official census
   has 120 FNAM, all inside the 24 AutoWeapon rate groups, and no top-level FNAM. FNAM is now only read as a rate file;
   one outside a group fails closed ("rate filename is out of order"). The RE record
-  (`build/RE-Work/6916afb/sound-399-340/README.md`, Standard loader 0x4C1C10) shows the
+  (RE repo `RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md` at 6916afb, Standard loader 0x4C1C10) shows the
   OG engine would accept a 4-byte top-level FNAM as legacy flags (remapped onto the LNAM looping bits); because nothing
   ships one and xEdit does not define it, Radicle does not expose it. Test:
   `Radicle/tests/test_sound.cpp:SoundTest.RateGroupFilenameIsNeverReadAsTopLevelFlags`.
