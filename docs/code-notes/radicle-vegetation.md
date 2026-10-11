@@ -19,7 +19,7 @@ FLOR 12167-12197. The existing scalar offsets, signedness, twelve stored TREE
 floats, four seasonal bytes, raw FLOR u16 and individual repeated GNAM links
 agree with those declarations. Private RE pin
 `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
-`build/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`,
+`https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`,
 sections 3.1, 3.2, 4 and 5, verifies the loader grammar and the bounded zero-filled
 GRAS prefix / exact-48-byte TREE CNAM behavior. It carries separate OG, AE and NG
 provenance and address stamps. Retain those behaviors and preserve original

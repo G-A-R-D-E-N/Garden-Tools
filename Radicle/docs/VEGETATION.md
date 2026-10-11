@@ -7,8 +7,7 @@ GRAS DATA is 32 bytes: density/min/max slope bytes, one unused byte,
 u16 distance from water, two unused bytes, u32 water-distance discriminator,
 four f32 placement/color/wave values and one flag byte plus three unused bytes.
 The [verified loader record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md)
-and local copy `build/RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`
-stamp `TESGrass::Load` at OG address 0x31AA00. Present DATA is copied into a
+stamps `TESGrass::Load` at OG address 0x31AA00. Present DATA is copied into a
 zero-filled 32-byte prefix, including short or oversized fields. The read
 surface keeps absent DATA distinct from present zero-length DATA. Untouched
 original bytes, including surplus bytes and padding, remain in the container.
