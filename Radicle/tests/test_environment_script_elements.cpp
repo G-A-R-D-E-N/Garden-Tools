@@ -141,7 +141,7 @@ std::vector<std::byte> make_vmad_latin1_struct() {
   out.u16(1);
   wstring(out, "LatinScript");
   out.u8(0);
-  out.u16(1);
+  out.u16(2);
   wstring(out, "Holder");
   out.u8(7);
   out.u8(0);
@@ -149,7 +149,12 @@ std::vector<std::byte> make_vmad_latin1_struct() {
   wstring(out, "Caf\xE9");
   out.u8(2);
   out.u8(0);
-  wstring(out, "Caf\xE9");
+  wstring(out, "Caf\xC3\xA9");
+  wstring(out, "Labels");
+  out.u8(12);
+  out.u8(1);
+  out.u32(1);
+  wstring(out, "Caf\xC3\xA9");
   return out.bytes;
 }
 
@@ -334,7 +339,7 @@ TEST_F(PlacedScriptElementTest, CApiExposesDecodedStructMembersAndStructArrays) 
   EXPECT_EQ(pairs.structs[1].member_count, 0u);
 }
 
-TEST_F(PlacedScriptElementTest, CApiConvertsWindows1252StructMemberNamesAndText) {
+TEST_F(PlacedScriptElementTest, CApiConvertsWindows1252NamesKeepsUtf8Text) {
   const auto data = make_plugin({{"REFR", 0x800, {{"VMAD", make_vmad_latin1_struct()}}}});
   const auto path = root_ / "Latin.esp";
   std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(data.data()),
@@ -352,11 +357,15 @@ TEST_F(PlacedScriptElementTest, CApiConvertsWindows1252StructMemberNamesAndText)
   const std::unique_ptr<radicle_placed_ref, decltype(&radicle_placed_ref_free)> ref(decoded, radicle_placed_ref_free);
 
   ASSERT_EQ(ref->script_count, 1u);
-  ASSERT_EQ(ref->scripts[0].property_count, 1u);
+  ASSERT_EQ(ref->scripts[0].property_count, 2u);
   const auto& holder = ref->scripts[0].properties[0];
   EXPECT_EQ(holder.has_structs, 1);
   ASSERT_EQ(holder.struct_count, 1u);
   ASSERT_EQ(holder.structs[0].member_count, 1u);
   EXPECT_STREQ(holder.structs[0].members[0].name, "Caf\xC3\xA9");
   EXPECT_STREQ(holder.structs[0].members[0].value.text, "Caf\xC3\xA9");
+  const auto& labels = ref->scripts[0].properties[1];
+  EXPECT_STREQ(labels.name, "Labels");
+  ASSERT_EQ(labels.element_value_count, 1u);
+  EXPECT_STREQ(labels.elements[0].text, "Caf\xC3\xA9");
 }
