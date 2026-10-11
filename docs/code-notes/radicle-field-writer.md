@@ -63,6 +63,8 @@ schema bounds, so the error names the storage when the value exceeds it. `zstrin
 plus one NUL and refuses an embedded NUL; `decode_scalar` for `zstring` refuses a payload that is not exactly
 one NUL-terminated string. The native layer stores exactly the bytes it is given.
 
+The f32 scalars of `PROJ`, `EXPL` and `HAZD` (`Radicle/schema/fallout4/fields.json`) use bounds of ±3.4028234663852886e+38 (the largest finite f32) instead of ±1e9, to match xEdit. xEdit accepts any finite single and clamps only to ±MaxSingle (`source:xEdit Core/wbInterface.pas:16216-16222 @93cc0bc5`). Radicle still refuses NaN and infinity in `Radicle/src/schema/scalar.cpp:parse_float`, and it refuses rather than clamps a value past ±FLT_MAX in `Radicle/src/schema/scalar.cpp:validate_range`. Both paths are the writers this covers: `set_record_scalar` on embedded DATA/DNAM fields and the native `CreateRecord` path through `encode_scalar`. `Radicle/tests/test_scalar_embedded.cpp:AcceptsAnyFiniteFloatUpToTheSingleLimit` pins 1e10 as accepted and 1e39, -1e39, nan and inf as refused.
+
 ## Radicle/src/c_api_fields.cpp:radicle_plugin_set_record_string
 
 String convention, mirrored from the editor-id and comments setters: the native layer takes already-stored
