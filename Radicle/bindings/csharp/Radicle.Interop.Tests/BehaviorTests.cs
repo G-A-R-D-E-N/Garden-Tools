@@ -65,7 +65,7 @@ public class BehaviorTests
             ("PTDA", U32(7, 0x811, uint.MaxValue)), ("PTDA", U32(4, 33, 0x80000000)), ("PLDT", U32(255, 1, 2)) }))));
         Package package;
         using (var env = RadicleEnvironment.Load(new[] { path })) package = env.Package(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
-        Assert.Equal(2, package.Locations.Count); Assert.Equal((nuint)1, package.Locations[0].SubrecordIndex);
+        Assert.Equal(2, package.Locations.Count); Assert.Equal((nuint)2, package.Locations[0].SubrecordIndex);
         Assert.Null(package.Locations[0].ItemIndex); Assert.Equal(new FormKey("Behavior.esm", 0x810), package.Locations[0].Form);
         Assert.Equal(-1, package.Locations[0].Radius); Assert.Equal(uint.MaxValue, package.Locations[1].ItemIndex);
         Assert.Null(package.Locations[1].Form); Assert.Equal(99u, package.Locations[1].Value);
