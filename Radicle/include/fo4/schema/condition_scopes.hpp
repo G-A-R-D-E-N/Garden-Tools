@@ -18,6 +18,7 @@ enum class ConditionScopeKind {
   alias,
   package_branch,
   quest_target,
+  perk_effect_tab,
 };
 
 struct ConditionScopeDescriptor {
