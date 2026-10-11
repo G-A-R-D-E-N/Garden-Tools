@@ -52,12 +52,16 @@ Result<nlohmann::json> RadiclePluginBackend::getConditions(
     };
 
     const fo4::Record* record = nullptr;
+    const LoadedPlugin* owner = loaded;
     if (loaded != nullptr) {
         record = resolveRecord(*loaded);
     } else {
         for (const auto& candidate : plugins_) {
             record = resolveRecord(candidate);
-            if (record != nullptr) break;
+            if (record != nullptr) {
+                owner = &candidate;
+                break;
+            }
         }
     }
     if (record == nullptr) {
@@ -78,7 +82,6 @@ Result<nlohmann::json> RadiclePluginBackend::getConditions(
     } catch (const fo4::CtdaNotLosslessError& error) {
         return std::unexpected(Error{"ConditionPayloadUnsupported", error.what()});
     }
-    const auto* owner = loaded != nullptr ? loaded : &plugins_.front();
     nlohmann::json outp = nlohmann::json::array();
     for (const auto& condition : conditions) {
         outp.push_back(describeCondition(condition, owner->plugin));

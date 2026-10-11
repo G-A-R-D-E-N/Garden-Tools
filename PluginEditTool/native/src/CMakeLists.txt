@@ -22,6 +22,14 @@ add_library(
     plugin/RadiclePluginFormLinkList.cpp
     plugin/RadiclePluginComponents.cpp
     plugin/RadiclePluginQuest.cpp
+    plugin/RadiclePluginQuestArgs.cpp
+    plugin/RadiclePluginQuestFormKeys.cpp
+    plugin/RadiclePluginQuestCondition.cpp
+    plugin/RadiclePluginQuestAliasFill.cpp
+    plugin/RadiclePluginQuestAliases.cpp
+    plugin/RadiclePluginQuestExisting.cpp
+    plugin/RadiclePluginQuestExistingExtras.cpp
+    plugin/RadiclePluginQuestLocalized.cpp
     plugin/RadiclePluginElement.cpp
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp
