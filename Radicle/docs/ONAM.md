@@ -52,7 +52,7 @@ xEdit deletes existing ONAM before rebuilding. It walks masters in master-table 
 
 Master reorder must preserve the logical FormKeys represented by ONAM even though the serialized high-byte master ordinals change.
 
-Dirty master-flagged Radicle writes rebuild ONAM automatically. Clean plugins still return their preserved original bytes without being rebuilt.
+Dirty master plugins (master flag set, or an `.esl` name per `Radicle/src/formid.cpp:is_master_plugin`) rebuild ONAM automatically on write. xEdit also treats an `.esm` name as master (source:xEdit Core/wbLoadOrder.pas:332-334 @93cc0bc5); Radicle does not yet, so an `.esm` without the master flag is not rebuilt. Clean plugins still return their preserved original bytes without being rebuilt.
 
 ## CopyAsOverride containment boundary
 
