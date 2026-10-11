@@ -101,10 +101,14 @@ constexpr std::uint8_t k_type_bool_array = 15;
 constexpr std::uint8_t k_type_variable_array = 16;
 constexpr std::uint8_t k_type_struct_array = 17;
 
+void require_zero_unused_word(Slice& slice) {
+  if (slice.u16() != 0) throw UnsupportedVmadProperty{};
+}
+
 void walk_object(Slice& slice, std::int16_t object_format,
                  std::vector<std::size_t>& offsets) {
   if (object_format == 2) {
-    slice.u16();
+    require_zero_unused_word(slice);
     slice.u16();
     offsets.push_back(slice.position());
     slice.u32();
@@ -112,7 +116,7 @@ void walk_object(Slice& slice, std::int16_t object_format,
     offsets.push_back(slice.position());
     slice.u32();
     slice.u16();
-    slice.u16();
+    require_zero_unused_word(slice);
   } else {
     throw parse_error(slice.position(), "unknown VMAD object format");
   }
@@ -439,13 +443,13 @@ namespace {
 VmadObjectElement read_object_element(Slice& slice, std::int16_t object_format) {
   VmadObjectElement element;
   if (object_format == 2) {
-    if (slice.u16() != 0) throw UnsupportedVmadProperty{};
+    require_zero_unused_word(slice);
     element.alias = slice.i16();
     element.object = RawFormId{slice.u32()};
   } else if (object_format == 1) {
     element.object = RawFormId{slice.u32()};
     element.alias = slice.i16();
-    if (slice.u16() != 0) throw UnsupportedVmadProperty{};
+    require_zero_unused_word(slice);
   } else {
     throw parse_error(slice.position(), "unknown VMAD object format");
   }

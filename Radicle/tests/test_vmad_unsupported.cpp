@@ -189,6 +189,20 @@ TEST(Vmad, UnknownPropertyTypesStopTheTypedReaderLikeVariables) {
   }
 }
 
+TEST(Vmad, UnexposedScalarObjectWordsStopTheScanPath) {
+  for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
+    for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
+      SCOPED_TRACE("format=" + std::to_string(format) + " word=" + std::to_string(word));
+      const auto vmad = object_word_vmad(format, word);
+      const auto refr = fo4::Signature::from_string("REFR");
+      const auto coverage = fo4::vmad_coverage(vmad.bytes, refr);
+      EXPECT_EQ(coverage.unsupported, word != 0);
+      EXPECT_EQ(coverage.complete(), word == 0);
+      EXPECT_EQ(fo4::vmad_formid_offsets_for_remap(vmad.bytes, refr).has_value(), word == 0);
+    }
+  }
+}
+
 TEST(Vmad, VariablePropertyFailsClosedForMasterRemap) {
   expect_remap_refused(6);
 }
