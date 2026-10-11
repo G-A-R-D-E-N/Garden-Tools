@@ -23,7 +23,7 @@ enum class Tool {
 
 class Locator {
 public:
-    Locator(const settings::Settings& settings, std::filesystem::path executablePath);
+    Locator(const settings::SharedSettings& settings, std::filesystem::path executablePath);
 
     std::filesystem::path fallout4Root() const;
     std::filesystem::path resolve(Tool tool) const;
@@ -37,9 +37,11 @@ private:
     std::filesystem::path onPath(std::initializer_list<std::string_view> names) const;
     std::filesystem::path environmentPath(const char* name) const;
 
-    const settings::Settings& settings_;
+    const settings::SharedSettings& settings_;
     std::filesystem::path executablePath_;
     std::filesystem::path appDirectory_;
 };
+
+std::filesystem::path resolveCommand(const std::filesystem::path& command);
 
 }

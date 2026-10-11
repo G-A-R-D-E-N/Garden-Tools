@@ -577,7 +577,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 creation.linked_aliases.push_back(std::move(linked));
             }
         }
-        const auto previousConditions = previousAliasConditions(previousAliases, creation.id);
         std::vector<PendingQuestCondition> parsedConditions;
         if (element.contains("conditions") && !element["conditions"].is_null()) {
             if (creation.kind == fo4::forms::QuestAliasKind::collection) {
@@ -603,10 +602,6 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                         return std::unexpected(std::move(remapped));
                     }
                     return std::unexpected(*error);
-                }
-                if (parsedConditions.size() < previousConditions.size()) {
-                    pending.condition.padding =
-                        previousConditions[parsedConditions.size()].padding;
                 }
                 parsedConditions.push_back(std::move(pending));
             }
@@ -644,6 +639,8 @@ Result<nlohmann::json> RadiclePluginBackend::setQuestAliases(const nlohmann::jso
                 }
                 creations[i].conditions.push_back(std::move(condition.condition));
             }
+            carryConditionPadding(previousAliasConditions(previousAliases, creations[i].id),
+                                  creations[i].conditions);
         }
         fo4::forms::write_quest_aliases(mutated, questKey, creations);
         stagePluginMutationLocked(*loaded, std::move(mutated));

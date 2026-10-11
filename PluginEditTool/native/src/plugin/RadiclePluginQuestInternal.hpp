@@ -105,6 +105,8 @@ std::optional<Error> parseQuestCondition(
     std::vector<fo4::FormKey>& conditionKeys,
     std::string_view errorType = "InvalidQuestStagePayload",
     std::string_view surface = "quest log entries");
+void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
+                           std::vector<fo4::CtdaCondition>& conditions);
 std::optional<Error> adapterConditionUnrepresentable(
     const fo4::Plugin& plugin,
     const fo4::ConflictGraph& graph,
