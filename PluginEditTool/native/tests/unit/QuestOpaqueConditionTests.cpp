@@ -41,7 +41,7 @@ TEST_CASE("quest stage and alias replacements refuse opaque condition prefixes",
     condition.param1 = 1;
     condition.comparison_raw = 0x3f800000u;
     condition.unknown3 = -1;
-    condition.opaque_prefix = {std::byte{0x12}, std::byte{0x34}, std::byte{0x56}};
+    condition.padding = {std::byte{0x12}, std::byte{0x34}, std::byte{0x56}};
     if (!alias) {
         fo4::test::ByteWriter indx;
         indx.u16(10); indx.u8(0); indx.u8(0);
