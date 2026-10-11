@@ -1485,6 +1485,19 @@ The empty `catch` bodies are deliberate best-effort paths, and they carry no sou
 
 Validation: `vitest run` 122/122 in 15 files, `tsc -b` clean, `vite build` clean (the pre-existing 1.08 MB chunk warning only), `eslint .` 34 errors and 16 warnings, `git diff --check` clean. The 34 errors are the react-hooks and react-refresh findings the later tranches take; `no-explicit-any` and `no-empty` are 0. The 16th warning is the `NifPanel.tsx:onDrop` `exhaustive-deps` one above, which `main` also has and this tranche leaves in place.
 
+## PluginEditTool/native/cmake/Dependencies.cmake:FetchContent_Declare — archives instead of git clones (WebView2 is not hashed)
+
+Windows native-ci configure hung forever inside the git clone of nlohmann_json (run 585 / job 10748 from 20:10:04 UTC; run 597 / job 10846 from 21:01:50 UTC; both cancelled). The log stops at `Cloning into 'nlohmann_json-src'...`, while other runs passed the same step in seconds. A git clone driven by FetchContent has no timeout, and on the Windows runner it can also block on a credential helper. Every `GIT_REPOSITORY` dependency in this configure therefore carried the same risk: nlohmann_json, spdlog, reproc, Catch2 and cpp-httplib in `Dependencies.cmake`, plus the zlib fallback in `PluginEditTool/native/CMakeLists.txt:fo4ide_zlib`. The Windows lane always fetches that zlib because it passes `CMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON`.
+
+Each of these now downloads a fixed archive with `URL_HASH SHA256` and `INACTIVITY_TIMEOUT 60`, at the same version as before. CMake's downloader drops a stalled transfer after 60 s, ExternalProject retries it, and git is out of the path entirely. The WebView2 NuGet fetch (`Dependencies.cmake:webview2_sdk`, version `1.0.4129.50`) was already a URL download and gained the same timeout, but it has no `URL_HASH`: the repo records no SHA256 for that package version (its only lock entry, `PluginEditTool/FO4RecordEditor.Tests/packages.lock.json`, pins 1.0.4022.49), so none was added. `Radicle/CMakeLists.txt:googletest` gained both the timeout and a hash.
+
+- nlohmann_json uses the official release asset `json.tar.xz`. Its SHA256 (`42f6e95c…dff7aa`) matches the value published in the v3.12.0 release notes.
+- The others use GitHub-generated tag archives, hashed from downloads on 2026-10-05. If GitHub ever regenerates an archive, configure fails loudly on the hash mismatch instead of hanging. Refresh the hash only after confirming the tag still points at the same commit.
+- Bumping a dependency means changing both its URL and its hash.
+
+zlib keeps its `GIT_REPOSITORY`/`GIT_TAG` form in `PluginEditTool/native/CMakeLists.txt:fo4ide_zlib`, because `.github/scripts/pinned-zlib.sh` and the Windows zlib step in `.github/workflows/native-ci.yml` parse that form (one 40-hex `GIT_TAG` after the madler/zlib `GIT_REPOSITORY`) to fetch and cache the pinned commit, and every Windows lane passes that cache through `FETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB`.
+
+`.github/workflows/native-ci.yml` also sets `timeout-minutes: 15` on each Configure step as a backstop. A hang anywhere else in configure now fails that step instead of holding the job until the 60/90-minute job limit or a manual cancel.
 ## .github/workflows/native-ci.yml:workflow_dispatch, native-linux, native-windows-tests, plugineditool-native-windows-cross
 
 The optional `lane=radicle-cross` dispatch runs only `radicle-windows-cross`, the existing Radicle clang-cl/xwin build. `native-linux`, `native-windows-tests` and `plugineditool-native-windows-cross` each have `github.event.inputs.lane != 'radicle-cross'` in their `if:` and are skipped; the default `full` runs them as before. Main has no gate job (`e4b8785a` removed the docs-only gate so every pull request runs the full build), so push and pull-request runs execute the same jobs as main and the `lane` input is only read on `workflow_dispatch`.
