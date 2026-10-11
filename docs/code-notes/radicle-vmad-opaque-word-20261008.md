@@ -12,7 +12,7 @@ The independently maintained parser at `opencw/third_party/Mutagen/Mutagen.Bethe
 
 `Radicle/tests/test_vmad_unsupported.cpp:UnexposedScalarObjectWordsStopTheScanPath` covers formats 1 and 2 with words 0, 1 and 65535 on the scan path: nonzero words make coverage unsupported and incomplete and withhold remap offsets, zero words stay complete.
 
-`Radicle/tests/test_vmad_unsupported.cpp:UnexposedScalarObjectWordsStopTheTypedReader` covers formats 1 and 2 with words 0, 1 and 65535, retained preceding properties, unchanged zero-word FormID/alias values, and exact plugin read/write byte preservation. `Radicle/tests/test_environment_placed.cpp:CApiReportsUnexposedScalarObjectWords` checks the public placed-reference flag and property projection with the same inputs.
+`Radicle/tests/test_vmad_unsupported.cpp:UnexposedScalarObjectWordsStopTheTypedReader` covers formats 1 and 2 with words 0, 1 and 65535, retained preceding properties, unchanged zero-word form ID/alias values, and exact plugin read/write byte preservation. `Radicle/tests/test_environment_placed.cpp:CApiReportsUnexposedScalarObjectWords` checks the public placed-reference flag and property projection with the same inputs.
 
 Both new tests failed after a successful test-first native build at unchanged parent `5ebac62ee0bb21aad12e9ce74fd85174f2ad0d9a`. The ignored local log `Radicle/build-opaque/opaque-word-red.log` has SHA-256 `98e39eeac421378f61ae76aa217de084adec3cdfe397ea4ae04b1e58cf21bcee`. Zero-word controls and plugin byte preservation passed; the nonzero typed-support and exposed-property expectations failed. No production code changed before this run.
 
