@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Radicle.Interop;
 
@@ -21,8 +22,8 @@ public partial class SoundProbe : Node
         {
             using var env = RadicleEnvironment.Load(new[] { Path.Combine(data, "Fallout4.esm") });
 
-            var descriptorRecord = FirstOf(env, "SNDR");
-            var descriptor = env.SoundDescriptor(descriptorRecord);
+            var (descriptorRecord, descriptor) = FirstWith<SoundDescriptor>(env, "SNDR", "a Category (GNAM)",
+                d => d.Category is not null, env.SoundDescriptor);
             var kind = descriptor.Kind ?? throw new InvalidOperationException("SNDR kind absent");
             var standard = kind == 0x1EEF540Au;
             if (!standard && kind != 0x54651A43u && kind != 0xED157AE3u)
@@ -37,20 +38,20 @@ public partial class SoundProbe : Node
             Resolve(env, descriptor.BaseDescriptor, "SNDR", "base descriptor");
             foreach (var child in descriptor.Descriptors) Resolve(env, child, "SNDR", "descriptor");
 
-            var soundRecord = FirstOf(env, "SOUN");
-            var marker = env.SoundMarker(soundRecord);
+            var (soundRecord, marker) = FirstWith<SoundMarker>(env, "SOUN", "a Descriptor (SDSC)",
+                m => m.Descriptor is not null, env.SoundMarker);
             var markerDescriptor = Resolve(env, marker.Descriptor, "SNDR", "marker descriptor")
                 ?? throw new InvalidOperationException("marker descriptor absent");
             env.SoundDescriptor(markerDescriptor);
             if (marker.Repeat?.Stackable is byte stackable && stackable > 1)
                 throw new InvalidOperationException("REPT stackable byte outside 0..1");
 
-            var musicRecord = FirstOf(env, "MUSC");
-            var music = env.MusicType(musicRecord);
+            var (musicRecord, music) = FirstWith<MusicType>(env, "MUSC", "a non-null track (TNAM)",
+                m => m.Tracks.Any(track => track is not null), env.MusicType);
             foreach (var track in music.Tracks) Resolve(env, track, "MUST", "music track");
 
-            var footstepRecord = FirstOf(env, "FSTP");
-            var footstep = env.Footstep(footstepRecord);
+            var (footstepRecord, footstep) = FirstWith<Footstep>(env, "FSTP", "an ImpactSet (DATA)",
+                f => f.ImpactSet is not null, env.Footstep);
             Resolve(env, footstep.ImpactSet, "IPDS", "impact data set");
 
             GD.Print("sound_probe PASS " + JsonSerializer.Serialize(new
@@ -69,10 +70,15 @@ public partial class SoundProbe : Node
         }
     }
 
-    private static Record FirstOf(RadicleEnvironment env, string signature)
+    private static (Record, T) FirstWith<T>(RadicleEnvironment env, string signature, string link,
+        Func<T, bool> carries, Func<Record, T> decode)
     {
-        var records = env.WinnersOf(signature);
-        return records.Count > 0 ? records[0] : throw new InvalidOperationException(signature + " absent");
+        foreach (var record in env.WinnersOf(signature))
+        {
+            var value = decode(record);
+            if (carries(value)) return (record, value);
+        }
+        throw new InvalidOperationException("no " + signature + " winner carries " + link);
     }
 
     private static Record? Resolve(RadicleEnvironment env, FormKey? key, string signature, string role)
