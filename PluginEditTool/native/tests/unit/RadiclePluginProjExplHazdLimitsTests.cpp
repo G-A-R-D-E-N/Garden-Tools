@@ -139,7 +139,7 @@ TEST_CASE("Native CreateRecord rejects payload scalars outside the generated sch
         }));
     REQUIRE_FALSE(speed.has_value());
     CHECK(speed.error().type == "InvalidRecordCreationPayload");
-    CHECK(speed.error().message.find("PROJ\\Speed") != std::string::npos);
+    CHECK(speed.error().message.find("DNAM storage") != std::string::npos);
     CHECK(readBytes(path) == before);
 
     writeBytes(path, pluginWithRecord("SPEL"));
