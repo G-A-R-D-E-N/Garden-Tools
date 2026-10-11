@@ -110,6 +110,13 @@ fo4::Plugin make_expl_plugin(std::uint32_t selector) {
   return fo4::read_plugin(out.bytes, "Variant.esp");
 }
 
+const fo4::Record* find_record(const fo4::Plugin& plugin, std::string_view signature) {
+  for (const auto* record : fo4::collect_records(plugin)) {
+    if (record->header.signature == fo4::Signature::from_string(signature)) return record;
+  }
+  return nullptr;
+}
+
 std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& findings,
                                        fo4::CheckCode code) {
   std::vector<fo4::CheckFinding> out;
@@ -290,17 +297,17 @@ TEST(CheckErrors, VariantFormLinkSlotIsProvenOnlyForSelectedVariant) {
   const auto subrecord = fo4::Signature::from_string("DATA");
   const auto selected = make_expl_plugin(1);
   const auto other = make_expl_plugin(2);
-  const auto selected_records = fo4::collect_records(selected);
-  const auto other_records = fo4::collect_records(other);
-  ASSERT_EQ(selected_records.size(), 1u);
-  ASSERT_EQ(other_records.size(), 1u);
+  const auto* selected_record = find_record(selected, "EXPL");
+  const auto* other_record = find_record(other, "EXPL");
+  ASSERT_NE(selected_record, nullptr);
+  ASSERT_NE(other_record, nullptr);
 
-  const auto slot = fo4::schema::formlink_field_at(fields, *selected_records[0], subrecord, 4);
+  const auto slot = fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 4);
   ASSERT_TRUE(slot.has_value());
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("LIGH")));
   EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("KYWD")));
-  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *other_records[0], subrecord, 4).has_value());
-  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *selected_records[0], subrecord, 0).has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *other_record, subrecord, 4).has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0).has_value());
 }
 
 TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
