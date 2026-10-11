@@ -775,6 +775,42 @@ public enum QuestPropertyOwner : int
     AliasScript = 2,
 }
 
+public enum QuestScope : int
+{
+    Dialogue = 0,
+    StoryManager = 1,
+    LogEntry = 2,
+    ObjectiveTarget = 3,
+    Alias = 4,
+    Stages = 5,
+    Objectives = 6,
+    Aliases = 7,
+}
+
+public enum QuestAliasKind : int
+{
+    Reference = 0,
+    Location = 1,
+    Collection = 2,
+}
+
+public enum QuestFillType : int
+{
+    None = 0,
+    SpecificReference = 1,
+    UniqueActor = 2,
+    LocationAliasReference = 3,
+    ExternalAliasReference = 4,
+    CreateReference = 5,
+    MatchingNearAlias = 6,
+    MatchingReferenceEvent = 7,
+    MatchingClosest = 8,
+    SpecificLocation = 9,
+    ReferenceAliasLocation = 10,
+    ExternalAliasLocation = 11,
+    MatchingLocationEvent = 12,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct QuestProperty
 {
@@ -800,10 +836,160 @@ public unsafe struct QuestProperty
     public uint ElementCount;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestText
+{
+    public NameKind Kind;
+    public uint StringId;
+    public IntPtr Bytes;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestStage
+{
+    public ushort Index;
+    public byte Flags;
+    public byte OpaqueByte;
+    public nuint FirstLog;
+    public nuint LogCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestLog
+{
+    public byte Flags;
+    public QuestText Text;
+    public IntPtr Note;
+    public nuint NoteSize;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestObjective
+{
+    public ushort Index;
+    public uint Flags;
+    public QuestText Text;
+    public nuint FirstTarget;
+    public nuint TargetCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestTarget
+{
+    public int Alias;
+    public uint Flags;
+    public FormKey Keyword;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestAlias
+{
+    public QuestAliasKind Kind;
+    public uint Id;
+    public IntPtr Name;
+    public nuint NameSize;
+    public byte HasFlags;
+    public uint Flags;
+    public byte HasForceIntoAlias;
+    public int ForceIntoAlias;
+    public byte HasClosestToAlias;
+    public int ClosestToAlias;
+    public byte FillSupported;
+    public QuestFillType FillType;
+    public FormKey Target;
+    public FormKey SecondaryTarget;
+    public byte HasFillAlias;
+    public int FillAlias;
+    public ushort CreateMode;
+    public byte HasLevel;
+    public uint Level;
+    public uint NearType;
+    public uint Event;
+    public uint EventData;
+    public nuint FirstCollectionEntry;
+    public nuint CollectionEntryCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestCollectionEntry
+{
+    public uint Id;
+    public byte HasMaxInitialFillCount;
+    public byte MaxInitialFillCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestCondition
+{
+    public byte FlagsByte;
+    public uint ComparisonRaw;
+    public ushort Function;
+    public ushort Unknown2;
+    public int Param1;
+    public int Param2;
+    public uint RunOn;
+    public uint Reference;
+    public int Unknown3;
+    public IntPtr Parameter1String;
+    public nuint Parameter1Size;
+    public IntPtr Parameter2String;
+    public nuint Parameter2Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestConditionList
+{
+    public QuestScope Scope;
+    public nuint Primary;
+    public nuint Secondary;
+    public byte Supported;
+    public nuint FirstCondition;
+    public nuint ConditionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestUnsupported
+{
+    public QuestScope Scope;
+    public nuint Primary;
+    public nuint Secondary;
+    public nuint Member;
+    public fixed byte Signature[5];
+    public IntPtr Reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct QuestStructureView
+{
+    public IntPtr SourcePlugin;
+    public byte StagesSupported;
+    public byte ObjectivesSupported;
+    public byte AliasesSupported;
+    public IntPtr Stages;
+    public nuint StageCount;
+    public IntPtr Logs;
+    public nuint LogCount;
+    public IntPtr Objectives;
+    public nuint ObjectiveCount;
+    public IntPtr Targets;
+    public nuint TargetCount;
+    public IntPtr Aliases;
+    public nuint AliasCount;
+    public IntPtr CollectionEntries;
+    public nuint CollectionEntryCount;
+    public IntPtr ConditionLists;
+    public nuint ConditionListCount;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Unsupported;
+    public nuint UnsupportedCount;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 22u;
+    public const uint CompiledAbiVersion = 23u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1269,6 +1455,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_quest_properties")]
     public static extern void FreeQuestProperties(QuestProperty* properties, nuint count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_structure_read")]
+    public static extern Status QuestStructureRead(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? form_key, IntPtr* out_structure);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_structure_get_view")]
+    public static extern Status QuestStructureGetView(IntPtr structure, QuestStructureView* out_view);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_quest_structure_destroy")]
+    public static extern void QuestStructureDestroy(IntPtr structure);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_add_subrecord")]
     public static extern Status PluginAddSubrecord(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? signature);
