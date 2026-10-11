@@ -1,6 +1,7 @@
 #include "fo4/environment/base_records.hpp"
 
 #include "record_reader.hpp"
+#include "fo4/forms/weather.hpp"
 #include "fo4/plugin/visit.hpp"
 
 #include <algorithm>
@@ -16,7 +17,6 @@ constexpr Signature sig(const char (&text)[5]) {
   return Signature{text[0], text[1], text[2], text[3]};
 }
 
-constexpr std::uint16_t k_weather_eight_times_form_version = 111;
 constexpr std::size_t k_light_required_size = 48;
 constexpr std::size_t k_distant_lod_slot = 260;
 constexpr std::size_t k_water_visual_required_size = 188;
@@ -156,7 +156,9 @@ WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("WTHR"));
   WeatherData out;
   if (const auto* sub = reader.unique(sig("DATA"))) {
-    if (sub->data.size() != 19 && sub->data.size() != 20) reader.fail(sub->signature, "must be 19 or 20 bytes");
+    if (sub->data.size() != weather_data_size(ref.record->header.form_version)) {
+      reader.fail(sub->signature, "does not match its form version");
+    }
     const auto byte = [&](std::size_t offset) { return std::to_integer<std::uint8_t>(sub->data[offset]); };
     WeatherParameters p{byte(0), byte(3), byte(4), byte(5), byte(6), byte(7), byte(8), byte(9), byte(10),
                         byte(11), Reader::color(*sub, 12), byte(15), byte(16), byte(17), byte(18), std::nullopt};
@@ -164,17 +166,15 @@ WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
     out.parameters = p;
   }
   if (const auto* sub = reader.unique(sig("NAM0"))) {
-    const std::size_t times = ref.record->header.form_version >= k_weather_eight_times_form_version ? 8 : 4;
-    const auto stride = times * 4;
-    const auto groups = sub->data.size() / stride;
-    if (sub->data.size() % stride != 0 || groups < 9) {
-      reader.fail(sub->signature, "is not a whole number of color groups");
+    const auto version = ref.record->header.form_version;
+    if (sub->data.size() != weather_nam0_size(version)) {
+      reader.fail(sub->signature, "does not match its form version");
     }
-    out.colors = WeatherColors{times, groups, sub->data};
+    out.colors = WeatherColors{weather_time_slots(version), weather_color_groups(version), sub->data};
   }
   if (const auto* sub = reader.unique(sig("FNAM"))) {
-    if (sub->data.size() != 32 && sub->data.size() != 56 && sub->data.size() != 72) {
-      reader.fail(sub->signature, "must be 32, 56, or 72 bytes");
+    if (sub->data.size() != weather_fnam_size(ref.record->header.form_version)) {
+      reader.fail(sub->signature, "does not match its form version");
     }
     for (std::size_t offset = 0; offset < sub->data.size(); offset += 4) {
       out.fog_distances.push_back(Reader::f32(*sub, offset));

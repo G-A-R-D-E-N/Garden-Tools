@@ -26,11 +26,12 @@ by `Core/wbDefinitionsCommon.pas:9612–9621`.
 | 12–14 | lightning RGB, u8 each |
 | 15 / 16 | visual-effect begin / end, u8 |
 | 17 / 18 | wind direction / direction range, u8 |
-| 19 | optional wind turbulence, u8; decoded by payload length, with the schema's version-119 annotation as compatibility evidence only |
+| 19 | optional wind turbulence, u8; present only when the form version is 119 or later (xEdit `wbFromVersion(119, 'Wind Turbulance')`, `Core/wbDefinitionsFO4.pas:13086` @93cc0bc5) |
 
 The existing measured corpus in `WTHR_SEMANTIC_PROOF.md` has 19/20-byte DATA
-variants and 107 WTHR records. Decode accepts those two lengths and preserves
-every stored value. Other lengths and duplicate TNAM/DATA fail closed. No
+variants and 107 WTHR records. Decode accepts the length its form version selects
+(19 before 119, 20 from 119) and preserves every stored value. Other lengths and
+duplicate TNAM/DATA fail closed. No
 weather scaled float values, flag enum names, transition duration formula or clock
 wrap behavior are asserted from schema annotations alone.
 

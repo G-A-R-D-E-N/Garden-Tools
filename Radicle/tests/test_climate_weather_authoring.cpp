@@ -435,10 +435,32 @@ TEST(ClimateWeatherReader, CloudColorLayerCountsMatchTheStoredLayouts) {
     for (auto& [name, data] : entries[3].subs) {
       if (name == "PNAM") { data = filled(size, 1); }
       if (name == "JNAM") { data = filled(size == 64 ? 512 : size, 0); }
+      if (name == "NAM0") { data = filled(size == 64 ? 208 : size == 512 ? 272 : 608, 0); }
+      if (name == "FNAM") { data = filled(size == 1024 ? 72 : 32, 0); }
+      if (name == "DATA") { data = filled(size == 1024 ? 20 : 19, 0); }
     }
     const auto model = fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr_old));
     EXPECT_EQ(model.cloud_color_layer_count, size == 64 ? 4u : 32u);
   }
+}
+
+TEST(ClimateWeatherReader, PnamAndJnamLengthFollowTheFormVersionNotTheSize) {
+  auto entries = fixture();
+  entries[3].version = 112;
+  for (auto& [name, data] : entries[3].subs) {
+    if (name == "PNAM" || name == "JNAM") { data = filled(1024, 0); }
+    if (name == "NAM0") { data = filled(544, 0); }
+  }
+  EXPECT_THROW(fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr_old)), fo4::forms::WeatherError);
+}
+
+TEST(ClimateWeatherReader, FnamLengthFollowsTheFormVersionNotTheSize) {
+  auto entries = fixture();
+  entries[2].version = 120;
+  for (auto& [name, data] : entries[2].subs) {
+    if (name == "FNAM") { data = filled(32, 0); }
+  }
+  EXPECT_THROW(fo4::forms::decode_weather(read(build(entries, true)), key(k_wthr)), fo4::forms::WeatherError);
 }
 
 TEST(ClimateWeatherReader, FourLayerCloudColorsDecodeOnlyBeforeFormVersion35) {
@@ -447,6 +469,7 @@ TEST(ClimateWeatherReader, FourLayerCloudColorsDecodeOnlyBeforeFormVersion35) {
     entries[3].version = version;
     for (auto& [name, data] : entries[3].subs) {
       if (name == "PNAM") { data = filled(64, 1); }
+      if (name == "NAM0") { data = filled(version < 35 ? 208 : 224, 0); }
     }
     const auto plugin = read(build(entries, true));
     if (version < 35) {
