@@ -21,17 +21,18 @@ public partial class DialogueProbe : Node
         try
         {
             using var env = RadicleEnvironment.Load(new[] { Path.Combine(data, "Fallout4.esm") });
-            var topic = env.WinnersOf("DIAL")
-                .Where(t => IsRecordOf(env, env.DialogueTopic(t).Quest, "QUST") && env.TopicChildren(t).Count > 0)
-                .Cast<Record?>().FirstOrDefault() ?? throw new InvalidOperationException("no quest-linked DIAL with INFO children");
+            var archives = new[] { Path.Combine(data, "Fallout4 - Interface.ba2") }.Where(File.Exists).ToArray();
+            using var assets = AssetResolver.Open(data, archives);
+            using var tables = StringTables.Load(env, Path.Combine(data, "Strings"), "en", assets);
+            var (topic, infoRecord, info, text) = env.WinnersOf("DIAL")
+                .Where(t => IsRecordOf(env, env.DialogueTopic(t).Quest, "QUST"))
+                .SelectMany(t => env.TopicChildren(t).Select(r => (Topic: t, Entry: r, Info: env.DialogueInfo(r))))
+                .Where(x => LinksResolve(env, x.Info.PreviousTopic, x.Info.PreviousInfo,
+                    x.Info.SharedInfo, x.Info.InfoGroup, x.Info.Speaker, x.Info.StartScene))
+                .Select(x => (x.Topic, x.Entry, x.Info, Text: ResponseText(tables, x.Entry, x.Info)))
+                .FirstOrDefault(x => x.Text is not null);
+            if (text is null) throw new InvalidOperationException("no INFO in Fallout4.esm has resolvable links and a non-empty response text");
             var questKey = env.DialogueTopic(topic).Quest;
-            var (infoRecord, info) = env.TopicChildren(topic).Select(r => (Entry: r, Info: env.DialogueInfo(r)))
-                .FirstOrDefault(x => x.Info.Responses.Count > 0 && LinksResolve(env, x.Info.PreviousTopic, x.Info.PreviousInfo,
-                    x.Info.SharedInfo, x.Info.InfoGroup, x.Info.Speaker, x.Info.StartScene));
-            if (info is null) throw new InvalidOperationException("no INFO under the topic has resolvable links and a response");
-            using var tables = StringTables.Load(env, Path.Combine(data, "Strings"));
-            var text = tables.ResolveDialogueText(infoRecord, "NAM1", info.Responses[0].Text);
-            if (text is null || text.Length == 0) throw new InvalidOperationException("INFO response text unresolved in Strings");
             var scene = env.WinnersOf("SCEN")
                 .Where(s => IsRecordOf(env, env.Scene(s).ParentQuest, "QUST"))
                 .Cast<Record?>().FirstOrDefault() ?? throw new InvalidOperationException("no SCEN with a resolvable quest link");
@@ -54,5 +55,9 @@ public partial class DialogueProbe : Node
         key is { } k && env.Winner(k) is { } record && env.Info(record).Signature == signature;
 
     private static bool LinksResolve(RadicleEnvironment env, params FormKey?[] links) =>
-        links.Any(link => link is not null) && links.All(link => link is not { } key || env.Winner(key) is not null);
+        links.All(link => link is not { } key || env.Winner(key) is not null);
+
+    private static byte[]? ResponseText(StringTables tables, Record record, DialogueInfo info) =>
+        info.Responses.Select(response => tables.ResolveDialogueText(record, "NAM1", response.Text))
+            .FirstOrDefault(text => text is { Length: > 0 });
 }
