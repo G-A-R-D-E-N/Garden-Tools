@@ -31,9 +31,7 @@ Result<fo4::FormKey> RadiclePluginBackend::createProjectileLocked(fo4::Plugin& m
     }
 
     fo4::forms::ProjectileCreation creation;
-    const auto editorStored = support::encodeEditorId(editorId.value_or(std::string{}));
-    if (!editorStored) return std::unexpected(editorStored.error());
-    creation.editor_id = *editorStored;
+    creation.editor_id = editorId.value_or(std::string{});
     creation.name = name;
     creation.muzzle_flash_model = muzzleFlashModel.value_or(std::string{});
     if (!lifecycleBoundsField(payload, creation.bounds) ||
@@ -199,9 +197,7 @@ Result<fo4::FormKey> RadiclePluginBackend::createExplosionLocked(fo4::Plugin& mu
     }
 
     fo4::forms::ExplosionCreation creation;
-    const auto editorStored = support::encodeEditorId(editorId.value_or(std::string{}));
-    if (!editorStored) return std::unexpected(editorStored.error());
-    creation.editor_id = *editorStored;
+    creation.editor_id = editorId.value_or(std::string{});
     creation.name = name;
     if (!lifecycleBoundsField(payload, creation.bounds) ||
         !lifecycleFloatField(payload, "force", creation.force, creation.force) ||
@@ -339,9 +335,7 @@ Result<fo4::FormKey> RadiclePluginBackend::createHazardLocked(fo4::Plugin& mutat
     }
 
     fo4::forms::HazardCreation creation;
-    const auto editorStored = support::encodeEditorId(editorId.value_or(std::string{}));
-    if (!editorStored) return std::unexpected(editorStored.error());
-    creation.editor_id = *editorStored;
+    creation.editor_id = editorId.value_or(std::string{});
     creation.name = name;
     creation.model = *model;
     if (!lifecycleBoundsField(payload, creation.bounds) ||
