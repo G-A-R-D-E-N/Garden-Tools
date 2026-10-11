@@ -1,4 +1,5 @@
 #include "RadiclePluginLifecycleFields.hpp"
+#include "RadiclePluginSupport.hpp"
 
 namespace fo4ide::plugin {
 

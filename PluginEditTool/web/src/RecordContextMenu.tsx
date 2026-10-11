@@ -5,6 +5,7 @@ import type { ConflictFieldRow, ConflictMatrix, ElementActions } from './backend
 import type { useRecordActions } from './recordActions';
 
 const conditionsPathOf = (field: string) => (/(^|\.)Conditions(\[|$)/.test(field) ? field : null);
+const initiallyDisabledTypes = new Set(['REFR', 'ACHR', 'NAVM', 'PARW', 'PBAR', 'PBEA', 'PCON', 'PFLA', 'PGRE', 'PHZD', 'PMIS']);
 
 export default function RecordContextMenu({
   menu, matrix, elementActions, actions, onEdit, onEditConditions, onShowTab,
@@ -19,12 +20,12 @@ export default function RecordContextMenu({
 }) {
   const {
     copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
-    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq,
+    deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq, createSchemaRecord,
     checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
   } = actions;
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
-      {!menu.row.HasChildren && (
+      {!menu.row.HasChildren && menu.row.Editable?.[menu.col] !== false && (
         <button onClick={() => onEdit(menu.row, menu.col)}><Pencil size={13} /> Edit value <span className="rv-key">F2</span></button>
       )}
 
@@ -61,6 +62,11 @@ export default function RecordContextMenu({
             onClick={() => elementAction('down', menu.row, menu.col)}><ArrowDown size={13} /> Move down</button>
         </>
       )}
+      {elementActions?.canCreate && (
+        <button onClick={() => createSchemaRecord(menu.col)}>
+          <FilePlus2 size={13} /> Create {matrix.Type} record…
+        </button>
+      )}
       {elementActions?.canClear && (
         <button className="rv-danger" onClick={() => elementAction('clear', menu.row, menu.col)}>
           <EraserIcon size={13} /> Clear ({elementActions.count})
@@ -70,7 +76,9 @@ export default function RecordContextMenu({
       <div className="rv-context-sep" />
       { }
       <button onClick={() => copyAsOverrideInto(menu.col)}><Copy size={13} /> Copy as override into...</button>
-      <button onClick={() => copyAsDisabledOverrideInto(menu.col)}><Copy size={13} /> Copy as disabled override into...</button>
+      {initiallyDisabledTypes.has(matrix.Type) && (
+        <button onClick={() => copyAsDisabledOverrideInto(menu.col)}><Copy size={13} /> Copy as disabled override into...</button>
+      )}
       <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into...</button>
       <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into...</button>
       <div className="rv-context-sep" />

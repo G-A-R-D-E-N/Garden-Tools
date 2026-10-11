@@ -35,6 +35,9 @@ RE record; that record cites issue counts rather than repeating the census.
 
 All 153 GNAM links resolve through their owning plugins' master tables to
 winning GRAS records (zero null, unresolved or wrong-signature targets).
+The decoders resolve these links but do not check the target's signature. xEdit flags a
+wrong-signature target as a warning (`wbFormIDCk` with `[GRAS]` at `Core/wbDefinitionsFO4.pas:9976`,
+`93cc0bc5`); the official data above has none, so the two agree there.
 Coast includes one base-master grass link; Nuka includes three. The remaining
 links target grass in the same master, corroborating the schema association.
 Runtime consumer semantics remain tracked in RE issue #403.
@@ -54,7 +57,7 @@ GardenEngine main `5cb5e18131a53e3c7c6fa049ce8fde6a9ad9f742` pins Radicle
 LTEX GNAM or GRAS/TREE/FLOR getter consumer. The probe source for GARDEN-TOOLS
 #342 is in `Radicle/probes/gardenengine/`; it has not been run. It cannot run
 until GardenEngine #148 adds that consumer and moves its Radicle pin. Existing foliage HLOD support does not establish that grass-reader proof.
-The audit and ABI 12 integration are recorded in
+The audit and ABI 26 integration are recorded in
 `docs/code-notes/radicle-vegetation.md` at the repository root.
 
 ## GardenEngine consumer probe

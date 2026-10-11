@@ -6,27 +6,65 @@ inline constexpr std::uint8_t k_generated_authoring_default_2[] = {0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_3[] = {0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_4[] = {0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_5[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_6[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_6[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_7[] = {0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_8[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_9[] = {0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_10[] = {0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_11[] = {0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_12[] = {0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_13[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_14[] = {0x1E, 0x00, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0xCD, 0xCC, 0x4C, 0x3E, 0x00, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x20, 0x41, 0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_8[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_9[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x03};
+inline constexpr std::uint8_t k_generated_authoring_default_10[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_11[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_12[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_13[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_14[] = {0x00, 0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_15[] = {0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_16[] = {0x1E, 0x1E};
-inline constexpr std::uint8_t k_generated_authoring_default_17[] = {0x1E};
-inline constexpr std::uint8_t k_generated_authoring_default_18[] = {0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_19[] = {0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_20[] = {0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_21[] = {0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_22[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_23[] = {0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_24[] = {0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_25[] = {0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_26[] = {0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x80, 0x3F};
+inline constexpr std::uint8_t k_generated_authoring_default_16[] = {0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_17[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_18[] = {0x1E, 0x00, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0xCD, 0xCC, 0x4C, 0x3E, 0x00, 0x00, 0x00, 0x3F, 0x00, 0x00, 0x20, 0x41, 0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_19[] = {0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_20[] = {0x1E, 0x1E};
+inline constexpr std::uint8_t k_generated_authoring_default_21[] = {0x1E};
+inline constexpr std::uint8_t k_generated_authoring_default_22[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_23[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_24[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_25[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_26[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_27[] = {0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_28[] = {0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_29[] = {0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_30[] = {0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x80, 0x3F};
+inline constexpr std::uint8_t k_generated_authoring_default_31[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_32[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_33[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_34[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_35[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_36[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_37[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_38[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_39[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_40[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_41[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_42[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_43[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_44[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_45[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_46[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_47[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_48[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_49[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_50[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_51[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_52[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_53[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_54[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_55[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_56[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_57[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_58[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_59[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_60[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_61[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_62[] = {0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_63[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_64[] = {0x00, 0x00, 0x00, 0x00};
 inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_constraints[] = {
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("DNAM"), 1, 1, k_generated_authoring_default_0, 12, false, false},
@@ -49,6 +87,16 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("MIC2"), 0, 1, k_generated_authoring_default_4, 1, false, false},
   {Signature::from_string("DESC"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("DATA"), 1, 1, k_generated_authoring_default_5, 12, false, false},
+  {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("WLST"), 0, 1, k_generated_authoring_default_6, 12, false, false},
+  {Signature::from_string("FNAM"), 0, 1, k_generated_authoring_default_7, 1, false, false},
+  {Signature::from_string("GNAM"), 0, 1, k_generated_authoring_default_8, 1, false, false},
+  {Signature::from_string("MODL"), 0, 1, nullptr, 0, false, true},
+  {Signature::from_string("MODT"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("MODC"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("MODS"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("MODF"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("TNAM"), 1, 1, k_generated_authoring_default_9, 6, false, false},
   {Signature::from_string("EDID"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("OBND"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("FULL"), 0, 1, nullptr, 0, false, false},
@@ -59,13 +107,13 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("DATA"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("FULL"), 1, 1, nullptr, 0, false, false},
-  {Signature::from_string("ICON"), 1, 1, k_generated_authoring_default_6, 1, false, false},
-  {Signature::from_string("DATA"), 1, 1, k_generated_authoring_default_7, 1, false, false},
+  {Signature::from_string("ICON"), 1, 1, k_generated_authoring_default_10, 1, false, false},
+  {Signature::from_string("DATA"), 1, 1, k_generated_authoring_default_11, 1, false, false},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("VMAD"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("OBND"), 1, 1, k_generated_authoring_default_8, 12, false, false},
+  {Signature::from_string("OBND"), 1, 1, k_generated_authoring_default_12, 12, false, false},
   {Signature::from_string("PTRN"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("FULL"), 1, 1, k_generated_authoring_default_9, 1, false, false},
+  {Signature::from_string("FULL"), 1, 1, k_generated_authoring_default_13, 1, false, false},
   {Signature::from_string("MODL"), 0, 1, nullptr, 0, false, true},
   {Signature::from_string("MODT"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("MODC"), 0, 1, nullptr, 0, false, false},
@@ -86,18 +134,18 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("PNAM"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("ATTX"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("RNAM"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("FNAM"), 0, 1, k_generated_authoring_default_10, 2, false, false},
-  {Signature::from_string("PFIG"), 0, 1, k_generated_authoring_default_11, 4, false, false},
+  {Signature::from_string("FNAM"), 0, 1, k_generated_authoring_default_14, 2, false, false},
+  {Signature::from_string("PFIG"), 0, 1, k_generated_authoring_default_15, 4, false, false},
   {Signature::from_string("SNAM"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("PFPC"), 1, 1, k_generated_authoring_default_12, 4, false, false},
+  {Signature::from_string("PFPC"), 1, 1, k_generated_authoring_default_16, 4, false, false},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("OBND"), 1, 1, k_generated_authoring_default_13, 12, false, false},
+  {Signature::from_string("OBND"), 1, 1, k_generated_authoring_default_17, 12, false, false},
   {Signature::from_string("MODL"), 0, 1, nullptr, 0, false, true},
   {Signature::from_string("MODT"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("MODC"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("MODS"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("MODF"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("DATA"), 1, 1, k_generated_authoring_default_14, 32, false, false},
+  {Signature::from_string("DATA"), 1, 1, k_generated_authoring_default_18, 32, false, false},
   {Signature::from_string("EDID"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("OBND"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("FULL"), 0, 1, nullptr, 0, false, false},
@@ -107,16 +155,16 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("DNAM"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("TNAM"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("MNAM"), 1, 1, k_generated_authoring_default_15, 4, false, false},
-  {Signature::from_string("HNAM"), 1, 1, k_generated_authoring_default_16, 2, false, false},
-  {Signature::from_string("SNAM"), 1, 1, k_generated_authoring_default_17, 1, false, false},
+  {Signature::from_string("MNAM"), 1, 1, k_generated_authoring_default_19, 4, false, false},
+  {Signature::from_string("HNAM"), 1, 1, k_generated_authoring_default_20, 2, false, false},
+  {Signature::from_string("SNAM"), 1, 1, k_generated_authoring_default_21, 1, false, false},
   {Signature::from_string("GNAM"), 0, 65535, nullptr, 0, true, false},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("OBND"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("LVLD"), 1, 1, k_generated_authoring_default_18, 1, false, false},
-  {Signature::from_string("LVLM"), 1, 1, k_generated_authoring_default_19, 1, false, false},
-  {Signature::from_string("LVLF"), 1, 1, k_generated_authoring_default_20, 1, false, false},
-  {Signature::from_string("LLCT"), 1, 1, k_generated_authoring_default_21, 1, false, false},
+  {Signature::from_string("LVLD"), 1, 1, k_generated_authoring_default_22, 1, false, false},
+  {Signature::from_string("LVLM"), 1, 1, k_generated_authoring_default_23, 1, false, false},
+  {Signature::from_string("LVLF"), 1, 1, k_generated_authoring_default_24, 1, false, false},
+  {Signature::from_string("LLCT"), 1, 1, k_generated_authoring_default_25, 1, false, false},
   {Signature::from_string("LVLO"), 0, 255, nullptr, 0, false, false},
   {Signature::from_string("EDID"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("OBND"), 1, 1, nullptr, 0, false, false},
@@ -144,30 +192,91 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("NAM3"), 1, 1, nullptr, 0, false, false},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("VMAD"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("OBND"), 1, 1, k_generated_authoring_default_22, 12, false, false},
+  {Signature::from_string("OBND"), 1, 1, k_generated_authoring_default_26, 12, false, false},
   {Signature::from_string("MODL"), 0, 1, nullptr, 0, false, true},
   {Signature::from_string("MODT"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("MODC"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("MODS"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("MODF"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("PFIG"), 0, 1, k_generated_authoring_default_23, 4, false, false},
-  {Signature::from_string("SNAM"), 0, 1, k_generated_authoring_default_24, 4, false, false},
-  {Signature::from_string("PFPC"), 0, 1, k_generated_authoring_default_25, 4, false, false},
+  {Signature::from_string("PFIG"), 0, 1, k_generated_authoring_default_27, 4, false, false},
+  {Signature::from_string("SNAM"), 0, 1, k_generated_authoring_default_28, 4, false, false},
+  {Signature::from_string("PFPC"), 0, 1, k_generated_authoring_default_29, 4, false, false},
   {Signature::from_string("FULL"), 0, 1, nullptr, 0, false, false},
-  {Signature::from_string("CNAM"), 1, 1, k_generated_authoring_default_26, 48, false, false},
+  {Signature::from_string("CNAM"), 1, 1, k_generated_authoring_default_30, 48, false, false},
+  {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("00TX"), 0, 1, k_generated_authoring_default_31, 1, false, false},
+  {Signature::from_string("10TX"), 0, 1, k_generated_authoring_default_32, 1, false, false},
+  {Signature::from_string("20TX"), 0, 1, k_generated_authoring_default_33, 1, false, false},
+  {Signature::from_string("30TX"), 0, 1, k_generated_authoring_default_34, 1, false, false},
+  {Signature::from_string("40TX"), 0, 1, k_generated_authoring_default_35, 1, false, false},
+  {Signature::from_string("50TX"), 0, 1, k_generated_authoring_default_36, 1, false, false},
+  {Signature::from_string("60TX"), 0, 1, k_generated_authoring_default_37, 1, false, false},
+  {Signature::from_string("70TX"), 0, 1, k_generated_authoring_default_38, 1, false, false},
+  {Signature::from_string("80TX"), 0, 1, k_generated_authoring_default_39, 1, false, false},
+  {Signature::from_string("90TX"), 0, 1, k_generated_authoring_default_40, 1, false, false},
+  {Signature::from_string(":0TX"), 0, 1, k_generated_authoring_default_41, 1, false, false},
+  {Signature::from_string(";0TX"), 0, 1, k_generated_authoring_default_42, 1, false, false},
+  {Signature::from_string("<0TX"), 0, 1, k_generated_authoring_default_43, 1, false, false},
+  {Signature::from_string("=0TX"), 0, 1, k_generated_authoring_default_44, 1, false, false},
+  {Signature::from_string(">0TX"), 0, 1, k_generated_authoring_default_45, 1, false, false},
+  {Signature::from_string("?0TX"), 0, 1, k_generated_authoring_default_46, 1, false, false},
+  {Signature::from_string("@0TX"), 0, 1, k_generated_authoring_default_47, 1, false, false},
+  {Signature::from_string("A0TX"), 0, 1, k_generated_authoring_default_48, 1, false, false},
+  {Signature::from_string("B0TX"), 0, 1, k_generated_authoring_default_49, 1, false, false},
+  {Signature::from_string("C0TX"), 0, 1, k_generated_authoring_default_50, 1, false, false},
+  {Signature::from_string("D0TX"), 0, 1, k_generated_authoring_default_51, 1, false, false},
+  {Signature::from_string("E0TX"), 0, 1, k_generated_authoring_default_52, 1, false, false},
+  {Signature::from_string("F0TX"), 0, 1, k_generated_authoring_default_53, 1, false, false},
+  {Signature::from_string("G0TX"), 0, 1, k_generated_authoring_default_54, 1, false, false},
+  {Signature::from_string("H0TX"), 0, 1, k_generated_authoring_default_55, 1, false, false},
+  {Signature::from_string("I0TX"), 0, 1, k_generated_authoring_default_56, 1, false, false},
+  {Signature::from_string("J0TX"), 0, 1, k_generated_authoring_default_57, 1, false, false},
+  {Signature::from_string("K0TX"), 0, 1, k_generated_authoring_default_58, 1, false, false},
+  {Signature::from_string("L0TX"), 0, 1, k_generated_authoring_default_59, 1, false, false},
+  {Signature::from_string("M0TX"), 0, 1, k_generated_authoring_default_60, 1, false, false},
+  {Signature::from_string("N0TX"), 0, 1, k_generated_authoring_default_61, 1, false, false},
+  {Signature::from_string("O0TX"), 0, 1, k_generated_authoring_default_62, 1, false, false},
+  {Signature::from_string("LNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("MNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("NNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("RNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("QNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("PNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("JNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("NAM0"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("NAM4"), 0, 1, nullptr, 0, false, true},
+  {Signature::from_string("FNAM"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("DATA"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("NAM1"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("SNAM"), 0, 65535, k_generated_authoring_default_63, 8, true, false},
+  {Signature::from_string("TNAM"), 0, 65535, k_generated_authoring_default_64, 4, true, false},
+  {Signature::from_string("IMSP"), 1, 1, nullptr, 0, false, false},
+  {Signature::from_string("WGDR"), 0, 1, nullptr, 0, false, true},
+  {Signature::from_string("DALC"), 4, 8, nullptr, 0, false, false},
+  {Signature::from_string("MODL"), 0, 1, nullptr, 0, false, true},
+  {Signature::from_string("MODT"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("MODC"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("MODS"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("MODF"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("GNAM"), 0, 1, nullptr, 0, false, false},
+  {Signature::from_string("UNAM"), 0, 1, nullptr, 0, false, true},
+  {Signature::from_string("VNAM"), 0, 1, nullptr, 0, false, true},
+  {Signature::from_string("WNAM"), 0, 1, nullptr, 0, false, true},
 };
 
 inline constexpr RecordAuthoringConstraint k_generated_record_authoring_constraints[] = {
   {Signature::from_string("ARMA"), RecordPlacement::top_level, 0, 10},
   {Signature::from_string("ARMO"), RecordPlacement::top_level, 10, 11},
-  {Signature::from_string("EXPL"), RecordPlacement::top_level, 21, 8},
-  {Signature::from_string("EYES"), RecordPlacement::top_level, 29, 4},
-  {Signature::from_string("FLOR"), RecordPlacement::top_level, 33, 29},
-  {Signature::from_string("GRAS"), RecordPlacement::top_level, 62, 8},
-  {Signature::from_string("HAZD"), RecordPlacement::top_level, 70, 7},
-  {Signature::from_string("LTEX"), RecordPlacement::top_level, 77, 6},
-  {Signature::from_string("LVSP"), RecordPlacement::top_level, 83, 7},
-  {Signature::from_string("PROJ"), RecordPlacement::top_level, 90, 15},
-  {Signature::from_string("RACE"), RecordPlacement::top_level, 105, 9},
-  {Signature::from_string("TREE"), RecordPlacement::top_level, 114, 13},
+  {Signature::from_string("CLMT"), RecordPlacement::top_level, 21, 10},
+  {Signature::from_string("EXPL"), RecordPlacement::top_level, 31, 8},
+  {Signature::from_string("EYES"), RecordPlacement::top_level, 39, 4},
+  {Signature::from_string("FLOR"), RecordPlacement::top_level, 43, 29},
+  {Signature::from_string("GRAS"), RecordPlacement::top_level, 72, 8},
+  {Signature::from_string("HAZD"), RecordPlacement::top_level, 80, 7},
+  {Signature::from_string("LTEX"), RecordPlacement::top_level, 87, 6},
+  {Signature::from_string("LVSP"), RecordPlacement::top_level, 93, 7},
+  {Signature::from_string("PROJ"), RecordPlacement::top_level, 100, 15},
+  {Signature::from_string("RACE"), RecordPlacement::top_level, 115, 9},
+  {Signature::from_string("TREE"), RecordPlacement::top_level, 124, 13},
+  {Signature::from_string("WTHR"), RecordPlacement::top_level, 137, 59},
 };

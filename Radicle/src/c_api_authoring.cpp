@@ -34,13 +34,13 @@ radicle_status radicle_plugin_add_subrecord(radicle_plugin* plugin,
                                             radicle_form_key key,
                                             const char* signature) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
-  }
-  const auto parsed = parse_signature(signature);
-  if (!parsed) return bad_signature();
   return guarded("unknown exception while adding a subrecord", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+    }
+    const auto parsed = parse_signature(signature);
+    if (!parsed) return bad_signature();
     using Status = fo4::SubrecordAddStatus;
     switch (fo4::add_record_subrecord(plugin->value, *form_key, *parsed)) {
       case Status::added:
@@ -65,13 +65,13 @@ radicle_status radicle_plugin_remove_subrecord(radicle_plugin* plugin,
                                                const char* signature,
                                                size_t occurrence) {
   clear_error();
-  const auto form_key = to_form_key(key);
-  if (plugin == nullptr || !form_key) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
-  }
-  const auto parsed = parse_signature(signature);
-  if (!parsed) return bad_signature();
   return guarded("unknown exception while removing a subrecord", [&] {
+    const auto form_key = to_form_key(key);
+    if (plugin == nullptr || !form_key) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+    }
+    const auto parsed = parse_signature(signature);
+    if (!parsed) return bad_signature();
     using Status = fo4::SubrecordRemoveStatus;
     switch (fo4::remove_record_subrecord(plugin->value, *form_key, *parsed, occurrence)) {
       case Status::removed:
@@ -100,11 +100,11 @@ radicle_status radicle_plugin_create_record(radicle_plugin* plugin,
   }
   const auto parsed = parse_signature(signature);
   if (!parsed) return bad_signature();
-  const auto stored = fo4::text::utf8_to_windows1252(editor_id_utf8);
-  if (!stored) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "editor ID is not valid UTF-8 representable in Windows-1252");
-  }
   return guarded("unknown exception while creating a record", [&] {
+    const auto stored = fo4::text::utf8_to_windows1252(editor_id_utf8);
+    if (!stored) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "editor ID is not valid UTF-8 representable in Windows-1252");
+    }
     using Status = fo4::RecordCreateStatus;
     const auto result = fo4::create_record(plugin->value, *parsed, *stored);
     switch (result.status) {

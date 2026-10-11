@@ -1,4 +1,6 @@
+#include "RadiclePluginSupport.hpp"
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
+#include "RadiclePluginFields.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -21,8 +23,12 @@
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/formlink_lists.hpp>
 #include <fo4/schema/scalar.hpp>
+#include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin {
+
+using support::editorId;
+
 namespace {
 
 std::string stringArgument(const nlohmann::json& args, std::size_t index) {
@@ -40,17 +46,6 @@ std::size_t sizeArgument(const nlohmann::json& args,
     const auto raw = args[index].get<long long>();
     if (raw < 0) return fallback;
     return std::min(static_cast<std::size_t>(raw), maximum);
-}
-
-std::string editorId(const fo4::Record& record) {
-    for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
-        const auto* begin = reinterpret_cast<const char*>(subrecord.data.data());
-        const auto* end = begin + subrecord.data.size();
-        const auto* nul = std::find(begin, end, '\0');
-        return std::string(begin, nul);
-    }
-    return {};
 }
 
 std::string asciiLower(std::string_view value) {
@@ -265,7 +260,21 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
         }
     }
 
-    const auto columns = gridColumns(signature, maxEntries);
+    auto columns = gridColumns(signature, maxEntries);
+    std::vector<std::vector<SemanticFieldCell>> semanticRows;
+    if (signature.size() == 4 && signature != "EYES" && signature != "LVSP") {
+        columns = nlohmann::json::array({"EDID"});
+        for (std::size_t index = begin; index < end; ++index) {
+            auto projected = semanticFieldCells(loaded->plugin, *matching[index]);
+            if (!projected) return std::unexpected(projected.error());
+            for (const auto& cell : *projected) {
+                if (std::find(columns.begin(), columns.end(), cell.path) == columns.end()) {
+                    columns.push_back(cell.path);
+                }
+            }
+            semanticRows.push_back(std::move(*projected));
+        }
+    }
     nlohmann::json rows = nlohmann::json::array();
     for (std::size_t index = begin; index < end; ++index) {
         const auto* record = matching[index];
@@ -328,85 +337,17 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
                 }
             }
         } else if (signature.size() == 4) {
-            const auto recordSignature = fo4::Signature::from_string(signature);
-            for (const auto& field : fo4::schema::scalar_fields(recordSignature)) {
-                const fo4::Subrecord* found = nullptr;
-                for (const auto& subrecord : record->subrecords) {
-                    if (subrecord.signature != field.scalar.subrecord) continue;
-                    if (found != nullptr) {
-                        return std::unexpected(Error{
-                            "ScalarReadFailed",
-                            record->form_key.to_string() + ": duplicate " + signature + " " +
-                                field.scalar.subrecord.to_string() + " subrecords"
-                        });
-                    }
-                    found = &subrecord;
-                }
-
-                if (found == nullptr) {
-                    cells.push_back("");
-                    editable.push_back(false);
-                    continue;
-                }
-
-                try {
-                    const auto bytes = fo4::schema::scalar_field_bytes(found->data, field.scalar);
-                    if (bytes.empty()) {
-                        cells.push_back("");
-                        editable.push_back(false);
-                        continue;
-                    }
-                    cells.push_back(fo4::schema::decode_scalar(bytes, field.scalar));
-                    editable.push_back(true);
-                } catch (const fo4::schema::ScalarError& error) {
-                    return std::unexpected(Error{
-                        "ScalarReadFailed",
-                        record->form_key.to_string() + ": " + error.what()
-                    });
-                }
-            }
-            for (const auto& field : fo4::schema::formlink_fields(recordSignature)) {
-                const fo4::Subrecord* found = nullptr;
-                for (const auto& subrecord : record->subrecords) {
-                    if (subrecord.signature != field.subrecord) continue;
-                    if (found != nullptr) {
-                        return std::unexpected(Error{
-                            "FormLinkReadFailed",
-                            record->form_key.to_string() + ": duplicate " + signature + " " +
-                                field.subrecord.to_string() + " subrecords"
-                        });
-                    }
-                    found = &subrecord;
-                }
-
-                if (found == nullptr) {
-                    cells.push_back("");
-                    editable.push_back(false);
-                    continue;
-                }
-                if (field.offset > found->data.size() || found->data.size() - field.offset < 4) {
-                    return std::unexpected(Error{
-                        "FormLinkReadFailed",
-                        record->form_key.to_string() + ": " + std::string(field.path) +
-                            " does not fit in the subrecord payload"
-                    });
-                }
-
-                std::uint32_t raw = 0;
-                std::memcpy(&raw, found->data.data() + field.offset, sizeof(raw));
-                try {
-                    cells.push_back(fo4::resolve_plugin_form_id(
-                        fo4::RawFormId{raw}, fo4::plugin_form_id_context(loaded->plugin)).to_string());
-                    editable.push_back(true);
-                } catch (const fo4::FormIdError& error) {
-                    return std::unexpected(Error{
-                        "FormLinkReadFailed",
-                        record->form_key.to_string() + ": " + error.what()
-                    });
-                }
+            const auto& projected = semanticRows[index - begin];
+            for (std::size_t column = 1; column < columns.size(); ++column) {
+                const auto found = std::find_if(projected.begin(), projected.end(), [&](const auto& cell) {
+                    return cell.path == columns[column].get<std::string>();
+                });
+                cells.push_back(found == projected.end() ? std::string{} : found->value);
+                editable.push_back(found != projected.end() && found->available && found->writable && isEditable(*loaded));
             }
         }
 
+        if (!isEditable(*loaded)) std::fill(editable.begin(), editable.end(), false);
         rows.push_back({
             {"formKey", record->form_key.to_string()},
             {"editorId", editor},

@@ -21,12 +21,30 @@ using namespace support;
 #ifdef FO4IDE_TEST_HOOKS
 namespace {
 LoadMo2AfterPendingCheckHook loadMo2AfterPendingCheckHook = nullptr;
+LoadReadWindowHook loadReadWindowHook = nullptr;
 }
 
 void setLoadMo2AfterPendingCheckHook(LoadMo2AfterPendingCheckHook hook) {
     loadMo2AfterPendingCheckHook = hook;
 }
+
+void setLoadReadWindowHook(LoadReadWindowHook hook) {
+    loadReadWindowHook = hook;
+}
 #endif
+
+Result<void> requirePluginUnchangedSince(const std::filesystem::path& path,
+                                         std::filesystem::file_time_type loadedTime) {
+    std::error_code ec;
+    const auto current = std::filesystem::last_write_time(path, ec);
+    if (ec || current != loadedTime) {
+        return std::unexpected(Error{
+            "PluginChangedOnDisk",
+            path.string() + " changed while it was being loaded; try again"
+        });
+    }
+    return {};
+}
 
 namespace {
 
@@ -47,6 +65,16 @@ std::pair<std::string, std::string> splitTreePath(std::string_view path) {
         return {std::string(path.substr(0, slash)), std::string(path.substr(slash + 1))};
     }
     return {std::string(path.substr(0, slash)), std::string(path.substr(slash + 1, second - slash - 1))};
+}
+
+const char* malformedEnvironmentField(const nlohmann::json& entry) {
+    for (const char* key : std::array<const char*, 3>{"name", "path", "source"}) {
+        const auto field = entry.find(key);
+        if (field != entry.end() && !field->is_string()) return key;
+    }
+    const auto resolved = entry.find("resolved");
+    if (resolved != entry.end() && !resolved->is_boolean()) return "resolved";
+    return nullptr;
 }
 
 }
@@ -219,6 +247,15 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
     if (!arguments.is_object() || !arguments.contains("plugins") || !arguments["plugins"].is_array()) {
         return std::unexpected(Error{"InvalidEnvironment", "MO2 environment is missing its plugin list"});
     }
+    for (const auto& entry : arguments["plugins"]) {
+        if (!entry.is_object()) continue;
+        if (const char* field = malformedEnvironmentField(entry)) {
+            return std::unexpected(Error{
+                "InvalidEnvironment",
+                std::string("MO2 environment plugin field has the wrong JSON type: ") + field
+            });
+        }
+    }
 
     const bool discardPending = arguments.contains("discardPending") &&
                                 arguments["discardPending"].is_boolean() &&
@@ -253,13 +290,21 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
 
         try {
             const auto filePath = utf8Path(path);
+            std::error_code statEc;
+            const auto readTime = std::filesystem::last_write_time(filePath, statEc);
             auto plugin = fo4::read_plugin_file(filePath);
-            std::error_code ec;
+#ifdef FO4IDE_TEST_HOOKS
+            if (loadReadWindowHook != nullptr) loadReadWindowHook();
+#endif
+            if (const auto stable = requirePluginUnchangedSince(filePath, readTime); !stable) {
+                errors.push_back({{"plugin", name}, {"path", path}, {"error", stable.error().message}});
+                continue;
+            }
             loaded.push_back({
                 .name = name,
                 .path = filePath,
                 .source = entry.value("source", std::string{}),
-                .loadedTime = std::filesystem::last_write_time(filePath, ec),
+                .loadedTime = readTime,
                 .trusted = true,
                 .plugin = std::move(plugin),
                 .originalPlugin = std::nullopt,
@@ -420,7 +465,15 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
 
     try {
         const auto filePath = utf8Path(path);
+        std::error_code statEc;
+        const auto readTime = std::filesystem::last_write_time(filePath, statEc);
         auto plugin = fo4::read_plugin_file(filePath);
+#ifdef FO4IDE_TEST_HOOKS
+        if (loadReadWindowHook != nullptr) loadReadWindowHook();
+#endif
+        if (const auto stable = requirePluginUnchangedSince(filePath, readTime); !stable) {
+            return std::unexpected(stable.error());
+        }
         std::string name = plugin.key.filename().empty()
             ? filePath.filename().string()
             : std::string(plugin.key.filename());
@@ -454,19 +507,17 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
             }
         }
 
-        std::error_code ec;
-        const auto loadedTime = std::filesystem::last_write_time(filePath, ec);
         if (existing != nullptr) {
             // Same canonical path: refresh the cached contents in place.
             // Trust and save roots are untouched by ad hoc loads.
-            existing->loadedTime = loadedTime;
+            existing->loadedTime = readTime;
             existing->plugin = std::move(plugin);
             existing->originalPlugin.reset();
             existing->stagedLocalization.reset();
             existing->dirty = false;
         } else {
             plugins_.push_back({
-                name, filePath, {}, loadedTime, false, std::move(plugin), std::nullopt, false, std::nullopt
+                name, filePath, {}, readTime, false, std::move(plugin), std::nullopt, false, std::nullopt
             });
         }
 
@@ -491,6 +542,13 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
     const auto name = stringArgument(arguments, 0);
     const auto requestedPath = stringArgument(arguments, 1);
     if (name.empty()) return std::unexpected(Error{"PluginMissing", "Plugin name is empty"});
+    bool overwrite = false;
+    if (arguments.is_array() && arguments.size() > 2 && !arguments[2].is_null()) {
+        if (!arguments[2].is_boolean()) {
+            return std::unexpected(Error{"InvalidOverwriteFlag", "Overwrite flag must be boolean"});
+        }
+        overwrite = arguments[2].get<bool>();
+    }
 
     OpLock lock(*this, OpLock::Mode::Write, {name});
     auto* loaded = findPlugin(name);
@@ -523,6 +581,17 @@ Result<nlohmann::json> RadiclePluginBackend::savePlugin(const nlohmann::json& ar
             });
         }
         output = *allowedOutput;
+        std::error_code loadedEc;
+        const auto loadedCanonical = std::filesystem::weakly_canonical(loaded->path, loadedEc);
+        const bool sameFile = !loadedEc && loadedCanonical == output;
+        std::error_code existsEc;
+        const bool outputExists = std::filesystem::exists(output, existsEc) || existsEc;
+        if (!overwrite && !sameFile && outputExists) {
+            return std::unexpected(Error{
+                "SaveTargetExists",
+                "Refusing to replace an existing plugin without overwrite: " + output.string()
+            });
+        }
     }
     if (const auto persisted = persistPluginLocked(*loaded, output); !persisted) {
         return std::unexpected(persisted.error());

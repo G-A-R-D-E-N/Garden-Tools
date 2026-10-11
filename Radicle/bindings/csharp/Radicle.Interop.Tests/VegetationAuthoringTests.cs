@@ -118,7 +118,7 @@ public class VegetationAuthoringTests
 
         Assert.Equal(2, plugin.FormLinkListCount(Ltex, "LTEX\\Grasses"));
         Assert.Equal(0, plugin.FormLinkListCount(LtexBare, "LTEX\\Grasses"));
-        Assert.Equal(0, plugin.FormLinkListCount(K(0x999), "LTEX\\Grasses"));
+        Assert.Throws<System.Collections.Generic.KeyNotFoundException>(() => plugin.FormLinkListCount(K(0x999), "LTEX\\Grasses"));
         Assert.True(plugin.FormLinkListSet(Ltex, "LTEX\\Grasses", 1, Gras));
         var settled = plugin.ToBytes();
         Assert.True(plugin.FormLinkListSet(Ltex, "LTEX\\Grasses", 1, Gras));
