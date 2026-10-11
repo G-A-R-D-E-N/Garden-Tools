@@ -48,6 +48,9 @@ export default function ExplorerTree({ path, node, backend, onOpenRecord }: { pa
     if (!expanded && node.HasChildren) {
       setLoading(true);
       setLoadError('');
+    } else if (expanded) {
+      requests.current++;
+      setLoading(false);
     }
     setExpanded(!expanded);
   };

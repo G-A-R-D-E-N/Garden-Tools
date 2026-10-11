@@ -91,3 +91,29 @@ it('clears expanded children when the refreshed node reports no children', async
   expect(screen.queryByText('CLMT (1)')).toBeNull();
   expect(GetChildren).toHaveBeenCalledTimes(1);
 });
+
+it('drops an in-flight fetch when the node is collapsed and refetches on re-expand', async () => {
+  const pending: Array<(json: string) => void> = [];
+  const later = () => new Promise<string>(resolve => { pending.push(resolve); });
+  const GetChildren = vi.fn()
+    .mockImplementationOnce(later)
+    .mockResolvedValueOnce(JSON.stringify([group('CLMT (2)')]));
+  const backend = { GetChildren } as unknown as AppInterop;
+  const root = group('W0.esp');
+  const tree = (node: RecordNode) => (
+    <ExplorerTree path="W0.esp" node={node} backend={backend} onOpenRecord={vi.fn()} />
+  );
+  const { container } = render(tree(root));
+
+  fireEvent.click(screen.getByText('W0.esp'));
+  fireEvent.click(screen.getByText('W0.esp'));
+  await act(async () => { pending[0](JSON.stringify([group('CLMT (1)')])); });
+  expect(screen.queryByText('CLMT (1)')).toBeNull();
+  expect(container.querySelector('.tree-loading')).toBeNull();
+
+  fireEvent.click(screen.getByText('W0.esp'));
+  expect(screen.queryByText('CLMT (1)')).toBeNull();
+  expect(await screen.findByText('CLMT (2)')).toBeTruthy();
+  expect(GetChildren).toHaveBeenCalledTimes(2);
+  expect(GetChildren).toHaveBeenLastCalledWith('W0.esp');
+});
