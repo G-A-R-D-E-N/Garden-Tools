@@ -81,7 +81,7 @@ class PapyrusDumpTests(unittest.TestCase):
         for signature in ("PERK", "TERM"):
             for header in ("Fragments", ""):
                 with self.subTest(signature=signature, header=header):
-                    extras = bytes([3]) + text(header) + (struct.pack("<BH", 0, 0) if header else b"")
+                    extras = bytes([3]) + text(header) + struct.pack("<BH", 0, 0)
                     extras += struct.pack("<H", 2)
                     extras += b"".join(struct.pack("<HHB", index, 0, 0) + text("Fragments") + text(f"Fragment_{index}")
                                        for index in range(2))

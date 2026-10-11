@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -223,4 +224,71 @@ TEST(Vmad, InfoFragmentCensusCountsOnlyDefinedFlagBits) {
   ASSERT_TRUE(coverage.complete());
   EXPECT_EQ(coverage.fragment_count, 0u);
   EXPECT_EQ(coverage.fragment_script_count, 1u);
+}
+
+TEST(Vmad, EmptyLeadingScriptNameKeepsFlagsPropertiesAndOffsets) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(2);
+  wstring(vmad, "");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "Count");
+  vmad.u8(3);
+  vmad.u8(0);
+  vmad.u32(42);
+  wstring(vmad, "Named");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "Target");
+  vmad.u8(1);
+  vmad.u8(0);
+  object_v2(vmad, 0x0200009A);
+  const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_FALSE(scripts.unsupported);
+  EXPECT_EQ(scripts.trailing_bytes, 0u);
+  ASSERT_EQ(scripts.scripts.size(), 2u);
+  EXPECT_EQ(scripts.scripts[0].name, "");
+  ASSERT_EQ(scripts.scripts[0].properties.size(), 1u);
+  EXPECT_EQ(scripts.scripts[0].properties[0].name, "Count");
+  EXPECT_EQ(scripts.scripts[0].properties[0].integer, 42);
+  EXPECT_EQ(scripts.scripts[1].name, "Named");
+  ASSERT_EQ(scripts.scripts[1].properties.size(), 1u);
+  EXPECT_EQ(scripts.scripts[1].properties[0].object->value(), 0x0200009Au);
+  const auto refr = fo4::Signature::from_string("REFR");
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, refr).complete());
+  const auto offsets = fo4::vmad_formid_offsets(vmad.bytes, refr);
+  ASSERT_EQ(offsets.size(), 1u);
+  EXPECT_EQ(offsets[0], vmad.bytes.size() - 4);
+}
+
+TEST(Vmad, EmptyQuestFragmentHeaderHasNoFlagsOrProperties) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(0);
+  vmad.u8(0);
+  vmad.u16(1);
+  vmad.u16(0);
+  vmad.u16(0);
+  vmad.u16(0);
+  vmad.u32(0);
+  vmad.u8(0);
+  wstring(vmad, "");
+  wstring(vmad, "Fragment");
+  vmad.u16(0);
+  const auto extras =
+      fo4::read_quest_vmad_extras(std::span<const std::byte>(vmad.bytes).subspan(6), 2);
+  EXPECT_FALSE(extras.unsupported);
+  EXPECT_TRUE(extras.fully_consumed);
+  EXPECT_EQ(extras.script_name, "");
+  EXPECT_TRUE(extras.properties.empty());
+  ASSERT_EQ(extras.fragments.size(), 1u);
+  EXPECT_EQ(extras.fragments[0].function, "Fragment");
+  EXPECT_TRUE(extras.aliases.empty());
+  const auto coverage = fo4::vmad_coverage(vmad.bytes, fo4::sig_qust);
+  EXPECT_TRUE(coverage.complete());
+  EXPECT_EQ(coverage.fragment_count, 1u);
+  EXPECT_EQ(coverage.fragment_script_count, 0u);
 }
