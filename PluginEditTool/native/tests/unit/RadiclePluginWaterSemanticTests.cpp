@@ -152,6 +152,20 @@ TEST_CASE("Water semantic refusals and unchanged edits stage nothing", "[water-s
     fixture.checkNotPending();
 }
 
+TEST_CASE("Water text outside Windows-1252 is refused without staging", "[water-semantic]") {
+    Fixture fixture;
+    const auto before = fo4::read_plugin_file(fixture.path);
+    const auto result = fixture.edit(water::k_full, "WATR\\Layer1NoiseTexture", "\xe4\xb8\xad.dds");
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "ScalarFieldWriteFailed");
+    fixture.checkNotPending();
+    REQUIRE(fixture.edit(water::k_full, "WATR\\DepthAmount", "4096").has_value());
+    fixture.save();
+    const auto after = fo4::read_plugin_file(fixture.path);
+    CHECK(water::payload(after, water::k_full, "NAM2") == water::payload(before, water::k_full, "NAM2"));
+    CHECK(water::payload(after, water::k_full, "NAM2") == water::zstr("water\\n1.dds"));
+}
+
 TEST_CASE("Water localized names stay opaque and refuse writes", "[water-semantic]") {
     auto entries = water::fixture();
     for (auto& [name, data] : entries[0].subs) {
