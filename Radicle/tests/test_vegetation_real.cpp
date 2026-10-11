@@ -47,6 +47,13 @@ void expect_harvest(const fo4::env::HarvestData& native, const radicle_harvest_i
   }
 }
 
+std::uint32_t raw_le(const std::vector<std::byte>& data, std::size_t offset, std::size_t width) {
+  std::uint32_t out = 0;
+  for (std::size_t i = 0; i < width && offset + i < data.size(); ++i)
+    out |= std::to_integer<std::uint32_t>(data[offset + i]) << (8 * i);
+  return out;
+}
+
 TEST_P(VegetationReal, EveryOfficialVegetationRecordDecodesAndMasterIsByteIdentical) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
@@ -84,7 +91,15 @@ TEST_P(VegetationReal, EveryOfficialVegetationRecordDecodesAndMasterIsByteIdenti
       ASSERT_EQ(radicle_grass_get_info(abi, records[i], &value), RADICLE_STATUS_OK);
       EXPECT_EQ(value.has_data, native.has_value() ? 1 : 0);
       for (const auto& sub : record.subrecords) {
-        if (sub.signature.to_string() == "DATA") { EXPECT_EQ(value.has_data, 1); }
+        if (sub.signature.to_string() != "DATA") continue;
+        const auto& bytes = sub.data; EXPECT_EQ(value.has_data, 1);
+        EXPECT_EQ(value.density, raw_le(bytes, 0, 1)); EXPECT_EQ(value.min_slope, raw_le(bytes, 1, 1));
+        EXPECT_EQ(value.max_slope, raw_le(bytes, 2, 1)); EXPECT_EQ(value.units_from_water, raw_le(bytes, 4, 2));
+        EXPECT_EQ(value.water_type, raw_le(bytes, 8, 4)); EXPECT_EQ(value.flags, raw_le(bytes, 28, 1));
+        EXPECT_EQ(std::bit_cast<std::uint32_t>(value.position_range), raw_le(bytes, 12, 4));
+        EXPECT_EQ(std::bit_cast<std::uint32_t>(value.height_range), raw_le(bytes, 16, 4));
+        EXPECT_EQ(std::bit_cast<std::uint32_t>(value.color_range), raw_le(bytes, 20, 4));
+        EXPECT_EQ(std::bit_cast<std::uint32_t>(value.wave_period), raw_le(bytes, 24, 4));
       }
       if (native) {
         EXPECT_EQ(value.density, native->density); EXPECT_EQ(value.min_slope, native->min_slope);

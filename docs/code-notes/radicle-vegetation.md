@@ -56,6 +56,7 @@ selected master. Keep the family totals and byte-identity assertions, and includ
 record keys and raw subrecord bytes in failure traces. No decoder behavior changes.
 Brace conditionals containing GoogleTest assertion macros so GCC's
 `-Werror=dangling-else` check accepts the same assertions as MSVC.
+The GRAS DATA raw offsets (density 0, min slope 1, max slope 2, units from water u16 at 4, water type u32 at 8, floats at 12/16/20/24, flags 28; bytes past a short payload read as zero) match `source:xEdit Core/wbDefinitionsFO4.pas:9616-9642 @93cc0bc5` (`wbStruct(DATA` for GRAS).
 
 ## Radicle/tests/test_c_api_quest.cpp:findProperty
 
