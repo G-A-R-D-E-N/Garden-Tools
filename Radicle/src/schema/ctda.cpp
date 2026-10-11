@@ -26,6 +26,7 @@ constexpr CitcListOwner k_citc_list_owners[] = {
     {Signature::from_string("SMBN"), {}},
     {Signature::from_string("SMQN"), {}},
     {Signature::from_string("SMEN"), {}},
+    {Signature::from_string("SCEN"), Signature::from_string("LCEP")},
     {Signature::from_string("SCEN"), Signature::from_string("INTT")},
     {Signature::from_string("SCEN"), Signature::from_string("SSPN")},
     {Signature::from_string("PACK"), Signature::from_string("ANAM")},

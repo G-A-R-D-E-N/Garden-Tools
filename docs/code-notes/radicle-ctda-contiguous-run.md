@@ -93,7 +93,7 @@ Vanilla corpus, read-only scan of Fallout4.esm, DLCCoast, DLCNukaWorld, DLCRobot
 
 No CITC value differed from its CTDA count in any run. Vanilla always writes the CITC when a list of an owned type has CTDAs. Required and nested lists keep a CITC of 0 when empty. ACTI, FACT, FURN and MUST never have a CITC without CTDAs.
 
-Reachability: `condition_scopes.cpp` generates scopes only for ALCH, ENCH, INGR, SPEL and QUST, and `set_record_conditions` passes no anchor. So a non-empty write to a CITC record with no list returns `no_condition_list` (PET: `NoConditionList`), and an empty write returns `unchanged` with nothing staged, as documented above. The CITC insert path is reached only by a caller that passes `insert_anchor` for an owned record type; no production caller does today, so the owner table is exercised by the tests only.
+Reachability (`Radicle/src/schema/condition_scopes.cpp:root_insert_anchor`): whole-record writes get an insert anchor only for PACK, INFO, PERK and QUST, none of which owns a root-level CITC. A PACK branch scope (`package_branch_ranges`) anchors right after its existing CITC, so it updates that count. A non-empty whole-record write to ACTI, FACT, FURN, MUST, SMBN, SMQN, SMEN or SCEN with no list still returns `no_condition_list` (PET: `NoConditionList`). The CITC create branch of `write_ctda_conditions_in` is reached only by callers that pass `insert_anchor` for an owned type, so today the owner table is exercised by `test_ctda_model.cpp` only. The SCEN Start Scene entries cover each optional member that can precede the CITC: LCEP, INTT and SSPN (`source:xEdit Core/wbDefinitionsFO4.pas:9069-9074 @93cc0bc5`).
 
 ## PluginEditTool/native/src/plugin/ConditionCodec.cpp:buildCondition — stored reference by Run On
 
