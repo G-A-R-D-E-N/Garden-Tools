@@ -14,6 +14,7 @@ Plugin read_plugin(std::span<const std::byte> bytes, std::filesystem::path path 
 Plugin read_plugin_file(const std::filesystem::path& path);
 
 std::vector<const Record*> collect_records(const Plugin& plugin);
+std::vector<const Record*> collect_first_records(const Plugin& plugin);
 std::vector<const Group*> collect_groups(const Plugin& plugin);
 
 const Record* find_record(const Plugin& plugin, RawFormId form_id);
