@@ -145,6 +145,9 @@ radicle_status radicle_strings_resolve_name(const radicle_strings* strings,
   if (strings == nullptr || record == nullptr || out_text == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "strings, record and out_text are required");
   }
+  if (!belongs_to_env(strings->env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   *out_text = nullptr;
   if (out_size != nullptr) *out_size = 0;
   return guarded("unknown exception while resolving a record name", [&] {

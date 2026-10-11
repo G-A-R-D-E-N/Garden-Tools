@@ -61,8 +61,8 @@ ONAM maintenance alone does not make every missing-record override insertion saf
 Radicle therefore distinguishes two cases:
 
 - replacing an override already present in the destination is allowed because its existing containment is preserved;
-- inserting a missing record is allowed only when the source record is a direct child of a top-level GRUP whose header can be reproduced safely.
+- inserting a missing record is allowed when the source record is a direct child of a top-level GRUP whose header can be reproduced safely, or when it is a placed reference (REFR, ACHR and the other reference kinds), PGRD, LAND or NAVM inside a CELL child GRUP or a WRLD chain. Those copy with their parent CELL and WRLD (see `docs/code-notes/radicle-copy-cell-children.md`).
 
-A missing nested source record fails with `source_containment_unsupported` in Radicle and `RecordContainmentUnsupported` through PluginEditTool. This prevents REFR/INFO/world records from being silently moved into invalid top-level groups.
+A missing nested source record outside those planned chains, such as a DIAL or INFO child, fails with `source_containment_unsupported` in Radicle and `RecordContainmentUnsupported` through PluginEditTool. This prevents DIAL/INFO records from being silently moved into invalid top-level groups.
 
 With that boundary enforced, PluginEditTool may write containment-safe top-level overrides into editable master-flagged targets. The writer rebuilds ONAM automatically on the resulting dirty master file.
