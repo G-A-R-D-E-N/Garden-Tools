@@ -20,6 +20,9 @@ radicle_status require(const radicle_env* env, const radicle_record* record, con
   if (env == nullptr || record == nullptr || out == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and an output are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   return RADICLE_STATUS_OK;
 }
 

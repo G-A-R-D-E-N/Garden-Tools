@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -17,6 +18,7 @@
 
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/ctda.hpp>
+#include <fo4ide/plugin/ConditionCodec.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
 
 namespace fo4ide::plugin::questinternal {
@@ -334,12 +336,14 @@ std::optional<Error> parseQuestCondition(
         out.condition.flags_byte =
             static_cast<std::uint8_t>(out.condition.flags_byte | fo4::k_ctda_flag_use_global);
     } else {
-        float value = 1.0f;
+        float value = 0.0f;
         if (hasValue) {
-            if (!element["value"].is_number()) {
-                return fail("condition value must be a number");
+            const auto number = element["value"].is_number() ? element["value"].get<double>() : 0.0;
+            if (!element["value"].is_number() || !std::isfinite(number) ||
+                std::fabs(number) > std::numeric_limits<float>::max()) {
+                return fail("comparison value must be a finite number");
             }
-            value = element["value"].get<float>();
+            value = static_cast<float>(number);
         }
         static_assert(sizeof(value) == sizeof(out.condition.comparison_raw));
         std::memcpy(&out.condition.comparison_raw, &value, sizeof(value));
@@ -430,11 +434,11 @@ std::optional<Error> parseQuestCondition(
         if (!element[key].is_string()) {
             return fail(std::string(key) + " must be a string");
         }
-        auto text = element[key].get<std::string>();
-        if (text.find('\0') != std::string::npos) {
-            return fail(std::string(key) + " cannot contain an embedded NUL");
+        const auto stored = conditionCisFromUtf8(element[key].get<std::string>());
+        if (!stored) {
+            return fail(std::string(key) + " is not valid UTF-8 text representable in Windows-1252");
         }
-        target = std::move(text);
+        target = *stored;
         return std::nullopt;
     };
     const auto cisAllowed = [&](std::size_t index) {
@@ -449,6 +453,39 @@ std::optional<Error> parseQuestCondition(
         return fail("cis2 is only valid when parameter 2 is String or Event");
     }
     return std::nullopt;
+}
+
+void carryConditionPadding(const std::vector<fo4::CtdaCondition>& previous,
+                           std::vector<fo4::CtdaCondition>& conditions) {
+    const auto withoutPadding = [](fo4::CtdaCondition condition) {
+        condition.padding = {};
+        return condition;
+    };
+    std::vector<bool> used(previous.size(), false);
+    std::vector<bool> carried(conditions.size(), false);
+    for (std::size_t k = 0; k < conditions.size(); ++k) {
+        auto& condition = conditions[k];
+        condition.padding = {};
+        const auto payload = fo4::serialize_ctda_condition(condition);
+        for (std::size_t index = 0; index < previous.size(); ++index) {
+            const auto& candidate = previous[index];
+            if (used[index] ||
+                fo4::serialize_ctda_condition(withoutPadding(candidate)) != payload ||
+                candidate.parameter1_string != condition.parameter1_string ||
+                candidate.parameter2_string != condition.parameter2_string) {
+                continue;
+            }
+            condition.padding = candidate.padding;
+            used[index] = true;
+            carried[k] = true;
+            break;
+        }
+    }
+    for (std::size_t k = 0; k < conditions.size() && k < previous.size(); ++k) {
+        if (carried[k] || used[k]) continue;
+        conditions[k].padding = previous[k].padding;
+        used[k] = true;
+    }
 }
 
 std::optional<Error> adapterConditionUnrepresentable(

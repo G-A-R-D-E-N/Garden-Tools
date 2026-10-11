@@ -39,6 +39,13 @@ std::uint32_t read_u32_le(std::span<const std::byte> data) {
   return value;
 }
 
+MasterReference named_master(const std::string& name) {
+  MasterReference master;
+  master.key = PluginKey::from_filename(text::windows1252_to_utf8(name));
+  master.kind = master.key.looks_light() ? PluginKind::light : PluginKind::full;
+  return master;
+}
+
 }  // namespace
 
 PluginHeader parse_tes4_header(const Record& tes4) {
@@ -60,12 +67,12 @@ PluginHeader parse_tes4_header(const Record& tes4) {
     } else if (sub.signature == sig_snam) {
       header.description = read_zstring(sub.data);
     } else if (sub.signature == sig_mast) {
+      if (pending_master) header.masters.push_back(named_master(*pending_master));
       pending_master = read_zstring(sub.data);
     } else if (sub.signature == sig_data) {
       MasterReference master;
       if (pending_master) {
-        master.key = PluginKey::from_filename(text::windows1252_to_utf8(*pending_master));
-        master.kind = master.key.looks_light() ? PluginKind::light : PluginKind::full;
+        master = named_master(*pending_master);
         pending_master.reset();
       }
       master.data_bytes.assign(sub.data.begin(), sub.data.end());
@@ -83,12 +90,7 @@ PluginHeader parse_tes4_header(const Record& tes4) {
     }
   }
 
-  if (pending_master) {
-    MasterReference master;
-    master.key = PluginKey::from_filename(*pending_master);
-    master.kind = master.key.looks_light() ? PluginKind::light : PluginKind::full;
-    header.masters.push_back(std::move(master));
-  }
+  if (pending_master) header.masters.push_back(named_master(*pending_master));
   return header;
 }
 

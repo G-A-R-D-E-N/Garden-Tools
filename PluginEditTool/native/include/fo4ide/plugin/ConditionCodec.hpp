@@ -35,6 +35,8 @@ std::optional<std::vector<fo4::CtdaCondition>> buildConditions(
     std::span<const fo4::CtdaCondition> existing,
     const EditorIdResolver& resolveEditorId, std::string& failure);
 
+std::optional<std::string> conditionCisFromUtf8(std::string_view utf8);
+
 // Formatting helpers exposed for the tests.
 std::string conditionOperatorString(std::uint8_t compareOperator);
 std::string conditionFlagString(std::uint8_t flags);

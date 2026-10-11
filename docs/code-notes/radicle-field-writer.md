@@ -63,6 +63,8 @@ schema bounds, so the error names the storage when the value exceeds it. `zstrin
 plus one NUL and refuses an embedded NUL; `decode_scalar` for `zstring` refuses a payload that is not exactly
 one NUL-terminated string. The native layer stores exactly the bytes it is given.
 
+The f32 scalars of `PROJ`, `EXPL` and `HAZD` (`Radicle/schema/fallout4/fields.json`) use bounds of ±3.4028234663852886e+38 (the largest finite f32) instead of ±1e9, to match xEdit. xEdit accepts any finite single and clamps only to ±MaxSingle (`source:xEdit Core/wbInterface.pas:16216-16222 @93cc0bc5`). Radicle still refuses NaN and infinity in `Radicle/src/schema/scalar.cpp:parse_float`, and it refuses rather than clamps a value past ±FLT_MAX in `Radicle/src/schema/scalar.cpp:validate_range`. Both paths are the writers this covers: `set_record_scalar` on embedded DATA/DNAM fields and the native `CreateRecord` path through `encode_scalar`. `Radicle/tests/test_scalar_embedded.cpp:AcceptsAnyFiniteFloatUpToTheSingleLimit` pins 1e10 as accepted and 1e39, -1e39, nan and inf as refused.
+
 ## Radicle/src/c_api_fields.cpp:radicle_plugin_set_record_string
 
 String convention, mirrored from the editor-id and comments setters: the native layer takes already-stored
@@ -186,8 +188,8 @@ the first four characters of the path. The nested (terminator-scoped) lists are 
 
 ## Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:SetScalar
 
-`SetScalar`, `SetFormLink`, `SetString`, `FieldCount` and the `FormLinkList*` methods follow the existing
-`Edit` pattern: NOT_FOUND returns false (counts return 0), other failures throw `RadicleException`.
+`SetScalar`, `SetFormLink`, `SetString` and the `FormLinkList*` edit methods follow the existing
+`Edit` pattern: NOT_FOUND returns false, other failures throw `RadicleException`. The counts differ: see `Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:FieldCount` in `Radicle/docs/code-notes/Radicle.md`.
 `SetString` rejects an embedded NUL before the call because a C string cannot carry it. A negative index
 throws `ArgumentOutOfRangeException`. `SetScalar` always calls the indexed export; the unindexed export is
 kept for callers that built against the vegetation branch.
@@ -198,7 +200,7 @@ reload.
 
 Bumped from current main's 9 to 10 for the new exports; no additional C struct layout changed, so the regenerated
 `Radicle/bindings/csharp/tests/abi_layout_probe.cpp` retains the existing layouts. W0b's three additive authoring exports
-subsequently advance the version to 11; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsEleven` pins that integrated value.
+subsequently advance the version to 11; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsEleven` pinned that integrated value; the test is now `AbiVersionIsTwelve` after the material file ABI moved the value to 12.
 
 ## Not done
 

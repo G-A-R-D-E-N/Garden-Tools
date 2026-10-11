@@ -77,6 +77,7 @@ export default function ConditionsEditor(
   const patch = (i: number, change: Partial<ConditionDto>) =>
     setRows(rs => (rs ?? []).map((r, ri) => (ri === i ? {
       ...r, ...change,
+      ...(change.runOn && change.runOn !== 'Reference' ? { reference: undefined } : {}),
       ...(r._native ? { _edited: [...new Set([...(r._edited ?? []), ...Object.keys(change)])] } : {}),
     } : r)));
 
@@ -171,7 +172,9 @@ export default function ConditionsEditor(
                 <div className="ce-line">
                   <span className="ce-index">{i + 1}</span>
 
-                  <select className="ce-fn" value={r.function} onChange={e => patch(i, { function: e.target.value })}>
+                  <select className="ce-fn" value={r.function} disabled={!!r._native}
+                    title={r._native ? 'Replace the row to change its function' : undefined}
+                    onChange={e => patch(i, { function: e.target.value })}>
                     {(shownFunctions.includes(r.function) ? shownFunctions : [r.function, ...shownFunctions])
                       .map(f => <option key={f} value={f}>{f}</option>)}
                   </select>

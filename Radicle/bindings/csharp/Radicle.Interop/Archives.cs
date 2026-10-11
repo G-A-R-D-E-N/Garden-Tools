@@ -13,22 +13,20 @@ public readonly record struct AssetLocation(AssetOrigin Origin, int ArchiveIndex
 
 public sealed unsafe class Ba2Archive : IDisposable
 {
-    private IntPtr _handle;
-    private readonly bool _owned;
+    private readonly Ba2Handle _handle;
     private readonly AssetResolver? _owner;
 
     static Ba2Archive() => RadicleLibrary.Register();
 
     internal Ba2Archive(IntPtr handle, bool owned, AssetResolver? owner = null)
     {
-        _handle = handle;
-        _owned = owned;
+        _handle = new Ba2Handle(handle, owned);
         _owner = owner;
     }
 
-    private IntPtr Handle => _handle != IntPtr.Zero && (_owner is null || _owner.Handle != IntPtr.Zero)
-        ? _handle
-        : throw new ObjectDisposedException(nameof(Ba2Archive));
+    private HandleUse Use() => new(_handle, nameof(Ba2Archive));
+
+    private HandleUse OwnerUse() => _owner is null ? default : _owner.Use();
 
     public static Ba2Archive Open(string path)
     {
@@ -44,8 +42,10 @@ public sealed unsafe class Ba2Archive : IDisposable
 
     public Ba2Entry Entry(int index)
     {
+        using var owner = OwnerUse();
+        using var use = Use();
         Ba2EntryInfo e;
-        Call.Check(RadicleNative.Ba2GetEntry(Handle, (nuint)index, &e));
+        Call.Check(RadicleNative.Ba2GetEntry(use.Pointer, (nuint)index, &e));
         return new Ba2Entry(Utf8.Read(e.Path) ?? string.Empty, e.NameHash, e.ExtensionHash, e.DirectoryHash,
                             e.UnpackedSize, (int)e.ChunkCount, e.Width, e.Height, e.MipCount, e.DxgiFormat,
                             e.TextureFlags, e.TileMode);
@@ -55,41 +55,43 @@ public sealed unsafe class Ba2Archive : IDisposable
 
     public int? Find(string path)
     {
+        using var owner = OwnerUse();
+        using var use = Use();
         nuint index;
-        return Call.Found(RadicleNative.Ba2Find(Handle, path, &index)) ? (int)index : null;
+        return Call.Found(RadicleNative.Ba2Find(use.Pointer, path, &index)) ? (int)index : null;
     }
 
     public byte[] Extract(int index)
     {
+        using var owner = OwnerUse();
+        using var use = Use();
         byte* bytes;
         nuint size;
-        Call.Check(RadicleNative.Ba2Extract(Handle, (nuint)index, &bytes, &size));
+        Call.Check(RadicleNative.Ba2Extract(use.Pointer, (nuint)index, &bytes, &size));
         return Call.TakeBytes(bytes, size);
     }
 
     private Ba2Info Info()
     {
+        using var owner = OwnerUse();
+        using var use = Use();
         Ba2Info info;
-        Call.Check(RadicleNative.Ba2GetInfo(Handle, &info));
+        Call.Check(RadicleNative.Ba2GetInfo(use.Pointer, &info));
         return info;
     }
 
-    public void Dispose()
-    {
-        var handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero && _owned) RadicleNative.Ba2Close(handle);
-    }
+    public void Dispose() => _handle.Dispose();
 }
 
 public sealed unsafe class AssetResolver : IDisposable
 {
-    private IntPtr _handle;
+    private readonly AssetsHandle _handle;
 
     static AssetResolver() => RadicleLibrary.Register();
 
-    private AssetResolver(IntPtr handle) => _handle = handle;
+    private AssetResolver(IntPtr handle) => _handle = new AssetsHandle(handle);
 
-    internal IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(AssetResolver));
+    internal HandleUse Use() => new(_handle, nameof(AssetResolver));
 
     public static IReadOnlyList<string> ArchiveLoadOrder(string dataDirectory, IEnumerable<string> iniArchives,
                                                         IEnumerable<string> plugins)
@@ -116,34 +118,40 @@ public sealed unsafe class AssetResolver : IDisposable
         return new AssetResolver(handle);
     }
 
-    public int ArchiveCount => (int)RadicleNative.AssetsArchiveCount(Handle);
+    public int ArchiveCount
+    {
+        get
+        {
+            using var use = Use();
+            return (int)RadicleNative.AssetsArchiveCount(use.Pointer);
+        }
+    }
 
     public Ba2Archive Archive(int index)
     {
+        using var use = Use();
         IntPtr ba2;
-        Call.Check(RadicleNative.AssetsGetArchive(Handle, (nuint)index, &ba2));
+        Call.Check(RadicleNative.AssetsGetArchive(use.Pointer, (nuint)index, &ba2));
         return new Ba2Archive(ba2, owned: false, owner: this);
     }
 
     public AssetLocation? Locate(string path)
     {
+        using var use = Use();
         Native.AssetLocation location;
-        return Call.Found(RadicleNative.AssetsLocate(Handle, path, &location))
+        return Call.Found(RadicleNative.AssetsLocate(use.Pointer, path, &location))
             ? new AssetLocation(location.Origin, (int)location.ArchiveIndex, (int)location.EntryIndex)
             : null;
     }
 
     public byte[]? Read(string path)
     {
+        using var use = Use();
         byte* bytes;
         nuint size;
         Native.AssetLocation location;
-        return Call.Found(RadicleNative.AssetsRead(Handle, path, &bytes, &size, &location)) ? Call.TakeBytes(bytes, size) : null;
+        return Call.Found(RadicleNative.AssetsRead(use.Pointer, path, &bytes, &size, &location)) ? Call.TakeBytes(bytes, size) : null;
     }
 
-    public void Dispose()
-    {
-        var handle = System.Threading.Interlocked.Exchange(ref _handle, IntPtr.Zero);
-        if (handle != IntPtr.Zero) RadicleNative.AssetsDestroy(handle);
-    }
+    public void Dispose() => _handle.Dispose();
 }

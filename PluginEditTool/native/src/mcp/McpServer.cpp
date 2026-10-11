@@ -69,7 +69,7 @@ ToolResult RpcTool::call(const nlohmann::json& arguments) {
 
     if (response.value.is_string()) return {response.value.get<std::string>(), false};
     if (response.value.is_null()) return {"", false};
-    return {response.value.dump(), false};
+    return {response.value.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace), false};
 }
 
 Result<void> Registry::registerTool(std::shared_ptr<Tool> tool) {
@@ -124,38 +124,42 @@ std::optional<std::string> StdioServer::handleLine(std::string_view line) const 
 
     if (!root.is_object() || !root.contains("id")) return std::nullopt;
     const auto id = root.at("id");
-    const auto method = root.value("method", std::string{});
+    try {
+        const auto method = root.value("method", std::string{});
 
-    if (method == "initialize") {
-        return result(id, {
-            {"protocolVersion", std::string(ProtocolVersion)},
-            {"capabilities", {{"tools", nlohmann::json::object()}}},
-            {"serverInfo", {{"name", "fo4editor"}, {"version", "1.0.0"}}}
-        });
-    }
-
-    if (method == "tools/list") {
-        return result(id, {{"tools", registry_.definitions()}});
-    }
-
-    if (method == "tools/call") {
-        const auto paramsIt = root.find("params");
-        if (paramsIt == root.end() || !paramsIt->is_object()) {
-            return error(id, -32602, "Invalid params");
+        if (method == "initialize") {
+            return result(id, {
+                {"protocolVersion", std::string(ProtocolVersion)},
+                {"capabilities", {{"tools", nlohmann::json::object()}}},
+                {"serverInfo", {{"name", "fo4editor"}, {"version", "1.0.0"}}}
+            });
         }
-        const auto name = paramsIt->value("name", std::string{});
-        if (name.empty()) return error(id, -32602, "Tool name is required");
-        const auto argsIt = paramsIt->find("arguments");
-        const auto arguments = argsIt == paramsIt->end() ? nlohmann::json::object() : *argsIt;
-        const auto toolResult = registry_.call(name, arguments);
-        return result(id, {
-            {"content", nlohmann::json::array({{{"type", "text"}, {"text", toolResult.text}}})},
-            {"isError", toolResult.isError}
-        });
-    }
 
-    if (method == "ping") return result(id, nlohmann::json::object());
-    return error(id, -32601, "Method not found: " + method);
+        if (method == "tools/list") {
+            return result(id, {{"tools", registry_.definitions()}});
+        }
+
+        if (method == "tools/call") {
+            const auto paramsIt = root.find("params");
+            if (paramsIt == root.end() || !paramsIt->is_object()) {
+                return error(id, -32602, "Invalid params");
+            }
+            const auto name = paramsIt->value("name", std::string{});
+            if (name.empty()) return error(id, -32602, "Tool name is required");
+            const auto argsIt = paramsIt->find("arguments");
+            const auto arguments = argsIt == paramsIt->end() ? nlohmann::json::object() : *argsIt;
+            const auto toolResult = registry_.call(name, arguments);
+            return result(id, {
+                {"content", nlohmann::json::array({{{"type", "text"}, {"text", toolResult.text}}})},
+                {"isError", toolResult.isError}
+            });
+        }
+
+        if (method == "ping") return result(id, nlohmann::json::object());
+        return error(id, -32601, "Method not found: " + method);
+    } catch (const std::exception& ex) {
+        return error(id, -32603, ex.what());
+    }
 }
 
 void StdioServer::run(std::istream& input, std::ostream& output) const {
@@ -170,7 +174,7 @@ void StdioServer::run(std::istream& input, std::ostream& output) const {
 }
 
 std::string StdioServer::result(const nlohmann::json& id, const nlohmann::json& value) const {
-    return nlohmann::json{{"jsonrpc", "2.0"}, {"id", id}, {"result", value}}.dump();
+    return nlohmann::json{{"jsonrpc", "2.0"}, {"id", id}, {"result", value}}.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 }
 
 std::string StdioServer::error(const nlohmann::json& id, int code, std::string message) const {
@@ -178,7 +182,7 @@ std::string StdioServer::error(const nlohmann::json& id, int code, std::string m
         {"jsonrpc", "2.0"},
         {"id", id},
         {"error", {{"code", code}, {"message", std::move(message)}}}
-    }.dump();
+    }.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
 }
 
 }
