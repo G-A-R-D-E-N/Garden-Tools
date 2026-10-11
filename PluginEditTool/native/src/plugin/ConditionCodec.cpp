@@ -93,7 +93,6 @@ ParamKind paramKind(const std::string& name, std::size_t slot, std::uint8_t ctda
                : ParamKind::Form;
 }
 
-
 float bitsFloat(std::int32_t raw) {
     const auto bits = static_cast<std::uint32_t>(raw);
     float value{};

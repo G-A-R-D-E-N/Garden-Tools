@@ -268,7 +268,6 @@ TEST_CASE("condition backend: SetConditions replaces the list and round-trips") 
     CHECK(reread[0].at("function") == "GetStage");
 }
 
-
 namespace {
 
 // A SPEL with two effects: Effects[0] has one CTDA, Effects[1] has two.
