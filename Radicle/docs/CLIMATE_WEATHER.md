@@ -9,7 +9,10 @@ CLMT in `Core/wbDefinitionsFO4.pas:6115–6126` uses the shared timing helper
 sunrise begin/end, sunset begin/end, volatility, and packed moons/phase length.
 The timing callback `Core/wbDefinitionsCommon.pas:wbClmtTime` displays ordinary time values in
 ten-minute steps. Radicle preserves all six encoded bytes and exposes the
-verified conversion below without clamping out-of-range clock values.
+verified conversion below without clamping out-of-range clock values. This differs from xEdit's
+display, which subtracts 143 while a value is above 143 (`Core/wbDefinitionsCommon.pas:3349-3359`,
+`wbClmtTime`, at `93cc0bc5`). The 2026-10-11 scan of the seven official masters found no CLMT TNAM
+with a sunrise or sunset byte above 143 (11 records), so the two agree on all official data.
 
 WTHR DATA is defined at FO4 lines 13057–13087. Lightning color is three bytes
 by `Core/wbDefinitionsCommon.pas:9612–9621`.
