@@ -79,16 +79,15 @@ TEST_CASE("condition reads retain the matched plugin owner with unnamed lookup",
         return nlohmann::json::parse(result->get<std::string>());
     };
     const auto* id = GENERATE("000800:B.esp", "OwnerSpell");
-    const auto named = read("backend.GetConditions", nlohmann::json::array({"B.esp", id}));
-    const auto unnamed = read("backend.GetConditions", nlohmann::json::array({"", id}));
-    const auto scoped = read("backend.GetConditionsAtPath", nlohmann::json::array({"", id, "Effects[0].Conditions"}));
+    CHECK(read("backend.GetConditions", nlohmann::json::array({"B.esp", id})).empty());
+    CHECK(read("backend.GetConditions", nlohmann::json::array({"", id})).empty());
+    const auto named = read("backend.GetConditionsAtPath", nlohmann::json::array({"B.esp", id, "Effects[0].Conditions"}));
+    const auto unnamed = read("backend.GetConditionsAtPath", nlohmann::json::array({"", id, "Effects[0].Conditions"}));
     REQUIRE(named.size() == 1);
     const auto expected = ownTarget ? "000800:B.esp" : "000800:A.esp";
     for (const auto* field : {"param1", "reference", "compareGlobal"}) {
         CHECK(named[0][field] == expected);
         CHECK(unnamed[0][field] == expected);
-        CHECK(scoped[0][field] == expected);
     }
     CHECK(unnamed == named);
-    CHECK(scoped == named);
 }

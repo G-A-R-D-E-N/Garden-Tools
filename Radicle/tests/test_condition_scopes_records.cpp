@@ -1,3 +1,4 @@
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/condition_scopes.hpp"
@@ -121,6 +122,29 @@ void expect_prefix_unchanged(const std::vector<fo4::Subrecord>& before, const fo
     EXPECT_EQ(after.subrecords[i].signature, before[i].signature) << "subrecord " << i;
     EXPECT_EQ(after.subrecords[i].data, before[i].data) << "subrecord " << i;
   }
+}
+
+void expect_suffix_unchanged(const std::vector<fo4::Subrecord>& before, const fo4::Record& after,
+                             std::size_t from) {
+  ASSERT_EQ(after.subrecords.size(), before.size());
+  for (std::size_t i = from; i < before.size(); ++i) {
+    EXPECT_EQ(after.subrecords[i].signature, before[i].signature) << "subrecord " << i;
+    EXPECT_EQ(after.subrecords[i].data, before[i].data) << "subrecord " << i;
+  }
+}
+
+Functions root_functions(const fo4::Record& record) {
+  const auto read = fo4::schema::read_root_conditions(record);
+  EXPECT_TRUE(read.ok) << "root status " << static_cast<int>(read.error);
+  Functions out;
+  for (const auto& condition : read.conditions) out.push_back(condition.function);
+  return out;
+}
+
+fo4::CtdaCondition function_condition(std::uint16_t function) {
+  fo4::CtdaCondition condition;
+  condition.function = function;
+  return condition;
 }
 
 Body pack_body(const Functions& top_level, const std::vector<Functions>& branches) {
@@ -293,4 +317,177 @@ TEST(ConditionScopesRecords, QuestTargetReplaceLeavesDialogueAndEarlierTargetIde
   EXPECT_EQ(functions_in(*record, *descriptor, 0), Functions{1});
   EXPECT_EQ(functions_in(*record, *descriptor, 1), Functions{9});
   EXPECT_EQ(citc_counts(*record), (std::vector<std::uint32_t>{1, 1}));
+}
+
+TEST(ConditionScopesRecords, PackRootListReadAndWriteLeavesBranchIdentical) {
+  auto plugin = make_plugin("PACK", pack_body({100}, {{1}}));
+  const auto descriptor = descriptor_for("PACK", "Branches[0].Conditions");
+  ASSERT_TRUE(descriptor.has_value());
+  const auto before = cond_record(plugin)->subrecords;
+  const auto branch_anam = index_of_nth(*cond_record(plugin), "ANAM", 0);
+  ASSERT_LT(branch_anam, before.size());
+  EXPECT_EQ(root_functions(*cond_record(plugin)), Functions{100});
+
+  const std::vector<fo4::CtdaCondition> conditions{function_condition(9)};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cond.esp");
+  const auto* record = cond_record(reread);
+  ASSERT_NE(record, nullptr);
+  expect_suffix_unchanged(before, *record, branch_anam);
+  EXPECT_EQ(root_functions(*record), Functions{9});
+  EXPECT_EQ(functions_in(*record, *descriptor, 0), Functions{1});
+}
+
+TEST(ConditionScopesRecords, PackRootInsertsBeforeCombatStyleSlotAndKeepsBranch) {
+  auto plugin = make_plugin("PACK", {
+      {"PKDT", zeros(12)},
+      {"PKCU", zeros(12)},
+      {"ANAM", zstring("Sandbox")},
+      {"CITC", u32_bytes(1)},
+      {"CTDA", ctda_bytes(1)},
+      {"PRCB", zeros(8)},
+  });
+  const auto descriptor = descriptor_for("PACK", "Branches[0].Conditions");
+  ASSERT_TRUE(descriptor.has_value());
+  EXPECT_TRUE(root_functions(*cond_record(plugin)).empty());
+
+  const std::vector<fo4::CtdaCondition> conditions{function_condition(5)};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cond.esp");
+  const auto* record = cond_record(reread);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(index_of_nth(*record, "CTDA", 0) + 1, index_of_nth(*record, "PKCU", 0));
+  EXPECT_EQ(root_functions(*record), Functions{5});
+  EXPECT_EQ(functions_in(*record, *descriptor, 0), Functions{1});
+}
+
+TEST(ConditionScopesRecords, InfoRootInsertsBeforePromptAndRefusesWithoutAnchor) {
+  auto plugin = make_plugin("INFO", {
+      {"TRDT", zeros(24)},
+      {"RNAM", zstring("Prompt")},
+  });
+  const std::vector<fo4::CtdaCondition> conditions{function_condition(7)};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cond.esp");
+  const auto* record = cond_record(reread);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(index_of_nth(*record, "CTDA", 0) + 1, index_of_nth(*record, "RNAM", 0));
+  EXPECT_EQ(root_functions(*record), Functions{7});
+
+  auto bare = make_plugin("INFO", {{"TRDT", zeros(24)}});
+  const auto before = bare;
+  EXPECT_EQ(fo4::set_record_conditions(bare, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::no_condition_list);
+  EXPECT_EQ(fo4::write_plugin(bare), fo4::write_plugin(before));
+}
+
+TEST(ConditionScopesRecords, RecordWithoutNestedScopesKeepsWholeRecordRules) {
+  auto single = make_plugin("SCEN", {{"CTDA", ctda_bytes(1)}, {"ANAM", u32_bytes(0)}});
+  EXPECT_EQ(root_functions(*cond_record(single)), Functions{1});
+  const std::vector<fo4::CtdaCondition> replacement{function_condition(5)};
+  EXPECT_EQ(fo4::set_record_conditions(single, fo4::FormKey::parse("000800:Cond.esp"), replacement),
+            fo4::ConditionMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(single), "Cond.esp");
+  ASSERT_NE(cond_record(reread), nullptr);
+  EXPECT_EQ(root_functions(*cond_record(reread)), Functions{5});
+
+  auto several = make_plugin("SCEN", {
+      {"CTDA", ctda_bytes(1)},
+      {"ANAM", u32_bytes(0)},
+      {"CTDA", ctda_bytes(2)},
+  });
+  const auto several_before = several;
+  EXPECT_EQ(fo4::schema::read_root_conditions(*cond_record(several)).error,
+            fo4::schema::ScopedConditionStatus::multiple_lists);
+  EXPECT_EQ(fo4::set_record_conditions(several, fo4::FormKey::parse("000800:Cond.esp"), replacement),
+            fo4::ConditionMutationStatus::multiple_lists);
+  EXPECT_EQ(fo4::write_plugin(several), fo4::write_plugin(several_before));
+
+  auto none = make_plugin("SCEN", {{"ANAM", u32_bytes(0)}});
+  const auto none_before = none;
+  EXPECT_EQ(fo4::set_record_conditions(none, fo4::FormKey::parse("000800:Cond.esp"), replacement),
+            fo4::ConditionMutationStatus::no_condition_list);
+  EXPECT_EQ(fo4::write_plugin(none), fo4::write_plugin(none_before));
+}
+
+TEST(ConditionScopesRecords, QuestRootListBesideTargetReadsAndWritesRoot) {
+  auto plugin = make_plugin("QUST", {
+      {"CTDA", ctda_bytes(100)},
+      {"QSTA", zeros(12)},
+      {"CTDA", ctda_bytes(1)},
+  });
+  const auto target = descriptor_for("QUST", "Targets[0].Conditions");
+  ASSERT_TRUE(target.has_value());
+  const auto before = cond_record(plugin)->subrecords;
+  const auto first_qsta = index_of_nth(*cond_record(plugin), "QSTA", 0);
+  EXPECT_EQ(root_functions(*cond_record(plugin)), Functions{100});
+
+  const std::vector<fo4::CtdaCondition> conditions{function_condition(9)};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cond.esp");
+  const auto* record = cond_record(reread);
+  ASSERT_NE(record, nullptr);
+  expect_suffix_unchanged(before, *record, first_qsta);
+  EXPECT_EQ(root_functions(*record), Functions{9});
+  EXPECT_EQ(functions_in(*record, *target, 0), Functions{1});
+}
+
+TEST(ConditionScopesRecords, QuestTwoRootListsStayRefused) {
+  auto plugin = make_plugin("QUST", {
+      {"CTDA", ctda_bytes(100)},
+      {"NEXT", zeros(0)},
+      {"CTDA", ctda_bytes(200)},
+  });
+  const auto before = plugin;
+  EXPECT_EQ(fo4::schema::read_root_conditions(*cond_record(plugin)).error,
+            fo4::schema::ScopedConditionStatus::multiple_lists);
+  const std::vector<fo4::CtdaCondition> conditions{function_condition(9)};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::multiple_lists);
+  EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(before));
+}
+
+TEST(ConditionScopesRecords, QuestRootExcludesStageLogEntryLists) {
+  auto plugin = make_plugin("QUST", {
+      {"CTDA", ctda_bytes(100)},
+      {"INDX", zeros(4)},
+      {"QSDT", zeros(1)},
+      {"CTDA", ctda_bytes(7)},
+  });
+  const auto before = cond_record(plugin)->subrecords;
+  const auto first_indx = index_of_nth(*cond_record(plugin), "INDX", 0);
+  EXPECT_EQ(root_functions(*cond_record(plugin)), Functions{100});
+
+  const std::vector<fo4::CtdaCondition> conditions{function_condition(9)};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cond.esp");
+  const auto* record = cond_record(reread);
+  ASSERT_NE(record, nullptr);
+  expect_suffix_unchanged(before, *record, first_indx);
+  EXPECT_EQ(root_functions(*record), Functions{9});
+}
+
+TEST(ConditionScopesRecords, QuestWithOnlyLogEntryListHasNoRootList) {
+  auto plugin = make_plugin("QUST", {
+      {"INDX", zeros(4)},
+      {"QSDT", zeros(1)},
+      {"CTDA", ctda_bytes(7)},
+  });
+  const auto before = plugin;
+  const auto read = fo4::schema::read_root_conditions(*cond_record(plugin));
+  EXPECT_TRUE(read.ok);
+  EXPECT_TRUE(read.conditions.empty());
+  const std::vector<fo4::CtdaCondition> conditions{function_condition(9)};
+  EXPECT_EQ(fo4::set_record_conditions(plugin, fo4::FormKey::parse("000800:Cond.esp"), conditions),
+            fo4::ConditionMutationStatus::no_condition_list);
+  EXPECT_EQ(fo4::write_plugin(plugin), fo4::write_plugin(before));
 }

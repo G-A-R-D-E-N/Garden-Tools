@@ -52,6 +52,24 @@ struct ScopedConditionsRead {
   std::vector<CtdaCondition> conditions;
 };
 
+enum class RootConditionStatus {
+  ok,
+  no_list,
+  multiple_lists,
+  alias_structure_invalid,
+};
+
+struct RootConditionWindow {
+  RootConditionStatus status{RootConditionStatus::no_list};
+  std::size_t begin{0};
+  std::size_t end{0};
+  std::optional<std::size_t> insert_anchor;
+};
+
+RootConditionWindow root_condition_window(const Record& record);
+
+ScopedConditionsRead read_root_conditions(const Record& record);
+
 // Resolves "<container>[i].<member>" for a record signature (e.g. SPEL +
 // "Effects[2].Conditions"). Empty result: no descriptor for this record matches.
 std::optional<ScopedConditionPath> scoped_condition_path(
