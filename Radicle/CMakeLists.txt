@@ -478,6 +478,8 @@ if(RADICLE_BUILD_TESTS)
                      -DCOMMITTED_PROBE=${_interop_dir}/tests/abi_layout_probe.cpp
                      -DCHECK=${_interop_dir}/tools/check_generated.cmake
                      -P ${_interop_dir}/tools/check_generated_eol.cmake)
+    add_test(NAME radicle_run_managed_tests
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/tools/test_run_managed_tests.py)
   endif()
 
   option(RADICLE_CSHARP_TESTS "Run the C# binding tests with the .NET 8 SDK and checked-in package feed" OFF)

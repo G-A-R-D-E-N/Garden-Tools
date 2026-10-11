@@ -237,3 +237,11 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 ## Radicle/src/c_api.cpp:radicle_plugin_remap_masters
 
 `Radicle/src/c_api.cpp:radicle_plugin_remap_masters` remaps a copy of the plugin and assigns it back only when `fo4::remap_plugin_masters` succeeds, so a failed call (for example a dropped master that an own record or override still uses, which makes `encode_plugin_form_id` throw "is not in the destination master table") leaves the handle unchanged instead of empty (GT-090). Test: `Radicle/tests/test_c_api.cpp` `CApi.FailedRemapMastersLeavesThePluginUnchanged`.
+
+## bindings/csharp/tools/run_managed_tests.py:main
+
+GT-065: with `--build-dir`, the script reads the `radicle_csharp_bindings` CTest entry and its `ENVIRONMENT` property. Both are added only when CMake is configured with `-DRADICLE_CSHARP_TESTS=ON` (`Radicle/CMakeLists.txt`), so a build without that option now exits with a message naming the option instead of a bare `StopIteration`. The script's existing `--build-dir` path is otherwise unchanged. `test_run_managed_tests.py` (registered as `radicle_run_managed_tests` in `Radicle/CMakeLists.txt` under the Python3 block) covers both missing-entry cases; CI runs it through the same `ctest --test-dir` steps in `.github/workflows/native-ci.yml`.
+
+## bindings/csharp/tools/run_managed_tests.py:parent_build_files
+
+GT-004: the consumer check copies only `Radicle.Interop`, `Radicle.Interop.Tests`, `global.json`, and the bindings folder's own `Directory.Build.*` and `NuGet.Config` into a temp folder. MSBuild and NuGet also read those files from parent folders up to the repo root, which the temp layout cannot reproduce. `parent_build_files` lists such parent files, stopping at the first ancestor that holds `.git`, and `main` raises `RuntimeError` when any exist so the check cannot pass while a real build would see different settings. No parent files exist in the repo at this commit, so the guard is inert today.
