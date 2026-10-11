@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
@@ -20,6 +21,17 @@ public:
         }
         return args;
     }
+};
+
+class ThrowingTool final : public fo4ide::mcp::Tool {
+public:
+    const fo4ide::mcp::ToolDefinition& definition() const noexcept override { return definition_; }
+    fo4ide::mcp::ToolResult call(const nlohmann::json&) override {
+        throw std::runtime_error("boom");
+    }
+
+private:
+    fo4ide::mcp::ToolDefinition definition_{.name = "throws", .description = "throws"};
 };
 
 fo4ide::mcp::ToolDefinition echoDefinition() {
@@ -130,4 +142,52 @@ TEST_CASE("MCP stdio loop is newline-delimited") {
     REQUIRE_FALSE(text.empty());
     CHECK(text.back() == '\n');
     CHECK(std::count(text.begin(), text.end(), '\n') == 1);
+}
+
+TEST_CASE("MCP invalid UTF-8 tool output is replaced and the stdio loop keeps answering") {
+    fo4ide::mcp::Registry registry;
+    REQUIRE(registry.registerTool(std::make_shared<fo4ide::mcp::FunctionTool>(
+        fo4ide::mcp::ToolDefinition{.name = "bad", .description = "bad"},
+        [](const nlohmann::json&) { return fo4ide::mcp::ToolResult{std::string("ok\xff\xfe"), false}; })).has_value());
+    fo4ide::mcp::StdioServer server(registry);
+    std::istringstream input(
+        R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"bad","arguments":{}}})" "\n"
+        R"({"jsonrpc":"2.0","id":2,"method":"ping"})" "\n");
+    std::ostringstream output;
+
+    server.run(input, output);
+    std::istringstream lines(output.str());
+    std::string first;
+    std::string second;
+    REQUIRE(std::getline(lines, first));
+    REQUIRE(std::getline(lines, second));
+
+    const auto callJson = nlohmann::json::parse(first);
+    const auto text = callJson.at("result").at("content").at(0).at("text").get<std::string>();
+    CHECK(text.starts_with("ok"));
+    CHECK(text.find("\xEF\xBF\xBD") != std::string::npos);
+    CHECK(nlohmann::json::parse(second).at("id") == 2);
+}
+
+TEST_CASE("MCP tool exception becomes a JSON-RPC internal error and the stdio loop keeps answering") {
+    fo4ide::mcp::Registry registry;
+    REQUIRE(registry.registerTool(std::make_shared<ThrowingTool>()).has_value());
+    fo4ide::mcp::StdioServer server(registry);
+    std::istringstream input(
+        R"({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"throws","arguments":{}}})" "\n"
+        R"({"jsonrpc":"2.0","id":4,"method":"ping"})" "\n");
+    std::ostringstream output;
+
+    server.run(input, output);
+    std::istringstream lines(output.str());
+    std::string first;
+    std::string second;
+    REQUIRE(std::getline(lines, first));
+    REQUIRE(std::getline(lines, second));
+
+    const auto failedJson = nlohmann::json::parse(first);
+    CHECK(failedJson.at("id") == 3);
+    CHECK(failedJson.at("error").at("code") == -32603);
+    CHECK(failedJson.at("error").at("message") == "boom");
+    CHECK(nlohmann::json::parse(second).at("id") == 4);
 }

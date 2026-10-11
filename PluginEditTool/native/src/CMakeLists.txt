@@ -140,7 +140,7 @@ fo4ide_enable_warnings(fo4ide_audio)
 fo4ide_enable_sanitizers(fo4ide_audio)
 
 add_library(fo4ide_material material/MaterialService.cpp)
-target_link_libraries(fo4ide_material PUBLIC fo4ide_core nlohmann_json::nlohmann_json)
+target_link_libraries(fo4ide_material PUBLIC fo4ide_core nlohmann_json::nlohmann_json fo4)
 fo4ide_enable_warnings(fo4ide_material)
 fo4ide_enable_sanitizers(fo4ide_material)
 
@@ -250,6 +250,7 @@ add_library(
     fo4ide_app
     app/ServiceTargets.cpp
     app/PapyrusTarget.cpp
+    app/PapyrusStaging.cpp
     app/GraphTarget.cpp
     app/AppInteropTarget.cpp
     app/AudioTarget.cpp

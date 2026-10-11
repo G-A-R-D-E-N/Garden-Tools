@@ -179,7 +179,8 @@ subblock label = (int16 floor(y /  8), int16 floor(x /  8))   bytes 0..1 = y, 2.
 This is the calculation #71 flags as "do not guess". `exterior_cell_grid_layout`
 and `exterior_grid_group_label_u32` in `fo4/forms/cell.hpp` implement it, and
 `tests/test_exterior_cell_grid_real.cpp` re-checks it against the shipped
-masters when `FO4_DATA_DIR` is set (it skips in CI, which has no game files).
+masters when `FO4_DATA_DIR` is set (it skips unless the CI variable
+`FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set).
 
 ## Localized string subrecords in shipped masters
 
@@ -381,7 +382,8 @@ to 93, 84 and 52 bytes with nothing left over.
 
 | Offset | Field | Type |
 |---|---|---|
-| +0 | flags | u32 |
+| +0 | flags | u16 (xEdit `wbFlags`, bits `0x0001`-`0x2000`) |
+| +2 | type | u16 (xEdit `wbEnum`: 1 Missile, 2 Lobber, 4 Beam, 8 Flame, 0x10 Cone, 0x20 Barrier, 0x40 Arrow; default 1) |
 | +4 | gravity | float (−0.01 … 10) |
 | +8 | speed | float (0 … 16000) |
 | +12 | range | float (200 … 25000) |

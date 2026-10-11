@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Save, RotateCcw, ChevronDown, ChevronRight, FolderOpen, Undo2, Layers, Boxes, Puzzle, Info } from 'lucide-react';
 import type { NifHost } from './backend';
 
@@ -74,11 +74,12 @@ const fromHex = (h: string): number[] => {
 
 
 export default function NifEditor(
-  { tree, nif, nifPath, onSaved, appendLog }: {
+  { tree, nif, nifPath, onSaved, onDirtyChange, appendLog }: {
     tree: NifTree;
     nif: NifHost;
     nifPath: string;
     onSaved: (result: string) => void;
+    onDirtyChange: (dirty: boolean) => void;
     appendLog: (line: string) => void;
   }
 ) {
@@ -95,6 +96,11 @@ export default function NifEditor(
 
   const dirtyKeys = Object.keys(edits);
   const dirtyCount = dirtyKeys.length;
+
+  useEffect(() => {
+    onDirtyChange(dirtyCount > 0);
+    return () => onDirtyChange(false);
+  }, [dirtyCount, onDirtyChange]);
 
   const cur = (id: number, f: TreeField) => {
     const k = `${id}::${f.key}`;
@@ -192,6 +198,7 @@ export default function NifEditor(
           {dirtyCount ? `${dirtyCount} unsaved change${dirtyCount > 1 ? 's' : ''}` : 'No changes'}
         </span>
         <div className="nif-editor-actions">
+          <span className="nif-dirty-count" title={nifPath}>Save target: {nifPath.split(/[\\/]/).pop()}</span>
           <button className="sidebar-action-btn" disabled={!dirtyCount || saving} onClick={() => setEdits({})} title="Discard all changes">
             <RotateCcw size={13} /> Revert
           </button>

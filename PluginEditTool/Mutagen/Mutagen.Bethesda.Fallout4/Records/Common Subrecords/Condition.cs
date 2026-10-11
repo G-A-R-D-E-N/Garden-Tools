@@ -1301,50 +1301,6 @@ partial class GetEventDataBinaryWriteTranslation
     }
 }
 
-partial class ConditionFloatBinaryOverlay
-{
-    public partial IConditionDataGetter GetDataCustom(int location)
-    {
-        var functionIndex = BinaryPrimitives.ReadUInt16LittleEndian(_structData.Slice(location));
-        if (functionIndex == ConditionBinaryCreateTranslation.EventFunctionIndex)
-        {
-            return GetEventDataBinaryOverlay.GetEventDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-        else
-        {
-            return FunctionConditionDataBinaryOverlay.FunctionConditionDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-    }
-
-    partial void CustomFactoryEnd(OverlayStream stream, int finalPos, int offset)
-    {
-        stream.Position = offset;
-        _structData = stream.RemainingMemory;
-    }
-}
-
-partial class ConditionGlobalBinaryOverlay
-{
-    public partial IConditionDataGetter GetDataCustom(int location)
-    {
-        var functionIndex = BinaryPrimitives.ReadUInt16LittleEndian(_structData.Slice(location));
-        if (functionIndex == ConditionBinaryCreateTranslation.EventFunctionIndex)
-        {
-            return GetEventDataBinaryOverlay.GetEventDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-        else
-        {
-            return FunctionConditionDataBinaryOverlay.FunctionConditionDataFactory(new OverlayStream(_structData.Slice(location), _package), _package);
-        }
-    }
-
-    partial void CustomFactoryEnd(OverlayStream stream, int finalPos, int offset)
-    {
-        stream.Position = offset;
-        _structData = stream.RemainingMemory;
-    }
-}
-
 partial class ConditionDataBinaryOverlay
 {
     public Condition.RunOnType RunOnType => (Condition.RunOnType)BinaryPrimitives.ReadInt32LittleEndian(_structData.Span.Slice(0xC, 0x4));
