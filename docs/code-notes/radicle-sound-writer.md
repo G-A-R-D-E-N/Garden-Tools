@@ -1,7 +1,7 @@
 # Sound writer (SNDR, SOUN, MUSC, FSTP, FSTS)
 
 Source for every layout, order, default and required flag: pinned TES5Edit `wbDefinitionsFO4.pas` at
-`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `build/xedit/wbDefinitionsFO4.pas` in the parity checkout:
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (`source:xEdit Core/wbDefinitionsFO4.pas @93cc0bc5`:
 SNDR 9406-9450 with `wbSNDRDataDecider` 1556-1576, SOUN 11961-11969, MUSC 8665-8684, FSTP 8686-8690, FSTS 8692-8718,
 `wbConditions` 5183) and `wbDefinitionsCommon.pas` (`wbSoundDescriptorSounds` 9200, `wbObjectBounds` 9074). Official
 measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673 Compound, 24 AutoWeapon), 339 SOUN,
@@ -26,8 +26,8 @@ measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673
   `uint?`). No official SNDR lacks CNAM, so official decode results are unchanged. Unknown CNAM values still fail closed.
   Tests: `Radicle/tests/test_sound.cpp:SoundTest.MissingKindUsesTheValuesLayoutAndExposesNoKind`,
   `Radicle/bindings/csharp/Radicle.Interop.Tests/SoundRecordTests.cs:MissingKindUsesValuesLayoutAndStrayFilenameFailsClosed`.
-- The top-level "legacy flags" FNAM is gone (`SoundDescriptorData::legacy_flags`, `has_legacy_flags`/`legacy_flags` in
-  the C struct and `SoundDescriptor.LegacyFlags` removed). xEdit defines FNAM only inside the rate-of-fire group
+- The top-level "legacy flags" FNAM is gone (`Radicle/include/fo4/environment/sound.hpp:SoundDescriptorData` has no
+  legacy-flags member; the C struct field and the C# LegacyFlags property were removed). xEdit defines FNAM only inside the rate-of-fire group
   {ITMS, INTV, FNAM, ITME}. The old decoder tested the Standard-kind FNAM branch before the rate-group branch, so a
   Standard descriptor carrying a rate group had its file name misread as flags (or failed on size). The official census
   has 120 FNAM, all inside the 24 AutoWeapon rate groups, and no top-level FNAM. FNAM is now only read as a rate file;

@@ -113,3 +113,24 @@ rate-group members, so add on them is refused with `unknown_order`. Field list, 
 reasons are in `docs/code-notes/radicle-sound-writer.md`.
 
 Malformed rate groups, unsupported fixed-link/repeat widths and inconsistent footstep counts refuse field counting and editing before any byte changes. Valid rate groups remain in their stored order; RPM edits do not sort them. Current GardenEngine adoption and its marker-to-file C ABI probe have not been rerun in this tranche; consumer work remains separate.
+
+## GardenEngine consumer probe
+
+Copy `Radicle/probes/gardenengine/SoundProbe.cs` and `sound_probe.tscn` into `opencw/tools/`.
+Build `opencw/OpenCommonwealth.csproj` with `RadicleSourceDir` set to this Radicle checkout.
+Set `FO4_DATA_DIR` to the installed data and `RADICLE_NATIVE_PATH` to the built library of the
+matching ABI, then run the double-precision Mono editor with `--headless --path opencw tools/sound_probe.tscn`.
+
+Exit codes: PASS 0; SKIP 77 when `FO4_DATA_DIR` is unset; FAIL 1, printed as `sound_probe FAIL:` with the exception.
+
+What each assertion proves, on the first winner of each signature in `Fallout4.esm` that carries the checked link (the probe picks the first record that carries the link, and fails if none does):
+- SNDR: CNAM kind is Standard, Compound or AutoWeapon; only Standard exposes Playback, and its LNAM controls are four bytes.
+- SNDR links: GNAM resolves to SNCT, SNAM to SNDR, ONAM to SOPM, BNAM base and DNAM descriptors to SNDR.
+- SOUN: SDSC resolves to an SNDR that `SoundDescriptor` decodes; a REPT stackable byte is 0..1.
+- MUSC: every non-null TNAM track resolves to MUST.
+- FSTP: a non-null DATA impact set resolves to IPDS.
+
+No vanilla EDID is hard-coded: this PR's tests, docs and fixtures name no vanilla SNDR, SOUN, MUSC or FSTP
+record, so the probe takes the first winner of each signature that carries the checked link and prints each record's EDID and FormKey in the PASS line.
+
+Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (GardenEngine pins ABI 9 at 34d16d50).

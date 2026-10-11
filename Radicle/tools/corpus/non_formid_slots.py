@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 
+XEDIT_ONLY_SCALAR_SLOTS = [("FSTP", "ANAM"), ("SNDR", "ANAM"), ("SNDR", "FNAM"), ("SNDR", "NNAM")]
 OFFICIAL = re.compile(r"^(Fallout4\.esm|DLC[A-Za-z0-9]+\.esm|cc[A-Z]{3}FO4\d{3}-[A-Za-z0-9_]+\.esl)$")
 SCALAR_TYPES = {"wbFloat", "wbInteger", "wbString", "wbLString", "wbRGBA", "wbByteRGBA", "wbFloatRGBA", "wbByteArray",
                 "wbByteColors", "wbByteABGR", "wbFloatColors", "wbLStringKC", "wbStringKC",
@@ -121,6 +122,8 @@ def main():
         "// in that record only as non-form-ID data.",
         "// Corpus: " + ", ".join(p.name for p in files),
     ]
+    denied = sorted(denied + [(pair, "xedit") for pair in XEDIT_ONLY_SCALAR_SLOTS
+                              if pair not in {p for p, _ in denied}], key=lambda item: item[0])
     for (record, subrecord), count in denied:
         lines.append(f'{{Signature::from_string("{record}"), Signature::from_string("{subrecord}")}},  // {count}')
     output.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
