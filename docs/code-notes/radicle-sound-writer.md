@@ -1,7 +1,7 @@
 # Sound writer (SNDR, SOUN, MUSC, FSTP, FSTS)
 
 Source for every layout, order, default and required flag: pinned TES5Edit `wbDefinitionsFO4.pas` at
-`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (local copy `build/xedit/wbDefinitionsFO4.pas` in the parity checkout:
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7` (`source:xEdit Core/wbDefinitionsFO4.pas @93cc0bc5`:
 SNDR 9406-9450 with `wbSNDRDataDecider` 1556-1576, SOUN 11961-11969, MUSC 8665-8684, FSTP 8686-8690, FSTS 8692-8718,
 `wbConditions` 5183) and `wbDefinitionsCommon.pas` (`wbSoundDescriptorSounds` 9200, `wbObjectBounds` 9074). Official
 measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673 Compound, 24 AutoWeapon), 339 SOUN,
