@@ -463,8 +463,8 @@ TEST_CASE("condition codec accepts only the exact placeholder form for unresolva
     const auto plugin = context();
     for (const char* text : {"", "000801:", "0A000801", "0A0008010:", "0x0A000801:", "0A00080G:"}) {
         std::string failure;
-        const nlohmann::json element = {{"function", "GetAngle"}, {"reference", text}};
+        const nlohmann::json element = {{"function", "GetAngle"}, {"runOn", "Reference"}, {"reference", text}};
         CHECK_FALSE(fo4ide::plugin::buildCondition(element, plugin, {}, failure).has_value());
-        CHECK_FALSE(failure.empty());
+        CHECK(failure == "unresolved condition reference");
     }
 }
