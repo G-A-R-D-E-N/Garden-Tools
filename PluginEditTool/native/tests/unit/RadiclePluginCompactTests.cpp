@@ -180,15 +180,17 @@ std::string editorIdOf(const fo4::Record& record) {
 
 std::uint32_t formLinkOf(const fo4::Record& record, std::string_view signature) {
     const auto wanted = fo4::Signature::from_string(signature);
+    const fo4::Subrecord* found = nullptr;
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != wanted) continue;
-        REQUIRE(subrecord.data.size() == 4);
-        std::uint32_t value = 0;
-        std::memcpy(&value, subrecord.data.data(), sizeof(value));
-        return value;
+        found = &subrecord;
+        break;
     }
-    FAIL("missing FormLink subrecord");
-    return 0;
+    if (found == nullptr) FAIL("missing FormLink subrecord");
+    REQUIRE(found->data.size() == 4);
+    std::uint32_t value = 0;
+    std::memcpy(&value, found->data.data(), sizeof(value));
+    return value;
 }
 
 std::string refuseAndCheckUnchanged(const std::vector<std::byte>& bytes,
