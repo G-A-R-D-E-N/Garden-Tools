@@ -151,7 +151,7 @@ public sealed unsafe class PluginFile : IDisposable
     public bool SetClimateTiming(FormKey climate, ClimateTiming timing)
     {
         ArgumentNullException.ThrowIfNull(timing);
-        return Edit(climate, (s, key) =>
+        return Edit(climate, (plugin, s, key) =>
         {
             var value = new ClimateTimingEdit
             {
@@ -159,7 +159,7 @@ public sealed unsafe class PluginFile : IDisposable
                 SunsetBegin = timing.SunsetBegin, SunsetEnd = timing.SunsetEnd,
                 Volatility = timing.Volatility, MoonsPhaseLength = timing.MoonsPhaseLength,
             };
-            return RadicleNative.PluginSetClimateTiming(Handle, key, &value);
+            return RadicleNative.PluginSetClimateTiming(plugin, key, &value);
         });
     }
 
