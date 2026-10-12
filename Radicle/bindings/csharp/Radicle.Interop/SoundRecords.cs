@@ -106,4 +106,59 @@ public sealed unsafe partial class RadicleEnvironment
         }
         finally { RadicleNative.FootstepSetFree(f); }
     }
+
+    public static int? SelectRateFileIndex(IReadOnlyList<SoundRateFile> rateFiles, uint rpm)
+    {
+        var native = rateFiles.Select(f => new Native.SoundRateFile { Rpm = f.Rpm }).ToArray();
+        fixed (Native.SoundRateFile* pointer = native)
+        {
+            int has;
+            nuint index;
+            Call.Check(RadicleNative.SoundSelectRateFile(pointer, (nuint)native.Length, rpm, &has, &index));
+            return has == 0 ? null : checked((int)index);
+        }
+    }
+
+    public static int SelectStandardFileIndex(int count, int drawIndex, int? previousIndex)
+    {
+        nuint index;
+        Call.Check(RadicleNative.SoundSelectStandardFile(checked((nuint)count), checked((nuint)drawIndex),
+            previousIndex.HasValue ? 1 : 0, checked((nuint)previousIndex.GetValueOrDefault()), &index));
+        return checked((int)index);
+    }
+
+    public static double SoundFrequencyFactor(sbyte frequencyShift)
+    {
+        double value;
+        Call.Check(RadicleNative.SoundFrequencyFactor(frequencyShift, &value));
+        return value;
+    }
+
+    public static bool SoundIsLooping(byte loopControl)
+    {
+        int looping;
+        Call.Check(RadicleNative.SoundIsLooping(loopControl, &looping));
+        return looping != 0;
+    }
+
+    public static double SoundSidechainSend(byte sidechainControl)
+    {
+        double value;
+        Call.Check(RadicleNative.SoundSidechainSend(sidechainControl, &value));
+        return value;
+    }
+
+    public static double SoundSmallRumbleSend(byte rumbleControl)
+    {
+        double value;
+        Call.Check(RadicleNative.SoundSmallRumbleSend(rumbleControl, &value));
+        return value;
+    }
+
+    public static double SoundBigRumbleSend(byte rumbleControl)
+    {
+        double value;
+        Call.Check(RadicleNative.SoundBigRumbleSend(rumbleControl, &value));
+        return value;
+    }
 }
