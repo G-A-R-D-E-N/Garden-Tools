@@ -1920,10 +1920,6 @@ The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3
 
 Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.
 
-## Radicle/CMakeLists.txt:FO4_TESTDATA_DIR, gtest_discover_tests
-
-`fo4_tests` uses the relative `testdata` fixture directory, and CTest runs its discovered cases from the Radicle source directory. A downloaded CI executable must likewise run from the matching checkout's `Radicle` directory. This avoids embedding the CI checkout path in the fixture lookup while keeping committed fixtures separate from the installed-game directory supplied through `FO4_DATA_DIR`.
-
 ## Radicle/src/schema/localized_fields.cpp:read_localized_string, Radicle/CMakeLists.txt:gtest_discover_tests
 
 The current-main integration retains the flag-boundary and zero-ID tests, portable fixtures, and main's field-address generator test. No localized-string decoder behavior or C ABI declarations change, so `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is unchanged. NG reader semantics, CK table emission and language ownership, and live transformation acceptance remain open under #390.
