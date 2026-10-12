@@ -56,7 +56,7 @@ env:
   # don't oversubscribe it. cmake --build reads this when --parallel is absent.
   CMAKE_BUILD_PARALLEL_LEVEL: "4"
   # Fallout 4 data tests: native-windows-real-data runs them, native-windows-tests excludes them.
-  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.(RealFallout4EsmDecodesWhenPresent|CorpusDecodeSweepWhenPresent)'
+  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.(RealFallout4EsmDecodesWhenPresent|CorpusDecodeSweepWhenPresent)|BehaviorReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
 
 jobs:
   # PluginEditTool/native builds Radicle as a subproject, so one build covers
@@ -501,6 +501,7 @@ jobs:
       - name: Test
         shell: powershell
         run: |
+          $env:FO4_DATA_DIR = ''
           $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '-E', $env:REAL_DATA_TEST_REGEX)
           ctest @ctestArgs
           exit $LASTEXITCODE
@@ -810,7 +811,7 @@ jobs:
 
       - name: Build
         if: steps.fo4.outputs.has_data == 'true'
-        run: cmake --build build\native --target fo4_tests
+        run: cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real
 
       - name: ccache statistics
         if: always() && steps.fo4.outputs.has_data == 'true'
