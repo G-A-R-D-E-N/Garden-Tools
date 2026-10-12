@@ -477,6 +477,22 @@ TEST(FormLink, MalformedNvnmFailsClosedInsteadOfScanningUint32s) {
       fo4::FormIdError);
 }
 
+TEST(FormLink, UnsupportedNvnmVersionsRefuseRemapWithoutChangingBytes) {
+  for (const std::uint32_t version : {12u, 13u, 14u, 16u, 0xFFFFFFFFu}) {
+    SCOPED_TRACE(version);
+    auto plugin = fo4::read_plugin(make_mixed_navmesh_plugin(), "NavmeshPatch.esp");
+    auto& record = std::get<fo4::Record>(plugin.groups[0].children[0]);
+    std::memcpy(record.subrecords[0].data.data(), &version, sizeof(version));
+    const auto before = fo4::write_plugin(plugin);
+    const auto key = fo4::FormKey::parse("000800:NavmeshPatch.esp");
+    EXPECT_TRUE(hits_for(plugin, key, "NVNM").empty());
+    EXPECT_THROW(fo4::remap_plugin_masters(plugin,
+        {fo4::PluginKey::from_filename("Fallout4.esm"),
+         fo4::PluginKey::from_filename("KeepMe.esm")}), fo4::FormIdError);
+    EXPECT_EQ(fo4::write_plugin(plugin), before);
+  }
+}
+
 TEST(FormLink, MalformedMnamFailsClosedInsteadOfScanningTriangleIndexes) {
   const auto plugin = fo4::read_plugin(
       make_mixed_navmesh_plugin(false, true), "NavmeshPatch.esp");

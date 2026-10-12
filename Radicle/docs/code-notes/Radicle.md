@@ -244,6 +244,66 @@ and a name-table offset past the end of the file are recorded as problems for th
 archive. Archives with problems are left out of the totals; the run continues and
 exits non-zero. It is not wired into CMake or CI.
 
+## src/environment/navmesh.cpp:decode_navmesh and decode_navmesh_info
+
+`docs/NAVM_NAVI.md` records the measured version-15 disk grammar and the
+resolved CK reader discrepancy. The pinned private record is
+`https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/navigation-401-339/README.md`
+at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 (OG readers
+@0x14250FCD0 and @0x14250FFB0; independently matched AE readers). Triangles
+store f32 clearance, a raw traversal byte and one u32 flags word; splitting
+that word discarded flags above bit 15. Form versions below 128 fail closed
+because the existing complete grammar assumes the 11-byte extra-edge form.
+Both decoders reuse the existing full
+payload validator before reading counted data. Geometry, adjacency values
+and links are stored reads; flag meanings and runtime pathfinding remain
+unverified. Cover/grid and optional island bytes stay opaque and borrowed
+from the immutable environment. Stored writer constraints are documented in
+`docs/code-notes/radicle-navmesh-writer.md:Radicle/src/plugin/navmesh_writer.cpp`.
+
+`src/c_api_navmesh.cpp:radicle_navmesh_decode` and `radicle_navi_decode`
+own their array views until the paired free call; strings and opaque bytes
+remain borrowed from the environment. `bindings/csharp/Radicle.Interop/Navmesh.cs`
+copies every array before freeing. ABI 31 advances main's ABI 28 once;
+re-bump if another additive ABI PR merges first. Existing exported signatures
+and layouts are retained.
+
+`CMakeLists.txt:RADICLE_CSHARP_TESTS` is enabled in the two native jobs of
+`.github/workflows/native-ci.yml` so the new getters and their ownership are
+validated in CI. The existing test supplies the branch's native library,
+layout probe and ABI stubs; the workflow supplies the .NET 8 SDK.
+
+## src/plugin/navmesh_writer.cpp:set_navmesh_triangle and set_navmesh_door
+
+`edit` reads the NVNM counts for all four blocks (vertices, triangles, edge
+links, doors) before patching, so each setter checks its index against the
+live counts and throws before the candidate bytes are copied back; a refused
+write leaves the plugin bytes identical. Triangle edge and vertex index ranges are Radicle policy, stricter than xEdit.
+xEdit's decider `wbEdgeLinksTo` (`source:xEdit Core/wbDefinitionsCommon.pas:2611-2662 @93cc0bc5`)
+rejects nothing: it resolves a link for display and returns nil for any index it cannot
+resolve. For edge i, if bit i of the triangle's u16 Flags is set (`Flags and (1 shl aEdge)`,
+line 2636) the value indexes NVNM `Edge Links` (count checked at 2640); otherwise it
+indexes NVNM `Triangles` (count checked at 2658). Negatives are not resolved (2643, 2661).
+The setter accepts -1 (none) and refuses -2 and any index at or past the selected count.
+Vertices must be below the NVNM vertex count. The selector is the low 16 bits of
+`NavmeshTriangle::flags` (the u16 Flags at triangle offset 17 in
+`source:xEdit Core/wbDefinitionsFO4.pas:4387-4397 @93cc0bc5`), and the flags word is
+preserved against the stored bytes before this check runs. A vertex or edge index is
+range-checked only when its new value differs from the stored value (fix in
+`src/plugin/navmesh_writer.cpp:set_navmesh_triangle`), so a triangle that already holds an
+out-of-range index keeps it while its clearance or other unchanged fields are edited;
+changing that index to another out-of-range value is refused.
+Door triangles use `wbTriangleLinksTo` (`source:xEdit Core/wbDefinitionsCommon.pas:2813-2843 @93cc0bc5`,
+index checked at 2837 and 2840) against NVNM `Triangles`. The setter requires
+`0 <= triangle < triangle count` as Radicle policy (Door Links at `source:xEdit Core/wbDefinitionsFO4.pas:4412-4418 @93cc0bc5`):
+the decider returns nil for -1 (2840) and any out-of-range value without rejecting it, and the
+setter refuses -1 so a door always names a triangle.
+Deliberate policy: `src/environment/navmesh.cpp:decode_navmesh_info` requires NAVI NVER
+== 15 (`version 15 is required`), while xEdit reads NVER as a plain u32
+(`source:xEdit Core/wbDefinitionsFO4.pas:7242 @93cc0bc5`). The tighter check is kept so
+that only the measured version-15 grammar is written; widen it only with evidence for
+other versions.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children
@@ -412,6 +472,7 @@ A fragment property belongs to the fragment script the `fragment-script` row nam
 ## src/schema/non_formid_slots.cpp:corpus_non_formid_slot
 
 `formid_subrecords.inc` is a signature-only union of xEdit's FO4 form ID signatures, so a signature that is a form ID in one record type was treated as one everywhere (DIAL `PNAM` priority float, DIAL `SNAM` subtype code, SNDR `CNAM`, PACK `CNAM`, NPC_ `NAM4`, ...). #365: `remap_plugin_masters` rewrote those bytes whenever the master list changed. The deny list (`include/fo4/schema/non_formid_slots.inc`) is generated by `tools/corpus/non_formid_slots.py` from two sources that must agree for every corpus row: an official master stores a non-null value at that (record, subrecord) that resolves to no record in the official load order (its master index is past the file's MAST table, or the target does not exist), AND xEdit `wbDefinitionsFO4.pas` (`dev-4.1.6`) declares that subrecord in that record only as scalar data (`wbFloat`/`wbInteger`, the string types including `wbLStringKC` localized string IDs, the RGBA and color helpers, a struct with no `wbFormID`, or a helper whose whole right-hand side, recursively, has no `wbFormID`/`wbUnion`; `wbPTRN := wbFormIDCk(...)` and the `wbVMAD*` helpers are therefore form IDs). In-table values matter as much as past-table ones: SCEN `WNAM` editor width 350 is `0x0000015E`, index 0, and was rewritten to `0x0100015E` when master 0 moved (`RemapNonFormIdSlots.InTableScalarsSurviveMasterReorder`). Localized string IDs are the same case: TERM `WNAM` welcome text ID `0x0000ABCD` became `0x0100ABCD` (`RemapNonFormIdSlots.LocalizedStringIdsSurviveMasterReorder`). `wbUnknown` slots count as scalar too, because xEdit never remaps bytes it has not decoded (TACT `PNAM`, PACK `BNAM`). Helpers are also read from `wbDefinitionsCommon.pas` (optional fifth generator argument), and a helper is judged by the element that declares the subrecord, not as a whole: `wbWorldLODData` holds NAM3 (water form ID) and NAM4 (`LOD Water Height` float), so only WRLD `NAM4` is denied. `remap_raw` and `rekey_form_links` also leave `0xFFFFFFFF` alone: it is xEdit's None value (`wbInterface.pas:TwbFormID.IsNone`), stored in vanilla EQUP `ANAM`, and was rewritten to `0x01FFFFFF` (`RemapNonFormIdSlots.NoneSentinelAndUndecodedSlotsSurviveMasterReorder`). The corpus evidence alone is not enough either: vanilla holds real links past the table (`DLCRobot.esm` REFR `XRFG`, see `GARDEN-TOOLS.md` on `resolve_plugin_link`), which the game reads as the owning plugin's, so `remap_raw` keeps remapping them. PACK `CNAM` is mixed in xEdit (record-level `Combat Style` form ID, and the `Data Input Values` union of bool/int/float after an `ANAM` type string), so `corpus_non_formid_slot` denies only a PACK `CNAM` whose previous subrecord is `ANAM`. SCEN `TNAM`/`HTID` depend on the scene action (`scene_action_scalar`): an action opens with a 2-byte `ANAM` type and closes with the empty `ANAM` marker. Inside an action `TNAM` is the Timer float and `HTID` is the Dialogue headtracking actor-ID array (or the empty Start Scene marker), so both stay scalar; only `HTID` in a Radio action (type 6, `Play Sound` SNDR) and the record-level `TNAM` (`Template Scene`, after the actions) are form IDs. It only removes slots from the generic branch of `form_links.cpp:visit_link_offsets`; record-specific handlers (WTHR, QUST, NAVM, structured slots) are unchanged. `tools/corpus/non_formid_slots.py:main` also merges `XEDIT_ONLY_SCALAR_SLOTS`, a hand list of slots that no official master value exercises but that xEdit types as strings: FSTP `ANAM` (`source:xEdit Core/wbDefinitionsFO4.pas:8689 @93cc0bc5`, `wbString(ANAM, 'Tag')`), SNDR `NNAM` (`wbDefinitionsFO4.pas:9408`, `wbString`), SNDR `FNAM` (`wbDefinitionsFO4.pas:9446`, `wbString`), and SNDR `ANAM` (`wbDefinitionsFO4.pas:9416` uses `wbSoundDescriptorSounds`, which is `wbRArray('Sounds', wbString(ANAM, 'Sound'))` at `source:xEdit Core/wbDefinitionsCommon.pas:9200 @93cc0bc5`), plus MUST `ANAM` and `BNAM` (`wbDefinitionsFO4.pas:8806-8807`, `wbString`), MUST `FNAM` (`wbDefinitionsFO4.pas:8813`, an array of `wbFloat` cue points) and SOPM `MNAM` (`wbDefinitionsFO4.pas:9505`, `wbInteger` type), checked by `RemapNonFormIdSlots.SopmAndMusicTrackFourByteSlotsStayUnchanged`. Those rows skip the corpus check and are tagged `// xedit` in the output, so a regeneration keeps them. Regenerate it after adding new handlers or when new official files ship.
+
 ## src/plugin/maintenance.cpp:find_identical_to_master
 
 Walks every group, nested ones included, bottom-up like xEdit `xeMainForm.pas:mniNavRemoveIdenticalToMasterClick` (`dev-4.1.6`): a record is reported only when it is identical to the previous version in load order AND its owned child group (`owned_child_group`: the world, cell or topic children group directly after it) would be emptied, so children are reported before their parent. An identical CELL with a changed REFR is therefore not reported, because removing it would orphan the cell's children. Injected records are not special-cased. A record is never ITM when its placement differs from the previous version (`record_placements`): moving a REFR to another CELL or an INFO to another DIAL is a real edit even when the bytes are identical. `remove_records` erases the reported keys anywhere in the tree and drops only the groups that this call emptied.
@@ -513,6 +574,7 @@ Repeated fixed-stride {form ID, value} arrays are visited through `k_repeated_st
 - DAMA, `wbDefinitionsCommon.pas:wbDamageTypeArray` (`:8454-8463`), element quoted from `wbDefinitionsCommon.pas:8454-8463` as `wbStructSK([0], aItemName, [wbFormIDCk('Type', [DMGT]), wbInteger('Amount', itU32), ...])`. Used by ARMO (`wbDefinitionsFO4.pas:5839`, "Resistance") and WEAP (`:13023`, "Damage Type"). Official masters: ARMO sizes 8 and 16, WEAP size 8, all multiples of 8. The element gains a Curve Table form ID at offset 8 only when `wbDefinitionsCommon.pas:8460` (`wbFromVersion(152, wbFormIDCk('Curve Table', [CURV, NULL]))`) applies, so `form_link_mixed.cpp:k_repeated_struct_layouts` uses the 12-byte, slots {0, 8} DAMA entry when `record.header.form_version >= 152` and the 8-byte, slot {0} entry otherwise. Vanilla FO4 records are form version 131 or lower (the repo's own FO4 version constant is `Radicle/src/forms/race.cpp:k_current_form_version = 131`), and all vanilla DAMA payloads are multiples of 8. The rule is FO4-only, because `wbDefinitionsFO76.pas` (`:15642`) reads DAMA as a different record field.
 
 `fixed_stride_formid_offsets` is the stride-table loop that `placed_reference_formid_offsets` already used for `k_placed_reference_layouts`, lifted out so the record-independent `k_repeated_struct_layouts` table can reuse it. Its malformed-payload error text is now "cannot safely remap malformed <SIG> payload"; no test asserts the old text. `generated_formlink_lists.inc` names PRPS and DAMC, but it only feeds the graph and check tables (`Radicle/src/graph/check_errors.cpp`), not `visit_link_offsets`.
+
 ## Radicle/src/material/material_file.cpp:read_material_file / write_material_file
 
 `read_material_file` takes the format from the first `u32` alone (`BGSM` or `BGEM` magic); the file extension is never consulted, because mods ship BGEM content under `.bgsm` names. Any other first word, or fewer than four bytes, throws `fo4::parse_error`. Both directions call one function, `visit_layout`, templated on the access type: `Reader` decodes each field into `MaterialFile::fields` and `Writer` encodes the stored value back. Each field call returns the value it read or wrote, so version gates and conditionals (EmitEnabled, GlassEnabled, Terrain, version 3 UnkInt1) use the same values in both directions and a field cannot be readable without being writable. Bools keep the raw byte (`RawBool`), strings keep every byte including any NUL, TileFlags is a raw `u32`, and bytes after the last field are kept in `MaterialFile::trailing`, so reading then writing a valid file reproduces it exactly. The writer takes a field missing from the list as zero (a conditional block switched on by a setter, for example EmittanceColor after EmitEnabled becomes true), and throws `std::invalid_argument` only when a stored field has a different type than the layout asks for. Tests: `Radicle/tests/test_material_file.cpp` (BGSM versions 0-20 and BGEM versions 2-22 across every version gate, each conditional both ways, raw bool 2, a string without NUL, an empty string, unknown TileFlags bits, trailing bytes, zero-default EmittanceColor), `Radicle/tests/test_material_file_real.cpp` (vanilla archive round trip).
@@ -526,12 +588,15 @@ The handle owns a `MaterialFile` copy, so the input buffer can be released after
 ## include/fo4/schema/non_formid_slots.inc: xEdit-only entries
 
 `Radicle/tools/corpus/non_formid_slots.py:main` merges the hand list `XEDIT_DENIED` into the generated deny list, because the corpus scan cannot see two slots that xEdit declares non-form-ID. No vanilla FLOR has RNAM, so the scan never saw it. Vanilla FACT RNAM values are small rank integers, and the generated list does not include FACT RNAM; without the entry every 4-byte rank is remapped as a form ID owned by master index 0. The entries are FACT `RNAM` (rank number, `wbInteger(RNAM, 'Rank#', itU32)` inside `wbFactionRank`, `Core/wbDefinitionsFO4.pas:6771-6773`, used at `:6830` by the FACT record at `:6785`) and FLOR `RNAM` (localized Activate Text Override, `wbLStringKC(RNAM, 'Activate Text Override', 0, cpTranslate)` at `Core/wbDefinitionsFO4.pas:12179`, FLOR record at `:12167`), both at xEdit 93cc0bc5. Entries marked `// xEdit` in `include/fo4/schema/non_formid_slots.inc` are hand-maintained and survive regeneration. The list also covers every FO4 pair whose signature is a global form ID signature in `include/fo4/schema/formid_subrecords.inc` but which xEdit declares in that record only as a string. The corpus rule misses these because vanilla values are never exactly 4 bytes. Examples are CLMT `FNAM` and `GNAM` (climate texture paths) and WATR `NAM2` to `NAM4` (water noise texture paths). Tests: `RemapNonFormIdSlots.FactionRankNumberSurvivesMasterReorder`, `RemapNonFormIdSlots.FloraActivateTextStringIdSurvivesMasterReorder`, `RemapNonFormIdSlots.ClimateSunTexturePathSurvivesMasterReorder` and `RemapNonFormIdSlots.WaterNoiseTexturePathSurvivesMasterReorder`.
+
 ## Radicle/src/plugin/writer.cpp:apply_extension_flags
 
 xEdit `93cc0bc5` `Core/wbImplementation.pas` (save path, lines 5300-5306) sets header flags from the module extension: `.esm` sets ESM, and `.esl` sets ESM and Light when light plugins are supported. xEdit never clears them. `apply_extension_flags` applies the same rule in `write_plugin_file` and in the PluginEditTool localized-sidecar save, so a Save As from an `.esp` to `.esm` or `.esl` writes the Master flag (and Light for `.esl`). Flags are only ever set; an existing flag is never cleared. A plugin with every needed flag already set is returned untouched, so it still writes its original bytes. When a flag is added, both `tes4.header.flags` and `header.tes4_flags` are updated and the original byte ranges are cleared so the header re-serializes. The Light flag goes through `set_plugin_light_flag`, which refuses an `.esl` save whose owned form IDs fall outside the light range with `FormIdError`. xEdit sets the flag anyway in that case; keeping the refusal is an owner decision. Tests: `Radicle/tests/test_plugin_flags.cpp:WriteFileToEslSetsMasterAndLightFlags`, `Radicle/tests/test_plugin_flags.cpp:WriteFileToEsmSetsMasterFlagOnly`, `Radicle/tests/test_plugin_flags.cpp:WriteFileToEspKeepsFlags`, `Radicle/tests/test_plugin_flags.cpp:WriteFileToEslRefusesOutOfRangeFormIds`. Setting Light goes through `set_plugin_light_flag`, which also lowers HEDR next object ID to one past the highest owned ID when every owned ID is in 0x800-0xFFF; xEdit's `SetIsLight` (`wbImplementation.pas:6248`) leaves HEDR alone, and the lower value is kept so new records stay in the light range. `write_plugin(const Plugin&, path)` copies the plugin only when a flag is missing.
+
 ## src/environment/environment.cpp:Environment::winner
 
 `Environment::winner` skips Partial Form overrides, as xEdit does. xEdit `93cc0bc5` `Core/wbImplementation.pas:GetWinningOverride` (lines 12574-12586) walks overrides from last to first, skips any that is a Partial Form, and falls back to the master record when every override is partial. The check is `fo4::is_partial_form` in `Radicle/include/fo4/plugin/container.hpp`, the same function `Radicle/src/graph/conflict_graph.cpp:ConflictGraph::winner` uses, so the two winners agree. Partial Form is record flag 0x4000 (`RecordFlags::partial_form`) and counts only for CELL, DIAL, QUST and WRLD (`Core/wbDefinitionsFO4.pas` lines 5957, 6311, 10686, 13112). Vanilla has 7 QUST records with the flag. 14 LCTN records carry bit 14, but LCTN is not partial-capable, so they still win. Tests: `Radicle/tests/test_environment.cpp:EnvironmentTest.WinnerSkipsPartialFormOverrideOfPartialCapableRecord`, `EnvironmentTest.WinnerFallsBackToMasterWhenEveryOverrideIsPartialForm`, `EnvironmentTest.WinnerKeepsLastVersionOfRecordTypeWithoutPartialForm`.
+
 ## bindings/csharp/tools/run_managed_tests.py:main
 
 GT-065: with `--build-dir`, the script reads the `radicle_csharp_bindings` CTest entry and its `ENVIRONMENT` property. Both are added only when CMake is configured with `-DRADICLE_CSHARP_TESTS=ON` (`Radicle/CMakeLists.txt`), so a build without that option now exits with a message naming the option instead of a bare `StopIteration`. The script's existing `--build-dir` path is otherwise unchanged. `test_run_managed_tests.py` (registered as `radicle_run_managed_tests` in `Radicle/CMakeLists.txt` under the Python3 block) covers both missing-entry cases; CI runs it through the same `ctest --test-dir` steps in `.github/workflows/native-ci.yml`.
@@ -539,6 +604,7 @@ GT-065: with `--build-dir`, the script reads the `radicle_csharp_bindings` CTest
 ## bindings/csharp/tools/run_managed_tests.py:parent_build_files
 
 GT-004: the consumer check copies only `Radicle.Interop`, `Radicle.Interop.Tests`, `global.json`, and the bindings folder's own `Directory.Build.*` and `NuGet.Config` into a temp folder. MSBuild and NuGet also read those files from parent folders up to the repo root, which the temp layout cannot reproduce. `parent_build_files` lists such parent files, stopping at the first ancestor that holds `.git`, and `main` raises `RuntimeError` when any exist so the check cannot pass while a real build would see different settings. No parent files exist in the repo at this commit, so the guard is inert today.
+
 ## bindings/csharp/Radicle.Interop/PluginFile.cs:FieldCount
 
 `FieldCount` and `FormLinkListCount` throw `KeyNotFoundException` for a missing record and return 0 when the record exists but the field has no occurrences; before GT-017 both cases returned 0. `TryFieldCount` and `TryFormLinkListCount` give the non-throwing form (false for a missing record, true with `out` 0 for no occurrences), matching the `Edit` family where NOT_FOUND returns false. The old names are kept so callers on open branches still compile. The C side already distinguishes the cases: `Radicle/src/c_api_fields.cpp:radicle_plugin_record_field_count` returns NOT_FOUND when `Radicle/src/plugin/field_writer.cpp:record_field_count` finds no record, and `radicle_plugin_formlink_list_size` does the same through `Radicle/src/schema/formlink_lists.cpp:record_formlink_list_size`. Tests: `Radicle/bindings/csharp/Radicle.Interop.Tests/FieldWriterTests.cs:FieldCountReportsOccurrences` and `FormLinkListOperationsEditByPath`.

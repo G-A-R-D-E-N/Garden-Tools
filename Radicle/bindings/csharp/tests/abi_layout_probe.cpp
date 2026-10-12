@@ -2,6 +2,7 @@
 #include "fo4/c_api_records.h"
 #include "fo4/c_api_materials.h"
 #include "fo4/c_api_maintenance.h"
+#include "fo4/c_api_navmesh.h"
 #include "fo4/c_api_sound.h"
 #include "fo4/c_api_pex.h"
 #include "fo4/c_api_material_file.h"
@@ -479,6 +480,68 @@ int main() {
   printf("MaterialSwap.Substitutions %zu\n", offsetof(radicle_material_swap, substitutions));
   printf("MaterialSwap.SubstitutionCount %zu\n", offsetof(radicle_material_swap, substitution_count));
   printf("MaterialSwap.Internal %zu\n", offsetof(radicle_material_swap, internal));
+  printf("NavmeshVertex %zu\n", sizeof(radicle_navmesh_vertex));
+  printf("NavmeshVertex.X %zu\n", offsetof(radicle_navmesh_vertex, x));
+  printf("NavmeshVertex.Y %zu\n", offsetof(radicle_navmesh_vertex, y));
+  printf("NavmeshVertex.Z %zu\n", offsetof(radicle_navmesh_vertex, z));
+  printf("NavmeshParent %zu\n", sizeof(radicle_navmesh_parent));
+  printf("NavmeshParent.Crc %zu\n", offsetof(radicle_navmesh_parent, crc));
+  printf("NavmeshParent.World %zu\n", offsetof(radicle_navmesh_parent, world));
+  printf("NavmeshParent.Cell %zu\n", offsetof(radicle_navmesh_parent, cell));
+  printf("NavmeshParent.GridY %zu\n", offsetof(radicle_navmesh_parent, grid_y));
+  printf("NavmeshParent.GridX %zu\n", offsetof(radicle_navmesh_parent, grid_x));
+  printf("NavmeshTriangle %zu\n", sizeof(radicle_navmesh_triangle));
+  printf("NavmeshTriangle.Vertices %zu\n", offsetof(radicle_navmesh_triangle, vertices));
+  printf("NavmeshTriangle.Edges %zu\n", offsetof(radicle_navmesh_triangle, edges));
+  printf("NavmeshTriangle.Clearance %zu\n", offsetof(radicle_navmesh_triangle, clearance));
+  printf("NavmeshTriangle.Traversal %zu\n", offsetof(radicle_navmesh_triangle, traversal));
+  printf("NavmeshTriangle.Flags %zu\n", offsetof(radicle_navmesh_triangle, flags));
+  printf("NavmeshEdgeLink %zu\n", sizeof(radicle_navmesh_edge_link));
+  printf("NavmeshEdgeLink.Type %zu\n", offsetof(radicle_navmesh_edge_link, type));
+  printf("NavmeshEdgeLink.Navmesh %zu\n", offsetof(radicle_navmesh_edge_link, navmesh));
+  printf("NavmeshEdgeLink.Triangle %zu\n", offsetof(radicle_navmesh_edge_link, triangle));
+  printf("NavmeshEdgeLink.Edge %zu\n", offsetof(radicle_navmesh_edge_link, edge));
+  printf("NavmeshDoorLink %zu\n", sizeof(radicle_navmesh_door_link));
+  printf("NavmeshDoorLink.Triangle %zu\n", offsetof(radicle_navmesh_door_link, triangle));
+  printf("NavmeshDoorLink.Crc %zu\n", offsetof(radicle_navmesh_door_link, crc));
+  printf("NavmeshDoorLink.Door %zu\n", offsetof(radicle_navmesh_door_link, door));
+  printf("Navmesh %zu\n", sizeof(radicle_navmesh));
+  printf("Navmesh.HasGeometry %zu\n", offsetof(radicle_navmesh, has_geometry));
+  printf("Navmesh.Version %zu\n", offsetof(radicle_navmesh, version));
+  printf("Navmesh.Parent %zu\n", offsetof(radicle_navmesh, parent));
+  printf("Navmesh.Vertices %zu\n", offsetof(radicle_navmesh, vertices));
+  printf("Navmesh.VertexCount %zu\n", offsetof(radicle_navmesh, vertex_count));
+  printf("Navmesh.Triangles %zu\n", offsetof(radicle_navmesh, triangles));
+  printf("Navmesh.TriangleCount %zu\n", offsetof(radicle_navmesh, triangle_count));
+  printf("Navmesh.Edges %zu\n", offsetof(radicle_navmesh, edges));
+  printf("Navmesh.EdgeCount %zu\n", offsetof(radicle_navmesh, edge_count));
+  printf("Navmesh.Doors %zu\n", offsetof(radicle_navmesh, doors));
+  printf("Navmesh.DoorCount %zu\n", offsetof(radicle_navmesh, door_count));
+  printf("Navmesh.OpaqueTail %zu\n", offsetof(radicle_navmesh, opaque_tail));
+  printf("Navmesh.OpaqueTailSize %zu\n", offsetof(radicle_navmesh, opaque_tail_size));
+  printf("Navmesh.Internal %zu\n", offsetof(radicle_navmesh, internal));
+  printf("NaviDoorLink %zu\n", sizeof(radicle_navi_door_link));
+  printf("NaviDoorLink.Crc %zu\n", offsetof(radicle_navi_door_link, crc));
+  printf("NaviDoorLink.Door %zu\n", offsetof(radicle_navi_door_link, door));
+  printf("NavmeshInfo %zu\n", sizeof(radicle_navmesh_info));
+  printf("NavmeshInfo.Navmesh %zu\n", offsetof(radicle_navmesh_info, navmesh));
+  printf("NavmeshInfo.Flags %zu\n", offsetof(radicle_navmesh_info, flags));
+  printf("NavmeshInfo.Location %zu\n", offsetof(radicle_navmesh_info, location));
+  printf("NavmeshInfo.Preferred %zu\n", offsetof(radicle_navmesh_info, preferred));
+  printf("NavmeshInfo.Edges %zu\n", offsetof(radicle_navmesh_info, edges));
+  printf("NavmeshInfo.EdgeCount %zu\n", offsetof(radicle_navmesh_info, edge_count));
+  printf("NavmeshInfo.PreferredEdges %zu\n", offsetof(radicle_navmesh_info, preferred_edges));
+  printf("NavmeshInfo.PreferredEdgeCount %zu\n", offsetof(radicle_navmesh_info, preferred_edge_count));
+  printf("NavmeshInfo.Doors %zu\n", offsetof(radicle_navmesh_info, doors));
+  printf("NavmeshInfo.DoorCount %zu\n", offsetof(radicle_navmesh_info, door_count));
+  printf("NavmeshInfo.HasIsland %zu\n", offsetof(radicle_navmesh_info, has_island));
+  printf("NavmeshInfo.Island %zu\n", offsetof(radicle_navmesh_info, island));
+  printf("NavmeshInfo.IslandSize %zu\n", offsetof(radicle_navmesh_info, island_size));
+  printf("NavmeshInfo.Parent %zu\n", offsetof(radicle_navmesh_info, parent));
+  printf("Navi %zu\n", sizeof(radicle_navi));
+  printf("Navi.Infos %zu\n", offsetof(radicle_navi, infos));
+  printf("Navi.InfoCount %zu\n", offsetof(radicle_navi, info_count));
+  printf("Navi.Internal %zu\n", offsetof(radicle_navi, internal));
   printf("SoundPlayback %zu\n", sizeof(radicle_sound_playback));
   printf("SoundPlayback.FrequencyShift %zu\n", offsetof(radicle_sound_playback, frequency_shift));
   printf("SoundPlayback.FrequencyVariance %zu\n", offsetof(radicle_sound_playback, frequency_variance));

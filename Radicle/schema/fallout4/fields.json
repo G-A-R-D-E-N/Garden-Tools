@@ -5770,6 +5770,199 @@
       ],
       "fields": [],
       "localized_subrecords": []
+    },
+    {
+      "signature": "NAVM",
+      "fields": [],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "NVNM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      }
+    },
+    {
+      "signature": "NAVI",
+      "fields": [
+        {
+          "path": "NAVI\\LocationX",
+          "label": "LocationX",
+          "kind": "scalar",
+          "subrecord": "NVMI",
+          "storage": "f32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "subrecord": "NVER",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [
+              15
+            ]
+          }
+        },
+        {
+          "path": "NAVI\\LocationY",
+          "label": "LocationY",
+          "kind": "scalar",
+          "subrecord": "NVMI",
+          "storage": "f32",
+          "offset": 12,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "subrecord": "NVER",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [
+              15
+            ]
+          }
+        },
+        {
+          "path": "NAVI\\LocationZ",
+          "label": "LocationZ",
+          "kind": "scalar",
+          "subrecord": "NVMI",
+          "storage": "f32",
+          "offset": 16,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "subrecord": "NVER",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [
+              15
+            ]
+          }
+        },
+        {
+          "path": "NAVI\\Preferred",
+          "label": "Preferred",
+          "kind": "scalar",
+          "subrecord": "NVMI",
+          "storage": "f32",
+          "offset": 20,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "subrecord": "NVER",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [
+              15
+            ]
+          }
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "NAVI\\Navmeshes",
+          "label": "Navmeshes",
+          "subrecord": "NVMI",
+          "offset": 0,
+          "nullable": false,
+          "targets": [
+            "NAVM"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "subrecord": "NVER",
+            "offset": 0,
+            "storage": "u32",
+            "equals": [
+              15
+            ]
+          }
+        }
+      ],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "NVER",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "NVMI",
+            "minimum": 0,
+            "maximum": 65535,
+            "coupled": true
+          },
+          {
+            "signature": "NVPP",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "NVSI",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      }
     }
   ],
   "keyword_records": [
