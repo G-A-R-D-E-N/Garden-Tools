@@ -1,4 +1,5 @@
 #include "fo4/schema/form_link_mixed.hpp"
+#include "fo4/schema/behavior_layout.hpp"
 
 #include "fo4/forms/proj_expl_hazd.hpp"
 #include "fo4/formid.hpp"
@@ -393,6 +394,7 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
+  if (auto behavior = behavior_formid_offsets(record, sub, strict_remap)) return behavior;
   if (auto packed = packed_formid_array_offsets(record, sub, strict_remap)) return packed;
   if (auto repeated = fixed_stride_formid_offsets(sub, record.header.form_version,
                                                   k_repeated_struct_layouts, strict_remap)) {
