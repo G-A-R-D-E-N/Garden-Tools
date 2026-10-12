@@ -868,3 +868,7 @@ The dirty-plugin ONAM rebuild gate is `src/formid.cpp:is_master_plugin` (TES4 ma
 ## Radicle/src/forms/placed_reference_copy.cpp:owner_kind
 
 The owner-is-source branch now calls `src/formid.cpp:classify_plugin_kind` with the source header and key, so a source named `.esl` without the TES4 SmallFile flag yields a light master entry, as the load-time sites do. Test: `tests/test_extension_light_kinds.cpp:OwnerEqualToEslSourceIsLightMaster`.
+
+## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
+
+The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
