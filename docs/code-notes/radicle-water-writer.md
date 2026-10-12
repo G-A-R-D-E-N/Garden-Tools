@@ -40,8 +40,8 @@ are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DL
 `Radicle/tests/test_water_authoring.cpp:WaterAuthoring.SiltFieldsRequireTheCompleteOptionalStruct`
 covers every silt field at DNAM sizes 188 through 201. At pinned xEdit commit
 `93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
-`Core/wbDefinitionsFO4.pas:12861-12868` declares the 12-byte silt struct as
-one optional member. `Core/wbImplementation.pas:22588-22603` replaces an
+`Core/wbDefinitionsFO4.pas:12861-12865` declares the 12-byte silt struct, and
+DNAM `SetOptionalFrom(4)` at 12867 makes it (with the SSR byte) one optional member. `Core/wbImplementation.pas:22588-22603` replaces an
 optional member with an empty value when its full size does not fit. The
 writer must therefore refuse all seven silt scalar paths below 200 bytes,
 preserving the complete serialized plugin; 200- and 201-byte DNAMs retain

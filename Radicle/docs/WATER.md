@@ -94,7 +94,7 @@ Radicle exposes these raw links/heights and load-order winners already.
 
 The [selection record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/water-395-341/README.md)
 answers these questions for OG 1.10.163 (RE 6916afb), except the XCWT step, which it left unresolved; README Follow-up 2 (RE `4cdafd2`) resolved it; sections 3.1–3.7 stamp
-RVAs 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910.
+addresses 0x3B53D0, 0x493910, 0x3B4D40, 0x493400, 0x3ADC29 and 0x491910.
 `fo4::env::resolve_water`, C `radicle_water_resolve` and C# `EffectiveWater`
 select a winning CELL XCWT, otherwise the exterior world's inherited NAM2,
 otherwise Fallout4.esm form 0x18. The default is the winning `Fallout4.esm:0x18` WATR record, looked up by form ID, the same lookup the engine's global default makes (VERIFY section 1 row 28). Radicle also treats a deleted `Fallout4.esm:0x18` as missing (`src/environment/world.cpp:winning_type`); RE `4cdafd2` does not cover deletion. Three rules govern the failure cases. An
