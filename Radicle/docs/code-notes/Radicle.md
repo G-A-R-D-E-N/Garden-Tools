@@ -882,3 +882,11 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
+
+## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
+
+The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
+
+## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
+
+Filters the stored LTEX GNAM list from `decode_landscape_grasses`. A null link is one whose owner is empty, as produced by `resolve_plugin_link` for a zero raw form ID. The stored list keeps every entry, including nulls. The view applies no slope, density or placement logic.
