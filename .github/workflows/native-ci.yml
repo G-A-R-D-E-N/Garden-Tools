@@ -492,7 +492,7 @@ jobs:
           }
 
       - name: Build
-        run: cmake --build build\native
+        run: cmake --build build\native -- -k 0
 
       - name: ccache statistics
         if: always()
@@ -832,7 +832,7 @@ jobs:
 
       - name: Build
         if: steps.fo4.outputs.has_data == 'true'
-        run: cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real
+        run: cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real -- -k 0
 
       - name: ccache statistics
         if: always() && steps.fo4.outputs.has_data == 'true'
