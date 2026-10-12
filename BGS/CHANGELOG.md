@@ -6,6 +6,8 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 ## Unreleased
 
+* Skin weights on full-precision skinned meshes are read and saved at the correct vertex offset. Skinned shapes whose vertex stride does not match their declared attributes are refused instead of misread.
+
 ## 1.3.0
 
 October 1, 2026
