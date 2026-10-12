@@ -18,6 +18,7 @@
 #include "fo4/localization/strings.hpp"
 #include "fo4/plugin/container.hpp"
 #include "fo4/plugin/load_order.hpp"
+#include "fo4/loadorder/load_order_files.hpp"
 #include "fo4/plugin/master_kinds.hpp"
 #include "fo4/plugin/maintenance.hpp"
 #include "fo4/plugin/master_usage.hpp"
