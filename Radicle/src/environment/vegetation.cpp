@@ -76,4 +76,10 @@ std::vector<FormKey> decode_landscape_grasses(const Environment& env, const Reco
   return out;
 }
 
+std::vector<FormKey> landscape_grasses_runtime_view(const Environment& env, const RecordRef& ref) {
+  auto links = decode_landscape_grasses(env, ref);
+  std::erase_if(links, [](const FormKey& key) { return key.owner().empty(); });
+  return links;
+}
+
 }
