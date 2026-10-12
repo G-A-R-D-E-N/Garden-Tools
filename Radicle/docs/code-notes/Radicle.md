@@ -882,3 +882,11 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
+
+## Radicle/tools/corpus/form_versions.py:walk
+
+The census walks TES4 and then each GRUP recursively, reading only the 24-byte record and group headers and seeking past every payload, so it never decompresses. A child that overruns its parent or a truncated header raises and fails that plugin. `Radicle/docs/FORMAT_NOTES.md` (AE 1.11.240.0, 2026-10-12) holds the table it produced over the install's Data folder. The `Fallout4.exe` version comes from the VS_FIXEDFILEINFO block next to the Data folder.
+
+## Radicle/src/forms/race.cpp:decode_race
+
+The RACE form version 131 gate stays exact, and `src/forms/race.cpp:create_race` keeps the same gate. The AE census in `Radicle/docs/FORMAT_NOTES.md` found all 110 RACE records in the seven official masters at form version 131, and no RACE record in any ESL, so the gate is unchanged. `Radicle/tests/test_race_real.cpp:RaceReal.EveryRaceDecodesWithoutFailure` decodes every official RACE under FO4_DATA_DIR. The census has not been run on OG or NG, so relax the gate only after running `Radicle/tools/corpus/form_versions.py` on those installs.

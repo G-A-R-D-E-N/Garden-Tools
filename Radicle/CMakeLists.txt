@@ -405,6 +405,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_lvsp_creation.cpp
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
+    tests/test_race_real.cpp
     tests/test_onam.cpp
     tests/test_vmad_writer.cpp
     tests/test_vmad_writer_real.cpp
