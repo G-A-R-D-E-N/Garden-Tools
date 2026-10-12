@@ -175,6 +175,7 @@ add_library(fo4
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
+  src/environment/package_procedure.cpp
   src/environment/dialogue.cpp
   src/environment/scene_layout.cpp
   src/environment/base_records.cpp

@@ -1,6 +1,6 @@
 # Stored package, combat-style and idle editing
 
-This #345 slice reads and edits stored PKDT, PSDT, PKCU version/template, scoped package links, location/target fields, combat-style values, and idle selection data and strings. It does not schedule or execute NPC behavior. [RE #407](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/407) contains static OG findings and the remaining questions. Procedure trees, data-input ownership, leaf payloads and VMAD fragments remain opaque.
+This #345 slice reads and edits stored PKDT, PSDT, PKCU version/template, scoped package links, location/target fields, combat-style values, and idle selection data and strings. It does not schedule or execute NPC behavior. [RE #407](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/407) contains static OG findings and the remaining questions. The procedure tree and data-input structure are decoded read-only (see Procedure tree); leaf payloads, data-input values and VMAD fragments remain opaque.
 
 ## Sources and scope
 
@@ -22,19 +22,40 @@ record subrecord index. PLDT types 0/1/4/6 and PTDA 0/1/3/7 resolve the value
 as a form ID; other supported variants keep it numeric. All stored values,
 including unused nonzero fields, stay unchanged. Unknown types/shapes receive
 no typed view and retain their raw bytes. These views do not claim ownership
-by a particular data input or procedure. The dispatch/container grammar is
-known, but arbitrary leaf payload boundaries are not, so no complete tree
-or data-input structure is invented.
+by a particular data input or procedure. The procedure-tree reader in the
+next section reports boundaries separately and leaves these views unchanged.
+
+## Procedure tree
+
+`decode_package_procedure` (Radicle/src/environment/package_procedure.cpp) reads the subrecords after PKCU without changing `Package::opaque` or the writers. It is exposed as `radicle_package_procedure_decode` with `radicle_package_procedure_free`. The grammar and boundaries come from [RE #407](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/407) comments 7894 and 9746 (OG 1.10.163 evidence); the result is a stored-structure view, not a runtime evaluation.
+
+- Data inputs: each begins with an ANAM whose zstring is a registered input type (Bool, Int, Float, Ref, Location, LocWrapper, LocationSelector, TargetSelector, ObjectList, SingleRef, Topic). Its value subrecords run to the next ANAM, UNAM or XNAM. Before the tree, one UNAM u8 per input is a bare index. An older shape with a BNAM string and a 4-byte PNAM after each UNAM is also accepted. An optional XNAM u8 closes the list, and the reader keeps it once per package. In shipped data the BNAM and PNAM triples come after the tree instead: no pre-tree UNAM carries a BNAM (0 of 46,174), and all 3,100 UNAM, BNAM and PNAM triples follow the tree. RE-015 (#520 comment 13144) identifies them as the template input-name table. The reader consumes that table after the tree and does not expose it.
+- Tree: the root ANAM is Procedure, Sequence, Stacked, Simultaneous or Random. Templated packages take their tree from the template (RE 7894), so a templated record normally has no tree of its own.
+- Container: ANAM, CITC count with that many CTDA (each with optional CIS1 and CIS2), PRCB (u32 child count, u32 flags), then the children, each opened by ANAM. After the children, one optional PFO2 (PFOR for the legacy form) is consumed. Simultaneous is not special: shipped Simultaneous nodes may have no PFO2.
+- Leaf: ANAM Procedure, CITC and CTDA, then PNAM naming a registered procedure. The payload up to the next ANAM, PFO2, PFOR, POBA, POEA, POCA, UNAM or XNAM is an opaque subrecord range. One optional PFO2 or PFOR directly after the payload is consumed as a flag override and is outside the range. Shipped data has it after leaves in any parent. The payload itself is not decoded. Leaf FNAM bit 0 is the success flag: on success the leaf sets the done flag and advances the procedure index (RE-015, #520 comment 13151); whether that ends the package is not traced. PKC2 indices are in the payload; a PKC2 value of 0xFF means no input (RE-015).
+- Fallback: any boundary that does not reconcile gives `decoded = false`, no nodes or inputs, and one opaque region from after PKCU to the first POBA, POEA or POCA (or the end of the record).
+
+Registered leaf procedure names in this reader: Travel, Sandbox, Sit, Sleep, Follow, FollowTo, Patrol, UseWeapon, Headtrack, ForceGreet, Activate, HoldPosition, UnlockDoors, LockDoors, Range, Escort, Eat, Find, Flee, Guard, GuardArea, Hover, Orbit, KeepAnEyeOn, Acquire, UseIdleMarker, UseMagic, Wander, Wait and Say. A real-data walk of OG 1.10.163, AE 1.11.240 and NG 1.10.984 (4,890 PACKs each, identical results, 0 fallbacks) found every shipped leaf name inside this list; Sit, Say and Eat are listed but never used by shipped leaves.
+
+`expected_input_count` returns the verified input slot counts per leaf (RE 9746): Travel 8, Sandbox 16, Sit 1, Sleep 1, Follow 6, Wait 2 and Say 5. These describe the leaf, not the package's data-input list; the corpus test records a mismatch count instead of asserting one.
+
+Location and target type names follow RE 7894, and the raw fields stay as stored. PLDT types: 0 near reference, 1 in cell, 2 near package start, 3 near editor location, 4 and 5 resolved from a process search result (never shipped), 6 near linked reference, 7 at package location (unproven: no type-7 arm found, RE-015; never shipped), 8 quest alias, 9 location handle (derived), 10 named special reference, 11 input ID matched against the data-input set (RE-015), 12 near self, 13 entire editor-location cell, 14 alias collection item. PTDA types: 0 specific reference, 1 object id, 2 object type, 3 linked reference, 4 quest reference alias, 5 special reference, 6 self, 7 keyword, 8 alias collection item. Type 4 and 5 meanings, type 7, and the 8 versus 9 split are not proven for the values they carry.
+
+Open items from RE #407: leaf payload meanings, data-input value tags for Float, Int, TargetSelector, Ref, SingleRef, LocWrapper and ObjectList, the template and instance input reconciliation rule, and how the post-tree input-name table (UNAM, BNAM, PNAM) relates to the data inputs (RE-015). The PLDT corpus check asserts bytes 1 to 3 of each shipped PLDT are zero (the type is a single byte in a 16-byte block per RE 407, while the reader reads it as i32).
 
 ## CSTY
 
-CSGD is 12 f32 values in the pinned schema's order: offensive, defensive and group-offensive multipliers; melee, magic, ranged, shout, unarmed and staff equipment-score multipliers; avoid, dodge and evade threat chances. CSME has nine or ten f32 values: attack-staggered, power-attack-staggered, power-attack-blocking, bash, bash-recoil, bash-attack, bash-power-attack, special-attack, block-when-staggered, and optional attack-when-staggered multipliers.
+CSGD is 12 f32 values in the pinned schema's order: offensive, defensive and group-offensive multipliers; melee, magic, ranged, shout, unarmed and staff equipment-score multipliers; avoid, dodge and evade threat chances. Those three sit at +0x44, +0x48 and +0x4C in the runtime struct (derived mapping; RE-015 does not name which CSGD fields map there) and are fractions in [0, 1] with a constructor default of 0.2, not percents (RE-015). CSME has nine or ten f32 values: attack-staggered, power-attack-staggered, power-attack-blocking, bash, bash-recoil, bash-attack, bash-power-attack, special-attack, block-when-staggered, and optional attack-when-staggered multipliers.
 
 CSRA and CSCV are individual f32 ranged-accuracy and cover-search values. CSCR is 44 bytes: nine f32 values (circle, fallback, flank distance, stalk time, charge distance, throw probability, sprint-fast probability, sideswipe probability and disengage probability), u32 throw-max-targets and f32 flank variance. CSLR accepts three, four or five f32 values: strafe, adjust-range, crouch, optional wait and optional range multipliers. CSFL has eight f32 values: hover chance, dive-bomb chance, ground-attack chance, hover time, ground-attack time, perch-attack chance, perch-attack time and flying-attack chance. DATA is raw u32 flags. Omitted optional values remain absent; arrays keep their actual stored count. No runtime numeric bounds or selection effects are asserted.
+
+Cross-reference (RE 7894, OG 1.10.163). The CSME names above follow xEdit, which calls the attack, power-attack, block-when and attack-when fields "staggered"; the engine's own debug table names the same fields "incapacitated". The CSCR fields circle, fallback, flank distance, stalk time and flank variance (+0xA4 in the runtime struct) are engine-labeled. The floats at +0x8C to +0xA0 are unlabeled by the engine, so the xEdit names for those slots are not confirmed. CommonLib declares +0xA0 as a uint32, and RE-015 confirms it is an integer field; the byte-level check is not repeated here. DATA flag bits: 0x1 (debug label "Dueling", otherwise "Flanking") sets the behavior-graph variable CloseMovement, 0x2 sets FlankingMovement and takes precedence over 0x8, which sets ChargingMovement. 0x10 gates a consumer (0x123E230). 0x4 has no consumer found in a negative scan, and other bits are unnamed. What the graph variables do downstream was not traced.
 
 ## IDLE
 
 ANAM is eight bytes: parent and previous form ID links. DATA is six bytes: loop minimum and maximum bytes, raw flag byte, raw padding byte and u16 replay delay. The compatibility API's `GroupSection` name does not establish a runtime meaning for the padding byte. DNAM behavior graph, ENAM animation event and GNAM animation file are strict NUL-terminated stored strings. The existing CTDA model supplies raw conditions and CIS operands. Loop/replay consumers remain unresolved in Q8; their units and selection effects are not invented. Strings follow the existing C ABI Windows-1252 to UTF-8 policy.
+
+Selection semantics (derived from RE 7894; labeled derived, not a runtime test). Candidate root idles come from the actor's idle arrays. An idle must pass its own condition list, and its children are reached only through a parent that passed. A candidate found in the recently played list is dropped. Children are searched depth-first unless flag bit 0x02 is set. The final result is accepted only if flag bit 0x02 is set or the animation event name is nonempty. Loop min and max, replay delay and the other flag bits have no proven consumer here.
 
 ## Editing
 
@@ -63,7 +84,7 @@ Metadata-only measurement on 2026-10-04:
 
 All packages have one PKDT/PSDT/PKCU of 12 bytes and one each of POBA/POEA/POCA, empty and in that order. All 143 combat styles have CSGD48, CSRA4, CSCR44, CSCV4, CSFL32 and DATA4; CSME is 36 bytes in 46 records and 40 in 97, while CSLR is 12 bytes in 33, 16 in 10 and 20 in 100. CSMD is absent. All idles have ANAM8 and DATA6. DNAM/ENAM/GNAM occur 3,704/2,904/841 times; all present strings have exactly one trailing NUL. Parent links are 333 null, 1,115 AACT and 2,257 IDLE; previous links are 2,232 null and 1,473 IDLE. There are no malformed measured shapes, unresolved links, wrong-type links or record/subrecord parse failures.
 
-New synthetic tests cover raw values, scoped package fields, location/target variants, combat size variants, conditions, malformed input and unchanged byte preservation. A seven-master corpus sweep invokes all native/C ABI getters and compares unchanged master bytes; it skips cleanly without `FO4_DATA_DIR`. Every new getter has a managed binding test. Local and CI validation are recorded separately for each published head; metadata measurements are not decoder acceptance.
+The procedure-tree corpus check in `test_behavior_real.cpp` expects every official PACK to decode, records leaf-name counts as `PACK_LEAF_<name>`, records data-input count mismatches without asserting them, and expects zero nonzero PLDT padding bytes. New synthetic tests cover raw values, scoped package fields, location/target variants, combat size variants, conditions, malformed input and unchanged byte preservation. A seven-master corpus sweep invokes all native/C ABI getters and compares unchanged master bytes; it skips cleanly without `FO4_DATA_DIR`. Every new getter has a managed binding test. Local and CI validation are recorded separately for each published head; metadata measurements are not decoder acceptance.
 
 Prior published head `3c53c8630cf23636232acc6823cb6a23771ba154` writer validation: both full suites had zero failures across 874 registered cases. The official run has 863 passes and 11 unrelated skips, including all 14 new official order/mutation cases passing; managed bindings have 86 passes. The focused seven-master writer run took 89.66 seconds. Reader regressions and the duplicate-PKCU strict-remap refusal were proven red before their fixes and green afterward. Independent read-only review and its follow-up accepted the changes. Evidence: (local run; not committed).
 
@@ -79,6 +100,6 @@ The probe loads `Fallout4.esm` only and makes no writes. Records are found by wa
 - One CSTY winner that decodes through `RadicleEnvironment.CombatStyle`. CSTY has no parent or previous link, so only the decode is checked.
 - One IDLE winner that decodes through `RadicleEnvironment.Idle`, whose ANAM parent and previous links each resolve through `env.Winner` when present.
 
-The PASS line carries `Pack`, `PackageDataType`, `Template`, `Locations`, `Targets`, `Conditions`, `Opaque`, `CombatStyle`, `CombatStyleMelee` and `Idle`, as form keys and counts.
+The PASS line carries `Pack`, `PackageDataType`, `Template`, `Locations`, `Targets`, `Conditions`, `Opaque`, `CombatStyle`, `CombatStyleMelee`, `Idle`, `RootProcedure` (the root node name, null for a templated record) and `LeafProcedures` (the leaf procedure names in tree order), as form keys, names and counts.
 
 Not yet run; needs a GardenEngine checkout whose Radicle pin includes this change.
