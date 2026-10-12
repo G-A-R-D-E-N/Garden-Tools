@@ -1591,12 +1591,6 @@ The PEX parser reads a value for every object variable and struct member, so `ha
 
 The managed model types and the generated raw structs share names (`PexValue`, `PexFunction`, `PexState`, `PexObjectCode` and others), following `PexHeader` and `PexObjectCounts`. Code inside `Radicle.Interop` resolves to the model type. A consumer outside it that imports both `Radicle.Interop` and `Radicle.Interop.Native` gets CS0104, so it qualifies the raw structs as `Native.X` (as `PexCode.cs:ReadCode` does) or aliases them. Renaming the generated structs would change every existing `Native` type name, so the bindings README documents the rule instead. No GardenEngine file imports both namespaces today.
 
-## .github/workflows/native-ci.yml:workflow_dispatch, native-windows-tests
-
-The branch previously provided an optional `lane=radicle-cross` dispatch. Integration with main supersedes that dispatch: the current workflow has no lane input or path gate, and every pull request runs the required Linux Debug and Windows MSVC suites, including documentation-only changes. The cross builds remain limited to main and manual runs.
-
-The earlier branch workflow retained a Windows Release test artifact for seven days. The current main workflow has no successful-run MSVC test artifact upload. Official-data validation therefore uses a fresh local build at the recorded head; downloading a binary is not a test result.
-
 ## Radicle/src/plugin/reader.cpp:inflate_record_payload, Radicle/tests/test_compression.cpp:OfficialMastersUseZlibAndPreserveBytes
 
 The current-main integration retains the published zlib-framing rejection and physical XXXX preservation tests without changing the decoder. Main supplies the required native and offline managed CI jobs and the field-address generator test. No exports or layouts are added, so `RADICLE_ABI_VERSION` is unchanged. NG window bits, zero-size and malformed-input runtime acceptance, and CK behavior remain open under #391.
