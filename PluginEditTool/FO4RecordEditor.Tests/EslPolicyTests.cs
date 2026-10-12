@@ -242,6 +242,42 @@ public class EslPolicyTests
     }
 
     [Fact]
+    public void CheckEsl_ReportsBlockedWhereAFormKeyIsSharedByTwoRecords()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x700, "Dup_Low");
+        AddWeapon(mod, 0x5000, "Dup_Weapon");
+        mod.Keywords.Add(new Keyword(new FormKey(mod.ModKey, 0x5000), Fallout4Release.Fallout4) { EditorID = "Dup_Keyword" });
+        var exec = new PluginToolExecutor(() => null);
+
+        var result = exec.Execute("check_esl_eligibility", Args(plugin));
+
+        result.Should().Contain("would BLOCK on compact_to_esl").And.Contain("005000").And.Contain("shared by 2 records");
+        result.Should().NotContain("ESL-ELIGIBLE");
+    }
+
+    [Fact]
+    public void RenumberPluginFormIds_RefusesPluginWhereAFormKeyIsSharedByTwoRecords()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x700, "Dup_Low");
+        AddWeapon(mod, 0x5000, "Dup_Weapon");
+        mod.Keywords.Add(new Keyword(new FormKey(mod.ModKey, 0x5000), Fallout4Release.Fallout4) { EditorID = "Dup_Keyword" });
+        var exec = new PluginToolExecutor(() => null);
+        var before = mod.EnumerateMajorRecords().Count();
+        var nextBefore = mod.ModHeader.Stats.NextFormID;
+
+        exec.Execute("renumber_plugin_formids", $"{{\"plugin\":\"{plugin}\",\"start\":\"000800\",\"apply\":true}}")
+            .Should().Contain("Cannot renumber").And.Contain("005000").And.Contain("shared by 2 records");
+        mod.EnumerateMajorRecords().Count().Should().Be(before);
+        mod.Weapons.First(w => w.EditorID == "Dup_Low").FormKey.ID.Should().Be(0x700u);
+        mod.Weapons.First(w => w.EditorID == "Dup_Weapon").FormKey.ID.Should().Be(0x5000u);
+        mod.ModHeader.Stats.NextFormID.Should().Be(nextBefore);
+    }
+
+    [Fact]
     public void SetLight_RefusesMasterlessPluginWithIdsBelowTheFloor()
     {
         var plugin = NewPlugin(1f, withMaster: false);

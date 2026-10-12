@@ -1,5 +1,6 @@
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace FO4RecordEditor.Services;
 
@@ -16,7 +17,7 @@ public static partial class WriteService
         var (first, last, capacity, range) = EslSlots(mod);
 
         var native = mod.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == mod.ModKey).ToList();
-        var duplicate = native.GroupBy(r => r.FormKey).FirstOrDefault(g => g.Count() > 1);
+        var duplicate = SharedFormKey(native);
         if (duplicate != null)
             return $"Cannot compact '{plugin}': form ID {duplicate.Key} is shared by {duplicate.Count()} records. Fix the duplicate in xEdit first.";
         var inRange = new HashSet<uint>(native.Select(r => r.FormKey.ID).Where(id => id >= first && id <= last));
@@ -66,6 +67,9 @@ public static partial class WriteService
         var (first, last, capacity, range) = EslSlots(mod);
 
         var native = mod.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == mod.ModKey).ToList();
+        if (SharedFormKey(native) is { } duplicate)
+            return $"'{plugin}' would BLOCK on compact_to_esl: form ID {duplicate.Key} is shared by {duplicate.Count()} records. " +
+                   "Fix the duplicate in xEdit first.";
         var outOfRange = native.Where(r => r.FormKey.ID < first || r.FormKey.ID > last).ToList();
 
         if (outOfRange.Count == 0)
@@ -158,4 +162,7 @@ public static partial class WriteService
     }
 
     private static bool IsForeign(IFallout4Mod mod, FormKey key) => !key.IsNull && key.ModKey != mod.ModKey;
+
+    private static IGrouping<FormKey, IMajorRecordGetter>? SharedFormKey(IEnumerable<IMajorRecordGetter> native) =>
+        native.GroupBy(r => r.FormKey).FirstOrDefault(g => g.Count() > 1);
 }
