@@ -2,6 +2,7 @@
 #include "fo4/c_api_records.h"
 #include "fo4/c_api_materials.h"
 #include "fo4/c_api_maintenance.h"
+#include "fo4/c_api_sound.h"
 #include "fo4/c_api_pex.h"
 #include "fo4/c_api_material_file.h"
 #include "fo4/c_api_seq.h"
@@ -472,6 +473,61 @@ int main() {
   printf("MaterialSwap.Substitutions %zu\n", offsetof(radicle_material_swap, substitutions));
   printf("MaterialSwap.SubstitutionCount %zu\n", offsetof(radicle_material_swap, substitution_count));
   printf("MaterialSwap.Internal %zu\n", offsetof(radicle_material_swap, internal));
+  printf("SoundPlayback %zu\n", sizeof(radicle_sound_playback));
+  printf("SoundPlayback.FrequencyShift %zu\n", offsetof(radicle_sound_playback, frequency_shift));
+  printf("SoundPlayback.FrequencyVariance %zu\n", offsetof(radicle_sound_playback, frequency_variance));
+  printf("SoundPlayback.Priority %zu\n", offsetof(radicle_sound_playback, priority));
+  printf("SoundPlayback.DbVariance %zu\n", offsetof(radicle_sound_playback, db_variance));
+  printf("SoundPlayback.AttenuationHundredths %zu\n", offsetof(radicle_sound_playback, attenuation_hundredths));
+  printf("SoundFile %zu\n", sizeof(radicle_sound_file));
+  printf("SoundFile.Path %zu\n", offsetof(radicle_sound_file, path));
+  printf("SoundRateFile %zu\n", sizeof(radicle_sound_rate_file));
+  printf("SoundRateFile.Rpm %zu\n", offsetof(radicle_sound_rate_file, rpm));
+  printf("SoundRateFile.Path %zu\n", offsetof(radicle_sound_rate_file, path));
+  printf("SoundDescriptor %zu\n", sizeof(radicle_sound_descriptor));
+  printf("SoundDescriptor.HasKind %zu\n", offsetof(radicle_sound_descriptor, has_kind));
+  printf("SoundDescriptor.Kind %zu\n", offsetof(radicle_sound_descriptor, kind));
+  printf("SoundDescriptor.Category %zu\n", offsetof(radicle_sound_descriptor, category));
+  printf("SoundDescriptor.Alternate %zu\n", offsetof(radicle_sound_descriptor, alternate));
+  printf("SoundDescriptor.OutputModel %zu\n", offsetof(radicle_sound_descriptor, output_model));
+  printf("SoundDescriptor.BaseDescriptor %zu\n", offsetof(radicle_sound_descriptor, base_descriptor));
+  printf("SoundDescriptor.Descriptors %zu\n", offsetof(radicle_sound_descriptor, descriptors));
+  printf("SoundDescriptor.DescriptorCount %zu\n", offsetof(radicle_sound_descriptor, descriptor_count));
+  printf("SoundDescriptor.Files %zu\n", offsetof(radicle_sound_descriptor, files));
+  printf("SoundDescriptor.FileCount %zu\n", offsetof(radicle_sound_descriptor, file_count));
+  printf("SoundDescriptor.HasControls %zu\n", offsetof(radicle_sound_descriptor, has_controls));
+  printf("SoundDescriptor.Controls %zu\n", offsetof(radicle_sound_descriptor, controls));
+  printf("SoundDescriptor.HasPlayback %zu\n", offsetof(radicle_sound_descriptor, has_playback));
+  printf("SoundDescriptor.Playback %zu\n", offsetof(radicle_sound_descriptor, playback));
+  printf("SoundDescriptor.RateFiles %zu\n", offsetof(radicle_sound_descriptor, rate_files));
+  printf("SoundDescriptor.RateFileCount %zu\n", offsetof(radicle_sound_descriptor, rate_file_count));
+  printf("SoundDescriptor.Internal %zu\n", offsetof(radicle_sound_descriptor, internal));
+  printf("SoundMarkerInfo %zu\n", sizeof(radicle_sound_marker_info));
+  printf("SoundMarkerInfo.Descriptor %zu\n", offsetof(radicle_sound_marker_info, descriptor));
+  printf("SoundMarkerInfo.HasRepeat %zu\n", offsetof(radicle_sound_marker_info, has_repeat));
+  printf("SoundMarkerInfo.MinTime %zu\n", offsetof(radicle_sound_marker_info, min_time));
+  printf("SoundMarkerInfo.MaxTime %zu\n", offsetof(radicle_sound_marker_info, max_time));
+  printf("SoundMarkerInfo.HasStackable %zu\n", offsetof(radicle_sound_marker_info, has_stackable));
+  printf("SoundMarkerInfo.Stackable %zu\n", offsetof(radicle_sound_marker_info, stackable));
+  printf("MusicType %zu\n", sizeof(radicle_music_type));
+  printf("MusicType.HasFlags %zu\n", offsetof(radicle_music_type, has_flags));
+  printf("MusicType.Flags %zu\n", offsetof(radicle_music_type, flags));
+  printf("MusicType.HasPriority %zu\n", offsetof(radicle_music_type, has_priority));
+  printf("MusicType.Priority %zu\n", offsetof(radicle_music_type, priority));
+  printf("MusicType.DuckingHundredths %zu\n", offsetof(radicle_music_type, ducking_hundredths));
+  printf("MusicType.HasFadeDuration %zu\n", offsetof(radicle_music_type, has_fade_duration));
+  printf("MusicType.FadeDuration %zu\n", offsetof(radicle_music_type, fade_duration));
+  printf("MusicType.Tracks %zu\n", offsetof(radicle_music_type, tracks));
+  printf("MusicType.TrackCount %zu\n", offsetof(radicle_music_type, track_count));
+  printf("MusicType.Internal %zu\n", offsetof(radicle_music_type, internal));
+  printf("FootstepInfo %zu\n", sizeof(radicle_footstep_info));
+  printf("FootstepInfo.ImpactSet %zu\n", offsetof(radicle_footstep_info, impact_set));
+  printf("FootstepInfo.Tag %zu\n", offsetof(radicle_footstep_info, tag));
+  printf("FootstepSet %zu\n", sizeof(radicle_footstep_set));
+  printf("FootstepSet.Counts %zu\n", offsetof(radicle_footstep_set, counts));
+  printf("FootstepSet.Steps %zu\n", offsetof(radicle_footstep_set, steps));
+  printf("FootstepSet.StepCount %zu\n", offsetof(radicle_footstep_set, step_count));
+  printf("FootstepSet.Internal %zu\n", offsetof(radicle_footstep_set, internal));
   printf("PexHeader %zu\n", sizeof(radicle_pex_header));
   printf("PexHeader.MajorVersion %zu\n", offsetof(radicle_pex_header, major_version));
   printf("PexHeader.MinorVersion %zu\n", offsetof(radicle_pex_header, minor_version));

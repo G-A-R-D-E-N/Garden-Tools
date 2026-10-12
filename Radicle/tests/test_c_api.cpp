@@ -1,6 +1,7 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_env.h"
 #include "fo4/c_api_materials.h"
+#include "fo4/c_api_sound.h"
 #include "fo4/c_api_vegetation.h"
 #include "plugin_bytes.hpp"
 #include "quest_plugin_fixture.hpp"
@@ -590,6 +591,23 @@ TEST(CApi, RecordFromAnotherEnvironmentIsRejected) {
   EXPECT_EQ(radicle_landscape_grasses_decode(env_b, record, &grasses), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
   EXPECT_EQ(grasses, nullptr);
+
+  const radicle_sound_descriptor* descriptor = sentinel_ptr<const radicle_sound_descriptor>();
+  EXPECT_EQ(radicle_sound_descriptor_decode(env_b, record, &descriptor), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  EXPECT_EQ(descriptor, nullptr);
+  radicle_sound_marker_info marker = sentinel_value<radicle_sound_marker_info>();
+  EXPECT_EQ(radicle_sound_marker_get_info(env_b, record, &marker), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(marker);
+  const radicle_music_type* music = sentinel_ptr<const radicle_music_type>();
+  EXPECT_EQ(radicle_music_type_decode(env_b, record, &music), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(music, nullptr);
+  radicle_footstep_info footstep = sentinel_value<radicle_footstep_info>();
+  EXPECT_EQ(radicle_footstep_get_info(env_b, record, &footstep), RADICLE_STATUS_INVALID_ARGUMENT);
+  expect_sentinel_value(footstep);
+  const radicle_footstep_set* footsteps = sentinel_ptr<const radicle_footstep_set>();
+  EXPECT_EQ(radicle_footstep_set_decode(env_b, record, &footsteps), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(footsteps, nullptr);
 
   radicle_plugin* target = nullptr;
   ASSERT_EQ(radicle_plugin_create("Target.esp", &target), RADICLE_STATUS_OK) << radicle_last_error();
