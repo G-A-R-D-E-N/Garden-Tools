@@ -571,6 +571,9 @@ PlacedReferenceCopyNewResult copy_placed_reference_as_new(
   auto* cell_parent = ensure_group_path(
       next, source_cell.path, source_context, destination_context);
 
+  if (world.has_value()) {
+    if (const auto* world_record = find_record(next, *world)) require_decodable(*world_record);
+  }
   require_decodable(*find_record(next, cell));
   auto* destination_cell_children = ensure_cell_children_group(
       *cell_parent,
