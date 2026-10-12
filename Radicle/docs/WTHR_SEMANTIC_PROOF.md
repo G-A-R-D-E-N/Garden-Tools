@@ -84,7 +84,7 @@ Not FormIDs: `DALC`, `VNAM`, `WNAM`, `NAM1`, cloud speed/color/alpha blobs, `LNA
 ## Partial
 
 - `DATA` flag byte (offset 11): stored raw. Bit names are not asserted from schema annotations or commonlib `WeatherDataFlags` / Mutagen `Weather.Flag`; no enum is exposed until cited. Source: `Radicle/docs/CLIMATE_WEATHER.md` (offset table row 11; lines 38-39).
-- `DATA` transition delta (offset 3): stored as u8. The runtime transition duration is partial: `fWeatherTransMin` and `fWeatherTransMax` are identified, but the formula, GMST override and live simulation are unproven and no duration is computed. Source: `Radicle/docs/CLIMATE_WEATHER.md` (offset table row 3; lines 53-58).
+- `DATA` transition delta (offset 3): stored as u8. RE-010 on #520 comment 13142 (static analysis of OG 1.10.163) gives the compiled defaults fWeatherTransMax 1.0, fWeatherTransMin 0.01 and fWeatherTransAccel 4.0. The AE 1.11.240 Fallout4.esm overrides fWeatherTransMax to 3.0 and fWeatherTransAccel to 16.0. Every matching GMST overwrites the setting in load order, so the last one wins. With the Sky accelerate flag (bit 3) set, `pct = (pct - base) * (fWeatherTransAccel + 1.0) + base`, recomputed each frame: 5x compiled, 17x AE. `transition_hours` computes the unaccelerated duration from caller-supplied bounds. Still open: live in-engine observation of the transition length at DATA[3] = 0 and 255 and of the effect of the game-setting values. Source: `Radicle/docs/CLIMATE_WEATHER.md` (offset table row 3; accelerated transition and GMST paragraphs).
 
 ## Radicle status before this issue
 

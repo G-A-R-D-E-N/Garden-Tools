@@ -220,3 +220,45 @@ TEST(ListPreflight, PackedKeywordArrayIsChecked4BytesPerElement) {
   }
   EXPECT_TRUE(flagged);
 }
+
+TEST(ClimatePreflight, SunWindowSpanningA24HourDayIsFlaggedWithoutReordering) {
+  const auto issues_for = [](std::vector<std::uint8_t> bytes) {
+    fo4::Record record;
+    record.header.signature = fo4::Signature::from_string("CLMT");
+    record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+    fo4::Subrecord timing;
+    timing.signature = fo4::Signature::from_string("TNAM");
+    for (const auto byte : bytes) timing.data.push_back(std::byte{byte});
+    record.subrecords.push_back(std::move(timing));
+    return fo4::schema::preflight_record(record);
+  };
+  const auto sunrise = issues_for({0, 144, 10, 20, 0, 0});
+  ASSERT_EQ(sunrise.size(), 1u);
+  EXPECT_EQ(sunrise[0].code, "climate_sun_window_full_day");
+  EXPECT_EQ(sunrise[0].path, "CLMT\\TNAM");
+  EXPECT_EQ(sunrise[0].severity, fo4::schema::PreflightSeverity::warning);
+  EXPECT_EQ(issues_for({0, 1, 10, 154, 0, 0}).size(), 1u);
+  EXPECT_TRUE(issues_for({0, 143, 10, 20, 0, 0}).empty());
+}
+
+TEST(ClimatePreflight, ReversedOrZeroWidthSunWindowNeverOpensIsFlagged) {
+  const auto issues_for = [](std::vector<std::uint8_t> bytes) {
+    fo4::Record record;
+    record.header.signature = fo4::Signature::from_string("CLMT");
+    record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+    fo4::Subrecord timing;
+    timing.signature = fo4::Signature::from_string("TNAM");
+    for (const auto byte : bytes) timing.data.push_back(std::byte{byte});
+    record.subrecords.push_back(std::move(timing));
+    return fo4::schema::preflight_record(record);
+  };
+  const auto reversed_sunrise = issues_for({60, 10, 20, 30, 0, 0});
+  ASSERT_EQ(reversed_sunrise.size(), 1u);
+  EXPECT_EQ(reversed_sunrise[0].code, "climate_sun_window_never_opens");
+  EXPECT_EQ(reversed_sunrise[0].path, "CLMT\\TNAM");
+  EXPECT_EQ(reversed_sunrise[0].severity, fo4::schema::PreflightSeverity::warning);
+  const auto zero_width_sunset = issues_for({10, 20, 40, 40, 0, 0});
+  ASSERT_EQ(zero_width_sunset.size(), 1u);
+  EXPECT_EQ(zero_width_sunset[0].code, "climate_sun_window_never_opens");
+  EXPECT_TRUE(issues_for({10, 20, 40, 50, 0, 0}).empty());
+}

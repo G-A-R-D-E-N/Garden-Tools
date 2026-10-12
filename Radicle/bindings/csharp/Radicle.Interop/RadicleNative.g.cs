@@ -1617,7 +1617,7 @@ public unsafe struct SceneInfo
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 34u;
+    public const uint CompiledAbiVersion = 35u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1906,6 +1906,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_climate_timing")]
     public static extern Status PluginSetClimateTiming(IntPtr plugin, FormKey key, ClimateTimingEdit* timing);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_climate_moon_phase")]
+    public static extern Status ClimateMoonPhase(byte moons_phase_length, uint days_passed, int* out_has_phase, byte* out_phase);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_climate_volatility_hold_hours")]
+    public static extern Status ClimateVolatilityHoldHours(byte volatility, float multiplier, float duration_min, float duration_max, float* out_hours);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_weather_transition_hours")]
+    public static extern Status WeatherTransitionHours(byte transition_delta, float min_hours, float max_hours, float* out_hours);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_weather_decode")]
     public static extern Status WeatherDecode(IntPtr env, IntPtr record, WeatherInfo** out_weather);

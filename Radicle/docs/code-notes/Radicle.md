@@ -882,3 +882,20 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
+
+## Radicle/include/fo4/environment/base_records.hpp:ClimateTiming
+`moon_phase` decodes the packed moon byte as in `days_per_phase`: the phase is `(days passed % (days * 8)) / days`, so there are eight phases (0 to 7) driven by the game day count. Zero days per phase means the phase is never updated, so the helper returns no value rather than 0. Packing and phase formula: #397 comment 7866.
+
+`volatility_hold_hours` takes the multiplier and the hold-time bounds as inputs. The engine's `x = clamp(byte * volatilityMult, 0, 255)` and the result `max(0.1, (max - min) * (255 - x) / 255 + min)` are the proven formula (0x656270, #397 comment 7866). The 0.1 floor is part of the formula; the engine returns 0.1 directly when there is no climate or no current weather, which the helper does not model. The compiled defaults are min 1.0 and max 23.0 game hours. The meaning of the result as the weather hold time is verified from `Sky::UpdateWeather` at 0x64E530 (#397 comment 9745).
+
+## Radicle/src/environment/base_records.cpp:transition_hours
+Computes `byte / 255 * (max - min) + min` in float32 from the WTHR DATA transition byte (`weatherData[3]`, read unsigned by the engine). The bounds are game settings `fWeatherTransMin` and `fWeatherTransMax`, not record fields, so the caller supplies them; the compiled OG defaults are 0.01 and 1.0, and the AE 1.11.240 Fallout4.esm sets fWeatherTransMax 3.0 (OG shipped GMST values unverified) (#397 comments 7866 and 9763 for the GMST routing). Its min and max come from GMSTs where the last matching plugin wins, and the accelerated 5x (compiled) or 17x (AE) multiplier from fWeatherTransAccel is not applied (RE-010 on #520, comment 13142).
+
+## Radicle/src/schema/preflight.cpp:climate_sun_window_issues
+Flags a CLMT TNAM whose sunrise (bytes 0 to 1) or sunset (bytes 2 to 3) window has end minus begin equal to 144 raw units, which is 24 hours at 1/6 hour per unit. The engine divides by zero for that window in 0x647CE0 (#397 comment 9745). Reversed and zero-width windows (end minus begin at or below 0) are flagged as `climate_sun_window_never_opens`, because the engine never opens them (RE-010 on #520, comment 13142); the record is not reordered or clamped.
+
+## Radicle/src/c_api_base_records.cpp:radicle_climate_moon_phase
+C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_hours` and `transition_hours`. They take the stored bytes as scalars, check null out-pointers, and use the same `RADICLE_STATUS_INVALID_ARGUMENT` convention as the other scalar getters. The moon wrapper reports absence with `out_has_phase` (0 when days per phase is 0).
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
+ABI 34 to 35 for the three new scalar helpers in `c_api_records.h` (`radicle_climate_moon_phase`, `radicle_climate_volatility_hold_hours`, `radicle_weather_transition_hours`). The test rename is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFive`.
