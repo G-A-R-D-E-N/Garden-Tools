@@ -105,7 +105,8 @@ void write_record(ByteWriter& out, const Plugin& plugin, const Record& record) {
   }
   if (record.undecodable) {
     throw std::invalid_argument("undecodable record " + record.header.signature.to_string() + " " +
-                                record.form_key.to_string() + " has no original bytes; it cannot be written");
+                                record.form_key.to_string() +
+                                " has no original bytes; it cannot be written");
   }
 
   const auto header_offset = out.bytes.size();
