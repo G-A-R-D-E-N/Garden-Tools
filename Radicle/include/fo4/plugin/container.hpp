@@ -46,6 +46,12 @@ struct Record {
   std::uint32_t uncompressed_size{0};
 };
 
+inline bool is_partial_form(const Record& record) {
+  const auto signature = record.header.signature.view();
+  return record.header.flags.test(RecordFlags::partial_form) &&
+         (signature == "CELL" || signature == "DIAL" || signature == "QUST" || signature == "WRLD");
+}
+
 struct Group;
 
 using GroupChild = std::variant<Record, Group>;

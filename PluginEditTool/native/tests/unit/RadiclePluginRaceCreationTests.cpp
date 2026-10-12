@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -152,6 +153,37 @@ TEST_CASE("PluginEditTool creates current-format RACE with required base skeleto
     }
     CHECK(bodyMarkers == 1u);
     CHECK(behaviorMarkers == 1u);
+}
+
+TEST_CASE("PluginEditTool stores a RACE UTF-8 EditorID as Windows-1252") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, emptyPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const nlohmann::json payload{
+        {"editorId", "Caf\xC3\xA9"},
+        {"description", "Native race"},
+        {"maleHeight", 1.0},
+        {"femaleHeight", 1.0}
+    };
+    const auto created = parseResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "RACE", payload})));
+    REQUIRE(created.at("formKey") == "000800:Patch.esp");
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(disk, fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(record != nullptr);
+    const auto edid = std::find_if(record->subrecords.begin(), record->subrecords.end(),
+        [](const fo4::Subrecord& sub) { return sub.signature == fo4::sig_edid; });
+    REQUIRE(edid != record->subrecords.end());
+    CHECK(edid->data == std::vector<std::byte>{
+        std::byte{'C'}, std::byte{'a'}, std::byte{'f'}, std::byte{0xE9}, std::byte{0}});
 }
 
 TEST_CASE("PluginEditTool rejects incomplete RACE payload before write") {

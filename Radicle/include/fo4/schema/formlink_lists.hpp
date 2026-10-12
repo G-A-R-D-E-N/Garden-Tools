@@ -5,11 +5,13 @@
 #include "fo4/schema/field_address.hpp"
 #include "fo4/signature.hpp"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 namespace fo4::schema {
 
@@ -28,6 +30,7 @@ struct FormLinkFieldDescriptor {
   std::size_t first_target{0};
   std::size_t target_count{0};
   FieldAddress address{};
+  std::array<std::size_t, 2> payload_sizes{};
 };
 
 class FormLinkFieldError : public std::runtime_error {
@@ -141,6 +144,11 @@ bool formlink_list_target_allowed(const FormLinkListDescriptor& descriptor,
                                   Signature signature) noexcept;
 
 std::optional<std::size_t> record_formlink_list_size(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const FormLinkListDescriptor& descriptor);
+
+std::optional<std::vector<FormKey>> record_formlink_list_values(
     const Plugin& plugin,
     const FormKey& record_key,
     const FormLinkListDescriptor& descriptor);

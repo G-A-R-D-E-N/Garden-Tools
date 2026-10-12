@@ -34,19 +34,27 @@ public:
   }
 
   const Subrecord* unique(Signature signature) const {
+    return unique(*ref_.record, signature);
+  }
+
+  static const Subrecord* unique(const Record& record, Signature signature) {
     const Subrecord* found = nullptr;
-    for (const auto& subrecord : ref_.record->subrecords) {
+    for (const auto& subrecord : record.subrecords) {
       if (subrecord.signature != signature) continue;
-      if (found != nullptr) fail(signature, "appears more than once");
+      if (found != nullptr) fail(record, signature, "appears more than once");
       found = &subrecord;
     }
     return found;
   }
 
   const Subrecord* sized(Signature signature, std::size_t size) const {
-    const auto* subrecord = unique(signature);
+    return sized(*ref_.record, signature, size);
+  }
+
+  static const Subrecord* sized(const Record& record, Signature signature, std::size_t size) {
+    const auto* subrecord = unique(record, signature);
     if (subrecord != nullptr && subrecord->data.size() != size) {
-      fail(signature, "must be " + std::to_string(size) + " bytes");
+      fail(record, signature, "must be " + std::to_string(size) + " bytes");
     }
     return subrecord;
   }
@@ -64,8 +72,12 @@ public:
   }
 
   [[noreturn]] void fail(Signature signature, const std::string& message) const {
-    throw WorldDecodeError(ref_.record->header.signature.to_string() + " " +
-                           ref_.record->form_key.to_string() + " " + signature.to_string() +
+    fail(*ref_.record, signature, message);
+  }
+
+  [[noreturn]] static void fail(const Record& record, Signature signature, const std::string& message) {
+    throw WorldDecodeError(record.header.signature.to_string() + " " +
+                           record.form_key.to_string() + " " + signature.to_string() +
                            " " + message);
   }
 

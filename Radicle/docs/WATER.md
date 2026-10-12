@@ -132,7 +132,7 @@ one half, negative fractions truncate, and NaN/below-range values become
 -2^31. Values at least +2^31 select the world's default height: **-2^31 is
 a real height**, not a default sentinel. The original XCLW bytes remain intact.
 Interior height volumes and live rendering are outside this selection query.
-The selection result uses ABI 12 after integrating main ABI 11; re-bump if
+The selection result uses ABI 28 after integrating main ABI 27; re-bump if
 another ABI PR merges first. See `docs/code-notes/radicle-water-writer.md`.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has the consumer

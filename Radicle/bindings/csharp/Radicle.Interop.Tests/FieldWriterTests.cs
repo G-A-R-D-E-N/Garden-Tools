@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -154,6 +155,35 @@ public class FieldWriterTests
     }
 
     [Fact]
+    public void EmbeddedNulInWritePathsIsRefusedBeforeNativeTruncatesIt()
+    {
+        using var temp = new TempDirectory();
+        using var plugin = Open(temp);
+        var before = plugin.ToBytes();
+
+        Assert.Throws<ArgumentException>(() => plugin.SetScalar(Refr, "REFR\\HealthPercent\0junk", "80"));
+        Assert.Throws<ArgumentException>(() => plugin.SetString(Race, "RACE\\BipedObjectNames\0junk", "x"));
+        Assert.Throws<ArgumentException>(() => plugin.SetFormLink(Expl, "EXPL\\Light\0junk", M(0x900)));
+        Assert.Throws<ArgumentException>(() => plugin.FormLinkListInsert(Flst, "FLST\\Items\0junk", 0, M(0x900)));
+        Assert.Throws<ArgumentException>(() => plugin.AddSubrecord(Refr, "XHLT\0junk"));
+        Assert.Throws<ArgumentException>(() => plugin.SetScalar(new Radicle.Interop.FormKey("Fields.esp\0junk", 0x820), "REFR\\HealthPercent", "80"));
+
+        Assert.Equal(before, plugin.ToBytes());
+    }
+
+    [Fact]
+    public void EmbeddedNulInFilePathsIsRefused()
+    {
+        using var temp = new TempDirectory();
+        using var plugin = Open(temp);
+
+        Assert.Throws<ArgumentException>(() => PluginFile.Read(Path.Combine(temp.Path, Plugin) + "\0junk"));
+        Assert.Throws<ArgumentException>(() => PluginFile.Create(Plugin + "\0junk"));
+        Assert.Throws<ArgumentException>(() => plugin.Write(Path.Combine(temp.Path, "Written.esp") + "\0junk"));
+        Assert.False(File.Exists(Path.Combine(temp.Path, "Written.esp")));
+    }
+
+    [Fact]
     public void FieldCountReportsOccurrences()
     {
         using var temp = new TempDirectory();
@@ -162,7 +192,13 @@ public class FieldWriterTests
         Assert.Equal(2, plugin.FieldCount(Race, "RACE\\BipedObjectNames"));
         Assert.Equal(1, plugin.FieldCount(Expl, "EXPL\\Light"));
         Assert.Equal(0, plugin.FieldCount(Refr, "REFR\\Scale"));
-        Assert.Equal(0, plugin.FieldCount(K(0x999), "REFR\\Scale"));
+        Assert.Throws<KeyNotFoundException>(() => plugin.FieldCount(K(0x999), "REFR\\Scale"));
+        Assert.False(plugin.TryFieldCount(K(0x999), "REFR\\Scale", out var missing));
+        Assert.Equal(0, missing);
+        Assert.True(plugin.TryFieldCount(Refr, "REFR\\Scale", out var none));
+        Assert.Equal(0, none);
+        Assert.True(plugin.TryFieldCount(Race, "RACE\\BipedObjectNames", out var biped));
+        Assert.Equal(2, biped);
         var error = Assert.Throws<RadicleException>(() => plugin.FieldCount(Refr, "REFR\\Nope"));
         Assert.Equal(Status.InvalidArgument, error.Status);
         Assert.Throws<ArgumentNullException>(() => plugin.FieldCount(Refr, null!));
@@ -182,7 +218,11 @@ public class FieldWriterTests
         Assert.False(plugin.FormLinkListSet(Flst, "FLST\\Items", 9, M(0x900)));
         Assert.False(plugin.FormLinkListRemove(Flst, "FLST\\Items", 9));
         Assert.False(plugin.FormLinkListClear(K(0x999), "FLST\\Items"));
-        Assert.Equal(0, plugin.FormLinkListCount(K(0x999), "FLST\\Items"));
+        Assert.Throws<KeyNotFoundException>(() => plugin.FormLinkListCount(K(0x999), "FLST\\Items"));
+        Assert.False(plugin.TryFormLinkListCount(K(0x999), "FLST\\Items", out var missing));
+        Assert.Equal(0, missing);
+        Assert.True(plugin.TryFormLinkListCount(Flst, "FLST\\Items", out var items));
+        Assert.Equal(3, items);
         Assert.True(plugin.FormLinkListRemove(Flst, "FLST\\Items", 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => plugin.FormLinkListRemove(Flst, "FLST\\Items", -1));
 

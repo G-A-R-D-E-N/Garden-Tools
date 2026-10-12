@@ -229,7 +229,11 @@ std::span<const RecordRef> Environment::versions(const FormKey& key) const noexc
 
 const RecordRef* Environment::winner(const FormKey& key) const noexcept {
   const auto found = versions(key);
-  return found.empty() ? nullptr : &found.back();
+  if (found.empty()) return nullptr;
+  for (auto it = found.rbegin(); it + 1 != found.rend(); ++it) {
+    if (!is_partial_form(*it->record)) return &*it;
+  }
+  return &found.front();
 }
 
 const RecordRef* Environment::find_by_editor_id(std::string_view editor_id,
