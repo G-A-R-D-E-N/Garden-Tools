@@ -70,7 +70,7 @@ TEST_P(BehaviorReal, EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByt
   for (const auto& [slice, pack_count] : pack_types) RecordProperty(slice, pack_count);
   for (const auto& [slice, example] : pack_examples) RecordProperty(slice + "_example", example);
   RecordProperty("PACK_template_packages", pack_templates);
-  for (const auto& [leaf, count] : leaf_counts) RecordProperty("PACK_LEAF_" + leaf, count);
+  for (const auto& [leaf, leaf_count] : leaf_counts) RecordProperty("PACK_LEAF_" + leaf, leaf_count);
   RecordProperty("PACK_procedure_total", pack_procedures); RecordProperty("PACK_procedure_decoded", pack_procedures_decoded);
   RecordProperty("PACK_LEAF_INPUT_COUNT_MISMATCH", leaf_input_mismatches); RecordProperty("PACK_PKCU_INPUT_COUNT_MISMATCH", pkcu_input_mismatches);
   RecordProperty("PLDT_records", pldt_records); RecordProperty("PLDT_nonzero_padding", pldt_nonzero_padding);
