@@ -81,9 +81,9 @@ Deleted record bit `1 << 5` is `strong` (`TESForm::IsDeleted`).
 
 ## Compressed records
 
-Payload starts with `uint32 uncompressed_size`, then a zlib-wrapped stream (window bits 15). This branch rejects raw-deflate and gzip framing for nonzero declared sizes; its existing zero-size early return is unchanged.
+Payload starts with `uint32 uncompressed_size`, then a zlib-wrapped stream (window bits 15). Raw-deflate or gzip framing, a failed inflate, a declared size past the caps, or inflated bytes that do not parse as subrecords make a non-TES4 record load as undecodable with its raw bytes kept and written back unchanged (GT-205, `src/plugin/reader.cpp:read_record`); a TES4 record still fails the plugin. The zero-size early return is unchanged.
 
-OG/AE decompressor and init-wrapper records establish the prefix and zlib framing statically; synthetic framing rejection and round-trip tests cover Radicle's policy. See `COMPRESSION_EVIDENCE.md` for per-build verification, remaining runtime questions and corpus scope. Untouched compressed records preserve their source bytes; rebuilt records emit zlib.
+OG/AE decompressor and init-wrapper records establish the prefix and zlib framing statically; synthetic undecodable-record and round-trip tests cover Radicle's policy (`tests/test_undecodable_record.cpp`, `tests/test_compression.cpp`). See `COMPRESSION_EVIDENCE.md` for per-build verification, remaining runtime questions and corpus scope. Untouched compressed records preserve their source bytes; rebuilt records emit zlib.
 
 ## Record type enum
 
