@@ -7,6 +7,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 
 namespace {
 
@@ -313,8 +314,8 @@ TEST(SoundPlaybackRules, DerivedFrequencyFactorClampsAtBothEnds) {
 }
 
 TEST(SoundPlaybackRules, DerivedLoopingIsAnyOfTheLoopBitsInByteOne) {
-  for (const std::uint8_t control : {0x08, 0x10, 0x20, 0x38}) EXPECT_TRUE(fo4::env::sound_is_looping(control));
-  for (const std::uint8_t control : {0x00, 0x07, 0x40, 0x80, 0xC7}) EXPECT_FALSE(fo4::env::sound_is_looping(control));
+  for (const std::uint8_t control : std::initializer_list<std::uint8_t>{0x08, 0x10, 0x20, 0x38}) EXPECT_TRUE(fo4::env::sound_is_looping(control));
+  for (const std::uint8_t control : std::initializer_list<std::uint8_t>{0x00, 0x07, 0x40, 0x80, 0xC7}) EXPECT_FALSE(fo4::env::sound_is_looping(control));
 }
 
 TEST(SoundPlaybackRules, DerivedSidechainAndRumbleSendsScaleAndClamp) {
