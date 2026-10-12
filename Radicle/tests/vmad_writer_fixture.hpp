@@ -24,8 +24,8 @@ inline std::vector<std::byte> payload(std::uint16_t format = 2) {
       for (int i = 0; i < (array ? 2 : 1); ++i) {
         if (type == 1) {
           if (format == 1) out.u32(0x801);
-          out.u16(format == 2 ? 0xBEEF : 0xFFFF);
-          out.u16(format == 2 ? 0xFFFF : 0xBEEF);
+          out.u16(format == 2 ? 0 : 0xFFFF);
+          out.u16(format == 2 ? 0xFFFF : 0);
           if (format == 2) out.u32(0x801);
         } else if (type == 2) {
           name(out, i == 0 ? "old" : "second");
