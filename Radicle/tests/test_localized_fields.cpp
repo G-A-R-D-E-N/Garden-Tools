@@ -276,8 +276,8 @@ TEST(LocalizedFields, QuestStructureCallerReportsNonFourByteObjectiveTextAsMalfo
   EXPECT_EQ(radicle_quest_structure_get_view(structure, &view), RADICLE_STATUS_OK);
   const bool has_one_objective = view.objective_count == 1u;
   const auto objective_text = has_one_objective ? view.objectives[0].text : radicle_quest_text{};
-  const auto* raw = reinterpret_cast<const std::byte*>(objective_text.bytes);
-  const std::vector<std::byte> objective_bytes(raw, raw + objective_text.size);
+  const auto* text_bytes = reinterpret_cast<const std::byte*>(objective_text.bytes);
+  const std::vector<std::byte> objective_bytes(text_bytes, text_bytes + objective_text.size);
   radicle_quest_structure_destroy(structure);
   std::error_code error;
   std::filesystem::remove_all(root, error);

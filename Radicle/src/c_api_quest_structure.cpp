@@ -43,8 +43,8 @@ struct radicle_quest_structure {
   const uint8_t* bytes(const std::optional<std::vector<std::byte>>& source, size_t& size) {
     size = source ? source->size() : 0;
     if (!source) return nullptr;
-    const std::string_view view(reinterpret_cast<const char*>(source->data()), source->size());
-    return reinterpret_cast<const uint8_t*>(text(view));
+    const std::string_view chars(reinterpret_cast<const char*>(source->data()), source->size());
+    return reinterpret_cast<const uint8_t*>(text(chars));
   }
 
   radicle_form_key key(const std::optional<fo4::FormKey>& source) {
