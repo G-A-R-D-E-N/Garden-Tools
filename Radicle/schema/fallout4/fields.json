@@ -7518,6 +7518,812 @@
           }
         ]
       }
+    },
+    {
+      "signature": "DIAL",
+      "fields": [
+        {
+          "path": "DIAL\\Name",
+          "label": "Name",
+          "kind": "string",
+          "subrecord": "FULL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Priority",
+          "label": "Priority",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\TopicFlags",
+          "label": "Topic flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Category",
+          "label": "Category",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 7,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Subtype",
+          "label": "Subtype",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\SubtypeName",
+          "label": "Subtype name (raw four characters)",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "DIAL\\Branch",
+          "payload_sizes": [4],
+          "label": "Branch",
+          "subrecord": "BNAM",
+          "offset": 0,
+          "targets": [
+            "DLBR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Quest",
+          "payload_sizes": [4],
+          "label": "Quest",
+          "subrecord": "QNAM",
+          "offset": 0,
+          "targets": [
+            "QUST"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Keyword",
+          "payload_sizes": [4],
+          "label": "Keyword",
+          "subrecord": "KNAM",
+          "offset": 0,
+          "targets": [
+            "KYWD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "quest_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00004842"
+          },
+          {
+            "signature": "BNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "QNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TIFC",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "INFO",
+      "fields": [
+        {
+          "path": "INFO\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "ENAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResetHours",
+          "label": "Reset hours (raw, hours x 2730.625)",
+          "kind": "scalar",
+          "subrecord": "ENAM",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\OverrideFileName",
+          "label": "Override file name",
+          "kind": "string",
+          "subrecord": "IOVR",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResponseNumber",
+          "label": "Response number",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResponseUnknown",
+          "label": "Response unknown byte",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 9,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\InterruptPercentage",
+          "label": "Interrupt percentage",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 10,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\CameraTargetAlias",
+          "label": "Camera target alias",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 12,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\CameraLocationAlias",
+          "label": "Camera location alias",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 16,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResponseText",
+          "label": "Response text",
+          "kind": "string",
+          "subrecord": "NAM1",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ScriptNotes",
+          "label": "Script notes",
+          "kind": "string",
+          "subrecord": "NAM2",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Edits",
+          "label": "Edits",
+          "kind": "string",
+          "subrecord": "NAM3",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\AlternateLipText",
+          "label": "Alternate LIP text",
+          "kind": "string",
+          "subrecord": "NAM4",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Prompt",
+          "label": "Prompt",
+          "kind": "string",
+          "subrecord": "RNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ForcedAlias",
+          "label": "Forced alias",
+          "kind": "scalar",
+          "subrecord": "ALFA",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\GreetDistance",
+          "label": "Greet distance",
+          "kind": "scalar",
+          "subrecord": "GREE",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ParentQuestStageOnBegin",
+          "label": "Set parent quest stage on begin",
+          "kind": "scalar",
+          "subrecord": "TIQS",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ParentQuestStageOnEnd",
+          "label": "Set parent quest stage on end",
+          "kind": "scalar",
+          "subrecord": "TIQS",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\StartScenePhase",
+          "label": "Start scene phase",
+          "kind": "string",
+          "subrecord": "NAM0",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Challenge",
+          "label": "Challenge",
+          "kind": "scalar",
+          "subrecord": "INCC",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 7,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\SubtitlePriority",
+          "label": "Subtitle priority",
+          "kind": "scalar",
+          "subrecord": "INAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 3,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "INFO\\PreviousTopic",
+          "payload_sizes": [4],
+          "label": "Previous topic",
+          "subrecord": "TPIC",
+          "offset": 0,
+          "targets": [
+            "DIAL"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\PreviousInfo",
+          "payload_sizes": [4],
+          "label": "Previous INFO",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "targets": [
+            "INFO"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\SharedInfo",
+          "payload_sizes": [4],
+          "label": "Shared INFO",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "targets": [
+            "INFO"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\InfoGroup",
+          "payload_sizes": [4],
+          "label": "INFO group",
+          "subrecord": "GNAM",
+          "offset": 0,
+          "targets": [
+            "INFO"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Emotion",
+          "label": "Emotion",
+          "subrecord": "TRDA",
+          "offset": 0,
+          "targets": [
+            "KYWD"
+          ],
+          "nullable": false,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\SoundFile",
+          "label": "Sound file",
+          "subrecord": "TRDA",
+          "offset": 5,
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Speaker",
+          "payload_sizes": [4],
+          "label": "Speaker",
+          "subrecord": "ANAM",
+          "offset": 0,
+          "targets": [
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\StartScene",
+          "payload_sizes": [4],
+          "label": "Start scene",
+          "subrecord": "TSCE",
+          "offset": 0,
+          "targets": [
+            "SCEN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\AudioOutputOverride",
+          "payload_sizes": [4],
+          "label": "Audio output override",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "targets": [
+            "SOPM"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResetGlobal",
+          "payload_sizes": [4],
+          "label": "Reset global",
+          "subrecord": "MODQ",
+          "offset": 0,
+          "targets": [
+            "GLOB"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "topic_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "TPIC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "GNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "IOVR",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "RNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TSCE",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INTV",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ALFA",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "GREE",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TIQS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM0",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "INCC",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "MODQ",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "NAM1",
+        "RNAM"
+      ]
+    },
+    {
+      "signature": "SCEN",
+      "fields": [
+        {
+          "path": "SCEN\\DeathBehavior",
+          "label": "Death behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\CombatBehavior",
+          "label": "Combat behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\PlayerDialogueBehavior",
+          "label": "Player dialogue behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 8,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\ObserveCombatBehavior",
+          "label": "Observe combat behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 12,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\CameraDistanceOverride",
+          "label": "Camera distance override",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\DialogueDistanceOverride",
+          "label": "Dialogue distance override",
+          "kind": "scalar",
+          "subrecord": "ACTV",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\Notes",
+          "label": "Notes",
+          "kind": "string",
+          "subrecord": "NNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\Index",
+          "label": "Index",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "quest_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000000000000000000000000000"
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ACTV",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          }
+        ]
+      },
+      "localized_subrecords": []
     }
   ],
   "keyword_records": [

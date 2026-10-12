@@ -14,6 +14,7 @@ std::optional<FormLinkFieldDescriptor> formlink_field_at(
     std::span<const FormLinkFieldDescriptor> fields,
     const Record& record,
     Signature subrecord,
+    std::size_t ordinal,
     std::size_t offset);
 
 }

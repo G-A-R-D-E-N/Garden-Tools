@@ -62,8 +62,8 @@ bool containsInsensitive(std::string_view value, std::string_view needle) {
 }
 
 std::string pluginKind(const fo4::Plugin& plugin) {
-    if (plugin.header.tes4_flags.is_small_file()) return "light";
-    if (plugin.header.tes4_flags.is_master()) return "master";
+    if (fo4::classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == fo4::PluginKind::light) return "light";
+    if (fo4::is_master_plugin(plugin.header.tes4_flags, plugin.key)) return "master";
     return "plugin";
 }
 

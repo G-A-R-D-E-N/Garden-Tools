@@ -387,6 +387,33 @@ TEST(VmadArrayElements, StructWithUnexposedObjectWordStopsTheTypedReader) {
   EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, fo4::Signature::from_string("REFR")).unsupported);
 }
 
+TEST(VmadArrayElements, StructFollowedByScalarReadsBoth) {
+  fo4::test::ByteWriter props;
+  begin_property(props, "Holder", 7);
+  props.u32(1);
+  wstring(props, "Inner");
+  props.u8(3);
+  props.u8(0);
+  props.i32(5);
+  begin_property(props, "After", 3);
+  props.i32(9);
+  const auto vmad = vmad_with_properties(2, 2, props);
+  const auto result = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_FALSE(result.unsupported);
+  ASSERT_EQ(result.scripts.size(), 1u);
+  ASSERT_EQ(result.scripts[0].properties.size(), 2u);
+  const auto& holder = result.scripts[0].properties[0];
+  ASSERT_TRUE(holder.struct_elements.has_value());
+  ASSERT_EQ(holder.struct_elements->size(), 1u);
+  const auto& members = (*holder.struct_elements)[0].members;
+  ASSERT_EQ(members.size(), 1u);
+  EXPECT_EQ(members[0].name, "Inner");
+  EXPECT_EQ(members[0].integer, 5);
+  EXPECT_EQ(result.scripts[0].properties[1].name, "After");
+  EXPECT_EQ(result.scripts[0].properties[1].integer, 9);
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, fo4::Signature::from_string("REFR")).complete());
+}
+
 TEST(VmadArrayElements, EmptyNameScriptEntryStillWalksFlagsAndProperties) {
   fo4::test::ByteWriter vmad;
   vmad.u16(5);

@@ -35,66 +35,7 @@ constexpr StructuredFormIdSlot k_structured_formids[] = {
 #include "fo4/schema/structured_formids.inc"
 };
 
-constexpr auto k_navm = Signature::from_string("NAVM");
-constexpr auto k_mnam = Signature::from_string("MNAM");
-constexpr auto k_qust = Signature::from_string("QUST");
-constexpr auto k_race = Signature::from_string("RACE");
-constexpr auto k_info = Signature::from_string("INFO");
-constexpr auto k_edid = Signature::from_string("EDID");
-constexpr auto k_obts = Signature::from_string("OBTS");
-constexpr auto k_sraf = Signature::from_string("SRAF");
-constexpr auto k_alco = Signature::from_string("ALCO");
-constexpr auto k_alfr = Signature::from_string("ALFR");
-constexpr auto k_alla = Signature::from_string("ALLA");
-constexpr auto k_anam = Signature::from_string("ANAM");
-constexpr auto k_cnam = Signature::from_string("CNAM");
-constexpr auto k_dnam = Signature::from_string("DNAM");
-constexpr auto k_fnam = Signature::from_string("FNAM");
-constexpr auto k_nam2 = Signature::from_string("NAM2");
-constexpr auto k_nnam = Signature::from_string("NNAM");
-constexpr auto k_snam = Signature::from_string("SNAM");
-constexpr auto k_npc_ = Signature::from_string("NPC_");
-constexpr auto k_fact = Signature::from_string("FACT");
-constexpr auto k_tpic = Signature::from_string("TPIC");
-constexpr auto k_pnam = Signature::from_string("PNAM");
-constexpr auto k_gnam = Signature::from_string("GNAM");
-constexpr auto k_trda = Signature::from_string("TRDA");
-constexpr auto k_lnam = Signature::from_string("LNAM");
-constexpr auto k_tsce = Signature::from_string("TSCE");
-constexpr auto k_onam = Signature::from_string("ONAM");
-constexpr auto k_modq = Signature::from_string("MODQ");
-constexpr auto k_enam = Signature::from_string("ENAM");
-constexpr auto k_iovr = Signature::from_string("IOVR");
-constexpr auto k_nam0 = Signature::from_string("NAM0");
-constexpr auto k_nam1 = Signature::from_string("NAM1");
-constexpr auto k_nam3 = Signature::from_string("NAM3");
-constexpr auto k_nam4 = Signature::from_string("NAM4");
-constexpr auto k_nam9 = Signature::from_string("NAM9");
-constexpr auto k_tnam = Signature::from_string("TNAM");
-constexpr auto k_inam = Signature::from_string("INAM");
-constexpr auto k_rnam = Signature::from_string("RNAM");
-constexpr auto k_intv = Signature::from_string("INTV");
-constexpr auto k_alfa = Signature::from_string("ALFA");
-constexpr auto k_gree = Signature::from_string("GREE");
-constexpr auto k_tiqs = Signature::from_string("TIQS");
-constexpr auto k_incc = Signature::from_string("INCC");
-constexpr auto k_wzmd = Signature::from_string("WZMD");
-constexpr auto k_cis1 = Signature::from_string("CIS1");
-constexpr auto k_cis2 = Signature::from_string("CIS2");
-constexpr auto k_wthr = Signature::from_string("WTHR");
-constexpr auto k_imsp = Signature::from_string("IMSP");
-constexpr auto k_wgdr = Signature::from_string("WGDR");
-constexpr auto k_unam = Signature::from_string("UNAM");
-constexpr auto k_vnam = Signature::from_string("VNAM");
-constexpr auto k_wnam = Signature::from_string("WNAM");
-constexpr auto k_dalc = Signature::from_string("DALC");
-constexpr auto k_jnam = Signature::from_string("JNAM");
-constexpr auto k_qnam = Signature::from_string("QNAM");
-constexpr auto k_data = Signature::from_string("DATA");
-constexpr auto k_clmt = Signature::from_string("CLMT");
-constexpr auto k_wlst = Signature::from_string("WLST");
-constexpr auto k_ipds = Signature::from_string("IPDS");
-constexpr auto k_dobj = Signature::from_string("DOBJ");
+#include "form_link_signatures.inc"
 
 std::uint32_t read_u32(std::span<const std::byte> data, std::size_t offset) {
   std::uint32_t value = 0;
@@ -521,7 +462,13 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     return;
   }
-  if (perk_epfd_is_formid(record, sub)) {
+  if (schema::scene_action_topic_data(record, sub)) {
+    if (sub.data.size() != 4) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed SCEN action Topic DATA payload");
+      }
+      return;
+    }
     fn(0);
     return;
   }
@@ -606,6 +553,7 @@ void remap_record_form_links(Record& record,
 
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context) {
+  visit_records(plugin, [](const Record& record) { require_decodable(record); });
   visit_records(plugin, [&](Record& record) {
     remap_record_form_links(record, old_context, new_context, &plugin);
   });
@@ -619,6 +567,7 @@ void rekey_form_links(Plugin& plugin,
   bool any_changed = false;
 
   visit_records(next, [&](Record& record) {
+    require_decodable(record);
     bool changed = false;
     for (auto& sub : record.subrecords) {
       auto bytes = std::span<std::byte>(sub.data);

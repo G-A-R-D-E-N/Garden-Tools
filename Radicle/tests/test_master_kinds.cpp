@@ -83,3 +83,33 @@ TEST(MasterKinds, StampsSmallFileEspAndPreservesUnreadableFallback) {
   std::error_code ec;
   std::filesystem::remove_all(root, ec);
 }
+
+TEST(MasterKinds, StampsEslExtensionWithoutLightFlagFromFile) {
+  const auto unique = std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count());
+  const auto root = std::filesystem::temp_directory_path() / ("radicle-master-kind-esl-" + unique);
+  ASSERT_TRUE(std::filesystem::create_directories(root));
+
+  const auto esl_path = root / "Extension.esl";
+  write_bytes(esl_path, make_header_only_plugin(0));
+
+  auto plugin = fo4::read_plugin(make_plugin_with_masters(), "Child.esp");
+  plugin.header.masters[0].key = fo4::PluginKey::from_filename("Extension.esl");
+  const std::array master_paths{esl_path};
+  fo4::stamp_master_kinds_from_files(plugin, master_paths);
+
+  EXPECT_EQ(plugin.header.masters[0].kind, fo4::PluginKind::light);
+
+  std::error_code ec;
+  std::filesystem::remove_all(root, ec);
+}
+
+TEST(MasterKinds, StampsEslExtensionWithoutLightFlagFromLoadedPlugin) {
+  auto plugin = fo4::read_plugin(make_plugin_with_masters(), "Child.esp");
+  plugin.header.masters[0].key = fo4::PluginKey::from_filename("Extension.esl");
+  const std::array loaded{fo4::read_plugin(make_header_only_plugin(0), "Extension.esl")};
+  fo4::stamp_master_kinds(plugin, loaded);
+
+  EXPECT_EQ(plugin.header.masters[0].kind, fo4::PluginKind::light);
+  EXPECT_EQ(plugin.header.masters[1].kind, fo4::PluginKind::full);
+}

@@ -3,6 +3,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/signature.hpp"
+#include "../plugin/record_edit.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -54,16 +55,7 @@ void write_u32(std::vector<std::byte>& data, std::uint32_t value) {
   std::memcpy(data.data(), &value, sizeof(value));
 }
 
-Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
-  Record* found = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (found == nullptr && record.header.signature != sig_tes4 &&
-        record.form_key == key) {
-      found = &record;
-    }
-  });
-  return found;
-}
+using fo4::detail::find_mutable_record;
 
 void mark_modified(Plugin& plugin, Record& record) {
   record.original_range.clear();

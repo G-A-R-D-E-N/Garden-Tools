@@ -62,12 +62,15 @@ struct ItmScan {
   }
 
   const Plugin* identical_previous(const Record& record) {
-    if (record.form_key.owner().empty() || record.form_key.owner() == plugin.key) return nullptr;
+    if (record.undecodable || record.form_key.owner().empty() || record.form_key.owner() == plugin.key) {
+      return nullptr;
+    }
     for (std::size_t index = plugin_index; index-- > 0;) {
       const auto* earlier = load_order[index];
       if (earlier == nullptr) continue;
       const auto* previous = find_record(*earlier, record.form_key);
       if (previous == nullptr) continue;
+      if (previous->undecodable) return nullptr;
       if (placement_in(index, record.form_key) != placement_in(plugin_index, record.form_key)) return nullptr;
       return previous_normalizes_equal(record, *previous, *earlier, plugin_form_id_context(*earlier),
                                        context)
@@ -133,6 +136,9 @@ std::vector<IdenticalToMaster> find_identical_to_master(std::span<const Plugin* 
 
 std::size_t remove_records(Plugin& plugin, std::span<const FormKey> keys) {
   const std::set<FormKey> wanted(keys.begin(), keys.end());
+  visit_records(plugin, [&](const Record& record) {
+    if (wanted.contains(record.form_key)) require_decodable(record);
+  });
   std::size_t removed = 0;
   std::vector<Group> kept;
   for (auto& group : plugin.groups) {

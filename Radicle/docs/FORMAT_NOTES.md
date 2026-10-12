@@ -81,9 +81,9 @@ Deleted record bit `1 << 5` is `strong` (`TESForm::IsDeleted`).
 
 ## Compressed records
 
-Payload starts with `uint32 uncompressed_size`, then zlib (window bits 15, with raw-deflate fallback).
+Payload starts with `uint32 uncompressed_size`, then a zlib-wrapped stream (window bits 15). Raw-deflate or gzip framing, a failed inflate, a declared size past the caps, or inflated bytes that do not parse as subrecords make a non-TES4 record load as undecodable with its raw bytes kept and written back unchanged (GT-205, `src/plugin/reader.cpp:read_record`); a TES4 record still fails the plugin. The zero-size early return is unchanged.
 
-CK strings confirm inflate/deflate (`confirmed` that the compressor is zlib). The 4-byte uncompressed-size prefix is `strong` (Mutagen `Decompression.cs` + CommonLib `decompressedFormBuffer`). Runtime function is `TESFile::DecompressCurrentForm` (OG RVA `0x132500`, 566 bytes), not yet decompiled. Synthetic zlib round-trip is tested. Raw-deflate fallback stays until that decompile.
+OG/AE decompressor and init-wrapper records establish the prefix and zlib framing statically; synthetic undecodable-record and round-trip tests cover Radicle's policy (`tests/test_undecodable_record.cpp`, `tests/test_compression.cpp`). See `COMPRESSION_EVIDENCE.md` for per-build verification, remaining runtime questions and corpus scope. Untouched compressed records preserve their source bytes; rebuilt records emit zlib.
 
 ## Record type enum
 
@@ -179,8 +179,8 @@ subblock label = (int16 floor(y /  8), int16 floor(x /  8))   bytes 0..1 = y, 2.
 This is the calculation #71 flags as "do not guess". `exterior_cell_grid_layout`
 and `exterior_grid_group_label_u32` in `fo4/forms/cell.hpp` implement it, and
 `tests/test_exterior_cell_grid_real.cpp` re-checks it against the shipped
-masters when `FO4_DATA_DIR` is set (it skips unless the CI variable
-`FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set).
+masters when `FO4_DATA_DIR` is set (it skips unless `FO4_DATA_DIR` is set: CI
+takes it from the variable `FO4_DATA_DIR_LINUX` on Linux and from the `fo4-data` runner's environment on Windows).
 
 ## Localized string subrecords in shipped masters
 
@@ -192,7 +192,8 @@ bytes.
 
 This is handled by `fo4/schema/localized_fields.hpp`. A string field decodes to
 a `LocalizedString` carrying **either** a four-byte string ID (localized plugin,
-lstring field) **or** inline text, whichever the file used. Decoding performs no
+lstring field) **or** inline text, whichever the file used; a localized payload
+that is not four bytes has neither, and its raw bytes are kept. Decoding performs no
 I/O and picks no language, so a write-back reproduces the original bytes;
 resolve an ID through `fo4::localization` when display text is wanted.
 

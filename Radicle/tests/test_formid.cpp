@@ -49,6 +49,18 @@ TEST(FormKey, EslExtensionLooksLight) {
   EXPECT_FALSE(PluginKey::from_filename("Fallout4.esm").looks_light());
 }
 
+TEST(FormKey, ClassifyPluginKindUsesLightFlagOrEslExtension) {
+  EXPECT_EQ(fo4::classify_plugin_kind(fo4::RecordFlags{}, PluginKey::from_filename("Light.esl")),
+            PluginKind::light);
+  EXPECT_EQ(fo4::classify_plugin_kind(fo4::RecordFlags{fo4::RecordFlags::small_file},
+                                      PluginKey::from_filename("Flagged.esp")),
+            PluginKind::light);
+  EXPECT_EQ(fo4::classify_plugin_kind(fo4::RecordFlags{}, PluginKey::from_filename("Full.esp")),
+            PluginKind::full);
+  EXPECT_TRUE(fo4::is_master_plugin(fo4::RecordFlags{}, PluginKey::from_filename("Light.esl")));
+  EXPECT_FALSE(fo4::is_master_plugin(fo4::RecordFlags{}, PluginKey::from_filename("Full.esp")));
+}
+
 TEST(FormId, ResolvesOnDiskMasterIndexToFormKey) {
   const auto ctx = sample_plugin_context();
   const auto key = fo4::resolve_plugin_form_id(RawFormId{0x0200009A}, ctx);

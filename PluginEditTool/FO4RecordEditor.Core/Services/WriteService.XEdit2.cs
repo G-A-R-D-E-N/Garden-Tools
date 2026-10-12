@@ -112,6 +112,8 @@ public static partial class WriteService
             .OrderBy(r => r.FormKey.ID)
             .ToList();
         if (native.Count == 0) return $"'{name}' has no records of its own to renumber.";
+        if (SharedFormKey(native) is { } duplicate)
+            return ToolError.Fail($"Cannot renumber '{name}': form ID {duplicate.Key} is shared by {duplicate.Count()} records. Fix the duplicate in xEdit first.");
         if (start + (ulong)native.Count - 1 > 0xFFFFFF)
             return ToolError.Fail($"'{name}' has {native.Count} record(s); starting at {start:X6} would run past 0xFFFFFF.");
 

@@ -31,7 +31,33 @@ void require_scalar_record(const Record& record, const schema::ScalarFieldDescri
   }
 }
 
+bool response_shape_valid(const Record& record) {
+  constexpr Signature trda = Signature::from_string("TRDA");
+  constexpr Signature members[] = {Signature::from_string("NAM1"), Signature::from_string("NAM2"),
+                                    Signature::from_string("NAM3"), Signature::from_string("NAM4")};
+  std::size_t responses = 0;
+  std::size_t counts[4] = {};
+  const auto& subs = record.subrecords;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    for (std::size_t m = 0; m < 4; ++m) {
+      if (subs[i].signature == members[m]) { ++counts[m]; }
+    }
+    if (subs[i].signature != trda) { continue; }
+    ++responses;
+    if (subs[i].data.size() != 20 || subs.size() - i <= 4) { return false; }
+    for (std::size_t m = 0; m < 4; ++m) {
+      if (subs[i + 1 + m].signature != members[m]) { return false; }
+    }
+  }
+  return std::all_of(counts, counts + 4,
+                     [&](std::size_t count) { return count == responses; });
+}
+
 schema::FieldSlots scalar_slots(const Record& record, const schema::ScalarFieldDescriptor& field) {
+  if (field.record == Signature::from_string("INFO") && field.scalar.address.repeated &&
+      !response_shape_valid(record)) {
+    throw schema::ScalarError("INFO response fields require complete TRDA,NAM1..NAM4 groups");
+  }
   try {
     if (record.header.signature == Signature::from_string("SNDR") &&
         (field.scalar.subrecord == Signature::from_string("INTV") ||
@@ -64,6 +90,10 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
     } catch (const env::WorldDecodeError& error) {
       throw schema::FormLinkFieldError(error.what());
     }
+  }
+  if (field.record == Signature::from_string("INFO") && field.address.repeated &&
+      !response_shape_valid(record)) {
+    throw schema::FormLinkFieldError("INFO response fields require complete TRDA,NAM1..NAM4 groups");
   }
   schema::FieldShape shape;
   shape.subrecord = field.subrecord;

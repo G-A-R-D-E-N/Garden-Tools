@@ -82,7 +82,8 @@ inline EslSlots eslSlots(const fo4::Plugin& plugin) {
 }
 
 inline std::string lightFlagAdvice(const fo4::Plugin& plugin) {
-    return plugin.header.tes4_flags.is_small_file() ? std::string{} : " " + std::string(lightFlagHint);
+    return fo4::classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == fo4::PluginKind::light
+        ? std::string{} : " " + std::string(lightFlagHint);
 }
 
 inline std::vector<EslBlocker> eslCompactionBlockers(const fo4::Plugin& plugin,

@@ -143,6 +143,7 @@ std::optional<bool> edit_placed(Plugin& plugin, const FormKey& reference, Edit&&
   if (!is_placed_reference_signature(target->header.signature)) {
     throw PlacedReferenceError("expected a placed-reference record");
   }
+  require_decodable(*target);
   if (!edit(next, *target)) return false;
   invalidate(*target);
   next.original_range.clear();

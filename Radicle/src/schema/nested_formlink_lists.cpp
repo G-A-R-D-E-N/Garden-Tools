@@ -2,6 +2,7 @@
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "../plugin/record_edit.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -47,16 +48,7 @@ std::optional<ScopedNestedFormLinkListPath> parse_scoped_path(
   return std::nullopt;
 }
 
-Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
-  Record* found = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (found == nullptr && record.header.signature != sig_tes4 &&
-        record.form_key == key) {
-      found = &record;
-    }
-  });
-  return found;
-}
+using fo4::detail::find_mutable_record;
 
 std::uint32_t read_u32(const std::vector<std::byte>& data) {
   std::uint32_t value = 0;

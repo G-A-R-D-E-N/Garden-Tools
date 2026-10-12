@@ -110,6 +110,7 @@ add_library(fo4
   src/forms/components.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
+  src/forms/info_copy.cpp
   src/forms/placed_reference_edit.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
@@ -139,6 +140,7 @@ add_library(fo4
   src/plugin/navmesh_writer.cpp
   src/plugin/field_writer.cpp
   src/plugin/subrecord_authoring.cpp
+  src/plugin/scene_writer.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp
@@ -173,6 +175,8 @@ add_library(fo4
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
+  src/environment/dialogue.cpp
+  src/environment/scene_layout.cpp
   src/environment/base_records.cpp
   src/environment/sound.cpp
   src/environment/material_swap.cpp
@@ -219,6 +223,7 @@ fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
 target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp)
+target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -295,7 +300,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_xxxx.cpp
     tests/test_compression.cpp
     tests/test_reader_limits.cpp
+    tests/test_undecodable_record.cpp
+    tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
+    tests/test_actor_value_perk_real.cpp
     tests/test_formkey_load.cpp
     tests/test_master_kinds.cpp
     tests/test_master_metadata.cpp
@@ -331,6 +339,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_creation.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
+    tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
     tests/test_quest_alias_real.cpp
@@ -426,6 +435,13 @@ if(RADICLE_BUILD_TESTS)
     tests/test_behavior_writer_c_api.cpp
     tests/test_behavior_writer_real.cpp
     tests/test_behavior_real.cpp
+    tests/test_dialogue.cpp
+    tests/test_dialogue_real.cpp
+    tests/test_dialogue_writer.cpp
+    tests/test_dialogue_subrecords.cpp
+    tests/test_dialogue_writer_c_api.cpp
+    tests/test_dialogue_writer_real.cpp
+    tests/test_scene_writer.cpp
     tests/test_environment_world.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp

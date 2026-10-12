@@ -48,7 +48,7 @@ Oracle: xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinit
 
 Other EPFD variants contain floats, text, localized text or other non-FormID data. For Add Activate Choice, `EPF2` is the button label and `EPF3` is integer flags; neither is a FormID.
 
-Radicle therefore tracks the most recent EPFT within the PERK record and visits EPFD offset 0 only for types 3, 4 or 5 and only when EPFD is exactly 4 bytes.
+Radicle tracks the most recent EPFT within the PERK record and visits EPFD offset 0 for types 3, 4 or 5 when EPFD is exactly 4 bytes, for type 8 (AVIF plus float) when EPFD is at least 8 bytes, and for type 2 when the entry-point Function in the type-2 effect DATA is 5, 12, 13 or 14 (`Radicle/src/schema/form_link_mixed.cpp:perk_formid_offsets`, xEdit `wbDefinitionsFO4.pas:1430-1445`, `:7671-7687`). See `docs/code-notes/radicle-avif-perk.md`.
 
 ## CTDA CIS1 / CIS2
 

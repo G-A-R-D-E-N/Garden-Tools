@@ -13,6 +13,33 @@ xEdit's `TwbMainRecord.SetLoadOrderFormID` refuses a non-hardcoded object ID bel
 ## Where it comes from
 
 `TESFile::AdjustFormIDFileIndex(TESFile* this, uint* id)` — Fallout4.exe
+1.10.155 (unpacked), address **`0x131f90`**, 55 bytes. Rebuilds an on-disk form ID
+into a runtime one:
+
+Build identification source: [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md), question 2's verified PE timestamps and predicate/conversion addresses. The assembly below is the older 1.10.155 image; the 1.10.163 conversion is at `0x131fa0`.
+
+The corresponding 1.10.163 conversion is recorded in the RE note linked from `RUNTIME_PLUGIN_INDEX_EVIDENCE.md`; see `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for its pinned provenance.
+
+```asm
+140131f90:  mov   byte [rdx+3], 0          ; drop the on-disk master-index byte
+140131f94:  mov   eax, [rcx+0x334]         ; TESFile flags
+140131f9a:  shr   eax, 9
+140131f9d:  test  al, 1                    ; bit 9 = SmallFile
+140131f9f:  je    full
+            ; --- light ---
+140131fa1:  and   dword [rdx], 0xFFF       ; keep 12 bits, discard 12..23
+140131fa7:  or    dword [rdx], 0xFE000000
+140131fad:  movzx eax, word [rcx+0x372]    ; smallFileCompileIndex (u16)
+140131fb4:  shl   eax, 12
+140131fb7:  or    dword [rdx], eax
+140131fb9:  ret
+full:
+140131fba:  movzx eax, byte [rcx+0x370]    ; compileIndex (u8)
+140131fc1:  shl   eax, 24
+140131fc4:  or    dword [rdx], eax
+140131fc6:  ret
+```
+
 1.10.163 (unpacked, PE timestamp `0x5ddc40fa`), RVA **`0x131fa0`**. Rebuilds an on-disk FormID
 into a runtime one. The RE repo records this as pseudocode only, not bytes: the on-disk master byte is dropped; for a SmallFile the result is `formID & 0xFFF | 0xFE000000 | smallCompileIndex(+0x372) << 12`; otherwise it is `compileIndex(+0x370) << 24` OR'd in.
 
@@ -95,7 +122,11 @@ while #26 was open.
 - `0x000` is excluded. No shipped ESL uses it and nothing in the recorded pseudocode
   rules it out; it is left unavailable rather than guessed at.
 - `smallFileCompileIndex` is a `u16` read from `TESFile+0x372`, versus the
-  full-plugin `u8` at `+0x370`. How 1.11.x assigns it is still open.
+  full-plugin `u8` at `+0x370`. OG and AE assign the position in independent
+  arrays starting at zero. OG/AE list construction is now established statically;
+  NG byte verification and live list behavior remain open. How NG assigns it is
+  still open in [#28](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/28).
+  See `RUNTIME_PLUGIN_INDEX_EVIDENCE.md` for the build-scoped evidence.
 - `TESFile::CheckValidIDForSmallFile` is recovered: `(id & 0x00FFF000) == 0`,
   a 10-byte predicate at `0x130560` in the timestamp `0x5ddc40fa` image
   (`0x130550` in the timestamp `0x5dac778e` image). See `OPEN_QUESTIONS.md` Q2

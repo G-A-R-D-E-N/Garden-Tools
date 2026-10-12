@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fo4/flags.hpp"
 #include "fo4/plugin_key.hpp"
 
 #include <cstdint>
@@ -102,6 +103,8 @@ public:
 FormKey resolve_plugin_form_id(RawFormId raw, const PluginFormIdContext& context);
 FormKey resolve_plugin_link(RawFormId raw, const PluginFormIdContext& context);
 RawFormId encode_plugin_form_id(const FormKey& key, const PluginFormIdContext& dest);
+PluginKind classify_plugin_kind(RecordFlags tes4_flags, const PluginKey& key) noexcept;
+bool is_master_plugin(RecordFlags tes4_flags, const PluginKey& key) noexcept;
 
 FormKey resolve_runtime_form_id(RawFormId raw, const RuntimeFormIdContext& context);
 

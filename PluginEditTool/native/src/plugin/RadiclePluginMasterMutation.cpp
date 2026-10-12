@@ -112,9 +112,7 @@ Result<nlohmann::json> RadiclePluginBackend::addMasters(const nlohmann::json& ar
         }
 
         const auto kind = loadedMaster != nullptr
-            ? (loadedMaster->plugin.header.tes4_flags.is_small_file()
-                   ? fo4::PluginKind::light
-                   : fo4::PluginKind::full)
+            ? fo4::classify_plugin_kind(loadedMaster->plugin.header.tes4_flags, loadedMaster->plugin.key)
             : fo4::PluginKind::light;
         masters.push_back({std::move(key), kind});
         ++added;
