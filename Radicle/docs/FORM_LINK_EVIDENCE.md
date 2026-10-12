@@ -126,15 +126,17 @@ This support intentionally does not infer FormIDs from NAVM vertex indexes, tria
 
 Oracle: xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsCommon.pas`.
 
-xEdit identifies VMAD property type `16` as `Array of Variable (FO76, Not Implemented)`. Type `6` is the corresponding dynamically typed Variable property. Neither has a fixed value layout that Radicle can safely walk without a nested type discriminator definition.
+xEdit identifies VMAD property type `16` as `Array of Variable (FO76, Not Implemented)`. Type `6` is the corresponding dynamically typed Variable property. The verified OG value reader has no type-6 case, so it does not provide a nested discriminator layout. The official survey found no examples of either type. See `VMAD_VARIABLE_EVIDENCE.md` for the build scope and remaining questions.
 
-Radicle therefore treats property types 6 and 16 differently depending on the operation:
+Radicle therefore treats type 6 and nonempty type 16 differently depending on the operation:
 
 - read-only FormLink collection remains tolerant and reports no VMAD links from that VMAD block;
 - master-table remapping fails closed rather than returning or rewriting a partial set of offsets;
 - malformed/truncated VMAD retains the existing tolerant read behavior and clears any offsets collected before the parse failure.
 
 This prevents a master reorder from rewriting only the references encountered before an unsupported dynamic property and leaving the rest of the VMAD in the old master-index space.
+
+The verified empty type-16 case consumes its four-byte zero count and continues to subsequent properties. Strict remapping still requires complete structural consumption, including any record-specific tail. The read model retains type 16 and its zero count. This permits remapping other proven links; it does not add variable-property editing or runtime binding emulation. See `VMAD_VARIABLE_EVIDENCE.md` for the verified record and synthetic acceptance tests.
 
 ## Tests
 

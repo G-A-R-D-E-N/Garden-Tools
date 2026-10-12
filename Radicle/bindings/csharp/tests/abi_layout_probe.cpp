@@ -9,6 +9,7 @@
 #include "fo4/c_api_quest.h"
 #include "fo4/c_api_authoring.h"
 #include "fo4/c_api_vegetation.h"
+#include "fo4/c_api_vmad.h"
 #include <cstddef>
 #include <cstdio>
 

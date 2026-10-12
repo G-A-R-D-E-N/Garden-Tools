@@ -141,11 +141,10 @@ void walk_property(Slice& slice, std::int16_t object_format,
     case 0:
       break;
     case k_type_variable:
-    case k_type_variable_array:
-      // xEdit identifies type 16 as FO76 Variable Array and does not implement
-      // it. Type 6 is likewise dynamically typed. Without a discriminator for
-      // the nested value, consuming bytes here would risk losing VMAD sync.
       throw UnsupportedVmadProperty{};
+    case k_type_variable_array:
+      if (slice.u32() != 0) throw UnsupportedVmadProperty{};
+      break;
     case k_type_object:
       walk_object(slice, object_format, offsets);
       break;
@@ -512,25 +511,30 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   property.name = slice.wstring();
   property.type = slice.u8();
   property.flags = slice.u8();
+  property.value_offset = slice.position();
+  const auto finish = [&] {
+    property.value_size = slice.position() - property.value_offset;
+    return property;
+  };
   switch (property.type) {
     case k_type_object: {
       const auto element = read_object_element(slice, object_format);
       property.object = element.object;
       property.alias = element.alias;
-      return property;
+      return finish();
     }
     case k_type_string:
       property.text = slice.wstring();
-      return property;
+      return finish();
     case k_type_int:
       property.integer = static_cast<std::int32_t>(slice.u32());
-      return property;
+      return finish();
     case k_type_float:
       property.real = read_float(slice);
-      return property;
+      return finish();
     case k_type_bool:
       property.boolean = slice.u8() != 0;
-      return property;
+      return finish();
     default:
       break;
   }
@@ -544,8 +548,10 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
     case 0:
       break;
     case k_type_variable:
-    case k_type_variable_array:
       throw UnsupportedVmadProperty{};
+    case k_type_variable_array:
+      if (slice.u32() != 0) throw UnsupportedVmadProperty{};
+      break;
     case k_type_struct: {
       Slice values = slice;
       walk_properties(slice, object_format, slice.u32(), ignored);
@@ -592,7 +598,7 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
     default:
       throw UnsupportedVmadProperty{};
   }
-  return property;
+  return finish();
 }
 
 }  // namespace

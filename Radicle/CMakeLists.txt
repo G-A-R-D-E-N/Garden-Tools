@@ -133,6 +133,7 @@ add_library(fo4
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
   src/plugin/copy_hierarchy.cpp
+  src/plugin/vmad_writer.cpp
   src/plugin/field_writer.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/master_usage.cpp
@@ -211,7 +212,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -386,6 +387,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
     tests/test_onam.cpp
+    tests/test_vmad_writer.cpp
+    tests/test_vmad_writer_real.cpp
+    tests/test_vmad_writer_c_api.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp

@@ -163,6 +163,38 @@ public sealed unsafe class PluginFile : IDisposable
         });
     }
 
+    public bool SetVmadObject(FormKey record, int script, int property, FormKey? target, short alias = -1, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadObject(plugin, key, si, pi, ei, s.Key(target), alias));
+    }
+
+    public bool SetVmadString(FormKey record, int script, int property, string value, int element = 0)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Contains('\0')) throw new ArgumentException("VMAD text cannot hold an embedded NUL through this API.", nameof(value));
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadString(plugin, key, si, pi, ei, value));
+    }
+
+    public bool SetVmadInt(FormKey record, int script, int property, int value, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadInt(plugin, key, si, pi, ei, value));
+    }
+
+    public bool SetVmadFloat(FormKey record, int script, int property, float value, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadFloat(plugin, key, si, pi, ei, value));
+    }
+
+    public bool SetVmadBool(FormKey record, int script, int property, bool value, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadBool(plugin, key, si, pi, ei, value ? 1 : 0));
+    }
+
     public bool SetScalar(FormKey record, string path, string value, int index = 0)
     {
         ArgumentNullException.ThrowIfNull(path);

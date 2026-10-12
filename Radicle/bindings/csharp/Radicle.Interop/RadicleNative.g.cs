@@ -1229,7 +1229,7 @@ public unsafe struct GrassLinks
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 29u;
+    public const uint CompiledAbiVersion = 30u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1758,5 +1758,20 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_free")]
     public static extern void LandscapeGrassesFree(GrassLinks* links);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_vmad_object")]
+    public static extern Status PluginSetVmadObject(IntPtr plugin, FormKey key, nuint script, nuint property, nuint element, FormKey target, short alias);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_vmad_string")]
+    public static extern Status PluginSetVmadString(IntPtr plugin, FormKey key, nuint script, nuint property, nuint element, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_vmad_int")]
+    public static extern Status PluginSetVmadInt(IntPtr plugin, FormKey key, nuint script, nuint property, nuint element, int value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_vmad_float")]
+    public static extern Status PluginSetVmadFloat(IntPtr plugin, FormKey key, nuint script, nuint property, nuint element, float value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_vmad_bool")]
+    public static extern Status PluginSetVmadBool(IntPtr plugin, FormKey key, nuint script, nuint property, nuint element, int value);
 
 }
