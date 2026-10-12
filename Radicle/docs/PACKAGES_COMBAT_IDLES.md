@@ -68,3 +68,17 @@ New synthetic tests cover raw values, scoped package fields, location/target var
 Prior published head `3c53c8630cf23636232acc6823cb6a23771ba154` writer validation: both full suites had zero failures across 874 registered cases. The official run has 863 passes and 11 unrelated skips, including all 14 new official order/mutation cases passing; managed bindings have 86 passes. The focused seven-master writer run took 89.66 seconds. Reader regressions and the duplicate-PKCU strict-remap refusal were proven red before their fixes and green afterward. Independent read-only review and its follow-up accepted the changes. Evidence: (local run; not committed).
 
 #408 landed at ABI 32, after main's ABI 31. Local official-data acceptance and current-head CI are separate results.
+
+## GardenEngine consumer probe
+
+Copy `Radicle/probes/gardenengine/PackageProbe.cs` and `Radicle/probes/gardenengine/package_probe.tscn` into `opencw/tools/`. Build `opencw/OpenCommonwealth.csproj` with `RadicleSourceDir` set to this Radicle checkout. Set `FO4_DATA_DIR` to the installed data directory and `RADICLE_NATIVE_PATH` to the built native library of the matching ABI, then run `--headless --path opencw tools/package_probe.tscn` with the double-precision Godot Mono editor. Exit 0 prints `package_probe PASS` with a one-line JSON summary. Exit 77 prints `package_probe SKIP: FO4_DATA_DIR unset`. Exit 1 prints `package_probe FAIL` with the exception.
+
+The probe loads `Fallout4.esm` only and makes no writes. Records are found by walking `env.WinnersOf`, not by editor ID. Its assertions:
+
+- A PACK winner, the first in plugin order, whose decoded package (`RadicleEnvironment.Package`) has PKDT data (`Data`), PSDT schedule (`Schedule`), a PKCU template (`Counter.TemplatePackage`) that resolves through `env.Winner`, and at least one location (`Locations`) or target (`Targets`) whose form resolves. The probe fails only if no PACK satisfies all four.
+- One CSTY winner that decodes through `RadicleEnvironment.CombatStyle`. CSTY has no parent or previous link, so only the decode is checked.
+- One IDLE winner that decodes through `RadicleEnvironment.Idle`, whose ANAM parent and previous links each resolve through `env.Winner` when present.
+
+The PASS line carries `Pack`, `PackageDataType`, `Template`, `Locations`, `Targets`, `Conditions`, `Opaque`, `CombatStyle`, `CombatStyleMelee` and `Idle`, as form keys and counts.
+
+Not yet run; needs a GardenEngine checkout whose Radicle pin includes this change.
