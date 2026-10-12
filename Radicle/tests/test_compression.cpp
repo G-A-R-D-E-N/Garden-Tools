@@ -30,14 +30,17 @@ std::vector<std::byte> compressed_plugin(std::span<const std::byte> stream,
 
 }
 
-TEST(Compression, RejectsValidRawDeflateAndGzipFraming) {
+TEST(Compression, RawDeflateAndGzipFramingLoadsUndecodable) {
   fo4::test::ByteWriter inner;
   fo4::test::write_subrecord(inner, "EDID", std::string_view{"Framing\0", 8});
   const auto zlib = fo4::test::zlib_compress(inner.bytes);
   ASSERT_GT(zlib.size(), 6u);
   const auto raw = std::span{zlib}.subspan(2, zlib.size() - 6);
   const auto declared = static_cast<std::uint32_t>(inner.size());
-  EXPECT_THROW(fo4::read_plugin(compressed_plugin(raw, declared)), fo4::parse_error);
+  const auto raw_plugin = fo4::read_plugin(compressed_plugin(raw, declared));
+  const auto* raw_record = fo4::find_record(raw_plugin, fo4::RawFormId{0x00000801});
+  ASSERT_NE(raw_record, nullptr);
+  EXPECT_TRUE(raw_record->undecodable);
 
   fo4::test::ByteWriter gzip;
   for (const auto byte : {0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 255}) {
@@ -47,17 +50,23 @@ TEST(Compression, RejectsValidRawDeflateAndGzipFraming) {
   gzip.u32(static_cast<std::uint32_t>(crc32(
       0, reinterpret_cast<const Bytef*>(inner.bytes.data()), declared)));
   gzip.u32(declared);
-  EXPECT_THROW(fo4::read_plugin(compressed_plugin(gzip.bytes, declared)), fo4::parse_error);
+  const auto gzip_plugin = fo4::read_plugin(compressed_plugin(gzip.bytes, declared));
+  const auto* gzip_record = fo4::find_record(gzip_plugin, fo4::RawFormId{0x00000801});
+  ASSERT_NE(gzip_record, nullptr);
+  EXPECT_TRUE(gzip_record->undecodable);
   EXPECT_NO_THROW(fo4::read_plugin(compressed_plugin(zlib, declared)));
 }
 
-TEST(Compression, RejectsBadZlibChecksum) {
+TEST(Compression, BadZlibChecksumLoadsUndecodable) {
   fo4::test::ByteWriter inner;
   fo4::test::write_subrecord(inner, "EDID", std::string_view{"Checksum\0", 9});
   auto stream = fo4::test::zlib_compress(inner.bytes);
   stream.back() ^= std::byte{1};
-  EXPECT_THROW(fo4::read_plugin(compressed_plugin(
-      stream, static_cast<std::uint32_t>(inner.size()))), fo4::parse_error);
+  const auto plugin = fo4::read_plugin(compressed_plugin(
+      stream, static_cast<std::uint32_t>(inner.size())));
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x00000801});
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->undecodable);
 }
 
 TEST(Compression, CompressedExtendedSubrecordPreservesPhysicalMarker) {
@@ -136,7 +145,7 @@ TEST(Compression, InflatesCompressedRecordAndKeepsOriginalBytes) {
   EXPECT_GT(fo4::test::record_original_bytes(plugin, *record).size(), inner.bytes.size());
 }
 
-TEST(Compression, RejectsCorruptCompressedPayload) {
+TEST(Compression, CorruptCompressedPayloadLoadsUndecodable) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::end_record(out, tes4);
@@ -147,10 +156,14 @@ TEST(Compression, RejectsCorruptCompressedPayload) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  EXPECT_THROW(fo4::read_plugin(out.bytes), fo4::parse_error);
+  const auto plugin = fo4::read_plugin(out.bytes);
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000801});
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->undecodable);
+  EXPECT_TRUE(record->subrecords.empty());
 }
 
-TEST(Compression, OversizedDeclaredSizeIsRefusedBeforeAllocating) {
+TEST(Compression, OversizedDeclaredSizeLoadsUndecodable) {
   std::mt19937 rng{0x5EEDu};
   std::vector<std::byte> compressed(1'100'000);
   for (auto& byte : compressed) {
@@ -167,10 +180,9 @@ TEST(Compression, OversizedDeclaredSizeIsRefusedBeforeAllocating) {
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  try {
-    static_cast<void>(fo4::read_plugin(out.bytes));
-    FAIL() << "expected the oversized declared size to be refused";
-  } catch (const fo4::parse_error& error) {
-    EXPECT_NE(std::string(error.what()).find("limit"), std::string::npos) << error.what();
-  }
+  const auto plugin = fo4::read_plugin(out.bytes);
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000801});
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->undecodable);
+  EXPECT_TRUE(record->subrecords.empty());
 }

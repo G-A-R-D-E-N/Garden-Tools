@@ -43,6 +43,7 @@ struct Record {
   OriginalByteRange original_range{};
   std::vector<std::byte> decompressed_payload{};
   bool compressed{false};
+  bool undecodable{false};
   std::uint32_t uncompressed_size{0};
 };
 

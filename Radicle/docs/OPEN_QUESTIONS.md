@@ -44,7 +44,7 @@ Speculative answers must not be hardcoded as facts.
 
 ## Compression / XXXX
 
-9. **Answered for stored framing:** official compressed records and OG/AE init-wrapper evidence use zlib framing. This branch removes the raw-deflate retry for nonzero declared sizes. NG window bits and live malformed-input behavior remain separate #391 questions; see `COMPRESSION_EVIDENCE.md`.
+9. **Answered for stored framing:** official compressed records and OG/AE init-wrapper evidence use zlib framing. This branch removes the raw-deflate retry for nonzero declared sizes. Radicle loads undecodable compressed content as an undecodable record with raw bytes kept (GT-205 PR1). NG window bits and live malformed-input behavior remain separate #391 questions; see `COMPRESSION_EVIDENCE.md`.
 10. **Answered for the inspected OG path:** the chunk-header reader consumes `XXXX`, replaces the type with the next header, and applies its extended size before higher-level reads. Radicle retains the physical marker to preserve file bytes. See `COMPRESSION_EVIDENCE.md` for per-build scope.
 10b. Engine `GetChunkData` truncates oversize chunks (`data truncated`). Should the native reader match that or fail hard? Currently fail hard.
 
