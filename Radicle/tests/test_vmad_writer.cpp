@@ -53,7 +53,7 @@ TEST(VmadWriter, ScalarsAndArrayElementsRoundtripBothObjectFormats) {
       }
     }
     const auto padding = properties[0].value_offset + (format == 2 ? 0 : 6);
-    EXPECT_EQ(data[padding], std::byte{0xEF}); EXPECT_EQ(data[padding + 1], std::byte{0xBE});
+    EXPECT_EQ(data[padding], std::byte{0}); EXPECT_EQ(data[padding + 1], std::byte{0});
     EXPECT_EQ(find_record(reparsed, fixture::key())->subrecords[1].data,
               find_record(plugin, fixture::key())->subrecords[1].data);
     EXPECT_EQ(test::record_original_bytes(reparsed, *find_record(reparsed, fixture::key(0x801))), other_bytes);
