@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Radicle.Interop;
 
 namespace OpenCommonwealth.Services.Archive;
 
@@ -524,14 +525,21 @@ public sealed class GameData : IDisposable
 
     private static List<string> OrderByPlugins(List<string> archives, string pluginsPath)
     {
-        var plugins = File.ReadAllLines(pluginsPath)
-                          .Select(line => line.Trim())
-                          .Where(line => line.Length > 0 && !line.StartsWith('#'))
-                          .Select(line => line.StartsWith('*') ? line[1..] : line)
-                          .Select(Path.GetFileNameWithoutExtension)
-                          .Where(baseName => !string.IsNullOrEmpty(baseName))
-                          .Cast<string>()
-                          .ToList();
+        IReadOnlyList<PluginListEntry> entries;
+        try
+        {
+            entries = LoadOrderFiles.ReadPluginList(pluginsPath);
+        }
+        catch (Exception e) when (e is RadicleException or FormatException or OverflowException || Ba2.IsNativeLoadFailure(e))
+        {
+            return archives;
+        }
+
+        var plugins = entries
+                      .Select(entry => Path.GetFileNameWithoutExtension(entry.Name))
+                      .Where(baseName => !string.IsNullOrEmpty(baseName))
+                      .Cast<string>()
+                      .ToList();
 
         var ordered = new List<string>();
         var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
