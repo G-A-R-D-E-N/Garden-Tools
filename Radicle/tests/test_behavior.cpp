@@ -165,9 +165,9 @@ TEST_F(BehaviorRead, ProcedureTreeDecodesNestedContainersAndLeafPayloadRanges) {
   const auto env = load(); const auto tree = fo4::env::decode_package_procedure(*record(env).record);
   EXPECT_TRUE(tree.decoded); EXPECT_EQ(tree.region_begin, 1u); EXPECT_EQ(tree.region_end, 16u);
   EXPECT_TRUE(tree.inputs.empty()); EXPECT_FALSE(tree.marker); ASSERT_EQ(tree.nodes.size(), 4u);
-  const auto& root = tree.nodes[0];
-  EXPECT_EQ(root.kind, fo4::env::PackageProcedureKind::container); EXPECT_EQ(root.name, "Sequence");
-  EXPECT_EQ(root.child_count, 2u); EXPECT_EQ(root.flags, 5u); EXPECT_EQ(root.children, (std::vector<std::size_t>{1, 2}));
+  const auto& root_node = tree.nodes[0];
+  EXPECT_EQ(root_node.kind, fo4::env::PackageProcedureKind::container); EXPECT_EQ(root_node.name, "Sequence");
+  EXPECT_EQ(root_node.child_count, 2u); EXPECT_EQ(root_node.flags, 5u); EXPECT_EQ(root_node.children, (std::vector<std::size_t>{1, 2}));
   const auto& travel = tree.nodes[1];
   EXPECT_EQ(travel.kind, fo4::env::PackageProcedureKind::leaf); EXPECT_EQ(travel.name, "Travel"); EXPECT_EQ(travel.condition_count, 1u);
   EXPECT_FALSE(travel.flags); EXPECT_EQ(travel.opaque_begin, 8u); EXPECT_EQ(travel.opaque_end, 10u);
