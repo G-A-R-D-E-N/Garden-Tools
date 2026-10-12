@@ -150,6 +150,26 @@ fo4::test::ByteWriter object_word_vmad(std::uint16_t format, std::uint16_t word)
   return vmad;
 }
 
+fo4::test::ByteWriter quest_alias_word_vmad(std::uint16_t format, std::uint16_t word) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(format);
+  vmad.u16(0);
+  vmad.u8(0);
+  vmad.u16(0);
+  vmad.u16(0);
+  vmad.u16(1);
+  if (format == 2) vmad.u16(word);
+  if (format == 1) vmad.u32(0x0200009A);
+  vmad.u16(3);
+  if (format == 1) vmad.u16(word);
+  if (format == 2) vmad.u32(0x0200009A);
+  vmad.u16(0xFFFF);
+  vmad.u16(format);
+  vmad.u16(0);
+  return vmad;
+}
+
 }
 
 TEST(Vmad, UnexposedScalarObjectWordsStopTheTypedReader) {
@@ -412,5 +432,41 @@ TEST(Vmad, EmptyVariableArrayDoesNotPermitUnknownTailOrTruncatedCountRemap) {
     const auto truncated = std::span<const std::byte>(payload).first(payload.size() - missing);
     EXPECT_TRUE(fo4::vmad_coverage(truncated, record->header.signature).failed);
     EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(truncated, record->header.signature).has_value());
+  }
+}
+
+TEST(Vmad, QuestAliasUnusedWordsStopTheScanPath) {
+  for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
+    for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
+      SCOPED_TRACE("format=" + std::to_string(format) + " word=" + std::to_string(word));
+      const auto vmad = quest_alias_word_vmad(format, word);
+      const auto coverage = fo4::vmad_coverage(vmad.bytes, fo4::sig_qust);
+      EXPECT_EQ(coverage.unsupported, word != 0);
+      EXPECT_EQ(coverage.complete(), word == 0);
+      const auto offsets = fo4::vmad_formid_offsets_for_remap(vmad.bytes, fo4::sig_qust);
+      EXPECT_EQ(offsets.has_value(), word == 0);
+      if (word == 0) {
+        ASSERT_TRUE(offsets.has_value());
+        ASSERT_EQ(offsets->size(), 1u);
+        EXPECT_EQ((*offsets)[0], vmad.bytes.size() - (format == 2 ? 10u : 14u));
+      }
+    }
+  }
+}
+
+TEST(Vmad, QuestAliasUnusedWordsStopTheTypedReader) {
+  for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
+    for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
+      SCOPED_TRACE("format=" + std::to_string(format) + " word=" + std::to_string(word));
+      const auto vmad = quest_alias_word_vmad(format, word);
+      const auto extras = fo4::read_quest_vmad_extras(
+          std::span<const std::byte>(vmad.bytes).subspan(6), static_cast<std::int16_t>(format));
+      EXPECT_EQ(extras.unsupported, word != 0);
+      if (word == 0) {
+        EXPECT_TRUE(extras.fully_consumed);
+        ASSERT_EQ(extras.aliases.size(), 1u);
+        EXPECT_EQ(extras.aliases[0].alias_id, 3);
+      }
+    }
   }
 }
