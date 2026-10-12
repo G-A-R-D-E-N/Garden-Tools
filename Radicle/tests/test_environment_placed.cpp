@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -61,10 +62,10 @@ void wstring(fo4::test::ByteWriter& out, std::string_view text) {
   out.raw(text);
 }
 
-std::vector<std::byte> make_vmad(bool with_variable) {
+std::vector<std::byte> make_vmad(bool with_variable, std::uint16_t format = 2, std::uint16_t word = 0) {
   fo4::test::ByteWriter out;
   out.u16(6);
-  out.u16(2);
+  out.u16(format);
   out.u16(1);
   wstring(out, "DoorScript");
   out.u8(0);
@@ -72,9 +73,11 @@ std::vector<std::byte> make_vmad(bool with_variable) {
   wstring(out, "Target");
   out.u8(1);
   out.u8(1);
-  out.u16(0);
+  if (format == 2) out.u16(word);
+  if (format == 1) out.u32(0x00000805);
   out.u16(0xFFFF);
-  out.u32(0x00000805);
+  if (format == 1) out.u16(word);
+  if (format == 2) out.u32(0x00000805);
   if (with_variable) {
     wstring(out, "Anything");
     out.u8(6);
@@ -374,6 +377,39 @@ TEST_F(PlacedEnvironmentTest, PrimaryModelPathIgnoresModlOnRecordsWithoutAModel)
   EXPECT_FALSE(model(0x811).has_value());
   EXPECT_FALSE(model(0x812).has_value());
   EXPECT_EQ(model(0x813), "Lights\\Bulb.nif");
+}
+
+TEST_F(PlacedEnvironmentTest, CApiReportsUnexposedScalarObjectWords) {
+  for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
+    for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
+      SCOPED_TRACE("format=" + std::to_string(format) + " word=" + std::to_string(word));
+      const auto bytes = make_plugin(0, {{"REFR", 0x800, {{"VMAD", make_vmad(false, format, word)}}}});
+      {
+        std::ofstream file(path_, std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+      }
+      const auto utf8 = path_.u8string();
+      const std::string path(utf8.begin(), utf8.end());
+      const char* raw[] = {path.c_str()};
+      radicle_env* pointer = nullptr;
+      ASSERT_EQ(radicle_env_load(raw, 1, &pointer), RADICLE_STATUS_OK) << radicle_last_error();
+      const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(pointer, radicle_env_destroy);
+      const radicle_record* record = nullptr;
+      ASSERT_EQ(radicle_env_winner(env.get(), {"Placed.esp", 0x800}, &record), RADICLE_STATUS_OK);
+      radicle_placed_ref* decoded = nullptr;
+      ASSERT_EQ(radicle_placed_ref_decode(env.get(), record, &decoded), RADICLE_STATUS_OK) << radicle_last_error();
+      const std::unique_ptr<radicle_placed_ref, decltype(&radicle_placed_ref_free)> ref(decoded, radicle_placed_ref_free);
+      EXPECT_EQ(ref->script_object_format, format);
+      EXPECT_EQ(ref->scripts_unsupported, word == 0 ? 0 : 1);
+      ASSERT_EQ(ref->script_count, 1u);
+      EXPECT_EQ(ref->scripts[0].property_count, word == 0 ? 4u : 0u);
+      if (word == 0) {
+        ASSERT_EQ(ref->scripts[0].property_count, 4u);
+        EXPECT_EQ(ref->scripts[0].properties[0].object.local_id, 0x805u);
+        EXPECT_EQ(ref->scripts[0].properties[0].alias, -1);
+      }
+    }
+  }
 }
 
 TEST_F(PlacedEnvironmentTest, CApiDecodesPlacedReferences) {
