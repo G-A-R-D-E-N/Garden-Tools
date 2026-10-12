@@ -1093,4 +1093,7 @@ Covers the C ABI for the load order: null arguments return INVALID_ARGUMENT, an 
 ## Radicle/tests/temp_data_dir.hpp:TempDataDir
 
 Creates a directory named with the process id and a process-wide atomic counter, so parallel test binaries and repeated fixtures do not collide. `write` sets each file's time to one hour ago plus `rank` seconds, which gives the name tie-break and the timestamp order distinct, deterministic values.
->
+
+## Radicle/src/forms/static_collection.cpp:decode_static_collection_parts
+
+The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
