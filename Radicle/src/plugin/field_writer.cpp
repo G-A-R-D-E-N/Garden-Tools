@@ -2,6 +2,7 @@
 
 #include "record_edit.hpp"
 
+#include "fo4/environment/sound.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/field_address.hpp"
@@ -31,6 +32,18 @@ void require_scalar_record(const Record& record, const schema::ScalarFieldDescri
 }
 
 schema::FieldSlots scalar_slots(const Record& record, const schema::ScalarFieldDescriptor& field) {
+  try {
+    if (record.header.signature == Signature::from_string("SNDR") &&
+        (field.scalar.subrecord == Signature::from_string("INTV") ||
+         field.scalar.subrecord == Signature::from_string("FNAM"))) {
+      static_cast<void>(env::decode_sound_rate_files(record));
+    } else if (record.header.signature == Signature::from_string("SOUN") &&
+               field.scalar.subrecord == Signature::from_string("REPT")) {
+      static_cast<void>(env::decode_sound_repeat(record));
+    }
+  } catch (const env::WorldDecodeError& error) {
+    throw schema::ScalarError(error.what());
+  }
   auto resolved = schema::resolve_field_slots(record, schema::scalar_field_shape(field.scalar),
                                               field.scalar.address);
   if (resolved.duplicate) {
@@ -44,6 +57,14 @@ schema::FieldSlots scalar_slots(const Record& record, const schema::ScalarFieldD
 }
 
 schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFieldDescriptor& field) {
+  if (record.header.signature == Signature::from_string("FSTS") &&
+      field.subrecord == Signature::from_string("DATA")) {
+    try {
+      static_cast<void>(env::decode_footstep_counts(record));
+    } catch (const env::WorldDecodeError& error) {
+      throw schema::FormLinkFieldError(error.what());
+    }
+  }
   schema::FieldShape shape;
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;
@@ -52,6 +73,17 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   if (resolved.duplicate) {
     throw schema::FormLinkFieldError("record contains duplicate FormLink subrecords: " +
                                      field.subrecord.to_string());
+  }
+  if (field.payload_sizes[0] != 0 &&
+      (field.address.when.count == 0 || std::any_of(resolved.slots.begin(), resolved.slots.end(),
+                                                   [](const auto& slot) { return slot.valid || slot.misfit; }))) {
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == field.subrecord &&
+          subrecord.data.size() != field.payload_sizes[0] &&
+          (field.payload_sizes[1] == 0 || subrecord.data.size() != field.payload_sizes[1])) {
+        throw schema::FormLinkFieldError(std::string(field.path) + " has unexpected payload size");
+      }
+    }
   }
   return resolved;
 }

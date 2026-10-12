@@ -113,8 +113,11 @@ add_executable(
     unit/RadiclePluginScalarTests.cpp
     unit/RadiclePluginSchemaGridTests.cpp
     unit/RadiclePluginW0Tests.cpp
+    unit/RadiclePluginSoundSemanticTests.cpp
     unit/RadiclePluginSchemaAuthoringTests.cpp
     unit/RadiclePluginWaterSemanticTests.cpp
+    unit/RadiclePluginVegetationSemanticTests.cpp
+    unit/RadiclePluginClimateSemanticTests.cpp
     unit/RadiclePluginPreflightTests.cpp
     unit/RadiclePluginArmorCreationTests.cpp
     unit/RadiclePluginRaceCreationTests.cpp
@@ -174,6 +177,12 @@ target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)
 fo4ide_enable_sanitizers(fo4ide_test_plugin_backend)
 catch_discover_tests(fo4ide_test_plugin_backend PROPERTIES TIMEOUT 10)
+
+add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRealTests.cpp)
+target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
+fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
+catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 120)
 
 add_executable(
     fo4ide_test_proj_expl_hazd

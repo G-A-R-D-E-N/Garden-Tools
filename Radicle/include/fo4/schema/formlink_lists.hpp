@@ -5,6 +5,7 @@
 #include "fo4/schema/field_address.hpp"
 #include "fo4/signature.hpp"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <span>
@@ -29,6 +30,7 @@ struct FormLinkFieldDescriptor {
   std::size_t first_target{0};
   std::size_t target_count{0};
   FieldAddress address{};
+  std::array<std::size_t, 2> payload_sizes{};
 };
 
 class FormLinkFieldError : public std::runtime_error {

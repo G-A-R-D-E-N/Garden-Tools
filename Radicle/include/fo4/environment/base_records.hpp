@@ -57,10 +57,27 @@ struct ClimateWeather {
   FormKey global;
 };
 
+struct ClimateTiming {
+  std::uint8_t sunrise_begin{0};
+  std::uint8_t sunrise_end{0};
+  std::uint8_t sunset_begin{0};
+  std::uint8_t sunset_end{0};
+  std::uint8_t volatility{0};
+  std::uint8_t moons_phase_length{0};
+  float sunrise_begin_hours() const { return sunrise_begin * (1.0f / 6.0f); }
+  float sunrise_end_hours() const { return sunrise_end * (1.0f / 6.0f); }
+  float sunset_begin_hours() const { return sunset_begin * (1.0f / 6.0f); }
+  float sunset_end_hours() const { return sunset_end * (1.0f / 6.0f); }
+  std::uint8_t days_per_phase() const { return moons_phase_length & 0x3Fu; }
+  bool uses_secunda() const { return (moons_phase_length & 0x40u) != 0; }
+  bool uses_masser() const { return (moons_phase_length & 0x80u) != 0; }
+};
+
 struct ClimateData {
   std::vector<ClimateWeather> weathers;
   std::optional<std::string_view> sun_texture;
   std::optional<std::string_view> sun_glare_texture;
+  std::optional<ClimateTiming> timing;
 };
 
 enum class WeatherColorGroup : std::uint8_t {
@@ -79,9 +96,29 @@ struct WeatherColors {
   std::optional<ByteColor> color(WeatherColorGroup group, std::size_t time) const noexcept;
 };
 
+struct WeatherParameters {
+  std::uint8_t wind_speed{0};
+  std::uint8_t transition_delta{0};
+  std::uint8_t sun_glare{0};
+  std::uint8_t sun_damage{0};
+  std::uint8_t precipitation_begin{0};
+  std::uint8_t precipitation_end{0};
+  std::uint8_t lightning_begin{0};
+  std::uint8_t lightning_end{0};
+  std::uint8_t lightning_frequency{0};
+  std::uint8_t flags{0};
+  ByteColor lightning_color;
+  std::uint8_t visual_effect_begin{0};
+  std::uint8_t visual_effect_end{0};
+  std::uint8_t wind_direction{0};
+  std::uint8_t wind_direction_range{0};
+  std::optional<std::uint8_t> wind_turbulence;
+};
+
 struct WeatherData {
   std::optional<WeatherColors> colors;
   std::vector<float> fog_distances;
+  std::optional<WeatherParameters> parameters;
 };
 
 struct StaticPlacement {
@@ -164,6 +201,7 @@ LightRecordData decode_light(const Environment& env, const RecordRef& ref);
 BendableSplineData decode_bendable_spline(const Environment& env, const RecordRef& ref);
 std::optional<FormKey> decode_layer_parent(const Environment& env, const RecordRef& ref);
 ClimateData decode_climate(const Environment& env, const RecordRef& ref);
+bool set_climate_timing(Plugin& plugin, const FormKey& key, const ClimateTiming& timing);
 WeatherData decode_weather(const Environment& env, const RecordRef& ref);
 std::vector<StaticCollectionPart> decode_static_collection(const Environment& env, const RecordRef& ref);
 StaticDistantLod decode_static_distant_lod(const Environment& env, const RecordRef& ref);

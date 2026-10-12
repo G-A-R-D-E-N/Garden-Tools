@@ -62,7 +62,7 @@ public class WaterAuthoringTests
     private static Status Refusal(Action action) => Assert.Throws<RadicleException>(action).Status;
 
     [Fact]
-    public void VisualFieldsColoursAndLinksSurviveReload()
+    public void VisualFieldsColorsAndLinksSurviveReload()
     {
         using var temp = new TempDirectory();
         var path = temp.Write(Plugin, Source());

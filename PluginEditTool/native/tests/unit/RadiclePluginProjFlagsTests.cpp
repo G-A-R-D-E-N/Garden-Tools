@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/forms/proj_expl_hazd.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
@@ -150,4 +151,35 @@ TEST_CASE("Native PROJ Flags SetField writes its u16 and leaves the embedded Typ
     for (std::size_t index = 2; index < beforeDnam->data.size(); ++index) {
         CHECK(afterDnam->data[index] == beforeDnam->data[index]);
     }
+}
+
+TEST_CASE("Native PROJ creation writes Type as its own u16 and reads it back") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginWithLight());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto created = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "PROJ",
+            nlohmann::json{{"editorId", "TypeLobber"}, {"type", 2}}
+        }));
+    REQUIRE(created.has_value());
+    savePlugin(backend);
+
+    const auto key = fo4::FormKey::parse("000801:Patch.esp");
+    const auto plugin = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(plugin, key);
+    REQUIRE(record != nullptr);
+    const auto* dnam = findSub(*record, "DNAM");
+    REQUIRE(dnam != nullptr);
+    CHECK(dnam->data[0] == std::byte{0x00});
+    CHECK(dnam->data[1] == std::byte{0x00});
+    CHECK(dnam->data[2] == std::byte{0x02});
+    CHECK(dnam->data[3] == std::byte{0x00});
+    CHECK(fo4::forms::decode_projectile(plugin, key).type == 2);
 }

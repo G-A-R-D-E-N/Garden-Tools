@@ -59,7 +59,7 @@ generic W0 field writer and subrecord authoring (`PluginFile.SetScalar`,
 | Family | READ | WRITE | ADD | REMOVE | CREATE | REMAP |
 | --- | --- | --- | --- | --- | --- | --- |
 | DNAM floats (44) | `decode_water`, `radicle_water_get_info`, `Water` | `SetScalar` `WATR\DepthAmount` .. `WATR\SiltAmount`; prefix rule, silt absent on a 188-byte DNAM | refused (present and required) | refused (required) | 201-byte xEdit default | none |
-| DNAM colours (6 x RGB) | same | `SetScalar` `WATR\<Colour>Red/Green/Blue` (u8); pad bytes never written | same | same | zero | none |
+| DNAM colors (6 x RGB) | same | `SetScalar` `WATR\<Color>Red/Green/Blue` (u8); pad bytes never written | same | same | zero | none |
 | DNAM reflections | `screen_space_reflections` | `SetScalar` `WATR\ScreenSpaceReflections` (0..1, 201-byte DNAM only) | same | same | 1 (True) | none |
 | FNAM flags | `flags` | `SetScalar` `WATR\Flags` | n/a (required) | refused (required) | `00` | none |
 | ANAM | n/a | `SetScalar` `WATR\OpacityUnused` | `00` | yes | not created | none |
@@ -77,7 +77,7 @@ leave the serialized plugin unchanged. No official record has a partial silt mem
 
 Stays opaque: DATA and GNAM payloads (local measurement of the seven official
 masters: every DATA is 0 bytes and every GNAM is 12 bytes of unknown data), the
-colour pad bytes (local measurement: byte 195 is 0xFF in four Fallout4.esm
+color pad bytes (local measurement: byte 195 is 0xFF in four Fallout4.esm
 records), and every byte of an official record that no edit
 touched. The official order check finds no violators in the 47 WATR. Field
 list, defaults provenance and refusal rules are in
@@ -132,7 +132,7 @@ one half, negative fractions truncate, and NaN/below-range values become
 -2^31. Values at least +2^31 select the world's default height: **-2^31 is
 a real height**, not a default sentinel. The original XCLW bytes remain intact.
 Interior height volumes and live rendering are outside this selection query.
-The selection result uses ABI 12 after integrating main ABI 11; re-bump if
+The selection result uses ABI 28 after integrating main ABI 27; re-bump if
 another ABI PR merges first. See `docs/code-notes/radicle-water-writer.md`.
 
 GardenEngine main `10ea81f1590b06dad962ff86721c0a55f00ef173` has the consumer

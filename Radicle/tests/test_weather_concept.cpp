@@ -23,15 +23,17 @@
 namespace {
 
 struct WeatherPluginOptions {
-  std::size_t pnam_jnam_size = 512;
+  std::size_t pnam_jnam_size = 1024;
   std::size_t imsp_size = 32;
   std::size_t data_size = 20;
   int dalc_count = 8;
+  std::size_t dalc_size = 32;
   bool include_nam4 = true;
   int unam_size = 24;
   std::size_t fnam_size = 72;
   std::size_t nam0_size = 608;
   std::uint32_t weather_form_id = 0x00000800;
+  std::uint16_t form_version = 131;
   std::uint32_t snam_form_id = 0x00000810;
   std::uint32_t tnam_form_id = 0x00000820;
   std::uint32_t mnam = 0;
@@ -75,7 +77,7 @@ void write_minimal_misc(fo4::test::ByteWriter& out, std::uint32_t form_id) {
 
 void write_weather_record(fo4::test::ByteWriter& out, const WeatherPluginOptions& options) {
   const auto group = fo4::test::begin_group(out, "WTHR", 0);
-  const auto record = fo4::test::begin_record(out, "WTHR", 0, options.weather_form_id);
+  const auto record = fo4::test::begin_record(out, "WTHR", 0, options.weather_form_id, options.form_version);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"TestWeather\0", 12});
   fo4::test::write_subrecord(out, "00TX", std::string_view{"Textures\\Sky\\Clouds\\Test.dds\0", 29});
   {
@@ -154,7 +156,7 @@ void write_weather_record(fo4::test::ByteWriter& out, const WeatherPluginOptions
   }
   for (int i = 0; i < options.dalc_count; ++i) {
     fo4::test::ByteWriter body;
-    write_zeros(body, 32);
+    write_zeros(body, options.dalc_size);
     fo4::test::write_subrecord(out, "DALC", body.bytes);
   }
   if (options.unam_size > 0) {
@@ -241,29 +243,47 @@ std::ostream& operator<<(std::ostream& out, const WeatherLayoutCase& value) {
   return out << value.name;
 }
 
-const std::array<WeatherLayoutCase, 13> kWeatherLayoutCases{{
-    {"default512", {}, 16u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"pnam1024", make_options([](WeatherPluginOptions& o) { o.pnam_jnam_size = 1024; }), 32u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"imsp16", make_options([](WeatherPluginOptions& o) { o.imsp_size = 16; }), 16u, 4u, 20u, 8u, true, true, 72u, 608u},
-    {"data19", make_options([](WeatherPluginOptions& o) { o.data_size = 19; }), 16u, 8u, 19u, 8u, true, true, 72u, 608u},
-    {"dalc4", make_options([](WeatherPluginOptions& o) { o.dalc_count = 4; }), 16u, 8u, 20u, 4u, true, true, 72u, 608u},
-    {"noNam4", make_options([](WeatherPluginOptions& o) { o.include_nam4 = false; }), 16u, 8u, 20u, 8u, false, true, 72u, 608u},
-    {"unam12", make_options([](WeatherPluginOptions& o) { o.unam_size = 12; }), 16u, 8u, 20u, 8u, true, true, 72u, 608u},
-    {"noUnam", make_options([](WeatherPluginOptions& o) { o.unam_size = 0; }), 16u, 8u, 20u, 8u, true, false, 72u, 608u},
-    {"fnam32", make_options([](WeatherPluginOptions& o) { o.fnam_size = 32; }), 16u, 8u, 20u, 8u, true, true, 32u, 608u},
-    {"fnam56", make_options([](WeatherPluginOptions& o) { o.fnam_size = 56; }), 16u, 8u, 20u, 8u, true, true, 56u, 608u},
-    {"nam0272", make_options([](WeatherPluginOptions& o) { o.nam0_size = 272; }), 16u, 8u, 20u, 8u, true, true, 72u, 272u},
-    {"nam0544", make_options([](WeatherPluginOptions& o) { o.nam0_size = 544; }), 16u, 8u, 20u, 8u, true, true, 72u, 544u},
-    {"full1024",
-     make_options([](WeatherPluginOptions& o) {
-       o.pnam_jnam_size = 1024;
-       o.imsp_size = 16;
+void legacy_layout(WeatherPluginOptions& o) {
+  o.form_version = 110;
+  o.pnam_jnam_size = 512;
+  o.data_size = 19;
+  o.fnam_size = 32;
+  o.nam0_size = 272;
+  o.imsp_size = 16;
+  o.dalc_count = 4;
+  o.unam_size = 12;
+}
+
+const std::array<WeatherLayoutCase, 10> kWeatherLayoutCases{{
+    {"default", {}, 32u, 8u, 20u, 8u, true, true, 72u, 608u},
+    {"imsp16", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
+    {"pre119", make_options([](WeatherPluginOptions& o) {
+       o.form_version = 118;
        o.data_size = 19;
-       o.dalc_count = 4;
-       o.include_nam4 = false;
-       o.unam_size = 12;
        o.fnam_size = 32;
-       o.nam0_size = 272;
+       o.nam0_size = 544;
+       o.unam_size = 12;
+     }),
+     32u, 8u, 19u, 8u, true, true, 32u, 544u},
+    {"dalc4", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
+    {"noNam4", make_options([](WeatherPluginOptions& o) { o.include_nam4 = false; }), 32u, 8u, 20u, 8u, false, true, 72u, 608u},
+    {"unam12", make_options([](WeatherPluginOptions& o) {
+       o.form_version = 129;
+       o.unam_size = 12;
+     }),
+     32u, 8u, 20u, 8u, true, true, 72u, 608u},
+    {"noUnam", make_options([](WeatherPluginOptions& o) { o.unam_size = 0; }), 32u, 8u, 20u, 8u, true, false, 72u, 608u},
+    {"v119", make_options([](WeatherPluginOptions& o) {
+       o.form_version = 119;
+       o.fnam_size = 56;
+       o.unam_size = 12;
+     }),
+     32u, 8u, 20u, 8u, true, true, 56u, 608u},
+    {"v110", make_options(legacy_layout), 32u, 4u, 19u, 4u, true, true, 32u, 272u},
+    {"full",
+     make_options([](WeatherPluginOptions& o) {
+       legacy_layout(o);
+       o.include_nam4 = false;
      }),
      32u, 4u, 19u, 4u, false, true, 32u, 272u},
 }};
@@ -292,14 +312,14 @@ TEST(WeatherConcept, DecodesProvenCloudAndLinkSlots) {
   EXPECT_EQ(*model.editor_id, "TestWeather");
   ASSERT_TRUE(model.cloud_textures[0].has_value());
   EXPECT_EQ(*model.cloud_textures[0], "Textures\\Sky\\Clouds\\Test.dds");
-  EXPECT_EQ(model.cloud_color_layer_count, 16u);
+  EXPECT_EQ(model.cloud_color_layer_count, 32u);
   EXPECT_FALSE(model.mnam.has_value());
   EXPECT_FALSE(model.nnam.has_value());
   ASSERT_EQ(model.snam.size(), 1u);
   ASSERT_TRUE(model.snam[0].sound.has_value());
   EXPECT_EQ(model.snam[0].sound->to_string(), "000810:WeatherPatch.esp");
   ASSERT_EQ(model.tnam.size(), 1u);
-  EXPECT_EQ(model.tnam[0].to_string(), "000820:WeatherPatch.esp");
+  EXPECT_EQ(model.tnam[0]->to_string(), "000820:WeatherPatch.esp");
   EXPECT_EQ(model.imsp_count, 8);
   EXPECT_TRUE(model.has_wgdr);
   EXPECT_EQ(model.dalc.size(), 8u);
@@ -320,6 +340,28 @@ TEST(WeatherConcept, RejectsMalformedPnamSize) {
     }
   }
   EXPECT_THROW(fo4::forms::decode_weather(plugin, key), fo4::forms::WeatherError);
+}
+
+TEST(WeatherConcept, CloudSpeedsPreserveUnsignedStoredBytes) {
+  auto plugin = fo4::read_plugin(make_weather_plugin(), "WeatherPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  auto* record = find_mutable_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  constexpr std::array<std::uint8_t, 5> values{0, 127, 128, 254, 255};
+  for (auto& sub : record->subrecords) {
+    if (sub.signature == fo4::Signature::from_string("RNAM") ||
+        sub.signature == fo4::Signature::from_string("QNAM")) {
+      for (std::size_t i = 0; i < sub.data.size(); ++i) {
+        sub.data[i] = std::byte{values[i % values.size()]};
+      }
+    }
+  }
+  const auto model = fo4::forms::decode_weather(plugin, key);
+  for (std::size_t i = 0; i < fo4::forms::k_weather_cloud_layer_slots; ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(model.cloud_speed_y[i], values[i % values.size()]);
+    EXPECT_EQ(model.cloud_speed_x[i], values[i % values.size()]);
+  }
 }
 
 class WeatherLayoutFamily : public testing::TestWithParam<WeatherLayoutCase> {};
@@ -352,6 +394,40 @@ TEST(WeatherConcept, MnamNullAccepted) {
   EXPECT_TRUE(fo4::forms::set_weather_mnam(plugin, key, std::nullopt));
   const auto model = fo4::forms::decode_weather(plugin, key);
   EXPECT_FALSE(model.mnam.has_value());
+}
+
+TEST(WeatherConcept, NullSkyStaticTnamDecodesAsAbsent) {
+  WeatherPluginOptions options;
+  options.tnam_form_id = 0;
+  auto plugin = fo4::read_plugin(make_weather_plugin(options), "WeatherPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  const auto model = fo4::forms::decode_weather(plugin, key);
+  ASSERT_EQ(model.tnam.size(), 1u);
+  EXPECT_FALSE(model.tnam[0].has_value());
+}
+
+TEST(WeatherConcept, DalcDecodesSpecularAndFresnelOnlyWhenPresent) {
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  const struct {
+    std::size_t size;
+    bool specular;
+    bool fresnel;
+  } cases[] = {{24, false, false}, {28, true, false}, {32, true, true}};
+  for (const auto& c : cases) {
+    SCOPED_TRACE(c.size);
+    WeatherPluginOptions options;
+    options.dalc_size = c.size;
+    auto plugin = fo4::read_plugin(make_weather_plugin(options), "WeatherPatch.esp");
+    const auto model = fo4::forms::decode_weather(plugin, key);
+    ASSERT_EQ(model.dalc.size(), 8u);
+    EXPECT_EQ(model.dalc[0].specular.has_value(), c.specular);
+    EXPECT_EQ(model.dalc[0].fresnel.has_value(), c.fresnel);
+  }
+
+  WeatherPluginOptions options;
+  options.dalc_size = 20;
+  auto plugin = fo4::read_plugin(make_weather_plugin(options), "WeatherPatch.esp");
+  EXPECT_THROW(fo4::forms::decode_weather(plugin, key), fo4::forms::WeatherError);
 }
 
 TEST(WeatherConcept, MnamRejectsNonSpgd) {
@@ -409,7 +485,7 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   ASSERT_FALSE(before.tnam.empty());
   ASSERT_TRUE(before.snam[0].sound.has_value());
   const auto snam_before = before.snam[0].sound->to_string();
-  const auto tnam_before = before.tnam[0].to_string();
+  const auto tnam_before = before.tnam[0]->to_string();
 
   const auto spgd_plugin = fo4::read_plugin(make_spgd_only_plugin(0x00000100), "FalloutSpgd.esm");
   const fo4::Plugin* environment[] = {&spgd_plugin};
@@ -425,7 +501,7 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   ASSERT_FALSE(after.tnam.empty());
   ASSERT_TRUE(after.snam[0].sound.has_value());
   EXPECT_EQ(after.snam[0].sound->to_string(), snam_before);
-  EXPECT_EQ(after.tnam[0].to_string(), tnam_before);
+  EXPECT_EQ(after.tnam[0]->to_string(), tnam_before);
   EXPECT_FLOAT_EQ(after.vnam.value_or(-1.0f), 1.0f);
   EXPECT_FLOAT_EQ(after.wnam.value_or(-1.0f), 1.0f);
 
@@ -607,7 +683,7 @@ TEST(WeatherConcept, RealFallout4EsmDecodesWhenPresent) {
   const auto key = fo4::FormKey::parse("0000015E:Fallout4.esm");
   const auto model = fo4::forms::decode_weather(plugin, key);
   EXPECT_TRUE(model.editor_id.has_value());
-  EXPECT_TRUE(model.cloud_color_layer_count == 16u || model.cloud_color_layer_count == 32u);
+  EXPECT_EQ(model.cloud_color_layer_count, 32u);
   EXPECT_TRUE(model.data.size() == 19 || model.data.size() == 20);
   EXPECT_TRUE(model.dalc.size() == 4u || model.dalc.size() == 8u);
 }

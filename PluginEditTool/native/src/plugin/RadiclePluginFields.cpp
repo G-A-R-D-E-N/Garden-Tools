@@ -56,6 +56,13 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
             return std::unexpected(Error{"ScalarReadFailed", error.what()});
         }
         const auto& scalar = field.scalar;
+        if (scalar.payload_size != 0 && std::any_of(record.subrecords.begin(), record.subrecords.end(),
+                [&](const auto& subrecord) {
+                    return subrecord.signature == scalar.subrecord && subrecord.data.size() != scalar.payload_size;
+                })) {
+            cells.push_back(SemanticFieldCell{std::string(field.path), "<opaque>", false, false});
+            continue;
+        }
         const auto resolved = fo4::schema::resolve_field_slots(
             record, fo4::schema::scalar_field_shape(scalar), scalar.address);
         if (resolved.misaligned) {
@@ -94,8 +101,9 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
     for (const auto& field : fo4::schema::formlink_fields(record.header.signature)) {
         try {
             static_cast<void>(fo4::record_field_count(plugin, record.form_key, field));
-        } catch (const fo4::schema::FormLinkFieldError& error) {
-            return std::unexpected(Error{"FormLinkReadFailed", error.what()});
+        } catch (const fo4::schema::FormLinkFieldError&) {
+            cells.push_back(SemanticFieldCell{std::string(field.path), "<opaque>", false, true});
+            continue;
         }
         const fo4::schema::FieldShape shape{field.subrecord, field.offset, sizeof(std::uint32_t), 0, false};
         const auto resolved = fo4::schema::resolve_field_slots(record, shape, field.address);

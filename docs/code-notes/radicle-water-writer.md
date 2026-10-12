@@ -12,9 +12,9 @@ are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DL
   `generated_formlink_lists.inc`, `generated_condition_scopes.inc`, `RadicleNative.g.cs`, `abi_layout_probe.cpp`) was
   regenerated with its tool. `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` is the W0 list, which already
   contains every header #396 exports from (`c_api_records.h` holds `radicle_water_resolve`).
-- Main `c50ad4d5405e1571113019654b10e3d4a05ca0f1` uses ABI 11. Integrating it
-  advances this additive surface to ABI 12, pinned by
-  `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwelve`. Regenerate the C#
+- Main's ABI 11 advanced this additive surface to ABI 12 (`c50ad4d5`). Merging main through the ABI 27 landing head
+  (`e4cd976d`, #400) advances it to ABI 28, pinned by
+  `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwentyEight`. Regenerate the C#
   declarations and layout probe with `generate_interop.py`; preserve both
   sides' exports. Re-bump from main if another ABI PR merges first.
 
@@ -24,12 +24,12 @@ are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DL
   `Silt Properties` struct, and the `Screen Space Reflections` byte after it are optional. `StructDoInit` treats an
   optional member whose full size does not fit as missing and ends the struct there, so silt is all-or-nothing: it is
   present only from 200 bytes, and the reflection byte only at 201. The decoder used to accept a partial silt at 192 and
-  196 bytes (silt amount, then light colour). It now reads all three silt members only when the payload is at least
+  196 bytes (silt amount, then light color). It now reads all three silt members only when the payload is at least
   `k_water_silt_end` (200). Payloads of 189-199 bytes decode the required 188 bytes with no silt and no reflection flag,
   like xEdit; the extra bytes stay in the record. Below 188 and above 201 still throw `WorldDecodeError`.
   Test: `Radicle/tests/test_water_authoring.cpp:WaterReader.SiltIsAllOrNothingLikeXEdit` (188, 192, 196, 199, 200, 201
   decode; 187 and 202 throw). Official decode is unchanged: every official DNAM is 188 or 201 bytes.
-- Everything else matches xEdit. FNAM must be exactly one byte, NAM0/NAM1 exactly 12, NAM2-NAM4 single strings; colours
+- Everything else matches xEdit. FNAM must be exactly one byte, NAM0/NAM1 exactly 12, NAM2-NAM4 single strings; colors
   expose RGB and leave the fourth byte (xEdit `wbByteColors` unused byte) alone. `screen_space_reflections` is
   `byte != 0`; xEdit's `wbBoolEnum` names only 0 and 1, and the raw byte is reachable as `WATR\ScreenSpaceReflections`.
   The decoder does not read FULL, ANAM, TNAM, SNAM, XNAM, YNAM, INAM, DATA or GNAM; those are reachable only through the
@@ -61,7 +61,7 @@ All paths are `existing_only`, `presentation: identity`; f32 bounds are +-1e9 li
   `DisplacementDampener` 88, `DisplacementStartingSize` 92, `SunSpecularPower` 100, `SunSpecularMagnitude` 104,
   `SunSparklePower` 108, `SunSparkleMagnitude` 112, `InteriorSpecularRadius` 116, `InteriorSpecularBrightness` 120,
   `InteriorSpecularPower` 124, `Layer1..3WindDirection` 128-136, `Layer1..3WindSpeed` 140-148, `Layer1..3AmplitudeScale`
-  152-160, `Layer1..3UVScale` 164-172, `Layer1..3NoiseFalloff` 176-184, `SiltAmount` 188); 18 colour bytes as
+  152-160, `Layer1..3UVScale` 164-172, `Layer1..3NoiseFalloff` 176-184, `SiltAmount` 188); 18 color bytes as
   `<Name>Red/Green/Blue` u8 for `ShallowColor` 4, `DeepColor` 8, `UnderwaterColor` 36, `ReflectionColor` 96, `LightColor`
   192 and `DarkColor` 196; `ScreenSpaceReflections` u8 0..1 at 200 (`wbBoolEnum`). Displacement fields carry the
   `Displacement` prefix so `WATR\Velocity` cannot be confused with the NAM0/NAM1 velocities.
@@ -97,7 +97,7 @@ All paths are `existing_only`, `presentation: identity`; f32 bounds are +-1e9 li
   0.985, DisplacementDampener 10, DisplacementStartingSize 0.05, SunSpecularPower 50, SunSpecularMagnitude 1,
   SunSparklePower 1, SunSparkleMagnitude 1, InteriorSpecularRadius 100000, InteriorSpecularBrightness 1,
   InteriorSpecularPower 100, Layer1..3UVScale 100, Layer1..3NoiseFalloff 300, ScreenSpaceReflections 1 for `True`) and
-  zero for every other float, every colour byte and every colour pad byte. 201 rather than 188: `StructDoInit` applies
+  zero for every other float, every color byte and every color pad byte. 201 rather than 188: `StructDoInit` applies
   the optional-member cut only when it loads existing data (`Assigned(aBasePtr)`), so a newly created xEdit DNAM has every
   member including silt and the reflection flag; and every official record at the current form version 131 stores 201
   bytes (the two 188-byte records are versions 122/123). The bytes are the little-endian f32 encodings of the values
@@ -125,7 +125,7 @@ Anchors: `Radicle/schema/fallout4/fields.json` (WATR entries), `Radicle/src/envi
 `Radicle/tests/test_water_real.cpp`.
 
 - DATA and GNAM payloads (unused/unknown bytes, preserved; listed in the order, removable, not addable).
-- Colour pad bytes at DNAM 7, 11, 39, 99, 195, 199. Not always zero in shipped data: byte 195 (silt light colour pad) is
+- Color pad bytes at DNAM 7, 11, 39, 99, 195, 199. Not always zero in shipped data: byte 195 (silt light color pad) is
   0xFF in four Fallout4.esm records (local measurement of the seven official masters: 0x1BDDB1, 0x1450A3, 0x16E900, 0x16E8FF), so they are never rewritten.
 - DNAM bytes 188-199 of a 189-199-byte payload as far as the decoder is concerned (see the size rule above).
 - FULL in localized plugins (string ID, W0 refusal).
@@ -144,7 +144,7 @@ emits the bound only when configured, leaving other generated descriptors
 unchanged. `Radicle/tools/test_field_address_codegen.py:SchemaCodegenTests.test_minimum_payload_size_for_optional_struct_members`
 covers valid metadata and malformed bounds.
 
-- `Radicle/tests/test_water_authoring.cpp` (fixture `Radicle/tests/water_fixture.hpp`): field and colour edits with exact
+- `Radicle/tests/test_water_authoring.cpp` (fixture `Radicle/tests/water_fixture.hpp`): field and color edits with exact
   DNAM bytes, bounds, prefix-rule absence at 188 bytes, strings and the localized refusal, links (null, wrong type,
   unknown master), add/remove order, unknown-order refusal, create and decode, reader fix.
 - `Radicle/tests/test_water_c_api.cpp:WaterCApi.FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload`: status mapping,

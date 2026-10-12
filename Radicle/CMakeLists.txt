@@ -111,7 +111,7 @@ add_library(fo4
   src/forms/placed_reference_edit.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
-  src/forms/weather_concept.cpp
+  src/forms/weather.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/proj_expl_hazd.cpp
@@ -165,7 +165,9 @@ add_library(fo4
   src/environment/placed.cpp
   src/environment/terrain.cpp
   src/environment/strings.cpp
+  src/environment/vegetation.cpp
   src/environment/base_records.cpp
+  src/environment/sound.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
   src/material/material_file.cpp
@@ -199,7 +201,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_vegetation.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_sound.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -335,6 +337,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
+    tests/test_climate_weather_authoring.cpp
+    tests/test_climate_weather_c_api.cpp
+    tests/test_climate_weather_real.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
@@ -365,6 +370,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_scopes_real.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
+    tests/test_vegetation.cpp
+    tests/test_vegetation_edit.cpp
+    tests/test_vegetation_authoring.cpp
+    tests/test_vegetation_real.cpp
     tests/test_navmesh_formlinks.cpp
     tests/test_armor_creation.cpp
     tests/test_armor_edit.cpp
@@ -413,6 +422,14 @@ if(RADICLE_BUILD_TESTS)
     tests/test_water_real.cpp
     tests/test_water_authoring.cpp
     tests/test_water_c_api.cpp
+    tests/test_sound.cpp
+    tests/test_sound_real.cpp
+    tests/test_sound_authoring.cpp
+    tests/test_sound_subrecords.cpp
+    tests/test_sound_writer_c_api.cpp
+    tests/test_sound_writer_real.cpp
+    tests/test_sky_parameters.cpp
+    tests/test_sky_real.cpp
     tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
     tests/test_env_bench_real.cpp

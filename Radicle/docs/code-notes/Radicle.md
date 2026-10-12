@@ -35,7 +35,7 @@ this query. These are static semantics, not live game acceptance. `VERIFY-2026-1
 
 `include/fo4/c_api_records.h:radicle_water_resolve` returns the selected key,
 borrowed winning WATR handle, default-selection flag and optional height.
-The ABI number is 12, re-bumped if another ABI PR lands first; see
+The ABI number is 28, re-bumped if another ABI PR lands first; see
 `docs/code-notes/radicle-water-writer.md`.
 `bindings/csharp/Radicle.Interop/WaterSelection.cs:EffectiveWater` consumes it.
 
@@ -59,6 +59,133 @@ byte. `docs/WATER.md` pins layout evidence for
 `src/environment/base_records.cpp:decode_water`. The selection query above uses
 static OG RE evidence from #395; runtime questions remain open. Raw links and heights are preserved by
 `src/environment/world.cpp:decode_cell` and `decode_worldspace`.
+
+## src/environment/sound.cpp:decode_sound_descriptor and decode_sound_marker
+
+The pinned loader record is
+`https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/sound-399-340/README.md`
+at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, sections 5.2–5.5 (OG
+addresses 0x4C1C10, 0x2CB540 and 0x55A1E0). The OG Standard loader would accept a
+top-level FNAM as legacy flags, but xEdit defines FNAM only inside rate groups
+and no official record has one, so the read surface no longer exposes it (see
+`docs/code-notes/radicle-sound-writer.md`). Repeated LNAM retains its last
+stored value. SOUN's ninth REPT byte is exposed whenever REPT is nine bytes. Playback selection,
+resource hashing and compound recursion remain outside these stored reads.
+
+## src/environment/sound.cpp:decode_sound_descriptor
+
+`docs/SOUND.md` pins each stored layout and the independent official-master
+census. SNDR's CNAM controls the BNAM union; known kinds keep their stored
+links, raw controls and complete rate blocks; a missing CNAM selects the values
+BNAM layout. Unknown kinds, duplicate scalar fields other than last-value LNAM,
+a top-level FNAM, wrong sizes and
+incomplete/count-mismatched rate groups fail closed. Static OG selection paths
+are documented in the newer record; category mixing and live playback remain
+outside this read surface.
+
+`src/environment/sound.cpp:decode_sound_marker` accepts the optional REPT tail
+without filling in a default. `decode_footstep_set` maps the reverse disk order
+into walking/running/sprinting/sneaking/swimming categories after validating
+the complete count table. `decode_music_type` and `decode_footstep` expose
+only their evidenced fields; unknown container bytes are untouched.
+
+`src/c_api_sound.cpp:radicle_sound_descriptor_decode` and the other sound
+exports use owned array holders and existing environment string storage.
+`bindings/csharp/Radicle.Interop/SoundRecords.cs:RadicleEnvironment` copies
+every array before freeing its holder. The generated declaration/layout probe
+includes `include/fo4/c_api_sound.h`; the current ABI is 27 against main ABI 26
+(re-bump if another ABI PR lands first; see `docs/code-notes/radicle-sound-writer.md`).
+
+## src/environment/vegetation.cpp:decode_grass / decode_tree
+
+The pinned private evidence at RE commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
+`RE-Work/subsystems/radicle-re-garden-tools/vegetation-403-342/README.md`, section
+3.1, verifies the OG grass loader address 0x31AA00 and bounded copy helper 0x1523A0:
+present DATA copies at most 32 bytes into zeroed storage. The typed view will
+zero-fill a short present DATA and read the prefix of a long one; original
+bytes remain available through the lossless container and payload getter.
+Missing DATA remains absent on this stored-field surface, rather than creating
+an authored payload. Section 5 verifies TREE CNAM is read only at exactly 48
+bytes; other lengths stay opaque without failing the rest of the record.
+Regression tests exercise short/long DATA and nonmatching CNAM before the fix.
+No placement, shader, wind or seasonal simulation is added.
+
+## src/environment/vegetation.cpp:decode_grass, decode_tree, decode_flora
+
+`docs/VEGETATION.md` pins stored fields and official-master size measurements.
+The shared model/bounds fields retain the existing metadata API; these getters
+validate present MODL and OBND rather than duplicating their surface. Raw flags,
+discriminators, seasonal bytes and tree wind values carry no runtime defaults.
+`decode_landscape_grasses` preserves repeated GNAM order and validates each
+individual link. Unknown payloads stay untouched in the container.
+
+`src/c_api_vegetation.cpp:radicle_landscape_grasses_decode` owns its key array
+until free; fixed record getters reuse environment-owned strings. C#
+`Vegetation.cs:RadicleEnvironment` copies arrays and releases the holder.
+ABI 26 follows merged main's ABI 25 and preserves its existing exports.
+`CMakeLists.txt:RADICLE_CSHARP_TESTS` is
+enabled in native CI with a writable runner-local .NET install directory.
+
+## include/fo4/environment/base_records.hpp:ClimateTiming
+
+The pinned private RE record at commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`,
+`RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/README.md`,
+is linked from `Radicle/docs/CLIMATE_WEATHER.md`; the local copy is not committed.
+Its sections 3.2 and 3.4 verify the unsigned four timing bytes multiplied by
+the float32 one-sixth constant (OG getter addresses 0x648A50–0x648B40), plus the
+moon byte's low six phase-day bits and Secunda/Masser bits 6/7 (0x648A10,
+0x658B00 and 0x658B10). `ClimateTiming` exposes these interpretations alongside
+the raw bytes, without clock clamping or wrapping. The existing climate C ABI
+getter carries the same values; integrating main
+`c50ad4d5405e1571113019654b10e3d4a05ca0f1` advances ABI 11 to 12.
+Re-bump if another ABI PR merges first. Native and managed boundary checks
+include unsigned values 128/255 and moon byte 0xFF. Volatility and weather
+execution remain raw; no transition simulation or assumed GMST override is added.
+
+## Climate timing and weather parameters (#343)
+
+`src/environment/base_records.cpp:decode_climate` decodes the six-byte CLMT
+TNAM and `decode_weather` decodes the measured 19/20-byte WTHR DATA variants.
+`docs/CLIMATE_WEATHER.md` pins the field-layout evidence and explicitly limits
+interpretation to stored bytes. `src/c_api_base_records.cpp:radicle_climate_decode`
+and `radicle_weather_decode` expose them in ABI 24; managed properties preserve
+the raw encoding. `include/fo4/forms/weather.hpp:Weather` provides a stable
+include name while `weather_concept.hpp` keeps existing consumers building.
+
+`bindings/csharp/tools/generate_interop.py:emit_probe` names the authoritative
+public header directory in the generated probe's existing source constraint.
+Its `offsetof` values describe Radicle's own compiled ABI, not game layouts.
+
+`probes/gardenengine/ClimateProbe.cs:ClimateProbe._Ready` runs in the current
+GardenEngine project, reads Commonwealth's climate and chosen weather through
+the generated C ABI binding, and invokes `CellService.BuildExteriorSkyJson`
+to verify that actual consumer path. It serializes stored timing/parameters
+and the existing sky payload, without a Mutagen lookup or asset conversion.
+The reflection call is confined to this integration probe because the
+existing consumer is private. The probe does not validate live transitions.
+
+`src/environment/base_records.cpp:decode_weather` keeps transition delta
+encoded. The private record pinned above, section 3.5, confirms DATA byte 3
+in `Sky::UpdateWeather` (address `0x64E530`) and names the two transition settings.
+Its sections 5–6 retain GMST override and live-simulation uncertainty; the
+decoder supplies stored bytes without adding a duration formula.
+
+`src/environment/base_records.cpp:decode_weather` accepts WTHR FNAM only at 32, 56 or 72 bytes, the sizes xEdit allows (`source:xEdit Core/wbDefinitionsCommon.pas:9521-9572 @93cc0bc5`). The former check accepted any multiple of four from 16 bytes up, such as 20, 24 or 28 bytes, that the forms model refuses, so the two readers now agree. The reader does not check form version against the 56 and 72 byte layouts.
+
+## include/fo4/forms/weather.hpp:Weather.cloud_speed_y / Weather.cloud_speed_x
+
+At pinned xEdit commit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`,
+`Core/wbDefinitionsCommon.pas:9366–9376` declares RNAM and QNAM as
+32-element `itU8` arrays. `src/forms/weather.cpp:decode_speed_bytes` must
+return their unsigned stored values: its signed arrays turned 128–255 into
+negative values. The shared helper and both arrays use `uint8_t`, without
+adding a physical scroll-rate conversion. The editor callback at lines
+4370–4376 is compatibility evidence, not a runtime rate specification.
+`tests/test_weather_concept.cpp:CloudSpeedsPreserveUnsignedStoredBytes`
+covers 0, 127, 128, 254 and 255 on both axes. These fields have no C ABI or
+managed exposure; the climate/weather C containers' separately added fields
+remain governed by ABI 24.
+
 ## tests/test_ba2_versions_real.cpp:Ba2NamedRealData
 
 Six installed archive fixtures cover GNRL and DX10 at versions 1, 7 and 8.
@@ -215,6 +342,12 @@ Owner and union dwords are read before `fn(0)` because `remap_raw` rewrites offs
 
 QUST extras after the primary scripts: bind byte, fragment count, optional fragment script, then fragments `{u16 Stage, u16 unused, i32 StageIndex, u8, wstring, wstring}`, then alias extras `{object, i16 version, i16 objFormat, scripts}`. Object format 2 stores unused u16, alias i16, FormID. Rewrite patches alias i16 (format 2 only) and Stage u16. StageIndex bytes are preserved.
 
+## src/forms/weather.cpp:decode_weather (TNAM, DALC)
+
+`src/forms/weather.cpp:decode_weather` keeps each sky-static TNAM slot as `std::optional<FormKey>` in `Weather::tnam`, so a NULL slot is absent rather than an error. This matches `decode_optional_form` for MNAM, NNAM, IMSP and WGDR, and keeps slot positions. xEdit allows NULL in that array (`source:xEdit Core/wbDefinitionsFO4.pas:13090-13092 @93cc0bc5`).
+
+`src/forms/weather.cpp:decode_weather` reads each DALC payload of 24, 28 or 32 bytes into `WeatherAmbientColors`: six directional words always, Specular only when the payload has at least 28 bytes, and Fresnel only at 32. xEdit makes both optional from form version 30 inside the `SetOptionalFrom(1)` struct (`source:xEdit Core/wbDefinitionsCommon.pas:6635-6655 @93cc0bc5`, used by WTHR at `source:xEdit Core/wbDefinitionsCommon.pas:9485-9497 @93cc0bc5`). The reader decides by payload size and does not read the form version, so a 28 byte payload reports Fresnel absent at any version.
+
 ## src/forms/quest_vmad.cpp:sync_quest_vmad_stages
 
 xEdit FO4/TES5 name the fragment i32 `Quest Stage Index`; Mutagen `QuestScriptFragment.StageIndex`; UESP VMAD names that slot `logentry`. xEdit PERK uses a separate `Fragment Index` for chronological fragment numbers; QUST chronological ids live in `FragmentName` (`Fragment_N`). Stage u16 is xEdit `Quest Stage` / UESP `fragment.index` = QUST INDX. StageIndex is not range-checked against QSDT count. INDX remap is identity, else a unique stage-body match excluding INDX; array position is never identity. Format-1 alias objects fail closed on rewrite.
@@ -278,7 +411,7 @@ A fragment property belongs to the fragment script the `fragment-script` row nam
 
 ## src/schema/non_formid_slots.cpp:corpus_non_formid_slot
 
-`formid_subrecords.inc` is a signature-only union of xEdit's FO4 form ID signatures, so a signature that is a form ID in one record type was treated as one everywhere (DIAL `PNAM` priority float, DIAL `SNAM` subtype code, SNDR `CNAM`, PACK `CNAM`, NPC_ `NAM4`, ...). #365: `remap_plugin_masters` rewrote those bytes whenever the master list changed. The deny list (`include/fo4/schema/non_formid_slots.inc`) is generated by `tools/corpus/non_formid_slots.py` from two sources that must agree: an official master stores a non-null value at that (record, subrecord) that resolves to no record in the official load order (its master index is past the file's MAST table, or the target does not exist), AND xEdit `wbDefinitionsFO4.pas` (`dev-4.1.6`) declares that subrecord in that record only as scalar data (`wbFloat`/`wbInteger`, the string types including `wbLStringKC` localized string IDs, the RGBA and colour helpers, a struct with no `wbFormID`, or a helper whose whole right-hand side, recursively, has no `wbFormID`/`wbUnion`; `wbPTRN := wbFormIDCk(...)` and the `wbVMAD*` helpers are therefore form IDs). In-table values matter as much as past-table ones: SCEN `WNAM` editor width 350 is `0x0000015E`, index 0, and was rewritten to `0x0100015E` when master 0 moved (`RemapNonFormIdSlots.InTableScalarsSurviveMasterReorder`). Localized string IDs are the same case: TERM `WNAM` welcome text ID `0x0000ABCD` became `0x0100ABCD` (`RemapNonFormIdSlots.LocalizedStringIdsSurviveMasterReorder`). `wbUnknown` slots count as scalar too, because xEdit never remaps bytes it has not decoded (TACT `PNAM`, PACK `BNAM`). Helpers are also read from `wbDefinitionsCommon.pas` (optional fifth generator argument), and a helper is judged by the element that declares the subrecord, not as a whole: `wbWorldLODData` holds NAM3 (water form ID) and NAM4 (`LOD Water Height` float), so only WRLD `NAM4` is denied. `remap_raw` and `rekey_form_links` also leave `0xFFFFFFFF` alone: it is xEdit's None value (`wbInterface.pas:TwbFormID.IsNone`), stored in vanilla EQUP `ANAM`, and was rewritten to `0x01FFFFFF` (`RemapNonFormIdSlots.NoneSentinelAndUndecodedSlotsSurviveMasterReorder`). The corpus evidence alone is not enough either: vanilla holds real links past the table (`DLCRobot.esm` REFR `XRFG`, see `GARDEN-TOOLS.md` on `resolve_plugin_link`), which the game reads as the owning plugin's, so `remap_raw` keeps remapping them. PACK `CNAM` is mixed in xEdit (record-level `Combat Style` form ID, and the `Data Input Values` union of bool/int/float after an `ANAM` type string), so `corpus_non_formid_slot` denies only a PACK `CNAM` whose previous subrecord is `ANAM`. SCEN `TNAM`/`HTID` depend on the scene action (`scene_action_scalar`): an action opens with a 2-byte `ANAM` type and closes with the empty `ANAM` marker. Inside an action `TNAM` is the Timer float and `HTID` is the Dialogue headtracking actor-ID array (or the empty Start Scene marker), so both stay scalar; only `HTID` in a Radio action (type 6, `Play Sound` SNDR) and the record-level `TNAM` (`Template Scene`, after the actions) are form IDs. It only removes slots from the generic branch of `form_links.cpp:visit_link_offsets`; record-specific handlers (WTHR, QUST, NAVM, structured slots) are unchanged. Regenerate it after adding new handlers or when new official files ship.
+`formid_subrecords.inc` is a signature-only union of xEdit's FO4 form ID signatures, so a signature that is a form ID in one record type was treated as one everywhere (DIAL `PNAM` priority float, DIAL `SNAM` subtype code, SNDR `CNAM`, PACK `CNAM`, NPC_ `NAM4`, ...). #365: `remap_plugin_masters` rewrote those bytes whenever the master list changed. The deny list (`include/fo4/schema/non_formid_slots.inc`) is generated by `tools/corpus/non_formid_slots.py` from two sources that must agree for every corpus row: an official master stores a non-null value at that (record, subrecord) that resolves to no record in the official load order (its master index is past the file's MAST table, or the target does not exist), AND xEdit `wbDefinitionsFO4.pas` (`dev-4.1.6`) declares that subrecord in that record only as scalar data (`wbFloat`/`wbInteger`, the string types including `wbLStringKC` localized string IDs, the RGBA and color helpers, a struct with no `wbFormID`, or a helper whose whole right-hand side, recursively, has no `wbFormID`/`wbUnion`; `wbPTRN := wbFormIDCk(...)` and the `wbVMAD*` helpers are therefore form IDs). In-table values matter as much as past-table ones: SCEN `WNAM` editor width 350 is `0x0000015E`, index 0, and was rewritten to `0x0100015E` when master 0 moved (`RemapNonFormIdSlots.InTableScalarsSurviveMasterReorder`). Localized string IDs are the same case: TERM `WNAM` welcome text ID `0x0000ABCD` became `0x0100ABCD` (`RemapNonFormIdSlots.LocalizedStringIdsSurviveMasterReorder`). `wbUnknown` slots count as scalar too, because xEdit never remaps bytes it has not decoded (TACT `PNAM`, PACK `BNAM`). Helpers are also read from `wbDefinitionsCommon.pas` (optional fifth generator argument), and a helper is judged by the element that declares the subrecord, not as a whole: `wbWorldLODData` holds NAM3 (water form ID) and NAM4 (`LOD Water Height` float), so only WRLD `NAM4` is denied. `remap_raw` and `rekey_form_links` also leave `0xFFFFFFFF` alone: it is xEdit's None value (`wbInterface.pas:TwbFormID.IsNone`), stored in vanilla EQUP `ANAM`, and was rewritten to `0x01FFFFFF` (`RemapNonFormIdSlots.NoneSentinelAndUndecodedSlotsSurviveMasterReorder`). The corpus evidence alone is not enough either: vanilla holds real links past the table (`DLCRobot.esm` REFR `XRFG`, see `GARDEN-TOOLS.md` on `resolve_plugin_link`), which the game reads as the owning plugin's, so `remap_raw` keeps remapping them. PACK `CNAM` is mixed in xEdit (record-level `Combat Style` form ID, and the `Data Input Values` union of bool/int/float after an `ANAM` type string), so `corpus_non_formid_slot` denies only a PACK `CNAM` whose previous subrecord is `ANAM`. SCEN `TNAM`/`HTID` depend on the scene action (`scene_action_scalar`): an action opens with a 2-byte `ANAM` type and closes with the empty `ANAM` marker. Inside an action `TNAM` is the Timer float and `HTID` is the Dialogue headtracking actor-ID array (or the empty Start Scene marker), so both stay scalar; only `HTID` in a Radio action (type 6, `Play Sound` SNDR) and the record-level `TNAM` (`Template Scene`, after the actions) are form IDs. It only removes slots from the generic branch of `form_links.cpp:visit_link_offsets`; record-specific handlers (WTHR, QUST, NAVM, structured slots) are unchanged. `tools/corpus/non_formid_slots.py:main` also merges `XEDIT_ONLY_SCALAR_SLOTS`, a hand list of slots that no official master value exercises but that xEdit types as strings: FSTP `ANAM` (`source:xEdit Core/wbDefinitionsFO4.pas:8689 @93cc0bc5`, `wbString(ANAM, 'Tag')`), SNDR `NNAM` (`wbDefinitionsFO4.pas:9408`, `wbString`), SNDR `FNAM` (`wbDefinitionsFO4.pas:9446`, `wbString`), and SNDR `ANAM` (`wbDefinitionsFO4.pas:9416` uses `wbSoundDescriptorSounds`, which is `wbRArray('Sounds', wbString(ANAM, 'Sound'))` at `source:xEdit Core/wbDefinitionsCommon.pas:9200 @93cc0bc5`), plus MUST `ANAM` and `BNAM` (`wbDefinitionsFO4.pas:8806-8807`, `wbString`), MUST `FNAM` (`wbDefinitionsFO4.pas:8813`, an array of `wbFloat` cue points) and SOPM `MNAM` (`wbDefinitionsFO4.pas:9505`, `wbInteger` type), checked by `RemapNonFormIdSlots.SopmAndMusicTrackFourByteSlotsStayUnchanged`. Those rows skip the corpus check and are tagged `// xedit` in the output, so a regeneration keeps them. Regenerate it after adding new handlers or when new official files ship.
 ## src/plugin/maintenance.cpp:find_identical_to_master
 
 Walks every group, nested ones included, bottom-up like xEdit `xeMainForm.pas:mniNavRemoveIdenticalToMasterClick` (`dev-4.1.6`): a record is reported only when it is identical to the previous version in load order AND its owned child group (`owned_child_group`: the world, cell or topic children group directly after it) would be emptied, so children are reported before their parent. An identical CELL with a changed REFR is therefore not reported, because removing it would orphan the cell's children. Injected records are not special-cased. A record is never ITM when its placement differs from the previous version (`record_placements`): moving a REFR to another CELL or an INFO to another DIAL is a real edit even when the bytes are identical. `remove_records` erases the reported keys anywhere in the tree and drops only the groups that this call emptied.
@@ -349,6 +482,12 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 
 `c_api_env.h` was at the file-size limit, so the typed record decoders moved to `include/fo4/c_api_records.h`, which includes the environment header for the shared types; `generate_interop.py` reads it, and the generated bindings and layout probe are regenerated from the headers, so `radicle_csharp_interop_up_to_date` still holds. Tests: `Radicle.Interop.Tests/HlodFieldTests.cs` builds a plugin with these subrecords and checks every field, including a STAT without `MNAM` and the four-slot ceiling.
 
+## CMakeLists.txt:RADICLE_CSHARP_TESTS
+
+The two native jobs in `.github/workflows/native-ci.yml` enable the existing
+managed test switch, with .NET 8 supplied by setup-dotnet. CI exercises the
+sound getters against this branch's native library, ABI probe and stubs.
+
 ## Radicle/src/plugin/flags.cpp:fo4::set_plugin_light_flag
 
 Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/maintenance.cpp:esl_eligibility` and `src/plugin/mutation.cpp:local_form_id_range` use: 0x001 when `allows_hardcoded_range` holds (HEDR at least 1.0 and a master), else 0x800. IDs above 0xFFF are also rejected, and the message names the actual range. The floor rule is xEdit `93cc0bc5` `Core/wbImplementation.pas:TwbFile.GetAllowHardcodedRangeUse`. Whether the engine loads masterless IDs below 0x800 in a light plugin is unverified; see `Radicle/docs/ESL_FORMIDS.md`. Clearing the flag never checks IDs. Tests: `Radicle/tests/test_plugin_flags.cpp:PluginFlags.RejectsLightFlagWhenMasterlessLocalIdIsBelowTheFullFloor`, `Radicle/tests/test_plugin_flags.cpp:PluginFlags.RejectsLightFlagBelowTheFloorWhenHedrIsBelowOne`, `Radicle/tests/test_plugin_flags.cpp:PluginFlags.AllowsLightFlagForLowLocalIdsWithHedrOneAndAMaster`, `Radicle/tests/test_plugin_flags.cpp:PluginFlags.AllowsLightFlagForMasterlessIdsAtTheFullFloor`, and `PluginEditTool/native/tests/unit/RadiclePluginEslTests.cpp:Native SetLight refuses a masterless plugin with owned IDs below 0x800`.
@@ -364,6 +503,7 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 ## src/schema/scalar.cpp:scalar_descriptor
 
 Record-agnostic: it returns the first whole-payload scalar field with the given subrecord signature, whatever record that signature sits in. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`).
+
 ## Radicle/src/schema/form_link_mixed.cpp:fixed_stride_formid_offsets
 
 Repeated fixed-stride {form ID, value} arrays are visited through `k_repeated_struct_layouts` (PRPS, DAMC, DAMA), which is consulted from `mixed_formid_offsets` before the placed-reference table. Before this entry they had no handler: they were absent from `formid_subrecords.inc`, `structured_formids.inc` and the KWDA/SPLO/XLKR stride-4 branch, so `remap_plugin_masters` and `collect_form_links` both skipped them and a master reorder left stale IDs.

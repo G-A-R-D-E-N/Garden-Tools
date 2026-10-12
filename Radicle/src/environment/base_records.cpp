@@ -1,7 +1,10 @@
 #include "fo4/environment/base_records.hpp"
 
 #include "record_reader.hpp"
+#include "fo4/forms/weather.hpp"
+#include "fo4/plugin/visit.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -14,7 +17,6 @@ constexpr Signature sig(const char (&text)[5]) {
   return Signature{text[0], text[1], text[2], text[3]};
 }
 
-constexpr std::uint16_t k_weather_eight_times_form_version = 111;
 constexpr std::size_t k_light_required_size = 48;
 constexpr std::size_t k_distant_lod_slot = 260;
 constexpr std::size_t k_water_visual_required_size = 188;
@@ -114,23 +116,67 @@ ClimateData decode_climate(const Environment& env, const RecordRef& ref) {
   }
   out.sun_texture = text(reader, sig("FNAM"));
   out.sun_glare_texture = text(reader, sig("GNAM"));
+  if (const auto* sub = reader.sized(sig("TNAM"), 6)) {
+    const auto byte = [&](std::size_t offset) { return std::to_integer<std::uint8_t>(sub->data[offset]); };
+    out.timing = ClimateTiming{byte(0), byte(1), byte(2), byte(3), byte(4), byte(5)};
+  }
   return out;
+}
+
+bool set_climate_timing(Plugin& plugin, const FormKey& key, const ClimateTiming& timing) {
+  Record* record = nullptr;
+  visit_records(plugin, [&](Record& candidate) {
+    if (candidate.form_key == key) {
+      if (record != nullptr) throw WorldDecodeError("duplicate climate record key");
+      record = &candidate;
+    }
+  });
+  if (record == nullptr) return false;
+  if (record->header.signature != sig("CLMT")) throw WorldDecodeError("expected a CLMT record");
+  Subrecord* slot = nullptr;
+  for (auto& sub : record->subrecords) {
+    if (sub.signature != sig("TNAM")) continue;
+    if (slot != nullptr) throw WorldDecodeError("CLMT contains duplicate TNAM");
+    slot = &sub;
+  }
+  if (slot == nullptr || slot->data.size() != 6) throw WorldDecodeError("CLMT requires a six-byte TNAM");
+  const std::array bytes{std::byte{timing.sunrise_begin}, std::byte{timing.sunrise_end},
+                         std::byte{timing.sunset_begin}, std::byte{timing.sunset_end},
+                         std::byte{timing.volatility}, std::byte{timing.moons_phase_length}};
+  if (std::equal(bytes.begin(), bytes.end(), slot->data.begin())) return true;
+  std::copy(bytes.begin(), bytes.end(), slot->data.begin());
+  record->original_range.clear();
+  record->decompressed_payload.clear();
+  record->header.data_size = 0;
+  record->uncompressed_size = 0;
+  plugin.original_range.clear();
+  return true;
 }
 
 WeatherData decode_weather(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("WTHR"));
   WeatherData out;
-  if (const auto* sub = reader.unique(sig("NAM0"))) {
-    const std::size_t times = ref.record->header.form_version >= k_weather_eight_times_form_version ? 8 : 4;
-    const auto stride = times * 4;
-    const auto groups = sub->data.size() / stride;
-    if (sub->data.size() % stride != 0 || groups < 9) {
-      reader.fail(sub->signature, "is not a whole number of color groups");
+  if (const auto* sub = reader.unique(sig("DATA"))) {
+    if (sub->data.size() != forms::weather_data_size(ref.record->header.form_version)) {
+      reader.fail(sub->signature, "does not match its form version");
     }
-    out.colors = WeatherColors{times, groups, sub->data};
+    const auto byte = [&](std::size_t offset) { return std::to_integer<std::uint8_t>(sub->data[offset]); };
+    WeatherParameters p{byte(0), byte(3), byte(4), byte(5), byte(6), byte(7), byte(8), byte(9), byte(10),
+                        byte(11), Reader::color(*sub, 12), byte(15), byte(16), byte(17), byte(18), std::nullopt};
+    if (sub->data.size() == 20) p.wind_turbulence = byte(19);
+    out.parameters = p;
+  }
+  if (const auto* sub = reader.unique(sig("NAM0"))) {
+    const auto version = ref.record->header.form_version;
+    if (sub->data.size() != forms::weather_nam0_size(version)) {
+      reader.fail(sub->signature, "does not match its form version");
+    }
+    out.colors = WeatherColors{forms::weather_time_slots(version), forms::weather_color_groups(version), sub->data};
   }
   if (const auto* sub = reader.unique(sig("FNAM"))) {
-    if (sub->data.size() % 4 != 0 || sub->data.size() < 16) reader.fail(sub->signature, "is not a float array");
+    if (sub->data.size() != forms::weather_fnam_size(ref.record->header.form_version)) {
+      reader.fail(sub->signature, "does not match its form version");
+    }
     for (std::size_t offset = 0; offset < sub->data.size(); offset += 4) {
       out.fog_distances.push_back(Reader::f32(*sub, offset));
     }

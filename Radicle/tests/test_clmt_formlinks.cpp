@@ -1,3 +1,4 @@
+#include "fo4/environment/base_records.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
@@ -52,6 +53,10 @@ void append_record(fo4::test::ByteWriter& out,
   const auto record = fo4::test::begin_record(out, signature, 0, form_id);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Record\0", 7});
   fo4::test::write_subrecord(out, "WLST", std::move(wlst));
+  if (signature == "CLMT") {
+    const std::array timing{std::byte{0}, std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}, std::byte{5}};
+    fo4::test::write_subrecord(out, "TNAM", timing);
+  }
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
 }
@@ -93,7 +98,7 @@ std::vector<fo4::PluginKey> reordered_masters() {
 
 }
 
-TEST(FormLink, ClmtWlstRemapsWeatherAndGlobalLanesPreservingChanceBytes) {
+TEST(FormLink, ClmtTimingEditAndMasterRemapPreserveWeatherChanceLanes) {
   fo4::test::ByteWriter wlst;
   wlst.u32(0x02000042);
   wlst.u32(static_cast<std::uint32_t>(-7));
@@ -109,6 +114,10 @@ TEST(FormLink, ClmtWlstRemapsWeatherAndGlobalLanesPreservingChanceBytes) {
   control.u32(0x0000009B);
 
   auto plugin = fo4::read_plugin(make_plugin(wlst.bytes, control.bytes).bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000800:Patch.esp");
+  ASSERT_TRUE(fo4::env::set_climate_timing(plugin, key, {128, 255, 36, 114, 99, 195}));
+  ASSERT_NE(fo4::find_record(plugin, key), nullptr);
+  EXPECT_EQ(find_sub(*fo4::find_record(plugin, key), "WLST")->data, original_wlst);
   plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
 
@@ -122,6 +131,10 @@ TEST(FormLink, ClmtWlstRemapsWeatherAndGlobalLanesPreservingChanceBytes) {
   write_u32(expected, 12, 0x00000043);
   write_u32(expected, 20, 0x0100009A);
   EXPECT_EQ(clmt_wlst->data, expected);
+  const auto* timing = find_sub(*clmt, "TNAM");
+  ASSERT_NE(timing, nullptr);
+  const std::vector wanted{std::byte{128}, std::byte{255}, std::byte{36}, std::byte{114}, std::byte{99}, std::byte{195}};
+  EXPECT_EQ(timing->data, wanted);
 
   const auto links = fo4::collect_form_links(reread);
   ASSERT_EQ(links.size(), 4);
