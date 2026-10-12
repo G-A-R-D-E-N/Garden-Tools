@@ -882,3 +882,27 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
+
+## Radicle/src/environment/package_procedure.cpp:decode_package_procedure
+
+Reads the subrecords after PKCU in three stages. Data inputs come first: each ANAM whose zstring is a registered input type runs to the next ANAM, UNAM or XNAM; then one bare UNAM u8 per input (an older shape with a BNAM and a 4-byte PNAM after each UNAM is also accepted); then an optional XNAM kept once per package. The tree follows, if present: a root ANAM Procedure, Sequence, Stacked, Simultaneous or Random. A container reads CITC with that many CTDA (each with optional CIS1 and CIS2), then PRCB (child count, flags), then its children, and then one optional PFO2 or PFOR. A leaf (ANAM Procedure) reads CITC and CTDA, then PNAM naming a registered procedure; the following subrecords up to ANAM, PFO2, PFOR, POBA, POEA, POCA, UNAM or XNAM are an opaque index range, and one optional PFO2 or PFOR directly after that range is consumed. After the tree, the UNAM, BNAM and PNAM triples are consumed as the template input-name table and not exposed; in shipped data they come only after the tree (RE-015, #520 comment 13144). The registered leaf list holds 30 names: the RE #407 comment 7894 names plus Wait and Say from comment 9746. A real-data walk of OG 1.10.163, AE 1.11.240 and NG 1.10.984 found every shipped leaf name inside this list, with 0 fallbacks. Any boundary that does not reconcile throws the internal Unreconciled marker, which the function catches and reports as decoded false with one opaque region from after PKCU to the first POBA, POEA or POCA. The depth limit of 64 bounds recursion on hostile records. Evidence: RE #407 comments 7894 (sections 3 and 5) and 9746, and RE-015.
+
+## Radicle/src/environment/package_procedure.cpp:expected_input_count
+
+Per-leaf input slot counts from RE #407 comment 9746 (Travel 8, Sandbox 16, Sit 1, Sleep 1, Follow 6, Wait 2, Say 5). They describe the leaf's slots, not the package's data-input list, so the corpus test records mismatches and asserts nothing about them.
+
+## Radicle/src/environment/package_procedure.cpp:package_location_type_name
+
+Names for PLDT types 0 to 14 follow RE #407 comment 7894, with corrections from RE-015: type 9 is labeled "location handle (derived)" rather than quest alias, type 11 is "input ID matched against the data-input set (RE-015)", and type 7 is marked unproven because no type-7 arm was found (RE-015; never shipped). PTDA types 0 to 8 follow comment 7894. Types 4 and 5 are never shipped and have descriptive labels only. Raw values stay in PackageLocation and PackageTarget.
+
+## Radicle/src/c_api_behavior.cpp:radicle_package_procedure_decode
+
+Flattens the tree into a node array in pre-order and an input array. Node children are pointers into per-node index arrays owned by the holder, and names are owned strings, so the pointers stay valid until radicle_package_procedure_free.
+
+## Radicle/tests/test_behavior_real.cpp:EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByteIdentical
+
+The procedure-tree corpus check expects every PACK to decode and records PACK_procedure_total and PACK_procedure_decoded, plus one PACK_LEAF_<name> count per leaf name. PACK_LEAF_INPUT_COUNT_MISMATCH and PACK_PKCU_INPUT_COUNT_MISMATCH are recorded only, because the leaf counts are not proven to apply to a package's data-input list. PLDT_nonzero_padding is asserted to be zero: bytes 1 to 3 of every shipped PLDT are zero, consistent with the one-byte type in a 16-byte block (RE #407 comment 7894), while the reader still reads the type as i32 at offset 0.
+
+## Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFive
+
+Pins RADICLE_ABI_VERSION at 35 after the procedure-tree exports and the location and target name functions were added. The C# bindings are regenerated from the headers, not edited by hand.

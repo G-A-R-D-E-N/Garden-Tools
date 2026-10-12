@@ -1461,6 +1461,45 @@ public unsafe struct IdleInfo
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageProcedureInput
+{
+    public IntPtr TypeName;
+    public nuint SubrecordBegin;
+    public nuint SubrecordEnd;
+    public byte Index;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageProcedureNode
+{
+    public int IsLeaf;
+    public IntPtr Name;
+    public uint ConditionCount;
+    public uint ChildCount;
+    public int HasFlags;
+    public uint Flags;
+    public nuint OpaqueBegin;
+    public nuint OpaqueEnd;
+    public IntPtr Children;
+    public nuint ChildrenCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageProcedureTree
+{
+    public int Decoded;
+    public nuint RegionBegin;
+    public nuint RegionEnd;
+    public int HasMarker;
+    public byte Marker;
+    public IntPtr Inputs;
+    public nuint InputCount;
+    public IntPtr Nodes;
+    public nuint NodeCount;
+    public IntPtr Internal;
+}
+
 public enum ScenePart : int
 {
     Phase = 0,
@@ -1617,7 +1656,7 @@ public unsafe struct SceneInfo
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 34u;
+    public const uint CompiledAbiVersion = 35u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2203,6 +2242,18 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_idle_free")]
     public static extern void IdleFree(IdleInfo* idle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_procedure_decode")]
+    public static extern Status PackageProcedureDecode(IntPtr env, IntPtr record, PackageProcedureTree** out_tree);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_procedure_free")]
+    public static extern void PackageProcedureFree(PackageProcedureTree* tree);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_location_type_name")]
+    public static extern IntPtr PackageLocationTypeName(int type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_target_type_name")]
+    public static extern IntPtr PackageTargetTypeName(int type);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dialogue_topic_get_info")]
     public static extern Status DialogueTopicGetInfo(IntPtr env, IntPtr record, DialogueTopicInfo* out_info);

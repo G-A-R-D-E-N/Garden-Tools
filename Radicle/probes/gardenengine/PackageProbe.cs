@@ -28,6 +28,7 @@ public partial class PackageProbe : Node
                 ?? throw new InvalidOperationException("no PACK in Fallout4.esm has data, schedule, a resolvable template and a resolvable location or target");
             var styleRecord = env.WinnersOf("CSTY").Cast<Record?>().FirstOrDefault()
                 ?? throw new InvalidOperationException("no CSTY in Fallout4.esm");
+            var procedure = env.PackageProcedure(pack);
             var combatStyle = env.CombatStyle(styleRecord);
             var idleRecord = env.WinnersOf("IDLE").Cast<Record?>().FirstOrDefault()
                 ?? throw new InvalidOperationException("no IDLE in Fallout4.esm");
@@ -38,6 +39,8 @@ public partial class PackageProbe : Node
                 Pack = env.Info(pack).FormKey.ToString(), PackageDataType = package.Data?.Type,
                 Template = package.Counter?.TemplatePackage?.ToString(), Locations = package.Locations.Count,
                 Targets = package.Targets.Count, Conditions = package.Conditions.Count, Opaque = package.Opaque.Count,
+                RootProcedure = procedure.Nodes.Count == 0 ? null : procedure.Nodes[0].Name,
+                LeafProcedures = procedure.Nodes.Where(node => node.IsLeaf).Select(node => node.Name).ToArray(),
                 CombatStyle = env.Info(styleRecord).FormKey.ToString(), CombatStyleMelee = combatStyle.Melee.Length,
                 Idle = env.Info(idleRecord).FormKey.ToString(),
             }));

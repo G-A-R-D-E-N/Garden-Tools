@@ -1,5 +1,6 @@
 #include "fo4/c_api_behavior.h"
 #include "fo4/environment/behavior.hpp"
+#include "fo4/environment/package_procedure.hpp"
 #include "fo4/plugin/writer.hpp"
 
 #include <gtest/gtest.h>
@@ -25,6 +26,8 @@ TEST_P(BehaviorReal, EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByt
   ASSERT_EQ(radicle_env_plugin_records(abi, 0, &records, &count), RADICLE_STATUS_OK);
   const auto refs = env.plugin_records(0); ASSERT_EQ(count, refs.size()); std::map<std::string, int> totals, pack_types;
   std::map<std::string, std::string> pack_examples; int pack_templates = 0;
+  std::map<std::string, int> leaf_counts; int pack_procedures = 0, pack_procedures_decoded = 0, leaf_input_mismatches = 0,
+      pkcu_input_mismatches = 0, pldt_records = 0, pldt_nonzero_padding = 0;
   for (std::size_t i = 0; i < count; ++i) {
     const auto type = refs[i]->record->header.signature.to_string();
     if (type != "PACK" && type != "CSTY" && type != "IDLE") continue;
@@ -36,6 +39,22 @@ TEST_P(BehaviorReal, EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByt
       ++pack_types[slice];
       if (package.counter && package.counter->template_package != fo4::FormKey{}) ++pack_templates;
       if (!package.locations.empty() || !package.targets.empty()) pack_examples.try_emplace(slice, refs[i]->record->form_key.to_string());
+      const auto tree = fo4::env::decode_package_procedure(*refs[i]->record);
+      EXPECT_TRUE(tree.decoded); ++pack_procedures; if (tree.decoded) ++pack_procedures_decoded;
+      for (const auto& node : tree.nodes) {
+        if (node.kind != fo4::env::PackageProcedureKind::leaf) continue;
+        ++leaf_counts[node.name];
+        const auto expected = fo4::env::expected_input_count(node.name);
+        if (expected && *expected != tree.inputs.size()) ++leaf_input_mismatches;
+      }
+      if (tree.decoded && package.counter && package.counter->input_count != tree.inputs.size()) ++pkcu_input_mismatches;
+      const radicle_package_procedure_tree* procedure = nullptr;
+      EXPECT_EQ(radicle_package_procedure_decode(abi, records[i], &procedure), RADICLE_STATUS_OK); radicle_package_procedure_free(procedure);
+      for (const auto& sub : refs[i]->record->subrecords) {
+        if (sub.signature.view() != "PLDT") continue;
+        ++pldt_records;
+        if (sub.data.size() >= 4 && (sub.data[1] != std::byte{0} || sub.data[2] != std::byte{0} || sub.data[3] != std::byte{0})) ++pldt_nonzero_padding;
+      }
     } else if (type == "CSTY") {
       EXPECT_NO_THROW(fo4::env::decode_combat_style(env, *refs[i])); radicle_combat_style_info value{};
       EXPECT_EQ(radicle_combat_style_get_info(abi, records[i], &value), RADICLE_STATUS_OK);
@@ -49,6 +68,11 @@ TEST_P(BehaviorReal, EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByt
   for (const auto& [slice, pack_count] : pack_types) RecordProperty(slice, pack_count);
   for (const auto& [slice, example] : pack_examples) RecordProperty(slice + "_example", example);
   RecordProperty("PACK_template_packages", pack_templates);
+  for (const auto& [leaf, count] : leaf_counts) RecordProperty("PACK_LEAF_" + leaf, count);
+  RecordProperty("PACK_procedure_total", pack_procedures); RecordProperty("PACK_procedure_decoded", pack_procedures_decoded);
+  RecordProperty("PACK_LEAF_INPUT_COUNT_MISMATCH", leaf_input_mismatches); RecordProperty("PACK_PKCU_INPUT_COUNT_MISMATCH", pkcu_input_mismatches);
+  RecordProperty("PLDT_records", pldt_records); RecordProperty("PLDT_nonzero_padding", pldt_nonzero_padding);
+  EXPECT_EQ(pldt_nonzero_padding, 0);
   const auto bytes = fo4::write_plugin(env.plugin(0)); const auto original = fo4::plugin_original_bytes(env.plugin(0));
   ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);
 }

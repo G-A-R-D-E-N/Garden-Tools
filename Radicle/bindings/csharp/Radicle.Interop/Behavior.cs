@@ -23,6 +23,11 @@ public sealed record CombatStyle(float[]? General, float[] Melee, float[] LongRa
 public sealed record IdleData(byte LoopMin, byte LoopMax, byte Flags, byte GroupSection, ushort ReplayDelay);
 public sealed record Idle(IdleData? Data, FormKey? Parent, FormKey? Previous, string? BehaviorGraph,
     string? AnimationEvent, string? AnimationFile, IReadOnlyList<BehaviorCondition> Conditions);
+public sealed record PackageProcedureInput(string TypeName, nuint SubrecordBegin, nuint SubrecordEnd, byte Index);
+public sealed record PackageProcedureNode(bool IsLeaf, string Name, uint ConditionCount, uint ChildCount, uint? Flags,
+    nuint OpaqueBegin, nuint OpaqueEnd, IReadOnlyList<nuint> Children);
+public sealed record PackageProcedureTree(bool Decoded, nuint RegionBegin, nuint RegionEnd, byte? Marker,
+    IReadOnlyList<PackageProcedureInput> Inputs, IReadOnlyList<PackageProcedureNode> Nodes);
 
 public sealed unsafe partial class RadicleEnvironment
 {
@@ -84,4 +89,25 @@ public sealed unsafe partial class RadicleEnvironment
         }
         finally { RadicleNative.IdleFree(i); }
     }
+
+    public PackageProcedureTree PackageProcedure(Record record)
+    {
+        using var use = Use(record);
+        Native.PackageProcedureTree* t;
+        Call.Check(RadicleNative.PackageProcedureDecode(use.Pointer, record.Handle, &t));
+        try
+        {
+            return new(t->Decoded != 0, t->RegionBegin, t->RegionEnd, t->HasMarker == 0 ? null : t->Marker,
+                Call.Copy<Native.PackageProcedureInput>(t->Inputs, t->InputCount).Select(i => new PackageProcedureInput(
+                    Utf8.Read(i.TypeName) ?? string.Empty, i.SubrecordBegin, i.SubrecordEnd, i.Index)).ToArray(),
+                Call.Copy<Native.PackageProcedureNode>(t->Nodes, t->NodeCount).Select(n => new PackageProcedureNode(
+                    n.IsLeaf != 0, Utf8.Read(n.Name) ?? string.Empty, n.ConditionCount, n.ChildCount, n.HasFlags == 0 ? null : n.Flags,
+                    n.OpaqueBegin, n.OpaqueEnd, Call.Copy<nuint>(n.Children, n.ChildrenCount))).ToArray());
+        }
+        finally { RadicleNative.PackageProcedureFree(t); }
+    }
+
+    public static string? PackageLocationTypeName(int type) => Utf8.Read(RadicleNative.PackageLocationTypeName(type));
+
+    public static string? PackageTargetTypeName(int type) => Utf8.Read(RadicleNative.PackageTargetTypeName(type));
 }
