@@ -43,6 +43,8 @@ public partial class SoundProbe : Node
             var markerDescriptor = Resolve(env, marker.Descriptor, "SNDR", "marker descriptor")
                 ?? throw new InvalidOperationException("marker descriptor absent");
             env.SoundDescriptor(markerDescriptor);
+            var markerFile = env.SoundFiles(soundRecord).FirstOrDefault(file => !string.IsNullOrEmpty(file))
+                ?? throw new InvalidOperationException("marker resolves to no sound file");
             if (marker.Repeat?.Stackable is byte stackable && stackable > 1)
                 throw new InvalidOperationException("REPT stackable byte outside 0..1");
 
@@ -57,7 +59,7 @@ public partial class SoundProbe : Node
             GD.Print("sound_probe PASS " + JsonSerializer.Serialize(new
             {
                 Descriptor = Describe(env, descriptorRecord), Kind = kind, Playback = descriptor.Playback is not null,
-                Marker = Describe(env, soundRecord), MarkerDescriptor = Describe(env, markerDescriptor),
+                Marker = Describe(env, soundRecord), MarkerDescriptor = Describe(env, markerDescriptor), MarkerFile = markerFile,
                 Music = Describe(env, musicRecord), Tracks = music.Tracks.Count,
                 Footstep = Describe(env, footstepRecord), Tag = footstep.Tag,
             }));

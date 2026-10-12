@@ -901,6 +901,14 @@ public unsafe struct FootstepSet
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct SoundFileList
+{
+    public IntPtr Files;
+    public nuint FileCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct PexHeader
 {
     public byte MajorVersion;
@@ -1609,7 +1617,7 @@ public unsafe struct SceneInfo
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 33u;
+    public const uint CompiledAbiVersion = 34u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2006,6 +2014,12 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_footstep_set_free")]
     public static extern void FootstepSetFree(FootstepSet* set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_resolve_files")]
+    public static extern Status SoundResolveFiles(IntPtr env, IntPtr record, SoundFileList** out_list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_file_list_free")]
+    public static extern void SoundFileListFree(SoundFileList* list);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
     public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);

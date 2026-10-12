@@ -112,4 +112,19 @@ public class SoundRecordTests
         Assert.Equal(new FormKey("Sound.esm", 0x814), Assert.Single(set.Sneaking));
         Assert.Equal(new FormKey("Sound.esm", 0x815), Assert.Single(set.Swimming));
     }
+
+    [Fact]
+    public void MarkerResolvesThroughCompoundToEachStandardDescriptorsFiles()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Sound.esm", Build(1, Array.Empty<string>(),
+            Top("SNDR",
+                new Rec("SNDR", 0x800, new[] { ("CNAM", U32(0x54651A43)), ("DNAM", U32(0x810)), ("DNAM", U32(0x811)) }),
+                new Rec("SNDR", 0x810, new[] { ("CNAM", U32(0x1EEF540A)), ("ANAM", Z(@"sound\one.xwm")) }),
+                new Rec("SNDR", 0x811, new[] { ("CNAM", U32(0x1EEF540A)), ("ANAM", Z(@"sound\two.wav")) })),
+            Top("SOUN", new Rec("SOUN", 0x801, new[] { ("SDSC", U32(0x800)) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var marker = env.Winner(new FormKey("Sound.esm", 0x801))!.Value;
+        Assert.Equal(new[] { @"sound\one.xwm", @"sound\two.wav" }, env.SoundFiles(marker));
+    }
 }

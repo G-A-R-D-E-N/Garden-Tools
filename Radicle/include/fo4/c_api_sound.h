@@ -77,6 +77,12 @@ typedef struct radicle_footstep_set {
   void* internal;
 } radicle_footstep_set;
 
+typedef struct radicle_sound_file_list {
+  const radicle_sound_file* files;
+  size_t file_count;
+  void* internal;
+} radicle_sound_file_list;
+
 RADICLE_API radicle_status radicle_sound_descriptor_decode(const radicle_env* env, const radicle_record* record,
                                                            const radicle_sound_descriptor** out_descriptor);
 RADICLE_API void radicle_sound_descriptor_free(const radicle_sound_descriptor* descriptor);
@@ -90,6 +96,9 @@ RADICLE_API radicle_status radicle_footstep_get_info(const radicle_env* env, con
 RADICLE_API radicle_status radicle_footstep_set_decode(const radicle_env* env, const radicle_record* record,
                                                       const radicle_footstep_set** out_set);
 RADICLE_API void radicle_footstep_set_free(const radicle_footstep_set* set);
+RADICLE_API radicle_status radicle_sound_resolve_files(const radicle_env* env, const radicle_record* record,
+                                                      const radicle_sound_file_list** out_list);
+RADICLE_API void radicle_sound_file_list_free(const radicle_sound_file_list* list);
 
 #ifdef __cplusplus
 }

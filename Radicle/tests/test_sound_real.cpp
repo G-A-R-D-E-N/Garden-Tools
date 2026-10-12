@@ -1,10 +1,13 @@
 #include "fo4/c_api_sound.h"
 #include "fo4/environment/sound.hpp"
+#include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/text/encoding.hpp"
+#include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -136,8 +139,34 @@ TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesByte
   }
   radicle_free_record_array(records); radicle_env_destroy(abi);
   for (const auto& [type, total] : totals) RecordProperty(type, total);
+  int unresolved = 0;
+  int cross_master = 0;
+  for (const auto* ref : native_records) {
+    if (ref->record->header.signature.to_string() != "SOUN") continue;
+    const auto marker = fo4::env::decode_sound_marker(env, *ref);
+    if (!marker.descriptor) continue;
+    if (env.winner(*marker.descriptor) == nullptr) { ++cross_master; continue; }
+    try {
+      const auto files = fo4::env::resolve_sound_files(env, *ref);
+      if (std::none_of(files.begin(), files.end(), [](std::string_view file) { return !file.empty(); })) ++unresolved;
+    } catch (const fo4::env::WorldDecodeError&) {
+      ++unresolved;
+    }
+  }
+  RecordProperty("SoundMarkerUnresolved", unresolved);
+  RecordProperty("SoundMarkerCrossMaster", cross_master);
+  EXPECT_EQ(unresolved, 0);
   const auto& plugin = env.plugin(0); const auto bytes = fo4::write_plugin(plugin); const auto original = fo4::plugin_original_bytes(plugin);
   ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);
+  const auto reread = fo4::read_plugin(bytes, plugin.path);
+  const fo4::RecordIndex index(reread);
+  for (const auto* ref : native_records) {
+    if (ref->record->header.signature.to_string() != "SNDR") continue;
+    SCOPED_TRACE(ref->record->form_key.to_string());
+    const auto* after = index.find(ref->record->form_key);
+    ASSERT_NE(after, nullptr);
+    EXPECT_EQ(fo4::test::record_original_bytes(reread, *after), fo4::test::record_original_bytes(plugin, *ref->record));
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, SoundRealData,

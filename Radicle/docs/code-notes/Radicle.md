@@ -869,6 +869,16 @@ The dirty-plugin ONAM rebuild gate is `src/formid.cpp:is_master_plugin` (TES4 ma
 
 The owner-is-source branch now calls `src/formid.cpp:classify_plugin_kind` with the source header and key, so a source named `.esl` without the TES4 SmallFile flag yields a light master entry, as the load-time sites do. Test: `tests/test_extension_light_kinds.cpp:OwnerEqualToEslSourceIsLightMaster`.
 
+## Radicle/src/environment/sound.cpp:resolve_sound_files
+
+`resolve_sound_files` (C ABI `radicle_sound_resolve_files`) maps a SOUN marker or an SNDR descriptor to the sound file paths it plays. A marker follows SDSC to its SNDR. A Standard descriptor (CNAM `1EEF540A`, or no CNAM, which the decoder reports as an absent kind) returns its ANAM files in stored order. A Compound (`54651A43`) resolves each DNAM child in stored order and concatenates the results; its own ANAM files are not read. An AutoWeapon (`ED157AE3`) resolves its BNAM base descriptor, then appends its ITMS/INTV/FNAM rate files.
+
+Fail closed: the recursion throws `WorldDecodeError` instead of returning a partial list when a link is missing or does not resolve in the load order, a marker has no SDSC, the target is not an SNDR, the kind is unknown, the chain goes past eight descriptor levels, or a descriptor reaches one of its own ancestors. The ancestor check looks only at the chain being resolved, so a child shared by two branches resolves twice instead of failing. The C ABI maps the throw to a non-OK status and a null list. Tests: `Radicle/tests/test_sound.cpp:MarkerToStandardResolvesFilesNativelyAndThroughTheCAbi`, `Radicle/tests/test_sound.cpp:CompoundConcatenatesChildFilesInDescriptorOrder`, `Radicle/tests/test_sound.cpp:AutoWeaponResolvesBaseFilesThenRateFiles`, `Radicle/tests/test_sound.cpp:DescriptorCyclesFailClosed`, `Radicle/tests/test_sound.cpp:UnresolvedLinksFailClosed`, `Radicle/tests/test_sound.cpp:UnknownKindAndNonSoundTargetsFailClosed`, `Radicle/tests/test_sound.cpp:ChainsStopAtTheDepthLimitOfEightDescriptors`.
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
+
+The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin.
+
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.

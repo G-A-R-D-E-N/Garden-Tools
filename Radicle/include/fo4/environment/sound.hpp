@@ -71,5 +71,6 @@ MusicTypeData decode_music_type(const Environment& env, const RecordRef& ref);
 FootstepData decode_footstep(const Environment& env, const RecordRef& ref);
 FootstepSetData decode_footstep_set(const Environment& env, const RecordRef& ref);
 std::array<std::uint32_t, 5> decode_footstep_counts(const Record& record);
+std::vector<std::string_view> resolve_sound_files(const Environment& env, const RecordRef& ref);
 
 }
