@@ -302,12 +302,68 @@ TEST(CheckErrors, VariantFormLinkSlotIsProvenOnlyForSelectedVariant) {
   ASSERT_NE(selected_record, nullptr);
   ASSERT_NE(other_record, nullptr);
 
-  const auto slot = fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 4);
+  const auto slot = fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0, 4);
   ASSERT_TRUE(slot.has_value());
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("LIGH")));
   EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("KYWD")));
-  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *other_record, subrecord, 4).has_value());
-  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0).has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *other_record, subrecord, 0, 4).has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0, 0).has_value());
+}
+
+TEST(CheckErrors, RepeatedVariantSubrecordUsesItsOwnSelector) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "PACK", 0);
+  const auto record = fo4::test::begin_record(out, "PACK", 0, 0x000800);
+  fo4::test::ByteWriter first;
+  first.i32(3);
+  first.u32(0x000801);
+  first.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", first.bytes);
+  fo4::test::ByteWriter second;
+  second.i32(1);
+  second.u32(0x000802);
+  second.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", second.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
+  const auto* pack = find_record(plugin, "PACK");
+  ASSERT_NE(pack, nullptr);
+
+  const auto fields = fo4::schema::formlink_fields(fo4::Signature::from_string("PACK"));
+  const auto ptda = fo4::Signature::from_string("PTDA");
+  const auto first_slot = fo4::schema::formlink_field_at(fields, *pack, ptda, 0, 4);
+  const auto second_slot = fo4::schema::formlink_field_at(fields, *pack, ptda, 1, 4);
+  ASSERT_TRUE(first_slot.has_value());
+  ASSERT_TRUE(second_slot.has_value());
+  EXPECT_EQ(first_slot->label, "TargetKeyword");
+  EXPECT_EQ(second_slot->label, "TargetObject");
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *pack, ptda, 2, 4).has_value());
+}
+
+TEST(CheckErrors, RepeatedVariantSubrecordTargetsAreCheckedPerInstance) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  write_empty_record(out, "MISC", 0x000801);
+  const auto group = fo4::test::begin_group(out, "PACK", 0);
+  const auto record = fo4::test::begin_record(out, "PACK", 0, 0x000802);
+  fo4::test::ByteWriter first;
+  first.i32(3);
+  first.u32(0x000800);
+  first.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", first.bytes);
+  fo4::test::ByteWriter second;
+  second.i32(1);
+  second.u32(0x000801);
+  second.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", second.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::wrong_target_type).empty());
 }
 
 TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {

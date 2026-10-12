@@ -5,11 +5,24 @@
 #include <cstdint>
 
 namespace fo4::schema {
+namespace {
+
+std::optional<std::size_t> ordinal_index(const Record& record, Signature subrecord, std::size_t ordinal) {
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    if (record.subrecords[i].signature != subrecord) continue;
+    if (ordinal == 0) return i;
+    --ordinal;
+  }
+  return std::nullopt;
+}
+
+}
 
 std::optional<FormLinkFieldDescriptor> formlink_field_at(
     std::span<const FormLinkFieldDescriptor> fields,
     const Record& record,
     Signature subrecord,
+    std::size_t ordinal,
     std::size_t offset) {
   for (const auto& field : fields) {
     if (field.subrecord != subrecord) continue;
@@ -27,9 +40,11 @@ std::optional<FormLinkFieldDescriptor> formlink_field_at(
     shape.subrecord = field.subrecord;
     shape.offset = field.offset;
     shape.width = sizeof(std::uint32_t);
+    const auto index = ordinal_index(record, subrecord, ordinal);
+    if (!index) continue;
     const auto resolved = resolve_field_slots(record, shape, address);
     for (const auto& slot : resolved.slots) {
-      if (slot.valid && slot.offset == offset) return field;
+      if (slot.valid && slot.subrecord == *index && slot.offset == offset) return field;
     }
   }
   return std::nullopt;

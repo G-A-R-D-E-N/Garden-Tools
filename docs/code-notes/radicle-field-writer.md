@@ -172,7 +172,11 @@ proven here; those modes are covered by hand-built descriptors in the same test 
 ## Radicle/src/graph/check_errors.cpp:slot_targets
 
 A strided FormLink field matches every element slot (`(offset - array_offset) % stride == field.offset`),
-not only element 0, so the target-type check stays correct once a strided field is registered. Fields with a `when` discriminator are skipped here, so union variants sharing an offset cannot borrow each other's target types.
+not only element 0, so the target-type check stays correct once a strided field is registered. Fields with a `when` discriminator match only when the selector in that subrecord instance picks them (see `formlink_field_at` below), so union variants sharing an offset cannot borrow each other's target types.
+
+## Radicle/src/schema/formlink_slots.cpp:formlink_field_at
+
+A record can hold several subrecords with the same discriminated signature (PACK holds one PTDA per package target). Each hit is resolved against its own instance: `formlink_field_at` takes the hit's per-signature ordinal (`FormLinkHit::subrecord_ordinal`), maps it to the index in `record.subrecords`, and requires `FieldSlot::subrecord` to equal that index. Before this, the first instance's selector (for example type 3 = TargetKeyword) decided every instance, so a type 1 PTDA holding a MISC was reported as "MISC, expected one of KYWD" on vanilla Fallout4.esm. Covered by `CheckErrors.RepeatedVariantSubrecordUsesItsOwnSelector` and `CheckErrors.RepeatedVariantSubrecordTargetsAreCheckedPerInstance` in `Radicle/tests/test_check_errors.cpp`.
 
 ## Radicle/src/c_api_fields.cpp:radicle_plugin_set_record_scalar_at
 
