@@ -168,6 +168,7 @@ Record copy_record_for_destination(const Record& source_record,
                                    const FormKey& key,
                                    const PluginFormIdContext& source_context,
                                    const PluginFormIdContext& destination_context) {
+  require_decodable(source_record);
   auto copied = source_record;
   copied.header.form_id = encode_plugin_form_id(key, destination_context);
   remap_record_form_links(copied, source_context, destination_context);
@@ -297,6 +298,7 @@ bool replace_record(Plugin& plugin, const FormKey& key, Record replacement) {
   bool replaced = false;
   visit_records(plugin, [&](Record& record) {
     if (replaced || record.header.signature == sig_tes4 || record.form_key != key) return;
+    require_decodable(record);
     record = std::move(replacement);
     replaced = true;
   });
@@ -458,6 +460,7 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
       world_parent->children.emplace_back(copy_record_for_destination(
           *source_world->record, *world, source_context, destination_context));
     }
+    require_decodable(*find_record(next, *world));
   }
 
   validate_destination_record_path(
@@ -470,6 +473,7 @@ PlacedReferenceCopyStatus copy_placed_reference_as_override(
         *source_cell.record, cell, source_context, destination_context));
   }
 
+  require_decodable(*find_record(next, cell));
   auto* destination_cell_children = ensure_cell_children_group(
       *cell_parent,
       source_reference.path[cell_children_index]->header,
@@ -567,6 +571,7 @@ PlacedReferenceCopyNewResult copy_placed_reference_as_new(
   auto* cell_parent = ensure_group_path(
       next, source_cell.path, source_context, destination_context);
 
+  require_decodable(*find_record(next, cell));
   auto* destination_cell_children = ensure_cell_children_group(
       *cell_parent,
       containment.reference.path[containment.cell_children_index]->header,

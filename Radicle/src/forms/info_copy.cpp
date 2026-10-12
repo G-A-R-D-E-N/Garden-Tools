@@ -363,6 +363,7 @@ InfoCopyNewResult copy_info_as_new(
   validate_destination_quest_dial(
       next, containment, source_context, destination_context);
   const auto& destination_dial_record = *destination_dial.record;
+  require_decodable(destination_dial_record);
   const auto destination_qnam = read_info_form_link(
       destination_dial_record, k_qnam, destination_context);
   if (destination_qnam.has_value() && *destination_qnam != containment.quest_key) {
