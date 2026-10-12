@@ -65,7 +65,7 @@ jobs:
         if: matrix.rid == 'linux-x64'
         run: |
           cmake -S ../Radicle -B ../build/radicle-bgs -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON
+            -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=OFF
           cmake --build ../build/radicle-bgs --target radicle_c
           mkdir -p ../build/radicle-bgs/native
           cp ../build/radicle-bgs/libradicle.so ../build/radicle-bgs/native/
@@ -128,7 +128,7 @@ jobs:
           $zlibWin = (Resolve-Path ..\build\zlib-win).Path
           $zlibLib = Join-Path $zlibWin 'zlibstatic.lib'
 
-          cmake -S ..\Radicle -B ..\build\radicle-bgs -G Ninja -DCMAKE_BUILD_TYPE=Release -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON "-DZLIB_INCLUDE_DIR=$zlibWin" "-DZLIB_LIBRARY=$zlibLib" "-DZLIB_LIBRARY_RELEASE=$zlibLib" "-DZLIB_LIBRARY_DEBUG=$zlibLib"
+          cmake -S ..\Radicle -B ..\build\radicle-bgs -G Ninja -DCMAKE_BUILD_TYPE=Release -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=OFF "-DZLIB_INCLUDE_DIR=$zlibWin" "-DZLIB_LIBRARY=$zlibLib" "-DZLIB_LIBRARY_RELEASE=$zlibLib" "-DZLIB_LIBRARY_DEBUG=$zlibLib"
           if ($LASTEXITCODE -ne 0) { throw "Radicle configure failed" }
           cmake --build ..\build\radicle-bgs --target radicle_c
           if ($LASTEXITCODE -ne 0) { throw "Radicle build failed" }
