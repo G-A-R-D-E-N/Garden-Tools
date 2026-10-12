@@ -23,14 +23,19 @@ TEST_P(BehaviorReal, EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByt
   ASSERT_EQ(radicle_env_load(paths, 1, &abi), RADICLE_STATUS_OK);
   const radicle_record** records = nullptr; std::size_t count = 0;
   ASSERT_EQ(radicle_env_plugin_records(abi, 0, &records, &count), RADICLE_STATUS_OK);
-  const auto refs = env.plugin_records(0); ASSERT_EQ(count, refs.size()); std::map<std::string, int> totals;
+  const auto refs = env.plugin_records(0); ASSERT_EQ(count, refs.size()); std::map<std::string, int> totals, pack_types;
+  std::map<std::string, std::string> pack_examples; int pack_templates = 0;
   for (std::size_t i = 0; i < count; ++i) {
     const auto type = refs[i]->record->header.signature.to_string();
     if (type != "PACK" && type != "CSTY" && type != "IDLE") continue;
     SCOPED_TRACE(refs[i]->record->form_key.to_string()); ++totals[type];
     if (type == "PACK") {
-      EXPECT_NO_THROW(fo4::env::decode_package(env, *refs[i])); const radicle_package_info* value = nullptr;
+      fo4::env::Package package; EXPECT_NO_THROW(package = fo4::env::decode_package(env, *refs[i])); const radicle_package_info* value = nullptr;
       EXPECT_EQ(radicle_package_decode(abi, records[i], &value), RADICLE_STATUS_OK); radicle_package_free(value);
+      const auto slice = package.data ? "PACK_TYPE_" + std::to_string(package.data->type) : std::string{"PACK_TYPE_none"};
+      ++pack_types[slice];
+      if (package.counter && package.counter->template_package != fo4::FormKey{}) ++pack_templates;
+      if (!package.locations.empty() || !package.targets.empty()) pack_examples.try_emplace(slice, refs[i]->record->form_key.to_string());
     } else if (type == "CSTY") {
       EXPECT_NO_THROW(fo4::env::decode_combat_style(env, *refs[i])); radicle_combat_style_info value{};
       EXPECT_EQ(radicle_combat_style_get_info(abi, records[i], &value), RADICLE_STATUS_OK);
@@ -41,6 +46,9 @@ TEST_P(BehaviorReal, EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByt
   }
   radicle_free_record_array(records); radicle_env_destroy(abi);
   for (const auto& [type, total] : totals) RecordProperty(type, total);
+  for (const auto& [slice, pack_count] : pack_types) RecordProperty(slice, pack_count);
+  for (const auto& [slice, example] : pack_examples) RecordProperty(slice + "_example", example);
+  RecordProperty("PACK_template_packages", pack_templates);
   const auto bytes = fo4::write_plugin(env.plugin(0)); const auto original = fo4::plugin_original_bytes(env.plugin(0));
   ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);
 }
