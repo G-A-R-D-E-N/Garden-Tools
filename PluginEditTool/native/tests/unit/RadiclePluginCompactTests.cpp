@@ -264,6 +264,33 @@ TEST_CASE("Native ESL compaction hints at masters.SetLight only when a compatibl
     }
 }
 
+TEST_CASE("Native ESL compaction gives an .esl-named plugin without the light flag no SetLight hint") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esl";
+    writeBytes(path, miscPlugin(1.0f, 0u, 0x802u, true, {0x001u, 0x800u}));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({{
+            {"name", "Patch.esl"},
+            {"path", path.string()},
+            {"source", "Test Mod"},
+            {"resolved", true}
+        }})}
+    };
+    const auto loaded = backend.invoke("environment.LoadMo2", environment);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->at("loadedPlugins") == 1);
+
+    const auto compacted = backend.compactToEsl(nlohmann::json::array({"Patch.esl"}));
+    REQUIRE(compacted.has_value());
+    REQUIRE(compacted->is_string());
+    const auto text = compacted->get<std::string>();
+    CHECK(text.find("already ESL-compatible") != std::string::npos);
+    CHECK(text.find("masters.SetLight") == std::string::npos);
+}
+
 TEST_CASE("Native CompactToEsl moves out-of-range IDs to the 0x800 floor for HEDR 0.95 plugins with a master") {
     const auto root = tempRoot();
     Cleanup cleanup{root};

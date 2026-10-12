@@ -255,6 +255,17 @@ TEST_F(EnvironmentTest, PluginInfoReportsKindsFlagsAndUnresolvedMasters) {
   EXPECT_FALSE(env.find_plugin("Other.esp").has_value());
 }
 
+TEST_F(EnvironmentTest, EslExtensionWithoutLightFlagIsLightInPluginInfo) {
+  const auto extension = write("Extension.esl", make_plugin(0, {}, {}));
+  const auto paths = write_base_and_patch();
+  const std::vector<std::filesystem::path> ordered{paths[0], paths[1], extension};
+  const auto env = fo4::env::Environment::load(ordered);
+
+  ASSERT_EQ(env.plugins().size(), 3u);
+  EXPECT_TRUE(env.plugins()[2].master_flag);
+  EXPECT_EQ(env.plugins()[2].kind, fo4::PluginKind::light);
+}
+
 TEST_F(EnvironmentTest, MasterLoadedLaterIsUnresolved) {
   const auto paths = write_base_and_patch();
   const std::vector<std::filesystem::path> reversed{paths[1], paths[0]};

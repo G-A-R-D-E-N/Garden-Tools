@@ -334,6 +334,20 @@ that runtime representation does not establish the on-disk field size. Action
 payload SNAM after the header remains opaque. SCQS values keep schema-derived
 labels only; no quest-stage execution behavior is implemented.
 
+## src/formid.cpp:classify_plugin_kind
+
+`src/formid.cpp:classify_plugin_kind` is the single light test: TES4 SmallFile flag or a case-insensitive `.esl` file name. xEdit does the same: `source:xEdit Core/wbLoadOrder.pas:363-364 @93cc0bc5` forces the light flag from the `.esl` extension, and `source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5` sets the light state for an `.esl` module. Callers with a loaded plugin's header and name use it: `src/environment/environment.cpp:kind_of`, `src/plugin/reader.cpp:plugin_form_id_context` and `stamp_master_kinds`, `src/plugin/master_kinds.cpp:stamp_master_kinds_from_files`, `src/plugin/load_order.cpp:build_runtime_form_id_context`, `src/forms/weather_concept.cpp:resolve_master_kind`, and `src/plugin/mutation.cpp:local_form_id_range` and `owner_kind`. Name-only sites keep `PluginKey::looks_light`: TES4 master references in `src/plugin/tes4.cpp`, the PluginKey overload of `src/plugin/writer.cpp:remap_plugin_masters`, and the fallback branches of `owner_kind`. The stranded-record check in `remap_plugin_masters` uses `classify_plugin_kind`, because xEdit sets light for an `.esl` module on save (`source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5`); test `tests/test_extension_light_kinds.cpp:EslExtensionWithoutFlagRejectsRemovingLastMasterWithLowIds`. `src/plugin/writer.cpp:make_empty_plugin` sets the flag from the extension when it creates a file. `src/forms/placed_reference_copy.cpp:owner_kind` calls it for the owner-is-source branch. Tests: `tests/test_formid.cpp:ClassifyPluginKindUsesLightFlagOrEslExtension`, `tests/test_formkey_load.cpp:EslExtensionWithoutLightFlagSetsCurrentKindLight`, `tests/test_master_kinds.cpp:StampsEslExtensionWithoutLightFlagFromFile`, `tests/test_master_kinds.cpp:StampsEslExtensionWithoutLightFlagFromLoadedPlugin`, `tests/test_environment.cpp:EslExtensionWithoutLightFlagIsLightInPluginInfo`, `tests/test_mutation.cpp:EslExtensionWithoutLightFlagUsesLightRange`.
+
+`src/formid.cpp:is_master_plugin` is the master-status twin: an `.esm` or `.esl` name counts as master (`PluginKey::looks_master`), as xEdit sets ESM for both (`source:xEdit Core/wbImplementation.pas:5301-5306 @93cc0bc5`). It backs `info.master_flag` in `src/environment/environment.cpp:Environment::load` and the PluginEditTool master checks. The dirty-plugin ONAM gate in `src/plugin/writer.cpp:write_plugin` uses it too; see that section below.
+
+## src/plugin/load_order.cpp:build_runtime_form_id_context
+
+Runtime classification uses TES4 SmallFile or the case-insensitive `.esl` extension, as the verified OG/AE header paths establish in `docs/RUNTIME_PLUGIN_INDEX_EVIDENCE.md`. The supplied order is already enabled and resolved by the caller. Existing safe table caps and duplicate refusal remain Radicle policy; no unverified engine sorting or overflow behavior is added. `tests/test_load_order.cpp:EslExtensionAssignsALightSlotWithoutChangingHeaderFlags` checks both classification sources and independent positions.
+
+## src/forms/weather.cpp:resolve_master_kind
+
+Weather master insertion uses the same flag-or-extension classification when the target plugin is present in the supplied environment. `tests/test_weather_concept.cpp:MnamExtensionOnlyLightMasterInsertion` checks the resulting master kind and decoded reference without changing the source header. Evidence: `docs/RUNTIME_PLUGIN_INDEX_EVIDENCE.md`.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children
@@ -799,3 +813,11 @@ GT-149: the entry points in `src/c_api_fields.cpp`, `src/c_api_ref_fields.cpp`, 
 ## src/nif/nif.cpp:read_nif
 
 read_nif checks the FO4 stream gate (version 20.2.0.7, user version 12, BS 130), then the block-type table, block sizes, string table and footer roots, all bounded by the remaining bytes before any reserve. It builds the child and parent maps once, skipping null child references and keeping the first parent seen. The layout facts with their F4LODGEN and NifFile.cs citations, and the parity-pending list for values the sources do not pin (rotation order, billboard layout, BSDynamicTriShape, vertex encodings, strict footer), are in `Radicle/docs/NIF.md`.
+
+## Radicle/src/plugin/writer.cpp:write_plugin
+
+The dirty-plugin ONAM rebuild gate is `src/formid.cpp:is_master_plugin` (TES4 master flag or an `.esm`/`.esl` name). xEdit gives an extension-only module its master state at save: `.esm` sets ESM (`source:xEdit Core/wbImplementation.pas:5301-5302 @93cc0bc5`), and `.esl` sets ESM and light (`source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5`). The ONAM rebuild runs when `FileHeader.IsESM` or the `mfHasESMExtension` module flag holds (`source:xEdit Core/wbImplementation.pas:5401 @93cc0bc5`); `source:xEdit Core/wbLoadOrder.pas:332-334 @93cc0bc5` sets that flag for `.esm` and `.esl` on Fallout 4. So a dirty `.esm` or `.esl` without the master flag rebuilds ONAM. Radicle does not set the TES4 master bit on write, while xEdit's save path sets it for `.esm` (`source:xEdit Core/wbImplementation.pas:5301-5302 @93cc0bc5`); the written bytes keep the flag clear, and that difference is open. The writer likewise does not set the Small (light) bit for a loaded extension-only `.esl`, while xEdit sets ESM and Small on save for `.esl` names (`source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5`); the runtime treats such a file as light by name through `src/formid.cpp:classify_plugin_kind`. `Radicle/docs/ONAM.md` states the same rule. Tests: `tests/test_extension_light_kinds.cpp:DirtyEslWithoutMasterFlagRebuildsOnam`, `tests/test_extension_light_kinds.cpp:DirtyEsmWithoutMasterFlagRebuildsOnam`.
+
+## Radicle/src/forms/placed_reference_copy.cpp:owner_kind
+
+The owner-is-source branch now calls `src/formid.cpp:classify_plugin_kind` with the source header and key, so a source named `.esl` without the TES4 SmallFile flag yields a light master entry, as the load-time sites do. Test: `tests/test_extension_light_kinds.cpp:OwnerEqualToEslSourceIsLightMaster`.
