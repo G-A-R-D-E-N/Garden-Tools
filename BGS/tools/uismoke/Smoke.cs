@@ -2778,11 +2778,10 @@ public static class Smoke
 
         for (int i = 0; i < entries.Length; i++)
         {
-            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
             writer.Write((ulong)offsets[i]);
             writer.Write(0u);
-            writer.Write((uint)entries[i].Payload.Length);
-            writer.Write(0u);
+            writer.Write((uint)entries[i].Payload.Length); writer.Write(0xBAADF00Du);
         }
 
         foreach (var entry in entries) writer.Write(entry.Payload);

@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <optional>
 #include <utility>
 
 namespace fo4::forms {
@@ -51,14 +50,16 @@ std::vector<StaticCollectionPartView> decode_static_collection_parts(
 
   const auto context = plugin_form_id_context(plugin);
   std::vector<StaticCollectionPartView> parts;
-  std::optional<StaticCollectionPartView> current;
+  StaticCollectionPartView current;
+  bool open = false;
 
   auto flush = [&]() {
-    if (!current.has_value()) return;
-    if (!current->static_record.owner().empty() || current->static_record.local().value() != 0) {
-      parts.push_back(std::move(*current));
+    if (!open) return;
+    if (!current.static_record.owner().empty() || current.static_record.local().value() != 0) {
+      parts.push_back(std::move(current));
     }
-    current.reset();
+    current = StaticCollectionPartView{};
+    open = false;
   };
 
   for (const auto& subrecord : record.subrecords) {
@@ -67,23 +68,23 @@ std::vector<StaticCollectionPartView> decode_static_collection_parts(
       if (subrecord.data.size() != 4) {
         throw StaticCollectionError("SCOL part ONAM must be exactly 4 bytes");
       }
-      current.emplace();
-      current->static_record = resolve_plugin_form_id(
+      open = true;
+      current.static_record = resolve_plugin_form_id(
           RawFormId{read_u32(subrecord.data, 0)}, context);
       continue;
     }
 
     if (subrecord.signature != sig_data) continue;
-    if (current.has_value() && !current->placements.empty()) {
+    if (open && !current.placements.empty()) {
       throw StaticCollectionError("SCOL part contains duplicate DATA placement arrays");
     }
-    if (!current.has_value()) current.emplace();
+    open = true;
     if (subrecord.data.size() % k_placement_size != 0) {
       throw StaticCollectionError("SCOL part DATA size is not a multiple of 28 bytes");
     }
-    current->placements.reserve(subrecord.data.size() / k_placement_size);
+    current.placements.reserve(subrecord.data.size() / k_placement_size);
     for (std::size_t offset = 0; offset < subrecord.data.size(); offset += k_placement_size) {
-      current->placements.push_back(decode_placement(subrecord.data, offset));
+      current.placements.push_back(decode_placement(subrecord.data, offset));
     }
   }
 

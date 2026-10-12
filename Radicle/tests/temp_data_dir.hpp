@@ -30,7 +30,9 @@ class TempDataDir {
 public:
   TempDataDir()
       : path_{std::filesystem::temp_directory_path() /
-              ("radicle_load_order_" + std::to_string(process_id()) + "_" + std::to_string(next_id()))} {
+              ("radicle_load_order_" + std::to_string(process_id()) + "_" + std::to_string(next_id()))},
+        base_{std::chrono::floor<std::chrono::seconds>(std::filesystem::file_time_type::clock::now()) -
+              std::chrono::hours(1)} {
     std::filesystem::create_directories(path_);
   }
   ~TempDataDir() {
@@ -48,8 +50,7 @@ public:
       std::ofstream out{file, std::ios::binary};
       out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     }
-    std::filesystem::last_write_time(file, std::filesystem::file_time_type::clock::now() -
-                                               std::chrono::hours(1) + std::chrono::seconds(rank));
+    std::filesystem::last_write_time(file, base_ + std::chrono::seconds(rank));
   }
 
 private:
@@ -59,6 +60,7 @@ private:
   }
 
   std::filesystem::path path_;
+  std::filesystem::file_time_type base_;
 };
 
 }  // namespace fo4::test
