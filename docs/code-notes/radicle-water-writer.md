@@ -13,8 +13,8 @@ are over the seven shipped masters: 47 WATR (Fallout4.esm 42, DLCCoast.esm 2, DL
   regenerated with its tool. `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` is the W0 list, which already
   contains every header #396 exports from (`c_api_records.h` holds `radicle_water_resolve`).
 - Main's ABI 11 advanced this additive surface to ABI 12 (`c50ad4d5`). Merging main through the ABI 27 landing head
-  (`e4cd976d`, #400) advances it to ABI 28, pinned by
-  `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsThirtyTwo`. Regenerate the C#
+  (`e4cd976d`, #400) advances it to ABI 28, pinned by the `CApiQuest` ABI
+  test in `Radicle/tests/test_c_api_quest.cpp`. Regenerate the C#
   declarations and layout probe with `generate_interop.py`; preserve both
   sides' exports. Re-bump from main if another ABI PR merges first.
 
