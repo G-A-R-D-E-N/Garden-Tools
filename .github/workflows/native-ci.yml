@@ -1,9 +1,10 @@
 name: native-ci
 
 # Runs the native C++23 build/test on the self-hosted GARDEN-TOOLS runners:
-# Linux (label `garden`) and Windows (`self-hosted, Windows, X64`). Hosted runners
-# are intentionally avoided: both orgs are over the Free Actions minutes
-# allowance (GHRUNNER#24), and hosted jobs fail silently once exhausted.
+# Linux (label `garden`), Windows (`self-hosted, Windows, X64`) and the Fallout 4
+# data host (`fo4-data`). Hosted runners are intentionally avoided: both orgs
+# are over the Free Actions minutes allowance (GHRUNNER#24), and hosted jobs
+# fail silently once exhausted.
 # Self-hosted minutes are free. Pull requests run through the
 # pull_request trigger only; work-branch push runs are intentionally omitted so
 # one PR commit does not consume two self-hosted CI slots.
@@ -54,6 +55,8 @@ env:
   # All runners share one 12-thread host; cap each build so concurrent jobs
   # don't oversubscribe it. cmake --build reads this when --parallel is absent.
   CMAKE_BUILD_PARALLEL_LEVEL: "4"
+  # Fallout 4 data tests: native-windows-real-data runs them, native-windows-tests excludes them.
+  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.(RealFallout4EsmDecodesWhenPresent|CorpusDecodeSweepWhenPresent)|BehaviorReal\.|DialogueReal\.|DialogueWriterReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
 
 jobs:
   # PluginEditTool/native builds Radicle as a subproject, so one build covers
@@ -496,17 +499,96 @@ jobs:
         if: always()
         run: if defined CCACHE "%CCACHE%" --show-stats
 
-      - name: Check FO4 data folder
+      - name: Test
         shell: powershell
-        env:
-          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
+        run: |
+          Remove-Item Env:FO4_DATA_DIR -ErrorAction SilentlyContinue
+          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '-E', $env:REAL_DATA_TEST_REGEX)
+          ctest @ctestArgs
+          exit $LASTEXITCODE
+
+      - name: Write artifact metadata
+        if: always()
+        run: |
+          echo commit=${{ github.sha }}> build\native\build-info.txt
+          echo ref=${{ github.ref }}>> build\native\build-info.txt
+          echo run_id=${{ github.run_id }}>> build\native\build-info.txt
+          echo target=x86_64-pc-windows-msvc>> build\native\build-info.txt
+
+      - name: Upload Radicle Release test executable
+        if: always()
+        continue-on-error: true
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        with:
+          name: radicle-msvc-release-tests
+          path: |
+            build/native/**/fo4_tests.exe
+            build/native/**/radicle.dll
+            build/native/build-info.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
+      # Debug on pull requests, so this runs on main pushes and manual runs.
+      # /Z7 (Embedded) instead of CMake's default /Zi: ccache can't cache
+      # compiles that write to a shared PDB.
+      - name: Configure (Debug)
+        timeout-minutes: 15
+        if: github.event_name != 'pull_request'
+        shell: powershell
+        run: |
+          $launcher = @()
+          if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -eq 3) {
+              Write-Output "::error::configure failed after 3 attempts"
+              exit 1
+            }
+            Write-Output "::warning::configure attempt $attempt failed, retrying"
+            Start-Sleep -Seconds (30 * $attempt)
+          }
+
+      - name: Build (Debug)
+        if: github.event_name != 'pull_request'
+        run: cmake --build build\native-debug
+
+      # Real-data tests run only in native-windows-real-data; Debug with game data exceeds the job timeout.
+      - name: Test (Debug)
+        if: github.event_name != 'pull_request'
+        run: |
+          set FO4_DATA_DIR=
+          ctest --test-dir build\native-debug --output-on-failure --parallel 4
+
+      - name: Stop .NET build servers
+        if: always()
+        run: dotnet build-server shutdown
+
+  # Runs only on the host labelled `fo4-data`, where the Fallout 4 Data folder exists.
+  native-windows-real-data:
+    name: Native real-data tests (Windows, MSVC, Fallout 4 data)
+    if: github.event.inputs.lane != 'radicle-cross'
+    runs-on: [fo4-data]
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check FO4 data folder
+        id: fo4
+        shell: powershell
         run: |
           if (-not $env:FO4_DATA_DIR) {
-            "FO4_DATA_DIR_WINDOWS is unset; real-data tests will skip."
+            "::notice::this runner has no Fallout 4 data configured (FO4_DATA_DIR is unset); the real-data tests are not run."
+            [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "has_data=false`n")
             exit 0
           }
           if (-not (Test-Path -LiteralPath $env:FO4_DATA_DIR -PathType Container)) {
-            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
+            "FO4_DATA_DIR ($env:FO4_DATA_DIR) is not an existing folder; point it at a Fallout 4 Data folder or unset it."
             exit 1
           }
           $missing = @()
@@ -515,15 +597,17 @@ jobs:
           }
           if (-not (Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter 'Fallout4 - *.ba2' -File -ErrorAction SilentlyContinue)) { $missing += 'Fallout4 - *.ba2' }
           if ($missing) {
-            "FO4_DATA_DIR_WINDOWS ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
+            "FO4_DATA_DIR ($env:FO4_DATA_DIR) is missing: $($missing -join ', '); point it at a Fallout 4 Data folder or unset it."
             exit 1
           }
           "FO4_DATA_DIR: $env:FO4_DATA_DIR"
           $esm = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.esm -File).Count
           $ba2 = @(Get-ChildItem -LiteralPath $env:FO4_DATA_DIR -Filter *.ba2 -File).Count
           "root *.esm: $esm, *.ba2: $ba2"
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "has_data=true`n")
 
       - name: Select real-data tests
+        if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
         run: |
           if ($env:GITHUB_EVENT_NAME -ne 'pull_request') {
@@ -588,51 +672,135 @@ jobs:
             Write-Output 'Every expensive real-data group runs on this pull request.'
           }
 
-      - name: Test
-        shell: powershell
+      - name: Set up .NET 8
+        if: steps.fo4.outputs.has_data == 'true'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         env:
-          FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_WINDOWS }}
-        run: |
-          if (-not $env:FO4_DATA_DIR) { Remove-Item Env:FO4_DATA_DIR -ErrorAction SilentlyContinue }
-          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4')
-          if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
-          ctest @ctestArgs
-          exit $LASTEXITCODE
-
-      - name: Write artifact metadata
-        if: always()
-        run: |
-          echo commit=${{ github.sha }}> build\native\build-info.txt
-          echo ref=${{ github.ref }}>> build\native\build-info.txt
-          echo run_id=${{ github.run_id }}>> build\native\build-info.txt
-          echo target=x86_64-pc-windows-msvc>> build\native\build-info.txt
-
-      - name: Upload Radicle Release test executable
-        if: always()
-        continue-on-error: true
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+          DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
         with:
-          name: radicle-msvc-release-tests
-          path: |
-            build/native/**/fo4_tests.exe
-            build/native/**/radicle.dll
-            build/native/build-info.txt
-          if-no-files-found: warn
-          retention-days: 7
+          global-json-file: Radicle/bindings/csharp/global.json
 
-      # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
-      # Debug on pull requests, so this runs on main pushes and manual runs.
-      # /Z7 (Embedded) instead of CMake's default /Zi: ccache can't cache
-      # compiles that write to a shared PDB.
-      - name: Configure (Debug)
+      - name: Set up MSVC, Ninja and ccache
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
+        run: |
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          if (-not (Test-Path "$installer\vswhere.exe")) { throw "Visual Studio is not installed on this runner" }
+          $vs = & "$installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "No Visual Studio install with the C++ x64 tools on this runner" }
+          $cmakeBin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $ninjaBin = "$vs\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja"
+          foreach ($tool in "$cmakeBin\cmake.exe", "$ninjaBin\ninja.exe") {
+            if (-not (Test-Path $tool)) { throw "Visual Studio at $vs has no C++ CMake tools component ($tool)" }
+          }
+
+          # Ninja calls cl.exe directly, so later steps need the vcvars64 environment.
+          $env:Path = "$installer;$env:Path"
+          $before = @{}
+          Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+          $vcvars = cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw "vcvars64.bat failed" }
+          $newPaths = @($cmakeBin, $ninjaBin)
+          foreach ($line in $vcvars) {
+            if ($line -notmatch '^([^=]+)=(.*)$') { continue }
+            $name = $Matches[1]; $value = $Matches[2]
+            if ($name -ieq 'Path') {
+              $old = $env:Path -split ';'
+              $newPaths += @($value -split ';' | Where-Object { $_ -and $old -notcontains $_ })
+            } elseif ($before[$name] -ne $value) {
+              [IO.File]::AppendAllText($env:GITHUB_ENV, "$name=$value`n")
+            }
+          }
+          # Each GITHUB_PATH line is prepended, so write in reverse to keep vcvars order.
+          [array]::Reverse($newPaths)
+          [IO.File]::AppendAllText($env:GITHUB_PATH, (($newPaths | Select-Object -Unique) -join "`n") + "`n")
+
+          $ccache = (Get-Command ccache -ErrorAction SilentlyContinue).Source
+          if (-not $ccache -and (Test-Path 'C:\tools\ccache\ccache.exe')) { $ccache = 'C:\tools\ccache\ccache.exe' }
+          if ($ccache) {
+            [IO.File]::AppendAllText($env:GITHUB_ENV, "CCACHE=$ccache`n")
+            [IO.File]::AppendAllText($env:GITHUB_ENV, "CCACHE_BASEDIR=$((Get-Location).Path)`n")
+            & $ccache --zero-stats | Out-Null
+            "Using $ccache"
+          } else {
+            "ccache not found; building without a compiler cache"
+          }
+
+      - name: Pinned zlib source (cached)
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cmakeText = Get-Content -Raw PluginEditTool\native\CMakeLists.txt
+          $revs = @([regex]::Matches($cmakeText, 'GIT_REPOSITORY[ \t]+https://github\.com/madler/zlib\.git\r?\n[ \t]*GIT_TAG[ \t]+([0-9a-f]{40})\r?\n') | ForEach-Object { $_.Groups[1].Value })
+          if ($revs.Count -ne 1) {
+            Write-Output "::error::expected exactly one 40-hex GIT_TAG after the zlib GIT_REPOSITORY in PluginEditTool/native/CMakeLists.txt"
+            exit 1
+          }
+          $zlibRev = $revs[0]
+          $base = if ($env:RUNNER_TOOL_CACHE) { Join-Path $env:RUNNER_TOOL_CACHE 'garden-src' } else { Join-Path $env:LOCALAPPDATA 'garden-src' }
+          $cache = Join-Path $base "zlib\$zlibRev"
+          if (Test-Path (Join-Path $cache '.installed')) {
+            Write-Output "Reusing cached zlib $zlibRev"
+          } else {
+            Write-Output "Fetching zlib $zlibRev into $cache"
+            New-Item -ItemType Directory -Force (Split-Path $cache) | Out-Null
+            $tmp = "$cache.tmp.$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+            git init -q $tmp
+            if ($LASTEXITCODE -ne 0) {
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp
+              Write-Output "::error::git init failed for $tmp"
+              exit 1
+            }
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+              git -C $tmp -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 fetch --depth 1 https://github.com/madler/zlib.git $zlibRev
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq 5) {
+                Remove-Item -Recurse -Force $tmp
+                Write-Output "::error::could not fetch zlib $zlibRev from GitHub after 5 attempts"
+                exit 1
+              }
+              Write-Output "::warning::zlib fetch attempt $attempt failed, retrying"
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+            git -C $tmp checkout -q --detach FETCH_HEAD
+            if ($LASTEXITCODE -ne 0) {
+              Remove-Item -Recurse -Force $tmp
+              Write-Output "::error::git checkout of zlib $zlibRev failed"
+              exit 1
+            }
+            $head = git -C $tmp rev-parse HEAD
+            if ($head -ne $zlibRev) {
+              Remove-Item -Recurse -Force $tmp
+              Write-Output "::error::zlib checkout is $head, not $zlibRev"
+              exit 1
+            }
+            New-Item -ItemType File -Path (Join-Path $tmp '.installed') | Out-Null
+            try {
+              [IO.Directory]::Move($tmp, $cache)
+            } catch {
+              Remove-Item -Recurse -Force $tmp
+              if (-not (Test-Path (Join-Path $cache '.installed'))) {
+                Write-Output "::error::zlib cache $cache is incomplete"
+                exit 1
+              }
+            }
+          }
+          New-Item -ItemType Directory -Force build | Out-Null
+          Copy-Item -Recurse -Force $cache build\zlib-src
+          Remove-Item -Recurse -Force build\zlib-src\.git
+          $zlibSrc = (Resolve-Path build\zlib-src).Path -replace '\\', '/'
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "ZLIB_SRC=$zlibSrc`n")
+
+      - name: Configure
         timeout-minutes: 15
-        if: github.event_name != 'pull_request'
+        if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
         run: |
           $launcher = @()
           if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            cmake -S PluginEditTool\native -B build\native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -eq 3) {
               Write-Output "::error::configure failed after 3 attempts"
@@ -642,17 +810,23 @@ jobs:
             Start-Sleep -Seconds (30 * $attempt)
           }
 
-      - name: Build (Debug)
-        if: github.event_name != 'pull_request'
-        run: cmake --build build\native-debug
+      - name: Build
+        if: steps.fo4.outputs.has_data == 'true'
+        run: cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real
 
-      # Real-data tests run in the Release pass only; Debug with game data exceeds the job timeout.
-      - name: Test (Debug)
-        if: github.event_name != 'pull_request'
+      - name: ccache statistics
+        if: always() && steps.fo4.outputs.has_data == 'true'
+        run: if defined CCACHE "%CCACHE%" --show-stats
+
+      - name: Test
+        if: steps.fo4.outputs.has_data == 'true'
+        shell: powershell
         run: |
-          set FO4_DATA_DIR=
-          ctest --test-dir build\native-debug --output-on-failure --parallel 4
+          $ctestArgs = @('--test-dir', 'build\native', '--output-on-failure', '--parallel', '4', '--no-tests=error', '-R', $env:REAL_DATA_TEST_REGEX)
+          if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
+          ctest @ctestArgs
+          exit $LASTEXITCODE
 
       - name: Stop .NET build servers
-        if: always()
+        if: always() && steps.fo4.outputs.has_data == 'true'
         run: dotnet build-server shutdown

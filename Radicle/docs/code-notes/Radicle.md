@@ -195,9 +195,8 @@ the reconstructed DDS header), the name/extension/directory hashes, and for
 DX10 the six texture info fields and each chunk's mip range. This does not
 require byte-identical archive padding. `docs/BA2.md` records the named fixture files (checked by `Ba2NamedRealData`)
 and the totals printed by `tools/corpus/ba2_measure.py`. The test reads game
-data only through `FO4_DATA_DIR` and runs only when it is set. CI sets it from
-`FO4_DATA_DIR_WINDOWS` in the Windows Release pass of `native-ci`; the Windows Debug
-pass clears it. The Linux job passes `FO4_DATA_DIR_LINUX`, which is currently unset,
+data only through `FO4_DATA_DIR` and runs only when it is set. In CI
+the `fo4-data` runner supplies it to the `native-windows-real-data` job of `native-ci`; both `native-windows-tests` passes clear it. The Linux job passes `FO4_DATA_DIR_LINUX`, which is currently unset,
 so the test skips there. Missing data or a
 missing named archive skips without committing payloads. A present archive whose
 version, kind or entry count differs fails the test.

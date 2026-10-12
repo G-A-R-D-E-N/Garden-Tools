@@ -1346,7 +1346,7 @@ Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses ever
   - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
   - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
   - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
-- **Test.** Gated on `FO4_DATA_DIR`; it skips unless the CI variable `FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+- **Test.** Gated on `FO4_DATA_DIR`; it skips unless `FO4_DATA_DIR` is set: CI sets it from the variable `FO4_DATA_DIR_LINUX` on Linux, and the `fo4-data` runner sets it on Windows. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
 - **Limits.** Archives and string tables are opened for `Fallout4.esm` only, so `archives_ms` and `strings_ms` leave out the DLC archives and their string tables even when the DLC masters are loaded (the installed game has no loose `Strings` folder, and each DLC's tables, such as `Strings/DLCRobot_en.STRINGS`, are only inside its `- Main.ba2`); `load_ms` covers every listed plugin. `tests/test_env_bench_real.cpp` reads `FO4_DATA_DIR` with `std::getenv`, so on Windows a Data path outside the ANSI code page makes the test skip; the standalone tool takes wide arguments.
 
 ## Radicle/src/c_api_version.cpp:radicle_abi_version — C ABI generation probe
@@ -1770,37 +1770,20 @@ Known gaps: the flag name `UseGlobal` is rejected as unknown. The C# oracle acce
 
 ## .github/workflows/native-ci.yml — Test steps (real-data tests)
 
-The real-data tests read `FO4_DATA_DIR`. CI sets it from two Forgejo repository variables:
+The real-data tests read `FO4_DATA_DIR`. Linux takes it from a Forgejo repository variable; Windows takes it from the runner:
 
 - `FO4_DATA_DIR_LINUX` feeds the `Test` step of the Linux job `Native (Linux, Debug)`. It is unset today, so that step skips the real-data tests.
-- `FO4_DATA_DIR_WINDOWS` feeds the `Test` step of the Windows job `Native tests (Windows, MSVC)`.
-- `.github/workflows/native-ci.yml:native-windows-tests` `Test (Debug)` clears `FO4_DATA_DIR` (`set FO4_DATA_DIR=`), so the Debug pass runs without game data. It runs only on non-pull_request events.
+- `.github/workflows/native-ci.yml:native-windows-real-data` reads `FO4_DATA_DIR` from the environment of the runner labelled `fo4-data` (its runner config `envs`). No workflow step sets it, and the `Test` step inherits it. The repository variable `FO4_DATA_DIR_WINDOWS` is no longer read; leave it unset so branches from before PR #480 skip the real-data tests.
+- `.github/workflows/native-ci.yml:native-windows-tests` (`self-hosted, Windows, X64`) excludes the real-data suites from its Release `Test` step with `REAL_DATA_TEST_REGEX` (workflow `env`), and sets no `FO4_DATA_DIR`; both of its `Test` steps clear any inherited value, Debug with `set FO4_DATA_DIR=` and Release with `$env:FO4_DATA_DIR = ''`.
 - Why: Debug with data does not finish within the job's 90-minute limit. In run 775, `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` took more than 34 CPU-minutes and 6.9 GB in Debug (289-421 s in Release). The `QuestAliasRealData`, `QuestStagesRealData` and `QuestObjectivesRealData` `DecodesEveryShippedQuest` tests each took about 60 CPU-minutes in Debug (131-320 s in Release). The run was still at test 358 of 1824 when the timeout neared.
-- Release keeps the real-data coverage: the Windows `Test` step runs the real-data tests with the data, except the expensive groups that a pull request does not touch (see below).
 
-On a pull request, the `Select real-data tests` step in `.github/workflows/native-ci.yml:native-windows-tests` decides which expensive real-data groups the Release `Test` step runs. It matches the changed paths (the diff of the base branch tip against `HEAD`, case-insensitive regexes) and writes one `CTEST_EXCLUDE_REGEX` to `GITHUB_ENV` for the groups it skips. A group runs when any changed path matches its trigger. Cheap real-data suites are never skipped, and every real-data suite not in the table below runs on every event.
+The `Check FO4 data folder` step (step id `fo4`) of `native-windows-real-data` reads the runner's `FO4_DATA_DIR` and runs before any build or test step:
 
-| Group | Test suites excluded when skipped | Trigger (changed path matches) |
-| --- | --- | --- |
-| Quest | `QuestAliasRealData`, `QuestStagesRealData`, `QuestObjectivesRealData`, `QuestAuthoringRealData`, `QuestRuntimeReal` | `quest`, `vmad`, `papyrus`, `pex`, `alias`, `condition`, `ctda` |
-| Writeback | `WritebackRealData` | `writeback`, `placed`, `reference`, `refr`, `ref_`, `master`, `environment`, `remap` |
-| SubrecordAuthoring | `SubrecordAuthoringRealData` | `subrecord`, `authoring` |
-| StructPayload | `StructPayloadFormLinksRealData` | `struct`, `payload`, `proj_expl`, `hazd` |
-| TypedFamilies | `TypedFamiliesRealData` | `typed`, `famil`, `armor`, `armo`, `arma`, `race`, `eyes`, `leveled`, `lvsp` |
-
-A core path forces every group to run, and nothing is excluded. The core list is one regex array in the step, and these are its entries: `Radicle/src/binary/` and `Radicle/include/fo4/binary/` (the byte cursor every reader uses); `Radicle/{src,include/fo4}/plugin/` reader, writer, visit, container, tes4, field_writer, mutation, record_edit, flags and onam (the read and write path; onam is the TES4 ONAM rebuild that plugin writes call); `form_?id`, `plugin_key`, `signature`, `error`, `headers`, `fo4` and `flags` (form ID, signature and the umbrella headers); `text/`, `localization/` and `io/` (string encoding, string tables and atomic writes); `environment/strings` (the string-table loader); the shared schema files (`scalar`, `field_address`, `localized_fields`, `form_link*`, `formlink_lists`, `nested_formlink*`, `non_formid_slots`, `preflight`, `record_constraints` and `generated_record_constraints`); `ctda` and `vmad` schema files; every `Radicle/include/fo4/schema/*.inc` table (the generated and hand-maintained data); `Radicle/{src,include/fo4}/forms/proj_expl_hazd` (the constants the mixed form-link decoder uses); `Radicle/schema/` (the `fields.json` input); `Radicle/tools/*codegen*` (the generators for those headers); every `CMakeLists.txt` and `*.cmake` (the build and test list, and the generated-file checks; `Radicle/tests` has no CMakeLists of its own); `.github/workflows/native-ci.yml` and `.github/scripts/` (this CI wiring and the zlib script); and `Radicle/tests/plugin_bytes` (the shared plugin-building test helper).
-
-Why: in run 806, a pull request about CELL water with no quest changes spent 925 s in `QuestObjectivesRealData.DecodesEveryShippedQuest`, and the quest groups together take 15-30 minutes. The owner's measurements are about 148 s for Writeback, 200-240 s for SubrecordAuthoring and 108 s for StructPayload. TypedFamilies has no recorded timing, but the owner reports `DecodesEveryShippedArmorAddon` as very slow.
-
-Pushes to `main`, `workflow_dispatch` and any other non-pull-request event run every real-data test, so a break caused by shared code is still caught right after merge. If the changed files cannot be determined (the fetch or the diff fails, or the diff is empty), the step warns and runs everything. The changed files come from `git diff --name-only --no-renames` (`.github/workflows/native-ci.yml:native-windows-tests`), so a rename lists both the old and the new path. The diff is taken against a depth-1 fetch of the base branch tip, so a shallow checkout can include files that changed on the base branch. That only makes the step run groups more often, never less. The step log prints a RUN or SKIP line per group with the paths that matched, or `core change:` with the path that forced everything.
-
-Each job's `Check FO4 data folder` step runs before its first Test step:
-
-- Unset or empty: prints one line saying the real-data tests will skip. The step passes.
+- Unset or empty: prints a `::notice::` that this runner has no Fallout 4 data configured, writes `has_data=false` to `GITHUB_OUTPUT`, and passes. Every later step is gated on `steps.fo4.outputs.has_data == 'true'` (the `always()` steps on `always() && steps.fo4.outputs.has_data == 'true'`), so the job succeeds with them skipped.
 - Set: requires the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in the folder root. Missing names are printed and the step exits 1.
-- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files.
+- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files, and writes `has_data=true`.
 
-`FO4_DATA_DIR_WINDOWS` points at the Steam install's `Fallout 4\Data` folder on the Windows runner. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
+On the `fo4-data` runner, `FO4_DATA_DIR` points at the Steam install's `Fallout 4\Data` folder. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
 
 The tests skip when `FO4_DATA_DIR` is unset, or when an expected file is missing or a list is empty. Examples:
 
@@ -1808,7 +1791,7 @@ The tests skip when `FO4_DATA_DIR` is unset, or when an expected file is missing
 - `Radicle/tests/test_ba2_real.cpp:real_data` returns nothing when the variable is unset (line 22) or no archives load (line 26). The BA2 tests skip at lines 46 and 73.
 - `Radicle/tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` skips when unset (line 12) and when no masters are found (line 15).
 
-An empty value is not a null `getenv` result, so each Test step unsets `FO4_DATA_DIR` when the variable is empty.
+An empty value is not a null `getenv` result, so the Linux `Test` step unsets `FO4_DATA_DIR` when the variable is empty.
 
 The opt-in suites stay off in CI, because no CI variable sets them:
 
@@ -1819,6 +1802,20 @@ The opt-in suites stay off in CI, because no CI variable sets them:
 - `FO4_SEQ_CORPUS`: `Radicle/tests/test_seq_corpus.cpp:EveryLooseSeqRoundTripsByteIdentically`.
 - `FO4_PAPYRUS_COMPILER` and `FO4_PAPYRUS_ASSEMBLER`: `Radicle/tests/test_pex_oracle.cpp:PexOracle.CompiledFixturesRoundTripByteIdentically` and `PexOracle.AssemblerDisassemblyAgreesWithTheCompiler`.
 - Optional `FO4_PAPYRUS_IMPORTS` and `FO4_PAPYRUS_FLAGS`: passed to the compiler by `Radicle/tests/test_pex_oracle.cpp:optionalArgument`.
+
+## .github/workflows/native-ci.yml:native-windows-real-data (Fallout 4 data job)
+
+The Fallout 4 `Data` folder exists only on the PC, so `native-windows-real-data` runs on `runs-on: [fo4-data]` and runs only the real-data tests. It is not a required check. The assumption is that the PC runner carries the label `fo4-data` alone and has `FO4_DATA_DIR` in its runner config `envs`. That variable reaches every job the runner takes, so only this job may run there. The `fo4-data` label must therefore stay exclusive to that PC, because any other job carrying it would inherit `FO4_DATA_DIR`.
+
+- Build: the Release configure matches `native-windows-tests` (same pinned actions, lane gate and 15-minute Configure timeout), then `cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real`. `fo4_tests` holds every FO4-reading Radicle suite (`Radicle/CMakeLists.txt:fo4_tests`). The Catch2 case in `fo4ide_test_sound_semantic_real` is a separate executable (`PluginEditTool/native/tests/CMakeLists.txt`), so it needs its own target. `.NET 8` stays because `RADICLE_CSHARP_TESTS=ON` makes configure need `dotnet`. The `Restore RID consumer` step is not copied because this job runs no managed tests.
+- Selection: `REAL_DATA_TEST_REGEX` (workflow `env`) is the CTest `-R` filter here and the `-E` filter in `native-windows-tests`, so both jobs split one pattern. It matches every suite ending in `RealData`, plus `QuestRuntimeReal`, `QuestConditionCorpus` (a `TEST_P`, named `OfficialMasters/QuestConditionCorpus.*`) and `RealPluginPreservation`, and four named tests in suites that also hold non-data tests: `CheckErrors.VanillaMasterHasNoErrorFindings`, `HedrCount.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent`, and the two `WeatherConcept` `*WhenPresent` tests. It also names the suites `BehaviorReal`, `BehaviorWriterReal`, `ClimateWeatherReal`, `ConditionScopesReal`, `NavmeshReal`, `NavmeshWriterReal`, `QuestStructureReal`, `SoundWriterReal`, `VegetationReal` and `VmadWriterOfficial`, the test `NifCorpus.ReadsEveryVanillaNifAndHandlesGeometryTypes`, and the Catch2 case `Official normal and AutoWeapon sounds edit through semantic backend` (matched by its prefix). `RealPlugin.*` reads repository fixtures, so it is not matched. `--no-tests=error` fails the job when nothing matches.
+- Pull requests: `Select real-data tests` writes `CTEST_EXCLUDE_REGEX` (passed as `-E`) for the expensive groups that a pull request does not touch. The groups are Quest, Writeback, SubrecordAuthoring, StructPayload and TypedFamilies; their trigger paths are in the step's `$groups`.
+
+A core path forces every group to run, and nothing is excluded. The core list is one regex array in the step, and these are its entries: `Radicle/src/binary/` and `Radicle/include/fo4/binary/` (the byte cursor every reader uses); `Radicle/{src,include/fo4}/plugin/` reader, writer, visit, container, tes4, field_writer, mutation, record_edit, flags and onam (the read and write path; onam is the TES4 ONAM rebuild that plugin writes call); `form_?id`, `plugin_key`, `signature`, `error`, `headers`, `fo4` and `flags` (form ID, signature and the umbrella headers); `text/`, `localization/` and `io/` (string encoding, string tables and atomic writes); `environment/strings` (the string-table loader); the shared schema files (`scalar`, `field_address`, `localized_fields`, `form_link*`, `formlink_lists`, `nested_formlink*`, `non_formid_slots`, `preflight`, `record_constraints` and `generated_record_constraints`); `ctda` and `vmad` schema files; every `Radicle/include/fo4/schema/*.inc` table (the generated and hand-maintained data); `Radicle/{src,include/fo4}/forms/proj_expl_hazd` (the constants the mixed form-link decoder uses); `Radicle/schema/` (the `fields.json` input); `Radicle/tools/*codegen*` (the generators for those headers); every `CMakeLists.txt` and `*.cmake` (the build and test list, and the generated-file checks; `Radicle/tests` has no CMakeLists of its own); `.github/workflows/native-ci.yml` and `.github/scripts/` (this CI wiring and the zlib script); and `Radicle/tests/plugin_bytes` (the shared plugin-building test helper).
+
+Why: in run 806, a pull request about CELL water with no quest changes spent 925 s in `QuestObjectivesRealData.DecodesEveryShippedQuest`, and the quest groups together take 15-30 minutes. The owner's measurements are about 148 s for Writeback, 200-240 s for SubrecordAuthoring and 108 s for StructPayload. TypedFamilies has no recorded timing, but the owner reports `DecodesEveryShippedArmorAddon` as very slow.
+
+Pushes to `main`, `workflow_dispatch` and any other non-pull-request event run every real-data test, so a break caused by shared code is still caught right after merge. If the changed files cannot be determined (the fetch or the diff fails, or the diff is empty), the step warns and runs everything. The changed files come from `git diff --name-only --no-renames` (`.github/workflows/native-ci.yml:native-windows-real-data`), so a rename lists both the old and the new path. The diff is taken against a depth-1 fetch of the base branch tip, so a shallow checkout can include files that changed on the base branch. That only makes the step run groups more often, never less. The step log prints a RUN or SKIP line per group with the paths that matched, or `core change:` with the path that forced everything.
 
 ## PluginEditTool/native/src/plugin/ConditionCodec.cpp:flagValue — numeric condition flags (GT-157)
 
