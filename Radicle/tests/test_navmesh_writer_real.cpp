@@ -5,6 +5,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 #include <cstdlib>
@@ -19,6 +20,7 @@ class NavmeshWriterReal : public testing::TestWithParam<const char*> {};
 TEST_P(NavmeshWriterReal, OfficialOrderAndCappedEditsPreserveEveryUntouchedByte) {
   const auto* directory = std::getenv("FO4_DATA_DIR");
   if (!directory) GTEST_SKIP() << "set FO4_DATA_DIR";
+  record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path{directory} / GetParam();
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "master missing";
   const std::filesystem::path paths[] = {path};

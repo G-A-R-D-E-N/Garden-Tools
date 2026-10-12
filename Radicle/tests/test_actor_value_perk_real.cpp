@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -25,6 +26,7 @@ TEST_P(ActorValuePerkReal, NativeAndCAbiPayloadsAgreeAndReparseIdempotently) {
   if (directory == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to run the official-master payload checks";
   }
+  record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path{directory} / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path;
   const auto native = fo4::read_plugin_file(path);

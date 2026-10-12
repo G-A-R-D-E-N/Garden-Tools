@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -168,6 +169,7 @@ TEST(HedrCount, OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresen
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
   const auto paths = official_hedr_samples(dir);
   if (paths.empty()) GTEST_SKIP() << "no official masters or .esl files under " << dir;
 

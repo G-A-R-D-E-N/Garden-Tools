@@ -201,4 +201,40 @@ std::vector<std::string_view> resolve_sound_files(const Environment& env, const 
   return out;
 }
 
+std::optional<std::size_t> select_rate_file_index(const std::vector<SoundRateFile>& rate_files, std::uint32_t rpm) {
+  std::optional<std::size_t> previous;
+  for (std::size_t i = 0; i < rate_files.size(); ++i) {
+    if (rate_files[i].rpm == 0) continue;
+    if (!previous) {
+      previous = i;
+      if (rpm <= rate_files[i].rpm) return i;
+      continue;
+    }
+    if (rpm <= rate_files[i].rpm) {
+      return rpm - rate_files[*previous].rpm < rate_files[i].rpm - rpm ? *previous : i;
+    }
+    previous = i;
+  }
+  return previous;
+}
+
+std::size_t select_standard_file_index(std::size_t count, std::size_t draw_index,
+                                       std::optional<std::size_t> previous_index) {
+  if (draw_index >= count) throw WorldDecodeError("sound file draw is outside the file list");
+  if (count > 1 && previous_index && draw_index == *previous_index) return (draw_index + 1) % count;
+  return draw_index;
+}
+
+double sound_frequency_factor(std::int8_t frequency_shift) {
+  return std::clamp(1.0 + frequency_shift * 0.01, 0.1, 2.0);
+}
+
+bool sound_is_looping(std::uint8_t loop_control) { return (loop_control & 0x38u) != 0; }
+
+double sound_sidechain_send(std::uint8_t sidechain_control) { return std::clamp(sidechain_control * 0.01, 0.0, 1.0); }
+
+double sound_small_rumble_send(std::uint8_t rumble_control) { return (rumble_control & 0x0Fu) / 15.0; }
+
+double sound_big_rumble_send(std::uint8_t rumble_control) { return (rumble_control >> 4) / 15.0; }
+
 }

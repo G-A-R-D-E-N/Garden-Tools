@@ -15,6 +15,7 @@
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -71,6 +72,7 @@ TEST(StructPayloadFormLinksRealData, EverySlotResolvesToItsDocumentedType) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
   constexpr const char* k_masters[] = {"Fallout4.esm",      "DLCCoast.esm",
                                        "DLCNukaWorld.esm",  "DLCRobot.esm",
                                        "DLCworkshop01.esm", "DLCworkshop02.esm",

@@ -2030,6 +2030,27 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_file_list_free")]
     public static extern void SoundFileListFree(SoundFileList* list);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_select_rate_file")]
+    public static extern Status SoundSelectRateFile(SoundRateFile* rate_files, nuint rate_file_count, uint rpm, int* out_has_index, nuint* out_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_select_standard_file")]
+    public static extern Status SoundSelectStandardFile(nuint count, nuint draw_index, int has_previous, nuint previous_index, nuint* out_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_frequency_factor")]
+    public static extern Status SoundFrequencyFactor(sbyte frequency_shift, double* out_factor);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_is_looping")]
+    public static extern Status SoundIsLooping(byte loop_control, int* out_looping);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_sidechain_send")]
+    public static extern Status SoundSidechainSend(byte sidechain_control, double* out_send);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_small_rumble_send")]
+    public static extern Status SoundSmallRumbleSend(byte rumble_control, double* out_send);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_big_rumble_send")]
+    public static extern Status SoundBigRumbleSend(byte rumble_control, double* out_send);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
     public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);
 

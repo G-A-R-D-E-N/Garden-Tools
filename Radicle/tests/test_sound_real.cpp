@@ -4,6 +4,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/text/encoding.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -38,6 +39,7 @@ void expect_text(std::optional<std::string_view> native, const char* abi) {
 TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
   const std::filesystem::path paths[] = {path};

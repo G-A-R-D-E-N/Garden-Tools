@@ -1,6 +1,7 @@
 // Real-data exercise of the QUST objective decoder. Gated on FO4_DATA_DIR.
 #include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -29,6 +30,7 @@ TEST(QuestObjectivesRealData, DecodesEveryShippedQuest) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
 
   std::size_t objectives = 0, targets = 0, localized = 0, empty = 0, multi = 0, keywords = 0;
   std::vector<std::string> failures;

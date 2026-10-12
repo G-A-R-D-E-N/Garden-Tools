@@ -2,6 +2,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -104,6 +105,7 @@ TEST(RealPluginPreservation, UnmodifiedFallout4MasterIsByteIdentical) {
   if (data_dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(data_dir));
 
   const auto path = std::filesystem::path{data_dir} / "Fallout4.esm";
   if (!std::filesystem::exists(path)) {

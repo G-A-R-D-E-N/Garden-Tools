@@ -2,6 +2,7 @@
 #include "fo4/environment/dialogue.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/text/encoding.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -176,6 +177,8 @@ TEST_P(DialogueReal, EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentica
   if (!dir) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
   const std::filesystem::path native_paths[] = {path};
   const auto env = fo4::env::Environment::load(native_paths);
   const auto filename = path.string();
@@ -243,7 +246,7 @@ TEST_P(DialogueReal, EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentica
     RecordProperty(type + "_decode_failures", failed);
     EXPECT_EQ(failed, 0) << type;
   }
-  if (std::strcmp(GetParam(), "Fallout4.esm") == 0) {
+  if (std::strcmp(GetParam(), "Fallout4.esm") == 0 && exact_counts_known(build)) {
     EXPECT_EQ(totals["DIAL"], 35443);
     EXPECT_EQ(totals["INFO"], 78087);
     EXPECT_EQ(totals["SCEN"], 3568);
