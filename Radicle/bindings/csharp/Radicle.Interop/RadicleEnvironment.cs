@@ -59,10 +59,14 @@ public sealed record LightingTemplate(Lighting? Lighting, FormKey? GodRays);
 
 public sealed record ClimateWeather(FormKey? Weather, int Chance, FormKey? Global);
 
-public sealed record Climate(IReadOnlyList<ClimateWeather> Weathers, string? SunTexture, string? SunGlareTexture);
+public sealed record Climate(IReadOnlyList<ClimateWeather> Weathers, string? SunTexture, string? SunGlareTexture)
+{
+    public ClimateTiming? Timing { get; init; }
+}
 
 public sealed record Weather(int ColorGroups, int ColorTimes, byte[] Colors, IReadOnlyList<float> FogDistances)
 {
+    public WeatherParameters? Parameters { get; init; }
     public const int Day = 1;
 
     public ByteColor? Color(int group, int time)
@@ -419,7 +423,8 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
             var weathers = Call.Copy<Native.ClimateWeather>(c->Weathers, c->WeatherCount)
                 .Select(w => new ClimateWeather(FormKey.FromNative(w.Weather), w.Chance, FormKey.FromNative(w.Global)))
                 .ToArray();
-            return new Climate(weathers, Utf8.Read(c->SunTexture), Utf8.Read(c->SunGlareTexture));
+            return new Climate(weathers, Utf8.Read(c->SunTexture), Utf8.Read(c->SunGlareTexture))
+                { Timing = c->HasTiming != 0 ? ToTiming(c->Timing) : null };
         }
         finally
         {
@@ -436,7 +441,8 @@ public sealed unsafe partial class RadicleEnvironment : IDisposable
         {
             var colors = Utf8.Raw(w->Colors, w->ColorGroups * w->ColorTimes * 4);
             return new Weather((int)w->ColorGroups, (int)w->ColorTimes, colors,
-                               Call.Copy<float>(w->FogDistances, w->FogDistanceCount));
+                               Call.Copy<float>(w->FogDistances, w->FogDistanceCount))
+                { Parameters = w->HasParameters != 0 ? ToParameters(w->Parameters) : null };
         }
         finally
         {

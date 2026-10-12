@@ -8,6 +8,7 @@
 #include "fo4/c_api_seq.h"
 #include "fo4/c_api_quest.h"
 #include "fo4/c_api_authoring.h"
+#include "fo4/c_api_vegetation.h"
 #include <cstddef>
 #include <cstdio>
 
@@ -329,18 +330,54 @@ int main() {
   printf("ClimateWeather.Weather %zu\n", offsetof(radicle_climate_weather, weather));
   printf("ClimateWeather.Chance %zu\n", offsetof(radicle_climate_weather, chance));
   printf("ClimateWeather.Global %zu\n", offsetof(radicle_climate_weather, global));
+  printf("ClimateTiming %zu\n", sizeof(radicle_climate_timing));
+  printf("ClimateTiming.SunriseBegin %zu\n", offsetof(radicle_climate_timing, sunrise_begin));
+  printf("ClimateTiming.SunriseEnd %zu\n", offsetof(radicle_climate_timing, sunrise_end));
+  printf("ClimateTiming.SunsetBegin %zu\n", offsetof(radicle_climate_timing, sunset_begin));
+  printf("ClimateTiming.SunsetEnd %zu\n", offsetof(radicle_climate_timing, sunset_end));
+  printf("ClimateTiming.Volatility %zu\n", offsetof(radicle_climate_timing, volatility));
+  printf("ClimateTiming.MoonsPhaseLength %zu\n", offsetof(radicle_climate_timing, moons_phase_length));
+  printf("ClimateTiming.SunriseBeginHours %zu\n", offsetof(radicle_climate_timing, sunrise_begin_hours));
+  printf("ClimateTiming.SunriseEndHours %zu\n", offsetof(radicle_climate_timing, sunrise_end_hours));
+  printf("ClimateTiming.SunsetBeginHours %zu\n", offsetof(radicle_climate_timing, sunset_begin_hours));
+  printf("ClimateTiming.SunsetEndHours %zu\n", offsetof(radicle_climate_timing, sunset_end_hours));
+  printf("ClimateTiming.DaysPerPhase %zu\n", offsetof(radicle_climate_timing, days_per_phase));
+  printf("ClimateTiming.UsesSecunda %zu\n", offsetof(radicle_climate_timing, uses_secunda));
+  printf("ClimateTiming.UsesMasser %zu\n", offsetof(radicle_climate_timing, uses_masser));
   printf("Climate %zu\n", sizeof(radicle_climate));
   printf("Climate.Weathers %zu\n", offsetof(radicle_climate, weathers));
   printf("Climate.WeatherCount %zu\n", offsetof(radicle_climate, weather_count));
   printf("Climate.SunTexture %zu\n", offsetof(radicle_climate, sun_texture));
   printf("Climate.SunGlareTexture %zu\n", offsetof(radicle_climate, sun_glare_texture));
+  printf("Climate.HasTiming %zu\n", offsetof(radicle_climate, has_timing));
+  printf("Climate.Timing %zu\n", offsetof(radicle_climate, timing));
   printf("Climate.Internal %zu\n", offsetof(radicle_climate, internal));
+  printf("WeatherParameters %zu\n", sizeof(radicle_weather_parameters));
+  printf("WeatherParameters.WindSpeed %zu\n", offsetof(radicle_weather_parameters, wind_speed));
+  printf("WeatherParameters.TransitionDelta %zu\n", offsetof(radicle_weather_parameters, transition_delta));
+  printf("WeatherParameters.SunGlare %zu\n", offsetof(radicle_weather_parameters, sun_glare));
+  printf("WeatherParameters.SunDamage %zu\n", offsetof(radicle_weather_parameters, sun_damage));
+  printf("WeatherParameters.PrecipitationBegin %zu\n", offsetof(radicle_weather_parameters, precipitation_begin));
+  printf("WeatherParameters.PrecipitationEnd %zu\n", offsetof(radicle_weather_parameters, precipitation_end));
+  printf("WeatherParameters.LightningBegin %zu\n", offsetof(radicle_weather_parameters, lightning_begin));
+  printf("WeatherParameters.LightningEnd %zu\n", offsetof(radicle_weather_parameters, lightning_end));
+  printf("WeatherParameters.LightningFrequency %zu\n", offsetof(radicle_weather_parameters, lightning_frequency));
+  printf("WeatherParameters.Flags %zu\n", offsetof(radicle_weather_parameters, flags));
+  printf("WeatherParameters.LightningColor %zu\n", offsetof(radicle_weather_parameters, lightning_color));
+  printf("WeatherParameters.VisualEffectBegin %zu\n", offsetof(radicle_weather_parameters, visual_effect_begin));
+  printf("WeatherParameters.VisualEffectEnd %zu\n", offsetof(radicle_weather_parameters, visual_effect_end));
+  printf("WeatherParameters.WindDirection %zu\n", offsetof(radicle_weather_parameters, wind_direction));
+  printf("WeatherParameters.WindDirectionRange %zu\n", offsetof(radicle_weather_parameters, wind_direction_range));
+  printf("WeatherParameters.HasWindTurbulence %zu\n", offsetof(radicle_weather_parameters, has_wind_turbulence));
+  printf("WeatherParameters.WindTurbulence %zu\n", offsetof(radicle_weather_parameters, wind_turbulence));
   printf("WeatherInfo %zu\n", sizeof(radicle_weather_info));
   printf("WeatherInfo.Colors %zu\n", offsetof(radicle_weather_info, colors));
   printf("WeatherInfo.ColorGroups %zu\n", offsetof(radicle_weather_info, color_groups));
   printf("WeatherInfo.ColorTimes %zu\n", offsetof(radicle_weather_info, color_times));
   printf("WeatherInfo.FogDistances %zu\n", offsetof(radicle_weather_info, fog_distances));
   printf("WeatherInfo.FogDistanceCount %zu\n", offsetof(radicle_weather_info, fog_distance_count));
+  printf("WeatherInfo.HasParameters %zu\n", offsetof(radicle_weather_info, has_parameters));
+  printf("WeatherInfo.Parameters %zu\n", offsetof(radicle_weather_info, parameters));
   printf("WeatherInfo.Internal %zu\n", offsetof(radicle_weather_info, internal));
   printf("StaticPlacement %zu\n", sizeof(radicle_static_placement));
   printf("StaticPlacement.Position %zu\n", offsetof(radicle_static_placement, position));
@@ -420,6 +457,13 @@ int main() {
   printf("LightingTemplateInfo.HasLighting %zu\n", offsetof(radicle_lighting_template_info, has_lighting));
   printf("LightingTemplateInfo.Lighting %zu\n", offsetof(radicle_lighting_template_info, lighting));
   printf("LightingTemplateInfo.GodRays %zu\n", offsetof(radicle_lighting_template_info, god_rays));
+  printf("ClimateTimingEdit %zu\n", sizeof(radicle_climate_timing_edit));
+  printf("ClimateTimingEdit.SunriseBegin %zu\n", offsetof(radicle_climate_timing_edit, sunrise_begin));
+  printf("ClimateTimingEdit.SunriseEnd %zu\n", offsetof(radicle_climate_timing_edit, sunrise_end));
+  printf("ClimateTimingEdit.SunsetBegin %zu\n", offsetof(radicle_climate_timing_edit, sunset_begin));
+  printf("ClimateTimingEdit.SunsetEnd %zu\n", offsetof(radicle_climate_timing_edit, sunset_end));
+  printf("ClimateTimingEdit.Volatility %zu\n", offsetof(radicle_climate_timing_edit, volatility));
+  printf("ClimateTimingEdit.MoonsPhaseLength %zu\n", offsetof(radicle_climate_timing_edit, moons_phase_length));
   printf("MaterialSubstitution %zu\n", sizeof(radicle_material_substitution));
   printf("MaterialSubstitution.OriginalMaterial %zu\n", offsetof(radicle_material_substitution, original_material));
   printf("MaterialSubstitution.ReplacementMaterial %zu\n", offsetof(radicle_material_substitution, replacement_material));
@@ -698,5 +742,34 @@ int main() {
   printf("QuestStructureView.ConditionCount %zu\n", offsetof(radicle_quest_structure_view, condition_count));
   printf("QuestStructureView.Unsupported %zu\n", offsetof(radicle_quest_structure_view, unsupported));
   printf("QuestStructureView.UnsupportedCount %zu\n", offsetof(radicle_quest_structure_view, unsupported_count));
+  printf("GrassInfo %zu\n", sizeof(radicle_grass_info));
+  printf("GrassInfo.HasData %zu\n", offsetof(radicle_grass_info, has_data));
+  printf("GrassInfo.Density %zu\n", offsetof(radicle_grass_info, density));
+  printf("GrassInfo.MinSlope %zu\n", offsetof(radicle_grass_info, min_slope));
+  printf("GrassInfo.MaxSlope %zu\n", offsetof(radicle_grass_info, max_slope));
+  printf("GrassInfo.UnitsFromWater %zu\n", offsetof(radicle_grass_info, units_from_water));
+  printf("GrassInfo.WaterType %zu\n", offsetof(radicle_grass_info, water_type));
+  printf("GrassInfo.PositionRange %zu\n", offsetof(radicle_grass_info, position_range));
+  printf("GrassInfo.HeightRange %zu\n", offsetof(radicle_grass_info, height_range));
+  printf("GrassInfo.ColorRange %zu\n", offsetof(radicle_grass_info, color_range));
+  printf("GrassInfo.WavePeriod %zu\n", offsetof(radicle_grass_info, wave_period));
+  printf("GrassInfo.Flags %zu\n", offsetof(radicle_grass_info, flags));
+  printf("HarvestInfo %zu\n", sizeof(radicle_harvest_info));
+  printf("HarvestInfo.Ingredient %zu\n", offsetof(radicle_harvest_info, ingredient));
+  printf("HarvestInfo.Sound %zu\n", offsetof(radicle_harvest_info, sound));
+  printf("HarvestInfo.HasSeasons %zu\n", offsetof(radicle_harvest_info, has_seasons));
+  printf("HarvestInfo.Seasons %zu\n", offsetof(radicle_harvest_info, seasons));
+  printf("TreeInfo %zu\n", sizeof(radicle_tree_info));
+  printf("TreeInfo.Harvest %zu\n", offsetof(radicle_tree_info, harvest));
+  printf("TreeInfo.HasWind %zu\n", offsetof(radicle_tree_info, has_wind));
+  printf("TreeInfo.Wind %zu\n", offsetof(radicle_tree_info, wind));
+  printf("FloraInfo %zu\n", sizeof(radicle_flora_info));
+  printf("FloraInfo.Harvest %zu\n", offsetof(radicle_flora_info, harvest));
+  printf("FloraInfo.HasFlags %zu\n", offsetof(radicle_flora_info, has_flags));
+  printf("FloraInfo.Flags %zu\n", offsetof(radicle_flora_info, flags));
+  printf("GrassLinks %zu\n", sizeof(radicle_grass_links));
+  printf("GrassLinks.Grasses %zu\n", offsetof(radicle_grass_links, grasses));
+  printf("GrassLinks.GrassCount %zu\n", offsetof(radicle_grass_links, grass_count));
+  printf("GrassLinks.Internal %zu\n", offsetof(radicle_grass_links, internal));
   return 0;
 }

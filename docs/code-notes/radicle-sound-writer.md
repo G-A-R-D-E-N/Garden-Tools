@@ -14,8 +14,8 @@ measurements are over the seven shipped masters: 7,427 SNDR (6,730 Standard, 673
   `Radicle/bindings/csharp/tools/generate_interop.py:HEADERS` (W0 list plus `fo4/c_api_sound.h`), `c_api.h` (ABI),
   `Radicle/tests/test_c_api_quest.cpp` (ABI pin) and the generated `RadicleNative.g.cs`. Every generated file was
   regenerated with its tool, never hand-merged.
-- ABI 12 is provisional against main `c50ad4d5405e1571113019654b10e3d4a05ca0f1`; `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwelve` pins it. Main is merged without rewriting the published sound branch. The bump also covers the
-  `radicle_sound_descriptor` layout change below. Reassign from current main before merging.
+- This branch builds on the landed #400 (ABI 27); `Radicle/tests/test_c_api_quest.cpp:AbiVersionIsTwentySeven` pins it. Main is merged without rewriting the published sound branch. The bump also covers the
+  `radicle_sound_descriptor` layout change below.
 
 ## Reader fixes (`Radicle/src/environment/sound.cpp:decode_sound_descriptor`)
 

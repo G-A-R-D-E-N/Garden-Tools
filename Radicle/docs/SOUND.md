@@ -55,7 +55,7 @@ The remaining runtime questions are tracked in
 The native environment read functions are in `environment/sound.hpp`; the
 separate `c_api_sound.h` exposes owned descriptor/music/footstep-set arrays and
 fixed marker/footstep views. The generator reads that header and C# copies the
-arrays before releasing their holders. The current ABI is 12 against main ABI 11;
+arrays before releasing their holders. The current ABI is 27 against main ABI 26;
 re-bump it if another ABI PR lands first.
 
 `test_sound_real.cpp` visits every sound-record version through both native
