@@ -17,7 +17,140 @@ Confidence: `confirmed` / `strong` / `probable` / `speculative`.
 | 0x14 | 2 | form version |
 | 0x16 | 2 | VC version |
 
-Fallout 4 form version observed: **131** (`confirmed`, Heather patch + `ccBGSFO4096-AS_Enclave.esl`).
+### Form version census: AE 1.11.240.0, 2026-10-12
+
+Measured with `Radicle/tools/corpus/form_versions.py` over the install's Data folder: the seven official masters plus every `cc*.esm`/`cc*.esl` Creation present. User mod plugins are not included. `Fallout4.exe` reports 1.11.240.0. The script walks TES4, GRUP and record headers only and never decompresses. The form version is the `uint16` at record offset 0x14. `Min`/`Max` cover every record of the signature across the census plugins. `<131` counts records below 131 per master (`-` means the signature is absent from that master). TES4 is 131 in every plugin, and no ESL has a record below 131.
+
+RACE: all 110 official RACE records are at form version 131 (Fallout4.esm 45, DLCRobot.esm 8, DLCworkshop01.esm 23, DLCCoast.esm 15, DLCworkshop02.esm 2, DLCworkshop03.esm 1, DLCNukaWorld.esm 16).
+
+Records below 131 are common, so 131 is not the only AE form version. The table lists every signature with a record below 131.
+
+| Sig | Min | Max | Fallout4 | DLCRobot | DLCworkshop01 | DLCCoast | DLCworkshop02 | DLCworkshop03 | DLCNukaWorld | cc Creations total below 131 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| AACT | 15 | 131 | 173 | 0 | - | - | - | - | 0 | 0 |
+| ACHR | 54 | 131 | 3800 | 0 | - | 0 | - | 0 | 0 | 0 |
+| ACTI | 54 | 131 | 431 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| ADDN | 72 | 131 | 226 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| AECH | 100 | 131 | 12 | - | - | - | - | 0 | 0 | 0 |
+| AMDL | 83 | 131 | 51 | 0 | - | 0 | 0 | - | 0 | 0 |
+| ANIO | 109 | 131 | 3 | 0 | - | 0 | - | 0 | 0 | 0 |
+| AORU | 109 | 131 | 6 | - | - | 0 | - | - | - | 0 |
+| ARMA | 64 | 131 | 44 | 0 | - | 0 | 0 | 0 | 0 | 0 |
+| ARTO | 57 | 131 | 90 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| ASPC | 126 | 131 | 65 | - | - | 0 | - | 0 | 0 | 0 |
+| ASTP | 75 | 75 | 13 | - | - | - | - | - | - | 0 |
+| CAMS | 59 | 131 | 655 | - | - | - | - | - | - | 0 |
+| CELL | 40 | 131 | 31173 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| CLMT | 40 | 131 | 6 | - | - | 0 | - | - | 0 | 0 |
+| COBJ | 76 | 131 | 247 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| CONT | 121 | 131 | 24 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| CPTH | 42 | 131 | 295 | - | - | - | - | - | - | 0 |
+| CSTY | 95 | 131 | 106 | 0 | - | 0 | - | - | 0 | 0 |
+| DFOB | 45 | 131 | 328 | 0 | - | 0 | 0 | 0 | 0 | 0 |
+| DIAL | 42 | 131 | 34320 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| DLBR | 42 | 131 | 127 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| DLVW | 54 | 54 | 1 | - | - | - | - | - | - | 0 |
+| DMGT | 63 | 129 | 8 | - | - | - | - | - | - | 0 |
+| DOOR | 115 | 131 | 4 | 0 | - | 0 | 0 | 0 | 0 | 0 |
+| ECZN | 42 | 131 | 195 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| EFSH | 63 | 131 | 39 | 0 | - | 0 | - | - | - | 0 |
+| ENCH | 54 | 131 | 59 | 0 | - | 0 | - | - | 0 | 0 |
+| EQUP | 19 | 131 | 38 | 0 | - | - | - | - | - | 0 |
+| EXPL | 63 | 131 | 116 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FACT | 40 | 131 | 446 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| FLST | 30 | 131 | 312 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| FSTP | 18 | 131 | 131 | 0 | - | 0 | - | - | 0 | 0 |
+| FSTS | 55 | 131 | 29 | 0 | - | 0 | - | - | 0 | 0 |
+| FURN | 74 | 131 | 188 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| GDRY | 122 | 131 | 61 | - | - | 0 | - | - | 0 | 0 |
+| GLOB | 18 | 131 | 1245 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| GMST | 15 | 131 | 759 | 0 | - | - | - | - | 0 | 0 |
+| HAZD | 94 | 131 | 4 | 0 | - | 0 | - | - | 0 | 0 |
+| IDLE | 43 | 131 | 2731 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| IDLM | 74 | 131 | 36 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| IMAD | 109 | 131 | 219 | 0 | - | 0 | 0 | 0 | 0 | 0 |
+| IMGS | 15 | 131 | 283 | - | - | 0 | - | 0 | 0 | 0 |
+| INFO | 45 | 131 | 7564 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| IPCT | 40 | 131 | 489 | 0 | - | 0 | 0 | - | 0 | 0 |
+| IPDS | 45 | 131 | 239 | 0 | - | 0 | 0 | - | 0 | 0 |
+| KSSM | 63 | 131 | 75 | 0 | - | 0 | 0 | - | 0 | 0 |
+| KYWD | 15 | 131 | 2750 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| LAND | 41 | 131 | 36171 | 0 | - | 0 | - | 0 | 0 | 0 |
+| LAYR | 45 | 131 | 3795 | 0 | - | 0 | - | 0 | 0 | 0 |
+| LCRT | 40 | 131 | 697 | 0 | - | 0 | - | 0 | 0 | 0 |
+| LCTN | 106 | 131 | 2 | 0 | - | 0 | - | 0 | 0 | 0 |
+| LENS | 119 | 131 | 30 | 0 | - | 0 | - | - | 0 | 0 |
+| LGTM | 34 | 131 | 65 | 0 | - | 0 | - | - | 0 | 0 |
+| LIGH | 63 | 131 | 752 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| LTEX | 42 | 131 | 101 | - | - | 0 | - | - | 0 | 0 |
+| LVLI | 59 | 131 | 1729 | 0 | - | 0 | 0 | 0 | 0 | 0 |
+| LVLN | 74 | 131 | 158 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| MATO | 18 | 39 | 26 | - | - | - | - | - | - | 0 |
+| MATT | 45 | 131 | 137 | - | - | 0 | 0 | - | 0 | 0 |
+| MISC | 86 | 131 | 110 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| MOVT | 24 | 131 | 77 | 0 | - | 0 | - | - | 0 | 0 |
+| MSTT | 99 | 131 | 197 | 0 | - | 0 | - | 0 | 0 | 0 |
+| MSWP | 54 | 131 | 2250 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| MUSC | 116 | 131 | 57 | 0 | - | 0 | - | - | 0 | 0 |
+| MUST | 26 | 131 | 501 | 0 | - | 0 | - | - | 0 | 0 |
+| NPC_ | 127 | 131 | 992 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| OTFT | 63 | 131 | 369 | 0 | - | 0 | - | 0 | 0 | 0 |
+| OVIS | 128 | 128 | 1 | - | - | - | - | - | - | 0 |
+| PACK | 40 | 131 | 3175 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| PGRE | 98 | 131 | 260 | - | - | 0 | - | - | 0 | 0 |
+| PHZD | 55 | 131 | 790 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| PKIN | 42 | 131 | 864 | 0 | - | 0 | - | 0 | 0 | 0 |
+| PMIS | 109 | 131 | 1 | - | - | 0 | - | - | - | 0 |
+| PROJ | 99 | 131 | 63 | 0 | - | 0 | 0 | - | 0 | 0 |
+| QUST | 45 | 131 | 472 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| REFR | 40 | 131 | 760930 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| REGN | 40 | 131 | 76 | - | - | 0 | - | - | 0 | 0 |
+| RELA | 75 | 131 | 63 | - | - | 0 | - | - | - | 0 |
+| REVB | 118 | 130 | 59 | - | - | - | - | - | - | 0 |
+| RFCT | 45 | 131 | 41 | 0 | - | 0 | - | - | 0 | 0 |
+| RFGP | 53 | 131 | 6029 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| SCCO | 68 | 131 | 173 | - | - | 0 | - | 0 | 0 | 0 |
+| SCEN | 57 | 131 | 2691 | 0 | - | 0 | - | 0 | 0 | 0 |
+| SCOL | 71 | 131 | 9 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| SCSN | 102 | 131 | 8 | - | - | - | - | - | - | 0 |
+| SMBN | 77 | 131 | 57 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| SMEN | 45 | 131 | 15 | - | - | 0 | - | - | - | 0 |
+| SMQN | 73 | 131 | 173 | 0 | 0 | 0 | - | 0 | 0 | 0 |
+| SNCT | 120 | 131 | 3 | - | - | - | - | - | - | 0 |
+| SNDR | 35 | 131 | 3164 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| SOPM | 63 | 131 | 196 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| SOUN | 57 | 131 | 217 | 0 | 0 | 0 | - | - | 0 | 0 |
+| SPGD | 124 | 131 | 3 | - | - | - | - | - | 0 | 0 |
+| STAG | 109 | 131 | 15 | 0 | - | 0 | - | - | 0 | 0 |
+| STAT | 25 | 131 | 1108 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| TACT | 118 | 131 | 3 | 0 | - | 0 | - | - | 0 | 0 |
+| TREE | 126 | 126 | 1 | - | - | - | - | - | - | 0 |
+| TRNS | 53 | 131 | 361 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| TXST | 60 | 131 | 351 | 0 | - | 0 | 0 | 0 | 0 | 0 |
+| VTYP | 16 | 131 | 531 | 0 | - | 0 | - | 0 | 0 | 0 |
+| WATR | 122 | 131 | 2 | - | - | 0 | - | - | 0 | 0 |
+| WTHR | 40 | 131 | 54 | - | - | 0 | 0 | - | 0 | 0 |
+| ZOOM | 109 | 131 | 13 | 0 | - | 0 | - | - | - | 0 |
+
+Version gates against the census (official masters):
+
+| Gate (source) | Signature | Min seen | Below gate, Fallout4.esm | Below gate, other official masters |
+|---|---|---:|---:|---:|
+| 30 (`src/environment/world.cpp:k_ambient_specular_form_version`) | CELL, LGTM | 40 / 34 | 0 | 0 |
+| 31 (`include/fo4/forms/weather.hpp:weather_color_groups`) | WTHR | 40 | 0 | 0 |
+| 35 (`src/forms/weather.cpp:k_weather_legacy_cloud_form_version`) | WTHR | 40 | 0 | 0 |
+| 37 (`include/fo4/forms/weather.hpp:weather_color_groups`) | WTHR | 40 | 0 | 0 |
+| 111 (`include/fo4/forms/weather.hpp:k_weather_eight_times_form_version`) | WTHR | 40 | 4 | 0 |
+| 119 (`include/fo4/forms/weather.hpp:weather_data_size`) | WTHR | 40 | 6 | 0 |
+| 120 (`include/fo4/forms/weather.hpp:weather_fnam_size`) | WTHR | 40 | 8 | 0 |
+| 130 (`include/fo4/forms/weather.hpp:weather_unam_size`) | WTHR | 40 | 50 | 0 |
+| 82 (`src/forms/quest_objectives.cpp:k_qsta_keyword_form_version`) | QUST | 45 | 28 | 0 |
+| 109 (`src/graph/reachability.cpp:k_race_weights_form_version`) | RACE | 131 | 0 | 0 |
+| 128 (`src/environment/navmesh.cpp`, `src/plugin/navmesh_writer.cpp`, `src/schema/form_link_mixed.cpp`) | NAVM | 131 | 0 | 0 |
+| 131 (`src/forms/race.cpp:k_current_form_version`) | RACE | 131 | 0 | 0 |
+| 152 (`src/schema/form_link_mixed.cpp:k_damage_curve_form_version`, 12-byte DAMA layout) | DAMA | absent | 0 | 0 |
+
+Record types below 131 that have no gate in this list: VTYP (16 to 128), DMGT (63 to 129), GDRY (122 to 128), MATO (18 to 39), REVB (118 to 130), SPGD (124 to 128), TREE (126), OVIS (128). The census records them only.
 
 ## Group header (24 bytes)
 
