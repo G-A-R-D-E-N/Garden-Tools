@@ -2,6 +2,8 @@
 
 #include "record_reader.hpp"
 
+#include <algorithm>
+
 namespace fo4::env {
 namespace {
 
@@ -22,6 +24,37 @@ std::optional<std::string_view> text(const Reader& reader, Signature tag) {
 void links(const Reader& reader, const Subrecord& sub, std::vector<FormKey>& out) {
   if (sub.data.size() % 4 != 0) reader.fail(sub.signature, "must contain complete four-byte links");
   for (std::size_t i = 0; i < sub.data.size(); i += 4) out.push_back(reader.link_at(sub, i));
+}
+
+constexpr std::size_t k_max_sound_depth = 8;
+
+const RecordRef& linked(const Environment& env, const Record& owner, Signature link,
+                        const std::optional<FormKey>& key) {
+  const auto* target = key ? env.winner(*key) : nullptr;
+  if (target == nullptr) Reader::fail(owner, link, "must link to a loaded sound descriptor");
+  return *target;
+}
+
+void collect_descriptor(const Environment& env, const RecordRef& ref, std::size_t depth,
+                        std::vector<FormKey>& path, std::vector<std::string_view>& out) {
+  const auto& record = *ref.record;
+  if (depth >= k_max_sound_depth) Reader::fail(record, sig("SNDR"), "exceeds the sound descriptor depth limit");
+  if (std::find(path.begin(), path.end(), record.form_key) != path.end()) {
+    Reader::fail(record, sig("SNDR"), "links back to an ancestor descriptor");
+  }
+  path.push_back(record.form_key);
+  const auto data = decode_sound_descriptor(env, ref);
+  if (!data.kind || *data.kind == 0x1EEF540Au) {
+    out.insert(out.end(), data.files.begin(), data.files.end());
+  } else if (*data.kind == 0x54651A43u) {
+    for (const auto& child : data.descriptors) {
+      collect_descriptor(env, linked(env, record, sig("DNAM"), child), depth + 1, path, out);
+    }
+  } else {
+    collect_descriptor(env, linked(env, record, sig("BNAM"), data.base_descriptor), depth + 1, path, out);
+    for (const auto& rate : data.rate_files) out.push_back(rate.file);
+  }
+  path.pop_back();
 }
 
 }
@@ -152,6 +185,18 @@ FootstepSetData decode_footstep_set(const Environment& env, const RecordRef& ref
     for (std::uint32_t i = 0; i < counts[category]; ++i, offset += 4) {
       out.categories[category].push_back(reader.link_at(*data, offset));
     }
+  }
+  return out;
+}
+
+std::vector<std::string_view> resolve_sound_files(const Environment& env, const RecordRef& ref) {
+  std::vector<std::string_view> out;
+  std::vector<FormKey> path;
+  if (ref.record->header.signature == sig("SOUN")) {
+    const auto marker = decode_sound_marker(env, ref);
+    collect_descriptor(env, linked(env, *ref.record, sig("SDSC"), marker.descriptor), 0, path, out);
+  } else {
+    collect_descriptor(env, ref, 0, path, out);
   }
   return out;
 }

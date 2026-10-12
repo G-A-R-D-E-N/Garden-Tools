@@ -43,6 +43,18 @@ public sealed unsafe partial class RadicleEnvironment
         finally { RadicleNative.SoundDescriptorFree(d); }
     }
 
+    public IReadOnlyList<string> SoundFiles(Record record)
+    {
+        using var use = Use(record);
+        Native.SoundFileList* list;
+        Call.Check(RadicleNative.SoundResolveFiles(use.Pointer, record.Handle, &list));
+        try
+        {
+            return Call.Copy<Native.SoundFile>(list->Files, list->FileCount).Select(f => Utf8.Read(f.Path)!).ToArray();
+        }
+        finally { RadicleNative.SoundFileListFree(list); }
+    }
+
     public SoundMarker SoundMarker(Record record)
     {
         using var use = Use(record);

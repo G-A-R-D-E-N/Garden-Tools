@@ -162,4 +162,104 @@ TEST_F(SoundTest, RepeatOptionalTailAndFootstepCategoriesPreservePresenceAndOrde
   EXPECT_THROW(fo4::env::decode_footstep_set(env, record(env, 0x800)), fo4::env::WorldDecodeError);
 }
 
+TEST_F(SoundTest, MarkerToStandardResolvesFilesNativelyAndThroughTheCAbi) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x1EEF540A})}, {"ANAM", text("sound\\one.xwm")}, {"ANAM", text("sound\\two.wav")}}},
+         {"SOUN", 0x801, {{"SDSC", words({0x800})}}}});
+  const auto env = load();
+  const std::vector<std::string_view> want{"sound\\one.xwm", "sound\\two.wav"};
+  EXPECT_EQ(fo4::env::resolve_sound_files(env, record(env, 0x800)), want);
+  EXPECT_EQ(fo4::env::resolve_sound_files(env, record(env, 0x801)), want);
+  const auto name = path.string(); const char* names[] = {name.c_str()}; radicle_env* abi = nullptr;
+  ASSERT_EQ(radicle_env_load(names, 1, &abi), RADICLE_STATUS_OK);
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Sound.esm", 0x801}, &handle), RADICLE_STATUS_OK);
+  const radicle_sound_file_list* list = nullptr;
+  ASSERT_EQ(radicle_sound_resolve_files(abi, handle, &list), RADICLE_STATUS_OK);
+  ASSERT_EQ(list->file_count, 2u);
+  EXPECT_STREQ(list->files[0].path, "sound\\one.xwm"); EXPECT_STREQ(list->files[1].path, "sound\\two.wav");
+  radicle_sound_file_list_free(list); radicle_env_destroy(abi);
+}
+
+TEST_F(SoundTest, CompoundConcatenatesChildFilesInDescriptorOrder) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x801})}, {"DNAM", words({0x802})}}},
+         {"SNDR", 0x801, {{"CNAM", words({0x1EEF540A})}, {"ANAM", text("a.wav")}}},
+         {"SNDR", 0x802, {{"CNAM", words({0x1EEF540A})}, {"ANAM", text("b.wav")}, {"ANAM", text("c.wav")}}}});
+  const auto env = load();
+  EXPECT_EQ(fo4::env::resolve_sound_files(env, record(env, 0x800)), (std::vector<std::string_view>{"a.wav", "b.wav", "c.wav"}));
+}
+
+TEST_F(SoundTest, AutoWeaponResolvesBaseFilesThenRateFiles) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x1EEF540A})}, {"ANAM", text("base.wav")}}},
+         {"SNDR", 0x801, {{"CNAM", words({0xED157AE3})}, {"BNAM", words({0x800})}, {"ITMC", words({2})},
+          {"ITMS", {}}, {"INTV", words({600})}, {"FNAM", text("r1.wav")}, {"ITME", {}},
+          {"ITMS", {}}, {"INTV", words({900})}, {"FNAM", text("r2.wav")}, {"ITME", {}}}}});
+  const auto env = load();
+  EXPECT_EQ(fo4::env::resolve_sound_files(env, record(env, 0x801)),
+            (std::vector<std::string_view>{"base.wav", "r1.wav", "r2.wav"}));
+}
+
+TEST_F(SoundTest, DescriptorCyclesFailClosed) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x801})}}},
+         {"SNDR", 0x801, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x800})}}},
+         {"SNDR", 0x802, {{"CNAM", words({0xED157AE3})}, {"BNAM", words({0x802})}}},
+         {"SOUN", 0x803, {{"SDSC", words({0x800})}}}});
+  const auto env = load();
+  for (const std::uint32_t id : {0x800u, 0x802u, 0x803u}) {
+    EXPECT_THROW(fo4::env::resolve_sound_files(env, record(env, id)), fo4::env::WorldDecodeError);
+  }
+}
+
+TEST_F(SoundTest, UnresolvedLinksFailClosed) {
+  write({{"SOUN", 0x800, {{"SDSC", words({0x900})}}}, {"SOUN", 0x801, {}},
+         {"SNDR", 0x802, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x900})}}},
+         {"SNDR", 0x803, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0})}}},
+         {"SNDR", 0x804, {{"CNAM", words({0xED157AE3})}}}});
+  const auto env = load();
+  for (const std::uint32_t id : {0x800u, 0x801u, 0x802u, 0x803u, 0x804u}) {
+    EXPECT_THROW(fo4::env::resolve_sound_files(env, record(env, id)), fo4::env::WorldDecodeError);
+  }
+}
+
+TEST_F(SoundTest, UnknownKindAndNonSoundTargetsFailClosed) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x1234})}, {"ANAM", text("x.wav")}}},
+         {"SOUN", 0x801, {{"SDSC", words({0x800})}}}, {"FSTP", 0x802, {{"DATA", words({0})}}},
+         {"SOUN", 0x803, {{"SDSC", words({0x802})}}}});
+  const auto env = load();
+  for (const std::uint32_t id : {0x800u, 0x801u, 0x802u, 0x803u}) {
+    EXPECT_THROW(fo4::env::resolve_sound_files(env, record(env, id)), fo4::env::WorldDecodeError);
+  }
+}
+
+TEST_F(SoundTest, ChainsStopAtTheDepthLimitOfEightDescriptors) {
+  for (const std::uint32_t levels : {7u, 8u}) {
+    std::vector<Rec> records;
+    for (std::uint32_t i = 0; i < levels; ++i) {
+      records.push_back({"SNDR", 0x800 + i, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x801 + i})}}});
+    }
+    records.push_back({"SNDR", 0x800 + levels, {{"CNAM", words({0x1EEF540A})}, {"ANAM", text("deep.wav")}}});
+    write(records);
+    const auto env = load();
+    if (levels == 7) {
+      EXPECT_EQ(fo4::env::resolve_sound_files(env, record(env, 0x800)), (std::vector<std::string_view>{"deep.wav"}));
+    } else {
+      EXPECT_THROW(fo4::env::resolve_sound_files(env, record(env, 0x800)), fo4::env::WorldDecodeError);
+    }
+  }
+}
+
+TEST_F(SoundTest, CAbiRejectsACycleAndNullArgumentsWithoutAList) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x800})}}}});
+  const auto name = path.string(); const char* names[] = {name.c_str()}; radicle_env* abi = nullptr;
+  ASSERT_EQ(radicle_env_load(names, 1, &abi), RADICLE_STATUS_OK);
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Sound.esm", 0x800}, &handle), RADICLE_STATUS_OK);
+  const radicle_sound_file_list* list = nullptr;
+  EXPECT_NE(radicle_sound_resolve_files(abi, handle, &list), RADICLE_STATUS_OK);
+  EXPECT_EQ(list, nullptr);
+  EXPECT_EQ(radicle_sound_resolve_files(nullptr, handle, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_sound_resolve_files(abi, nullptr, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_sound_resolve_files(abi, handle, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_env_destroy(abi);
+}
+
 }

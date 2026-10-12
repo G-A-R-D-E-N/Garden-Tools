@@ -621,6 +621,10 @@ int main() {
   printf("FootstepSet.Steps %zu\n", offsetof(radicle_footstep_set, steps));
   printf("FootstepSet.StepCount %zu\n", offsetof(radicle_footstep_set, step_count));
   printf("FootstepSet.Internal %zu\n", offsetof(radicle_footstep_set, internal));
+  printf("SoundFileList %zu\n", sizeof(radicle_sound_file_list));
+  printf("SoundFileList.Files %zu\n", offsetof(radicle_sound_file_list, files));
+  printf("SoundFileList.FileCount %zu\n", offsetof(radicle_sound_file_list, file_count));
+  printf("SoundFileList.Internal %zu\n", offsetof(radicle_sound_file_list, internal));
   printf("PexHeader %zu\n", sizeof(radicle_pex_header));
   printf("PexHeader.MajorVersion %zu\n", offsetof(radicle_pex_header, major_version));
   printf("PexHeader.MinorVersion %zu\n", offsetof(radicle_pex_header, minor_version));

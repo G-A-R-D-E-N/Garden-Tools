@@ -54,13 +54,13 @@ The remaining runtime questions are tracked in
 
 The native environment read functions are in `environment/sound.hpp`; the
 separate `c_api_sound.h` exposes owned descriptor/music/footstep-set arrays and
-fixed marker/footstep views. The generator reads that header and C# copies the
-arrays before releasing their holders. The current ABI is 27 against main ABI 26;
+fixed marker/footstep views, and `radicle_sound_resolve_files` returns an owned file list released by `radicle_sound_file_list_free`. The generator reads that header and C# copies the
+arrays before releasing their holders. The current ABI is 34;
 re-bump it if another ABI PR lands first.
 
 `test_sound_real.cpp` visits every sound-record version through both native
 and C ABI getters, checks native/C value agreement for all exposed fields, then compares untouched serialization with the original
-master bytes. It skips cleanly with game data unset. Native synthetic cases
+master bytes, and each SNDR record slice after a write and reread. It counts SOUN markers whose SDSC resolves in the loaded master but does not give a non-empty path (`SoundMarkerUnresolved`); markers whose SDSC is not in that master are counted separately (`SoundMarkerCrossMaster`). It skips cleanly with game data unset. Native synthetic cases
 exercise union selection, malformed groups, optional tails and reversed
 category ordering; managed getter tests cover all five record families.
 Local and CI results are recorded separately for each published head.
@@ -70,6 +70,17 @@ consumer or marker-to-descriptor conversion path. Record vocabulary and generic
 reference discovery are present; generic Godot audio commands do not consume
 these forms. Its #144 audio runtime must supply that path before the requested
 GardenEngine probe can exercise it.
+
+## Marker-to-file resolution
+
+`resolve_sound_files` (`src/environment/sound.cpp:resolve_sound_files`, C ABI `radicle_sound_resolve_files`) returns the sound file paths that a SOUN marker or SNDR descriptor plays:
+
+- SOUN: follows its SDSC link to the SNDR.
+- Standard (CNAM `1EEF540A`, or no CNAM): the ANAM files in stored order. A descriptor with no ANAM files resolves to an empty list.
+- Compound (`54651A43`): each DNAM child resolved recursively, concatenated in stored order. The Compound's own ANAM and rate blocks are not read.
+- AutoWeapon (`ED157AE3`): the BNAM base descriptor resolved recursively, then its rate files in stored order.
+
+Chains are capped at eight descriptor levels, and a descriptor that reaches one of its own ancestors is a cycle; a child shared by two branches is allowed. A missing or unresolved link, a marker without SDSC, a non-SNDR target, an unknown kind, a depth overflow or a cycle fails closed: the native call throws `WorldDecodeError`, the C ABI returns a non-OK status with a null list, and no partial list is returned.
 
 ## Editing
 
@@ -125,7 +136,7 @@ Exit codes: PASS 0; SKIP 77 when `FO4_DATA_DIR` is unset; FAIL 1, printed as `so
 What each assertion proves, on the first winner of each signature in `Fallout4.esm` that carries the checked link (the probe picks the first record that carries the link, and fails if none does):
 - SNDR: CNAM kind is Standard, Compound or AutoWeapon; only Standard exposes Playback, and its LNAM controls are four bytes.
 - SNDR links: GNAM resolves to SNCT, SNAM to SNDR, ONAM to SOPM, BNAM base and DNAM descriptors to SNDR.
-- SOUN: SDSC resolves to an SNDR that `SoundDescriptor` decodes; a REPT stackable byte is 0..1.
+- SOUN: SDSC resolves to an SNDR that `SoundDescriptor` decodes; `SoundFiles` returns a non-empty path for the marker, printed as `MarkerFile`; a REPT stackable byte is 0..1.
 - MUSC: every non-null TNAM track resolves to MUST.
 - FSTP: a non-null DATA impact set resolves to IPDS.
 

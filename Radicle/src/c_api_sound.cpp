@@ -26,6 +26,11 @@ struct FootstepSetHolder {
   std::vector<radicle_form_key> steps;
 };
 
+struct FileListHolder {
+  radicle_sound_file_list view{};
+  std::vector<radicle_sound_file> files;
+};
+
 bool valid(const radicle_env* env, const radicle_record* record, const void* output) {
   return env && record && output;
 }
@@ -164,6 +169,28 @@ radicle_status radicle_footstep_set_decode(const radicle_env* env, const radicle
 
 void radicle_footstep_set_free(const radicle_footstep_set* set) {
   if (set) delete static_cast<FootstepSetHolder*>(set->internal);
+}
+
+radicle_status radicle_sound_resolve_files(const radicle_env* env, const radicle_record* record,
+                                           const radicle_sound_file_list** out_list) {
+  clear_error();
+  if (out_list) *out_list = nullptr;
+  if (!valid(env, record, out_list)) return invalid();
+  if (!belongs_to_env(env, to_ref(record))) return foreign();
+  return guarded("unknown exception while resolving sound files", [&] {
+    const auto paths = fo4::env::resolve_sound_files(env->value, *to_ref(record));
+    auto holder = std::make_unique<FileListHolder>();
+    for (const auto path : paths) holder->files.push_back({stored_text(*env, path)});
+    holder->view.files = holder->files.data();
+    holder->view.file_count = holder->files.size();
+    holder->view.internal = holder.get();
+    *out_list = &holder.release()->view;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+void radicle_sound_file_list_free(const radicle_sound_file_list* list) {
+  if (list) delete static_cast<FileListHolder*>(list->internal);
 }
 
 }
