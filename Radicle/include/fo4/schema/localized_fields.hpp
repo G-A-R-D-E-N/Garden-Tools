@@ -30,9 +30,14 @@ bool is_localized_field(Signature record, Signature subrecord) noexcept;
 // Decoding keeps whichever form the file used, so a write-back reproduces the
 // original bytes and no language choice is baked into the SDK. Resolve an ID
 // through fo4::localization when display text is wanted.
+//
+// A localized payload that is not four bytes has no ID and no text; its bytes
+// are kept in raw_id and written back unchanged. Build a new value to change
+// the ID; writing returns raw_id before id.
 struct LocalizedString {
   std::optional<std::uint32_t> id;
   std::optional<std::string> text;
+  std::optional<std::vector<std::byte>> raw_id;
 
   bool localized() const noexcept { return id.has_value(); }
   // Inline text when present; empty for an unresolved string ID.
@@ -40,8 +45,7 @@ struct LocalizedString {
 };
 
 // Reads a string subrecord according to the plugin's localized flag and the
-// schema. Throws if a localized payload is not exactly four bytes, or if
-// inline text is not a single NUL-terminated string.
+// schema. Throws only if inline text is not a single NUL-terminated string.
 LocalizedString read_localized_string(const Plugin& plugin,
                                       Signature record,
                                       Signature subrecord,

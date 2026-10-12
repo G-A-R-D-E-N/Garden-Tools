@@ -1900,3 +1900,17 @@ Rewrites PATH entries under the real Windows profile to the neutral runner host 
 The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3984-3990 @93cc0bc5` (`wbVMADFragmentedQUST`) wraps Script Data in `wbUnion` with `source:xEdit Core/wbDefinitionsCommon.pas:5866-5876 @93cc0bc5` (`wbScriptFragmentsEmptyScriptDecider`), which picks `wbNull` for an empty ScriptName. So `walk_quest_extra` and `read_quest_vmad_extras` keep the empty-name guard for that header only.
 
 Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.
+
+## .github/workflows/native-ci.yml:workflow_dispatch, native-windows-tests
+
+The branch previously provided an optional `lane=radicle-cross` dispatch. Integration with main supersedes that dispatch: the current workflow has no lane input or path gate, and every pull request runs the required Linux Debug and Windows MSVC suites, including documentation-only changes. The cross builds remain limited to main and manual runs.
+
+The earlier branch workflow retained a Windows Release test artifact for seven days. The current main workflow has no successful-run MSVC test artifact upload. Official-data validation therefore uses a fresh local build at the recorded head; downloading a binary is not a test result.
+
+## Radicle/CMakeLists.txt:FO4_TESTDATA_DIR, gtest_discover_tests
+
+`fo4_tests` uses the relative `testdata` fixture directory, and CTest runs its discovered cases from the Radicle source directory. A downloaded CI executable must likewise run from the matching checkout's `Radicle` directory. This avoids embedding the CI checkout path in the fixture lookup while keeping committed fixtures separate from the installed-game directory supplied through `FO4_DATA_DIR`.
+
+## Radicle/src/schema/localized_fields.cpp:read_localized_string, Radicle/CMakeLists.txt:gtest_discover_tests
+
+The current-main integration retains the flag-boundary and zero-ID tests, portable fixtures, and main's field-address generator test. No localized-string decoder behavior or C ABI declarations change; nomad/dev's ABI 33 remains current (`Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION`). NG reader semantics, CK table emission and language ownership, and live transformation acceptance remain open under #390.
