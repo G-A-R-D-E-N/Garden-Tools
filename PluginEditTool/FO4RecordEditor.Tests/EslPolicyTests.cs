@@ -44,6 +44,16 @@ public class EslPolicyTests
         }
     }
 
+    private static int CountNotifications(string plugin, Action act)
+    {
+        var count = 0;
+        Action<string> handler = name => { if (name == plugin) count++; };
+        WriteService.PluginChanged += handler;
+        try { act(); }
+        finally { WriteService.PluginChanged -= handler; }
+        return count;
+    }
+
     [Fact]
     public void MasterlessPlugin_RemapsBelowSlotRecordsIntoLegacyRange()
     {
@@ -185,9 +195,50 @@ public class EslPolicyTests
         mod.ModHeader.Stats.NextFormID = 0x5000;
         var exec = new PluginToolExecutor(() => null);
 
-        exec.Execute("compact_to_esl", Args(plugin))
-            .Should().Contain("already has all native form IDs within 0x800-0xFFF").And.Contain("lowered HEDR next object ID to 0x901");
+        var result = "";
+        var notifications = CountNotifications(plugin, () => result = exec.Execute("compact_to_esl", Args(plugin)));
+
+        result.Should().Contain("already has all native form IDs within 0x800-0xFFF").And.Contain("lowered HEDR next object ID to 0x901");
         mod.ModHeader.Stats.NextFormID.Should().Be(0x901u);
+        notifications.Should().Be(1);
+    }
+
+    [Fact]
+    public void CompactToEsl_AlreadyCompatiblePluginWithNoLowerNeededDoesNotNotify()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x900, "Noop_A");
+        var exec = new PluginToolExecutor(() => null);
+
+        var result = "";
+        var notifications = CountNotifications(plugin, () => result = exec.Execute("compact_to_esl", Args(plugin)));
+
+        result.Should().Contain("already ESL-compatible");
+        notifications.Should().Be(0);
+    }
+
+    [Fact]
+    public void CompactToEsl_RefusesPluginWhereAFormKeyIsSharedByTwoRecords()
+    {
+        var plugin = NewPlugin(1f, withMaster: false);
+        var mod = WriteService.GetMutable(plugin)!;
+        AddWeapon(mod, 0x700, "Dup_Low");
+        AddWeapon(mod, 0x5000, "Dup_Weapon");
+        mod.Keywords.Add(new Keyword(new FormKey(mod.ModKey, 0x5000), Fallout4Release.Fallout4) { EditorID = "Dup_Keyword" });
+        var exec = new PluginToolExecutor(() => null);
+        var before = mod.EnumerateMajorRecords().Count();
+        var nextBefore = mod.ModHeader.Stats.NextFormID;
+
+        var result = "";
+        var notifications = CountNotifications(plugin, () => result = exec.Execute("compact_to_esl", Args(plugin)));
+
+        result.Should().Contain("Cannot compact").And.Contain("005000").And.Contain("shared by 2 records");
+        mod.EnumerateMajorRecords().Count().Should().Be(before);
+        mod.Weapons.First(w => w.EditorID == "Dup_Low").FormKey.ID.Should().Be(0x700u);
+        mod.Weapons.First(w => w.EditorID == "Dup_Weapon").FormKey.ID.Should().Be(0x5000u);
+        mod.ModHeader.Stats.NextFormID.Should().Be(nextBefore);
+        notifications.Should().Be(0);
     }
 
     [Fact]
