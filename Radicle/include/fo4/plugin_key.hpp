@@ -15,6 +15,7 @@ public:
   std::string_view filename() const noexcept { return filename_; }
   bool empty() const noexcept { return filename_.empty(); }
   bool looks_light() const noexcept;
+  bool looks_master() const noexcept;
 
   friend bool operator==(const PluginKey& a, const PluginKey& b) noexcept;
   friend bool operator<(const PluginKey& a, const PluginKey& b) noexcept;

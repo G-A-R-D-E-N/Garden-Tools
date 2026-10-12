@@ -224,8 +224,7 @@ Group* ensure_reference_bucket(Group& cell_children,
 
 PluginKind owner_kind(const Plugin& source, const PluginKey& owner) {
   if (owner == source.key) {
-    return source.header.tes4_flags.is_small_file() ? PluginKind::light
-                                                   : PluginKind::full;
+    return classify_plugin_kind(source.header.tes4_flags, source.key);
   }
   for (const auto& master : source.header.masters) {
     if (master.key == owner) return master.kind;

@@ -356,6 +356,12 @@ TEST(Mutation, LightPluginRangeStartsAtOneAndStopsAtTwelveBits) {
   EXPECT_EQ(fhi, 0xFFFFFFu);
 }
 
+TEST(Mutation, EslExtensionWithoutLightFlagUsesLightRange) {
+  const auto extension = fo4::read_plugin(make_lifecycle_plugin(0x900, false, true), "Lifecycle.esl");
+  EXPECT_FALSE(extension.header.tes4_flags.is_small_file());
+  EXPECT_EQ(fo4::local_form_id_range(extension), (std::pair<std::uint32_t, std::uint32_t>{0x001u, 0xFFFu}));
+}
+
 TEST(Mutation, LightPluginKeepsTheFullFloorWithoutHedrOneAndAMaster) {
   const auto masterless = fo4::read_plugin(make_lifecycle_plugin(0x900, true), "Lifecycle.esl");
   EXPECT_FALSE(fo4::allows_hardcoded_range(masterless));

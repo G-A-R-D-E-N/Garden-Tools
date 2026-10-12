@@ -403,8 +403,7 @@ std::size_t RecordIndex::FormKeyHash::operator()(const FormKey& form_key) const 
 PluginFormIdContext plugin_form_id_context(const Plugin& plugin) {
   PluginFormIdContext context;
   context.current_plugin = plugin.key;
-  context.current_kind =
-      plugin.header.tes4_flags.is_small_file() ? PluginKind::light : PluginKind::full;
+  context.current_kind = classify_plugin_kind(plugin.header.tes4_flags, plugin.key);
   context.masters.reserve(plugin.header.masters.size());
   for (const auto& master : plugin.header.masters) {
     context.masters.push_back(MasterDescriptor{master.key, master.kind});
@@ -427,8 +426,7 @@ void stamp_master_kinds(Plugin& plugin, std::span<const Plugin> loaded_masters) 
   std::vector<MasterDescriptor> known;
   known.reserve(loaded_masters.size());
   for (const auto& loaded : loaded_masters) {
-    const auto kind =
-        loaded.header.tes4_flags.is_small_file() ? PluginKind::light : PluginKind::full;
+    const auto kind = classify_plugin_kind(loaded.header.tes4_flags, loaded.key);
     known.push_back(MasterDescriptor{loaded.key, kind});
   }
   apply_master_kinds(plugin, known);

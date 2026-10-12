@@ -140,4 +140,12 @@ FormKey resolve_runtime_form_id(RawFormId raw, const RuntimeFormIdContext& conte
   return FormKey{context.full_plugins[index].key, LocalFormId{raw.local_24()}};
 }
 
+PluginKind classify_plugin_kind(RecordFlags tes4_flags, const PluginKey& key) noexcept {
+  return tes4_flags.is_small_file() || key.looks_light() ? PluginKind::light : PluginKind::full;
+}
+
+bool is_master_plugin(RecordFlags tes4_flags, const PluginKey& key) noexcept {
+  return tes4_flags.is_master() || key.looks_master();
+}
+
 }  // namespace fo4

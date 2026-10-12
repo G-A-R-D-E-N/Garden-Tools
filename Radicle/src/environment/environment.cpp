@@ -49,7 +49,7 @@ std::optional<std::string_view> editor_id_of(const Record& record) noexcept {
 }
 
 PluginKind kind_of(const Plugin& plugin) noexcept {
-  return plugin.header.tes4_flags.is_small_file() ? PluginKind::light : PluginKind::full;
+  return classify_plugin_kind(plugin.header.tes4_flags, plugin.key);
 }
 
 }  // namespace
@@ -134,7 +134,7 @@ Environment Environment::load(std::span<const std::filesystem::path> ordered_pat
     info.key = plugin.key;
     info.path = plugin.path;
     info.kind = kind_of(plugin);
-    info.master_flag = plugin.header.tes4_flags.is_master();
+    info.master_flag = is_master_plugin(plugin.header.tes4_flags, plugin.key);
     info.localized = plugin.header.tes4_flags.is_localized();
     for (const auto& master : plugin.header.masters) {
       info.masters.push_back(master.key);
