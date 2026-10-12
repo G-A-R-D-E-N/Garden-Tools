@@ -1924,6 +1924,10 @@ The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3
 
 Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.
 
+## Radicle/src/schema/localized_fields.cpp:read_localized_string, Radicle/CMakeLists.txt:gtest_discover_tests
+
+The current-main integration retains the flag-boundary and zero-ID tests, portable fixtures, and main's field-address generator test. No localized-string decoder behavior or C ABI declarations change, so `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is unchanged. NG reader semantics, CK table emission and language ownership, and live transformation acceptance remain open under #390.
+
 ## .github/workflows/native-ci.yml:native-linux — failure artifact
 
 `native-linux-failure` keeps only what diagnoses a failed Linux run: the CTest tree (`build/native/Testing/**`, whose `LastTest.log` holds every test's output), the CMake logs (`build/native/**/*.log`, `build/native/CMakeFiles/CMakeConfigureLog.yaml`) and `build/native/CMakeCache.txt`. It no longer uploads `build/native/bin/**`. That directory holds the Debug test and tool executables with debug information, and each upload was 360-470 MB. Compiler and linker errors appear in the step log, so no compiler log file is uploaded. Retention is 3 days. To inspect a failing test binary, rebuild the same commit locally.
