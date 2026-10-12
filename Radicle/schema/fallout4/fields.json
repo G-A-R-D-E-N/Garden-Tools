@@ -625,6 +625,276 @@
       ]
     },
     {
+      "signature": "FLOR",
+      "fields": [
+        {
+          "path": "FLOR\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 2,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\Spring",
+          "label": "Spring",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\Summer",
+          "label": "Summer",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\Fall",
+          "label": "Fall",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\Winter",
+          "label": "Winter",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "FLOR\\Ingredient",
+          "label": "Ingredient",
+          "subrecord": "PFIG",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["ALCH", "AMMO", "ARMO", "BOOK", "INGR", "KEYM", "LIGH", "LVLI", "MISC", "NOTE", "WEAP"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\HarvestSound",
+          "label": "Harvest sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["SNDR"],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "PTRN", "minimum": 0, "maximum": 1 },
+          { "signature": "FULL", "minimum": 1, "maximum": 1, "default": "00" },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DAMC", "minimum": 0, "maximum": 1 },
+          { "signature": "DSTD", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTA", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDL", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDT", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDC", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDS", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTF", "minimum": 0, "maximum": 255 },
+          { "signature": "KSIZ", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "KWDA", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "PRPS", "minimum": 0, "maximum": 1 },
+          { "signature": "PNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "ATTX", "minimum": 0, "maximum": 1 },
+          { "signature": "RNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "FNAM", "minimum": 0, "maximum": 1, "default": "0000" },
+          { "signature": "PFIG", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "SNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "PFPC", "minimum": 1, "maximum": 1, "default": "00000000" }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL",
+        "ATTX",
+        "RNAM"
+      ]
+    },
+    {
+      "signature": "GRAS",
+      "fields": [
+        {
+          "path": "GRAS\\Density",
+          "label": "Density",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\MinSlope",
+          "label": "Min slope",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\MaxSlope",
+          "label": "Max slope",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\UnitsFromWater",
+          "label": "Units from water",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\UnitsFromWaterType",
+          "label": "Units from water type",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 7,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\PositionRange",
+          "label": "Position range",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\HeightRange",
+          "label": "Height range",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\ColorRange",
+          "label": "Color range",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\WavePeriod",
+          "label": "Wave period",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "GRAS\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 28,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "1e005a00000000000000000000000042cdcc4c3e0000003f0000204100000000" }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
       "signature": "HAZD",
       "fields": [
         {
@@ -818,6 +1088,32 @@
       "localized_subrecords": [
         "FULL"
       ]
+    },
+    {
+      "signature": "LTEX",
+      "fields": [],
+      "formlink_lists": [
+        {
+          "path": "LTEX\\Grasses",
+          "label": "Grasses",
+          "subrecord": "GNAM",
+          "targets": ["GRAS"],
+          "nullable": false,
+          "mutation": "appendable"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "TNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "MNAM", "minimum": 1, "maximum": 1, "default": "00000000" },
+          { "signature": "HNAM", "minimum": 1, "maximum": 1, "default": "1e1e" },
+          { "signature": "SNAM", "minimum": 1, "maximum": 1, "default": "1e" },
+          { "signature": "GNAM", "minimum": 0, "maximum": 65535, "uncounted": true }
+        ]
+      },
+      "localized_subrecords": []
     },
     {
       "signature": "LVSP",
@@ -1452,6 +1748,262 @@
         }
       ],
       "localized_subrecords": []
+    },
+    {
+      "signature": "TREE",
+      "fields": [
+        {
+          "path": "TREE\\TrunkFlexibility",
+          "label": "Trunk flexibility",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\BranchFlexibility",
+          "label": "Branch flexibility",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\TrunkAmplitude",
+          "label": "Trunk amplitude",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\FrontAmplitude",
+          "label": "Front amplitude",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\BackAmplitude",
+          "label": "Back amplitude",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\SideAmplitude",
+          "label": "Side amplitude",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\FrontFrequency",
+          "label": "Front frequency",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\BackFrequency",
+          "label": "Back frequency",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\SideFrequency",
+          "label": "Side frequency",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\LeafFlexibility",
+          "label": "Leaf flexibility",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 36,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\LeafAmplitude",
+          "label": "Leaf amplitude",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\LeafFrequency",
+          "label": "Leaf frequency",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 48,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\Spring",
+          "label": "Spring",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\Summer",
+          "label": "Summer",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\Fall",
+          "label": "Fall",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\Winter",
+          "label": "Winter",
+          "kind": "scalar",
+          "subrecord": "PFPC",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "TREE\\Ingredient",
+          "label": "Ingredient",
+          "subrecord": "PFIG",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["ACTI", "ADDN", "ALCH", "AMMO", "ARMO", "ARTO", "ASPC", "BNDS", "BOOK", "CMPO", "COBJ", "CONT", "DEBR", "DOOR", "EXPL", "FLST", "FLOR", "FURN", "HAZD", "IDLM", "INGR", "KEYM", "LIGH", "LVLI", "LVLN", "LVSP", "MISC", "MSTT", "NOTE", "NPC_", "OMOD", "PROJ", "SCOL", "SCRL", "SOUN", "SPEL", "STAT", "TACT", "TERM", "TREE", "TXST", "WATR", "WEAP", "ENCH"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TREE\\HarvestSound",
+          "label": "Harvest sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "PFIG", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "SNAM", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "PFPC", "minimum": 0, "maximum": 1, "default": "00000000" },
+          { "signature": "FULL", "minimum": 0, "maximum": 1 },
+          { "signature": "CNAM", "minimum": 1, "maximum": 1, "default": "0000803f0000803f00000000000000000000000000000000000000000000000000000000000000000000803f0000803f" }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
     },
     {
       "signature": "WTHR",
