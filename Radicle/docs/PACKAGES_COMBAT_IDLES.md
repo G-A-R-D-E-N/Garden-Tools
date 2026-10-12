@@ -67,4 +67,4 @@ New synthetic tests cover raw values, scoped package fields, location/target var
 
 Prior published head `3c53c8630cf23636232acc6823cb6a23771ba154` writer validation: both full suites had zero failures across 874 registered cases. The official run has 863 passes and 11 unrelated skips, including all 14 new official order/mutation cases passing; managed bindings have 86 passes. The focused seven-master writer run took 89.66 seconds. Reader regressions and the duplicate-PKCU strict-remap refusal were proven red before their fixes and green afterward. Independent read-only review and its follow-up accepted the changes. Evidence: (local run; not committed).
 
-ABI 32 reconciles this branch with main ABI 31. Re-bump it if another ABI PR merges first. Local official-data acceptance and current-head CI are separate results.
+#408 landed at ABI 32, after main's ABI 31. Local official-data acceptance and current-head CI are separate results.
