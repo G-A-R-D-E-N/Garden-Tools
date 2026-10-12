@@ -15,7 +15,8 @@ std::optional<std::vector<std::size_t>> struct_payload_formid_offsets(const Reco
                                                                      const Subrecord& sub,
                                                                      bool strict_remap);
 std::optional<std::vector<std::size_t>> obts_formid_offsets(const Subrecord& sub);
-bool perk_epfd_is_formid(const Record& record, const Subrecord& sub);
+std::optional<std::vector<std::size_t>> perk_formid_offsets(const Record& record,
+                                                           const Subrecord& sub);
 std::optional<std::vector<std::size_t>> packed_formid_array_offsets(const Record& record,
                                                                    const Subrecord& sub,
                                                                    bool strict_remap);
