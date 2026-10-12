@@ -99,4 +99,28 @@ public class SkyParameterTests
         Assert.Equal((moons & 128) != 0, timing.UsesMasser);
         Assert.Equal(moons, timing.MoonsPhaseLength);
     }
+
+    [Fact]
+    public void DerivedTimingAndTransitionHelpersMatchNativeFixtures()
+    {
+        Assert.Null(new ClimateTiming(0, 0, 0, 0, 0, 0x00).MoonPhase(10));
+        Assert.Equal((byte)0, new ClimateTiming(0, 0, 0, 0, 0, 0x3F).MoonPhase(0));
+        Assert.Equal((byte)1, new ClimateTiming(0, 0, 0, 0, 0, 0x3F).MoonPhase(63));
+        Assert.Equal((byte)0, new ClimateTiming(0, 0, 0, 0, 0, 0x3F).MoonPhase(504));
+        Assert.Equal((byte)1, new ClimateTiming(0, 0, 0, 0, 0, 0x41).MoonPhase(9));
+        Assert.Equal((byte)2, new ClimateTiming(0, 0, 0, 0, 0, 0xC3).MoonPhase(200));
+        Assert.Equal(1f, new ClimateTiming(0, 0, 0, 0, 255, 0).VolatilityHoldHours(1f, 1f, 23f));
+        Assert.Equal(23f, new ClimateTiming(0, 0, 0, 0, 0, 0).VolatilityHoldHours(1f, 1f, 23f));
+        Assert.Equal(11.9569f, new ClimateTiming(0, 0, 0, 0, 128, 0).VolatilityHoldHours(1f, 1f, 23f), 4);
+        Assert.Equal(0.01f, Transition(0).TransitionHours(0.01f, 1f), 6);
+        Assert.Equal(0.013882353f, Transition(1).TransitionHours(0.01f, 1f), 6);
+        Assert.Equal(0.50305885f, Transition(127).TransitionHours(0.01f, 1f), 6);
+        Assert.Equal(0.5069412f, Transition(128).TransitionHours(0.01f, 1f), 6);
+        Assert.Equal(1f, Transition(255).TransitionHours(0.01f, 1f), 6);
+        Assert.Equal(3f, Transition(255).TransitionHours(0.01f, 3f), 6);
+        Assert.Equal(1.5108628f, Transition(128).TransitionHours(0.01f, 3f), 6);
+    }
+
+    private static WeatherParameters Transition(byte delta) =>
+        new(0, delta, 0, 0, 0, 0, 0, 0, 0, 0, new ByteColor(0, 0, 0), 0, 0, 0, 0, null);
 }
