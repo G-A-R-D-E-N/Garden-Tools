@@ -1046,6 +1046,10 @@ Filters the stored LTEX GNAM list from `decode_landscape_grasses`. A null link i
 
 Returns the loaded-file list for a data directory, a parsed plugin list and the `Fallout4.ccc` names. The stage order, master hoist and checked pass are in `Radicle/src/loadorder/assemble.cpp:assemble_load_order`. `failed` is set on the first checked-file failure and on a hoist cycle; entries show the state reached at that point. `PluginList::duplicates` carries the dropped repeats so `duplicate_entry` can be reported.
 
+## Radicle/src/loadorder/assemble.cpp:assemble_load_order
+
+The data directory overload lists the directory and passes the entries to the span overload, which holds the one assembly implementation. The span overload takes already-resolved plugin files, such as a mod manager's virtual-data winners. `discover` applies the same filter as the directory scan (plugin extension, regular file, non-zero size) and keeps the first path for each plugin key through `try_emplace`, so a repeated name resolves to the earlier path. The directory overload's output is unchanged. Tests: `Radicle/tests/test_load_order_files.cpp:ResolvedFilesFromSeveralFoldersAssembleLikeOneDataFolder`, `Radicle/tests/test_load_order_files.cpp:ResolvedFilesKeepTheFirstPathForADuplicateName`, `Radicle/tests/test_load_order_files.cpp:ResolvedFilesSkipNonPluginAndZeroByteFiles`. No C ABI change; `RADICLE_ABI_VERSION` stays 40.
+
 ## Radicle/src/loadorder/plugin_list.cpp:parse_plugin_list
 
 Splits on LF and removes one trailing CR per line; the BOM is removed only at the start of the text. Lines starting with `#` or shorter than two characters are skipped before the leading `*` is stripped, so a lone `*` is skipped and `*a` yields the name `a`. Duplicates are compared as exact strings after the `*` is stripped. The first occurrence keeps its active flag; later ones go to `duplicates`.

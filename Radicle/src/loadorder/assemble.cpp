@@ -61,16 +61,17 @@ bool is_plugin_file(const std::filesystem::path& path) {
   return extension == ".esm" || extension == ".esl" || extension == ".esp";
 }
 
-std::map<PluginKey, Candidate> discover(const std::filesystem::path& data_dir) {
+std::map<PluginKey, Candidate> discover(std::span<const std::filesystem::path> plugin_files) {
   std::map<PluginKey, Candidate> found;
-  for (const auto& entry : std::filesystem::directory_iterator{data_dir}) {
-    const auto& path = entry.path();
-    if (!is_plugin_file(path) || !entry.is_regular_file() || entry.file_size() == 0) continue;
+  for (const auto& path : plugin_files) {
+    if (!is_plugin_file(path) || !std::filesystem::is_regular_file(path) || std::filesystem::file_size(path) == 0) {
+      continue;
+    }
     Candidate candidate;
     candidate.name = io::utf8(path.filename());
     candidate.key = PluginKey::from_filename(candidate.name);
     candidate.path = path;
-    candidate.time = entry.last_write_time();
+    candidate.time = std::filesystem::last_write_time(path);
     const auto key = candidate.key;
     found.try_emplace(key, std::move(candidate));
   }
@@ -216,8 +217,17 @@ AssembledLoadOrder assemble_load_order(const std::filesystem::path& data_dir,
                                        const PluginList& plugin_list,
                                        std::span<const std::string> ccc_names,
                                        OfficialTable table) {
+  std::vector<std::filesystem::path> plugin_files;
+  for (const auto& entry : std::filesystem::directory_iterator{data_dir}) plugin_files.push_back(entry.path());
+  return assemble_load_order(std::span<const std::filesystem::path>{plugin_files}, plugin_list, ccc_names, table);
+}
+
+AssembledLoadOrder assemble_load_order(std::span<const std::filesystem::path> plugin_files,
+                                       const PluginList& plugin_list,
+                                       std::span<const std::string> ccc_names,
+                                       OfficialTable table) {
   AssembledLoadOrder result;
-  auto discovered = discover(data_dir);
+  auto discovered = discover(plugin_files);
   std::vector<Candidate> files;
   for (auto& entry : discovered) {
     auto& candidate = entry.second;

@@ -50,5 +50,9 @@ AssembledLoadOrder assemble_load_order(const std::filesystem::path& data_dir,
                                        const PluginList& plugin_list,
                                        std::span<const std::string> ccc_names,
                                        OfficialTable table);
+AssembledLoadOrder assemble_load_order(std::span<const std::filesystem::path> plugin_files,
+                                       const PluginList& plugin_list,
+                                       std::span<const std::string> ccc_names,
+                                       OfficialTable table);
 
 }  // namespace fo4::loadorder

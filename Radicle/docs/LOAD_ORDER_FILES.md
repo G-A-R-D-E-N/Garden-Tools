@@ -60,6 +60,8 @@ Checked state (the startup run of the engine):
 - Each checked file's masters become checked, recursively. A missing master of a checked file fails the assembly (`missing_master`). A master whose HEDR version is above 1.0 fails it (`master_too_new`). The record describes the recursion's failure path as "result becomes the return"; Radicle treats any failure in the recursion as a whole-assembly failure.
 - A checked file whose own HEDR version is above 1.0 is unchecked and reported as `version_unchecked`. This is not a failure. The comparison is against the float 1.0 exactly.
 
+The data directory overload lists the directory. A second overload takes a list of already-resolved plugin file paths, such as a mod manager's virtual-data winners. It applies the same filter (plugin extension, regular file, non-zero size), keeps the first path for each plugin name, and runs the same stages, so the same files give the same order from one folder or several.
+
 ## Findings
 
 | Code | Meaning | Failure |
@@ -79,15 +81,15 @@ Checked state (the startup run of the engine):
 - The order of files that are not listed anywhere (the "remaining files" tie order) is a Radicle choice, documented above.
 - `DLCList.txt`.
 - sTestFile INI settings. Radicle always applies the `Fallout4.esm` fallback and does not read the INI.
-- Mod-manager virtual file systems. Radicle reads the real directory or profile files given to it.
+- Mod-manager virtual file systems. The caller resolves them and passes the winning plugin paths to the path-list overload of `assemble_load_order`.
 - The runtime index table. `build_runtime_form_id_context` in `Radicle/src/plugin/load_order.cpp` is unchanged, and callers supply it.
 - External capacity limits (launcher, CK, plugin list writer). The record leaves these unresolved.
 - Runtime consequences of an ESP master listed after its dependent. The record leaves these unresolved; Radicle keeps the plugin-list order for ESP dependents.
-- Two files with the same name in different directories. Only the data directory is read.
+- Two files with the same name in different directories. The data-directory overload reads one directory; the path-list overload keeps the first path given for each name.
 
 ## Tests
 
-- `Radicle/tests/test_load_order_files.cpp` covers the parsing rules, both tables, ccc ordering, hoisting, light and master flags, checked rules, too-new versions, zero-byte files, unreadable headers and the cycle refusal, using synthetic plugins.
+- `Radicle/tests/test_load_order_files.cpp` covers the parsing rules, both tables, ccc ordering, hoisting, light and master flags, checked rules, too-new versions, zero-byte files, unreadable headers and the cycle refusal, using synthetic plugins; the path-list overload is covered by `ResolvedFilesFromSeveralFoldersAssembleLikeOneDataFolder`, `ResolvedFilesKeepTheFirstPathForADuplicateName` and `ResolvedFilesSkipNonPluginAndZeroByteFiles`.
 - `Radicle/tests/test_c_api_loadorder.cpp` covers the C ABI: argument checks, the unknown table, IO errors with cleared outputs, and the happy path freed with `radicle_free_string_array`.
 - `Radicle/tests/test_load_order_real.cpp` runs on installed data when `FO4_DATA_DIR` is set. It assembles the installed Data with an empty plugin list and the game root's `Fallout4.ccc`, and checks that `Fallout4.esm` is first, the installed official plugins follow in table order, and the present `Fallout4.ccc` entries follow in file order.
 - `Radicle.Interop.Tests/LoadOrderTests.cs` covers the C ABI through the C# wrapper.

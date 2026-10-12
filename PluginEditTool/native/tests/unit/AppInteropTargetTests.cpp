@@ -9,8 +9,10 @@
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 #include "../helpers/AppInteropTestSupport.hpp"
+#include "../helpers/PluginFixtures.hpp"
 
 using namespace app_interop_test;
+using namespace plugin_fixtures_test;
 
 TEST_CASE("AppInterop validates selected MO2 instance folders") {
     const auto root = tempRoot();
@@ -288,8 +290,8 @@ TEST_CASE("AppInterop keeps the live MO2 snapshot until reload") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     makeProfile(root);
-    writeFile(root / "Game" / "Data" / "Second.esp");
-    writeFile(root / "mods" / "Extra" / "FromMod.esp");
+    writeFile(root / "Game" / "Data" / "Second.esp", minimalPlugin(0, "second"));
+    writeFile(root / "mods" / "Extra" / "FromMod.esp", minimalPlugin(0, "from mod"));
 
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::SharedSettings settings;
@@ -334,8 +336,8 @@ TEST_CASE("AppInterop reload replaces the live MO2 snapshot after profile files 
     const auto root = tempRoot();
     Cleanup cleanup{root};
     makeProfile(root);
-    writeFile(root / "Game" / "Data" / "Second.esp");
-    writeFile(root / "mods" / "Extra" / "FromMod.esp");
+    writeFile(root / "Game" / "Data" / "Second.esp", minimalPlugin(0, "second"));
+    writeFile(root / "mods" / "Extra" / "FromMod.esp", minimalPlugin(0, "from mod"));
 
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::SharedSettings settings;
@@ -395,7 +397,7 @@ TEST_CASE("AppInterop reload replaces the previous MO2 snapshot instead of mergi
     const auto root = tempRoot();
     Cleanup cleanup{root};
     makeProfile(root);
-    writeFile(root / "Game" / "Data" / "Second.esp");
+    writeFile(root / "Game" / "Data" / "Second.esp", minimalPlugin(0, "second"));
 
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::SharedSettings settings;
@@ -437,7 +439,7 @@ TEST_CASE("AppInterop keeps the old snapshot when reload is blocked by pending e
     const auto root = tempRoot();
     Cleanup cleanup{root};
     makeProfile(root);
-    writeFile(root / "Game" / "Data" / "Second.esp");
+    writeFile(root / "Game" / "Data" / "Second.esp", minimalPlugin(0, "second"));
 
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::SharedSettings settings;

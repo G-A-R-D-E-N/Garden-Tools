@@ -103,7 +103,7 @@ fo4ide_enable_warnings(fo4ide_window)
 fo4ide_enable_sanitizers(fo4ide_window)
 
 add_library(fo4ide_mo2 mo2/Mo2Profile.cpp)
-target_link_libraries(fo4ide_mo2 PUBLIC fo4ide_core)
+target_link_libraries(fo4ide_mo2 PUBLIC fo4ide_core fo4)
 fo4ide_enable_warnings(fo4ide_mo2)
 fo4ide_enable_sanitizers(fo4ide_mo2)
 
