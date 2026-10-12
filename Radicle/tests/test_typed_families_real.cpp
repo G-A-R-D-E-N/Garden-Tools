@@ -13,6 +13,7 @@
 #include "fo4/forms/leveled_spell.hpp"
 #include "fo4/forms/race.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -45,6 +46,7 @@ void run_family(const Family& family) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
   const auto files = masters(dir);
   if (files.empty()) {
     GTEST_SKIP() << "no official masters found under " << dir;
@@ -97,6 +99,7 @@ TEST(TypedFamiliesRealData, ShippedRaceStringsAreLocalizedIds) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / "Fallout4.esm";
   if (!std::filesystem::exists(path)) {
     GTEST_SKIP() << "Fallout4.esm not found under " << dir;
@@ -160,6 +163,7 @@ TEST(TypedFamiliesRealData, ShippedArmorDescriptionsAreLocalizedIds) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / "Fallout4.esm";
   if (!std::filesystem::exists(path)) {
     GTEST_SKIP() << "Fallout4.esm not found under " << dir;

@@ -2,6 +2,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/vmad.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 #include <array>
@@ -25,6 +26,7 @@ class VmadWriterOfficial : public ::testing::TestWithParam<const char*> {};
 TEST_P(VmadWriterOfficial, PropertyOrderAndCappedMutationPreserveOtherRecords) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR for read-only official coverage";
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path(dir) / GetParam();
   ASSERT_TRUE(std::filesystem::exists(path));
   auto plugin = fo4::read_plugin_file(path);

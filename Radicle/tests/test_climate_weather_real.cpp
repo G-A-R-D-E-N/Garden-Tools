@@ -10,6 +10,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -77,6 +78,7 @@ TEST_P(ClimateWeatherReal, EveryOfficialRecordIsListedOrderedAndPreflightClean) 
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  record_game_build(detect_game_build(path.parent_path()));
   const auto plugin = fo4::read_plugin_file(path);
   std::map<std::string, int> totals;
   std::vector<std::string> violators;
@@ -104,6 +106,7 @@ TEST_P(ClimateWeatherReal, EveryScalarAndStringPathEditsFirstAndLastSlotsWithout
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  record_game_build(detect_game_build(path.parent_path()));
   const auto full = fo4::read_plugin_file(path);
   auto sample = fo4::make_empty_plugin(full.key.filename());
   sample.header = full.header;
@@ -185,6 +188,7 @@ TEST_P(ClimateWeatherReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepE
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  record_game_build(detect_game_build(path.parent_path()));
   const auto& pick = base_targets(path.parent_path());
   ASSERT_EQ(pick.size(), 4u);
   auto plugin = fo4::read_plugin_file(path);

@@ -157,3 +157,33 @@ TEST_F(ClimateWeatherCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReloa
   EXPECT_EQ(payloads(reread, key(k_wthr_old), "DALC").at(1)[25], std::byte{8});
   for (const auto id : {k_clmt, k_clmt_bare, k_wthr, k_wthr_old, created_id}) { EXPECT_TRUE(authoring_clean(reread, key(id))) << id; }
 }
+
+TEST(ClimateDerivedHelpersCApi, DerivedTimingHelpersFollowTheirFixtures) {
+  int32_t has_phase = 0;
+  uint8_t phase = 0xFF;
+  ASSERT_EQ(radicle_climate_moon_phase(0xC3, 10, &has_phase, &phase), RADICLE_STATUS_OK);
+  EXPECT_EQ(has_phase, 1);
+  EXPECT_EQ(phase, 3);
+  ASSERT_EQ(radicle_climate_moon_phase(0x00, 10, &has_phase, &phase), RADICLE_STATUS_OK);
+  EXPECT_EQ(has_phase, 0);
+  ASSERT_EQ(radicle_climate_moon_phase(0x3F, 63, &has_phase, &phase), RADICLE_STATUS_OK);
+  EXPECT_EQ(phase, 1);
+  EXPECT_EQ(radicle_climate_moon_phase(0x3F, 0, nullptr, &phase), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  float hours = 0.0f;
+  ASSERT_EQ(radicle_climate_volatility_hold_hours(255, 1.0f, 1.0f, 23.0f, &hours), RADICLE_STATUS_OK);
+  EXPECT_FLOAT_EQ(hours, 1.0f);
+  ASSERT_EQ(radicle_climate_volatility_hold_hours(0, 1.0f, 1.0f, 23.0f, &hours), RADICLE_STATUS_OK);
+  EXPECT_FLOAT_EQ(hours, 23.0f);
+  ASSERT_EQ(radicle_climate_volatility_hold_hours(128, 1.0f, 1.0f, 23.0f, &hours), RADICLE_STATUS_OK);
+  EXPECT_NEAR(hours, 11.9569f, 1e-4f);
+  EXPECT_EQ(radicle_climate_volatility_hold_hours(128, 1.0f, 1.0f, 23.0f, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  ASSERT_EQ(radicle_weather_transition_hours(0, 0.01f, 1.0f, &hours), RADICLE_STATUS_OK);
+  EXPECT_NEAR(hours, 0.01f, 1e-6f);
+  ASSERT_EQ(radicle_weather_transition_hours(128, 0.01f, 3.0f, &hours), RADICLE_STATUS_OK);
+  EXPECT_NEAR(hours, 1.5108628f, 1e-6f);
+  ASSERT_EQ(radicle_weather_transition_hours(255, 0.01f, 3.0f, &hours), RADICLE_STATUS_OK);
+  EXPECT_NEAR(hours, 3.0f, 1e-6f);
+  EXPECT_EQ(radicle_weather_transition_hours(255, 0.01f, 3.0f, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+}

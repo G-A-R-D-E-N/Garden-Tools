@@ -9,6 +9,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -99,6 +100,7 @@ TEST_P(SoundWriterReal, EveryOfficialRecordIsListedOrderedAndPreflightClean) {
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(path.parent_path()));
   const auto plugin = sound_sample(fo4::read_plugin_file(path), path);
   std::map<std::string, int> totals;
   std::vector<std::string> violators;
@@ -134,6 +136,7 @@ TEST_P(SoundWriterReal, EveryScalarStringAndLinkPathEditsFirstAndLastSlotsWithou
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(path.parent_path()));
   const auto full = fo4::read_plugin_file(path);
   auto sample = sound_sample(full, path);
   const auto original = sample;
@@ -221,6 +224,7 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(path.parent_path()));
   auto plugin = fo4::read_plugin_file(path);
   fo4::assign_record_form_keys(plugin);
   const auto original = snapshot(plugin);

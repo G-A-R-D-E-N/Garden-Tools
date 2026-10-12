@@ -11,6 +11,7 @@
 
 #include "fo4/forms/proj_expl_hazd.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -36,6 +37,7 @@ TEST(ProjExplHazdReencodeRealData, ReproducesEveryShippedPayloadByteForByte) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
 
   std::map<std::string, std::size_t> seen;
   std::vector<std::string> failures;

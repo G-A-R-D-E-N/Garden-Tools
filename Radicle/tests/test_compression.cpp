@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 #include <zlib.h>
@@ -89,6 +90,7 @@ TEST(Compression, CompressedExtendedSubrecordPreservesPhysicalMarker) {
 TEST(CompressionRealData, OfficialMastersUseZlibAndPreserveBytes) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  record_game_build(detect_game_build(dir));
   for (const auto* name : {"Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm",
                            "DLCCoast.esm", "DLCworkshop02.esm", "DLCworkshop03.esm",
                            "DLCNukaWorld.esm"}) {

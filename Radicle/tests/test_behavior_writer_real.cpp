@@ -10,6 +10,7 @@
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -28,6 +29,7 @@ class BehaviorWriterReal : public testing::TestWithParam<const char*> {};
 TEST_P(BehaviorWriterReal, EveryOfficialRecordHasOrderedKnownSectionsAndValidWriterShapes) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "missing official master";
   const auto plugin = fo4::read_plugin_file(path);
@@ -86,6 +88,7 @@ TEST_P(BehaviorWriterReal, EveryOfficialRecordHasOrderedKnownSectionsAndValidWri
 TEST_P(BehaviorWriterReal, CappedMutationSweepReparsesAndPreservesEveryUntouchedRecordAndPayloadByte) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "missing official master";
   auto plugin = fo4::read_plugin_file(path);

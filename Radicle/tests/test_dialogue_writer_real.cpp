@@ -12,6 +12,7 @@
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -113,6 +114,7 @@ TEST_P(DialogueWriterReal, EveryOfficialRecordFollowsTheAuthoringOrderPlacementA
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(path.parent_path()));
   auto plugin = fo4::read_plugin_file(path);
   fo4::assign_record_form_keys(plugin);
   std::map<std::string, int> totals{{"DIAL", 0}, {"INFO", 0}, {"SCEN", 0}}, unlisted, sampled;
@@ -156,6 +158,7 @@ TEST_P(DialogueWriterReal, CappedFieldSceneAndSubrecordEditsKeepEveryOtherRecord
   bool skip = false;
   const auto path = official(GetParam(), skip);
   if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(path.parent_path()));
   auto plugin = fo4::read_plugin_file(path);
   fo4::assign_record_form_keys(plugin);
   const auto original = snapshot(plugin);

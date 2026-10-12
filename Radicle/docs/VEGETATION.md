@@ -40,12 +40,26 @@ wrong-signature target as a warning (`wbFormIDCk` with `[GRAS]` at `Core/wbDefin
 `93cc0bc5`); the official data above has none, so the two agree there.
 Coast includes one base-master grass link; Nuka includes three. The remaining
 links target grass in the same master, corroborating the schema association.
-Runtime consumer semantics remain tracked in RE issue #403.
+Runtime consumer semantics remain tracked as RE-013 on #520.
 
 The newer loader record confirms the disk grammar and LTEX association,
 including the TREE 0x30-byte size test in OG, AE and NG decompile records.
 Its sections 5 and 8 leave TREE CNAM, PFPC and FLOR FNAM runtime consumers
 unresolved. Those stored fields remain numeric and unchanged.
+
+Stored-read rules on the 1.10.163 executable, with AE and NG compared where the
+record notes it:
+- LTEX GNAM is the landscape-texture to grass link. The game loader confirms it
+  and uses it at runtime. The loader keeps an unbounded list of form IDs and skips
+  zero entries. `landscape_grasses_runtime_view` drops null links from the stored
+  list and keeps the rest in file order.
+- GRAS DATA is read as up to 32 raw bytes into a zeroed block, with no clamping.
+- Water mode above 5 means no water filter. `GrassData::water_filter_active` is
+  true for modes 0 through 5 only.
+- TREE CNAM is read only at exactly 48 bytes.
+
+The runtime view applies no slope, density or placement logic. Placement and
+the runtime effect of these fields remain RE-013 on #520.
 
 `test_vegetation_real.cpp` visits all four record families in each official
 master through native and C ABI getters and checks unchanged whole-file byte

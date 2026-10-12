@@ -37,9 +37,7 @@ struct Ba2GeneralArchive {
   std::vector<Ba2GeneralEntry> entries;
 };
 
-// Supported versions: 1 (FO4), 7 (Skyrim SE-style), 8 (next-gen). The GNRL
-// record layout is identical across these versions; only the header field
-// differs, matching the C# oracle which passes the version through.
+// Supported versions: 1, 7 (seen on NG/AE installs), 8 (seen on AE 1.11.240.0).
 bool is_supported_ba2_general_version(std::uint32_t version) noexcept;
 
 Ba2GeneralArchive read_ba2_general(std::span<const std::byte> data);
