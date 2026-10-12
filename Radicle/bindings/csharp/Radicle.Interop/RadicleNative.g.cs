@@ -814,6 +814,30 @@ public unsafe struct Navi
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct NaviPath
+{
+    public IntPtr Navmeshes;
+    public nuint NavmeshCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NaviAnchor
+{
+    public FormKey Navmesh;
+    public uint Value;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NaviPathList
+{
+    public IntPtr Paths;
+    public nuint PathCount;
+    public IntPtr Anchors;
+    public nuint AnchorCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SoundPlayback
 {
     public sbyte FrequencyShift;
@@ -1619,7 +1643,7 @@ public unsafe struct SceneInfo
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 37u;
+    public const uint CompiledAbiVersion = 38u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1987,11 +2011,20 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navmesh_free")]
     public static extern void NavmeshFree(Navmesh* navmesh);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navmesh_triangle_edge_is_extra")]
+    public static extern Status NavmeshTriangleEdgeIsExtra(NavmeshTriangle* triangle, nuint edge, int* out_is_extra);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_decode")]
     public static extern Status NaviDecode(IntPtr env, IntPtr record, Navi** out_navi);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_free")]
     public static extern void NaviFree(Navi* navi);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_path_list_decode")]
+    public static extern Status NaviPathListDecode(IntPtr env, IntPtr record, NaviPathList** out_list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_path_list_free")]
+    public static extern void NaviPathListFree(NaviPathList* list);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_navmesh_vertex")]
     public static extern Status PluginSetNavmeshVertex(IntPtr plugin, FormKey key, nuint index, NavmeshVertex* value);

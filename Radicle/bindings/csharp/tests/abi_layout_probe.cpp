@@ -566,6 +566,18 @@ int main() {
   printf("Navi.Infos %zu\n", offsetof(radicle_navi, infos));
   printf("Navi.InfoCount %zu\n", offsetof(radicle_navi, info_count));
   printf("Navi.Internal %zu\n", offsetof(radicle_navi, internal));
+  printf("NaviPath %zu\n", sizeof(radicle_navi_path));
+  printf("NaviPath.Navmeshes %zu\n", offsetof(radicle_navi_path, navmeshes));
+  printf("NaviPath.NavmeshCount %zu\n", offsetof(radicle_navi_path, navmesh_count));
+  printf("NaviAnchor %zu\n", sizeof(radicle_navi_anchor));
+  printf("NaviAnchor.Navmesh %zu\n", offsetof(radicle_navi_anchor, navmesh));
+  printf("NaviAnchor.Value %zu\n", offsetof(radicle_navi_anchor, value));
+  printf("NaviPathList %zu\n", sizeof(radicle_navi_path_list));
+  printf("NaviPathList.Paths %zu\n", offsetof(radicle_navi_path_list, paths));
+  printf("NaviPathList.PathCount %zu\n", offsetof(radicle_navi_path_list, path_count));
+  printf("NaviPathList.Anchors %zu\n", offsetof(radicle_navi_path_list, anchors));
+  printf("NaviPathList.AnchorCount %zu\n", offsetof(radicle_navi_path_list, anchor_count));
+  printf("NaviPathList.Internal %zu\n", offsetof(radicle_navi_path_list, internal));
   printf("SoundPlayback %zu\n", sizeof(radicle_sound_playback));
   printf("SoundPlayback.FrequencyShift %zu\n", offsetof(radicle_sound_playback, frequency_shift));
   printf("SoundPlayback.FrequencyVariance %zu\n", offsetof(radicle_sound_playback, frequency_variance));
