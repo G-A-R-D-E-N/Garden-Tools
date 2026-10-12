@@ -220,11 +220,11 @@ public sealed class ScanCliTests
         writer.Write(1u);
         writer.Write((ulong)nameTableAt);
 
-        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
         writer.Write((ulong)headerEnd);
         writer.Write(0u);
         writer.Write((uint)payload.Length);
-        writer.Write(0u);
+        writer.Write(0xBAADF00Du);
 
         writer.Write(payload);
         var bytes = Encoding.UTF8.GetBytes(entryName.Replace('/', '\\'));
