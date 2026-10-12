@@ -193,4 +193,72 @@ void radicle_sound_file_list_free(const radicle_sound_file_list* list) {
   if (list) delete static_cast<FileListHolder*>(list->internal);
 }
 
+radicle_status radicle_sound_select_rate_file(const radicle_sound_rate_file* rate_files, size_t rate_file_count,
+                                              uint32_t rpm, int32_t* out_has_index, size_t* out_index) {
+  clear_error();
+  if (out_has_index) *out_has_index = 0;
+  if (out_index) *out_index = 0;
+  if ((!rate_files && rate_file_count != 0) || !out_has_index || !out_index) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "rate_files, out_has_index and out_index are required");
+  }
+  return guarded("unknown exception while selecting a rate file", [&] {
+    std::vector<fo4::env::SoundRateFile> entries;
+    for (size_t i = 0; i < rate_file_count; ++i) entries.push_back({rate_files[i].rpm, {}});
+    const auto index = fo4::env::select_rate_file_index(entries, rpm);
+    if (index) {
+      *out_has_index = 1;
+      *out_index = *index;
+    }
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_sound_select_standard_file(size_t count, size_t draw_index, int32_t has_previous,
+                                                  size_t previous_index, size_t* out_index) {
+  clear_error();
+  if (out_index) *out_index = 0;
+  if (!out_index) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_index is required");
+  if (draw_index >= count) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "draw_index must be below count");
+  return guarded("unknown exception while selecting a standard file", [&] {
+    const std::optional<size_t> previous = has_previous ? std::optional<size_t>{previous_index} : std::nullopt;
+    *out_index = fo4::env::select_standard_file_index(count, draw_index, previous);
+    return RADICLE_STATUS_OK;
+  });
+}
+
+radicle_status radicle_sound_frequency_factor(int8_t frequency_shift, double* out_factor) {
+  clear_error();
+  if (!out_factor) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_factor is required");
+  *out_factor = fo4::env::sound_frequency_factor(frequency_shift);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_sound_is_looping(uint8_t loop_control, int32_t* out_looping) {
+  clear_error();
+  if (!out_looping) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_looping is required");
+  *out_looping = fo4::env::sound_is_looping(loop_control) ? 1 : 0;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_sound_sidechain_send(uint8_t sidechain_control, double* out_send) {
+  clear_error();
+  if (!out_send) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_send is required");
+  *out_send = fo4::env::sound_sidechain_send(sidechain_control);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_sound_small_rumble_send(uint8_t rumble_control, double* out_send) {
+  clear_error();
+  if (!out_send) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_send is required");
+  *out_send = fo4::env::sound_small_rumble_send(rumble_control);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_sound_big_rumble_send(uint8_t rumble_control, double* out_send) {
+  clear_error();
+  if (!out_send) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_send is required");
+  *out_send = fo4::env::sound_big_rumble_send(rumble_control);
+  return RADICLE_STATUS_OK;
+}
+
 }

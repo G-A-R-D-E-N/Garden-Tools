@@ -114,6 +114,35 @@ bool first_nested_terminator_descriptor(std::size_t descriptor_index) {
   return true;
 }
 
+constexpr int k_climate_full_day_units = 144;
+
+void climate_sun_window_issues(const Record& record, std::vector<PreflightIssue>& issues) {
+  if (record.header.signature != Signature::from_string("CLMT")) return;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature != Signature::from_string("TNAM") || subrecord.data.size() != 6) continue;
+    const auto byte = [&](std::size_t offset) { return std::to_integer<int>(subrecord.data[offset]); };
+    for (const std::size_t begin : {std::size_t{0}, std::size_t{2}}) {
+      const int span = byte(begin + 1) - byte(begin);
+      const std::string window = begin == 0 ? "sunrise" : "sunset";
+      if (span == k_climate_full_day_units) {
+        issues.push_back(field_issue(
+            record,
+            "CLMT\\TNAM",
+            "climate_sun_window_full_day",
+            window + " window ends 24 hours after it begins, which the engine divides by zero",
+            PreflightSeverity::warning));
+      } else if (span <= 0) {
+        issues.push_back(field_issue(
+            record,
+            "CLMT\\TNAM",
+            "climate_sun_window_never_opens",
+            window + " window ends at or before it begins, so the engine never opens it",
+            PreflightSeverity::warning));
+      }
+    }
+  }
+}
+
 }  // namespace
 
 std::vector<PreflightIssue> preflight_record(const Record& record, bool localized) {
@@ -269,6 +298,7 @@ std::vector<PreflightIssue> preflight_record(const Record& record, bool localize
     }
   }
 
+  climate_sun_window_issues(record, issues);
   return issues;
 }
 

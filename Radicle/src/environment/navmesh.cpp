@@ -36,6 +36,11 @@ void validate(const Reader& r, const Subrecord& sub) {
   if (!navmesh_mixed_formid_offsets(*r.ref().record, sub)) r.fail(sub.signature, "unsupported counted layout");
 }
 
+void require_navi_version(const Reader& r) {
+  const auto* version = r.sized(sig("NVER"), 4);
+  if (!version || Reader::u32(*version, 0) != 15) r.fail(sig("NVER"), "version 15 is required");
+}
+
 }
 
 std::optional<NavmeshGeometry> decode_navmesh(const Environment& env, const RecordRef& ref) {
@@ -70,6 +75,12 @@ std::optional<NavmeshGeometry> decode_navmesh(const Environment& env, const Reco
     e.triangle = static_cast<std::int16_t>(c.read_u16()); e.edge = c.read_u8();
     out.edges.push_back(e);
   }
+  for (const auto& t : out.triangles) {
+    for (std::size_t i = 0; i < t.edges.size(); ++i) {
+      const auto index = static_cast<std::size_t>(static_cast<std::uint16_t>(t.edges[i]));
+      if (t.edge_is_extra(i) && index >= out.edges.size()) r.fail(sub->signature, "extra edge index is out of range");
+    }
+  }
   count = c.read_u32();
   out.doors.reserve(count);
   for (std::uint32_t i = 0; i < count; ++i) {
@@ -83,8 +94,7 @@ std::optional<NavmeshGeometry> decode_navmesh(const Environment& env, const Reco
 
 std::vector<NavmeshInfo> decode_navmesh_info(const Environment& env, const RecordRef& ref) {
   const Reader r(env, ref, sig("NAVI"));
-  const auto* version = r.sized(sig("NVER"), 4);
-  if (!version || Reader::u32(*version, 0) != 15) r.fail(sig("NVER"), "version 15 is required");
+  require_navi_version(r);
   std::vector<NavmeshInfo> out;
   for (const auto& sub : ref.record->subrecords) {
     if (sub.signature != sig("NVMI")) continue;
@@ -112,6 +122,27 @@ std::vector<NavmeshInfo> decode_navmesh_info(const Environment& env, const Recor
     }
     info.parent = parent(r, sub, c);
     out.push_back(std::move(info));
+  }
+  return out;
+}
+
+NavmeshPathData decode_navmesh_paths(const Environment& env, const RecordRef& ref) {
+  const Reader r(env, ref, sig("NAVI"));
+  require_navi_version(r);
+  NavmeshPathData out;
+  const auto* sub = r.unique(sig("NVPP"));
+  if (!sub) return out;
+  validate(r, *sub);
+  Cursor c(sub->data);
+  out.paths.resize(c.read_u32());
+  for (auto& path : out.paths) {
+    path.resize(c.read_u32());
+    for (auto& key : path) key = link(r, *sub, c);
+  }
+  out.anchors.resize(c.read_u32());
+  for (auto& anchor : out.anchors) {
+    anchor.first = link(r, *sub, c);
+    anchor.second = c.read_u32();
   }
   return out;
 }

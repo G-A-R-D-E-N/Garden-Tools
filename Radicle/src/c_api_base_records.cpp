@@ -201,6 +201,41 @@ radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
   });
 }
 
+radicle_status radicle_climate_moon_phase(uint8_t moons_phase_length,
+                                          uint32_t days_passed,
+                                          int32_t* out_has_phase,
+                                          uint8_t* out_phase) {
+  clear_error();
+  if (out_has_phase == nullptr || out_phase == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_has_phase and out_phase are required");
+  }
+  const auto phase = fo4::env::ClimateTiming{.moons_phase_length = moons_phase_length}.moon_phase(days_passed);
+  *out_has_phase = phase ? 1 : 0;
+  *out_phase = phase.value_or(0);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_climate_volatility_hold_hours(uint8_t volatility,
+                                                     float multiplier,
+                                                     float duration_min,
+                                                     float duration_max,
+                                                     float* out_hours) {
+  clear_error();
+  if (out_hours == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_hours is required");
+  *out_hours = fo4::env::ClimateTiming{.volatility = volatility}.volatility_hold_hours(multiplier, duration_min, duration_max);
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_weather_transition_hours(uint8_t transition_delta,
+                                                float min_hours,
+                                                float max_hours,
+                                                float* out_hours) {
+  clear_error();
+  if (out_hours == nullptr) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_hours is required");
+  *out_hours = fo4::env::transition_hours(transition_delta, min_hours, max_hours);
+  return RADICLE_STATUS_OK;
+}
+
 radicle_status radicle_weather_decode(const radicle_env* env,
                                       const radicle_record* record,
                                       radicle_weather_info** out_weather) {

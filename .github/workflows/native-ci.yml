@@ -574,6 +574,27 @@ jobs:
       run:
         shell: cmd
     steps:
+      - name: Print Fallout 4 build (exe file version and Steam buildid)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          try {
+            if (-not $env:FO4_DATA_DIR) { "FO4_DATA_DIR is unset; no Fallout 4 build to report."; exit 0 }
+            $data = $env:FO4_DATA_DIR.TrimEnd('\','/')
+            $steamRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $data))
+            $exe = Join-Path (Split-Path -Parent $data) 'Fallout4.exe'
+            if (Test-Path -LiteralPath $exe -PathType Leaf) {
+              "Fallout4.exe file version: $((Get-Item -LiteralPath $exe).VersionInfo.FileVersion)"
+            } else {
+              "Fallout4.exe not found at $exe"
+            }
+            $manifest = Join-Path $steamRoot 'appmanifest_377160.acf'
+            $buildid = if (Test-Path -LiteralPath $manifest -PathType Leaf) {
+              Select-String -LiteralPath $manifest -Pattern '"buildid"\s+"(\d+)"' | Select-Object -First 1
+            }
+            if ($buildid) { "Steam buildid: $($buildid.Matches[0].Groups[1].Value)" } else { "Steam appmanifest_377160.acf buildid not found under $steamRoot" }
+          } catch { "build probe failed: $_" }
+          exit 0
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

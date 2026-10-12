@@ -50,12 +50,63 @@ the OG loader and consumers at 0x3989B0, 0x658090 and 0x648A50.
 Each unsigned clock byte is multiplied by 1/6 to obtain game hours, including
 128 through 255 without signed conversion or clamping. The low six moon bits
 hold days per phase; bit 6 enables Secunda and bit 7 enables Masser.
-Raw bytes remain available. Section 3.5 identifies the transition settings as
-`fWeatherTransMin` and `fWeatherTransMax`, with compiled defaults 0.01 and 1.0
-game hours, from stamped instruction and setting bytes. The GMST override
-mechanism, exceptional timing-window behavior and live simulation remain
-partial or unverified in sections 5–6. They are outside these stored timing
-conversions; no transition-duration calculation is added.
+`ClimateTiming::moon_phase` returns `(days passed % (days per phase * 8)) / days per phase`
+(0 to 7), or no phase when days per phase is 0, so the phase is left unchanged.
+Raw bytes remain available.
+
+Byte 4 (volatility) is the weather hold time, verified from `Sky::UpdateWeather` (0x64E530) in OG 1.10.163.
+The override is released when elapsed time is greater than the hold time, a re-roll happens at the same
+point, and a switch happens when the random value is greater than elapsed / hold time. The hold time is
+`max(0.1, (max - min) * (255 - x) / 255 + min)` with `x = clamp(volatility * multiplier, 0, 255)`; the
+compiled defaults for min and max are 1.0 and 23.0 game hours (GMSTs fWeatherDurationMin and
+fWeatherDurationMax; RE-010 on #520 comment 13142, static analysis of OG 1.10.163). The AE 1.11.240
+Fallout4.esm sets neither. `ClimateTiming::volatility_hold_hours`
+takes the multiplier and bounds as caller-supplied inputs. The field names of the Sky fields are inferred
+from their use. The CLMT TNAM byte 4 reader at 0x656270 is the only consumer of that byte in the Sky and
+TESClimate code (RE-010 on #520 comment 13142, OG 1.10.163); it is not proven image-wide, and three loads
+are unclassified.
+
+The WTHR DATA transition byte (byte 3, read unsigned) gives `transition_hours` = byte / 255 * (max - min) + min
+game hours. The bounds are the game settings `fWeatherTransMin` and `fWeatherTransMax`. Compiled OG defaults
+(RE-010 on #520 comment 13142, release OG 1.10.163) are fWeatherTransMax 1.0, fWeatherTransMin 0.01 and
+fWeatherTransAccel 4.0. The AE 1.11.240 Fallout4.esm overrides fWeatherTransMax to 3.0 and fWeatherTransAccel
+to 16.0; it does not set fWeatherTransMin. Every matching GMST overwrites the setting in load order, so the
+last one wins. `transition_hours` takes both bounds as inputs and reads no GMST. The routing from a plugin
+GMST value to the transition code is verified: the tag table gives
+GMST type 3, the DATA reader writes the value the transition code reads, and the transition code reads
+fWeatherTransMax, Min and Accel at 0x64E964, 0x64E970/87 and 0x64E9C3. The shipped OG Fallout4.esm values
+are not verified, because no 1.10.163 Fallout4.esm is on disk.
+
+Accelerated transition: when the Sky accelerate flag (Sky+0x394 bit 3, 0x8) is set, the transition percentage
+is `pct = (pct - base) * (fWeatherTransAccel + 1.0) + base`, recomputed each frame and not compounding. That is
+5x with the compiled defaults and 17x with the AE override. The Papyrus `Weather.SetActive(abOverride, abAccelerate)`
+second argument sets the flag, and the console `SetWeather` can also. `transition_hours` does not model this
+multiplier (RE-010 on #520 comment 13142).
+
+The three C ABI helpers `radicle_climate_moon_phase`, `radicle_climate_volatility_hold_hours` and `radicle_weather_transition_hours` (#343) arrive in ABI 36; ABI 35 is the #340 sound playback set.
+
+Sunrise and sunset windows are stored as-is. The timing classifier (RE-010 on #520 comment 13142, OG 1.10.163)
+opens the sunrise window only if sunrise begin < t < sunrise end, day covers sunrise end <= t <= sunset begin,
+the sunset window opens only if sunset begin < t < sunset end, and anything else is night. None of the timing
+helpers checks ordering, so a reversed or zero-width window never opens: its time is classified as plain day or
+night with fraction 1.0. Sunrise begin is floored at 0 and sunset end is capped at 23.99 using
+fDaytimeColorExtension (compiled 0.5); raw sunrise end and sunset begin are not clamped, and a sunset begin of
+24 hours or more means sunset never opens. Radicle does not reorder or clamp the stored window. A window whose
+end minus begin is 24 hours divides by zero in 0x647CE0 and produces a NaN vector; `preflight_record` reports it
+as `climate_sun_window_full_day`. Reversed and zero-width windows (end at or before begin) are reported as `climate_sun_window_never_opens`.
+
+NG 1.10.984 was byte-checked on the Steamless-unpacked image for the transition formula (0x668990), the
+CLMT timing-byte readers (0x662DB0, 0x671A40, 0x673280), and the phase routine; they are byte-identical to
+the AE functions and the OG defaults match. The NG volatility consumer is FUN_1406704e0 with the same
+constants. The engine reads weatherData unsigned (movzx); CommonLib declares it as `int8_t`. The RE-010 facts
+above are OG 1.10.163 static analysis; NG was not checked for them. Evidence: `RE-Work/subsystems/radicle-re-garden-tools/weather-climate-397-343/` (`findings.jsonl`), Fallout4_Runtime_Research branch `re/garden-tools-issues-2026-10-04`, summarized as RE-010 on #520.
+
+Still open (#397 follow-ups and #343 comment 12950): the WTHR DATA flag byte (byte 11), including which bits
+the runtime tests; whether WTHR DATA bytes 1-2 are read anywhere; whether 0x656270 is the only consumer of
+CLMT byte 4 across the image (three loads unclassified); the shipped OG Fallout4.esm GMST values;
+the low-priority LNAM 4-byte payload, NAM4 float[32] indices and NAM0 color-group mapping. Live in-engine
+observation of the override-release time, the transition length at DATA[3] = 0 and 255, and the effect of the
+game-setting values is not done. The live simulation is separate acceptance work.
 
 `src/environment/base_records.cpp:decode_climate` and `decode_weather` expose
 these optional fields through the existing environment decoders. C ABI 25

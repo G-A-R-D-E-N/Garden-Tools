@@ -262,4 +262,112 @@ TEST_F(SoundTest, CAbiRejectsACycleAndNullArgumentsWithoutAList) {
   radicle_env_destroy(abi);
 }
 
+std::vector<fo4::env::SoundRateFile> rates(std::initializer_list<std::uint32_t> values) {
+  std::vector<fo4::env::SoundRateFile> out;
+  for (const auto value : values) out.push_back({value, {}});
+  return out;
+}
+
+TEST(SoundPlaybackRules, AutoWeaponRateChoosesTheNearestEntryWithTiesToTheHigherEntry) {
+  const auto list = rates({420, 540, 660, 780, 900});
+  EXPECT_EQ(fo4::env::select_rate_file_index(list, 400), std::optional<std::size_t>{0});
+  EXPECT_EQ(fo4::env::select_rate_file_index(list, 479), std::optional<std::size_t>{0});
+  EXPECT_EQ(fo4::env::select_rate_file_index(list, 480), std::optional<std::size_t>{1});
+  EXPECT_EQ(fo4::env::select_rate_file_index(list, 1000), std::optional<std::size_t>{4});
+  EXPECT_EQ(fo4::env::select_rate_file_index(rates({420, 540, 600, 780, 1020}), 690), std::optional<std::size_t>{3});
+}
+
+TEST(SoundPlaybackRules, AutoWeaponRateSkipsZeroEntriesAndReturnsTheStoredIndex) {
+  const auto list = rates({0, 420, 0, 540});
+  EXPECT_EQ(fo4::env::select_rate_file_index(list, 500), std::optional<std::size_t>{3});
+  EXPECT_EQ(fo4::env::select_rate_file_index(list, 100), std::optional<std::size_t>{1});
+  EXPECT_FALSE(fo4::env::select_rate_file_index(rates({0, 0}), 500));
+  EXPECT_FALSE(fo4::env::select_rate_file_index({}, 500));
+}
+
+TEST(SoundPlaybackRules, StandardChooserReturnsTheOnlyFileAndNeverRepeatsAConsecutivePick) {
+  EXPECT_EQ(fo4::env::select_standard_file_index(1, 0, std::nullopt), 0u);
+  EXPECT_EQ(fo4::env::select_standard_file_index(1, 0, 0u), 0u);
+  EXPECT_THROW(fo4::env::select_standard_file_index(1, 1, std::nullopt), fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::select_standard_file_index(0, 0, std::nullopt), fo4::env::WorldDecodeError);
+  for (std::size_t previous = 0; previous < 3; ++previous) {
+    for (std::size_t draw = 0; draw < 3; ++draw) {
+      EXPECT_EQ(fo4::env::select_standard_file_index(3, draw, previous), draw == previous ? (draw + 1) % 3 : draw);
+    }
+  }
+  std::optional<std::size_t> previous;
+  for (const std::size_t draw : {0u, 0u, 1u, 2u, 2u, 0u, 1u, 1u}) {
+    const auto pick = fo4::env::select_standard_file_index(3, draw, previous);
+    if (previous) EXPECT_NE(pick, *previous);
+    previous = pick;
+  }
+}
+
+TEST(SoundPlaybackRules, DerivedFrequencyFactorClampsAtBothEnds) {
+  EXPECT_DOUBLE_EQ(fo4::env::sound_frequency_factor(0), 1.0);
+  EXPECT_NEAR(fo4::env::sound_frequency_factor(-30), 0.7, 1e-12);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_frequency_factor(100), 2.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_frequency_factor(127), 2.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_frequency_factor(-100), 0.1);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_frequency_factor(-128), 0.1);
+}
+
+TEST(SoundPlaybackRules, DerivedLoopingIsAnyOfTheLoopBitsInByteOne) {
+  for (const std::uint8_t control : {0x08, 0x10, 0x20, 0x38}) EXPECT_TRUE(fo4::env::sound_is_looping(control));
+  for (const std::uint8_t control : {0x00, 0x07, 0x40, 0x80, 0xC7}) EXPECT_FALSE(fo4::env::sound_is_looping(control));
+}
+
+TEST(SoundPlaybackRules, DerivedSidechainAndRumbleSendsScaleAndClamp) {
+  EXPECT_DOUBLE_EQ(fo4::env::sound_sidechain_send(0), 0.0);
+  EXPECT_NEAR(fo4::env::sound_sidechain_send(50), 0.5, 1e-12);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_sidechain_send(100), 1.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_sidechain_send(255), 1.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_small_rumble_send(0xF0), 0.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_big_rumble_send(0xF0), 1.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_small_rumble_send(0x0F), 1.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_big_rumble_send(0x0F), 0.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_small_rumble_send(0x21), 1.0 / 15.0);
+  EXPECT_DOUBLE_EQ(fo4::env::sound_big_rumble_send(0x21), 2.0 / 15.0);
+}
+
+TEST(SoundPlaybackRules, CAbiMatchesTheNativeRulesAndRejectsBadArguments) {
+  const radicle_sound_rate_file rate_files[] = {{420, "a.wav"}, {540, "b.wav"}, {780, "c.wav"}};
+  int32_t has = 0;
+  size_t index = 99;
+  EXPECT_EQ(radicle_sound_select_rate_file(rate_files, 3, 480, &has, &index), RADICLE_STATUS_OK);
+  EXPECT_EQ(has, 1); EXPECT_EQ(index, 1u);
+  EXPECT_EQ(radicle_sound_select_rate_file(rate_files, 3, 1000, &has, &index), RADICLE_STATUS_OK);
+  EXPECT_EQ(index, 2u);
+  EXPECT_EQ(radicle_sound_select_rate_file(nullptr, 0, 480, &has, &index), RADICLE_STATUS_OK);
+  EXPECT_EQ(has, 0);
+  EXPECT_EQ(radicle_sound_select_rate_file(nullptr, 3, 480, &has, &index), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_sound_select_rate_file(rate_files, 3, 480, nullptr, &index), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  EXPECT_EQ(radicle_sound_select_standard_file(3, 1, 1, 1, &index), RADICLE_STATUS_OK);
+  EXPECT_EQ(index, 2u);
+  EXPECT_EQ(radicle_sound_select_standard_file(3, 1, 0, 0, &index), RADICLE_STATUS_OK);
+  EXPECT_EQ(index, 1u);
+  EXPECT_EQ(radicle_sound_select_standard_file(3, 3, 0, 0, &index), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_sound_select_standard_file(1, 0, 0, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  double value = 0;
+  int32_t looping = 0;
+  EXPECT_EQ(radicle_sound_frequency_factor(127, &value), RADICLE_STATUS_OK);
+  EXPECT_DOUBLE_EQ(value, 2.0);
+  EXPECT_EQ(radicle_sound_frequency_factor(-100, &value), RADICLE_STATUS_OK);
+  EXPECT_DOUBLE_EQ(value, 0.1);
+  EXPECT_EQ(radicle_sound_frequency_factor(0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_sound_is_looping(0x10, &looping), RADICLE_STATUS_OK);
+  EXPECT_EQ(looping, 1);
+  EXPECT_EQ(radicle_sound_is_looping(0x40, &looping), RADICLE_STATUS_OK);
+  EXPECT_EQ(looping, 0);
+  EXPECT_EQ(radicle_sound_sidechain_send(255, &value), RADICLE_STATUS_OK);
+  EXPECT_DOUBLE_EQ(value, 1.0);
+  EXPECT_EQ(radicle_sound_small_rumble_send(0x0F, &value), RADICLE_STATUS_OK);
+  EXPECT_DOUBLE_EQ(value, 1.0);
+  EXPECT_EQ(radicle_sound_big_rumble_send(0xF0, &value), RADICLE_STATUS_OK);
+  EXPECT_DOUBLE_EQ(value, 1.0);
+  EXPECT_EQ(radicle_sound_big_rumble_send(0xF0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
 }

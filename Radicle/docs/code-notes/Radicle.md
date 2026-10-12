@@ -877,7 +877,7 @@ Fail closed: the recursion throws `WorldDecodeError` instead of returning a part
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin.
+The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin. ABI 35 renames that test to `CApiQuest.AbiVersionIsThirtyFive` and moves its literal to 35; that bump is the #340 sound playback functions (`radicle_sound_select_rate_file`, `radicle_sound_select_standard_file`). The #343 climate helpers (`radicle_climate_moon_phase`, `radicle_climate_volatility_hold_hours`, `radicle_weather_transition_hours`, in `c_api_records.h`) were first numbered 35 on their branch and moved to ABI 36 when nomad/dev merged, so they arrive in ABI 36. The test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtySix`. The #344 dialogue reset hours fields (`has_reset_hours` and `reset_hours` on `radicle_dialogue_info`) and the `radicle_scene_action_type_name` export moved it to ABI 37; the test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtySeven`. ABI 38 adds the #339 navmesh extra-edge accessor `radicle_navmesh_triangle_edge_is_extra` and the NVPP path-list functions `radicle_navi_path_list_decode` and `radicle_navi_path_list_free`; the test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyEight`. ABI 39 adds the #345 package procedure-tree decode (`radicle_package_procedure_decode` and `radicle_package_procedure_free`) and the package location and target type name functions (`radicle_package_location_type_name` and `radicle_package_target_type_name`); the test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyNine`.
 
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
@@ -903,6 +903,138 @@ Flattens the tree into a node array in pre-order and an input array. Node childr
 
 The procedure-tree corpus check expects every PACK to decode and records PACK_procedure_total and PACK_procedure_decoded, plus one PACK_LEAF_<name> count per leaf name. PACK_LEAF_INPUT_COUNT_MISMATCH and PACK_PKCU_INPUT_COUNT_MISMATCH are recorded only, because the leaf counts are not proven to apply to a package's data-input list. PLDT_nonzero_padding is asserted to be zero: bytes 1 to 3 of every shipped PLDT are zero, consistent with the one-byte type in a 16-byte block (RE #407 comment 7894), while the reader still reads the type as i32 at offset 0.
 
-## Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFive
+## Radicle/include/fo4/environment/navmesh.hpp:NavmeshTriangle::edge_is_extra
 
-Pins RADICLE_ABI_VERSION at 35 after the procedure-tree exports and the location and target name functions were added. The C# bindings are regenerated from the headers, not edited by hand.
+`edge_is_extra(i)` reports whether flags bit i (0 to 2) is set. A set bit means `edges[i]` indexes the extra-edge array instead of the triangle array. `decode_navmesh` in `Radicle/src/environment/navmesh.cpp` checks every flagged index after the extra-edge table is read, and throws `WorldDecodeError` when an index is at or past the extra-edge count, so the mesh is refused rather than partly read. An unflagged `0xFFFF` is still the open-edge value and is kept as read.
+
+`set_navmesh_triangle` refuses -1 on a flagged slot (`Radicle/tests/test_navmesh_authoring.cpp:FlaggedEdgeSlotRefusesMinusOneWithoutChangingBytes`). The C ABI exposes the same bit test as `radicle_navmesh_triangle_edge_is_extra` in `Radicle/src/c_api_navmesh.cpp`, which returns `RADICLE_STATUS_INVALID_ARGUMENT` for an edge above 2. The C# wrapper is `NavmeshTriangle.EdgeIsExtra` in `Radicle/bindings/csharp/Radicle.Interop/Navmesh.cs`. Tests: `Radicle/tests/test_navmesh.cpp:ExtraEdgeFlagIndexesExtraEdgeArray`, `Radicle/tests/test_navmesh.cpp:FlaggedEdgeIndexPastExtraEdgeCountFailsClosed`, `Radicle/tests/test_navmesh.cpp:NavmeshAbi.TriangleEdgeAccessorReadsFlagBitsAndRefusesOutOfRange`, and `Radicle/tests/test_navmesh_real.cpp:NavmeshReal` (flagged bits 0 to 2 equal the extra-edge count per master).
+
+## Radicle/src/environment/navmesh.cpp:decode_navmesh_paths
+
+`decode_navmesh_paths` reads the NVPP subrecord of a NAVI record. It takes the NAVI record like `decode_navmesh_info` does and shares its NVER 15 check through `require_navi_version`. The payload is validated by `validate`, which calls `navmesh_mixed_formid_offsets`, before the lists are read. A truncated payload or trailing bytes therefore throw `WorldDecodeError`. A record without an NVPP subrecord returns empty lists. Form IDs resolve through the same `link` helper as the other navmesh links. The layout (u32 N, N lists of u32 k and k form IDs, u32 M, M pairs of form ID and u32 value) is in `docs/NAVM_NAVI.md`.
+
+The C ABI reads it through `radicle_navi_path_list_decode`, which returns an owned list released by `radicle_navi_path_list_free` (`Radicle/src/c_api_navmesh.cpp`). The C# binding is `RadicleEnvironment.NavmeshPaths` in `Radicle/bindings/csharp/Radicle.Interop/Navmesh.cs`. These exports, together with the accessor above, move `RADICLE_ABI_VERSION` from 34 to 35, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFive`. Tests: `Radicle/tests/test_navmesh.cpp:PathPayloadDecodesListsAndAnchorsAndFailsClosed` and `Radicle/tests/test_navmesh_real.cpp:NavmeshCorpus.Fallout4FixturesBoundaryCountsAndNvppSize`, which asserts N = 196 and M = 14 on Fallout4.esm.
+## Radicle/include/fo4/environment/dialogue.hpp:DialogueInfo::reset_hours
+
+ENAM's second u16 is a reset time in units of 1/65535 of a day (RE #405 comment 7891, reaffirmed in #344 comment 7892), so the derived hours are raw * 24 / 65535 and raw 65535 is exactly 24.0. The method returns an empty optional when ENAM is absent, rather than 0, so an absent reset is not confused with a zero reset. The writer field `INFO\ResetHours` in `include/fo4/schema/generated_scalar_fields.inc` edits the raw u16 and keeps its historical name; it is not the derived value.
+
+## Radicle/include/fo4/environment/dialogue.hpp:SceneActionType
+
+The enumerators are the OG 1.10.163 ANAM action type ids 0 to 6 from RE #405 comment 7891. Only ids 0 to 6 are named. The stored `SceneAction::type` stays the raw u16, so unknown ids such as 7 or 0xFFFF are preserved and report no name rather than being coerced. RE #405 does not state that every shipped id is in 0 to 6, so the corpus test records a histogram instead of asserting it.
+
+## Radicle/src/environment/dialogue.cpp:scene_action_type_name
+
+Unknown ids return an empty view built from a literal, not a default `string_view`, so `data()` is a valid pointer for the C ABI's `radicle_scene_action_type_name`, which must return a non-null C string.
+
+## Radicle/include/fo4/c_api_dialogue.h:radicle_dialogue_info
+
+`has_reset_hours` and `reset_hours` follow the `has_` plus value pattern of the other optional fields. They were added in ABI 37. The C# `DialogueInfo` record gained a `ResetHours` positional parameter after `ResetTimeEncoded`.
+
+## Radicle/src/c_api_dialogue.cpp:radicle_scene_action_type_name
+
+Static names are returned for the named ids and an empty string for every other id. The caller does not free the result, which points into the library's static data.
+
+## Radicle/tests/test_dialogue_real.cpp:DialogueReal
+
+The per-type `SCEN_action_type_<id>` properties are a histogram of the shipped action type ids for the record-level CI report. They are not asserted, because RE #405 only states the meaning of ids 0 to 6 and does not state that every shipped id is in that range.
+
+## Radicle/include/fo4/environment/base_records.hpp:ClimateTiming
+`moon_phase` decodes the packed moon byte as in `days_per_phase`: the phase is `(days passed % (days * 8)) / days`, so there are eight phases (0 to 7) driven by the game day count. Zero days per phase means the phase is never updated, so the helper returns no value rather than 0. Packing and phase formula: #397 comment 7866.
+
+`volatility_hold_hours` takes the multiplier and the hold-time bounds as inputs. The engine's `x = clamp(byte * volatilityMult, 0, 255)` and the result `max(0.1, (max - min) * (255 - x) / 255 + min)` are the proven formula (0x656270, #397 comment 7866). The 0.1 floor is part of the formula; the engine returns 0.1 directly when there is no climate or no current weather, which the helper does not model. The compiled defaults are min 1.0 and max 23.0 game hours. The meaning of the result as the weather hold time is verified from `Sky::UpdateWeather` at 0x64E530 (#397 comment 9745).
+
+## Radicle/src/environment/base_records.cpp:transition_hours
+Computes `byte / 255 * (max - min) + min` in float32 from the WTHR DATA transition byte (`weatherData[3]`, read unsigned by the engine). The bounds are game settings `fWeatherTransMin` and `fWeatherTransMax`, not record fields, so the caller supplies them; the compiled OG defaults are 0.01 and 1.0, and the AE 1.11.240 Fallout4.esm sets fWeatherTransMax 3.0 (OG shipped GMST values unverified) (#397 comments 7866 and 9763 for the GMST routing). Its min and max come from GMSTs where the last matching plugin wins, and the accelerated 5x (compiled) or 17x (AE) multiplier from fWeatherTransAccel is not applied (RE-010 on #520, comment 13142).
+
+## Radicle/src/schema/preflight.cpp:climate_sun_window_issues
+Flags a CLMT TNAM whose sunrise (bytes 0 to 1) or sunset (bytes 2 to 3) window has end minus begin equal to 144 raw units, which is 24 hours at 1/6 hour per unit. The engine divides by zero for that window in 0x647CE0 (#397 comment 9745). Reversed and zero-width windows (end minus begin at or below 0) are flagged as `climate_sun_window_never_opens`, because the engine never opens them (RE-010 on #520, comment 13142); the record is not reordered or clamped.
+
+## Radicle/src/c_api_base_records.cpp:radicle_climate_moon_phase
+C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_hours` and `transition_hours`. They take the stored bytes as scalars, check null out-pointers, and use the same `RADICLE_STATUS_INVALID_ARGUMENT` convention as the other scalar getters. The moon wrapper reports absence with `out_has_phase` (0 when days per phase is 0).
+
+## Radicle/tests/real_data_build.cpp:detect_game_build
+
+Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The first match wins, so the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
+
+## Radicle/src/environment/sound.cpp:select_rate_file_index
+
+Walks the rate list in stored order and skips INTV 0 entries, so the returned index is the stored index; storage keeps the zero-rate entries. Ties go to the higher entry. The rule is written for ascending rates because the RE gives no rule for an unsorted list. Source: #399 comment 7869 section 3 (AutoWeapon rate choice) and section 5 (boundary values). Tests: `Radicle/tests/test_sound.cpp:AutoWeaponRateChoosesTheNearestEntryWithTiesToTheHigherEntry`, `Radicle/tests/test_sound.cpp:AutoWeaponRateSkipsZeroEntriesAndReturnsTheStoredIndex`.
+
+## Radicle/src/environment/sound.cpp:select_standard_file_index
+
+The random draw is an input, so the chooser stays deterministic and testable; the engine's uniform index is the caller's job. A draw equal to the previous pick moves to `(draw + 1) % count`, and only when count is above one. Source: #399 comment 7869 section 3 (Standard selection). Test: `Radicle/tests/test_sound.cpp:StandardChooserReturnsTheOnlyFileAndNeverRepeatsAConsecutivePick`.
+
+## Radicle/src/environment/sound.cpp:sound_frequency_factor
+
+Derived from BNAM byte 0 (signed) as `1 + shift * 0.01`, clamped to [0.1, 2.0], per OG 1.10.163 playback (#399 comment 7869). Test: `Radicle/tests/test_sound.cpp:DerivedFrequencyFactorClampsAtBothEnds`.
+
+## Radicle/src/environment/sound.cpp:sound_is_looping
+
+Tests the mask `0x38` on LNAM byte 1, which is the LNAM dword bits `0x800`, `0x1000` and `0x2000` (#399 comment 7869). This is the any-loop test only. The Envelope Fast and Slow bits have their own stop behavior (#399 comment 9761) and are not separated here. `sound_sidechain_send`, `sound_small_rumble_send` and `sound_big_rumble_send` read LNAM bytes 2 and 3 from the same source. Per RE 7869 the engine applies rumble sends only when the rumble-enabled flag is set and the value is nonzero; `sound_small_rumble_send` and `sound_big_rumble_send` return only the scaled nibble, so the caller must gate on that flag. Test: `Radicle/tests/test_sound.cpp:DerivedLoopingIsAnyOfTheLoopBitsInByteOne`.
+
+## Radicle/src/c_api_sound.cpp:radicle_sound_select_standard_file
+
+Checks `draw_index < count` before calling the native chooser and returns INVALID_ARGUMENT. Left to the native throw, `guarded` would map the WorldDecodeError to PARSE_ERROR. Test: `Radicle/tests/test_sound.cpp:CAbiMatchesTheNativeRulesAndRejectsBadArguments`.
+
+## Radicle/include/fo4/archive/ba2.hpp:is_supported_ba2_general_version
+
+GNRL versions 1, 7 and 8 are accepted on read and write. The GNRL record layout is the same for all three; only the header version field differs, matching the C# oracle which passes the version through. Version 7 is seen on NG/AE installs and version 8 on the AE 1.11.240.0 build (`docs/BA2.md`). An earlier "Skyrim SE-style" label on version 7 had no source and was removed. Versions 0, 2, 3, 9 and 0xFFFFFFFF are rejected on read and write (`Radicle/tests/test_ba2.cpp:Ba2GeneralUnprovenVersion`).
+
+## Radicle/include/fo4/archive/ba2_texture.hpp:is_supported_ba2_texture_version
+
+DX10 versions 1, 7 and 8 are accepted on read and write, with the same version set and the same reasoning as the GNRL gate in `Radicle/include/fo4/archive/ba2.hpp:is_supported_ba2_general_version`. Rejection of 0, 2, 3, 9 and 0xFFFFFFFF is pinned by `Radicle/tests/test_ba2_texture.cpp:Ba2TextureUnprovenVersion`.
+
+## Radicle/include/fo4/plugin/mutation.hpp:local_form_id_range
+
+Inclusive [min, max] local form ID range this plugin may allocate for its own records, selected by the TES4 SmallFile flag. Light plugins are 0x001..0xFFF. `TESFile::AdjustFormIDFileIndex` in Fallout4.exe 1.10.163 is recorded at RVA 0x131fa0 in `docs/ESL_FORMIDS.md` (lines 19, 43); the 0x131f90 value that earlier comments gave is the older 1.10.155 image, labeled Tool-Build at `docs/ESL_FORMIDS.md:48`. The RVA is documentation only and is not verified in this repository. Evidence: `RE-Work/Runtime/03-FINDINGS.md`, section "FormID compile-index remap decoded", summarized in `docs/ESL_FORMIDS.md`.
+
+The recorded routine rebuilds a light record's runtime form ID as
+
+    *id &= 0xFFF;  *id |= 0xFE000000;  *id |= u16 [this+0x372] << 12;
+
+so bits 12..23 of the on-disk local are discarded before the slot is OR'd in. A local above 0xFFF does not fail to load; it silently aliases onto another record. That is why the ceiling is enforced here, since the engine never reports the violation. See `docs/ESL_FORMIDS.md` and issue #26.
+
+## Radicle/src/plugin/mutation.cpp:reserve_local_form_key
+
+Shipped Bethesda plugins store a 0xFF-prefixed HEDR next object ID. The seven official masters and the cc ESLs on the AE 1.11.240.0 install all do (`docs/FORMAT_NOTES.md`, TES4 / HEDR). The current rule throws `FormIdError` "HEDR nextFormID is outside this plugin's local FormID range" for any light or full plugin whose next ID is above the local ceiling plus one, so creating a local record in a plugin with a 0xFF-prefixed next ID is refused. The pinned behavior is `Radicle/tests/test_mutation.cpp:LightPluginWithFfPrefixedHedrNextRefusesLocalRecord` and `Radicle/tests/test_mutation.cpp:FullPluginWithFfPrefixedHedrNextRefusesLocalRecord`. Whether the engine or the Creation Kit reads or writes this field for user plugins is unanswered. The allocation policy for a 0xFF-prefixed next ID awaits RE-016 on issue #520. Until then the throw is kept; no fallback to the first free local ID is implemented.
+
+## Radicle/tests/test_header_versions_real.cpp:ReadsEveryOfficialMasterAndEslHeaderAndRewritesItIdentically
+
+The test reads the plugins from `installed_master_and_cc_plugins` in `Radicle/tests/real_data_plugins.hpp`: the seven official masters present in `FO4_DATA_DIR`, plus installed cc*.esl and cc*.esm Creations (names matched case-insensitively). It does not scan other files. then asserts the TES4 signature, a finite HEDR version and a byte-identical `write_plugin` result. Form version, HEDR version, flags and next object ID are recorded as properties only. Form version 131 and the 0x81/0x281 flags were observed on AE 1.11.240.0 and are not asserted, so the test runs on other builds without changes.
+
+## Radicle/tools/corpus/ba2_measure.py:exe_file_version
+
+`--json` output includes the Fallout4.exe file version read from the VS_FIXEDFILEINFO block (signature 0xFEEF04BD, then the two version words after the struct-version field). The executable is looked up in the parent folder of the Data folder. The signature search takes the first match in the file; no other match was checked. Without `--json` the Markdown table is unchanged.
+
+## Radicle/tools/corpus/form_versions.py:walk
+
+The census walks TES4 and then each GRUP recursively, reading only the 24-byte record and group headers and seeking past every payload, so it never decompresses. A child that overruns its parent or a truncated header raises and fails that plugin. `Radicle/docs/FORMAT_NOTES.md` (AE 1.11.240.0, 2026-10-12) holds the table it produced over the install's Data folder. The `Fallout4.exe` version comes from the VS_FIXEDFILEINFO block next to the Data folder.
+
+## Radicle/src/forms/race.cpp:decode_race
+
+The RACE form version 131 gate stays exact, and `src/forms/race.cpp:create_race` keeps the same gate. The AE census in `Radicle/docs/FORMAT_NOTES.md` found all 110 RACE records in the seven official masters at form version 131, and no RACE record in any ESL, so the gate is unchanged. `Radicle/tests/test_race_real.cpp:RaceReal.EveryRaceDecodesWithoutFailure` decodes every official RACE under FO4_DATA_DIR. The census has not been run on OG or NG, so relax the gate only after running `Radicle/tools/corpus/form_versions.py` on those installs.
+
+## Radicle/tests/real_data_plugins.hpp:installed_master_and_cc_plugins
+
+Returns the seven official masters present in the Data folder (Fallout4.esm, DLCRobot, DLCworkshop01-03, DLCCoast, DLCNukaWorld) followed by every `cc*.esl` and `cc*.esm` file, matched case-insensitively. Missing masters are skipped rather than reported, so the corpus tests keep their skip behavior on partial installs. `archive_load_order` then pairs each name with its `<plugin> - *.ba2` archives, so a `cc` archive is opened only when its plugin is present in Data. Shared by `test_nif_corpus.cpp`, `test_ba2_real.cpp` and `test_pex_corpus.cpp`.
+
+## Radicle/tests/test_nif_corpus.cpp:ReadsEveryVanillaNifAndHandlesGeometryTypes
+
+Reads NIFs from every general archive of the masters and cc plugins from `installed_master_and_cc_plugins`. Per-archive NIF counts and per-BS-version counts are recorded with `RecordProperty`. `read_nif` only accepts BS 130, so a NIF with another BS version fails as a parse error and is counted under the failure, not under a `bs_version_<n>` key; the BS number of a rejected file is not exposed by the reader.
+
+## Radicle/tests/test_ba2_real.cpp:ParsesEveryVanillaStringTableInMastersAndCcArchives
+
+Parses every `Strings/*.STRINGS`, `*.DLSTRINGS` and `*.ILSTRINGS` entry in the general archives of the masters and cc plugins with `fo4::localization::read_string_table`. Path matching normalizes separators and case. Counts are recorded per extension and per language suffix (the text after the last `_` in the file stem, `none` when absent). Only `.STRINGS` presence is asserted.
+
+## Radicle/tests/test_pex_corpus.cpp:EveryDataDirArchivePexRoundTripsByteIdentically
+
+Fallback for `FO4_DATA_DIR` when neither `FO4_PEX_CORPUS` nor `FO4_PEX_ARCHIVES` is set. It scans every general archive from `archive_load_order` for `.pex` entries instead of naming `Fallout4 - Misc.ba2`. On AE 1.11.240, `Fallout4 - Misc.ba2` holds 7875 PEX entries, and the DLC and some cc Main archives hold more, so the scan covers all of them. Found and identical counts are recorded per archive, and the same `roundTrip` and `expectClean` checks apply.
+
+## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
+
+The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
+
+## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
+
+Filters the stored LTEX GNAM list from `decode_landscape_grasses`. A null link is one whose owner is empty, as produced by `resolve_plugin_link` for a zero raw form ID. The stored list keeps every entry, including nulls. The view applies no slope, density or placement logic.
+>

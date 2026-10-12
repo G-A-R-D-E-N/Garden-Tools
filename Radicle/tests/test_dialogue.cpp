@@ -136,4 +136,57 @@ TEST_F(DialogueRead, MalformedKnownFieldsAndUnpairedGroupsFailClosed) {
   }
 }
 
+TEST_F(DialogueRead, InfoResetDerivesHoursFromTheRawDayFractionAndExposesItThroughTheAbi) {
+  write({{"INFO", 0x800, {{"ENAM", words({0xFFFF8001})}}}, {"INFO", 0x801, {{"ENAM", words({0x00008001})}}},
+    {"INFO", 0x802, {{"ENAM", words({0x80008001})}}}, {"INFO", 0x803, {}}});
+  const auto env = load();
+  EXPECT_EQ(fo4::env::decode_dialogue_info(env, record(env, 0x800)).reset_hours(), 24.0);
+  EXPECT_EQ(fo4::env::decode_dialogue_info(env, record(env, 0x801)).reset_hours(), 0.0);
+  const auto half_day = fo4::env::decode_dialogue_info(env, record(env, 0x802)).reset_hours();
+  ASSERT_TRUE(half_day); EXPECT_NEAR(*half_day, 12.0002, 1e-3);
+  EXPECT_FALSE(fo4::env::decode_dialogue_info(env, record(env, 0x803)).reset_hours());
+  const auto file = path.string();
+  const char* paths[] = {file.c_str()};
+  radicle_env* abi = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &abi), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Dialogue.esm", 0x800}, &handle), RADICLE_STATUS_OK);
+  ASSERT_NE(handle, nullptr);
+  const radicle_dialogue_info* info = nullptr;
+  ASSERT_EQ(radicle_dialogue_info_decode(abi, handle, &info), RADICLE_STATUS_OK);
+  ASSERT_NE(info, nullptr);
+  EXPECT_EQ(info->has_reset_hours, 1); EXPECT_EQ(info->reset_hours, 24.0); EXPECT_EQ(info->reset_time_encoded, 0xFFFF);
+  radicle_dialogue_info_free(info);
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Dialogue.esm", 0x803}, &handle), RADICLE_STATUS_OK);
+  ASSERT_NE(handle, nullptr);
+  ASSERT_EQ(radicle_dialogue_info_decode(abi, handle, &info), RADICLE_STATUS_OK);
+  ASSERT_NE(info, nullptr);
+  EXPECT_EQ(info->has_reset_hours, 0); EXPECT_EQ(info->has_data, 0);
+  radicle_dialogue_info_free(info); radicle_env_destroy(abi);
+}
+
+TEST_F(DialogueRead, SceneActionTypesStayRawForUnknownIds) {
+  write({{"SCEN", 0x800, {{"ANAM", half(7)}, {"ANAM", {}}, {"ANAM", half(0xFFFF)}, {"ANAM", {}}, {"ANAM", half(3)}, {"ANAM", {}}}}});
+  const auto env = load(); const auto scene = fo4::env::decode_scene(env, record(env));
+  ASSERT_EQ(scene.actions.size(), 3u);
+  EXPECT_EQ(scene.actions[0].type, 7); EXPECT_EQ(scene.actions[1].type, 0xFFFF); EXPECT_EQ(scene.actions[2].type, 3);
+  EXPECT_FALSE(fo4::env::scene_action_type(scene.actions[0].type));
+  EXPECT_EQ(fo4::env::scene_action_type(scene.actions[2].type), fo4::env::SceneActionType::player_dialogue);
+  EXPECT_EQ(fo4::env::scene_action_type_name(scene.actions[1].type), "");
+}
+
+TEST(DialogueSceneActions, KnownIdsMapToNamedClassesAndUnknownIdsStayEmpty) {
+  using fo4::env::SceneActionType;
+  EXPECT_EQ(fo4::env::scene_action_type(0), SceneActionType::dialogue);
+  EXPECT_EQ(fo4::env::scene_action_type(3), SceneActionType::player_dialogue);
+  EXPECT_EQ(fo4::env::scene_action_type(6), SceneActionType::radio);
+  EXPECT_FALSE(fo4::env::scene_action_type(7));
+  EXPECT_FALSE(fo4::env::scene_action_type(0xFFFF));
+  EXPECT_EQ(fo4::env::scene_action_type_name(2), "timer");
+  EXPECT_EQ(fo4::env::scene_action_type_name(7), "");
+  EXPECT_EQ(fo4::env::scene_action_type_name(0xFFFF), "");
+  EXPECT_STREQ(radicle_scene_action_type_name(5), "npc_response_dialogue");
+  EXPECT_STREQ(radicle_scene_action_type_name(0xFFFF), "");
+}
+
 }

@@ -30,6 +30,13 @@ struct NaviHolder {
   std::vector<InfoLinks> links;
 };
 
+struct PathListHolder {
+  radicle_navi_path_list view{};
+  std::vector<std::vector<radicle_form_key>> keys;
+  std::vector<radicle_navi_path> paths;
+  std::vector<radicle_navi_anchor> anchors;
+};
+
 radicle_navmesh_parent parent(const radicle_env& env, const fo4::env::NavmeshParent& p) {
   return {p.crc, to_c_key(env, p.world), to_c_key(env, p.cell), p.grid_y, p.grid_x};
 }
@@ -124,6 +131,17 @@ void radicle_navmesh_free(const radicle_navmesh* navmesh) {
   if (navmesh) delete static_cast<GeometryHolder*>(navmesh->internal);
 }
 
+radicle_status radicle_navmesh_triangle_edge_is_extra(const radicle_navmesh_triangle* triangle, size_t edge,
+                                                      int32_t* out_is_extra) {
+  clear_error();
+  if (!triangle || !out_is_extra) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "triangle and output required");
+  if (edge >= 3) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "edge must be 0, 1 or 2");
+  fo4::env::NavmeshTriangle t;
+  t.flags = triangle->flags;
+  *out_is_extra = t.edge_is_extra(edge) ? 1 : 0;
+  return RADICLE_STATUS_OK;
+}
+
 radicle_status radicle_navi_decode(const radicle_env* env, const radicle_record* record,
                                   const radicle_navi** out_navi) {
   clear_error();
@@ -158,6 +176,34 @@ radicle_status radicle_navi_decode(const radicle_env* env, const radicle_record*
 
 void radicle_navi_free(const radicle_navi* navi) {
   if (navi) delete static_cast<NaviHolder*>(navi->internal);
+}
+
+radicle_status radicle_navi_path_list_decode(const radicle_env* env, const radicle_record* record,
+                                             const radicle_navi_path_list** out_list) {
+  clear_error();
+  if (!env || !record || !out_list) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and output required");
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
+  *out_list = nullptr;
+  return guarded("unknown exception while decoding NAVI paths", [&] {
+    const auto data = fo4::env::decode_navmesh_paths(env->value, *to_ref(record));
+    auto h = std::make_unique<PathListHolder>();
+    h->keys.resize(data.paths.size());
+    for (std::size_t i = 0; i < data.paths.size(); ++i) {
+      for (const auto& key : data.paths[i]) h->keys[i].push_back(to_c_key(*env, key));
+    }
+    for (const auto& path : h->keys) h->paths.push_back({path.data(), path.size()});
+    for (const auto& [key, value] : data.anchors) h->anchors.push_back({to_c_key(*env, key), value});
+    h->view.paths = h->paths.data(); h->view.path_count = h->paths.size();
+    h->view.anchors = h->anchors.data(); h->view.anchor_count = h->anchors.size();
+    h->view.internal = h.get(); *out_list = &h.release()->view;
+    return RADICLE_STATUS_OK;
+  });
+}
+
+void radicle_navi_path_list_free(const radicle_navi_path_list* list) {
+  if (list) delete static_cast<PathListHolder*>(list->internal);
 }
 
 }

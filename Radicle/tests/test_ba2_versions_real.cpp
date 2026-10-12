@@ -1,4 +1,5 @@
 #include "fo4/archive/ba2_reader.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -23,11 +24,15 @@ TEST_P(Ba2NamedRealData, ExtractsAndRebuildsOneEntry) {
   const auto path = std::filesystem::path{dir} / fixture.filename;
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "missing named archive: " << path;
   SCOPED_TRACE(fixture.filename);
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
 
   const auto reader = fo4::archive::Ba2Reader::open(path);
-  ASSERT_EQ(reader.version(), fixture.version);
+  RecordProperty("version", static_cast<int>(reader.version()));
+  RecordProperty("entries", static_cast<int>(reader.entries().size()));
+  if (exact_counts_known(build)) ASSERT_EQ(reader.version(), fixture.version);
   ASSERT_EQ(reader.kind(), fixture.kind);
-  ASSERT_EQ(reader.entries().size(), fixture.entries);
+  if (exact_counts_known(build)) ASSERT_EQ(reader.entries().size(), fixture.entries);
   ASSERT_TRUE(reader.has_name_table());
   const auto expected = reader.extract(0);
   ASSERT_FALSE(expected.empty());
@@ -35,12 +40,12 @@ TEST_P(Ba2NamedRealData, ExtractsAndRebuildsOneEntry) {
 
   if (fixture.kind == fo4::archive::Ba2Kind::general) {
     auto archive = fo4::archive::read_ba2_general_file(path);
-    ASSERT_EQ(archive.entries.size(), fixture.entries);
+    if (exact_counts_known(build)) ASSERT_EQ(archive.entries.size(), fixture.entries);
     EXPECT_EQ(fo4::archive::extract_ba2_general_entry(archive.entries[0]), expected);
     archive.entries.resize(1);
     const auto rebuilt = fo4::archive::read_ba2_general(fo4::archive::write_ba2_general(archive));
     ASSERT_EQ(rebuilt.entries.size(), 1u);
-    EXPECT_EQ(rebuilt.version, fixture.version);
+    EXPECT_EQ(rebuilt.version, reader.version());
     EXPECT_EQ(rebuilt.entries[0].path, archive.entries[0].path);
     EXPECT_EQ(rebuilt.entries[0].unknown, archive.entries[0].unknown);
     EXPECT_EQ(rebuilt.entries[0].name_hash, archive.entries[0].name_hash);
@@ -54,12 +59,12 @@ TEST_P(Ba2NamedRealData, ExtractsAndRebuildsOneEntry) {
     EXPECT_EQ(std::to_integer<char>(expected[2]), 'S');
     EXPECT_EQ(std::to_integer<char>(expected[3]), ' ');
     auto archive = fo4::archive::read_ba2_texture_file(path);
-    ASSERT_EQ(archive.entries.size(), fixture.entries);
+    if (exact_counts_known(build)) ASSERT_EQ(archive.entries.size(), fixture.entries);
     EXPECT_EQ(fo4::archive::extract_ba2_texture_entry(archive.entries[0]), expected);
     archive.entries.resize(1);
     const auto rebuilt = fo4::archive::read_ba2_texture(fo4::archive::write_ba2_texture(archive));
     ASSERT_EQ(rebuilt.entries.size(), 1u);
-    EXPECT_EQ(rebuilt.version, fixture.version);
+    EXPECT_EQ(rebuilt.version, reader.version());
     EXPECT_EQ(rebuilt.entries[0].path, archive.entries[0].path);
     EXPECT_EQ(rebuilt.entries[0].unknown, archive.entries[0].unknown);
     EXPECT_EQ(rebuilt.entries[0].name_hash, archive.entries[0].name_hash);

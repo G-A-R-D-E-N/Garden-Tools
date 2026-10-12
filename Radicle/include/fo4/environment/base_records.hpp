@@ -3,6 +3,7 @@
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/world.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -71,6 +72,15 @@ struct ClimateTiming {
   std::uint8_t days_per_phase() const { return moons_phase_length & 0x3Fu; }
   bool uses_secunda() const { return (moons_phase_length & 0x40u) != 0; }
   bool uses_masser() const { return (moons_phase_length & 0x80u) != 0; }
+  std::optional<std::uint8_t> moon_phase(std::uint32_t days_passed) const {
+    const std::uint32_t days = days_per_phase();
+    if (days == 0) return std::nullopt;
+    return static_cast<std::uint8_t>((days_passed % (days * 8u)) / days);
+  }
+  float volatility_hold_hours(float multiplier, float duration_min, float duration_max) const {
+    const float scaled = std::clamp(volatility * multiplier, 0.0f, 255.0f);
+    return std::max(0.1f, (duration_max - duration_min) * (255.0f - scaled) / 255.0f + duration_min);
+  }
 };
 
 struct ClimateData {
@@ -207,5 +217,6 @@ std::vector<StaticCollectionPart> decode_static_collection(const Environment& en
 StaticDistantLod decode_static_distant_lod(const Environment& env, const RecordRef& ref);
 std::optional<FormKey> decode_activator_water_type(const Environment& env, const RecordRef& ref);
 WaterData decode_water(const Environment& env, const RecordRef& ref);
+float transition_hours(std::uint8_t transition_delta, float min_hours, float max_hours);
 
 }  // namespace fo4::env

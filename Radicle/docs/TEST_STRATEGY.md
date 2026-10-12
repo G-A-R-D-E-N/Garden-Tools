@@ -40,6 +40,20 @@ Use known definitions and real plugins to prove decoded values. Runtime RE is re
 | Light master on disk | `0x02000812` case from FO4IDE |
 | Runtime `0x56xxxxxx` and `0xFExxxxxx` | unit |
 
+## Real-data tests and game releases
+
+Tests that read `FO4_DATA_DIR` call `detect_game_build` (`tests/real_data_build.hpp`) and record the `game_build` property. Release detection reads `Fallout4.exe` next to the Data folder (VS_FIXEDFILEINFO), and `FO4_GAME_BUILD` (for example `1.11.240.0`) overrides it. The release is OG for 1.10.163, NG for 1.10.980 or 1.10.984, AE for 1.11.x, and Unknown otherwise.
+
+Exact-count assertions are pinned to AE 1.11.240.0 only (`exact_counts_known`):
+
+- `Fallout4.esm` DIAL 35443, INFO 78087, SCEN 3568 (`test_dialogue_real.cpp`)
+- per-master WTHR and CLMT counts (`kOfficialSkyCounts` in `test_sky_real.cpp`)
+- per-master WATR counts (`test_water_real.cpp`)
+- 107 WTHR when the corpus has 7 plugins (`test_weather_concept.cpp`)
+- named BA2 archive versions and entry counts (`test_ba2_versions_real.cpp`)
+
+On other builds these tests record the observed values with `RecordProperty` and skip only the exact equality. Decode, edit, round-trip and byte-identity checks run on every build.
+
 ## Planned (not this pass)
 
 Named regression tests:
@@ -71,6 +85,24 @@ Reader/writer:
 - EditorIDs
 
 `fo4inspect` JSON is the native inspection side of that diff. Writer acceptance additionally edits, saves and reparses the resulting plugin.
+
+## Real-asset corpus tests
+
+Opt-in tests read an installed game and skip when their variables are unset. Each run reports `RecordProperty` counts, which must be recorded per release (OG, NG and AE) before a format gate is changed.
+
+| Test | Variable | Covers |
+|------|----------|--------|
+| `NifCorpus.ReadsEveryVanillaNifAndHandlesGeometryTypes` | `FO4_DATA_DIR` | every NIF in the general archives of the present official masters and `cc*` plugins, per archive and per BS version |
+| `Ba2RealData.ParsesEveryVanillaStringTableInMastersAndCcArchives` | `FO4_DATA_DIR` | every `Strings/*.STRINGS`, `*.DLSTRINGS`, `*.ILSTRINGS` entry, per extension and language |
+| `PexCorpus.EveryLoosePexRoundTripsByteIdentically` | `FO4_PEX_CORPUS` | loose `.pex` directories |
+| `PexCorpus.EveryArchivedPexRoundTripsByteIdentically` | `FO4_PEX_ARCHIVES` | `.ba2` files holding `Scripts/*.pex` |
+| `PexCorpus.EveryDataDirArchivePexRoundTripsByteIdentically` | `FO4_DATA_DIR` (fallback when the two above are unset) | `.pex` entries in the general archives of the masters and `cc*` plugins |
+
+`FO4_DATA_DIR` is the game's `Data` folder. The masters are the seven official plugins that are present (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCCoast.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCNukaWorld.esm`), plus every `cc*.esl` and `cc*.esm` in the folder. Only archives paired with a plugin that is present are opened; a `cc` archive whose plugin is absent is not read.
+
+Measured on AE 1.11.240 (BA2 name tables): Fallout4 strings are in `Fallout4 - Interface.ba2` (33 files under `STRINGS\`). Each DLC has 33 string files in its `<DLC> - Main.ba2`, with mixed `/` and `\` separators. Each cc Main archive holds 36 string files. PEX is in `Fallout4 - Misc.ba2` (7875 entries), plus the DLC and some cc Main archives.
+
+Each release's results are recorded as OG, NG or AE in the issue or PR that changes a format gate.
 
 ## Sanitizers
 

@@ -12,13 +12,36 @@ public sealed record ClimateTiming(byte SunriseBegin, byte SunriseEnd, byte Suns
     public byte DaysPerPhase => (byte)(MoonsPhaseLength & 0x3F);
     public bool UsesSecunda => (MoonsPhaseLength & 0x40) != 0;
     public bool UsesMasser => (MoonsPhaseLength & 0x80) != 0;
+
+    public unsafe byte? MoonPhase(uint daysPassed)
+    {
+        int hasPhase;
+        byte phase;
+        Call.Check(RadicleNative.ClimateMoonPhase(MoonsPhaseLength, daysPassed, &hasPhase, &phase));
+        return hasPhase != 0 ? phase : null;
+    }
+
+    public unsafe float VolatilityHoldHours(float multiplier, float durationMin, float durationMax)
+    {
+        float hours;
+        Call.Check(RadicleNative.ClimateVolatilityHoldHours(Volatility, multiplier, durationMin, durationMax, &hours));
+        return hours;
+    }
 }
 
 public sealed record WeatherParameters(byte WindSpeed, byte TransitionDelta, byte SunGlare, byte SunDamage,
                                         byte PrecipitationBegin, byte PrecipitationEnd, byte LightningBegin,
                                         byte LightningEnd, byte LightningFrequency, byte Flags, ByteColor LightningColor,
                                         byte VisualEffectBegin, byte VisualEffectEnd, byte WindDirection,
-                                        byte WindDirectionRange, byte? WindTurbulence);
+                                        byte WindDirectionRange, byte? WindTurbulence)
+{
+    public unsafe float TransitionHours(float minHours, float maxHours)
+    {
+        float hours;
+        Call.Check(RadicleNative.WeatherTransitionHours(TransitionDelta, minHours, maxHours, &hours));
+        return hours;
+    }
+}
 
 public sealed unsafe partial class RadicleEnvironment
 {

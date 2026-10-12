@@ -320,6 +320,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
+    tests/test_header_versions_real.cpp
     tests/test_tes4_masters_hedr.cpp
     tests/test_formlinks.cpp
     tests/test_clmt_formlinks.cpp
@@ -406,6 +407,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_lvsp_creation.cpp
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
+    tests/test_race_real.cpp
     tests/test_onam.cpp
     tests/test_vmad_writer.cpp
     tests/test_vmad_writer_real.cpp
@@ -489,6 +491,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_structure_real.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
+    tests/real_data_build.cpp
+    tests/test_real_data_build.cpp
   )
   target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)

@@ -10,6 +10,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -33,9 +34,12 @@ protected:
     if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
     path_ = std::filesystem::path{dir} / GetParam();
     if (!std::filesystem::exists(path_)) GTEST_SKIP() << "missing official master: " << path_;
+    build_ = detect_game_build(dir);
+    record_game_build(build_);
   }
 
   std::filesystem::path path_;
+  GameBuild build_ = game_build_from_version("");
 };
 
 TEST_P(WaterRealData, DecodesEveryWaterAndPreservesMasterBytes) {
@@ -111,7 +115,8 @@ TEST_P(WaterRealData, MasterHasExpectedWaterCountAndDnamSizes) {
       EXPECT_TRUE(sub.data.size() == 188 || sub.data.size() == 201) << sub.data.size();
     }
   });
-  EXPECT_EQ(count, expected.at(GetParam()));
+  RecordProperty("WATR_master", static_cast<int>(count));
+  if (exact_counts_known(build_)) EXPECT_EQ(count, expected.at(GetParam()));
 }
 
 INSTANTIATE_TEST_SUITE_P(
