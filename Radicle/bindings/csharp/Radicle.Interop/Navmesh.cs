@@ -6,7 +6,16 @@ namespace Radicle.Interop;
 
 public sealed record NavmeshParent(uint Crc, FormKey? World, FormKey? Cell, short GridY, short GridX);
 public sealed record NavmeshVertex(float X, float Y, float Z);
-public sealed record NavmeshTriangle(ushort[] Vertices, short[] Edges, float Clearance, byte Traversal, uint Flags);
+public sealed record NavmeshTriangle(ushort[] Vertices, short[] Edges, float Clearance, byte Traversal, uint Flags)
+{
+    public unsafe bool EdgeIsExtra(int edge)
+    {
+        var native = new Native.NavmeshTriangle { Flags = Flags };
+        var extra = 0;
+        Call.Check(RadicleNative.NavmeshTriangleEdgeIsExtra(&native, (nuint)(uint)edge, &extra));
+        return extra != 0;
+    }
+}
 public sealed record NavmeshEdgeLink(uint Type, FormKey? Navmesh, short Triangle, byte Edge);
 public sealed record NavmeshDoorLink(short Triangle, uint Crc, FormKey? Door);
 public sealed record NaviDoorLink(uint Crc, FormKey? Door);
@@ -15,6 +24,8 @@ public sealed record NavmeshGeometry(uint Version, NavmeshParent Parent, IReadOn
 public sealed record NavmeshInfo(FormKey? Navmesh, uint Flags, NavmeshVertex Location, float Preferred,
     IReadOnlyList<FormKey?> Edges, IReadOnlyList<FormKey?> PreferredEdges, IReadOnlyList<NaviDoorLink> Doors,
     bool HasIsland, byte[] Island, NavmeshParent Parent);
+public sealed record NaviAnchor(FormKey? Navmesh, uint Value);
+public sealed record NavmeshPathData(IReadOnlyList<IReadOnlyList<FormKey?>> Paths, IReadOnlyList<NaviAnchor> Anchors);
 
 public sealed unsafe partial class RadicleEnvironment
 {
@@ -59,5 +70,20 @@ public sealed unsafe partial class RadicleEnvironment
                 i.HasIsland != 0, Call.Copy<byte>(i.Island, i.IslandSize), NavParent(i.Parent))).ToArray();
         }
         finally { RadicleNative.NaviFree(n); }
+    }
+
+    public NavmeshPathData NavmeshPaths(Record record)
+    {
+        using var use = Use(record);
+        Native.NaviPathList* list;
+        Call.Check(RadicleNative.NaviPathListDecode(use.Pointer, record.Handle, &list));
+        try
+        {
+            var paths = Call.Copy<Native.NaviPath>(list->Paths, list->PathCount).Select(p =>
+                (IReadOnlyList<FormKey?>)Call.Copy<Native.FormKey>(p.Navmeshes, p.NavmeshCount).Select(FormKey.FromNative).ToArray()).ToArray();
+            return new(paths, Call.Copy<Native.NaviAnchor>(list->Anchors, list->AnchorCount)
+                .Select(a => new NaviAnchor(FormKey.FromNative(a.Navmesh), a.Value)).ToArray());
+        }
+        finally { RadicleNative.NaviPathListFree(list); }
     }
 }
