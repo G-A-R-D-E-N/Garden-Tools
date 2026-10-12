@@ -16,6 +16,9 @@ public static partial class WriteService
         var (first, last, capacity, range) = EslSlots(mod);
 
         var native = mod.EnumerateMajorRecords().Where(r => r.FormKey.ModKey == mod.ModKey).ToList();
+        var duplicate = native.GroupBy(r => r.FormKey).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate != null)
+            return $"Cannot compact '{plugin}': form ID {duplicate.Key} is shared by {duplicate.Count()} records. Fix the duplicate in xEdit first.";
         var inRange = new HashSet<uint>(native.Select(r => r.FormKey.ID).Where(id => id >= first && id <= last));
 
         var remap = new Dictionary<FormKey, FormKey>();
