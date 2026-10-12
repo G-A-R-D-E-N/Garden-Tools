@@ -49,6 +49,17 @@ and skip cleanly otherwise. In CI
 the `fo4-data` runner supplies it to the `native-windows-real-data` job of `native-ci`; both `native-windows-tests` passes clear it. The Linux job passes
 `FO4_DATA_DIR_LINUX`, which is currently unset, so they skip there.
 
+Per-field population, measured on the shipped masters of OG 1.10.163.0, NG 1.10.984.0 and AE 1.11.240.0 (identical on all three). The counting rules match `populated_<field>` in `Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes`: DNAM counts records that have one, NAM0 and NAM1 count velocity triples with a non-zero component, and NAM2-NAM4 count non-empty noise texture paths.
+
+| Master | WATR | DNAM (188 / 201 bytes) | NAM0 | NAM1 | NAM2 | NAM3 | NAM4 |
+|---|---|---|---|---|---|---|---|
+| Fallout4.esm | 42 | 42 (2 / 40) | 36 | 0 | 42 | 42 | 42 |
+| DLCCoast.esm | 2 | 2 (0 / 2) | 2 | 0 | 2 | 2 | 2 |
+| DLCNukaWorld.esm | 3 | 3 (0 / 3) | 1 | 0 | 3 | 3 | 3 |
+| Total | 47 | 47 (2 / 45) | 39 | 0 | 47 | 47 | 47 |
+
+DLCRobot, DLCworkshop01, DLCworkshop02 and DLCworkshop03 have no WATR. No shipped record sets a non-zero angular velocity (NAM1).
+
 ## Editing
 
 WATR is registered in `schema/fallout4/fields.json` and edited through the
