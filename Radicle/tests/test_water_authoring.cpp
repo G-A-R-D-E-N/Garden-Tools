@@ -35,7 +35,7 @@ bool link_refused(fo4::Plugin& plugin, std::uint32_t id, const char* path, const
 
 }
 
-TEST(WaterAuthoring, VisualFloatsAndColourBytesWriteOnlyTheirBytes) {
+TEST(WaterAuthoring, VisualFloatsAndColorBytesWriteOnlyTheirBytes) {
   auto plugin = read(build(fixture()));
   const auto before = snapshot(plugin);
   auto want = visual(201);
