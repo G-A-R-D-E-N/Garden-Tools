@@ -553,6 +553,7 @@ void remap_record_form_links(Record& record,
 
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context) {
+  visit_records(plugin, [](const Record& record) { require_decodable(record); });
   visit_records(plugin, [&](Record& record) {
     remap_record_form_links(record, old_context, new_context, &plugin);
   });
@@ -566,6 +567,7 @@ void rekey_form_links(Plugin& plugin,
   bool any_changed = false;
 
   visit_records(next, [&](Record& record) {
+    require_decodable(record);
     bool changed = false;
     for (auto& sub : record.subrecords) {
       auto bytes = std::span<std::byte>(sub.data);

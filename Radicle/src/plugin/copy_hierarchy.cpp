@@ -207,6 +207,8 @@ bool insert_nested_copy(Plugin& destination,
                         const Plugin& source,
                         const NestedCopyPlan& plan,
                         Record copied) {
+  require_decodable(*plan.cell);
+  if (plan.world != nullptr) require_decodable(*plan.world);
   const auto& path = plan.path;
   const auto source_context = plugin_form_id_context(source);
   const auto destination_context = plugin_form_id_context(destination);
@@ -224,6 +226,7 @@ bool insert_nested_copy(Plugin& destination,
     const auto world_key = plan.world->form_key;
     auto index = record_index(*top, world_key);
     if (index) {
+      require_decodable(std::get<Record>(top->children[*index]));
       if (std::get<Record>(top->children[*index]).header.signature != k_wrld) return false;
     } else {
       if (find_record(destination, world_key) != nullptr) return false;
@@ -244,6 +247,7 @@ bool insert_nested_copy(Plugin& destination,
 
   const auto cell_key = plan.cell->form_key;
   const auto* existing = find_record(destination, cell_key);
+  if (existing != nullptr) require_decodable(*existing);
   auto cell_index = record_index(*current, cell_key);
   if (existing != nullptr && (!cell_index || existing->header.signature != k_cell)) return false;
   if (!cell_index) {

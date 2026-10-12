@@ -300,6 +300,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_compression.cpp
     tests/test_reader_limits.cpp
     tests/test_undecodable_record.cpp
+    tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
     tests/test_actor_value_perk_real.cpp
     tests/test_formkey_load.cpp
