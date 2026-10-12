@@ -60,10 +60,6 @@ std::vector<std::byte> inflate_record_payload(std::span<const std::byte> compres
     out.resize(*produced);
     return out;
   }
-  if (auto produced = try_inflate(-MAX_WBITS)) {
-    out.resize(*produced);
-    return out;
-  }
   throw parse_error(offset, "zlib inflate failed for compressed record");
 }
 

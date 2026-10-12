@@ -81,9 +81,9 @@ Deleted record bit `1 << 5` is `strong` (`TESForm::IsDeleted`).
 
 ## Compressed records
 
-Payload starts with `uint32 uncompressed_size`, then zlib (window bits 15, with raw-deflate fallback).
+Payload starts with `uint32 uncompressed_size`, then a zlib-wrapped stream (window bits 15). This branch rejects raw-deflate and gzip framing for nonzero declared sizes; its existing zero-size early return is unchanged.
 
-CK strings confirm inflate/deflate (`confirmed` that the compressor is zlib). The 4-byte uncompressed-size prefix is `strong` (Mutagen `Decompression.cs` + CommonLib `decompressedFormBuffer`). Runtime function is `TESFile::DecompressCurrentForm` (OG RVA `0x132500`, 566 bytes), not yet decompiled. Synthetic zlib round-trip is tested. Raw-deflate fallback stays until that decompile.
+OG/AE decompressor and init-wrapper records establish the prefix and zlib framing statically; synthetic framing rejection and round-trip tests cover Radicle's policy. See `COMPRESSION_EVIDENCE.md` for per-build verification, remaining runtime questions and corpus scope. Untouched compressed records preserve their source bytes; rebuilt records emit zlib.
 
 ## Record type enum
 

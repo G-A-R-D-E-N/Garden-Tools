@@ -1591,6 +1591,10 @@ The PEX parser reads a value for every object variable and struct member, so `ha
 
 The managed model types and the generated raw structs share names (`PexValue`, `PexFunction`, `PexState`, `PexObjectCode` and others), following `PexHeader` and `PexObjectCounts`. Code inside `Radicle.Interop` resolves to the model type. A consumer outside it that imports both `Radicle.Interop` and `Radicle.Interop.Native` gets CS0104, so it qualifies the raw structs as `Native.X` (as `PexCode.cs:ReadCode` does) or aliases them. Renaming the generated structs would change every existing `Native` type name, so the bindings README documents the rule instead. No GardenEngine file imports both namespaces today.
 
+## Radicle/src/plugin/reader.cpp:inflate_record_payload, Radicle/tests/test_compression.cpp:OfficialMastersUseZlibAndPreserveBytes
+
+The current-main integration retains the published zlib-framing rejection and physical XXXX preservation tests without changing the decoder. Main supplies the required native and offline managed CI jobs and the field-address generator test. No exports or layouts are added, so `RADICLE_ABI_VERSION` is unchanged. NG window bits, zero-size and malformed-input runtime acceptance, and CK behavior remain open under #391.
+
 ## PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:CompactToEslCore / CheckEslEligibilityCore / EslSlots
 
 The legacy Mutagen path (reached through `BackendInterop` and `PluginToolExecutor` compact_to_esl / check_esl_eligibility) follows the native backend's slot rules (`PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:eslSlots`, which uses `Radicle/src/plugin/mutation.cpp:allows_hardcoded_range`), with one stricter condition. `EslSlots` starts at 0x001 only when the HEDR version is at least 1.0, the plugin has a master, and `HasForeignReference` finds a record FormKey or form link whose ModKey is another mod; otherwise it starts at 0x800. The native floor has no cross-mod check, so the legacy floor can be stricter than `eslSlots`. Native IDs below that floor or above 0xFFF are out of range, and the range text and capacity come from those bounds; the old code hard-coded 0x800-0xFFF and missed low IDs. The four methods moved out of `WriteService.cs` because that file is over the line limit.
@@ -1923,3 +1927,11 @@ Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a 
 ## Radicle/src/schema/localized_fields.cpp:read_localized_string, Radicle/CMakeLists.txt:gtest_discover_tests
 
 The current-main integration retains the flag-boundary and zero-ID tests, portable fixtures, and main's field-address generator test. No localized-string decoder behavior or C ABI declarations change, so `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is unchanged. NG reader semantics, CK table emission and language ownership, and live transformation acceptance remain open under #390.
+
+## .github/workflows/native-ci.yml:native-linux — failure artifact
+
+`native-linux-failure` keeps only what diagnoses a failed Linux run: the CTest tree (`build/native/Testing/**`, whose `LastTest.log` holds every test's output), the CMake logs (`build/native/**/*.log`, `build/native/CMakeFiles/CMakeConfigureLog.yaml`) and `build/native/CMakeCache.txt`. It no longer uploads `build/native/bin/**`. That directory holds the Debug test and tool executables with debug information, and each upload was 360-470 MB. Compiler and linker errors appear in the step log, so no compiler log file is uploaded. Retention is 3 days. To inspect a failing test binary, rebuild the same commit locally.
+
+## .github/workflows/plugin-editor-ci.yml:windows, linux — failure artifacts
+
+`plugin-editor-windows-failure` and `plugin-editor-linux-failure` upload `TestResults/**` (the TRX logs written by `dotnet test --results-directory ../TestResults`). The TRX files are not expected to be large, so only the retention changed, from 7 to 3 days.
