@@ -33,7 +33,21 @@ struct DialogueInfo {
   RecordName prompt;
   std::vector<DialogueResponse> responses;
   std::vector<CtdaCondition> conditions;
+  std::optional<double> reset_hours() const;
 };
+
+enum class SceneActionType : std::uint16_t {
+  dialogue = 0,
+  package = 1,
+  timer = 2,
+  player_dialogue = 3,
+  start_scene = 4,
+  npc_response_dialogue = 5,
+  radio = 6
+};
+
+std::optional<SceneActionType> scene_action_type(std::uint16_t type);
+std::string_view scene_action_type_name(std::uint16_t type);
 
 struct ScenePhase {
   std::optional<std::string_view> name;

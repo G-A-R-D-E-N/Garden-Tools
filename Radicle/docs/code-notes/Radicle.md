@@ -882,3 +882,31 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
+
+## Radicle/include/fo4/environment/dialogue.hpp:DialogueInfo::reset_hours
+
+ENAM's second u16 is a reset time in units of 1/65535 of a day (RE #405 comment 7891, reaffirmed in #344 comment 7892), so the derived hours are raw * 24 / 65535 and raw 65535 is exactly 24.0. The method returns an empty optional when ENAM is absent, rather than 0, so an absent reset is not confused with a zero reset. The writer field `INFO\ResetHours` in `include/fo4/schema/generated_scalar_fields.inc` edits the raw u16 and keeps its historical name; it is not the derived value.
+
+## Radicle/include/fo4/environment/dialogue.hpp:SceneActionType
+
+The enumerators are the OG 1.10.163 ANAM action type ids 0 to 6 from RE #405 comment 7891. Only ids 0 to 6 are named. The stored `SceneAction::type` stays the raw u16, so unknown ids such as 7 or 0xFFFF are preserved and report no name rather than being coerced. RE #405 does not state that every shipped id is in 0 to 6, so the corpus test records a histogram instead of asserting it.
+
+## Radicle/src/environment/dialogue.cpp:scene_action_type_name
+
+Unknown ids return an empty view built from a literal, not a default `string_view`, so `data()` is a valid pointer for the C ABI's `radicle_scene_action_type_name`, which must return a non-null C string.
+
+## Radicle/include/fo4/c_api_dialogue.h:radicle_dialogue_info
+
+`has_reset_hours` and `reset_hours` follow the `has_` plus value pattern of the other optional fields. They were added in the ABI bump from 34 to 35. The C# `DialogueInfo` record gained a `ResetHours` positional parameter after `ResetTimeEncoded`.
+
+## Radicle/src/c_api_dialogue.cpp:radicle_scene_action_type_name
+
+Static names are returned for the named ids and an empty string for every other id. The caller does not free the result, which points into the library's static data.
+
+## Radicle/tests/test_dialogue_real.cpp:DialogueReal
+
+The per-type `SCEN_action_type_<id>` properties are a histogram of the shipped action type ids for the record-level CI report. They are not asserted, because RE #405 only states the meaning of ids 0 to 6 and does not state that every shipped id is in that range.
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
+
+The C ABI moved from 34 to 35 for the reset-hours fields and the `radicle_scene_action_type_name` export. The quest ABI test is renamed to `CApiQuest.AbiVersionIsThirtyFive` and checks 35u.

@@ -65,6 +65,23 @@ std::vector<CtdaCondition> conditions(const Reader& r, std::size_t begin, std::s
   catch (const std::exception& error) { r.fail(sig("CTDA"), error.what()); }
 }
 
+constexpr std::array<std::string_view, 7> scene_action_type_names{
+    "dialogue", "package", "timer", "player_dialogue", "start_scene", "npc_response_dialogue", "radio"};
+
+}
+
+std::optional<double> DialogueInfo::reset_hours() const {
+  if (!data) return std::nullopt;
+  return (*data)[1] * 24.0 / 65535.0;
+}
+
+std::optional<SceneActionType> scene_action_type(std::uint16_t type) {
+  if (type >= scene_action_type_names.size()) return std::nullopt;
+  return static_cast<SceneActionType>(type);
+}
+
+std::string_view scene_action_type_name(std::uint16_t type) {
+  return scene_action_type(type) ? scene_action_type_names[type] : std::string_view{""};
 }
 
 DialogueTopic decode_dialogue_topic(const Environment& env, const RecordRef& ref) {
