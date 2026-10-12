@@ -24,7 +24,7 @@ and table end before the name-table offset, prints the totals below and
 exits non-zero if any check fails. An archive that cannot be opened or parsed, or
 that fails a check, is reported as a problem and left out of the totals. It is a
 local tool and is not run by CI.
-Counts cover all 79 installed root-level `.ba2` archives:
+Counts cover all 79 installed root-level `.ba2` archives of the AE 1.11.240.0 build:
 
 | Version | Content | Archives | Entries | Chunks |
 |---|---|---:|---:|---:|

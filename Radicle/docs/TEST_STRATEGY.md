@@ -86,6 +86,24 @@ Reader/writer:
 
 `fo4inspect` JSON is the native inspection side of that diff. Writer acceptance additionally edits, saves and reparses the resulting plugin.
 
+## Real-asset corpus tests
+
+Opt-in tests read an installed game and skip when their variables are unset. Each run reports `RecordProperty` counts, which must be recorded per release (OG, NG and AE) before a format gate is changed.
+
+| Test | Variable | Covers |
+|------|----------|--------|
+| `NifCorpus.ReadsEveryVanillaNifAndHandlesGeometryTypes` | `FO4_DATA_DIR` | every NIF in the general archives of the present official masters and `cc*` plugins, per archive and per BS version |
+| `Ba2RealData.ParsesEveryVanillaStringTableInMastersAndCcArchives` | `FO4_DATA_DIR` | every `Strings/*.STRINGS`, `*.DLSTRINGS`, `*.ILSTRINGS` entry, per extension and language |
+| `PexCorpus.EveryLoosePexRoundTripsByteIdentically` | `FO4_PEX_CORPUS` | loose `.pex` directories |
+| `PexCorpus.EveryArchivedPexRoundTripsByteIdentically` | `FO4_PEX_ARCHIVES` | `.ba2` files holding `Scripts/*.pex` |
+| `PexCorpus.EveryDataDirArchivePexRoundTripsByteIdentically` | `FO4_DATA_DIR` (fallback when the two above are unset) | `.pex` entries in the general archives of the masters and `cc*` plugins |
+
+`FO4_DATA_DIR` is the game's `Data` folder. The masters are the seven official plugins that are present (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCCoast.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCNukaWorld.esm`), plus every `cc*.esl` and `cc*.esm` in the folder. Only archives paired with a plugin that is present are opened; a `cc` archive whose plugin is absent is not read.
+
+Measured on AE 1.11.240 (BA2 name tables): Fallout4 strings are in `Fallout4 - Interface.ba2` (33 files under `STRINGS\`). Each DLC has 33 string files in its `<DLC> - Main.ba2`, with mixed `/` and `\` separators. Each cc Main archive holds 36 string files. PEX is in `Fallout4 - Misc.ba2` (7875 entries), plus the DLC and some cc Main archives.
+
+Each release's results are recorded as OG, NG or AE in the issue or PR that changes a format gate.
+
 ## Sanitizers
 
 CMake options `FO4_ENABLE_ASAN` and `FO4_ENABLE_UBSAN`. Parsing untrusted plugins must fail with `parse_error`, not memory corruption.

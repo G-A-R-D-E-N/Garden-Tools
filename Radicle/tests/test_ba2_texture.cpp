@@ -318,9 +318,11 @@ TEST(Ba2Texture, RejectsMissingMagic) {
   EXPECT_THROW(fo4::archive::read_ba2_texture(data), Ba2Error);
 }
 
-TEST(Ba2Texture, RejectsUnsupportedVersion) {
+class Ba2TextureUnprovenVersion : public testing::TestWithParam<std::uint32_t> {};
+
+TEST_P(Ba2TextureUnprovenVersion, RejectsOnWriteAndRead) {
   Ba2TextureArchive archive;
-  archive.version = 2;
+  archive.version = GetParam();
   Ba2TextureEntry entry;
   entry.path = "textures\\x.dds";
   entry.texture = {4, 4, 1, 71, 0, 8};
@@ -337,13 +339,16 @@ TEST(Ba2Texture, RejectsUnsupportedVersion) {
     header.push_back(static_cast<std::byte>((value >> 24u) & 0xFFu));
   };
   u32(0x58445442u);
-  u32(2);
+  u32(GetParam());
   u32(0x30315844u);
   u32(0);
   u32(0);
   u32(0);
   EXPECT_THROW(fo4::archive::read_ba2_texture(header), Ba2Error);
 }
+
+INSTANTIATE_TEST_SUITE_P(UnprovenVersions, Ba2TextureUnprovenVersion,
+                         testing::Values(0u, 2u, 3u, 9u, 0xFFFFFFFFu));
 
 TEST(Ba2Texture, RejectsGeneralArchiveContent) {
   std::vector<std::byte> data;

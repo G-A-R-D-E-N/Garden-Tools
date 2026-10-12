@@ -441,3 +441,29 @@ TEST(Mutation, ReserveLocalFormKeyReportsAFullLightPluginAndAnOverflowedNextSepa
   EXPECT_NE(reserveError(0x1000u).find("no local "), std::string::npos);
   EXPECT_NE(reserveError(0x1001u).find("is outside this plugin's local "), std::string::npos);
 }
+
+TEST(Mutation, LightPluginWithFfPrefixedHedrNextRefusesLocalRecord) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF002F1Au, true, true), "Lifecycle.esl");
+  const auto original = fo4::test::original_bytes(plugin);
+  try {
+    static_cast<void>(fo4::create_local_record(plugin, fo4::Signature::from_string("EYES")));
+    ADD_FAILURE() << "create_local_record allocated under a 0xFF-prefixed HEDR next";
+  } catch (const fo4::FormIdError& error) {
+    EXPECT_NE(std::string{error.what()}.find("is outside this plugin's local"), std::string::npos);
+  }
+  EXPECT_EQ(plugin.header.next_form_id, 0xFF002F1Au);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(Mutation, FullPluginWithFfPrefixedHedrNextRefusesLocalRecord) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF002F1Au, false), "Lifecycle.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  try {
+    static_cast<void>(fo4::create_local_record(plugin, fo4::Signature::from_string("EYES")));
+    ADD_FAILURE() << "create_local_record allocated under a 0xFF-prefixed HEDR next";
+  } catch (const fo4::FormIdError& error) {
+    EXPECT_NE(std::string{error.what()}.find("is outside this plugin's local"), std::string::npos);
+  }
+  EXPECT_EQ(plugin.header.next_form_id, 0xFF002F1Au);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
