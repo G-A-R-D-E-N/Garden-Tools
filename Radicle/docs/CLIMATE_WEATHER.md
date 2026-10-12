@@ -83,6 +83,8 @@ is `pct = (pct - base) * (fWeatherTransAccel + 1.0) + base`, recomputed each fra
 second argument sets the flag, and the console `SetWeather` can also. `transition_hours` does not model this
 multiplier (RE-010 on #520 comment 13142).
 
+The three C ABI helpers `radicle_climate_moon_phase`, `radicle_climate_volatility_hold_hours` and `radicle_weather_transition_hours` (#343) arrive in ABI 36; ABI 35 is the #340 sound playback set.
+
 Sunrise and sunset windows are stored as-is. The timing classifier (RE-010 on #520 comment 13142, OG 1.10.163)
 opens the sunrise window only if sunrise begin < t < sunrise end, day covers sunrise end <= t <= sunset begin,
 the sunset window opens only if sunset begin < t < sunset end, and anything else is night. None of the timing

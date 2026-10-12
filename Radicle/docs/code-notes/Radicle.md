@@ -877,7 +877,7 @@ Fail closed: the recursion throws `WorldDecodeError` instead of returning a part
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin. ABI 35 renames that test to `CApiQuest.AbiVersionIsThirtyFive` and moves its literal to 35.
+The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin. ABI 35 renames that test to `CApiQuest.AbiVersionIsThirtyFive` and moves its literal to 35; that bump is the #340 sound playback functions (`radicle_sound_select_rate_file`, `radicle_sound_select_standard_file`). The #343 climate helpers (`radicle_climate_moon_phase`, `radicle_climate_volatility_hold_hours`, `radicle_weather_transition_hours`, in `c_api_records.h`) were first numbered 35 on their branch and moved to ABI 36 when nomad/dev merged, so they arrive in ABI 36. The test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtySix`.
 
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
@@ -896,9 +896,6 @@ Flags a CLMT TNAM whose sunrise (bytes 0 to 1) or sunset (bytes 2 to 3) window h
 
 ## Radicle/src/c_api_base_records.cpp:radicle_climate_moon_phase
 C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_hours` and `transition_hours`. They take the stored bytes as scalars, check null out-pointers, and use the same `RADICLE_STATUS_INVALID_ARGUMENT` convention as the other scalar getters. The moon wrapper reports absence with `out_has_phase` (0 when days per phase is 0).
-
-## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
-ABI 34 to 35 for the three new scalar helpers in `c_api_records.h` (`radicle_climate_moon_phase`, `radicle_climate_volatility_hold_hours`, `radicle_weather_transition_hours`). The test rename is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFive`.
 
 ## Radicle/tests/real_data_build.cpp:detect_game_build
 
