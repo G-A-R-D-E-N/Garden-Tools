@@ -1944,3 +1944,17 @@ The current-main integration retains the flag-boundary and zero-ID tests, portab
 ## F4LODGEN removed
 
 Anchored to `README.md` (tool table) and `.github/workflows/native-ci.yml:on.push.paths-ignore`. F4LODGEN was retired on 2026-10-11 and its tree was deleted. The last commit that contains it is 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3; recover files with `git show 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3:F4LODGEN/<path>`. The README tool table row and the native-ci paths-ignore entry `F4LODGEN/**` were removed with it.
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile
+
+MO2 winners are resolved as before: Data, then enabled mods low to high, then the overwrite folder, each overwriting the earlier name. `readProfile` then passes every winner path to the resolved-files overload of `fo4::loadorder::assemble_load_order` (Radicle `src/loadorder/assemble.cpp`), with `plugins.txt` read by `fo4::loadorder::read_plugin_list` and `Fallout4.ccc` read from the parent of the game Data folder when that file exists. The table is `OfficialTable::ae`. Master-flag files therefore precede non-masters as the engine orders them. Official and ccc names that are not in the winners are skipped by the assembler.
+
+Ceiling: the AE table is the seven OG/NG names plus `DLCDummy10thAnniversary.esm`. On an OG/NG install without that file the result equals the OG/NG result. If the file is present, it is ordered as an official name, which the OG/NG table would not do.
+
+`loadOrder` is `Fallout4.esm` first, then the assembled entries with `checked` set, in assembled order. The assembler does not place `Fallout4.esm` first unless it is an official name, so `readProfile` forces it to the front.
+
+A failed assembly (`assembled.failed`) returns `Error{"Mo2LoadOrderInvalid", ...}` before `loadOrder` is built. The message joins each `missing_master`, `master_too_new` and `hoist_cycle` finding as `<plugin>: <detail>`, separated by `; `. Radicle exceptions from reading or assembling return the same error type. When `readProfile` returns `Mo2LoadOrderInvalid`, `textureRootsForSettings` in `PluginEditTool/native/apps/fo4ide/main.cpp` falls back to the Data folder, so MO2 texture roots are not used until the load order is fixed.
+
+`missingPlugins` lists every active plugins.txt entry the assembly did not check (absent from the winners, zero-byte, unreadable header, or a master absent), plus `Fallout4.esm` when no winner has that name. Names are deduplicated. A `Fallout4.ccc` name that is missing is not reported unless plugins.txt also lists it as active.
+
+Tests in `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp`: `MO2 profile loads official masters and Creation Club plugins missing from plugins.txt`, `MO2 profile keeps inactive plugin list entries unloaded`, `MO2 profile resolves plugin winners in virtual data priority`, `MO2 profile reports an active plugin whose master is absent`, `MO2 profile refuses a load order when a checked master is missing its own master`. No test covers an unresolved `Fallout4.esm`.

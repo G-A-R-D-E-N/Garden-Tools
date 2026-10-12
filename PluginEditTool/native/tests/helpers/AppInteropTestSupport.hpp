@@ -12,6 +12,8 @@
 #include <fo4ide/app/AppInteropTarget.hpp>
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
+#include "PluginFixtures.hpp"
+
 namespace app_interop_test {
 
 inline std::filesystem::path tempRoot() {
@@ -145,8 +147,8 @@ inline void makeProfile(const std::filesystem::path& root) {
         "selected_profile=Test\n"
         "gamePath=" + game.string() + "\n");
     writeFile(root / "profiles" / "Test" / "plugins.txt", "*Example.esp\n");
-    writeFile(game / "Data" / "Fallout4.esm");
-    writeFile(game / "Data" / "Example.esp");
+    writeFile(game / "Data" / "Fallout4.esm", plugin_fixtures_test::minimalPlugin(0x1, "fallout4"));
+    writeFile(game / "Data" / "Example.esp", plugin_fixtures_test::minimalPlugin(0, "example"));
 }
 
 }

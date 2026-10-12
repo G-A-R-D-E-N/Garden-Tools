@@ -8,8 +8,10 @@
 #include <fo4ide/plugin/IPluginBackend.hpp>
 
 #include "../helpers/AppInteropTestSupport.hpp"
+#include "../helpers/PluginFixtures.hpp"
 
 using namespace app_interop_test;
+using namespace plugin_fixtures_test;
 
 TEST_CASE("AppInterop failed reload does not commit settings or trusted output root") {
     const auto first = tempRoot();
@@ -18,7 +20,7 @@ TEST_CASE("AppInterop failed reload does not commit settings or trusted output r
     const auto second = tempRoot();
     Cleanup secondCleanup{second};
     makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "Game" / "Data" / "Other.esp", minimalPlugin(0, "other"));
     writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
 
     fo4ide::settings::Store store(first / "settings.json");
@@ -64,7 +66,7 @@ TEST_CASE("AppInterop trusted-root failure after LoadMo2 restores the previous b
     const auto second = tempRoot();
     Cleanup secondCleanup{second};
     makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "Game" / "Data" / "Other.esp", minimalPlugin(0, "other"));
     writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
 
     fo4ide::settings::Store store(first / "settings.json");
@@ -124,7 +126,7 @@ TEST_CASE("AppInterop settings-store failure after LoadMo2 restores the previous
     const auto second = tempRoot();
     Cleanup secondCleanup{second};
     makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "Game" / "Data" / "Other.esp", minimalPlugin(0, "other"));
     writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
 
     fo4ide::settings::Store store(first / "settings.json");
@@ -183,7 +185,7 @@ TEST_CASE("AppInterop surfaces rollback LoadMo2 failure and still restores the t
     const auto second = tempRoot();
     Cleanup secondCleanup{second};
     makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "Game" / "Data" / "Other.esp", minimalPlugin(0, "other"));
     writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
 
     fo4ide::settings::Store store(first / "settings.json");
@@ -231,7 +233,7 @@ TEST_CASE("AppInterop surfaces rollback trusted-root failure after backend resto
     const auto second = tempRoot();
     Cleanup secondCleanup{second};
     makeProfile(second);
-    writeFile(second / "Game" / "Data" / "Other.esp");
+    writeFile(second / "Game" / "Data" / "Other.esp", minimalPlugin(0, "other"));
     writeFile(second / "profiles" / "Test" / "plugins.txt", "*Other.esp\n");
 
     fo4ide::settings::Store store(first / "settings.json");

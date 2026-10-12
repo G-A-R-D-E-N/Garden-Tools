@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -378,4 +379,61 @@ TEST(LoadOrderFiles, Fallout4EsmIsCheckedWhenPresent) {
   ASSERT_NE(find_entry(order, "Fallout4.esm"), nullptr);
   EXPECT_TRUE(find_entry(order, "Fallout4.esm")->checked);
   EXPECT_FALSE(find_entry(order, "Mod.esp")->checked);
+}
+
+TEST(LoadOrderFiles, ResolvedFilesFromSeveralFoldersAssembleLikeOneDataFolder) {
+  TempDataDir whole;
+  TempDataDir first;
+  TempDataDir second;
+  const auto master = make_tes4_plugin(k_master, 1.0f, {});
+  const auto dependent = make_tes4_plugin(k_master, 1.0f, {"Fallout4.esm"});
+  const auto plugin = make_tes4_plugin(0, 1.0f, {});
+  whole.write("Fallout4.esm", master, 1);
+  whole.write("DLCRobot.esm", dependent, 2);
+  whole.write("Late.esp", plugin, 3);
+  whole.write("Early.esp", plugin, 0);
+  first.write("Fallout4.esm", master, 1);
+  first.write("Late.esp", plugin, 3);
+  second.write("DLCRobot.esm", dependent, 2);
+  second.write("Early.esp", plugin, 0);
+
+  const auto list = fo4::loadorder::parse_plugin_list("Late.esp\nEarly.esp\n");
+  const std::vector<std::string> expected{"Fallout4.esm", "DLCRobot.esm", "Late.esp", "Early.esp"};
+  EXPECT_EQ(names_of(fo4::loadorder::assemble_load_order(whole.path(), list, {}, OfficialTable::og_ng)), expected);
+
+  const std::vector<std::filesystem::path> files{first.path() / "Fallout4.esm", first.path() / "Late.esp",
+                                                 second.path() / "DLCRobot.esm", second.path() / "Early.esp"};
+  EXPECT_EQ(names_of(fo4::loadorder::assemble_load_order(files, list, {}, OfficialTable::og_ng)), expected);
+}
+
+TEST(LoadOrderFiles, ResolvedFilesKeepTheFirstPathForADuplicateName) {
+  TempDataDir first;
+  TempDataDir second;
+  first.write("Mod.esp", make_tes4_plugin(k_master, 1.0f, {}), 1);
+  second.write("Mod.esp", make_tes4_plugin(0, 1.0f, {}), 1);
+
+  const std::vector<std::filesystem::path> files{first.path() / "Mod.esp", second.path() / "Mod.esp"};
+  const auto order = fo4::loadorder::assemble_load_order(files, PluginList{}, {}, OfficialTable::og_ng);
+  EXPECT_EQ(names_of(order), (std::vector<std::string>{"Mod.esp"}));
+  ASSERT_NE(find_entry(order, "Mod.esp"), nullptr);
+  EXPECT_TRUE(find_entry(order, "Mod.esp")->master_flag);
+
+  const std::vector<std::filesystem::path> reversed{second.path() / "Mod.esp", first.path() / "Mod.esp"};
+  const auto reversed_order = fo4::loadorder::assemble_load_order(reversed, PluginList{}, {}, OfficialTable::og_ng);
+  ASSERT_NE(find_entry(reversed_order, "Mod.esp"), nullptr);
+  EXPECT_FALSE(find_entry(reversed_order, "Mod.esp")->master_flag);
+}
+
+TEST(LoadOrderFiles, ResolvedFilesSkipNonPluginAndZeroByteFiles) {
+  TempDataDir data;
+  data.write("Readme.txt", make_tes4_plugin(0, 1.0f, {}), 1);
+  data.write("Empty.esp", {}, 2);
+  data.write("Mod.esp", make_tes4_plugin(0, 1.0f, {}), 3);
+  std::filesystem::create_directories(data.path() / "Folder.esp");
+
+  const std::vector<std::filesystem::path> files{data.path() / "Readme.txt", data.path() / "Empty.esp",
+                                                 data.path() / "Folder.esp", data.path() / "Mod.esp"};
+  const auto order = fo4::loadorder::assemble_load_order(files, PluginList{}, {}, OfficialTable::og_ng);
+  EXPECT_EQ(names_of(order), (std::vector<std::string>{"Mod.esp"}));
+  EXPECT_TRUE(order.findings.empty());
 }
