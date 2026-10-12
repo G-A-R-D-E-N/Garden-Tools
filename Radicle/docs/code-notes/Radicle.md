@@ -1000,7 +1000,7 @@ Shipped Bethesda plugins store a 0xFF-prefixed HEDR next object ID. The seven of
 
 ## Radicle/tests/test_header_versions_real.cpp:ReadsEveryOfficialMasterAndEslHeaderAndRewritesItIdentically
 
-The test reads the plugins from `installed_master_and_cc_plugins` in `Radicle/tests/real_data_plugins.hpp`: the seven official masters present in `FO4_DATA_DIR`, plus installed cc*.esl and cc*.esm Creations (names matched case-insensitively). It does not scan other files. then asserts the TES4 signature, a finite HEDR version and a byte-identical `write_plugin` result. Form version, HEDR version, flags and next object ID are recorded as properties only. Form version 131 and the 0x81/0x281 flags were observed on AE 1.11.240.0 and are not asserted, so the test runs on other builds without changes.
+The test reads the plugins from `installed_master_and_cc_plugins` in `Radicle/tests/real_data_plugins.hpp`: the seven official masters present in `FO4_DATA_DIR`, plus the installed cc*.esl and cc*.esm Creations listed in `Fallout4.ccc` when that file is present, or all of them otherwise (names matched case-insensitively). It does not scan other files. then asserts the TES4 signature, a finite HEDR version and a byte-identical `write_plugin` result. Form version, HEDR version, flags and next object ID are recorded as properties only. Form version 131 and the 0x81/0x281 flags were observed on AE 1.11.240.0 and are not asserted, so the test runs on other builds without changes.
 
 ## Radicle/tools/corpus/ba2_measure.py:exe_file_version
 
@@ -1010,13 +1010,17 @@ The test reads the plugins from `installed_master_and_cc_plugins` in `Radicle/te
 
 The census walks TES4 and then each GRUP recursively, reading only the 24-byte record and group headers and seeking past every payload, so it never decompresses. A child that overruns its parent or a truncated header raises and fails that plugin. `Radicle/docs/FORMAT_NOTES.md` (AE 1.11.240.0, 2026-10-12) holds the table it produced over the install's Data folder. The `Fallout4.exe` version comes from the VS_FIXEDFILEINFO block next to the Data folder.
 
+## Radicle/tools/corpus/form_versions.py:expand
+
+In data-folder mode `expand` adds the seven official masters found in the folder, then every cc*.esm and cc*.esl file. When `Fallout4.ccc` exists in the parent of the folder, only the cc files named in it are added (names trimmed, lowercased and read as `utf-8-sig`), so user copies are skipped; when the file is missing or lists no names, every cc file is added. This mirrors `Radicle/tests/real_data_plugins.hpp:installed_master_and_cc_plugins`. On the AE Data folder the script reports the 16 plugins of the census and no `ccOTMFO4001-Remnants - Copy.esl`.
+
 ## Radicle/src/forms/race.cpp:decode_race
 
-The RACE form version 131 gate stays exact, and `src/forms/race.cpp:create_race` keeps the same gate. The AE census in `Radicle/docs/FORMAT_NOTES.md` found all 110 RACE records in the seven official masters at form version 131, and no RACE record in any ESL, so the gate is unchanged. `Radicle/tests/test_race_real.cpp:RaceReal.EveryRaceDecodesWithoutFailure` decodes every official RACE under FO4_DATA_DIR. The census has not been run on OG or NG, so relax the gate only after running `Radicle/tools/corpus/form_versions.py` on those installs.
+The RACE form version 131 gate stays exact, and `src/forms/race.cpp:create_race` keeps the same gate. The AE census in `Radicle/docs/FORMAT_NOTES.md` found all 110 RACE records in the seven official masters at form version 131, plus 2 in `ccBGSFO4046-TesCan.esl` and 3 in `ccOTMFO4001-Remnants.esl` (NG and AE), all at form version 131, so the gate is unchanged. `Radicle/tests/test_race_real.cpp:RaceReal.EveryRaceDecodesWithoutFailure` decodes every official RACE under FO4_DATA_DIR. The census was also run on OG 1.10.163.0 and NG 1.10.984.0 on 2026-10-12: the minimum and maximum form version per signature match AE for all 138 signatures, and RACE is 131 on all three releases (`Radicle/docs/FORMAT_NOTES.md`, Releases).
 
 ## Radicle/tests/real_data_plugins.hpp:installed_master_and_cc_plugins
 
-Returns the seven official masters present in the Data folder (Fallout4.esm, DLCRobot, DLCworkshop01-03, DLCCoast, DLCNukaWorld) followed by every `cc*.esl` and `cc*.esm` file, matched case-insensitively. Missing masters are skipped rather than reported, so the corpus tests keep their skip behavior on partial installs. `archive_load_order` then pairs each name with its `<plugin> - *.ba2` archives, so a `cc` archive is opened only when its plugin is present in Data. Shared by `test_nif_corpus.cpp`, `test_ba2_real.cpp` and `test_pex_corpus.cpp`.
+Returns the seven official masters present in the Data folder (Fallout4.esm, DLCRobot, DLCworkshop01-03, DLCCoast, DLCNukaWorld) followed by every `cc*.esl` and `cc*.esm` file, matched case-insensitively. When `Fallout4.ccc` exists in the game root (`dir / ".." / "Fallout4.ccc"`), only cc files whose lowercased name is listed there are returned, so user copies such as `ccOTMFO4001-Remnants - Copy.esl` are skipped; when the file is missing or lists no names, the prefix rule applies alone. Listed names are trimmed and lowercased; both readers ignore a UTF-8 BOM. Missing masters are skipped rather than reported, so the corpus tests keep their skip behavior on partial installs. `archive_load_order` then pairs each name with its `<plugin> - *.ba2` archives, so a `cc` archive is opened only when its plugin is present in Data. Shared by `test_nif_corpus.cpp`, `test_ba2_real.cpp` and `test_pex_corpus.cpp`.
 
 ## Radicle/tests/test_nif_corpus.cpp:ReadsEveryVanillaNifAndHandlesGeometryTypes
 

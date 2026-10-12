@@ -42,6 +42,23 @@ The measured v7/v8 tables use the same field widths as v1; no additional
 version-dependent fields were needed in these files. This does not establish
 support for unmeasured versions or layouts.
 
+### Per release
+
+In-scope archives are those listed in each release's `scope.json`: the master and cc plugin archives and the `Fallout4 - *.ba2` archives. Counts are archive headers only.
+
+| Release | Archives | v1 | v7 | v8 |
+|---|---:|---:|---:|---:|
+| OG 1.10.163.0 | 49 | 16 | 12 | 21 |
+| NG 1.10.984.0 | 53 | 17 | 12 | 24 |
+| AE 1.11.240.0 | 55 | 16 | 12 | 27 |
+
+NG leaves out `DLCworkshop03 - Voices_en.ba2` (51,327,791 bytes; the OG and AE copies are 51,750,623 bytes). Its name table runs past the end of the file, so it is treated as an incomplete download; its header reports v1, which is why the raw NG v1 count is 18.
+
+- `Fallout4 - Meshes.ba2` and `Fallout4 - Sounds.ba2` are v8 on OG and AE and v1 on NG. NG Meshes has 42416 entries (OG and AE 42426) and NG Sounds has 8872 (OG and AE 8869).
+- `Fallout4 - TexturesPatch.ba2` (v8 DX10, 7 entries) is present on OG and AE and absent on NG.
+- `Fallout4 - MeshesExtra.ba2` (v1, 125837 entries) is the same size on all three releases.
+- No archive on any release has a version other than 1, 7 or 8.
+
 `tests/test_ba2_versions_real.cpp:Ba2NamedRealData` pins these named fixtures:
 
 | Version | Content | Filename | Entries |
