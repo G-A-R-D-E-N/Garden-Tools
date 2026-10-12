@@ -225,6 +225,33 @@ public unsafe struct Patrol
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptElement
+{
+    public FormKey Object;
+    public short Alias;
+    public IntPtr Text;
+    public int Integer;
+    public float Real;
+    public int Boolean;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptStructMember
+{
+    public IntPtr Name;
+    public byte Type;
+    public byte Flags;
+    public ScriptElement Value;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScriptStruct
+{
+    public IntPtr Members;
+    public nuint MemberCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct ScriptProperty
 {
     public IntPtr Name;
@@ -243,6 +270,12 @@ public unsafe struct ScriptProperty
     public int Boolean;
     public int HasElementCount;
     public uint ElementCount;
+    public int HasElements;
+    public IntPtr Elements;
+    public nuint ElementValueCount;
+    public byte HasStructs;
+    public IntPtr Structs;
+    public nuint StructCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -986,6 +1019,12 @@ public unsafe struct QuestProperty
     public short PropertyAlias;
     public byte HasElementCount;
     public uint ElementCount;
+    public byte HasElements;
+    public IntPtr Elements;
+    public nuint ElementValueCount;
+    public byte HasStructs;
+    public IntPtr Structs;
+    public nuint StructCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1190,7 +1229,7 @@ public unsafe struct GrassLinks
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 28u;
+    public const uint CompiledAbiVersion = 29u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();

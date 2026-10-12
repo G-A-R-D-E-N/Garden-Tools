@@ -68,6 +68,26 @@ struct QuestVmadLayout {
 
 QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data);
 
+struct VmadObjectElement {
+  RawFormId object;
+  std::int16_t alias{0};
+};
+
+struct VmadStructMember {
+  std::string name;
+  std::uint8_t type{0};
+  std::uint8_t flags{0};
+  std::optional<VmadObjectElement> object;
+  std::optional<std::string> text;
+  std::optional<std::int32_t> integer;
+  std::optional<float> real;
+  std::optional<bool> boolean;
+};
+
+struct VmadStruct {
+  std::vector<VmadStructMember> members;
+};
+
 struct VmadProperty {
   std::string name;
   std::uint8_t type{0};
@@ -80,6 +100,12 @@ struct VmadProperty {
   std::optional<bool> boolean;
   // Leading u32 count of struct and array properties.
   std::optional<std::uint32_t> element_count;
+  std::optional<std::vector<VmadObjectElement>> object_elements;
+  std::optional<std::vector<std::string>> text_elements;
+  std::optional<std::vector<std::int32_t>> integer_elements;
+  std::optional<std::vector<float>> real_elements;
+  std::optional<std::vector<bool>> boolean_elements;
+  std::optional<std::vector<VmadStruct>> struct_elements;
 };
 
 struct VmadScript {

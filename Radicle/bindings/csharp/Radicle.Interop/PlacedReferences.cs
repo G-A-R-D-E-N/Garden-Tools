@@ -17,8 +17,16 @@ public sealed record TopicReference(uint Type, FormKey? Topic, uint Subtype);
 
 public sealed record Patrol(float IdleTime, FormKey? Idle, FormKey? Topic, IReadOnlyList<TopicReference> Topics);
 
+public sealed record ScriptElement(FormKey? Object, short Alias, string? Text, int Integer, float Real, bool Boolean);
+
+public sealed record ScriptStructMember(string Name, byte Type, byte Flags, ScriptElement Value);
+
+public sealed record ScriptStruct(IReadOnlyList<ScriptStructMember> Members);
+
 public sealed record ScriptProperty(string Name, byte Type, byte Flags, FormKey? Object, short? Alias, string? Text,
-                                   int? Integer, float? Real, bool? Boolean, uint? ElementCount);
+                                   int? Integer, float? Real, bool? Boolean, uint? ElementCount,
+                                   IReadOnlyList<ScriptElement>? Elements = null,
+                                   IReadOnlyList<ScriptStruct>? Structs = null);
 
 public sealed record Script(string Name, byte Flags, IReadOnlyList<ScriptProperty> Properties);
 
@@ -67,6 +75,16 @@ public sealed unsafe partial class RadicleEnvironment
     private static FormKey?[] Keys(IntPtr items, nuint count) =>
         Call.Copy<Native.FormKey>(items, count).Select(FormKey.FromNative).ToArray();
 
+    internal static ScriptStruct[] ScriptStructs(IntPtr structs, nuint count) =>
+        Call.Copy<Native.ScriptStruct>(structs, count)
+            .Select(s => new ScriptStruct(Call.Copy<Native.ScriptStructMember>(s.Members, s.MemberCount)
+                .Select(m => new ScriptStructMember(Utf8.Read(m.Name) ?? string.Empty, m.Type, m.Flags,
+                                                    new ScriptElement(FormKey.FromNative(m.Value.Object), m.Value.Alias,
+                                                                      Utf8.Read(m.Value.Text), m.Value.Integer,
+                                                                      m.Value.Real, m.Value.Boolean != 0)))
+                .ToArray()))
+            .ToArray();
+
     private static PlacedReference Convert(PlacedRef* r)
     {
         var linked = Call.Copy<LinkedRef>(r->LinkedRefs, r->LinkedRefCount)
@@ -90,7 +108,12 @@ public sealed unsafe partial class RadicleEnvironment
                                             p.Text == IntPtr.Zero ? null : System.Text.Encoding.UTF8.GetString(Utf8.Raw(p.Text, p.TextSize)),
                                             p.HasInteger != 0 ? p.Integer : null, p.HasReal != 0 ? p.Real : null,
                                             p.HasBoolean != 0 ? p.Boolean != 0 : null,
-                                            p.HasElementCount != 0 ? p.ElementCount : null))
+                                            p.HasElementCount != 0 ? p.ElementCount : null,
+                                            p.HasElements != 0 ? Call.Copy<Native.ScriptElement>(p.Elements, p.ElementValueCount)
+                                                .Select(e => new ScriptElement(FormKey.FromNative(e.Object), e.Alias, Utf8.Read(e.Text),
+                                                                               e.Integer, e.Real, e.Boolean != 0))
+                                                .ToArray() : null,
+                                            p.HasStructs != 0 ? ScriptStructs(p.Structs, p.StructCount) : null))
                                         .ToArray()))
             .ToArray();
 

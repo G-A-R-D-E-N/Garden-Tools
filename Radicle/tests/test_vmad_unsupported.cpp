@@ -157,6 +157,39 @@ TEST(Vmad, UnexposedScalarObjectWordsStopTheTypedReader) {
   }
 }
 
+TEST(Vmad, UnknownPropertyTypesStopTheTypedReaderLikeVariables) {
+  for (const auto type : {std::uint8_t{8}, std::uint8_t{9}, std::uint8_t{10}, std::uint8_t{18},
+                          std::uint8_t{255}}) {
+    SCOPED_TRACE("type=" + std::to_string(type));
+    fo4::test::ByteWriter vmad;
+    vmad.u16(5);
+    vmad.u16(2);
+    vmad.u16(1);
+    wstring(vmad, "UnknownScript");
+    vmad.u8(0);
+    vmad.u16(3);
+    wstring(vmad, "Before");
+    vmad.u8(3);
+    vmad.u8(1);
+    vmad.u32(7);
+    wstring(vmad, "Unknown");
+    vmad.u8(type);
+    vmad.u8(1);
+    wstring(vmad, "After");
+    vmad.u8(3);
+    vmad.u8(1);
+    vmad.u32(9);
+    const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+    ASSERT_EQ(scripts.scripts.size(), 1u);
+    EXPECT_EQ(scripts.scripts[0].name, "UnknownScript");
+    EXPECT_TRUE(scripts.unsupported);
+    const auto& properties = scripts.scripts[0].properties;
+    ASSERT_EQ(properties.size(), 1u);
+    EXPECT_EQ(properties[0].name, "Before");
+    EXPECT_EQ(properties[0].integer, 7);
+  }
+}
+
 TEST(Vmad, UnexposedScalarObjectWordsStopTheScanPath) {
   for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
     for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
@@ -177,6 +210,10 @@ TEST(Vmad, VariablePropertyFailsClosedForMasterRemap) {
 
 TEST(Vmad, VariableArrayPropertyFailsClosedForMasterRemap) {
   expect_remap_refused(16);
+}
+
+TEST(Vmad, UnknownPropertyTypeFailsClosedForMasterRemap) {
+  expect_remap_refused(8);
 }
 
 TEST(Vmad, FragmentCountsArePublishedOnlyForCompleteCoverage) {

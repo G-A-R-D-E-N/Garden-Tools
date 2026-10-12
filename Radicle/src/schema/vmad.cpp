@@ -437,38 +437,97 @@ QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data) {
 
 namespace {
 
+VmadObjectElement read_object_element(Slice& slice, std::int16_t object_format) {
+  VmadObjectElement element;
+  if (object_format == 2) {
+    require_zero_unused_word(slice);
+    element.alias = slice.i16();
+    element.object = RawFormId{slice.u32()};
+  } else if (object_format == 1) {
+    element.object = RawFormId{slice.u32()};
+    element.alias = slice.i16();
+    require_zero_unused_word(slice);
+  } else {
+    throw parse_error(slice.position(), "unknown VMAD object format");
+  }
+  return element;
+}
+
+float read_float(Slice& slice) {
+  const auto bits = slice.u32();
+  float value = 0.0f;
+  std::memcpy(&value, &bits, 4);
+  return value;
+}
+
+bool read_struct_members(Slice& slice, std::int16_t object_format, VmadStruct& out) {
+  const auto count = slice.u32();
+  for (std::uint32_t i = 0; i < count; ++i) {
+    VmadStructMember member;
+    member.name = slice.wstring();
+    member.type = slice.u8();
+    member.flags = slice.u8();
+    switch (member.type) {
+      case k_type_object:
+        member.object = read_object_element(slice, object_format);
+        break;
+      case k_type_string:
+        member.text = slice.wstring();
+        break;
+      case k_type_int:
+        member.integer = static_cast<std::int32_t>(slice.u32());
+        break;
+      case k_type_float:
+        member.real = read_float(slice);
+        break;
+      case k_type_bool:
+        member.boolean = slice.u8() != 0;
+        break;
+      default:
+        return false;
+    }
+    out.members.push_back(std::move(member));
+  }
+  return true;
+}
+
+std::optional<std::vector<VmadStruct>> decode_structs(Slice values, std::int16_t object_format,
+                                                      bool array) {
+  std::vector<VmadStruct> structs;
+  try {
+    const auto n = array ? values.u32() : 1u;
+    for (std::uint32_t i = 0; i < n; ++i) {
+      VmadStruct value;
+      if (!read_struct_members(values, object_format, value)) return std::nullopt;
+      structs.push_back(std::move(value));
+    }
+  } catch (const UnsupportedVmadProperty&) {
+    return std::nullopt;
+  }
+  return structs;
+}
+
 VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   VmadProperty property;
   property.name = slice.wstring();
   property.type = slice.u8();
   property.flags = slice.u8();
   switch (property.type) {
-    case k_type_object:
-      if (object_format == 2) {
-        require_zero_unused_word(slice);
-        property.alias = slice.i16();
-        property.object = RawFormId{slice.u32()};
-      } else if (object_format == 1) {
-        property.object = RawFormId{slice.u32()};
-        property.alias = slice.i16();
-        require_zero_unused_word(slice);
-      } else {
-        throw parse_error(slice.position(), "unknown VMAD object format");
-      }
+    case k_type_object: {
+      const auto element = read_object_element(slice, object_format);
+      property.object = element.object;
+      property.alias = element.alias;
       return property;
+    }
     case k_type_string:
       property.text = slice.wstring();
       return property;
     case k_type_int:
       property.integer = static_cast<std::int32_t>(slice.u32());
       return property;
-    case k_type_float: {
-      const auto bits = slice.u32();
-      float value = 0.0f;
-      std::memcpy(&value, &bits, 4);
-      property.real = value;
+    case k_type_float:
+      property.real = read_float(slice);
       return property;
-    }
     case k_type_bool:
       property.boolean = slice.u8() != 0;
       return property;
@@ -487,35 +546,51 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
     case k_type_variable:
     case k_type_variable_array:
       throw UnsupportedVmadProperty{};
-    case k_type_struct:
+    case k_type_struct: {
+      Slice values = slice;
       walk_properties(slice, object_format, slice.u32(), ignored);
+      property.struct_elements = decode_structs(values, object_format, false);
       break;
+    }
     case k_type_object_array: {
+      auto& elements = property.object_elements.emplace();
       const auto n = slice.u32();
-      for (std::uint32_t i = 0; i < n; ++i) walk_object(slice, object_format, ignored);
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(read_object_element(slice, object_format));
       break;
     }
     case k_type_string_array: {
+      auto& elements = property.text_elements.emplace();
       const auto n = slice.u32();
-      for (std::uint32_t i = 0; i < n; ++i) slice.skip_wstring();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(slice.wstring());
       break;
     }
-    case k_type_int_array:
+    case k_type_int_array: {
+      auto& elements = property.integer_elements.emplace();
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(static_cast<std::int32_t>(slice.u32()));
+      break;
+    }
     case k_type_float_array: {
+      auto& elements = property.real_elements.emplace();
       const auto n = slice.u32();
-      for (std::uint32_t i = 0; i < n; ++i) slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(read_float(slice));
       break;
     }
-    case k_type_bool_array:
-      slice.skip(slice.u32());
+    case k_type_bool_array: {
+      auto& elements = property.boolean_elements.emplace();
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(slice.u8() != 0);
       break;
+    }
     case k_type_struct_array: {
+      Slice values = slice;
       const auto n = slice.u32();
       for (std::uint32_t i = 0; i < n; ++i) walk_properties(slice, object_format, slice.u32(), ignored);
+      property.struct_elements = decode_structs(values, object_format, true);
       break;
     }
     default:
-      throw parse_error(slice.position(), "unknown VMAD property type");
+      throw UnsupportedVmadProperty{};
   }
   return property;
 }

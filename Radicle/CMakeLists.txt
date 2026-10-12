@@ -388,6 +388,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_onam.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
+    tests/test_vmad_array_elements.cpp
     tests/test_conflict_graph.cpp
     tests/test_check_errors.cpp
     tests/test_remap_non_formid_slots.cpp
@@ -409,6 +410,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_environment_world.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
+    tests/test_environment_script_elements.cpp
     tests/test_environment_terrain.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
