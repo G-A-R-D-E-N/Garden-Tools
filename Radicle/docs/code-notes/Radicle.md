@@ -314,6 +314,18 @@ PKDT's final u16 is exposed as an unnamed trailing value rather
 than discarded. Raw signed month/hour/minute bytes remain unchanged;
 legacy month adjustment and schedule execution are not simulated.
 
+## src/environment/dialogue.cpp:decode_scene
+
+Stored action-header SNAM/ENAM are four-byte unsigned values in pinned xEdit
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas:9010-9011`.
+The seven-master corpus test caught the incorrect two-byte requirement. Native,
+C and C# preserve all 32 stored bits, including values above 65535. The private
+record `https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/dialogue-scenes-405-344/README.md`
+stamps OG runtime action storage/range use at addresses 0x5975E0/0x597910 as 16-bit;
+that runtime representation does not establish the on-disk field size. Action
+payload SNAM after the header remains opaque. SCQS values keep schema-derived
+labels only; no quest-stage execution behavior is implemented.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children
@@ -362,7 +374,7 @@ Unknown four-byte signatures use reversible Latin1 in managed snapshots.
 
 A `radicle_record` handle is only meaningful to the environment that produced it: it
 is a pointer to one of that environment's own `RecordRef` versions, and the plugin
-index it carries is an index into that environment's plugin list. All seven exports
+index it carries is an index into that environment's plugin list. All ten exports
 therefore call `src/c_api_env_internal.hpp:belongs_to_env` first, which looks the record's
 FormKey up in `env->value.versions` and compares addresses. That is the same
 pointer-identity test `radicle_record_topic_children` already used, now shared. The
@@ -371,6 +383,8 @@ package, combat-style and idle exports (`src/c_api_behavior.cpp:radicle_package_
 null checks and before decoding, with the same `INVALID_ARGUMENT` status and message. A
 rejected package or idle output stays null, and a rejected combat-style output keeps its
 caller value.
+The dialogue decode exports (`src/c_api_dialogue.cpp:radicle_dialogue_topic_get_info`, `radicle_dialogue_info_decode`,
+`radicle_scene_decode`) run the same check before any output is cleared, so a rejected INFO or SCEN output keeps its caller value.
 `ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
 handle from a second live environment resolved through the supplied environment:
 `ResolveFormId` read `env->value.plugins().at(ref.plugin)` from the wrong plugin list
@@ -401,9 +415,26 @@ bindings/csharp/Radicle.Interop.Tests/RecordReadTests.cs verifies override choic
 duplicate unknown bytes, empty payloads, master/self/null/invalid FormIDs and
 managed byte ownership after disposal. This is not a decoded UI-content claim.
 
+## src/c_api_dialogue.cpp:radicle_dialogue_topic_get_info / radicle_dialogue_info_decode / radicle_scene_decode
+
+These three exports take a `radicle_record` handle like the record readers above, so
+they check it with `src/c_api_env_internal.hpp:belongs_to_env` before decoding, and
+refuse a handle from another live environment with `RADICLE_STATUS_INVALID_ARGUMENT`
+and the same message the record readers use. Without the check a foreign DIAL, INFO
+or SCEN handle decoded through the supplied environment's plugin and link tables, the
+same wrong-answer path `ResolveFormId` had. The helper moved from
+`src/c_api_records.cpp` into the shared internal header so every caller uses one
+definition. `Radicle/tests/test_dialogue_writer_c_api.cpp:DecodeRefusesRecordsFromAnotherEnvironment`
+loads one plugin into two environments, requires both foreign decodes to refuse with
+null outputs, and requires the owner environment to still decode the DIAL.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
+
+## src/schema/form_links.cpp:visit_link_offsets (SCEN action Topic DATA)
+
+`src/schema/form_links.cpp:visit_link_offsets` with `src/schema/non_formid_slots.cpp:scene_action_topic_data`: SCEN `DATA` is a Topic form ID only in a Dialogue (type 0) or Radio (type 6) action, `wbFormIDCk(DATA, 'Topic', [DIAL,NULL])` at source:xEdit Core/wbDefinitionsFO4.pas:9014 and :9096 @93cc0bc5. The action type is the last 2-byte `ANAM` before the subrecord (`src/schema/non_formid_slots.cpp:scene_action_type`), as xEdit reads it through `wbSceneActionTypeDecider` (source:xEdit Core/wbDefinitionsCommon.pas:5403 @93cc0bc5) and the `ANAM` 'Type' field at source:xEdit Core/wbDefinitionsFO4.pas:8956 @93cc0bc5. The empty closing `ANAM` marker (`wbMarkerReq(ANAM)`, source:xEdit Core/wbDefinitionsFO4.pas:9103 @93cc0bc5) has no 2-byte payload, so it ends the type for later subrecords. SCEN has no top-level `DATA`, so no other `DATA` is visited. `DATA` is not in the generic `formid_subrecords.inc` table, so before this rule a cross-plugin remap left topic links pointing at the old master index. Under strict remap a `DATA` in these actions whose payload is not 4 bytes throws instead of being skipped.
 
 ## src/schema/form_links.cpp:visit_coed_formids
 
@@ -557,6 +588,11 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 - CELL `XCWT`: the cell's water type.
 
 `c_api_env.h` was at the file-size limit, so the typed record decoders moved to `include/fo4/c_api_records.h`, which includes the environment header for the shared types; `generate_interop.py` reads it, and the generated bindings and layout probe are regenerated from the headers, so `radicle_csharp_interop_up_to_date` still holds. Tests: `Radicle.Interop.Tests/HlodFieldTests.cs` builds a plugin with these subrecords and checks every field, including a STAT without `MNAM` and the four-slot ceiling.
+# Dialogue and scene read slice
+
+`src/environment/dialogue.cpp:decode_dialogue_topic`, `decode_dialogue_info` and `decode_scene` use the pinned disk layouts and measured marker grammar in `docs/DIALOGUE_SCENES.md`. Scope readers keep repeated scene and response tags separate. Scene action payloads retain ordered opaque subrecord views. Conditions reuse `schema/ctda.cpp:read_ctda_conditions_in` without executing them; reset values and flags retain their encoded values. Unknown data is preserved, and malformed known fields fail closed.
+
+`src/c_api_dialogue.cpp:radicle_dialogue_info_decode` and `radicle_scene_decode` own all returned arrays and copied condition strings until the matching free call; record-backed strings, keys and opaque bytes require the environment to remain alive. `bindings/csharp/Radicle.Interop/Dialogue.cs` copies every returned array, key, string and opaque payload before releasing the holder. `StringTables.ResolveDialogueText` uses the existing source-selection and lookup contract rather than guessing text from IDs. Runtime semantics remain tracked by RE #405 and TES4 bit 7 by #29.
 
 ## CMakeLists.txt:RADICLE_CSHARP_TESTS
 

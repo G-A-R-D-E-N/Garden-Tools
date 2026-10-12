@@ -619,6 +619,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Upload Radicle Release test executable
+        if: always()
+        continue-on-error: true
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
+        with:
+          name: radicle-msvc-release-tests
+          path: |
+            build/native/**/fo4_tests.exe
+            build/native/**/radicle.dll
+          if-no-files-found: warn
+          retention-days: 7
+
       # The Debug pass repeats the whole MSVC build; Native (Linux, Debug) covers
       # Debug on pull requests, so this runs on main pushes and manual runs.
       # /Z7 (Embedded) instead of CMake's default /Zi: ccache can't cache
