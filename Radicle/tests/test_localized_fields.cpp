@@ -1,9 +1,23 @@
 #include "fo4/schema/localized_fields.hpp"
 
-#include "plugin_bytes.hpp"
+#include "fo4/c_api.h"
+#include "fo4/c_api_quest.h"
+#include "fo4/forms/armor.hpp"
+#include "fo4/forms/race.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
+#include "plugin_bytes.hpp"
+#include "quest_structure_fixture.hpp"
 
 #include <gtest/gtest.h>
+
+#include <chrono>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -45,6 +59,47 @@ fo4::Plugin plugin_with_flags(std::uint32_t tes4_flags) {
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
   return fo4::read_plugin(out.bytes, "Test.esp");
+}
+
+std::vector<std::byte> bytes_of(std::string_view value) {
+  std::vector<std::byte> out(value.size());
+  for (std::size_t i = 0; i < value.size(); ++i) {
+    out[i] = std::byte{static_cast<std::uint8_t>(value[i])};
+  }
+  return out;
+}
+
+using Member = std::pair<std::string_view, std::vector<std::byte>>;
+
+std::vector<std::byte> localized_plugin(std::string_view record_type,
+                                        const std::vector<Member>& members) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0x80, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto group = fo4::test::begin_group(out, record_type, 0);
+  const auto record = fo4::test::begin_record(out, record_type, 0, 0x800);
+  for (const auto& [signature, data] : members) {
+    fo4::test::write_subrecord(out, signature, data);
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+void expect_raw_without_id(const fo4::schema::LocalizedString& value,
+                           const std::vector<std::byte>& payload) {
+  EXPECT_FALSE(value.localized());
+  EXPECT_FALSE(value.id.has_value());
+  EXPECT_FALSE(value.text.has_value());
+  EXPECT_EQ(value.inline_text(), "");
+  ASSERT_TRUE(value.raw_id.has_value());
+  EXPECT_EQ(*value.raw_id, payload);
+  EXPECT_EQ(fo4::schema::write_localized_string(value), payload);
 }
 
 }  // namespace
@@ -138,4 +193,94 @@ TEST(LocalizedFields, InlineTextMustBeSingleNulTerminated) {
       static_cast<void>(fo4::schema::read_localized_string(
           plugin, k_race, k_desc, make(k_desc, std::vector<std::byte>{std::byte{'a'}}))),
       std::exception);
+}
+
+TEST(LocalizedFields, ArmorCallerKeepsNonFourBytePayloadWithoutId) {
+  fo4::test::ByteWriter data;
+  data.u32(5);
+  data.f32(1.0f);
+  data.u32(100);
+  const auto full = bytes_of("abc");
+  const auto desc = text("nope");
+  const auto bytes = localized_plugin(
+      "ARMO", {{"FULL", full}, {"DESC", desc}, {"DATA", data.bytes}});
+  const auto plugin = fo4::read_plugin(bytes, "Test.esp");
+
+  std::optional<fo4::forms::Armor> armor;
+  EXPECT_NO_THROW(armor = fo4::forms::decode_armor(plugin, fo4::FormKey::parse("000800:Test.esp")));
+  ASSERT_TRUE(armor.has_value());
+  ASSERT_TRUE(armor->full_name.has_value());
+  expect_raw_without_id(*armor->full_name, full);
+  ASSERT_TRUE(armor->description.has_value());
+  expect_raw_without_id(*armor->description, desc);
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+}
+
+TEST(LocalizedFields, RaceCallerKeepsNonFourBytePayloadWithoutId) {
+  const auto full = text("nope");
+  const auto desc = bytes_of("abc");
+  const auto bytes = localized_plugin(
+      "RACE",
+      {{"FULL", full},
+       {"DESC", desc},
+       {"DATA", std::vector<std::byte>(200)},
+       {"VTCK", std::vector<std::byte>(8)},
+       {"PNAM", std::vector<std::byte>(4)},
+       {"UNAM", std::vector<std::byte>(4)},
+       {"NAM1", {}},
+       {"MNAM", {}},
+       {"FNAM", {}},
+       {"NAM3", {}}});
+  const auto plugin = fo4::read_plugin(bytes, "Test.esp");
+
+  std::optional<fo4::forms::Race> race;
+  EXPECT_NO_THROW(race = fo4::forms::decode_race(plugin, fo4::FormKey::parse("000800:Test.esp")));
+  ASSERT_TRUE(race.has_value());
+  ASSERT_TRUE(race->full_name.has_value());
+  expect_raw_without_id(*race->full_name, full);
+  expect_raw_without_id(race->description, desc);
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+}
+
+TEST(LocalizedFields, QuestStructureCallerKeepsNonFourByteObjectiveTextWithoutId) {
+  auto plugin = fo4::test::quest_structure_plugin(true);
+  fo4::test::change_quest(plugin, [](fo4::Record& record) {
+    for (auto& subrecord : record.subrecords) {
+      if (subrecord.signature == fo4::Signature::from_string("NNAM") && subrecord.data.size() == 4) {
+        subrecord.data.resize(3);
+        return;
+      }
+    }
+  });
+  const auto bytes = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::write_plugin(fo4::read_plugin(bytes, "Quests.esp")), bytes);
+
+  const auto root = std::filesystem::temp_directory_path() /
+                    ("localized_callers_" +
+                     std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  const auto path = root / "Quests.esp";
+  fo4::write_plugin_file(plugin, path);
+
+  radicle_plugin* raw = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &raw), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  radicle_quest_structure* structure = nullptr;
+  const auto status = radicle_quest_structure_read(raw, "000800:Quests.esp", &structure);
+  radicle_plugin_destroy(raw);
+  ASSERT_EQ(status, RADICLE_STATUS_OK) << radicle_last_error();
+
+  radicle_quest_structure_view view{};
+  EXPECT_EQ(radicle_quest_structure_get_view(structure, &view), RADICLE_STATUS_OK);
+  const bool has_one_objective = view.objective_count == 1u;
+  const auto objective_text = has_one_objective ? view.objectives[0].text : radicle_quest_text{};
+  radicle_quest_structure_destroy(structure);
+  std::error_code error;
+  std::filesystem::remove_all(root, error);
+
+  ASSERT_TRUE(has_one_objective);
+  EXPECT_NE(objective_text.kind, RADICLE_NAME_STRING_ID);
+  EXPECT_EQ(objective_text.string_id, 0u);
+  EXPECT_EQ(objective_text.bytes, nullptr);
+  EXPECT_EQ(objective_text.size, 0u);
 }
