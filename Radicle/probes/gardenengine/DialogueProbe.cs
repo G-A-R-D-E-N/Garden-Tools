@@ -33,14 +33,27 @@ public partial class DialogueProbe : Node
                 .FirstOrDefault(x => x.Text is not null);
             if (text is null) throw new InvalidOperationException("no INFO in Fallout4.esm has resolvable links and a non-empty response text");
             var questKey = env.DialogueTopic(topic).Quest;
-            var scene = env.WinnersOf("SCEN")
-                .Where(s => IsRecordOf(env, env.Scene(s).ParentQuest, "QUST"))
-                .Cast<Record?>().FirstOrDefault() ?? throw new InvalidOperationException("no SCEN with a resolvable quest link");
+            var entries = env.TopicChildren(topic);
+            if (entries.Count == 0) throw new InvalidOperationException("selected DIAL has no INFO children");
+            var previousFollowed = 0;
+            var responsesResolved = 0;
+            foreach (var entry in entries)
+            {
+                var entryInfo = env.DialogueInfo(entry);
+                if (entryInfo.PreviousInfo is { } previous && env.Winner(previous) is not null) ++previousFollowed;
+                responsesResolved += entryInfo.Responses.Count(response => tables.ResolveDialogueText(entry, "NAM1", response.Text) is not null);
+            }
+            var (scene, sceneValue) = env.WinnersOf("SCEN")
+                .Select(s => (Entry: s, Value: env.Scene(s)))
+                .FirstOrDefault(x => IsRecordOf(env, x.Value.ParentQuest, "QUST") && x.Value.Phases.Count > 0 && x.Value.Actions.Count > 0);
+            if (sceneValue is null) throw new InvalidOperationException("no SCEN with a resolvable quest link, a phase and an action");
             GD.Print("dialogue_probe PASS " + JsonSerializer.Serialize(new
             {
-                Topic = env.Info(topic).FormKey.ToString(), Quest = questKey?.ToString(), TopicInfos = env.TopicChildren(topic).Count,
+                Topic = env.Info(topic).FormKey.ToString(), Quest = questKey?.ToString(), Infos = entries.Count,
+                ResponsesResolved = responsesResolved, PreviousInfoFollowed = previousFollowed,
                 Info = env.Info(infoRecord).FormKey.ToString(), ResponseTextBytes = text.Length,
-                Scene = env.Info(scene).FormKey.ToString(), SceneQuest = env.Scene(scene).ParentQuest?.ToString(),
+                Scene = env.Info(scene).FormKey.ToString(), SceneQuest = sceneValue.ParentQuest?.ToString(),
+                ScenePhases = sceneValue.Phases.Count, SceneActions = sceneValue.Actions.Count,
             }));
             GetTree().Quit(0);
         }
