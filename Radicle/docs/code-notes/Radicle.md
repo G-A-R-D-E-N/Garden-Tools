@@ -877,7 +877,7 @@ Fail closed: the recursion throws `WorldDecodeError` instead of returning a part
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin.
+The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin. ABI 35 renames that test to `CApiQuest.AbiVersionIsThirtyFive` and moves its literal to 35.
 
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
@@ -886,6 +886,27 @@ The `populated_*` properties count WATR records by `fo4::env::decode_water` outp
 ## Radicle/tests/real_data_build.cpp:detect_game_build
 
 Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The first match wins, so the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
+
+## Radicle/src/environment/sound.cpp:select_rate_file_index
+
+Walks the rate list in stored order and skips INTV 0 entries, so the returned index is the stored index; storage keeps the zero-rate entries. Ties go to the higher entry. The rule is written for ascending rates because the RE gives no rule for an unsorted list. Source: #399 comment 7869 section 3 (AutoWeapon rate choice) and section 5 (boundary values). Tests: `Radicle/tests/test_sound.cpp:AutoWeaponRateChoosesTheNearestEntryWithTiesToTheHigherEntry`, `Radicle/tests/test_sound.cpp:AutoWeaponRateSkipsZeroEntriesAndReturnsTheStoredIndex`.
+
+## Radicle/src/environment/sound.cpp:select_standard_file_index
+
+The random draw is an input, so the chooser stays deterministic and testable; the engine's uniform index is the caller's job. A draw equal to the previous pick moves to `(draw + 1) % count`, and only when count is above one. Source: #399 comment 7869 section 3 (Standard selection). Test: `Radicle/tests/test_sound.cpp:StandardChooserReturnsTheOnlyFileAndNeverRepeatsAConsecutivePick`.
+
+## Radicle/src/environment/sound.cpp:sound_frequency_factor
+
+Derived from BNAM byte 0 (signed) as `1 + shift * 0.01`, clamped to [0.1, 2.0], per OG 1.10.163 playback (#399 comment 7869). Test: `Radicle/tests/test_sound.cpp:DerivedFrequencyFactorClampsAtBothEnds`.
+
+## Radicle/src/environment/sound.cpp:sound_is_looping
+
+Tests the mask `0x38` on LNAM byte 1, which is the LNAM dword bits `0x800`, `0x1000` and `0x2000` (#399 comment 7869). This is the any-loop test only. The Envelope Fast and Slow bits have their own stop behavior (#399 comment 9761) and are not separated here. `sound_sidechain_send`, `sound_small_rumble_send` and `sound_big_rumble_send` read LNAM bytes 2 and 3 from the same source. Per RE 7869 the engine applies rumble sends only when the rumble-enabled flag is set and the value is nonzero; `sound_small_rumble_send` and `sound_big_rumble_send` return only the scaled nibble, so the caller must gate on that flag. Test: `Radicle/tests/test_sound.cpp:DerivedLoopingIsAnyOfTheLoopBitsInByteOne`.
+
+## Radicle/src/c_api_sound.cpp:radicle_sound_select_standard_file
+
+Checks `draw_index < count` before calling the native chooser and returns INVALID_ARGUMENT. Left to the native throw, `guarded` would map the WorldDecodeError to PARSE_ERROR. Test: `Radicle/tests/test_sound.cpp:CAbiMatchesTheNativeRulesAndRejectsBadArguments`.
+
 ## Radicle/include/fo4/archive/ba2.hpp:is_supported_ba2_general_version
 
 GNRL versions 1, 7 and 8 are accepted on read and write. The GNRL record layout is the same for all three; only the header version field differs, matching the C# oracle which passes the version through. Version 7 is seen on NG/AE installs and version 8 on the AE 1.11.240.0 build (`docs/BA2.md`). An earlier "Skyrim SE-style" label on version 7 had no source and was removed. Versions 0, 2, 3, 9 and 0xFFFFFFFF are rejected on read and write (`Radicle/tests/test_ba2.cpp:Ba2GeneralUnprovenVersion`).
