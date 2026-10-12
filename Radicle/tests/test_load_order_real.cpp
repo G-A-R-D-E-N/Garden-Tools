@@ -38,7 +38,9 @@ TEST(LoadOrderReal, InstalledDataFollowsFallout4OfficialThenCccOrder) {
   const auto order = loadorder::assemble_load_order(data, loadorder::PluginList{}, ccc, table);
   const bool has_missing_master = std::any_of(order.findings.begin(), order.findings.end(),
                                               [](const auto& finding) { return finding.code == "missing_master"; });
-  if (!has_missing_master) EXPECT_FALSE(order.failed);
+  if (!has_missing_master) {
+    EXPECT_FALSE(order.failed);
+  }
 
   std::vector<std::string> names;
   for (const auto& entry : order.entries) names.push_back(lowered_name(entry.name));
