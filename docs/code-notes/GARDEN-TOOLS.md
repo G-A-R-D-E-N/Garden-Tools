@@ -1591,13 +1591,9 @@ The PEX parser reads a value for every object variable and struct member, so `ha
 
 The managed model types and the generated raw structs share names (`PexValue`, `PexFunction`, `PexState`, `PexObjectCode` and others), following `PexHeader` and `PexObjectCounts`. Code inside `Radicle.Interop` resolves to the model type. A consumer outside it that imports both `Radicle.Interop` and `Radicle.Interop.Native` gets CS0104, so it qualifies the raw structs as `Native.X` (as `PexCode.cs:ReadCode` does) or aliases them. Renaming the generated structs would change every existing `Native` type name, so the bindings README documents the rule instead. No GardenEngine file imports both namespaces today.
 
-## Radicle/CMakeLists.txt:FO4_TESTDATA_DIR, gtest_discover_tests
-
-`fo4_tests` uses the relative `testdata` fixture directory, and CTest runs its discovered cases from the Radicle source directory. A downloaded CI executable must likewise run from the matching checkout's `Radicle` directory. This avoids embedding the CI checkout path in the fixture lookup while keeping committed fixtures separate from the installed-game directory supplied through `FO4_DATA_DIR`.
-
 ## Radicle/src/plugin/load_order.cpp:build_runtime_form_id_context
 
-The main integration retains the published flag-or-extension classification in `Radicle/src/forms/weather_concept.cpp:resolve_master_kind` and the caller-supplied resolved-order boundary. Main ABI 11 remains unchanged because this branch adds no public exports or layouts. `Radicle/CMakeLists.txt:gtest_discover_tests` keeps the portable fixture working directory together with main's generator test; the required native and offline managed CI workflow comes from main. Existing OG/AE evidence remains static; NG byte checks, external limits and live dependency behavior stay open in #28/#389.
+The main integration retains the published flag-or-extension classification in `Radicle/src/forms/weather.cpp:resolve_master_kind` and the caller-supplied resolved-order boundary. `RADICLE_ABI_VERSION` is unchanged because this branch adds no public exports or layouts. `Radicle/CMakeLists.txt:gtest_discover_tests` keeps the portable fixture working directory together with main's generator test; the required native and offline managed CI workflow comes from main. Existing OG/AE evidence remains static; NG byte checks, external limits and live dependency behavior stay open in #28/#389.
 
 ## PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:CompactToEslCore / CheckEslEligibilityCore / EslSlots
 
