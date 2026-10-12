@@ -180,6 +180,7 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
         record.header.signature == sig_tes4 || record.form_key != record_key) {
       return;
     }
+    require_decodable(record);
     status = ConditionMutationStatus::unchanged;
     const auto window = schema::root_condition_window(record);
     if (window.status == schema::RootConditionStatus::multiple_lists) {

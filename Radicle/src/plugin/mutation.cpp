@@ -73,13 +73,17 @@ const Group* source_top_group_for_record(const Plugin& source,
 }
 
 using detail::find_mutable_record;
+using detail::require_plugin_decodable;
 
 Record* find_top_level_record(Plugin& plugin, const FormKey& record_key) {
   for (auto& group : plugin.groups) {
     if (group.header.group_type != 0) continue;
     for (auto& child : group.children) {
       auto* record = std::get_if<Record>(&child);
-      if (record != nullptr && record->form_key == record_key) return record;
+      if (record != nullptr && record->form_key == record_key) {
+        require_decodable(*record);
+        return record;
+      }
     }
   }
   return nullptr;
@@ -241,6 +245,7 @@ FormKey create_local_record(Plugin& plugin,
 
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key) {
   if (record_key.owner() != plugin.key) return RecordDeleteStatus::not_local;
+  require_plugin_decodable(plugin, "delete");
 
   auto next = plugin;
   assign_record_form_keys(next);
@@ -291,6 +296,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
   if (record_key.owner() != plugin.key) return RecordRenumberStatus::not_local;
+  require_plugin_decodable(plugin, "renumber");
   const auto [lowest, highest] = local_form_id_range(plugin);
   if (new_local.value() < lowest || new_local.value() > highest) {
     throw FormIdError("new local FormID is outside this plugin's local FormID range");
@@ -365,6 +371,7 @@ bool set_record_editor_id(Plugin& plugin,
       return;
     }
     found = true;
+    require_decodable(record);
 
     for (auto& subrecord : record.subrecords) {
       if (subrecord.signature != sig_edid) continue;
@@ -433,6 +440,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          bool overwrite) {
   const auto* source_record = find_record(source, record_key);
   if (source_record == nullptr) return RecordCopyStatus::source_missing;
+  require_decodable(*source_record);
 
   const bool target_exists = find_record(destination, record_key) != nullptr;
   if (target_exists && !overwrite) return RecordCopyStatus::already_exists;
@@ -495,6 +503,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
       if (replaced || record.header.signature == sig_tes4 || record.form_key != record_key) {
         return;
       }
+      require_decodable(record);
       record = copied_record;
       replaced = true;
     });

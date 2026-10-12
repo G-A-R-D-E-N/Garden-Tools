@@ -197,6 +197,7 @@ Record* mutable_quest(Plugin& plugin, const FormKey& quest) {
   if (found == nullptr) {
     throw QuestError("QUST record " + quest.to_string() + " was not found");
   }
+  require_decodable(*found);
   return found;
 }
 
