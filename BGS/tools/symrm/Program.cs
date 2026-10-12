@@ -783,8 +783,7 @@ public static class Program
         Console.WriteLine($"{found.Count} match \"{query}\"{(extension.Length > 0 ? " ending " + extension : "")}");
 
         foreach (var entry in found.Take(20))
-            Console.WriteLine($"  {entry.Name}  {entry.Unpacked} bytes" +
-                              (entry.Packed != 0 ? $", stored as {entry.Packed}" : ", stored plain"));
+            Console.WriteLine($"  {entry.Name}  {entry.Unpacked} bytes");
 
         if (found.Count > 20) Console.WriteLine($"  and {found.Count - 20} more");
         if (found.Count == 0) return 1;

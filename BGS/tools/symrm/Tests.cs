@@ -9496,11 +9496,9 @@ public static class Tests
         writer.Write(1u);
         writer.Write((ulong)nameTableAt);
 
-        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
         writer.Write((ulong)(offsetOverride ?? headerEnd));
-        writer.Write(packed ? (uint)payload.Length : 0u);
-        writer.Write(declaredUnpacked);
-        writer.Write(0u);
+        writer.Write(packed ? (uint)payload.Length : 0u); writer.Write(declaredUnpacked); writer.Write(0xBAADF00Du);
 
         writer.Write(payload);
         var bytes = System.Text.Encoding.UTF8.GetBytes(name.Replace('/', '\\'));
@@ -9603,8 +9601,7 @@ public static class Tests
         File.WriteAllBytes(path, System.Text.Encoding.ASCII.GetBytes("BTDX"));
         try
         {
-            try { OpenCommonwealth.Services.Archive.Ba2.Open(path); }
-            catch (EndOfStreamException) { }
+            try { OpenCommonwealth.Services.Archive.Ba2.Open(path); } catch (InvalidDataException) { }
 
             using var exclusive = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
             CheckTrue("a malformed archive can be reopened exclusively", exclusive.CanWrite);

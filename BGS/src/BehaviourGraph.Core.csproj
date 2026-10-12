@@ -17,6 +17,9 @@
     <PackageReference Include="BepuPhysics" Version="2.4.0" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../../Radicle/bindings/csharp/Radicle.Interop/Radicle.Interop.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Include="Hkx/HavokClassLayouts.json" />
     <EmbeddedResource Include="Hkx/HavokClassTypes.json" Condition="Exists('Hkx/HavokClassTypes.json')" />
   </ItemGroup>

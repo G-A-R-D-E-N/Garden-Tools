@@ -94,6 +94,24 @@ dotnet publish app/BehaviourStudio.csproj -c Release -r linux-x64 -o out
 For the pinned SDK, locked restores, the full three-part test surface, CI-parity commands, and both
 Windows/Linux publish flows, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Native Radicle library
+
+BGS reads BA2 archives through `Radicle.Interop`, which loads the Radicle native library: `radicle.dll` on Windows and `libradicle.so` on Linux. Every BA2 read fails until the library is in place, but the project still builds without it; the build prints a warning instead.
+
+Build the library from the repository root. Radicle needs zlib, so `find_package(ZLIB)` must succeed on Linux; on Windows, point the build at a zlib you have built.
+
+```bash
+cmake -S Radicle -B build/radicle-bgs -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DRADICLE_BUILD_TESTS=OFF -DRADICLE_BUILD_TOOLS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON
+cmake --build build/radicle-bgs --target radicle_c
+mkdir -p build/radicle-bgs/native
+cp build/radicle-bgs/libradicle.so build/radicle-bgs/native/
+```
+
+On Windows, run the same configure and build from a Visual Studio x64 developer prompt and copy `radicle.dll` instead, passing `-DZLIB_INCLUDE_DIR` and `-DZLIB_LIBRARY` for your zlib.
+
+The BGS projects copy the library from the `RadicleNativeDir` property, which defaults to `build/radicle-bgs/native` at the repository root. To use another folder, pass it to any BGS build or publish: `dotnet publish app/BehaviourStudio.csproj -c Release -r win-x64 -p:RadicleNativeDir=<folder>`.
+
 ## Help and feedback
 
 - Read the [public guide](https://prisma-user-interface-framework.github.io/Prisma2.0/tools/behaviourgraphstudio/guide/getting-started).
