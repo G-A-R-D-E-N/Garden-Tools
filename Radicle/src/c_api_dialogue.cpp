@@ -95,6 +95,7 @@ radicle_status radicle_dialogue_info_decode(const radicle_env* env, const radicl
     const auto d = fo4::env::decode_dialogue_info(env->value, *to_ref(record)); auto h = std::make_unique<InfoHolder>();
     auto& v = h->view;
     if (d.data) { v.has_data = 1; v.flags = (*d.data)[0]; v.reset_time_encoded = (*d.data)[1]; }
+    set_optional(d.reset_hours(), v.has_reset_hours, v.reset_hours);
     v.previous_topic = to_c_key(*env, d.previous_topic); v.previous_info = to_c_key(*env, d.previous_info);
     v.shared_info = to_c_key(*env, d.shared_info); v.info_group = to_c_key(*env, d.info_group);
     v.speaker = to_c_key(*env, d.speaker); v.start_scene = to_c_key(*env, d.start_scene); v.prompt = text(*env, d.prompt);
@@ -154,6 +155,10 @@ radicle_status radicle_scene_decode(const radicle_env* env, const radicle_record
 
 void radicle_scene_free(const radicle_scene_info* scene) {
   if (scene) delete static_cast<SceneHolder*>(scene->internal);
+}
+
+const char* radicle_scene_action_type_name(uint16_t type) {
+  return fo4::env::scene_action_type_name(type).data();
 }
 
 radicle_status radicle_plugin_set_scene_scalar(radicle_plugin* plugin,

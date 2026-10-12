@@ -1032,6 +1032,8 @@ int main() {
   printf("DialogueInfo.HasData %zu\n", offsetof(radicle_dialogue_info, has_data));
   printf("DialogueInfo.Flags %zu\n", offsetof(radicle_dialogue_info, flags));
   printf("DialogueInfo.ResetTimeEncoded %zu\n", offsetof(radicle_dialogue_info, reset_time_encoded));
+  printf("DialogueInfo.HasResetHours %zu\n", offsetof(radicle_dialogue_info, has_reset_hours));
+  printf("DialogueInfo.ResetHours %zu\n", offsetof(radicle_dialogue_info, reset_hours));
   printf("DialogueInfo.PreviousTopic %zu\n", offsetof(radicle_dialogue_info, previous_topic));
   printf("DialogueInfo.PreviousInfo %zu\n", offsetof(radicle_dialogue_info, previous_info));
   printf("DialogueInfo.SharedInfo %zu\n", offsetof(radicle_dialogue_info, shared_info));

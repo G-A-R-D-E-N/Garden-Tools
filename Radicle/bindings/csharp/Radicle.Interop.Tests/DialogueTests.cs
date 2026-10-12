@@ -54,7 +54,7 @@ public class DialogueTests
         Assert.Equal(2, info.Responses.Count); Assert.Equal("first", info.Responses[0].Text.Text); Assert.Equal("second", info.Responses[1].Text.Text);
         Assert.Equal(new FormKey("Dialogue.esm", 0x813), info.Responses[0].SpeakerIdle); Assert.Null(info.Responses[1].SpeakerIdle);
         Assert.Equal(new FormKey("Dialogue.esm", 0x814), info.Responses[1].ListenerIdle); Assert.Equal(-1, info.Responses[0].CameraTargetAlias);
-        Assert.Equal((ushort)0xFFFF, info.ResetTimeEncoded); Assert.Equal("prompt", info.Prompt.Text);
+        Assert.Equal((ushort)0xFFFF, info.ResetTimeEncoded); Assert.Equal(24.0, info.ResetHours); Assert.Equal("prompt", info.Prompt.Text);
         var c = Assert.Single(info.Conditions); Assert.Equal((byte)0xE1, c.FlagsByte); Assert.Equal(-7, c.Param1); Assert.Equal("operand", c.Parameter1String);
     }
 
@@ -71,6 +71,7 @@ public class DialogueTests
         var record = env.Winner(new FormKey("Dialogue.esm", 0x800))!.Value; var info = env.DialogueInfo(record);
         Assert.Equal(NameKind.StringId, info.Responses[0].Text.Kind); Assert.Equal(123u, info.Responses[0].Text.StringId);
         Assert.Equal("response", Encoding.ASCII.GetString(tables.ResolveDialogueText(record, "NAM1", info.Responses[0].Text)!));
+        Assert.Null(info.ResetHours);
         Assert.Equal("prompt", Encoding.ASCII.GetString(tables.ResolveDialogueText(record, "RNAM", info.Prompt)!));
         Assert.Null(tables.ResolveDialogueText(record, "NAM1", new(NameKind.StringId, null, 999)));
     }
@@ -95,5 +96,15 @@ public class DialogueTests
         Assert.Equal(65537u, action.StartPhase); Assert.Equal(uint.MaxValue, action.EndPhase);
         Assert.Equal("SNAM", action.Payload[0].Signature); Assert.Equal(F32(10), action.Payload[0].Bytes);
         Assert.Equal("PNAM", action.Payload[1].Signature); Assert.Equal((ushort)16, Assert.Single(scene.Conditions).Function);
+    }
+
+    [Fact]
+    public void SceneActionTypeNamesCoverTheNamedIdsAndLeaveUnknownIdsEmpty()
+    {
+        Assert.Equal("dialogue", RadicleEnvironment.SceneActionTypeName(0));
+        Assert.Equal("player_dialogue", RadicleEnvironment.SceneActionTypeName(3));
+        Assert.Equal("radio", RadicleEnvironment.SceneActionTypeName(6));
+        Assert.Equal(string.Empty, RadicleEnvironment.SceneActionTypeName(7));
+        Assert.Equal(string.Empty, RadicleEnvironment.SceneActionTypeName(0xFFFF));
     }
 }

@@ -1,7 +1,10 @@
+#include "fo4/archive/assets.hpp"
 #include "fo4/archive/ba2.hpp"
 #include "fo4/c_api.h"
 #include "fo4/c_api_pex.h"
 #include "fo4/pex/pex.hpp"
+#include "real_data_build.hpp"
+#include "real_data_plugins.hpp"
 
 #include <gtest/gtest.h>
 
@@ -541,5 +544,43 @@ TEST(PexCorpus, EveryArchivedPexRoundTripsByteIdentically) {
 
   report(tally);
   ASSERT_GT(tally.found, 0u) << "no .pex entries found in " << archives;
+  expectClean(tally);
+}
+
+TEST(PexCorpus, EveryDataDirArchivePexRoundTripsByteIdentically) {
+  if (std::getenv("FO4_PEX_CORPUS") != nullptr || std::getenv("FO4_PEX_ARCHIVES") != nullptr) {
+    GTEST_SKIP() << "FO4_PEX_CORPUS or FO4_PEX_ARCHIVES is set; the explicit inputs above run instead";
+  }
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder to scan its archives for .pex";
+  record_game_build(detect_game_build(dir));
+  const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
+  if (archives.empty()) GTEST_SKIP() << "no Fallout4 - *.ba2 archives under " << dir;
+
+  const auto assets = fo4::archive::AssetResolver::open({}, archives);
+  Tally tally;
+  for (const auto& reader : assets.archives()) {
+    if (reader.kind() != fo4::archive::Ba2Kind::general) continue;
+    const auto found_start = tally.found;
+    const auto identical_start = tally.identical;
+    for (std::size_t i = 0; i < reader.entries().size(); ++i) {
+      const auto& entry = reader.entries()[i].path;
+      if (lowerExtension(entry) != ".pex") continue;
+      const std::string where = reader.path().filename().string() + "!" + entry;
+      try {
+        roundTrip(unpack(reader.extract(i)), where, tally);
+      } catch (const std::exception& error) {
+        tally.found++;
+        tally.unreadable++;
+        tally.note(error.what(), where);
+      }
+    }
+    RecordProperty(reader.path().filename().string() + " pex_found", std::to_string(tally.found - found_start));
+    RecordProperty(reader.path().filename().string() + " pex_identical",
+                   std::to_string(tally.identical - identical_start));
+  }
+
+  report(tally);
+  ASSERT_GT(tally.found, 0u) << "no .pex entries found under " << dir;
   expectClean(tally);
 }

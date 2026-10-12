@@ -3,6 +3,7 @@
 
 #include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -36,6 +37,7 @@ TEST(QuestStagesRealData, DecodesEveryShippedQuest) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
 
   std::size_t quests = 0;
   std::size_t stages = 0;
@@ -105,6 +107,7 @@ TEST(QuestStagesRealData, MQ101ConditionsRoundTripPaddingBytes) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to run this";
   }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / "Fallout4.esm";
   ASSERT_TRUE(std::filesystem::exists(path));
   const auto plugin = fo4::read_plugin_file(path);
@@ -137,6 +140,7 @@ TEST_P(QuestConditionCorpus, EveryStoredRunIsLossless) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to run this";
   }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
   const auto plugin = fo4::read_plugin_file(path);
