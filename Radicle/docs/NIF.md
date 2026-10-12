@@ -122,21 +122,30 @@ guard).
 Descriptor: stride is `(desc & 0xF) * 4` bytes; attribute flags are `desc >> 44`
 (`NifShape.cs:ReadShape` lines 92-93). Flag bits (`NifShape.cs` lines 40-49):
 bit 1 UV, bit 2 UV2, bit 3 normal, bit 4 tangent, bit 5 colour, bit 6 skin,
-bit 10 full precision.
+bit 8 tail slot (`HasEyeData` in `NifShape.cs` line 48; 4 bytes at the end,
+meaning not pinned), bit 10 full precision.
 
 Data size must equal `vertex count * stride + triangle count * 6`
 (`NifShape.cs:ReadShape` lines 99-102). Data size 0, vertex count 0 or stride 0
 yields an empty shape, not an error (`src/nif/geometry.cpp:read_shape`).
 `NifShape.cs:ReadShape` line 95 returns null for the same three conditions.
 
-Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162):
+Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162, except the
+full-precision position width, see parity item 15):
 
-- Position: 12 bytes at full precision, 8 bytes at half precision (three
-  binary16 values plus two bytes; `NifShape.cs:ReadShape` lines 118-121).
+- Position: 16 bytes at full precision (three f32 plus one 4-byte value, not
+  decoded; settled by the vanilla corpus, parity item 15), 8 bytes at half
+  precision (three binary16 values plus two bytes; `NifShape.cs:ReadShape`
+  lines 118-121).
 - UV, UV2, normal, tangent and colour: 4 bytes each, in that order after the
   position (`NifShape.cs:Layout` lines 147-152).
-- Skin weights 8 bytes and indices 4 bytes, at the end (`NifShape.cs:Layout`
-  lines 154-155). Skin data is not decoded.
+- Skin weights 8 bytes and indices 4 bytes, after the colour
+  (`NifShape.cs:Layout` lines 154-155). Skin data is not decoded.
+- Tail slot (bit 8): 4 bytes after the skin block, at the end of the vertex
+  (byte 36 in the vanilla stride-40 layout, flags `0x17b`; the descriptor's
+  offset nibble at bits 36-39 says 9, which is 36 bytes). Not decoded. Its
+  meaning is not pinned. In vanilla, the FaceGen FaceGeom heads and
+  `maleeyes.nif` hold zero there and `maleeyes_facebones.nif` holds 1.0f.
 
 The attribute bytes must equal the stride exactly (`src/nif/geometry.cpp:read_shape`).
 Each triangle index must be less than the vertex count
@@ -210,9 +219,10 @@ run (`tests/test_nif_corpus.cpp`) and a later RE or CK check decide.
 13. Two bytes after a half-precision position are skipped. Their meaning (the
     bitangent X slot in common Gamebryo layouts) is not pinned.
 14. Bitangents: left empty. The packing is not pinned.
-15. Full-precision position slot width: 12 bytes (`NifShape.cs:Layout` line 147)
-    versus 16 bytes. The reader uses 12. The exact stride check
-    (`src/nif/geometry.cpp:read_shape`) makes the corpus decide.
+15. Full-precision position slot width: 16 bytes. Settled by the vanilla corpus:
+    descriptor 0x0041b00000650407 places UV at byte 16 (stride 28); decoding UV
+    at 12 gives invalid UVs. The BGS NifShape.cs:Layout uses 12 for skin offsets,
+    so that file disagrees. BGS is not edited.
 16. Attribute bytes must equal the stride exactly. The reader rejects any stride
     that is larger than the attributes (padding), so the corpus decides whether
     padding occurs.

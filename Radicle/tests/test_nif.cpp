@@ -25,6 +25,7 @@ constexpr std::uint32_t k_has_normal = 1U << 3;
 constexpr std::uint32_t k_has_tangent = 1U << 4;
 constexpr std::uint32_t k_has_colour = 1U << 5;
 constexpr std::uint32_t k_has_skin = 1U << 6;
+constexpr std::uint32_t k_has_tail_slot = 1U << 8;
 constexpr std::uint32_t k_full = 1U << 10;
 
 class Writer {
@@ -162,12 +163,15 @@ Block shape_block(std::string type, std::int32_t name, const Transform& xf, std:
 std::vector<std::byte> triangle_vertices() {
   Writer w;
   const float positions[9] = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
-  for (const float value : positions) w.f32(value);
+  for (std::size_t i = 0; i < 9; ++i) {
+    w.f32(positions[i]);
+    if (i % 3 == 2) w.u32(0);
+  }
   return w.bytes();
 }
 
 Block triangle_block(std::string type, const Transform& xf) {
-  return shape_block(std::move(type), 0, xf, k_full, 12, triangle_vertices(), {0, 1, 2});
+  return shape_block(std::move(type), 0, xf, k_full, 16, triangle_vertices(), {0, 1, 2});
 }
 
 std::vector<std::byte> chain_file() {
@@ -215,6 +219,7 @@ std::vector<std::byte> encode_vertex(bool full, std::uint32_t flags, const Vert&
       w.u16(vert.half[i]);
     }
   }
+  if (full) w.u32(0);
   if (!full) w.u16(0);
   if ((flags & k_has_uv) != 0) {
     w.u16(0x3800);
@@ -244,6 +249,7 @@ std::vector<std::byte> encode_vertex(bool full, std::uint32_t flags, const Vert&
   if ((flags & k_has_skin) != 0) {
     for (int i = 0; i < 12; ++i) w.u8(0xCD);
   }
+  if ((flags & k_has_tail_slot) != 0) w.u32(0xEFU);
   return w.bytes();
 }
 
@@ -302,6 +308,42 @@ TEST(NifGeometry, DecodesEveryVertexAttributeCombinationAtBothPrecisions) {
   }
 }
 
+TEST(NifGeometry, DecodesFullPrecisionSixteenByteSlotBeforeUv) {
+  const std::uint32_t flags = k_full | k_has_uv | k_has_normal | k_has_tangent;
+  const auto first = encode_vertex(true, flags, k_verts[0]);
+  auto vertices = first;
+  const auto second = encode_vertex(true, flags, k_verts[1]);
+  vertices.insert(vertices.end(), second.begin(), second.end());
+  const auto nif = fo4::nif::read_nif(
+      build_nif({"shape"}, {shape_block("BSTriShape", 0, Transform{}, flags, 28, vertices, {0, 1, 1})}, {0}));
+  const auto shapes = fo4::nif::read_shapes(nif);
+  ASSERT_EQ(shapes.size(), 1U);
+  const auto& shape = shapes[0];
+  const float mid = 128.0f / 255.0f * 2.0f - 1.0f;
+  expect_floats(shape.verts, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  expect_floats(shape.uvs, {0.5f, 0.25f, 0.5f, 0.25f});
+  expect_floats(shape.normals, {1.0f, -1.0f, mid, 1.0f, -1.0f, mid});
+}
+
+TEST(NifGeometry, DecodesTailSlotAfterSkinBlock) {
+  const std::uint32_t flags =
+      k_has_uv | k_has_normal | k_has_tangent | k_has_colour | k_has_skin | k_has_tail_slot;
+  const auto first = encode_vertex(false, flags, k_verts[0]);
+  auto vertices = first;
+  const auto second = encode_vertex(false, flags, k_verts[1]);
+  vertices.insert(vertices.end(), second.begin(), second.end());
+  const auto nif = fo4::nif::read_nif(
+      build_nif({"shape"}, {shape_block("BSTriShape", 0, Transform{}, flags, 40, vertices, {0, 1, 1})}, {0}));
+  const auto shapes = fo4::nif::read_shapes(nif);
+  ASSERT_EQ(shapes.size(), 1U);
+  const auto& shape = shapes[0];
+  const float mid = 128.0f / 255.0f * 2.0f - 1.0f;
+  expect_floats(shape.verts, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  expect_floats(shape.uvs, {0.5f, 0.25f, 0.5f, 0.25f});
+  expect_floats(shape.normals, {1.0f, -1.0f, mid, 1.0f, -1.0f, mid});
+  EXPECT_EQ(shape.tris, (std::vector<std::uint16_t>{0, 1, 1}));
+}
+
 TEST(NifGeometry, DecodesBinary16SpecialValues) {
   const std::vector<std::uint16_t> bits{0x0000, 0x8000, 0x0001, 0x03FF, 0x0400,
                                         0x3C00, 0xC000, 0x7C00, 0xFC00, 0x7E00};
@@ -346,7 +388,7 @@ TEST(NifGeometry, ZeroDataSizeYieldsEmptyShape) {
 
 TEST(NifGeometry, RejectsDescriptorStrideThatDoesNotMatchDataSize) {
   const auto nif = fo4::nif::read_nif(
-      build_nif({"s"}, {shape_block("BSTriShape", 0, Transform{}, k_full, 8, triangle_vertices(), {})}, {}));
+      build_nif({"s"}, {shape_block("BSTriShape", 0, Transform{}, k_full, 8, std::vector<std::byte>(36), {})}, {}));
   expect_parse_error([&] { fo4::nif::read_shapes(nif); }, "vertex data size does not match the vertex descriptor");
 }
 
@@ -357,15 +399,31 @@ TEST(NifGeometry, RejectsStrideThatDoesNotMatchAttributes) {
                      "vertex attributes do not fill the vertex stride exactly");
 }
 
+TEST(NifGeometry, RejectsFullPrecisionPositionWithTwelveByteSlot) {
+  const auto nif = fo4::nif::read_nif(
+      build_nif({"s"}, {shape_block("BSTriShape", 0, Transform{}, k_full, 12, std::vector<std::byte>(36), {})}, {}));
+  expect_parse_error([&] { fo4::nif::read_shapes(nif); },
+                     "vertex attributes do not fill the vertex stride exactly");
+}
+
+TEST(NifGeometry, RejectsTailSlotStrideWithoutItsFourBytes) {
+  const std::uint32_t flags =
+      k_has_uv | k_has_normal | k_has_tangent | k_has_colour | k_has_skin | k_has_tail_slot;
+  const auto nif = fo4::nif::read_nif(
+      build_nif({"s"}, {shape_block("BSTriShape", 0, Transform{}, flags, 36, std::vector<std::byte>(72), {})}, {}));
+  expect_parse_error([&] { fo4::nif::read_shapes(nif); },
+                     "vertex attributes do not fill the vertex stride exactly");
+}
+
 TEST(NifGeometry, RejectsTriangleIndexOutOfRange) {
   const auto nif = fo4::nif::read_nif(
-      build_nif({"s"}, {shape_block("BSTriShape", 0, Transform{}, k_full, 12, triangle_vertices(), {0, 1, 3})}, {}));
+      build_nif({"s"}, {shape_block("BSTriShape", 0, Transform{}, k_full, 16, triangle_vertices(), {0, 1, 3})}, {}));
   expect_parse_error([&] { fo4::nif::read_shapes(nif); }, "triangle index is out of range");
 }
 
 TEST(NifGeometry, RejectsNameIndexOutOfRange) {
   const auto nif = fo4::nif::read_nif(
-      build_nif({"s"}, {shape_block("BSTriShape", 5, Transform{}, k_full, 12, triangle_vertices(), {0, 1, 2})}, {}));
+      build_nif({"s"}, {shape_block("BSTriShape", 5, Transform{}, k_full, 16, triangle_vertices(), {0, 1, 2})}, {}));
   expect_parse_error([&] { fo4::nif::read_shapes(nif); }, "string index is out of range");
 }
 

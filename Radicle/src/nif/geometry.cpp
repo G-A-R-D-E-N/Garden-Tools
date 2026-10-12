@@ -19,6 +19,7 @@ constexpr std::uint32_t k_has_normal = 1U << 3;
 constexpr std::uint32_t k_has_tangent = 1U << 4;
 constexpr std::uint32_t k_has_colour = 1U << 5;
 constexpr std::uint32_t k_has_skin = 1U << 6;
+constexpr std::uint32_t k_has_tail_slot = 1U << 8;
 constexpr std::uint32_t k_full_precision = 1U << 10;
 constexpr std::size_t k_skin_bytes = 12;
 constexpr std::size_t k_triangle_bytes = 6;
@@ -50,11 +51,12 @@ float unit_from_byte(std::uint8_t value) {
 }
 
 std::size_t vertex_bytes_for(std::uint32_t flags) {
-  std::size_t bytes = (flags & k_full_precision) != 0 ? 12 : 8;
+  std::size_t bytes = (flags & k_full_precision) != 0 ? 16 : 8;
   for (const std::uint32_t bit : {k_has_uv, k_has_uv2, k_has_normal, k_has_tangent, k_has_colour}) {
     if ((flags & bit) != 0) bytes += 4;
   }
   if ((flags & k_has_skin) != 0) bytes += k_skin_bytes;
+  if ((flags & k_has_tail_slot) != 0) bytes += 4;
   return bytes;
 }
 
@@ -68,7 +70,7 @@ void read_vertex(binary::Cursor& vertex, std::uint32_t flags, Shape& shape) {
   for (std::size_t i = 0; i < 3; ++i) {
     shape.verts.push_back(full ? vertex.read_f32() : half_to_float(vertex.read_u16()));
   }
-  if (!full) vertex.read_bytes(2);
+  vertex.read_bytes(full ? 4 : 2);
   if ((flags & k_has_uv) != 0) {
     shape.uvs.push_back(half_to_float(vertex.read_u16()));
     shape.uvs.push_back(half_to_float(vertex.read_u16()));
