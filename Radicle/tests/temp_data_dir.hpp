@@ -30,7 +30,7 @@ class TempDataDir {
 public:
   TempDataDir()
       : path_{std::filesystem::temp_directory_path() /
-              ("radicle_load_order_" + std::to_string(process_id()) + "_" + std::to_string(next_id())),
+              ("radicle_load_order_" + std::to_string(process_id()) + "_" + std::to_string(next_id()))},
         base_{std::chrono::floor<std::chrono::seconds>(std::filesystem::file_time_type::clock::now()) -
               std::chrono::hours(1)} {
     std::filesystem::create_directories(path_);
