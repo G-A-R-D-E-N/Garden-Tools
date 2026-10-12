@@ -69,17 +69,17 @@ are unclassified.
 The WTHR DATA transition byte (byte 3, read unsigned) gives `transition_hours` = byte / 255 * (max - min) + min
 game hours. The bounds are the game settings `fWeatherTransMin` and `fWeatherTransMax`. Compiled OG defaults
 (RE-010 on #520 comment 13142, release OG 1.10.163) are fWeatherTransMax 1.0, fWeatherTransMin 0.01 and
-fWeatherTransAccel 4.0. The AE 1.11.240 Fallout4.esm overrides fWeatherTransMax to 3.0 and fWeatherTransAccel
-to 16.0; it does not set fWeatherTransMin. Every matching GMST overwrites the setting in load order, so the
-last one wins. `transition_hours` takes both bounds as inputs and reads no GMST. The routing from a plugin
-GMST value to the transition code is verified: the tag table gives
-GMST type 3, the DATA reader writes the value the transition code reads, and the transition code reads
-fWeatherTransMax, Min and Accel at 0x64E964, 0x64E970/87 and 0x64E9C3. The shipped OG Fallout4.esm values
-are not verified, because no 1.10.163 Fallout4.esm is on disk.
+fWeatherTransAccel 4.0. The shipped Fallout4.esm of OG 1.10.163, NG 1.10.984 and AE 1.11.240 makes the same
+overrides (fWeatherTransMax 3.0, fWeatherTransAccel 16.0), and none of them sets fWeatherTransMin. Every
+matching GMST overwrites the setting in load order, so the last one wins. `transition_hours` takes both bounds
+as inputs and reads no GMST. The routing from a plugin GMST value to the transition code is verified: the tag
+table gives GMST type 3, the DATA reader writes the value the transition code reads, and the transition code
+reads fWeatherTransMax, Min and Accel at 0x64E964, 0x64E970/87 and 0x64E9C3. These shipped values were read from
+the Fallout4.esm of each release.
 
 Accelerated transition: when the Sky accelerate flag (Sky+0x394 bit 3, 0x8) is set, the transition percentage
 is `pct = (pct - base) * (fWeatherTransAccel + 1.0) + base`, recomputed each frame and not compounding. That is
-5x with the compiled defaults and 17x with the AE override. The Papyrus `Weather.SetActive(abOverride, abAccelerate)`
+5x with the compiled defaults and 17x with the shipped Fallout4.esm override. The Papyrus `Weather.SetActive(abOverride, abAccelerate)`
 second argument sets the flag, and the console `SetWeather` can also. `transition_hours` does not model this
 multiplier (RE-010 on #520 comment 13142).
 
