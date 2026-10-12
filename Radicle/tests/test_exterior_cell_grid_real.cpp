@@ -11,6 +11,7 @@
 #include "fo4/forms/cell.hpp"
 #include "fo4/plugin/container.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -87,6 +88,7 @@ TEST(ExteriorCellGridRealData, ReproducesShippedWorldspaceLabels) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
 
   GridCounts counts;
   int files = 0;

@@ -1,6 +1,7 @@
 #include "fo4/archive/assets.hpp"
 #include "fo4/environment/strings.hpp"
 #include "fo4/localization/strings.hpp"
+#include "real_data_build.hpp"
 #include "real_data_plugins.hpp"
 
 #include <gtest/gtest.h>
@@ -25,6 +26,7 @@ struct RealData {
 std::optional<RealData> real_data() {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) return std::nullopt;
+  record_game_build(detect_game_build(dir));
   RealData data{dir, {}};
   const std::vector<std::string> plugins{"Fallout4.esm"};
   data.archives = fo4::archive::archive_load_order(data.dir, {}, plugins);

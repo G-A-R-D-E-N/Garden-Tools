@@ -3,6 +3,7 @@
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/formlink_slots.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -207,6 +208,7 @@ TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
   const char* data = std::getenv("FO4_DATA_DIR");
   if (!data) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
   const std::filesystem::path dir{data};
+  record_game_build(detect_game_build(dir));
   if (!std::filesystem::exists(dir / "Fallout4.esm")) GTEST_SKIP() << "Fallout4.esm not found";
 
   const auto plugin = fo4::read_plugin_file(dir / "Fallout4.esm");

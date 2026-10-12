@@ -1,6 +1,7 @@
 #include "fo4/c_api_navmesh.h"
 #include "fo4/environment/navmesh.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -80,6 +81,7 @@ void expect_info(const fo4::env::NavmeshInfo& native, const radicle_navmesh_info
 TEST_P(NavmeshReal, EveryOfficialNavmeshDecodesAndUnchangedMasterIsIdentical) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "missing official master: " << path;
   const std::filesystem::path native_paths[] = {path}; const auto env = fo4::env::Environment::load(native_paths);

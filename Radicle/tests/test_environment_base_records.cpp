@@ -6,6 +6,7 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -438,6 +439,7 @@ TEST(BaseRecordsRealData, DecodesEveryShippedBaseRecord) {
     if (std::filesystem::exists(path)) order.push_back(path);
   }
   if (order.empty()) GTEST_SKIP() << "no official masters in FO4_DATA_DIR";
+  record_game_build(detect_game_build(dir));
   const auto env = fo4::env::Environment::load(order);
   std::map<std::string, std::size_t> decoded;
   for (std::size_t plugin = 0; plugin < env.plugins().size(); ++plugin) {

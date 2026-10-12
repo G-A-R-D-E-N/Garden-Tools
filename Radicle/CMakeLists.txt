@@ -490,6 +490,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_structure_real.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
+    tests/real_data_build.cpp
+    tests/test_real_data_build.cpp
   )
   target_include_directories(fo4_tests PRIVATE tests tools)
   target_link_libraries(fo4_tests PRIVATE fo4 radicle_c GTest::gtest_main ZLIB::ZLIB)

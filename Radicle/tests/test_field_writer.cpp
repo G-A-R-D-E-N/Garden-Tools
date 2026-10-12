@@ -6,6 +6,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -609,6 +610,7 @@ TEST(FieldWriterRealData, RegisteredRaceStringsMatchEveryShippedRace) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
 
   std::size_t races = 0;
   std::size_t biped_names = 0;

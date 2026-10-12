@@ -883,6 +883,10 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
 
+## Radicle/tests/real_data_build.cpp:detect_game_build
+
+Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The first match wins, so the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
+
 ## Radicle/src/environment/sound.cpp:select_rate_file_index
 
 Walks the rate list in stored order and skips INTV 0 entries, so the returned index is the stored index; storage keeps the zero-rate entries. Ties go to the higher entry. The rule is written for ascending rates because the RE gives no rule for an unsorted list. Source: #399 comment 7869 section 3 (AutoWeapon rate choice) and section 5 (boundary values). Tests: `Radicle/tests/test_sound.cpp:AutoWeaponRateChoosesTheNearestEntryWithTiesToTheHigherEntry`, `Radicle/tests/test_sound.cpp:AutoWeaponRateSkipsZeroEntriesAndReturnsTheStoredIndex`.

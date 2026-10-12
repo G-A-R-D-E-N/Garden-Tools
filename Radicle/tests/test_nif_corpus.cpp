@@ -1,6 +1,7 @@
 #include "fo4/archive/assets.hpp"
 #include "fo4/error.hpp"
 #include "fo4/nif/nif.hpp"
+#include "real_data_build.hpp"
 #include "real_data_plugins.hpp"
 
 #include <gtest/gtest.h>
@@ -43,6 +44,7 @@ bool is_geometry_name(std::string_view type) {
 TEST(NifCorpus, ReadsEveryVanillaNifAndHandlesGeometryTypes) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
+  record_game_build(detect_game_build(dir));
   const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
   if (archives.empty()) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder with its Fallout4 - *.ba2 archives";
 

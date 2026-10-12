@@ -1,4 +1,5 @@
 #include "env_bench/env_bench.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -11,6 +12,7 @@ TEST(EnvBenchRealData, LoadsOfficialMasters) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   const std::filesystem::path data_dir = dir;
+  record_game_build(detect_game_build(data_dir));
   const auto plugins = radicle_bench::default_masters(data_dir);
   if (plugins.empty()) GTEST_SKIP() << "no official masters found under " << data_dir.string();
 

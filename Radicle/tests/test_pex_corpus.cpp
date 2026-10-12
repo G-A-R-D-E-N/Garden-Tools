@@ -3,6 +3,7 @@
 #include "fo4/c_api.h"
 #include "fo4/c_api_pex.h"
 #include "fo4/pex/pex.hpp"
+#include "real_data_build.hpp"
 #include "real_data_plugins.hpp"
 
 #include <gtest/gtest.h>
@@ -552,6 +553,7 @@ TEST(PexCorpus, EveryDataDirArchivePexRoundTripsByteIdentically) {
   }
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder to scan its archives for .pex";
+  record_game_build(detect_game_build(dir));
   const auto archives = fo4::archive::archive_load_order(dir, {}, installed_master_and_cc_plugins(dir));
   if (archives.empty()) GTEST_SKIP() << "no Fallout4 - *.ba2 archives under " << dir;
 

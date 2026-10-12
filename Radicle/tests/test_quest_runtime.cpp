@@ -5,6 +5,7 @@
 #include "fo4/signature.hpp"
 
 #include "quest_plugin_fixture.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -141,6 +142,7 @@ TEST(QuestRuntimeReal, EveryShippedQuestDecodesOrReportsUnsupported) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / "Fallout4.esm";
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "Fallout4.esm not found under " << dir;
 

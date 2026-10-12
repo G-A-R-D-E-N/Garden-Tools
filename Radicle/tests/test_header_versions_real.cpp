@@ -1,6 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/signature.hpp"
+#include "real_data_build.hpp"
 #include "real_data_plugins.hpp"
 
 #include <gtest/gtest.h>
@@ -43,6 +44,7 @@ TEST(HeaderVersionsReal, ReadsEveryOfficialMasterAndEslHeaderAndRewritesItIdenti
   const auto* data_dir = std::getenv("FO4_DATA_DIR");
   if (data_dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
   const std::filesystem::path dir{data_dir};
+  record_game_build(detect_game_build(dir));
   for (const auto* master : kOfficialMasters) {
     if (!std::filesystem::exists(dir / master)) {
       GTEST_SKIP() << "missing official master: " << (dir / master);

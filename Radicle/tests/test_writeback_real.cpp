@@ -4,6 +4,7 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -63,6 +64,7 @@ std::map<std::string, std::string> raw_links(const fo4::Plugin& plugin, const st
 TEST(WritebackRealData, CopiedDlcReferencesKeepEveryLinkWhenMastersMove) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  record_game_build(detect_game_build(dir));
   const std::filesystem::path data(dir);
   const std::vector<std::filesystem::path> order{data / "Fallout4.esm", data / "DLCRobot.esm"};
   for (const auto& path : order) {

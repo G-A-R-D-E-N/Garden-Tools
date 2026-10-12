@@ -3,6 +3,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -696,6 +697,7 @@ TEST(WeatherConcept, RealFallout4EsmDecodesWhenPresent) {
   if (!std::filesystem::exists(path)) {
     GTEST_SKIP() << "Fallout4.esm not found under " << dir;
   }
+  record_game_build(detect_game_build(dir));
   const auto plugin = fo4::read_plugin_file(path);
   const auto key = fo4::FormKey::parse("0000015E:Fallout4.esm");
   const auto model = fo4::forms::decode_weather(plugin, key);
@@ -714,6 +716,8 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
   if (files.empty()) {
     GTEST_SKIP() << "no corpus plugins found under " << dir;
   }
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
   std::size_t seen = 0;
   std::size_t failed = 0;
   std::vector<std::string> failures;
@@ -735,7 +739,8 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
     ADD_FAILURE() << failures[i];
   }
   EXPECT_EQ(failed, 0u) << seen << " WTHR records scanned, " << failed << " failed to decode";
-  if (files.size() == 7) EXPECT_EQ(seen, 107u);
+  RecordProperty("WTHR_scanned", static_cast<int>(seen));
+  if (files.size() == 7 && exact_counts_known(build)) EXPECT_EQ(seen, 107u);
   if (seen == 0) {
     GTEST_SKIP() << "no WTHR records found in available corpus plugins";
   }
