@@ -18,6 +18,14 @@ std::vector<std::byte> epft(std::uint8_t type) {
   return {std::byte{type}};
 }
 
+std::vector<std::byte> prke(std::uint8_t type) {
+  return {std::byte{type}, std::byte{1}, std::byte{0}};
+}
+
+std::vector<std::byte> entry_point(std::uint8_t function) {
+  return {std::byte{0}, std::byte{function}, std::byte{0}};
+}
+
 std::vector<std::byte> u32_payload(std::uint32_t value) {
   fo4::test::ByteWriter out;
   out.u32(value);
@@ -69,11 +77,16 @@ std::vector<std::byte> make_plugin() {
   const auto group = fo4::test::begin_group(out, "PERK", 0);
   const auto record = fo4::test::begin_record(out, "PERK", 0, 0x03000800);
 
-  // EPFT 1 = Float. The bit pattern must remain opaque.
+  fo4::test::write_subrecord(out, "DATA",
+                             std::vector<std::byte>{std::byte{0x50}, std::byte{0x08},
+                                                    std::byte{0x00}, std::byte{0x02},
+                                                    std::byte{0x00}});
+
   fo4::test::write_subrecord(out, "EPFT", epft(1));
   fo4::test::write_subrecord(out, "EPFD", u32_payload(0x02000811));
 
-  // EPFT 2 = Float/AV,Float. Both 32-bit words remain opaque.
+  fo4::test::write_subrecord(out, "PRKE", prke(2));
+  fo4::test::write_subrecord(out, "DATA", entry_point(4));
   fo4::test::write_subrecord(out, "EPFT", epft(2));
   fo4::test::write_subrecord(out, "EPFD", two_u32_payload(0x02000812, 0x02000813));
 
@@ -98,6 +111,28 @@ std::vector<std::byte> make_plugin() {
   fo4::test::write_subrecord(out, "EPFT", epft(6));
   fo4::test::write_subrecord(out, "EPFD", u32_payload(0x02000817));
 
+  fo4::test::write_subrecord(out, "EPFT", epft(8));
+  fo4::test::write_subrecord(out, "EPFD", two_u32_payload(0x02000830, 0x3F800000u));
+
+  const std::uint8_t entry_codes[] = {5, 12, 13, 14};
+  std::uint32_t next_form = 0x02000818;
+  for (const auto code : entry_codes) {
+    fo4::test::write_subrecord(out, "PRKE", prke(2));
+    fo4::test::write_subrecord(out, "DATA", entry_point(code));
+    fo4::test::write_subrecord(out, "EPFT", epft(2));
+    fo4::test::write_subrecord(out, "EPFD", two_u32_payload(next_form++, 0x3F800000u));
+  }
+
+  fo4::test::write_subrecord(out, "PRKE", prke(0));
+  fo4::test::ByteWriter quest;
+  quest.u32(0x02000860);
+  quest.u16(5);
+  fo4::test::write_subrecord(out, "DATA", quest.bytes);
+  fo4::test::write_subrecord(out, "PRKE", prke(1));
+  fo4::test::write_subrecord(out, "DATA", u32_payload(0x02000870));
+  fo4::test::write_subrecord(out, "PRKE", prke(2));
+  fo4::test::write_subrecord(out, "DATA", entry_point(4));
+
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   return out.bytes;
@@ -118,7 +153,7 @@ TEST(FormLink, PerkEntryPointRemapsOnlyFormIdEpfdVariants) {
   ASSERT_NE(record, nullptr);
 
   const auto epfd = find_subs(*record, "EPFD");
-  ASSERT_EQ(epfd.size(), 6u);
+  ASSERT_EQ(epfd.size(), 11u);
   EXPECT_EQ(read_u32(epfd[0]->data), 0x02000811u);
   ASSERT_EQ(epfd[1]->data.size(), 8u);
   EXPECT_EQ(read_u32(epfd[1]->data, 0), 0x02000812u);
@@ -127,25 +162,76 @@ TEST(FormLink, PerkEntryPointRemapsOnlyFormIdEpfdVariants) {
   EXPECT_EQ(read_u32(epfd[3]->data), 0x01000815u);
   EXPECT_EQ(read_u32(epfd[4]->data), 0x01000816u);
   EXPECT_EQ(read_u32(epfd[5]->data), 0x02000817u);
+  ASSERT_EQ(epfd[6]->data.size(), 8u);
+  EXPECT_EQ(read_u32(epfd[6]->data, 0), 0x01000830u);
+  EXPECT_EQ(read_u32(epfd[6]->data, 4), 0x3F800000u);
+  for (std::size_t at = 7; at < 11; ++at) {
+    ASSERT_EQ(epfd[at]->data.size(), 8u);
+    EXPECT_EQ(read_u32(epfd[at]->data, 0), 0x01000818u + static_cast<std::uint32_t>(at - 7));
+    EXPECT_EQ(read_u32(epfd[at]->data, 4), 0x3F800000u);
+  }
 
   const auto epf3 = find_subs(*record, "EPF3");
   ASSERT_EQ(epf3.size(), 1u);
   EXPECT_EQ(read_u32(epf3[0]->data), 0x02000899u);
 }
 
+TEST(FormLink, PerkEffectDataRemapsOnlyQuestAndAbilityFormIds) {
+  auto plugin = fo4::read_plugin(make_plugin(), "PerkPatch.esp");
+  plugin = fo4::remap_plugin_masters(
+      std::move(plugin),
+      {fo4::PluginKey::from_filename("Fallout4.esm"),
+       fo4::PluginKey::from_filename("KeepMe.esm")});
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "PerkPatch.esp");
+  const auto* record = fo4::find_record(
+      reread, fo4::FormKey::parse("000800:PerkPatch.esp"));
+  ASSERT_NE(record, nullptr);
+
+  const auto data = find_subs(*record, "DATA");
+  ASSERT_EQ(data.size(), 9u);
+  EXPECT_EQ(data[0]->data.size(), 5u);
+  EXPECT_EQ(read_u32(data[0]->data), 0x02000850u);
+  EXPECT_EQ(data[1]->data, entry_point(4));
+  for (std::size_t at = 1; at < 6; ++at) {
+    EXPECT_EQ(data[at]->data.size(), 3u);
+  }
+  ASSERT_EQ(data[6]->data.size(), 6u);
+  EXPECT_EQ(read_u32(data[6]->data), 0x01000860u);
+  EXPECT_EQ(data[6]->data[4], std::byte{5});
+  EXPECT_EQ(data[6]->data[5], std::byte{0});
+  ASSERT_EQ(data[7]->data.size(), 4u);
+  EXPECT_EQ(read_u32(data[7]->data), 0x01000870u);
+  EXPECT_EQ(data[8]->data, entry_point(4));
+}
+
 TEST(FormLink, PerkEntryPointCollectionReportsOnlyFormIdEpfdVariants) {
   const auto plugin = fo4::read_plugin(make_plugin(), "PerkPatch.esp");
   const auto links = fo4::collect_form_links(plugin);
 
-  std::size_t epfdHits = 0;
+  std::vector<std::uint32_t> epfd;
   for (const auto& link : links) {
     if (link.subrecord.to_string() != "EPFD") continue;
-    ++epfdHits;
+    epfd.push_back(link.raw.value());
     EXPECT_EQ(link.offset, 0u);
-    EXPECT_TRUE(link.raw.value() == 0x02000814u ||
-                link.raw.value() == 0x02000815u ||
-                link.raw.value() == 0x02000816u);
     EXPECT_EQ(link.key.owner().filename(), "KeepMe.esm");
   }
-  EXPECT_EQ(epfdHits, 3u);
+  const std::vector<std::uint32_t> expected{0x02000814u, 0x02000815u, 0x02000816u, 0x02000830u,
+                                            0x02000818u, 0x02000819u, 0x0200081Au, 0x0200081Bu};
+  EXPECT_EQ(epfd, expected);
+}
+
+TEST(FormLink, PerkEffectDataCollectionReportsOnlyQuestAndAbilityFormIds) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "PerkPatch.esp");
+  const auto links = fo4::collect_form_links(plugin);
+
+  std::vector<std::uint32_t> data;
+  for (const auto& link : links) {
+    if (link.subrecord.to_string() != "DATA") continue;
+    data.push_back(link.raw.value());
+    EXPECT_EQ(link.offset, 0u);
+    EXPECT_EQ(link.key.owner().filename(), "KeepMe.esm");
+  }
+  const std::vector<std::uint32_t> expected{0x02000860u, 0x02000870u};
+  EXPECT_EQ(data, expected);
 }
