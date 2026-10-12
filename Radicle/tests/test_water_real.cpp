@@ -116,7 +116,7 @@ TEST_P(WaterRealData, MasterHasExpectedWaterCountAndDnamSizes) {
     }
   });
   RecordProperty("WATR_master", static_cast<int>(count));
-  if (exact_counts_known(build_)) EXPECT_EQ(count, expected.at(GetParam()));
+  if (exact_counts_known(build_)) { EXPECT_EQ(count, expected.at(GetParam())); }
 }
 
 INSTANTIATE_TEST_SUITE_P(
