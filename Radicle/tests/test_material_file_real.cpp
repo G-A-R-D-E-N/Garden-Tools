@@ -1,5 +1,6 @@
 #include "fo4/archive/ba2.hpp"
 #include "fo4/material/material_file.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -27,6 +28,7 @@ TEST(MaterialFileRealData, RoundTripsEveryVanillaMaterialByteIdentically) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
   }
+  record_game_build(detect_game_build(dir));
   const auto archive_path = std::filesystem::path(dir) / "Fallout4 - Materials.ba2";
   if (!std::filesystem::exists(archive_path)) {
     GTEST_SKIP() << "Fallout4 - Materials.ba2 is not in FO4_DATA_DIR";

@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/quest/structure.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -253,6 +254,7 @@ TEST_P(QuestStructureReal, EveryStoredQuestAgreesAndRoundTrips) {
   if (!directory) {
     GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
   }
+  record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
   const auto plugin = fo4::read_plugin_file(path);

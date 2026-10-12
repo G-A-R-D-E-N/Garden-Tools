@@ -4,6 +4,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -499,6 +500,7 @@ TEST(SubrecordAuthoring, RefusesDefaultFieldsInLocalizedPlugins) {
 TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / "Fallout4.esm";
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "Fallout4.esm not found";
 

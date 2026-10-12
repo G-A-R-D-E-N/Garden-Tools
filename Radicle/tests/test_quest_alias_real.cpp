@@ -11,6 +11,7 @@
 #include "fo4/forms/quest.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -54,6 +55,7 @@ TEST(QuestAliasRealData, DecodesEveryShippedQuest) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
 
   std::size_t quests = 0;
   std::size_t aliases = 0;

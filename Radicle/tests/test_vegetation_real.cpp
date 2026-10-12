@@ -8,6 +8,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -66,6 +67,7 @@ std::uint32_t raw_le(const std::vector<std::byte>& data, std::size_t offset, std
 TEST_P(VegetationReal, EveryOfficialVegetationRecordDecodesAndMasterIsByteIdentical) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
   std::vector<std::filesystem::path> native_paths; std::vector<std::string> names;
@@ -185,6 +187,7 @@ TEST_P(VegetationReal, EveryOfficialVegetationRecordDecodesAndMasterIsByteIdenti
 TEST_P(VegetationReal, EveryNewScalarPathEditsOfficialRecordsWithoutLosingData) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
   const std::filesystem::path native_paths[] = {path}; const auto env = fo4::env::Environment::load(native_paths);
@@ -296,6 +299,7 @@ bool is_vegetation(const std::string& type) { return type == "GRAS" || type == "
 TEST_P(VegetationReal, EveryOfficialRecordIsListedAndOrderedInTheAuthoringSchema) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
   const auto plugin = fo4::read_plugin_file(path);
@@ -330,6 +334,7 @@ TEST_P(VegetationReal, EveryOfficialRecordIsListedAndOrderedInTheAuthoringSchema
 TEST_P(VegetationReal, LinksGrassListsAndOptionalSubrecordsEditOfficialRecordsAndKeepEveryOtherRecordByteIdentical) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
   const auto& pick = official_targets(dir);
