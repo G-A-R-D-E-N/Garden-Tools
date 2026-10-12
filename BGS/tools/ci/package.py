@@ -21,6 +21,9 @@ def main():
         parser.error("Package must be an existing output directory beneath BGS.")
     if not re.fullmatch(r"[0-9a-f]{40}", args.commit):
         parser.error("Commit must be a full lowercase Git SHA.")
+    native = {"win-x64": "radicle.dll", "linux-x64": "libradicle.so"}[args.runtime]
+    if not (package / native).is_file():
+        raise RuntimeError(f"Package is missing the native Radicle library {native}.")
     version = ET.parse(root / "app/BehaviourStudio.csproj").findtext(".//Version")
     executable = package / ("BehaviourGraphStudio.exe" if args.runtime == "win-x64" else "BehaviourGraphStudio")
     report = subprocess.check_output([str(executable), "--version"], text=True).strip()

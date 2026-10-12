@@ -319,3 +319,21 @@ Regressions: `BGS/tools/tests/HkxAnimationBoundsTests.cs` covers each bounded co
 A full-precision (flag bit 10) position is three f32 plus one 4-byte value, 16 bytes; the vanilla corpus fixes this (descriptor 0x0041b00000650407 puts UV at byte 16, stride 28; `Radicle/docs/NIF.md` parity item 15). `Layout` used 12, so for full-precision skinned shapes (flags 0x45b stride 40 and 0x47b stride 44; six vanilla shapes under Meshes\SCOL per the corpus scan in GARDEN-TOOLS PR #498, commit d3901026) weights and indices were read 4 bytes early, and `BGS/src/Nif/SkinSave.cs:Apply` wrote the 12 skin bytes 4 bytes early, over the 4 bytes before the weights (the tangent for 0x45b, the color for 0x47b) and the true weight bytes, leaving the true indices stale; the reparse check used the same layout and passed. `Layout` now uses 16 and, for skinned shapes, throws `InvalidDataException` when the stride differs from the attribute total (position 16 or 8, 4 per bit 1-5, skin 12, bit 8 four), mirroring `Radicle/src/nif/geometry.cpp:vertex_bytes_for`. Unskinned shapes are not checked: only the position at byte 0 is read from them, and a throw would fail the whole file in `BGS/app/MainWindow.Pose.cs:LoadMesh`, `BGS/src/Hkx/MeshLookup.cs:IsMesh` and `BGS/src/Nif/SkinSave.cs:SkinDocument`, for mod meshes with descriptor bits this reader does not model.
 
 Regressions: `BGS/tools/tests/NifVertexLayoutTests.cs` (decode at bytes 28/36, rejection of strides 36 and 44; both failed before the change). `UnskinnedVertexKeepsItsDeclaredStride` guards the skinned-only scope.
+
+## BGS/src/Archive/Ba2.cs:Ba2
+
+`Ba2.Open` wraps `Radicle.Interop.Ba2Archive`, which loads the native `radicle_c` library through `RadicleLibrary`. Radicle parses the header, entry table and chunk bounds. The wrapper maps each `RadicleException` to `InvalidDataException` with the same message and releases the native handle when opening fails. Only GNRL archives open. A DX10 archive is refused with "is a DX10 archive, not GNRL", and `BGS/src/Archive/GameData.cs:TryArchiveEntries` skips archives whose message contains "DX10", so that wording must stay. Non-empty archives without a name table are refused because their entries cannot be named; an empty GNRL archive opens.
+
+Names are Radicle's Windows-1252 paths with `\` mapped to `/`. Rooted names and names containing `:` are refused when the archive opens, before any extraction. `Ba2.Read` extracts by `Entry.Index`; Radicle checks chunk bounds and decompressed sizes.
+
+`Entry` carries `Unpacked` as `uint`; an entry above 4 GiB is refused before the cast, and GNRL stores a u32 size. `Offset` and `Packed` were removed because the Radicle C API does not expose them; `BGS/tools/symrm/Program.cs:Ba2Browse` was the only caller that read them.
+
+Behaviour changes from the old reader: entry names are decoded as Windows-1252 (the old reader used UTF-8); only GNRL versions 1, 7 and 8 are accepted; Radicle caps a single entry at 1 GiB; a missing native library surfaces as `InvalidDataException` from `Ba2.Open` and `Ba2.Read`.
+
+## BGS/Directory.Build.targets:WarnMissingRadicleNative
+
+Every BGS project receives the native Radicle library as a `None` item from `RadicleNativeDir`, which defaults to `build/radicle-bgs/native` at the repository root, and copies it to output and publish. `ExcludeFromSingleFile` keeps the library beside the single-file executable, where the default NativeLibrary probing finds it. A missing file produces a warning that names `RadicleNativeDir`, not an error, so editor-only builds still succeed.
+
+## BGS/tools/tests/Ba2RadicleTests.cs:WriteGeneralBa2
+
+Radicle requires each GNRL record to declare a 16-byte chunk header (the count and size word is `0x00100100`) and the `0xBAADF00D` chunk sentinel. Fixtures that wrote zeros there passed only because the previous reader ignored those fields. `BGS/tools/tests/ArchivePathRegressionTests.cs:WriteBa2` and `BGS/tools/tests/AuditRegressionTests.cs:WriteBa2` use the same layout.

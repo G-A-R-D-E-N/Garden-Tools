@@ -685,7 +685,8 @@
       "behaviourgraph.core": {
         "type": "Project",
         "dependencies": {
-          "BepuPhysics": "[2.4.0, )"
+          "BepuPhysics": "[2.4.0, )",
+          "Radicle.Interop": "[1.0.0, )"
         }
       },
       "behaviourgraph.mcp": {
@@ -706,6 +707,9 @@
           "BehaviourGraph.Core": "[1.0.0, )",
           "Microsoft.Extensions.AI.OpenAI": "[10.10.0, )"
         }
+      },
+      "radicle.interop": {
+        "type": "Project"
       },
       "symrm": {
         "type": "Project",
