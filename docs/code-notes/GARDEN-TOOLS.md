@@ -1595,6 +1595,10 @@ The managed model types and the generated raw structs share names (`PexValue`, `
 
 The main integration retains the published flag-or-extension classification in `Radicle/src/forms/weather.cpp:resolve_master_kind` and the caller-supplied resolved-order boundary. `RADICLE_ABI_VERSION` is unchanged because this branch adds no public exports or layouts. `Radicle/CMakeLists.txt:gtest_discover_tests` keeps the portable fixture working directory together with main's generator test; the required native and offline managed CI workflow comes from main. Existing OG/AE evidence remains static; NG byte checks, external limits and live dependency behavior stay open in #28/#389.
 
+## Radicle/src/plugin/reader.cpp:inflate_record_payload, Radicle/tests/test_compression.cpp:OfficialMastersUseZlibAndPreserveBytes
+
+The current-main integration retains the published zlib-framing rejection and physical XXXX preservation tests without changing the decoder. Main supplies the required native and offline managed CI jobs and the field-address generator test. No exports or layouts are added, so `RADICLE_ABI_VERSION` is unchanged. NG window bits, zero-size and malformed-input runtime acceptance, and CK behavior remain open under #391.
+
 ## PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:CompactToEslCore / CheckEslEligibilityCore / EslSlots
 
 The legacy Mutagen path (reached through `BackendInterop` and `PluginToolExecutor` compact_to_esl / check_esl_eligibility) follows the native backend's slot rules (`PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:eslSlots`, which uses `Radicle/src/plugin/mutation.cpp:allows_hardcoded_range`), with one stricter condition. `EslSlots` starts at 0x001 only when the HEDR version is at least 1.0, the plugin has a master, and `HasForeignReference` finds a record FormKey or form link whose ModKey is another mod; otherwise it starts at 0x800. The native floor has no cross-mod check, so the legacy floor can be stricter than `eslSlots`. Native IDs below that floor or above 0xFFF are out of range, and the range text and capacity come from those bounds; the old code hard-coded 0x800-0xFFF and missed low IDs. The four methods moved out of `WriteService.cs` because that file is over the line limit.
@@ -1923,3 +1927,11 @@ Rewrites PATH entries under the real Windows profile to the neutral runner host 
 The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3984-3990 @93cc0bc5` (`wbVMADFragmentedQUST`) wraps Script Data in `wbUnion` with `source:xEdit Core/wbDefinitionsCommon.pas:5866-5876 @93cc0bc5` (`wbScriptFragmentsEmptyScriptDecider`), which picks `wbNull` for an empty ScriptName. So `walk_quest_extra` and `read_quest_vmad_extras` keep the empty-name guard for that header only.
 
 Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.
+
+## .github/workflows/native-ci.yml:native-linux — failure artifact
+
+`native-linux-failure` keeps only what diagnoses a failed Linux run: the CTest tree (`build/native/Testing/**`, whose `LastTest.log` holds every test's output), the CMake logs (`build/native/**/*.log`, `build/native/CMakeFiles/CMakeConfigureLog.yaml`) and `build/native/CMakeCache.txt`. It no longer uploads `build/native/bin/**`. That directory holds the Debug test and tool executables with debug information, and each upload was 360-470 MB. Compiler and linker errors appear in the step log, so no compiler log file is uploaded. Retention is 3 days. To inspect a failing test binary, rebuild the same commit locally.
+
+## .github/workflows/plugin-editor-ci.yml:windows, linux — failure artifacts
+
+`plugin-editor-windows-failure` and `plugin-editor-linux-failure` upload `TestResults/**` (the TRX logs written by `dotnet test --results-directory ../TestResults`). The TRX files are not expected to be large, so only the retention changed, from 7 to 3 days.
