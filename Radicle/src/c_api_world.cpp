@@ -42,12 +42,12 @@ radicle_status radicle_water_resolve(const radicle_env* env, const radicle_recor
   if (env == nullptr || record == nullptr || out_selection == nullptr) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_selection are required");
   }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
   *out_selection = {};
   return guarded("unknown exception while resolving water", [&] {
     const auto* ref = to_ref(record);
-    if (!belongs_to_env(env, ref)) {
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record belongs to another environment");
-    }
     const auto water = fo4::env::resolve_water(env->value, *ref);
     out_selection->water = water.uses_default_water ? radicle_form_key{fo4::env::k_default_water_plugin, fo4::env::k_default_water_local}
                                                    : to_c_key(*env, water.water);

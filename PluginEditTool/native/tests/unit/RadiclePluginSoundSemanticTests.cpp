@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 #include <catch2/catch_test_macros.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -116,16 +117,6 @@ TEST_CASE("Sound semantic reads retain native structural refusals", "[sound-sema
         signature = "SNDR";
         error = "ScalarReadFailed";
     }
-    SECTION("Oversized sound descriptor link") {
-        payload(entries, sound::k_marker, "SDSC").push_back(std::byte{0});
-        signature = "SOUN";
-        error = "FormLinkReadFailed";
-    }
-    SECTION("Footstep count mismatch") {
-        payload(entries, sound::k_set, "XCNT") = sound::words({0, 0, 0, 0, 0});
-        signature = "FSTS";
-        error = "FormLinkReadFailed";
-    }
     SECTION("Incomplete packed music track") {
         payload(entries, sound::k_music, "TNAM").push_back(std::byte{0});
         signature = "MUSC";
@@ -136,6 +127,23 @@ TEST_CASE("Sound semantic reads retain native structural refusals", "[sound-sema
     const auto result = fixture.grid(signature);
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == error);
+    fixture.checkNotPending();
+}
+
+TEST_CASE("Sound semantic grids list a wrong-size descriptor link and miscounted footsteps as unavailable", "[sound-semantic]") {
+    auto entries = sound::fixture();
+    payload(entries, sound::k_marker, "SDSC").push_back(std::byte{0});
+    payload(entries, sound::k_set, "XCNT") = sound::words({0, 0, 0, 0, 0});
+    Fixture fixture{entries};
+    for (const auto& [signature, id, field] : {std::tuple{"SOUN", sound::k_marker, "SOUN\\SoundDescriptor"},
+            std::tuple{"FSTS", sound::k_set, "FSTS\\Footsteps"}}) {
+        CAPTURE(signature);
+        const auto result = fixture.grid(signature);
+        REQUIRE(result.has_value());
+        const auto grid = nlohmann::json::parse(result->get<std::string>());
+        CHECK(cell(grid, id, field).at("value") == "<opaque>");
+        CHECK(cell(grid, id, field).at("editable") == false);
+    }
     fixture.checkNotPending();
 }
 
