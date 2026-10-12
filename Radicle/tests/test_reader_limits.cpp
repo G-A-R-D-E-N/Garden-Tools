@@ -40,7 +40,7 @@ TEST(ReaderLimits, TwentyNestedGroupsAreRefusedCleanly) {
   EXPECT_THROW(fo4::read_plugin(nested_groups_plugin(20)), fo4::parse_error);
 }
 
-TEST(ReaderLimits, CompressedUncompressedSizeBeyondZlibBoundIsRefusedBeforeAllocation) {
+TEST(ReaderLimits, CompressedUncompressedSizeBeyondZlibBoundLoadsUndecodable) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::end_record(out, tes4);
@@ -51,10 +51,8 @@ TEST(ReaderLimits, CompressedUncompressedSizeBeyondZlibBoundIsRefusedBeforeAlloc
   fo4::test::end_record(out, rec);
   fo4::test::end_group(out, grup);
 
-  try {
-    fo4::read_plugin(out.bytes);
-    FAIL() << "expected parse_error";
-  } catch (const fo4::parse_error& error) {
-    EXPECT_NE(error.parse_message().find("zlib expansion bound"), std::string::npos);
-  }
+  const auto plugin = fo4::read_plugin(out.bytes);
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x01000801});
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->undecodable);
 }

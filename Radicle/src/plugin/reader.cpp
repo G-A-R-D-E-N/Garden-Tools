@@ -150,9 +150,16 @@ Record read_record(binary::Cursor& cursor, const std::vector<std::byte>* owner) 
   }
   binary::Cursor payload_cursor{payload, start_abs + k_record_header_size};
   record.uncompressed_size = payload_cursor.read_u32();
-  const auto compressed = payload_cursor.read_bytes(payload.size() - 4);
-  const auto inflated = inflate_record_payload(compressed, record.uncompressed_size, start_abs);
-  record.subrecords = parse_subrecords(inflated, start_abs + k_record_header_size);
+  try {
+    const auto compressed = payload_cursor.read_bytes(payload.size() - 4);
+    const auto inflated = inflate_record_payload(compressed, record.uncompressed_size, start_abs);
+    record.subrecords = parse_subrecords(inflated, start_abs + k_record_header_size);
+  } catch (const parse_error&) {
+    if (record.header.signature == sig_tes4) {
+      throw;
+    }
+    record.undecodable = true;
+  }
   return record;
 }
 
