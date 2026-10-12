@@ -1383,7 +1383,7 @@ Not done, because nothing in GardenEngine has failed on memory. The Fallen World
 
 ## Radicle/src/plugin/reader.cpp:read_record — compressed payloads are not retained
 
-Nothing read `Record::decompressed_payload`; every writer only cleared it, because the writer re-emits records from `subrecords` and `record_original_bytes` slices the retained file bytes. `read_record` now inflates into a local buffer, and `parse_subrecords` copies out of it, so no view outlives the buffer. The field stays in `include/fo4/plugin/container.hpp`, because removing it means touching the files over 750 lines that clear it (`placed_reference_copy.cpp`, `formlink_lists.cpp`, `form_links.cpp`).
+Nothing read `Record::decompressed_payload`; every writer only cleared it, because the writer re-emits records from `subrecords` and `record_original_bytes` slices the retained file bytes. `read_record` now inflates into a local buffer, and `parse_subrecords` copies out of it, so no view outlives the buffer. The field stays in `include/fo4/plugin/container.hpp`, because removing it means touching the files that clear it, which were over 750 lines at the time (`placed_reference_copy.cpp`, `formlink_lists.cpp`, `form_links.cpp`).
 
 Proof: `EnvBenchRealData.LoadsOfficialMasters` asserts `payload_bytes == 0`, the full `fo4_tests` suite passes (590 tests), and `RealPluginPreservation.UnmodifiedFallout4MasterIsByteIdentical` passes on real data. On the official masters (Release, 2026-09-28), peak working set fell from 3,097,288 KB to 2,567,404 KB and load time is unchanged at about 4.8–5.0 s.
 
