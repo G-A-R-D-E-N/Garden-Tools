@@ -130,8 +130,7 @@ Data size must equal `vertex count * stride + triangle count * 6`
 yields an empty shape, not an error (`src/nif/geometry.cpp:read_shape`).
 `NifShape.cs:ReadShape` line 95 returns null for the same three conditions.
 
-Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162, except the
-full-precision position width, see parity item 15):
+Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162):
 
 - Position: 16 bytes at full precision (three f32 plus one 4-byte value, not
   decoded; settled by the vanilla corpus, parity item 15), 8 bytes at half
@@ -147,7 +146,9 @@ full-precision position width, see parity item 15):
   meaning is not pinned. In vanilla, the FaceGen FaceGeom heads and
   `maleeyes.nif` hold zero there and `maleeyes_facebones.nif` holds 1.0f.
 
-The attribute bytes must equal the stride exactly (`src/nif/geometry.cpp:read_shape`).
+The attribute bytes must equal the stride exactly
+(`src/nif/geometry.cpp:read_shape`). `NifShape.cs:Layout` applies the same
+check to skinned shapes only.
 Each triangle index must be less than the vertex count
 (`NifShape.cs:ReadShape` lines 135-137).
 
@@ -221,8 +222,7 @@ run (`tests/test_nif_corpus.cpp`) and a later RE or CK check decide.
 14. Bitangents: left empty. The packing is not pinned.
 15. Full-precision position slot width: 16 bytes. Settled by the vanilla corpus:
     descriptor 0x0041b00000650407 places UV at byte 16 (stride 28); decoding UV
-    at 12 gives invalid UVs. The BGS NifShape.cs:Layout uses 12 for skin offsets,
-    so that file disagrees. BGS is not edited.
+    at 12 gives invalid UVs. `NifShape.cs:Layout` uses 16 as well.
 16. Attribute bytes must equal the stride exactly. The reader rejects any stride
     that is larger than the attributes (padding), so the corpus decides whether
     padding occurs.

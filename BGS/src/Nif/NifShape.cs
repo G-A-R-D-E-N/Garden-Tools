@@ -107,7 +107,7 @@ public static class NifGeometry
             NodeTranslation = translation,
             NodeScale = scale,
         };
-        var layout = Layout(flags, stride);
+        var layout = Layout(flags, stride, shape.Name);
         if (layout.Weights >= 0)
             shape.SkinSource = (block, at, stride, layout.Weights, layout.Indices);
 
@@ -140,11 +140,11 @@ public static class NifGeometry
         return shape;
     }
 
-    private static (int Weights, int Indices) Layout(int flags, int stride)
+    private static (int Weights, int Indices) Layout(int flags, int stride, string name)
     {
         if ((flags & HasSkin) == 0) return (-1, -1);
 
-        int o = (flags & FullPrecision) != 0 ? 12 : 8;
+        int o = (flags & FullPrecision) != 0 ? 16 : 8;
         if ((flags & HasUv) != 0) o += 4;
         if ((flags & HasUv2) != 0) o += 4;
         if ((flags & HasNormal) != 0) o += 4;
@@ -153,10 +153,10 @@ public static class NifGeometry
 
         int weights = o;
         int indices = o + 8;
-        if (indices + 4 > stride)
+        int expected = indices + 4 + ((flags & HasEyeData) != 0 ? 4 : 0);
+        if (expected != stride)
             throw new InvalidDataException(
-                $"a skinned vertex of {stride} bytes has no room for weights at {weights}; " +
-                $"the vertex descriptor declares attributes this does not lay out");
+                $"{name}: a skinned vertex declares {expected} bytes of attributes but a stride of {stride}");
 
         return (weights, indices);
     }
