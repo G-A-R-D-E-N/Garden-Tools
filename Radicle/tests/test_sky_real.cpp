@@ -15,6 +15,21 @@ namespace {
 
 class SkyRealData : public testing::TestWithParam<const char*> {};
 
+struct SkyCounts {
+  std::size_t weathers;
+  std::size_t climates;
+};
+
+const std::map<std::string, SkyCounts> kOfficialSkyCounts = {
+    {"Fallout4.esm", {71, 7}},
+    {"DLCRobot.esm", {0, 0}},
+    {"DLCworkshop01.esm", {0, 0}},
+    {"DLCCoast.esm", {16, 3}},
+    {"DLCworkshop02.esm", {3, 0}},
+    {"DLCworkshop03.esm", {0, 0}},
+    {"DLCNukaWorld.esm", {17, 1}},
+};
+
 TEST_P(SkyRealData, DecodesSkyAndEditsOfficialClimateSamplesWithoutLosingData) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
@@ -93,6 +108,9 @@ TEST_P(SkyRealData, DecodesSkyAndEditsOfficialClimateSamplesWithoutLosingData) {
       ++weathers;
     }
   }
+  const auto& expected = kOfficialSkyCounts.at(GetParam());
+  EXPECT_EQ(weathers, expected.weathers);
+  EXPECT_EQ(climates, expected.climates);
   RecordProperty("CLMT", static_cast<int>(climates));
   RecordProperty("WTHR", static_cast<int>(weathers));
   for (const auto& [size, count] : sizes) RecordProperty("DATA_" + std::to_string(size), count);

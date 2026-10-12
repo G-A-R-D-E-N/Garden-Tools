@@ -735,6 +735,7 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
     ADD_FAILURE() << failures[i];
   }
   EXPECT_EQ(failed, 0u) << seen << " WTHR records scanned, " << failed << " failed to decode";
+  if (files.size() == 7) EXPECT_EQ(seen, 107u);
   if (seen == 0) {
     GTEST_SKIP() << "no WTHR records found in available corpus plugins";
   }

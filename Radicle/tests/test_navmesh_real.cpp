@@ -88,30 +88,41 @@ TEST_P(NavmeshReal, EveryOfficialNavmeshDecodesAndUnchangedMasterIsIdentical) {
   const radicle_record** records = nullptr; std::size_t count = 0;
   ASSERT_EQ(radicle_env_plugin_records(abi, 0, &records, &count), RADICLE_STATUS_OK);
   const auto refs = env.plugin_records(0); ASSERT_EQ(count, refs.size());
-  std::size_t navm = 0, navi = 0, infos = 0;
+  std::size_t navm = 0, navm_failed = 0, navi = 0, navi_failed = 0, infos = 0;
   for (std::size_t i = 0; i < count; ++i) {
     const auto type = refs[i]->record->header.signature;
     if (type == fo4::Signature::from_string("NAVM")) {
       SCOPED_TRACE(refs[i]->record->form_key.to_string()); ++navm;
-      std::optional<fo4::env::NavmeshGeometry> native;
-      ASSERT_NO_THROW(native = fo4::env::decode_navmesh(env, *refs[i])); const radicle_navmesh* value = nullptr;
-      ASSERT_EQ(radicle_navmesh_decode(abi, records[i], &value), RADICLE_STATUS_OK); ASSERT_NE(value, nullptr);
-      EXPECT_EQ(value->has_geometry, native ? 1 : 0);
-      if (native) { expect_geometry(*native, *value); }
-      radicle_navmesh_free(value);
+      std::optional<fo4::env::NavmeshGeometry> native; bool native_ok = true;
+      try { native = fo4::env::decode_navmesh(env, *refs[i]); } catch (...) { native_ok = false; }
+      const radicle_navmesh* value = nullptr;
+      const bool c_ok = radicle_navmesh_decode(abi, records[i], &value) == RADICLE_STATUS_OK && value != nullptr;
+      if (!native_ok || !c_ok) ++navm_failed;
+      if (native_ok && c_ok) {
+        EXPECT_EQ(value->has_geometry, native ? 1 : 0);
+        if (native) { expect_geometry(*native, *value); }
+      }
+      if (value) radicle_navmesh_free(value);
     } else if (type == fo4::Signature::from_string("NAVI")) {
       SCOPED_TRACE(refs[i]->record->form_key.to_string()); ++navi;
-      std::vector<fo4::env::NavmeshInfo> native;
-      ASSERT_NO_THROW(native = fo4::env::decode_navmesh_info(env, *refs[i])); infos += native.size();
+      std::vector<fo4::env::NavmeshInfo> native; bool native_ok = true;
+      try { native = fo4::env::decode_navmesh_info(env, *refs[i]); } catch (...) { native_ok = false; }
       const radicle_navi* value = nullptr;
-      ASSERT_EQ(radicle_navi_decode(abi, records[i], &value), RADICLE_STATUS_OK); ASSERT_NE(value, nullptr);
-      ASSERT_EQ(value->info_count, native.size());
-      for (std::size_t j = 0; j < native.size(); ++j) { SCOPED_TRACE(j); expect_info(native[j], value->infos[j]); }
-      radicle_navi_free(value);
+      const bool c_ok = radicle_navi_decode(abi, records[i], &value) == RADICLE_STATUS_OK && value != nullptr &&
+                        value->info_count == native.size();
+      if (!native_ok || !c_ok) ++navi_failed;
+      if (native_ok && c_ok) {
+        infos += native.size();
+        for (std::size_t j = 0; j < native.size(); ++j) { SCOPED_TRACE(j); expect_info(native[j], value->infos[j]); }
+      }
+      if (value) radicle_navi_free(value);
     }
   }
   radicle_free_record_array(records); radicle_env_destroy(abi);
-  RecordProperty("NAVM", static_cast<int>(navm)); RecordProperty("NAVI", static_cast<int>(navi)); RecordProperty("NVMI", static_cast<int>(infos));
+  RecordProperty("NAVM", static_cast<int>(navm)); RecordProperty("NAVM_FAILED", static_cast<int>(navm_failed));
+  RecordProperty("NAVI", static_cast<int>(navi)); RecordProperty("NAVI_FAILED", static_cast<int>(navi_failed));
+  RecordProperty("NVMI", static_cast<int>(infos));
+  EXPECT_EQ(navm_failed, 0u); EXPECT_EQ(navi_failed, 0u);
   const auto bytes = fo4::write_plugin(env.plugin(0)); const auto original = fo4::plugin_original_bytes(env.plugin(0));
   ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);
 }
