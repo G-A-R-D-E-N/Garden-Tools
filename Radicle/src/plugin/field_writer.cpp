@@ -2,6 +2,7 @@
 
 #include "record_edit.hpp"
 
+#include "fo4/environment/sound.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/field_address.hpp"
@@ -30,7 +31,45 @@ void require_scalar_record(const Record& record, const schema::ScalarFieldDescri
   }
 }
 
+bool response_shape_valid(const Record& record) {
+  constexpr Signature trda = Signature::from_string("TRDA");
+  constexpr Signature members[] = {Signature::from_string("NAM1"), Signature::from_string("NAM2"),
+                                    Signature::from_string("NAM3"), Signature::from_string("NAM4")};
+  std::size_t responses = 0;
+  std::size_t counts[4] = {};
+  const auto& subs = record.subrecords;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    for (std::size_t m = 0; m < 4; ++m) {
+      if (subs[i].signature == members[m]) { ++counts[m]; }
+    }
+    if (subs[i].signature != trda) { continue; }
+    ++responses;
+    if (subs[i].data.size() != 20 || subs.size() - i <= 4) { return false; }
+    for (std::size_t m = 0; m < 4; ++m) {
+      if (subs[i + 1 + m].signature != members[m]) { return false; }
+    }
+  }
+  return std::all_of(counts, counts + 4,
+                     [&](std::size_t count) { return count == responses; });
+}
+
 schema::FieldSlots scalar_slots(const Record& record, const schema::ScalarFieldDescriptor& field) {
+  if (field.record == Signature::from_string("INFO") && field.scalar.address.repeated &&
+      !response_shape_valid(record)) {
+    throw schema::ScalarError("INFO response fields require complete TRDA,NAM1..NAM4 groups");
+  }
+  try {
+    if (record.header.signature == Signature::from_string("SNDR") &&
+        (field.scalar.subrecord == Signature::from_string("INTV") ||
+         field.scalar.subrecord == Signature::from_string("FNAM"))) {
+      static_cast<void>(env::decode_sound_rate_files(record));
+    } else if (record.header.signature == Signature::from_string("SOUN") &&
+               field.scalar.subrecord == Signature::from_string("REPT")) {
+      static_cast<void>(env::decode_sound_repeat(record));
+    }
+  } catch (const env::WorldDecodeError& error) {
+    throw schema::ScalarError(error.what());
+  }
   auto resolved = schema::resolve_field_slots(record, schema::scalar_field_shape(field.scalar),
                                               field.scalar.address);
   if (resolved.duplicate) {
@@ -44,6 +83,18 @@ schema::FieldSlots scalar_slots(const Record& record, const schema::ScalarFieldD
 }
 
 schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFieldDescriptor& field) {
+  if (record.header.signature == Signature::from_string("FSTS") &&
+      field.subrecord == Signature::from_string("DATA")) {
+    try {
+      static_cast<void>(env::decode_footstep_counts(record));
+    } catch (const env::WorldDecodeError& error) {
+      throw schema::FormLinkFieldError(error.what());
+    }
+  }
+  if (field.record == Signature::from_string("INFO") && field.address.repeated &&
+      !response_shape_valid(record)) {
+    throw schema::FormLinkFieldError("INFO response fields require complete TRDA,NAM1..NAM4 groups");
+  }
   schema::FieldShape shape;
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;
@@ -52,6 +103,17 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   if (resolved.duplicate) {
     throw schema::FormLinkFieldError("record contains duplicate FormLink subrecords: " +
                                      field.subrecord.to_string());
+  }
+  if (field.payload_sizes[0] != 0 &&
+      (field.address.when.count == 0 || std::any_of(resolved.slots.begin(), resolved.slots.end(),
+                                                   [](const auto& slot) { return slot.valid || slot.misfit; }))) {
+    for (const auto& subrecord : record.subrecords) {
+      if (subrecord.signature == field.subrecord &&
+          subrecord.data.size() != field.payload_sizes[0] &&
+          (field.payload_sizes[1] == 0 || subrecord.data.size() != field.payload_sizes[1])) {
+        throw schema::FormLinkFieldError(std::string(field.path) + " has unexpected payload size");
+      }
+    }
   }
   return resolved;
 }

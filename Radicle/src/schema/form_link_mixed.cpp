@@ -1,4 +1,5 @@
 #include "fo4/schema/form_link_mixed.hpp"
+#include "fo4/schema/behavior_layout.hpp"
 
 #include "fo4/forms/proj_expl_hazd.hpp"
 #include "fo4/formid.hpp"
@@ -28,6 +29,9 @@ constexpr auto k_tnam = Signature::from_string("TNAM");
 constexpr auto k_omod = Signature::from_string("OMOD");
 constexpr auto k_equp = Signature::from_string("EQUP");
 constexpr auto k_musc = Signature::from_string("MUSC");
+constexpr auto k_fstp = Signature::from_string("FSTP");
+constexpr auto k_fsts = Signature::from_string("FSTS");
+constexpr auto k_data = Signature::from_string("DATA");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -183,6 +187,9 @@ std::optional<std::vector<std::size_t>> mnam_formid_offsets(
 std::optional<std::vector<std::size_t>> navmesh_mixed_formid_offsets(
     const Record& record, const Subrecord& sub) {
   if (record.header.signature == k_navm && sub.signature == k_nvnm) {
+    if (record.header.form_version < 128 || sub.data.size() < 4 || read_u32(sub.data, 0) != 15) {
+      return std::nullopt;
+    }
     return nvnm_formid_offsets(sub.data);
   }
   if (record.header.signature == k_navm && sub.signature == k_mnam) {
@@ -294,7 +301,8 @@ std::optional<std::vector<std::size_t>> packed_formid_array_offsets(const Record
   const auto rec = record.header.signature;
   const auto sig = sub.signature;
   if (!((rec == k_omod && (sig == k_mnam || sig == k_fnam)) ||
-        (rec == k_equp && sig == k_pnam) || (rec == k_musc && sig == k_tnam))) {
+        (rec == k_equp && sig == k_pnam) || (rec == k_musc && sig == k_tnam) ||
+        ((rec == k_fstp || rec == k_fsts) && sig == k_data))) {
     return std::nullopt;
   }
   if (sub.data.size() % 4 != 0) {
@@ -319,36 +327,29 @@ bool is_placed_reference_signature(Signature signature) noexcept {
   return false;
 }
 
-std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Record& record,
-                                                                       const Subrecord& sub,
-                                                                       bool strict_remap) {
-  if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
-  // stride: bytes per element; slots: form ID offsets within one element; exact: payload must be one element.
-  struct Layout {
-    const char* signature;
-    std::size_t stride;
-    std::initializer_list<std::size_t> slots;
-    bool exact;
-    std::size_t short_size;
-  };
-  static const Layout k_layouts[] = {
-      {"XPOD", 8, {0, 4}, false, 0},  // Portal Data: array of {Origin, Destination}
-      {"XORD", 4, {0}, false, 0},     // Linked Occlusion References
-      {"XLRT", 4, {0}, false, 0},     // Location Ref Type
-      {"XPWR", 8, {0}, true, 4},      // Reflected/Refracted By: {Reference, Type}
-      {"XAPR", 8, {0}, true, 0},      // Activate Parent Ref: {Reference, Delay}
-      {"XPLK", 8, {0}, true, 4},      // Spline Connection: {Ref, Unknown}
-      {"XWPN", 12, {0, 4, 8}, true, 0},  // Power Grid Connection: {Node 1, Node 2, Line}
-  };
-  for (const auto& layout : k_layouts) {
-    if (sub.signature != Signature::from_string(layout.signature)) continue;
+struct FixedStrideLayout {
+  const char* signature;
+  std::size_t stride;
+  std::initializer_list<std::size_t> slots;
+  bool exact;
+  std::size_t short_size;
+  std::uint16_t min_form_version{0};
+};
+
+std::optional<std::vector<std::size_t>> fixed_stride_formid_offsets(
+    const Subrecord& sub, std::uint16_t form_version, std::span<const FixedStrideLayout> layouts,
+    bool strict_remap) {
+  for (const auto& layout : layouts) {
+    if (sub.signature != Signature::from_string(layout.signature) ||
+        form_version < layout.min_form_version) {
+      continue;
+    }
     const auto size = sub.data.size();
     const bool valid = layout.exact ? size == layout.stride || (layout.short_size != 0 && size == layout.short_size)
                                     : size % layout.stride == 0;
     if (!valid) {
       if (strict_remap) {
-        throw FormIdError("cannot safely remap malformed placed-reference " + sub.signature.to_string() +
-                          " payload");
+        throw FormIdError("cannot safely remap malformed " + sub.signature.to_string() + " payload");
       }
       return std::vector<std::size_t>{};
     }
@@ -363,10 +364,42 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
   return std::nullopt;
 }
 
+const FixedStrideLayout k_placed_reference_layouts[] = {
+    {"XPOD", 8, {0, 4}, false, 0},
+    {"XORD", 4, {0}, false, 0},
+    {"XLRT", 4, {0}, false, 0},
+    {"XPWR", 8, {0}, true, 4},
+    {"XAPR", 8, {0}, true, 0},
+    {"XPLK", 8, {0}, true, 4},
+    {"XWPN", 12, {0, 4, 8}, true, 0},
+};
+
+constexpr std::uint16_t k_damage_curve_form_version = 152;
+
+const FixedStrideLayout k_repeated_struct_layouts[] = {
+    {"PRPS", 8, {0}, false, 0},
+    {"DAMC", 8, {0}, false, 0},
+    {"DAMA", 12, {0, 8}, false, 0, k_damage_curve_form_version},
+    {"DAMA", 8, {0}, false, 0},
+};
+
+std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Record& record,
+                                                                       const Subrecord& sub,
+                                                                       bool strict_remap) {
+  if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
+  return fixed_stride_formid_offsets(sub, record.header.form_version, k_placed_reference_layouts,
+                                     strict_remap);
+}
+
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
+  if (auto behavior = behavior_formid_offsets(record, sub, strict_remap)) return behavior;
   if (auto packed = packed_formid_array_offsets(record, sub, strict_remap)) return packed;
+  if (auto repeated = fixed_stride_formid_offsets(sub, record.header.form_version,
+                                                  k_repeated_struct_layouts, strict_remap)) {
+    return repeated;
+  }
   return placed_reference_formid_offsets(record, sub, strict_remap);
 }
 

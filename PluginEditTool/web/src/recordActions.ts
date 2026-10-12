@@ -446,6 +446,24 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     } catch (e) { setStatus('Failed: ' + errorText(e)); }
   };
 
+  const createSchemaRecord = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const editorId = await askPrompt({
+      title: `Create ${matrix.Type} record`, label: 'Editor ID', confirmLabel: 'Create',
+      description: 'Create a record using the schema’s proven required defaults.',
+      validate: value => value.includes('\0') ? 'Editor ID cannot contain a null character.' : null,
+    });
+    if (editorId === null) return;
+    try {
+      const created = JSON.parse(await b.CreateRecord(matrix.Plugins[col], matrix.Type, { schema: true, editorId }));
+      setStatus(`Created ${created.formKey} in ${matrix.Plugins[col]}.`);
+      await onReload();
+      onPluginsChanged?.();
+    } catch (e) { setStatus('Creation failed: ' + errorText(e)); }
+  };
+
   const askImpact = () => {
     closeMenu();
     const id = matrix.EditorID || matrix.FormKey;
@@ -482,6 +500,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     copyAsDisabledOverrideInto,
     copyText,
     elementAction,
+    createSchemaRecord,
     askImpact,
   };
 }

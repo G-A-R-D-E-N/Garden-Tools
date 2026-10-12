@@ -21,6 +21,9 @@ struct PlacedHolder {
   std::vector<std::vector<radicle_topic_ref>> topics;
   std::vector<radicle_patrol> patrols;
   std::vector<std::vector<radicle_script_property>> properties;
+  std::vector<std::vector<radicle_script_element>> elements;
+  std::vector<std::vector<radicle_script_struct>> structs;
+  std::vector<std::vector<radicle_script_struct_member>> struct_members;
   std::vector<radicle_script> scripts;
 };
 
@@ -39,7 +42,13 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
       script.name = fo4::text::windows1252_to_utf8(script.name);
       for (auto& property : script.properties) {
         property.name = fo4::text::windows1252_to_utf8(property.name);
-        if (property.text) property.text = fo4::text::windows1252_to_utf8(*property.text);
+        if (property.struct_elements) {
+          for (auto& structure : *property.struct_elements) {
+            for (auto& member : structure.members) {
+              member.name = fo4::text::windows1252_to_utf8(member.name);
+            }
+          }
+        }
       }
     }
   }
@@ -215,6 +224,9 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
     v.script_object_format = scripts.raw.object_format;
     v.scripts_unsupported = scripts.raw.unsupported ? 1 : 0;
     holder.properties.reserve(scripts.raw.scripts.size());
+    std::size_t property_total = 0;
+    for (const auto& raw : scripts.raw.scripts) property_total += raw.properties.size();
+    holder.elements.reserve(property_total);
     for (std::size_t i = 0; i < scripts.raw.scripts.size(); ++i) {
       const auto& raw = scripts.raw.scripts[i];
       const auto& resolved = scripts.scripts[i];
@@ -222,6 +234,57 @@ void build_view(const radicle_env& env, PlacedHolder& holder) {
       for (std::size_t p = 0; p < raw.properties.size(); ++p) {
         const auto& in = raw.properties[p];
         radicle_script_property out{};
+        auto& elements = holder.elements.emplace_back();
+        bool has_elements = false;
+        const auto add = [&](const auto& values, const auto& set) {
+          if (!values) return;
+          has_elements = true;
+          for (std::size_t e = 0; e < values->size(); ++e) {
+            radicle_script_element element{};
+            set(element, e);
+            elements.push_back(element);
+          }
+        };
+        add(in.object_elements, [&](auto& element, std::size_t e) {
+          element.object = key(resolved.properties[p].object_elements->at(e));
+          element.alias = (*in.object_elements)[e].alias;
+        });
+        add(in.text_elements, [&](auto& element, std::size_t e) { element.text = (*in.text_elements)[e].c_str(); });
+        add(in.integer_elements, [&](auto& element, std::size_t e) { element.integer = (*in.integer_elements)[e]; });
+        add(in.real_elements, [&](auto& element, std::size_t e) { element.real = (*in.real_elements)[e]; });
+        add(in.boolean_elements, [&](auto& element, std::size_t e) { element.boolean = (*in.boolean_elements)[e] ? 1 : 0; });
+        if (has_elements) {
+          out.has_elements = 1;
+          out.elements = data_or_null(elements);
+          out.element_value_count = elements.size();
+        }
+        if (in.struct_elements) {
+          auto& structs = holder.structs.emplace_back();
+          for (std::size_t s = 0; s < in.struct_elements->size(); ++s) {
+            const auto& structure = (*in.struct_elements)[s];
+            auto& members = holder.struct_members.emplace_back();
+            for (std::size_t m = 0; m < structure.members.size(); ++m) {
+              const auto& member = structure.members[m];
+              radicle_script_struct_member out_member{};
+              out_member.name = member.name.c_str();
+              out_member.type = member.type;
+              out_member.flags = member.flags;
+              if (member.object) {
+                out_member.value.object = key(resolved.properties[p].struct_member_objects->at(s).at(m));
+                out_member.value.alias = member.object->alias;
+              }
+              if (member.text) out_member.value.text = member.text->c_str();
+              if (member.integer) out_member.value.integer = *member.integer;
+              if (member.real) out_member.value.real = *member.real;
+              if (member.boolean) out_member.value.boolean = *member.boolean ? 1 : 0;
+              members.push_back(out_member);
+            }
+            structs.push_back({data_or_null(members), members.size()});
+          }
+          out.has_structs = 1;
+          out.structs = data_or_null(structs);
+          out.struct_count = structs.size();
+        }
         out.name = in.name.c_str();
         out.type = in.type;
         out.flags = in.flags;

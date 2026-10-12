@@ -102,6 +102,8 @@ add_library(fo4
   src/archive/ba2_reader.cpp
   src/archive/assets.cpp
   src/binary/cursor.cpp
+  src/nif/nif.cpp
+  src/nif/geometry.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -111,7 +113,7 @@ add_library(fo4
   src/forms/placed_reference_edit.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
-  src/forms/weather_concept.cpp
+  src/forms/weather.cpp
   src/forms/leveled_spell.cpp
   src/forms/leveled_spell_creation.cpp
   src/forms/proj_expl_hazd.cpp
@@ -133,8 +135,11 @@ add_library(fo4
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
   src/plugin/copy_hierarchy.cpp
+  src/plugin/vmad_writer.cpp
+  src/plugin/navmesh_writer.cpp
   src/plugin/field_writer.cpp
   src/plugin/subrecord_authoring.cpp
+  src/plugin/scene_writer.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp
@@ -145,8 +150,10 @@ add_library(fo4
   src/schema/form_links.cpp
   src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
+  src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
+  src/schema/formlink_list_read.cpp
   src/schema/nested_formlink_lists.cpp
   src/schema/nested_formlink_list_null.cpp
   src/schema/preflight.cpp
@@ -164,12 +171,19 @@ add_library(fo4
   src/environment/placed.cpp
   src/environment/terrain.cpp
   src/environment/strings.cpp
+  src/environment/vegetation.cpp
+  src/environment/navmesh.cpp
+  src/environment/behavior.cpp
+  src/environment/dialogue.cpp
+  src/environment/scene_layout.cpp
   src/environment/base_records.cpp
+  src/environment/sound.cpp
   src/environment/material_swap.cpp
   src/pex/pex.cpp
   src/material/material_file.cpp
   src/seq/seq.cpp
   src/quest/runtime.cpp
+  src/quest/structure.cpp
 )
 
 if(TARGET radicle_schema_check)
@@ -197,7 +211,7 @@ target_link_libraries(fo4 PRIVATE ZLIB::ZLIB)
 fo4_apply_warnings(fo4)
 fo4_apply_sanitizers(fo4)
 
-add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp)
+add_library(radicle_c SHARED src/c_api.cpp src/c_api_env.cpp src/c_api_navmesh.cpp src/c_api_vegetation.cpp src/c_api_world.cpp src/c_api_placed.cpp src/c_api_terrain.cpp src/c_api_strings.cpp src/c_api_archive.cpp src/c_api_writeback.cpp src/c_api_fields.cpp src/c_api_ref_fields.cpp src/c_api_base_records.cpp src/c_api_sound.cpp src/c_api_materials.cpp src/c_api_check.cpp src/c_api_maintenance.cpp src/c_api_pex.cpp src/c_api_material_file.cpp src/c_api_seq.cpp src/c_api_quest.cpp src/c_api_quest_structure.cpp)
 target_compile_definitions(radicle_c PRIVATE RADICLE_C_BUILD)
 target_link_libraries(radicle_c PRIVATE fo4)
 set_target_properties(radicle_c PROPERTIES
@@ -207,7 +221,8 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp)
+target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -333,6 +348,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp
+    tests/test_climate_weather_authoring.cpp
+    tests/test_climate_weather_c_api.cpp
+    tests/test_climate_weather_real.cpp
     tests/test_quest_authoring_real.cpp
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
@@ -358,8 +376,19 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ctda_model.cpp
     tests/test_ctda_alias_formids.cpp
     tests/test_condition_scopes.cpp
+    tests/test_condition_scopes_records.cpp
+    tests/test_condition_root_insert.cpp
+    tests/test_condition_scopes_real.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
+    tests/test_vegetation.cpp
+    tests/test_vegetation_edit.cpp
+    tests/test_vegetation_authoring.cpp
+    tests/test_vegetation_real.cpp
+    tests/test_navmesh.cpp
+    tests/test_navmesh_authoring.cpp
+    tests/test_navmesh_writer_real.cpp
+    tests/test_navmesh_real.cpp
     tests/test_navmesh_formlinks.cpp
     tests/test_armor_creation.cpp
     tests/test_armor_edit.cpp
@@ -372,8 +401,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
     tests/test_onam.cpp
+    tests/test_vmad_writer.cpp
+    tests/test_vmad_writer_real.cpp
+    tests/test_vmad_writer_c_api.cpp
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
+    tests/test_vmad_array_elements.cpp
     tests/test_conflict_graph.cpp
     tests/test_check_errors.cpp
     tests/test_remap_non_formid_slots.cpp
@@ -392,17 +425,45 @@ if(RADICLE_BUILD_TESTS)
     tests/test_localized_strings.cpp
     tests/test_c_api.cpp
     tests/test_environment.cpp
+    tests/test_behavior.cpp
+    tests/test_behavior_authoring.cpp
+    tests/test_behavior_writer_c_api.cpp
+    tests/test_behavior_writer_real.cpp
+    tests/test_behavior_real.cpp
+    tests/test_dialogue.cpp
+    tests/test_dialogue_real.cpp
+    tests/test_dialogue_writer.cpp
+    tests/test_dialogue_subrecords.cpp
+    tests/test_dialogue_writer_c_api.cpp
+    tests/test_dialogue_writer_real.cpp
+    tests/test_scene_writer.cpp
     tests/test_environment_world.cpp
+    tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
+    tests/test_environment_script_elements.cpp
     tests/test_environment_terrain.cpp
     tests/test_environment_strings.cpp
     tests/test_ba2_reader.cpp
     tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
+    tests/test_ba2_versions_real.cpp
+    tests/test_nif.cpp
+    tests/test_nif_corpus.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
+    tests/test_water_real.cpp
+    tests/test_water_authoring.cpp
+    tests/test_water_c_api.cpp
+    tests/test_sound.cpp
+    tests/test_sound_real.cpp
+    tests/test_sound_authoring.cpp
+    tests/test_sound_subrecords.cpp
+    tests/test_sound_writer_c_api.cpp
+    tests/test_sound_writer_real.cpp
+    tests/test_sky_parameters.cpp
+    tests/test_sky_real.cpp
     tests/test_environment_material_swap.cpp
     tests/test_original_storage.cpp
     tests/test_env_bench_real.cpp
@@ -418,6 +479,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_seq.cpp
     tests/test_seq_corpus.cpp
     tests/test_quest_runtime.cpp
+    tests/test_quest_structure.cpp
+    tests/test_quest_structure_real.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
   )
@@ -438,6 +501,9 @@ if(RADICLE_BUILD_TESTS)
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
   if(RADICLE_BUILD_TOOLS)
+    add_test(NAME radicle_papyrus_dump
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/tests/test_papyrus_dump.py
+                     $<TARGET_FILE:radicle_parity_dump>)
     add_test(NAME radicle_env_bench_non_ansi_data_dir
              COMMAND ${CMAKE_COMMAND} -DBENCH=$<TARGET_FILE:radicle_env_bench>
                      -DPLUGIN=${CMAKE_CURRENT_SOURCE_DIR}/testdata/SlowTime.esp

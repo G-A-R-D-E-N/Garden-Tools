@@ -262,7 +262,7 @@ bool lossless_quest_log_entry_conditions(std::span<const Subrecord> members,
  *   QOBJ (u16 objective index)
  *     FNAM (u32 objective flags)    -- exactly one per objective
  *     NNAM (display text, localized) -- exactly one; 4 bytes in all 1,198
- *     QSTA (12 bytes)               -- one target; 0..19 of them
+ *     QSTA (12 bytes; 8 before form version 82) -- one target; 0..19 of them
  *       CTDA / CIS1 / CIS2 per-target conditions
  */
 struct QuestObjectiveTarget {
@@ -271,6 +271,7 @@ struct QuestObjectiveTarget {
   std::int32_t alias{0};
   std::uint32_t flags{0};
   std::optional<FormKey> keyword;
+  bool keyword_unresolved{false};
   // Per-target conditions and anything unmodelled, kept in order.
   std::vector<Subrecord> subrecords;
 };

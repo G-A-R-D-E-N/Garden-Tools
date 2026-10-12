@@ -16,6 +16,9 @@ namespace fo4::schema {
 enum class ConditionScopeKind {
   effect,
   alias,
+  package_branch,
+  quest_target,
+  perk_effect_tab,
 };
 
 struct ConditionScopeDescriptor {
@@ -49,6 +52,24 @@ struct ScopedConditionsRead {
   ScopedConditionStatus error{ScopedConditionStatus::container_index_out_of_range};
   std::vector<CtdaCondition> conditions;
 };
+
+enum class RootConditionStatus {
+  ok,
+  no_list,
+  multiple_lists,
+  alias_structure_invalid,
+};
+
+struct RootConditionWindow {
+  RootConditionStatus status{RootConditionStatus::no_list};
+  std::size_t begin{0};
+  std::size_t end{0};
+  std::optional<std::size_t> insert_anchor;
+};
+
+RootConditionWindow root_condition_window(const Record& record);
+
+ScopedConditionsRead read_root_conditions(const Record& record);
 
 // Resolves "<container>[i].<member>" for a record signature (e.g. SPEL +
 // "Effects[2].Conditions"). Empty result: no descriptor for this record matches.

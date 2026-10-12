@@ -57,13 +57,51 @@ typedef struct radicle_climate_weather {
   radicle_form_key global;
 } radicle_climate_weather;
 
+typedef struct radicle_climate_timing {
+  uint8_t sunrise_begin;
+  uint8_t sunrise_end;
+  uint8_t sunset_begin;
+  uint8_t sunset_end;
+  uint8_t volatility;
+  uint8_t moons_phase_length;
+  float sunrise_begin_hours;
+  float sunrise_end_hours;
+  float sunset_begin_hours;
+  float sunset_end_hours;
+  uint8_t days_per_phase;
+  int32_t uses_secunda;
+  int32_t uses_masser;
+} radicle_climate_timing;
+
 typedef struct radicle_climate {
   const radicle_climate_weather* weathers;
   size_t weather_count;
   const char* sun_texture;
   const char* sun_glare_texture;
+  int32_t has_timing;
+  radicle_climate_timing timing;
   void* internal;
 } radicle_climate;
+
+typedef struct radicle_weather_parameters {
+  uint8_t wind_speed;
+  uint8_t transition_delta;
+  uint8_t sun_glare;
+  uint8_t sun_damage;
+  uint8_t precipitation_begin;
+  uint8_t precipitation_end;
+  uint8_t lightning_begin;
+  uint8_t lightning_end;
+  uint8_t lightning_frequency;
+  uint8_t flags;
+  radicle_byte_color lightning_color;
+  uint8_t visual_effect_begin;
+  uint8_t visual_effect_end;
+  uint8_t wind_direction;
+  uint8_t wind_direction_range;
+  int32_t has_wind_turbulence;
+  uint8_t wind_turbulence;
+} radicle_weather_parameters;
 
 typedef struct radicle_weather_info {
   const uint8_t* colors;
@@ -71,6 +109,8 @@ typedef struct radicle_weather_info {
   size_t color_times;
   const float* fog_distances;
   size_t fog_distance_count;
+  int32_t has_parameters;
+  radicle_weather_parameters parameters;
   void* internal;
 } radicle_weather_info;
 
@@ -154,6 +194,14 @@ typedef struct radicle_water_info {
   float angular_velocity[3];
 } radicle_water_info;
 
+typedef struct radicle_water_selection {
+  radicle_form_key water;
+  const radicle_record* record;
+  int32_t uses_default_water;
+  int32_t has_height;
+  float height;
+} radicle_water_selection;
+
 typedef struct radicle_lighting_template_info {
   int32_t has_lighting;
   radicle_cell_lighting lighting;
@@ -176,6 +224,18 @@ RADICLE_API radicle_status radicle_climate_decode(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_climate** out_climate);
 RADICLE_API void radicle_climate_free(radicle_climate* climate);
+typedef struct radicle_climate_timing_edit {
+  uint8_t sunrise_begin;
+  uint8_t sunrise_end;
+  uint8_t sunset_begin;
+  uint8_t sunset_end;
+  uint8_t volatility;
+  uint8_t moons_phase_length;
+} radicle_climate_timing_edit;
+
+RADICLE_API radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             const radicle_climate_timing_edit* timing);
 RADICLE_API radicle_status radicle_weather_decode(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_weather_info** out_weather);
@@ -193,6 +253,9 @@ RADICLE_API radicle_status radicle_activator_get_water_type(const radicle_env* e
 RADICLE_API radicle_status radicle_water_get_info(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_water_info* out_info);
+RADICLE_API radicle_status radicle_water_resolve(const radicle_env* env,
+                                                 const radicle_record* record,
+                                                 radicle_water_selection* out_selection);
 
 RADICLE_API radicle_status radicle_record_payload_info(
     const radicle_env* env, const radicle_record* record,

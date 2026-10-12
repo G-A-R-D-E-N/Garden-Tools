@@ -73,6 +73,13 @@ struct LightingTemplateData {
   std::optional<FormKey> god_rays;
 };
 
+struct WaterSelection {
+  FormKey water;
+  const RecordRef* record{nullptr};
+  bool uses_default_water{false};
+  std::optional<float> height;
+};
+
 class WorldDecodeError : public EnvironmentError {
 public:
   using EnvironmentError::EnvironmentError;
@@ -82,5 +89,6 @@ public:
 WorldspaceData decode_worldspace(const Environment& env, const RecordRef& ref);
 CellData decode_cell(const Environment& env, const RecordRef& ref);
 LightingTemplateData decode_lighting_template(const Environment& env, const RecordRef& ref);
+WaterSelection resolve_water(const Environment& env, const RecordRef& ref);
 
 }  // namespace fo4::env

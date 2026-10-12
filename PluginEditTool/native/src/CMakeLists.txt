@@ -18,6 +18,7 @@ add_library(
     plugin/RadiclePluginProjExplHazd.cpp
     plugin/RadiclePluginCreate.cpp
     plugin/RadiclePluginScalar.cpp
+    plugin/RadiclePluginFields.cpp
     plugin/RadiclePluginArmor.cpp
     plugin/RadiclePluginFormLinkList.cpp
     plugin/RadiclePluginComponents.cpp

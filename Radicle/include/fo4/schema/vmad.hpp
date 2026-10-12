@@ -20,6 +20,8 @@ struct VmadCoverage {
   bool failed{false};
   bool trailing_data{false};
   bool fully_consumed{false};
+  std::uint32_t fragment_count{0};
+  std::uint32_t fragment_script_count{0};
 
   bool complete() const {
     return !unsupported && !failed && !trailing_data && fully_consumed;
@@ -66,6 +68,26 @@ struct QuestVmadLayout {
 
 QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data);
 
+struct VmadObjectElement {
+  RawFormId object;
+  std::int16_t alias{0};
+};
+
+struct VmadStructMember {
+  std::string name;
+  std::uint8_t type{0};
+  std::uint8_t flags{0};
+  std::optional<VmadObjectElement> object;
+  std::optional<std::string> text;
+  std::optional<std::int32_t> integer;
+  std::optional<float> real;
+  std::optional<bool> boolean;
+};
+
+struct VmadStruct {
+  std::vector<VmadStructMember> members;
+};
+
 struct VmadProperty {
   std::string name;
   std::uint8_t type{0};
@@ -78,6 +100,14 @@ struct VmadProperty {
   std::optional<bool> boolean;
   // Leading u32 count of struct and array properties.
   std::optional<std::uint32_t> element_count;
+  std::optional<std::vector<VmadObjectElement>> object_elements;
+  std::optional<std::vector<std::string>> text_elements;
+  std::optional<std::vector<std::int32_t>> integer_elements;
+  std::optional<std::vector<float>> real_elements;
+  std::optional<std::vector<bool>> boolean_elements;
+  std::optional<std::vector<VmadStruct>> struct_elements;
+  std::size_t value_offset{0};
+  std::size_t value_size{0};
 };
 
 struct VmadScript {
@@ -90,7 +120,6 @@ struct VmadScripts {
   std::int16_t version{0};
   std::int16_t object_format{0};
   std::vector<VmadScript> scripts;
-  // A Variable (6/16) property stops decoding; scripts up to that property are kept.
   bool unsupported{false};
   // Bytes after the script list, e.g. record-specific fragment data.
   std::size_t trailing_bytes{0};
@@ -99,18 +128,6 @@ struct VmadScripts {
 // Reads the leading script list of any VMAD; throws fo4::parse_error on truncated or unknown data.
 VmadScripts read_vmad_scripts(std::span<const std::byte> data);
 
-/*
- * The quest-specific block that follows the leading script list of a QUST VMAD:
- * the script the stage fragments belong to and its typed properties, the stage
- * fragments (stage, stage index, fragment script and function names), and each
- * alias's script attachments with their typed properties.
- *
- * `object_format` is the one read_vmad_scripts reported for the same VMAD. The
- * block layout is the one walk_quest_extra consumes; this reader keeps the names
- * and property values that walker only skips. A property type this reader cannot
- * decode, or a truncated block, sets `unsupported` with a reason instead of
- * throwing, so a caller can report exactly what stopped.
- */
 struct QuestVmadFragment {
   std::uint16_t stage{0};
   std::uint16_t unknown{0};

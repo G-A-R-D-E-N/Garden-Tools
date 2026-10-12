@@ -80,6 +80,8 @@ struct VmadScan {
   std::int16_t object_format{0};
   std::uint16_t quest_fragment_count{0};
   std::uint16_t quest_alias_count{0};
+  std::uint32_t fragment_count{0};
+  std::uint32_t fragment_script_count{0};
   std::vector<QuestVmadFragmentBinding> quest_fragments;
   std::vector<QuestVmadAliasBinding> quest_aliases;
 };
@@ -99,10 +101,14 @@ constexpr std::uint8_t k_type_bool_array = 15;
 constexpr std::uint8_t k_type_variable_array = 16;
 constexpr std::uint8_t k_type_struct_array = 17;
 
+void require_zero_unused_word(Slice& slice) {
+  if (slice.u16() != 0) throw UnsupportedVmadProperty{};
+}
+
 void walk_object(Slice& slice, std::int16_t object_format,
                  std::vector<std::size_t>& offsets) {
   if (object_format == 2) {
-    slice.u16();
+    require_zero_unused_word(slice);
     slice.u16();
     offsets.push_back(slice.position());
     slice.u32();
@@ -110,7 +116,7 @@ void walk_object(Slice& slice, std::int16_t object_format,
     offsets.push_back(slice.position());
     slice.u32();
     slice.u16();
-    slice.u16();
+    require_zero_unused_word(slice);
   } else {
     throw parse_error(slice.position(), "unknown VMAD object format");
   }
@@ -135,11 +141,10 @@ void walk_property(Slice& slice, std::int16_t object_format,
     case 0:
       break;
     case k_type_variable:
-    case k_type_variable_array:
-      // xEdit identifies type 16 as FO76 Variable Array and does not implement
-      // it. Type 6 is likewise dynamically typed. Without a discriminator for
-      // the nested value, consuming bytes here would risk losing VMAD sync.
       throw UnsupportedVmadProperty{};
+    case k_type_variable_array:
+      if (slice.u32() != 0) throw UnsupportedVmadProperty{};
+      break;
     case k_type_object:
       walk_object(slice, object_format, offsets);
       break;
@@ -191,19 +196,17 @@ void walk_property(Slice& slice, std::int16_t object_format,
       break;
     }
     default:
-      throw parse_error(slice.position(), "unknown VMAD property type");
+      throw UnsupportedVmadProperty{};
   }
 }
 
-void walk_script_entry(Slice& slice, std::int16_t object_format,
+bool walk_script_entry(Slice& slice, std::int16_t object_format,
                        std::vector<std::size_t>& offsets) {
   const auto name_len = slice.u16();
   slice.skip(name_len);
-  if (name_len == 0) {
-    return;
-  }
   slice.u8();
   walk_properties(slice, object_format, slice.u16(), offsets);
+  return name_len != 0;
 }
 
 void walk_scripts(Slice& slice, std::int16_t object_format, std::uint16_t count,
@@ -237,6 +240,8 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
   }
   const auto alias_count = slice.u16();
   result.quest_fragment_count = fragment_count;
+  result.fragment_count = fragment_count;
+  result.fragment_script_count = script_name_len != 0 ? 1u : 0u;
   result.quest_alias_count = alias_count;
   result.quest_aliases.reserve(alias_count);
   for (std::uint16_t i = 0; i < alias_count; ++i) {
@@ -264,10 +269,11 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
 }
 
 void walk_indexed_fragments(Slice& slice, std::int16_t object_format,
-                            std::vector<std::size_t>& offsets) {
+                            VmadScan& result) {
   slice.u8();
-  walk_script_entry(slice, object_format, offsets);
+  result.fragment_script_count = walk_script_entry(slice, object_format, result.offsets) ? 1u : 0u;
   const auto n = slice.u16();
+  result.fragment_count = n;
   for (std::uint16_t i = 0; i < n; ++i) {
     slice.u16();
     slice.u16();
@@ -278,18 +284,19 @@ void walk_indexed_fragments(Slice& slice, std::int16_t object_format,
 }
 
 void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
-                            std::vector<std::size_t>& offsets, bool scene) {
+                            VmadScan& result, bool scene, unsigned flag_bits) {
   slice.u8();  // extra bind
   const auto flags = slice.u8();
-  walk_script_entry(slice, object_format, offsets);
+  result.fragment_script_count = walk_script_entry(slice, object_format, result.offsets) ? 1u : 0u;
   unsigned count = 0;
   auto bits = flags;
-  for (int i = 0; i < 8; ++i) {
+  for (unsigned i = 0; i < flag_bits; ++i) {
     if ((bits & 1u) != 0) {
       ++count;
     }
     bits = static_cast<std::uint8_t>(bits >> 1);
   }
+  result.fragment_count = count;
   for (unsigned i = 0; i < count; ++i) {
     slice.u8();
     slice.skip_wstring();
@@ -297,6 +304,7 @@ void walk_flagged_fragments(Slice& slice, std::int16_t object_format,
   }
   if (scene && !slice.at_end()) {
     const auto phases = slice.u16();
+    result.fragment_count += phases;
     for (std::uint16_t i = 0; i < phases; ++i) {
       slice.u8();
       slice.u8();
@@ -325,11 +333,12 @@ VmadScan scan_vmad(std::span<const std::byte> data, Signature record_signature) 
       if (record_signature == sig_qust) {
         walk_quest_extra(slice, object_format, result);
       } else if (record_signature == sig_perk || record_signature == sig_term) {
-        walk_indexed_fragments(slice, object_format, result.offsets);
+        walk_indexed_fragments(slice, object_format, result);
       } else if (record_signature == sig_pack || record_signature == sig_info) {
-        walk_flagged_fragments(slice, object_format, result.offsets, false);
+        walk_flagged_fragments(slice, object_format, result, false,
+                               record_signature == sig_pack ? 3u : 2u);
       } else if (record_signature == sig_scen) {
-        walk_flagged_fragments(slice, object_format, result.offsets, true);
+        walk_flagged_fragments(slice, object_format, result, true, 2u);
       }
     }
     result.fully_consumed = slice.at_end();
@@ -364,6 +373,10 @@ VmadCoverage vmad_coverage(std::span<const std::byte> data,
   coverage.failed = scan.failed;
   coverage.trailing_data = scan.trailing_data;
   coverage.fully_consumed = scan.fully_consumed;
+  if (coverage.complete()) {
+    coverage.fragment_count = scan.fragment_count;
+    coverage.fragment_script_count = scan.fragment_script_count;
+  }
   return coverage;
 }
 
@@ -423,41 +436,105 @@ QuestVmadLayout inspect_quest_vmad(std::span<const std::byte> data) {
 
 namespace {
 
+VmadObjectElement read_object_element(Slice& slice, std::int16_t object_format) {
+  VmadObjectElement element;
+  if (object_format == 2) {
+    require_zero_unused_word(slice);
+    element.alias = slice.i16();
+    element.object = RawFormId{slice.u32()};
+  } else if (object_format == 1) {
+    element.object = RawFormId{slice.u32()};
+    element.alias = slice.i16();
+    require_zero_unused_word(slice);
+  } else {
+    throw parse_error(slice.position(), "unknown VMAD object format");
+  }
+  return element;
+}
+
+float read_float(Slice& slice) {
+  const auto bits = slice.u32();
+  float value = 0.0f;
+  std::memcpy(&value, &bits, 4);
+  return value;
+}
+
+bool read_struct_members(Slice& slice, std::int16_t object_format, VmadStruct& out) {
+  const auto count = slice.u32();
+  for (std::uint32_t i = 0; i < count; ++i) {
+    VmadStructMember member;
+    member.name = slice.wstring();
+    member.type = slice.u8();
+    member.flags = slice.u8();
+    switch (member.type) {
+      case k_type_object:
+        member.object = read_object_element(slice, object_format);
+        break;
+      case k_type_string:
+        member.text = slice.wstring();
+        break;
+      case k_type_int:
+        member.integer = static_cast<std::int32_t>(slice.u32());
+        break;
+      case k_type_float:
+        member.real = read_float(slice);
+        break;
+      case k_type_bool:
+        member.boolean = slice.u8() != 0;
+        break;
+      default:
+        return false;
+    }
+    out.members.push_back(std::move(member));
+  }
+  return true;
+}
+
+std::optional<std::vector<VmadStruct>> decode_structs(Slice values, std::int16_t object_format,
+                                                      bool array) {
+  std::vector<VmadStruct> structs;
+  try {
+    const auto n = array ? values.u32() : 1u;
+    for (std::uint32_t i = 0; i < n; ++i) {
+      VmadStruct value;
+      if (!read_struct_members(values, object_format, value)) return std::nullopt;
+      structs.push_back(std::move(value));
+    }
+  } catch (const UnsupportedVmadProperty&) {
+    return std::nullopt;
+  }
+  return structs;
+}
+
 VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   VmadProperty property;
   property.name = slice.wstring();
   property.type = slice.u8();
   property.flags = slice.u8();
+  property.value_offset = slice.position();
+  const auto finish = [&] {
+    property.value_size = slice.position() - property.value_offset;
+    return property;
+  };
   switch (property.type) {
-    case k_type_object:
-      if (object_format == 2) {
-        slice.u16();
-        property.alias = slice.i16();
-        property.object = RawFormId{slice.u32()};
-      } else if (object_format == 1) {
-        property.object = RawFormId{slice.u32()};
-        property.alias = slice.i16();
-        slice.u16();
-      } else {
-        throw parse_error(slice.position(), "unknown VMAD object format");
-      }
-      return property;
+    case k_type_object: {
+      const auto element = read_object_element(slice, object_format);
+      property.object = element.object;
+      property.alias = element.alias;
+      return finish();
+    }
     case k_type_string:
       property.text = slice.wstring();
-      return property;
+      return finish();
     case k_type_int:
       property.integer = static_cast<std::int32_t>(slice.u32());
-      return property;
-    case k_type_float: {
-      const auto bits = slice.u32();
-      float value = 0.0f;
-      std::memcpy(&value, &bits, 4);
-      property.real = value;
-      return property;
-    }
+      return finish();
+    case k_type_float:
+      property.real = read_float(slice);
+      return finish();
     case k_type_bool:
       property.boolean = slice.u8() != 0;
-      return property;
+      return finish();
     default:
       break;
   }
@@ -471,39 +548,57 @@ VmadProperty read_property(Slice& slice, std::int16_t object_format) {
     case 0:
       break;
     case k_type_variable:
-    case k_type_variable_array:
       throw UnsupportedVmadProperty{};
-    case k_type_struct:
-      walk_properties(slice, object_format, slice.u32(), ignored);
+    case k_type_variable_array:
+      if (slice.u32() != 0) throw UnsupportedVmadProperty{};
       break;
+    case k_type_struct: {
+      Slice values = slice;
+      walk_properties(slice, object_format, slice.u32(), ignored);
+      property.struct_elements = decode_structs(values, object_format, false);
+      break;
+    }
     case k_type_object_array: {
+      auto& elements = property.object_elements.emplace();
       const auto n = slice.u32();
-      for (std::uint32_t i = 0; i < n; ++i) walk_object(slice, object_format, ignored);
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(read_object_element(slice, object_format));
       break;
     }
     case k_type_string_array: {
+      auto& elements = property.text_elements.emplace();
       const auto n = slice.u32();
-      for (std::uint32_t i = 0; i < n; ++i) slice.skip_wstring();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(slice.wstring());
       break;
     }
-    case k_type_int_array:
+    case k_type_int_array: {
+      auto& elements = property.integer_elements.emplace();
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(static_cast<std::int32_t>(slice.u32()));
+      break;
+    }
     case k_type_float_array: {
+      auto& elements = property.real_elements.emplace();
       const auto n = slice.u32();
-      for (std::uint32_t i = 0; i < n; ++i) slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(read_float(slice));
       break;
     }
-    case k_type_bool_array:
-      slice.skip(slice.u32());
+    case k_type_bool_array: {
+      auto& elements = property.boolean_elements.emplace();
+      const auto n = slice.u32();
+      for (std::uint32_t i = 0; i < n; ++i) elements.push_back(slice.u8() != 0);
       break;
+    }
     case k_type_struct_array: {
+      Slice values = slice;
       const auto n = slice.u32();
       for (std::uint32_t i = 0; i < n; ++i) walk_properties(slice, object_format, slice.u32(), ignored);
+      property.struct_elements = decode_structs(values, object_format, true);
       break;
     }
     default:
-      throw parse_error(slice.position(), "unknown VMAD property type");
+      throw UnsupportedVmadProperty{};
   }
-  return property;
+  return finish();
 }
 
 }  // namespace
@@ -517,17 +612,15 @@ VmadScripts read_vmad_scripts(std::span<const std::byte> data) {
   for (std::uint16_t i = 0; i < count; ++i) {
     VmadScript script;
     script.name = slice.wstring();
-    if (!script.name.empty()) {
-      script.flags = slice.u8();
-      const auto properties = slice.u16();
-      for (std::uint16_t p = 0; p < properties; ++p) {
-        try {
-          script.properties.push_back(read_property(slice, result.object_format));
-        } catch (const UnsupportedVmadProperty&) {
-          result.unsupported = true;
-          result.scripts.push_back(std::move(script));
-          return result;
-        }
+    script.flags = slice.u8();
+    const auto properties = slice.u16();
+    for (std::uint16_t p = 0; p < properties; ++p) {
+      try {
+        script.properties.push_back(read_property(slice, result.object_format));
+      } catch (const UnsupportedVmadProperty&) {
+        result.unsupported = true;
+        result.scripts.push_back(std::move(script));
+        return result;
       }
     }
     result.scripts.push_back(std::move(script));
@@ -584,12 +677,10 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
       for (std::uint16_t s = 0; s < scripts; ++s) {
         VmadScript script;
         script.name = slice.wstring();
-        if (!script.name.empty()) {
-          script.flags = slice.u8();
-          const auto properties = slice.u16();
-          for (std::uint16_t p = 0; p < properties; ++p) {
-            script.properties.push_back(read_property(slice, alias.script_format));
-          }
+        script.flags = slice.u8();
+        const auto properties = slice.u16();
+        for (std::uint16_t p = 0; p < properties; ++p) {
+          script.properties.push_back(read_property(slice, alias.script_format));
         }
         alias.scripts.push_back(std::move(script));
       }
@@ -598,7 +689,7 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
     result.fully_consumed = slice.at_end();
   } catch (const UnsupportedVmadProperty&) {
     result.unsupported = true;
-    result.unsupported_reason = "a VMAD property type in the quest extras is unsupported";
+    result.unsupported_reason = "a VMAD property in the quest extras is unsupported";
   } catch (const std::exception& error) {
     result.unsupported = true;
     result.unsupported_reason = error.what();

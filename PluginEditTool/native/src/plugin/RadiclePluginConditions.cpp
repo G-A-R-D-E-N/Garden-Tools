@@ -16,6 +16,20 @@
 namespace fo4ide::plugin {
 using namespace support;
 
+namespace {
+
+Error rootConditionError(fo4::schema::ScopedConditionStatus status, const std::string& recordId) {
+    if (status == fo4::schema::ScopedConditionStatus::alias_structure_invalid) {
+        return Error{"ConditionAliasMalformed", "Record '" + recordId + "' has a malformed alias array."};
+    }
+    if (status == fo4::schema::ScopedConditionStatus::unrepresentable) {
+        return Error{"ConditionPayloadUnsupported", "Condition bytes cannot round-trip on record '" + recordId + "'."};
+    }
+    return Error{"ConditionScopeMultipleLists", "Record '" + recordId + "' has more than one condition list."};
+}
+
+}
+
 Result<nlohmann::json> RadiclePluginBackend::getConditions(
     const nlohmann::json& arguments) const {
     const auto pluginName = stringArgument(arguments, 0);
@@ -71,19 +85,10 @@ Result<nlohmann::json> RadiclePluginBackend::getConditions(
         });
     }
 
-    std::vector<fo4::CtdaCondition> conditions;
-    try {
-        conditions = fo4::read_ctda_conditions(*record);
-    } catch (const fo4::CtdaMultipleListsError&) {
-        return std::unexpected(Error{
-            "ConditionScopeMultipleLists",
-            "Record '" + recordId + "' has more than one condition list."
-        });
-    } catch (const fo4::CtdaNotLosslessError& error) {
-        return std::unexpected(Error{"ConditionPayloadUnsupported", error.what()});
-    }
+    const auto root = fo4::schema::read_root_conditions(*record);
+    if (!root.ok) return std::unexpected(rootConditionError(root.error, recordId));
     nlohmann::json outp = nlohmann::json::array();
-    for (const auto& condition : conditions) {
+    for (const auto& condition : root.conditions) {
         outp.push_back(describeCondition(condition, owner->plugin));
     }
     return nlohmann::json(outp.dump());
@@ -301,9 +306,10 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 "Record '" + recordId + "' not found in " + pluginName + "."
             });
         }
-        const auto existing = fo4::read_ctda_conditions(*record);
+        const auto root = fo4::schema::read_root_conditions(*record);
+        if (!root.ok) return std::unexpected(rootConditionError(root.error, recordId));
         std::string failure;
-        const auto built = buildConditions(document, loaded->plugin, existing, resolveEditorId, failure);
+        const auto built = buildConditions(document, loaded->plugin, root.conditions, resolveEditorId, failure);
         if (!built) return std::unexpected(Error{"InvalidConditionsJson", failure});
         writtenCount = built->size();
         const auto status = fo4::set_record_conditions(
@@ -314,13 +320,25 @@ Result<nlohmann::json> RadiclePluginBackend::setConditions(
                 "Record '" + recordId + "' has more than one condition list."
             });
         }
-        if (status == fo4::ConditionMutationStatus::record_missing) {
+        if (status == fo4::ConditionMutationStatus::alias_structure_invalid) {
+            return std::unexpected(rootConditionError(
+                fo4::schema::ScopedConditionStatus::alias_structure_invalid, recordId));
+        }
+        if (status == fo4::ConditionMutationStatus::no_condition_list) {
             return std::unexpected(Error{
                 "NoConditionList",
+                "Record '" + recordId + "' has no condition list to replace."
+            });
+        }
+        if (status == fo4::ConditionMutationStatus::record_missing) {
+            return std::unexpected(Error{
+                "RecordNotFound",
                 "Record '" + recordId + "' not found in " + pluginName + "."
             });
         }
-        stagePluginMutationLocked(*loaded, std::move(mutated));
+        if (status == fo4::ConditionMutationStatus::updated) {
+            stagePluginMutationLocked(*loaded, std::move(mutated));
+        }
     } catch (const fo4::CtdaMultipleListsError&) {
         return std::unexpected(Error{"ConditionScopeMultipleLists", "Record '" + recordId + "' has more than one condition list."});
     } catch (const fo4::CtdaNotLosslessError& error) {

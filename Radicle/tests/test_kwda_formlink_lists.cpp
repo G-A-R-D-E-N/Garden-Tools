@@ -468,3 +468,20 @@ TEST(SigBaseObjects, MatchesXeditUnionAndRejectsNonBaseRecords) {
   EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("FACT")));
   EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("ENCH")));
 }
+
+TEST(KwdaFormLinkList, ReadsPackedValuesAndDistinguishesEmptyFromMissingRecord) {
+  const auto plugin = fo4::read_plugin(plugin_with_keywords(), "Guns.esp");
+  const auto descriptor = keywords_descriptor();
+  const auto values = fo4::schema::record_formlink_list_values(
+      plugin, fo4::FormKey::parse("000900:Guns.esp"), descriptor);
+  ASSERT_TRUE(values.has_value());
+  ASSERT_EQ(values->size(), 2u);
+  EXPECT_EQ((*values)[0], fo4::FormKey::parse("000801:Guns.esp"));
+  EXPECT_EQ((*values)[1], fo4::FormKey::parse("000802:Guns.esp"));
+  const auto empty = fo4::schema::record_formlink_list_values(
+      plugin, fo4::FormKey::parse("000901:Guns.esp"), descriptor);
+  ASSERT_TRUE(empty.has_value());
+  EXPECT_TRUE(empty->empty());
+  EXPECT_FALSE(fo4::schema::record_formlink_list_values(
+      plugin, fo4::FormKey::parse("000999:Guns.esp"), descriptor));
+}

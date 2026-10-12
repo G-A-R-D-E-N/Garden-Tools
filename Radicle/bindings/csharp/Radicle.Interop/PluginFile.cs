@@ -71,6 +71,42 @@ public sealed unsafe class PluginFile : IDisposable
         Call.Check(RadicleNative.PluginSortMasters(use.Pointer, envUse.Pointer));
     }
 
+    public bool SetNavmeshVertex(FormKey record, int index, NavmeshVertex value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var at = Index(index);
+        return Edit(record, (plugin, s, key) =>
+        {
+            var native = new Native.NavmeshVertex { X = value.X, Y = value.Y, Z = value.Z };
+            return RadicleNative.PluginSetNavmeshVertex(plugin, key, at, &native);
+        });
+    }
+
+    public bool SetNavmeshTriangle(FormKey record, int index, NavmeshTriangle value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Vertices is not { Length: 3 } || value.Edges is not { Length: 3 })
+            throw new ArgumentException("A triangle requires three vertices and edges.", nameof(value));
+        var at = Index(index);
+        return Edit(record, (plugin, s, key) =>
+        {
+            var native = new Native.NavmeshTriangle { Clearance = value.Clearance, Traversal = value.Traversal, Flags = value.Flags };
+            for (var i = 0; i < 3; ++i) { native.Vertices[i] = value.Vertices[i]; native.Edges[i] = value.Edges[i]; }
+            return RadicleNative.PluginSetNavmeshTriangle(plugin, key, at, &native);
+        });
+    }
+
+    public bool SetNavmeshDoor(FormKey record, int index, NavmeshDoorLink value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var at = Index(index);
+        return Edit(record, (plugin, s, key) =>
+        {
+            var native = new Native.NavmeshDoorLink { Triangle = value.Triangle, Crc = value.Crc, Door = s.Key(value.Door) };
+            return RadicleNative.PluginSetNavmeshDoor(plugin, key, at, &native);
+        });
+    }
+
     public bool SetTransform(FormKey reference, Vector3 position, Vector3 rotation) =>
         Edit(reference, (plugin, s, key) =>
         {
@@ -148,6 +184,53 @@ public sealed unsafe class PluginFile : IDisposable
         return Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedActivateParentDelay(plugin, key, at, delay));
     }
 
+    public bool SetClimateTiming(FormKey climate, ClimateTiming timing)
+    {
+        ArgumentNullException.ThrowIfNull(timing);
+        return Edit(climate, (plugin, s, key) =>
+        {
+            var value = new ClimateTimingEdit
+            {
+                SunriseBegin = timing.SunriseBegin, SunriseEnd = timing.SunriseEnd,
+                SunsetBegin = timing.SunsetBegin, SunsetEnd = timing.SunsetEnd,
+                Volatility = timing.Volatility, MoonsPhaseLength = timing.MoonsPhaseLength,
+            };
+            return RadicleNative.PluginSetClimateTiming(plugin, key, &value);
+        });
+    }
+
+    public bool SetVmadObject(FormKey record, int script, int property, FormKey? target, short alias = -1, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadObject(plugin, key, si, pi, ei, s.Key(target), alias));
+    }
+
+    public bool SetVmadString(FormKey record, int script, int property, string value, int element = 0)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Contains('\0')) throw new ArgumentException("VMAD text cannot hold an embedded NUL through this API.", nameof(value));
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadString(plugin, key, si, pi, ei, value));
+    }
+
+    public bool SetVmadInt(FormKey record, int script, int property, int value, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadInt(plugin, key, si, pi, ei, value));
+    }
+
+    public bool SetVmadFloat(FormKey record, int script, int property, float value, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadFloat(plugin, key, si, pi, ei, value));
+    }
+
+    public bool SetVmadBool(FormKey record, int script, int property, bool value, int element = 0)
+    {
+        var si = Index(script); var pi = Index(property); var ei = Index(element);
+        return Edit(record, (plugin, s, key) => RadicleNative.PluginSetVmadBool(plugin, key, si, pi, ei, value ? 1 : 0));
+    }
+
     public bool SetScalar(FormKey record, string path, string value, int index = 0)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -210,6 +293,34 @@ public sealed unsafe class PluginFile : IDisposable
         var found = Call.Found(RadicleNative.PluginRecordFieldCount(use.Pointer, strings.Key(record), path, &native));
         count = found ? checked((int)native) : 0;
         return found;
+    }
+
+    public bool SetSceneScalar(FormKey scene, string path, string value, int index = 0)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(value);
+        var at = Index(index);
+        return Edit(scene, (plugin, s, key) => RadicleNative.PluginSetSceneScalar(plugin, key, path, at, value));
+    }
+
+    public bool SetSceneFormLink(FormKey scene, string path, FormKey target)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return Edit(scene, (plugin, s, key) =>
+        {
+            var native = s.Key(target);
+            return RadicleNative.PluginSetSceneFormlink(plugin, key, path, &native);
+        });
+    }
+
+    public int SceneGroupCount(FormKey scene, ScenePart part)
+    {
+        using var use = Use();
+        using var strings = new NativeStrings();
+        nuint count;
+        return Call.Found(RadicleNative.PluginSceneGroupCount(use.Pointer, strings.Key(scene), part, &count))
+            ? checked((int)count)
+            : throw new KeyNotFoundException($"Record not found: {scene}");
     }
 
     public int FormLinkListCount(FormKey record, string path) =>

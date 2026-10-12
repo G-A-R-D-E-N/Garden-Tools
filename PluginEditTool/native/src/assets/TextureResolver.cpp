@@ -570,7 +570,6 @@ std::optional<std::string> TextureResolver::resolveMaterialDiffuse(
     } catch (const std::exception&) {
         return std::nullopt;
     }
-    return std::nullopt;
 }
 
 std::optional<std::filesystem::path> TextureResolver::resolveFromArchives(

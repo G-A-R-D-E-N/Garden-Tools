@@ -65,15 +65,16 @@ Speculative answers must not be hardcoded as facts.
 
 ## Complex chunks (deferred)
 
-17. VMAD fragment layouts for PACK/INFO/SCEN phase extras are walked from xEdit counters; Variable property payloads (type 6/16) are skipped as empty/count-only. Encoding of VMAD strings is UTF-8 per xEdit `wbEncodingVMAD`.
+17. VMAD fragment layouts for PACK/INFO/SCEN phase extras are walked from xEdit counters. Type 6 and nonempty type 16 stop structural decoding; read-only collection clears partial VMAD discoveries and master remapping refuses. The verified empty type-16 stored case consumes only its zero count and permits complete structural scanning. Variable authoring, nonempty layouts, third-party fixtures and runtime binding behavior remain gaps in [#388](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/388). See `VMAD_VARIABLE_EVIDENCE.md`. Encoding of VMAD strings is UTF-8 per xEdit `wbEncodingVMAD`.
 18. CTDA CIS1/CIS2 string params. Use Global comparison FormID remap is implemented (type bit 2). ESP flagged light can be stamped via `apply_master_kinds` / `remap_plugin_masters(MasterDescriptor)`; the library still cannot read SmallFile off a master that is only a MAST name.
 19. PERK Add Activate Choice
-20. NAVM / NAVI
+20. NAVM / NAVI: stored modern version-15 grammar and native/C read surface are documented in `NAVM_NAVI.md` (`src/environment/navmesh.cpp:decode_navmesh` / `decode_navmesh_info`). Remaining traversal/flag, cover/waypoint and NG semantics stay open in #401; GardenEngine #146 consumer/probe acceptance remains separate.
+20b. DIAL/INFO/SCEN stored fields and scoped condition lists have a read slice in `DIALOGUE_SCENES.md`. Action-specific scene payloads and VMAD fragments remain opaque; runtime response selection and scene execution require [RE #405](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/405). TES4 bit 7 remains question 7.
 21. Persistent vs temporary REFR grouping rules on save
 
 ## BA2
 
-22. Next-gen v7/v8 GNRL and DX10 differences. FO4IDE already has tests; this library has not imported that evidence yet.
+22. Next-gen v7/v8 GNRL and DX10 differences. **Partial answer (#394):** every installed root-level v1, v7 and v8 GNRL and DX10 archive measured by `tools/corpus/ba2_measure.py` uses the v1 header, entry and chunk field widths, and Radicle reads and writes all three versions (`docs/BA2.md`). Still open: layouts and versions not present in the measured install, the meaning of the entry metadata byte, DX10 flag bits other than the cubemap bit and the tile mode, and how the engine itself treats v7/v8 archives at runtime.
 
 ## Writer policy
 

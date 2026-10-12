@@ -31,7 +31,7 @@ struct Cleanup {
     }
 };
 
-std::vector<std::byte> pluginBytes() {
+std::vector<std::byte> pluginBytes(bool anchor = false) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
     fo4::test::ByteWriter hedr;
@@ -57,6 +57,11 @@ std::vector<std::byte> pluginBytes() {
     const auto race = fo4::test::begin_record(out, "RACE", 0, 0x00000803, 131);
     fo4::test::ByteWriter link;
     link.u32(0x00000800);
+    if (anchor) {
+        fo4::test::ByteWriter preset;
+        preset.u32(0x00000802);
+        fo4::test::write_subrecord(out, "RPRM", preset.bytes);
+    }
     fo4::test::write_subrecord(out, "AHCM", link.bytes);
     fo4::test::write_subrecord(out, "AHCM", link.bytes);
     fo4::test::end_record(out, race);
@@ -307,4 +312,80 @@ TEST_CASE("PluginEditTool refuses empty-list insertion without a schema anchor")
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "FormLinkListInsertionBoundaryUnavailable");
     CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("W0 grid projects generated list count and indexed values", "[w0]") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    const auto result = backend.invokeBackend("GetRecordsGrid",
+        nlohmann::json::array({"Patch.esp", "RACE", 200, 0}));
+    REQUIRE(result.has_value());
+    const auto grid = nlohmann::json::parse(result->get<std::string>());
+    bool count = false;
+    bool element = false;
+    for (std::size_t index = 0; index < grid.at("columns").size(); ++index) {
+        if (grid.at("columns")[index] == "RACE\\MaleHairColors\\Count") {
+            count = true;
+            CHECK(grid.at("rows")[0].at("cells")[index] == "2");
+            CHECK(grid.at("rows")[0].at("editable")[index] == false);
+        }
+        if (grid.at("columns")[index] == "RACE\\MaleHairColors[1]") {
+            element = true;
+            CHECK(grid.at("rows")[0].at("cells")[index] == "000800:Patch.esp");
+            CHECK(grid.at("rows")[0].at("editable")[index] == true);
+        }
+    }
+    CHECK(count);
+    CHECK(element);
+}
+
+TEST_CASE("W0 generated list count rows expose list actions", "[w0]") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes());
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    auto& elements = static_cast<fo4ide::plugin::IPluginBackend&>(backend);
+    const auto result = elements.describeElement(nlohmann::json::array({
+        "Patch.esp", "000803:Patch.esp", "RACE\\MaleHairColors\\Count"}));
+    REQUIRE(result.has_value());
+    const auto actions = nlohmann::json::parse(result->get<std::string>());
+    REQUIRE(actions.contains("count"));
+    CHECK(actions.at("count") == 2);
+    CHECK(actions.at("canAdd") == true);
+    CHECK(actions.at("canClear") == true);
+    CHECK(actions.at("canRemove") == false);
+}
+
+TEST_CASE("W0 empty-list capability uses the native insertion anchor", "[w0]") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    writeBytes(path, pluginBytes(true));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    auto& elements = static_cast<fo4ide::plugin::IPluginBackend&>(backend);
+    REQUIRE(elements.clearElement(nlohmann::json::array({
+        "Patch.esp", "000803:Patch.esp", "RACE\\MaleHairColors"})).has_value());
+    const auto result = elements.describeElement(nlohmann::json::array({
+        "Patch.esp", "000803:Patch.esp", "RACE\\MaleHairColors"}));
+    REQUIRE(result.has_value());
+    const auto actions = nlohmann::json::parse(result->get<std::string>());
+    CHECK(actions.at("count") == 0);
+    CHECK(actions.at("canAdd") == true);
+    REQUIRE(elements.addElement(nlohmann::json::array({
+        "Patch.esp", "000803:Patch.esp", "RACE\\MaleHairColors\\Count", "FormLink<CLFM>"})).has_value());
+    REQUIRE(backend.invokeBackend("SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto plugin = fo4::read_plugin_file(path);
+    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000803:Patch.esp"));
+    REQUIRE(record != nullptr);
+    REQUIRE(record->subrecords.size() == 2);
+    CHECK(record->subrecords[0].signature == fo4::Signature::from_string("RPRM"));
+    CHECK(record->subrecords[1].signature == fo4::Signature::from_string("AHCM"));
+    CHECK(record->subrecords[1].data == std::vector<std::byte>(4, std::byte{0}));
 }

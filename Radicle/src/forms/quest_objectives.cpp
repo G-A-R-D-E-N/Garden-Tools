@@ -18,6 +18,7 @@ constexpr auto k_fnam = Signature::from_string("FNAM");
 constexpr auto k_nnam = Signature::from_string("NNAM");
 constexpr auto k_qsta = Signature::from_string("QSTA");
 constexpr auto k_anam = Signature::from_string("ANAM");
+constexpr std::uint16_t k_qsta_keyword_form_version = 82;
 
 std::uint32_t read_u32(const std::vector<std::byte>& data, std::size_t offset) {
   std::uint32_t value = 0;
@@ -59,14 +60,22 @@ QuestObjectives decode_quest_objectives_record(const Plugin& plugin,
     if (objective == nullptr) continue;  // still ahead of the objective array
 
     if (subrecord.signature == k_qsta) {
-      if (subrecord.data.size() != 12) {
-        throw QuestError("QUST QSTA must be exactly twelve bytes");
+      const bool keyword_layout = record->header.form_version >= k_qsta_keyword_form_version;
+      if (subrecord.data.size() != (keyword_layout ? 12u : 8u)) {
+        throw QuestError(keyword_layout ? "QUST QSTA must be exactly twelve bytes"
+                                        : "QUST QSTA must be exactly eight bytes");
       }
       QuestObjectiveTarget next;
       std::memcpy(&next.alias, subrecord.data.data(), 4);
       next.flags = read_u32(subrecord.data, 4);
-      if (const auto raw = RawFormId{read_u32(subrecord.data, 8)}; !raw.is_null()) {
-        next.keyword = resolve_plugin_form_id(raw, context);
+      if (keyword_layout) {
+        if (const auto raw = RawFormId{read_u32(subrecord.data, 8)}; !raw.is_null()) {
+          try {
+            next.keyword = resolve_plugin_form_id(raw, context);
+          } catch (const FormIdError&) {
+            next.keyword_unresolved = true;
+          }
+        }
       }
       objective->targets.push_back(std::move(next));
       target = &objective->targets.back();
@@ -147,8 +156,10 @@ std::vector<std::byte> bytes_of(const void* source, std::size_t size) {
 }
 
 std::vector<Subrecord> encode_objectives(const Plugin& plugin,
-                                         const QuestObjectives& objectives) {
+                                         const QuestObjectives& objectives,
+                                         std::uint16_t form_version) {
   const auto context = plugin_form_id_context(plugin);
+  const bool keyword_layout = form_version >= k_qsta_keyword_form_version;
   std::vector<Subrecord> out;
   for (const auto& objective : objectives.objectives) {
     out.push_back(marker(k_qobj, bytes_of(&objective.index, 2)));
@@ -157,12 +168,20 @@ std::vector<Subrecord> encode_objectives(const Plugin& plugin,
       out.push_back(marker(k_nnam, schema::write_localized_string(*objective.display_text)));
     }
     for (const auto& target : objective.targets) {
-      std::vector<std::byte> qsta(12);
+      if (target.keyword_unresolved) {
+        throw QuestError("QUST objective target keyword does not resolve and cannot be rewritten");
+      }
+      if (!keyword_layout && target.keyword.has_value()) {
+        throw QuestError("QUST objective target keyword requires form version 82 or later");
+      }
+      std::vector<std::byte> qsta(keyword_layout ? 12 : 8);
       std::memcpy(qsta.data(), &target.alias, 4);
       std::memcpy(qsta.data() + 4, &target.flags, 4);
-      const std::uint32_t keyword =
-          target.keyword.has_value() ? encode_plugin_form_id(*target.keyword, context).value() : 0u;
-      std::memcpy(qsta.data() + 8, &keyword, 4);
+      if (keyword_layout) {
+        const std::uint32_t keyword =
+            target.keyword.has_value() ? encode_plugin_form_id(*target.keyword, context).value() : 0u;
+        std::memcpy(qsta.data() + 8, &keyword, 4);
+      }
       out.push_back(marker(k_qsta, std::move(qsta)));
       out.insert(out.end(), target.subrecords.begin(), target.subrecords.end());
     }
@@ -189,7 +208,7 @@ void write_quest_objectives(Plugin& plugin,
   auto next = plugin;
   auto* record = mutable_quest(next, quest);
   const auto [begin, end] = objective_array_bounds(*record);
-  const auto encoded = encode_objectives(next, objectives);
+  const auto encoded = encode_objectives(next, objectives, record->header.form_version);
 
   std::vector<Subrecord> rebuilt;
   rebuilt.insert(rebuilt.end(), record->subrecords.begin(),
