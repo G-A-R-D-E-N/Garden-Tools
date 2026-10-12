@@ -883,6 +883,22 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
 
+## Radicle/tests/real_data_plugins.hpp:installed_master_and_cc_plugins
+
+Returns the seven official masters present in the Data folder (Fallout4.esm, DLCRobot, DLCworkshop01-03, DLCCoast, DLCNukaWorld) followed by every `cc*.esl` and `cc*.esm` file, matched case-insensitively. Missing masters are skipped rather than reported, so the corpus tests keep their skip behavior on partial installs. `archive_load_order` then pairs each name with its `<plugin> - *.ba2` archives, so a `cc` archive is opened only when its plugin is present in Data. Shared by `test_nif_corpus.cpp`, `test_ba2_real.cpp` and `test_pex_corpus.cpp`.
+
+## Radicle/tests/test_nif_corpus.cpp:ReadsEveryVanillaNifAndHandlesGeometryTypes
+
+Reads NIFs from every general archive of the masters and cc plugins from `installed_master_and_cc_plugins`. Per-archive NIF counts and per-BS-version counts are recorded with `RecordProperty`. `read_nif` only accepts BS 130, so a NIF with another BS version fails as a parse error and is counted under the failure, not under a `bs_version_<n>` key; the BS number of a rejected file is not exposed by the reader.
+
+## Radicle/tests/test_ba2_real.cpp:ParsesEveryVanillaStringTableInMastersAndCcArchives
+
+Parses every `Strings/*.STRINGS`, `*.DLSTRINGS` and `*.ILSTRINGS` entry in the general archives of the masters and cc plugins with `fo4::localization::read_string_table`. Path matching normalizes separators and case. Counts are recorded per extension and per language suffix (the text after the last `_` in the file stem, `none` when absent). Only `.STRINGS` presence is asserted.
+
+## Radicle/tests/test_pex_corpus.cpp:EveryDataDirArchivePexRoundTripsByteIdentically
+
+Fallback for `FO4_DATA_DIR` when neither `FO4_PEX_CORPUS` nor `FO4_PEX_ARCHIVES` is set. It scans every general archive from `archive_load_order` for `.pex` entries instead of naming `Fallout4 - Misc.ba2`. On AE 1.11.240, `Fallout4 - Misc.ba2` holds 7875 PEX entries, and the DLC and some cc Main archives hold more, so the scan covers all of them. Found and identical counts are recorded per archive, and the same `roundTrip` and `expectClean` checks apply.
+
 ## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
 
 The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
