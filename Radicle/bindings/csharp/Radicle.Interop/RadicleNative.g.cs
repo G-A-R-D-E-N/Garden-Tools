@@ -1679,10 +1679,16 @@ public unsafe struct SceneInfo
     public IntPtr Internal;
 }
 
+public enum OfficialTable : int
+{
+    OgNg = 0,
+    Ae = 1,
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 39u;
+    public const uint CompiledAbiVersion = 40u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2346,5 +2352,14 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_scene_group_count")]
     public static extern Status PluginSceneGroupCount(IntPtr plugin, FormKey key, ScenePart part, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
+    public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ccc_read")]
+    public static extern Status CccRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_names, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_load_order_assemble")]
+    public static extern Status LoadOrderAssemble([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin_list_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? ccc_path, OfficialTable table, IntPtr** out_rows, nuint* out_row_count, IntPtr** out_findings, nuint* out_finding_count, int* out_failed);
 
 }

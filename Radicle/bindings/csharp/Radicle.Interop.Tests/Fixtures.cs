@@ -25,11 +25,13 @@ internal static class PluginWriter
 {
     public static Grp Top(string signature, params Node[] children) => new(Bytes.Label(signature), 0, children);
 
-    public static byte[] Build(uint flags, string[] masters, params Node[] groups)
+    public static byte[] Build(uint flags, string[] masters, params Node[] groups) => Build(flags, 1.0f, masters, groups);
+
+    public static byte[] Build(uint flags, float version, string[] masters, Node[] groups)
     {
         using var stream = new MemoryStream();
         using var w = new BinaryWriter(stream);
-        var tes4 = new List<(string, byte[])> { ("HEDR", Bytes.F32(1.0f).Concat(Bytes.U32(0, 0x900)).ToArray()) };
+        var tes4 = new List<(string, byte[])> { ("HEDR", Bytes.F32(version).Concat(Bytes.U32(0, 0x900)).ToArray()) };
         foreach (var master in masters)
         {
             tes4.Add(("MAST", Bytes.Z(master)));

@@ -13,6 +13,7 @@
 #include "fo4/c_api_vmad.h"
 #include "fo4/c_api_behavior.h"
 #include "fo4/c_api_dialogue.h"
+#include "fo4/c_api_loadorder.h"
 #include <cstddef>
 #include <cstdio>
 

@@ -1041,4 +1041,56 @@ The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filt
 ## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
 
 Filters the stored LTEX GNAM list from `decode_landscape_grasses`. A null link is one whose owner is empty, as produced by `resolve_plugin_link` for a zero raw form ID. The stored list keeps every entry, including nulls. The view applies no slope, density or placement logic.
+
+## Radicle/include/fo4/loadorder/load_order_files.hpp:assemble_load_order
+
+Returns the loaded-file list for a data directory, a parsed plugin list and the `Fallout4.ccc` names. The stage order, master hoist and checked pass are in `Radicle/src/loadorder/assemble.cpp:assemble_load_order`. `failed` is set on the first checked-file failure and on a hoist cycle; entries show the state reached at that point. `PluginList::duplicates` carries the dropped repeats so `duplicate_entry` can be reported.
+
+## Radicle/src/loadorder/plugin_list.cpp:parse_plugin_list
+
+Splits on LF and removes one trailing CR per line; the BOM is removed only at the start of the text. Lines starting with `#` or shorter than two characters are skipped before the leading `*` is stripped, so a lone `*` is skipped and `*a` yields the name `a`. Duplicates are compared as exact strings after the `*` is stripped. The first occurrence keeps its active flag; later ones go to `duplicates`.
+
+## Radicle/src/loadorder/plugin_list.cpp:parse_ccc
+
+Trims spaces, tabs and CRs around each name and drops blank lines. Names keep their case. The assembly matches names case-insensitively, so the engine's lower-casing does not change the result.
+
+## Radicle/src/loadorder/assemble.cpp:read_tes4_header
+
+Reads the 24-byte record header and the TES4 data only, passes those bytes to `read_plugin`, so no groups are parsed. A data size above 16 MiB is rejected before the file size check and before the buffer is resized, so a corrupt header cannot force a large allocation. A data size that overruns the file is rejected the same way. Any throw is reported by `assemble_load_order` as `unreadable_header`.
+
+## Radicle/src/loadorder/assemble.cpp:find_master_cycle
+
+Depth-first search over present master-flag files, following edges only to present master-flag masters. A file that lists itself closes a one-file cycle. The `path` stack holds the current chain, so the cycle is the chain from the repeated file to the end.
+
+## Radicle/src/loadorder/assemble.cpp:master_cycle
+
+Runs `find_master_cycle` from every unvisited master-flag file and returns the first cycle found, or an empty vector. `assemble_load_order` calls it before the hoist: a cycle is reported as `hoist_cycle` naming its files, sets `failed`, and skips the hoist and the checked pass.
+
+## Radicle/src/loadorder/assemble.cpp:hoist_masters
+
+Inner loop per the RE record section 4.4 (`RE-Work/subsystems/radicle-re-garden-tools/light-plugin-index-389-28/README.md`). For a master-flag dependent at `pos`, each MAST name in order that is present at or after `pos` is moved to `pos`, ahead of the dependent and of masters moved earlier in the same scan. Independent masters therefore end in reverse MAST order. The walk does not advance after a move, so the moved masters are processed next. The move count is capped at `n*n + n` as a backstop; past it the function records `hoist_cycle` and returns false. `master_cycle` runs first, so the cap only catches inputs the search does not.
+
+## Radicle/src/loadorder/assemble.cpp:settle_checked
+
+Recursive checked pass. A checked file above HEDR 1.0 is unchecked with `version_unchecked` and is not recursed. Otherwise every master must be present and at or below 1.0; a missing or too-new master fails the assembly. Unchecked masters are checked and recursed. The comparison is a float against `1.0f`.
+
+## Radicle/src/c_api_loadorder.cpp:radicle_load_order_assemble
+
+Rows are `name\tchecked\tmaster_flag\tlight`; findings are `code\tplugin\tdetail`. `*out_failed` is 1 when the assembly aborted, and the call still returns OK. It is written only after both arrays are copied. A data directory that is not a directory returns IO_ERROR, and so does a plugin list or `Fallout4.ccc` that cannot be read (`std::exception`); `bad_alloc` maps to OUT_OF_MEMORY and anything else to INTERNAL_ERROR. If the findings copy fails, the rows already copied are freed with `std::free`, not `radicle_free_string_array`, so the error message set by the failed copy is kept.
+
+## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
+
+ABI 40 adds `radicle_plugin_list_read`, `radicle_ccc_read` and `radicle_load_order_assemble` (`Radicle/include/fo4/c_api_loadorder.h`) and the `radicle_official_table` enum. The pin is `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsForty`.
+
+## Radicle/tests/test_load_order_real.cpp:InstalledDataFollowsFallout4OfficialThenCccOrder
+
+Skips unless `FO4_DATA_DIR` is set. Picks the AE table for 1.11.x builds and the OG/NG table otherwise. Asserts that `Fallout4.esm` is first, that installed official plugins follow in table order, and that present `Fallout4.ccc` entries follow after them in file order. `order.failed` is asserted false only when no `missing_master` finding is present.
+
+## Radicle/tests/test_c_api_loadorder.cpp:CApiLoadOrder
+
+Covers the C ABI for the load order: null arguments return INVALID_ARGUMENT, an unknown table value is rejected with the outputs cleared, a non-directory data directory and a missing plugin list return IO_ERROR with the outputs cleared, and the happy path frees its rows and findings with `radicle_free_string_array`. Outputs start as non-null sentinels so a failure that does not clear them is caught.
+
+## Radicle/tests/temp_data_dir.hpp:TempDataDir
+
+Creates a directory named with the process id and a process-wide atomic counter, so parallel test binaries and repeated fixtures do not collide. `write` sets each file's time to one hour ago plus `rank` seconds, which gives the name tie-break and the timestamp order distinct, deterministic values.
 >

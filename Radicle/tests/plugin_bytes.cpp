@@ -88,6 +88,26 @@ std::vector<std::byte> zlib_compress(std::span<const std::byte> data) {
   return out;
 }
 
+std::vector<std::byte> make_tes4_plugin(std::uint32_t flags, float version,
+                                        const std::vector<std::string>& masters) {
+  ByteWriter out;
+  const auto tes4 = begin_record(out, "TES4", flags, 0);
+  ByteWriter hedr;
+  hedr.f32(version);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  write_subrecord(out, "HEDR", hedr.bytes);
+  for (const auto& master : masters) {
+    write_subrecord(out, "MAST", master + '\0');
+    ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    write_subrecord(out, "DATA", data.bytes);
+  }
+  end_record(out, tes4);
+  return out.bytes;
+}
+
 std::vector<std::byte> make_minimal_plugin() {
   ByteWriter out;
   const auto tes4 = begin_record(out, "TES4", 0, 0);
