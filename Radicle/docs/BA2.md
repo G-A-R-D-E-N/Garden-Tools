@@ -57,8 +57,8 @@ The tests compare streaming and model extraction of the first entry, rebuild
 that entry into an archive, and check identical extracted content and DDS
 bytes after re-reading. The rebuilt entry must keep its name, extension and
 directory hashes; for DX10 it must also keep its texture info and each chunk's
-mip range. They run only when `FO4_DATA_DIR` is set; CI sets it from `FO4_DATA_DIR_WINDOWS`
-in the Windows Release pass of `native-ci`; the Windows Debug pass clears it. The
+mip range. They run only when `FO4_DATA_DIR` is set; in CI
+the `fo4-data` runner supplies it to the `native-windows-real-data` job of `native-ci`; both `native-windows-tests` passes clear it. The
 Linux job passes `FO4_DATA_DIR_LINUX`, which is currently unset, so the tests skip
 there. They skip when `FO4_DATA_DIR` or a named archive is missing. A present
 archive whose version, kind or entry count differs from the table above fails the
