@@ -1,8 +1,12 @@
 #include "fo4/environment/world.hpp"
 
+#include "default_water.hpp"
 #include "record_reader.hpp"
 
 #include <cstring>
+#include <cmath>
+#include <limits>
+#include <set>
 #include <string>
 
 namespace fo4::env {
@@ -127,6 +131,89 @@ CellData decode_cell(const Environment& env, const RecordRef& ref) {
   data.worldspace = env.world_of(ref);
   data.water = reader.link(k_xcwt);
   return data;
+}
+
+namespace {
+
+const RecordRef* winning_type(const Environment& env, const std::optional<FormKey>& key,
+                              Signature signature) {
+  if (!key || key->owner().empty()) return nullptr;
+  const auto* ref = env.winner(*key);
+  return ref && ref->record->header.signature == signature && !env.metadata(*ref).deleted
+             ? ref : nullptr;
+}
+
+std::uint16_t effective_parent_flags(const Record& record) {
+  std::uint16_t flags = 0;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == k_wnam) flags = 0xFFFFu;
+    if (sub.signature == k_pnam) flags = Reader::u16(sub, 0);
+  }
+  return flags;
+}
+
+WorldspaceData inherited_world(const Environment& env, const RecordRef& root, std::uint16_t bit) {
+  const auto* current = &root;
+  std::set<FormKey> visited;
+  for (;;) {
+    if (!visited.insert(current->record->form_key).second) {
+      throw WorldDecodeError("cyclic worldspace water inheritance");
+    }
+    auto world = decode_worldspace(env, *current);
+    const auto flags = effective_parent_flags(*current->record);
+    const auto* parent = winning_type(env, world.parent, k_wrld);
+    if (parent == nullptr || (flags & bit) == 0) return world;
+    current = parent;
+  }
+}
+
+float loaded_water_height(float raw) {
+  constexpr float limit = 2147483648.0f;
+  if (raw >= limit) return raw;
+  if (!std::isfinite(raw) || raw < -limit) return -limit;
+  const auto integer = static_cast<std::int32_t>(raw);
+  return static_cast<float>(integer) + (raw - static_cast<float>(integer) >= 0.5f ? 1.0f : 0.0f);
+}
+
+}
+
+WaterSelection resolve_water(const Environment& env, const RecordRef& ref) {
+  WaterSelection result;
+  const RecordRef* world_ref = nullptr;
+  std::optional<FormKey> water;
+  if (ref.record && ref.record->header.signature == k_wrld) {
+    world_ref = winning_type(env, ref.record->form_key, k_wrld);
+  } else {
+    const auto* winner = ref.record ? env.winner(ref.record->form_key) : nullptr;
+    const auto cell = decode_cell(env, winner ? *winner : ref);
+    const auto flags = cell.flags.value_or(0);
+    if (cell.water && !cell.water->owner().empty()) {
+      water = cell.water;
+      if (winning_type(env, water, Signature{'W', 'A', 'T', 'R'}) == nullptr) {
+        water.reset();
+      }
+    }
+    if ((flags & 1u) == 0) world_ref = winning_type(env, cell.worldspace, k_wrld);
+    if ((flags & 3u) == 2u) {
+      const auto height = loaded_water_height(cell.water_height.value_or(std::numeric_limits<float>::max()));
+      if (height < 2147483648.0f) result.height = height;
+      else if (world_ref) result.height = inherited_world(env, *world_ref, 1).default_water_height.value_or(0.0f);
+    }
+  }
+  if (world_ref) {
+    if (!water) water = inherited_world(env, *world_ref, 8).water;
+    if (ref.record->header.signature == k_wrld) {
+      result.height = inherited_world(env, *world_ref, 1).default_water_height.value_or(0.0f);
+    }
+  }
+  result.record = winning_type(env, water, Signature{'W', 'A', 'T', 'R'});
+  if (result.record) result.water = result.record->record->form_key;
+  else {
+    result.uses_default_water = true;
+    result.water = FormKey{PluginKey::from_filename(k_default_water_plugin), LocalFormId{k_default_water_local}};
+    result.record = winning_type(env, result.water, Signature{'W', 'A', 'T', 'R'});
+  }
+  return result;
 }
 
 }  // namespace fo4::env

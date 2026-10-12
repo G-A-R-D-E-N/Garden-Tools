@@ -194,6 +194,14 @@ typedef struct radicle_water_info {
   float angular_velocity[3];
 } radicle_water_info;
 
+typedef struct radicle_water_selection {
+  radicle_form_key water;
+  const radicle_record* record;
+  int32_t uses_default_water;
+  int32_t has_height;
+  float height;
+} radicle_water_selection;
+
 typedef struct radicle_lighting_template_info {
   int32_t has_lighting;
   radicle_cell_lighting lighting;
@@ -245,6 +253,9 @@ RADICLE_API radicle_status radicle_activator_get_water_type(const radicle_env* e
 RADICLE_API radicle_status radicle_water_get_info(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_water_info* out_info);
+RADICLE_API radicle_status radicle_water_resolve(const radicle_env* env,
+                                                 const radicle_record* record,
+                                                 radicle_water_selection* out_selection);
 
 RADICLE_API radicle_status radicle_record_payload_info(
     const radicle_env* env, const radicle_record* record,

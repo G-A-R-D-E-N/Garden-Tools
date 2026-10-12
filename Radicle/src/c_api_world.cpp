@@ -1,5 +1,7 @@
 #include "c_api_env_internal.hpp"
+#include "fo4/c_api_records.h"
 #include "fo4/environment/world.hpp"
+#include "environment/default_water.hpp"
 
 #include <cstdlib>
 #include <optional>
@@ -33,6 +35,28 @@ radicle_status resolve_one(const radicle_env* env,
 }  // namespace
 
 extern "C" {
+
+radicle_status radicle_water_resolve(const radicle_env* env, const radicle_record* record,
+                                     radicle_water_selection* out_selection) {
+  clear_error();
+  if (env == nullptr || record == nullptr || out_selection == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_selection are required");
+  }
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
+  *out_selection = {};
+  return guarded("unknown exception while resolving water", [&] {
+    const auto* ref = to_ref(record);
+    const auto water = fo4::env::resolve_water(env->value, *ref);
+    out_selection->water = water.uses_default_water ? radicle_form_key{fo4::env::k_default_water_plugin, fo4::env::k_default_water_local}
+                                                   : to_c_key(*env, water.water);
+    out_selection->record = to_handle(water.record);
+    out_selection->uses_default_water = water.uses_default_water ? 1 : 0;
+    set_optional(water.height, out_selection->has_height, out_selection->height);
+    return RADICLE_STATUS_OK;
+  });
+}
 
 radicle_status radicle_worldspace_get_info(const radicle_env* env,
                                            const radicle_record* record,

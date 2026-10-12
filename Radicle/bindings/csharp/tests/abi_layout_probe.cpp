@@ -453,6 +453,12 @@ int main() {
   printf("WaterInfo.LinearVelocity %zu\n", offsetof(radicle_water_info, linear_velocity));
   printf("WaterInfo.HasAngularVelocity %zu\n", offsetof(radicle_water_info, has_angular_velocity));
   printf("WaterInfo.AngularVelocity %zu\n", offsetof(radicle_water_info, angular_velocity));
+  printf("WaterSelection %zu\n", sizeof(radicle_water_selection));
+  printf("WaterSelection.Water %zu\n", offsetof(radicle_water_selection, water));
+  printf("WaterSelection.Record %zu\n", offsetof(radicle_water_selection, record));
+  printf("WaterSelection.UsesDefaultWater %zu\n", offsetof(radicle_water_selection, uses_default_water));
+  printf("WaterSelection.HasHeight %zu\n", offsetof(radicle_water_selection, has_height));
+  printf("WaterSelection.Height %zu\n", offsetof(radicle_water_selection, height));
   printf("LightingTemplateInfo %zu\n", sizeof(radicle_lighting_template_info));
   printf("LightingTemplateInfo.HasLighting %zu\n", offsetof(radicle_lighting_template_info, has_lighting));
   printf("LightingTemplateInfo.Lighting %zu\n", offsetof(radicle_lighting_template_info, lighting));
