@@ -92,7 +92,7 @@ public sealed class Ba2 : IDisposable
         catch (Exception e) when (IsNativeLoadFailure(e)) { throw NativeLoadFailure(e); }
     }
 
-    private static bool IsNativeLoadFailure(Exception e) =>
+    internal static bool IsNativeLoadFailure(Exception e) =>
         e is DllNotFoundException or BadImageFormatException or EntryPointNotFoundException or TypeInitializationException;
 
     private static InvalidDataException NativeLoadFailure(Exception e) =>
