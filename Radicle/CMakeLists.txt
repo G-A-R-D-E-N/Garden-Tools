@@ -102,6 +102,8 @@ add_library(fo4
   src/archive/ba2_reader.cpp
   src/archive/assets.cpp
   src/binary/cursor.cpp
+  src/nif/nif.cpp
+  src/nif/geometry.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -405,6 +407,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_long_names.cpp
     tests/test_ba2_real.cpp
     tests/test_ba2_versions_real.cpp
+    tests/test_nif.cpp
+    tests/test_nif_corpus.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
