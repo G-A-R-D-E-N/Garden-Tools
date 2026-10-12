@@ -69,6 +69,7 @@ Speculative answers must not be hardcoded as facts.
 18. CTDA CIS1/CIS2 string params. Use Global comparison FormID remap is implemented (type bit 2). ESP flagged light can be stamped via `apply_master_kinds` / `remap_plugin_masters(MasterDescriptor)`; the library still cannot read SmallFile off a master that is only a MAST name.
 19. PERK Add Activate Choice
 20. NAVM / NAVI: stored modern version-15 grammar and native/C read surface are documented in `NAVM_NAVI.md` (`src/environment/navmesh.cpp:decode_navmesh` / `decode_navmesh_info`). Remaining traversal/flag, cover/waypoint and NG semantics stay open in #401; GardenEngine #146 consumer/probe acceptance remains separate.
+20b. DIAL/INFO/SCEN stored fields and scoped condition lists have a read slice in `DIALOGUE_SCENES.md`. Action-specific scene payloads and VMAD fragments remain opaque; runtime response selection and scene execution require [RE #405](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/405). TES4 bit 7 remains question 7.
 21. Persistent vs temporary REFR grouping rules on save
 
 ## BA2

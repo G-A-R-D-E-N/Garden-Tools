@@ -139,6 +139,7 @@ add_library(fo4
   src/plugin/navmesh_writer.cpp
   src/plugin/field_writer.cpp
   src/plugin/subrecord_authoring.cpp
+  src/plugin/scene_writer.cpp
   src/plugin/master_usage.cpp
   src/plugin/maintenance.cpp
   src/plugin/placement.cpp
@@ -173,6 +174,8 @@ add_library(fo4
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
   src/environment/behavior.cpp
+  src/environment/dialogue.cpp
+  src/environment/scene_layout.cpp
   src/environment/base_records.cpp
   src/environment/sound.cpp
   src/environment/material_swap.cpp
@@ -219,6 +222,7 @@ fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
 target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp)
+target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -426,6 +430,13 @@ if(RADICLE_BUILD_TESTS)
     tests/test_behavior_writer_c_api.cpp
     tests/test_behavior_writer_real.cpp
     tests/test_behavior_real.cpp
+    tests/test_dialogue.cpp
+    tests/test_dialogue_real.cpp
+    tests/test_dialogue_writer.cpp
+    tests/test_dialogue_subrecords.cpp
+    tests/test_dialogue_writer_c_api.cpp
+    tests/test_dialogue_writer_real.cpp
+    tests/test_scene_writer.cpp
     tests/test_environment_world.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
