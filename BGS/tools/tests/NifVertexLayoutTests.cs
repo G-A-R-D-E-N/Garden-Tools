@@ -25,6 +25,17 @@ public sealed class NifVertexLayoutTests
         Assert.Equal(36, location.Indices);
     }
 
+    [Fact]
+    public void FullPrecisionSkinnedVertexWithATailSlotKeepsTheSkinBeforeTheTail()
+    {
+        var shape = Assert.Single(NifGeometry.Shapes(NifFile.Parse(Mesh(FullPrecisionSkinned | 0x100, 44), "tail.nif")));
+
+        Assert.Equal(new[] { 1, 2, 3, 4 }, shape.BoneIndices.ToArray());
+        var location = shape.SkinSource!.Value;
+        Assert.Equal(28, location.Weights);
+        Assert.Equal(36, location.Indices);
+    }
+
     [Theory]
     [InlineData(36)]
     [InlineData(44)]

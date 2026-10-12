@@ -130,7 +130,7 @@ Data size must equal `vertex count * stride + triangle count * 6`
 yields an empty shape, not an error (`src/nif/geometry.cpp:read_shape`).
 `NifShape.cs:ReadShape` line 95 returns null for the same three conditions.
 
-Vertex attribute offsets (`NifShape.cs:Layout` lines 143-162):
+Vertex attribute offsets (`NifShape.cs:Layout` lines 143-163):
 
 - Position: 16 bytes at full precision (three f32 plus one 4-byte value, not
   decoded; settled by the vanilla corpus, parity item 15), 8 bytes at half
