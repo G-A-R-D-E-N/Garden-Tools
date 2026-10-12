@@ -247,7 +247,7 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
   for (std::uint16_t i = 0; i < alias_count; ++i) {
     QuestVmadAliasBinding alias;
     if (object_format == 2) {
-      slice.u16();
+      require_zero_unused_word(slice);
       alias.alias_id_offset = slice.position();
       alias.alias_id = slice.i16();
       result.offsets.push_back(slice.position());
@@ -257,7 +257,7 @@ void walk_quest_extra(Slice& slice, std::int16_t object_format, VmadScan& result
       slice.u32();
       alias.alias_id_offset = slice.position();
       alias.alias_id = slice.i16();
-      slice.u16();
+      require_zero_unused_word(slice);
     } else {
       throw parse_error(slice.position(), "unknown VMAD object format");
     }
@@ -661,13 +661,13 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
     for (std::uint16_t i = 0; i < alias_count; ++i) {
       QuestVmadAliasScripts alias;
       if (object_format == 2) {
-        slice.u16();
+        require_zero_unused_word(slice);
         alias.alias_id = slice.i16();
         slice.u32();
       } else if (object_format == 1) {
         slice.u32();
         alias.alias_id = slice.i16();
-        slice.u16();
+        require_zero_unused_word(slice);
       } else {
         throw parse_error(slice.position(), "unknown VMAD object format");
       }
