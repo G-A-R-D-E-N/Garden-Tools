@@ -1,6 +1,6 @@
 # TES4 localization flag evidence
 
-Partial work for [#29](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/29); remaining research [#390](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/390).
+Partial work for [#29](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/29); remaining research tracked as RE-007 on #520.
 
 Verified source: [OG loader and CK record](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/f18bee7912b793b3cd3ed8d47c6f9a45f4d01b3a/RE-Work/subsystems/plugin-io-garden-tools/tes4-localized-flag-390/README.md), read 2026-10-04. Private copy: `tes4-localized-flag-390.md` (not committed, same note as the link above), SHA256 `7405934a8f6eb0b89542d41282fc4459ee2f8533caed998321a8d7d91ccf8329`. The record carries Ghidra 12.1.3 OG 1.10.163 decompile/disassembly addresses. This is static evidence, not live game acceptance.
 
@@ -22,3 +22,16 @@ The 6916afb follow-up is available locally at `localized-strings-390-29/README.m
 AE 1.11.240 predicate `0x2f9380` and reader `0x3517c0` establish the same set-ID / clear-inline direction as OG. The record identifies a locally authored bit-clear `CommonwealthOnline.esp` with inline FULL fields; it is not an official or delocalizer-output sample and is not part of this branch's test corpus. NG has predicate/header-import byte evidence from an unpacked image, but its string reader remains unresolved. No live runtime or CK transformation was executed.
 
 `schema::read_localized_string` needs no runtime emulation change for these answers. Field-aware string edits and explicit sidecar ownership remain stored-format acceptance work under #287/#32; unresolved runtime/CK details stay in #390 without blocking an otherwise proven stored edit. Regression-test execution is recorded per PR head; these private surveys are supporting evidence, not execution of Radicle tests.
+
+## Resolution of #29
+
+This maps the four "Still required" boxes of #29 to the evidence above. Comment numbers refer to #29 and to its research item RE-007 on #520.
+
+| #29 item | Resolution |
+| --- | --- |
+| Reverse engineer `MasterfileDelocalizer` to prove when bit `0x80` is set or cleared | Resolved for direction (comment 7904). The CK 1.11.137 `-DelocalizeMasterfile` path sets bit `0x80`: the flag setter has two callers, both passing TRUE, and none passing FALSE. Localized chunks become four-byte string IDs, so the direction is inline text to external ID, with the bit set. CK 1.11.240 matches at byte level only. The ID helper's edge cases (for example untagged strings) were not decompiled. |
+| Reconcile Mutagen/xEdit `Localized` with CommonLib `kDelocalized` | Naming policy, not an established error (comments 6943 and 7904). The CK's "delocalized" means the external-table state, which is the bit-set state that xEdit calls "Localized". The internal API keeps `is_localized` (`Radicle/include/fo4/flags.hpp:is_localized`). The serialized bit is unchanged. |
+| Verify behavior against named official plugins before renaming the internal API | Every installed official plugin checked has bit `0x80` set with four-byte FULL IDs: Fallout4.esm and the six DLC masters at flags `0x81`, and the nine CC ESL files at `0x281`. No official bit-clear sample exists. The flag-clear case needs a caller-supplied sample: the locally authored bit-clear `CommonwealthOnline.esp` with inline FULL text is a candidate, and it is not in the test corpus. |
+| Connect automatic FULL/DESC string-ID resolution to plugin state | Connected for the bit-set case. `Radicle/src/environment/environment.cpp:decode_record_name` checks `is_localized()` at line 83 and returns a string ID for FULL. `Radicle/src/environment/strings.cpp:StringTables::resolve_name` (line 149) looks that ID up in caller-loaded tables. `Radicle/src/schema/localized_fields.cpp:read_localized_string` (line 31) combines the flag with the localized-field schema. `decode_record_name` reads FULL only, not DESC. Turning an ID into text still needs a caller-supplied table. No language or sidecar lookup is inferred. |
+
+The flag-clear path is proven only by the inline-text reader in the OG and AE records. The NG reader and CK string-table emission remain open in RE-007 on #520.

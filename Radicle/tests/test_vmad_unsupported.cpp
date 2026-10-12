@@ -470,3 +470,112 @@ TEST(Vmad, QuestAliasUnusedWordsStopTheTypedReader) {
     }
   }
 }
+
+TEST(Vmad, VariablePropertyStopsTheScriptAndLeavesFollowingBytesUninterpreted) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "VariableScript");
+  vmad.u8(0);
+  vmad.u16(3);
+  wstring(vmad, "Before");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(7);
+  wstring(vmad, "Dynamic");
+  vmad.u8(6);
+  vmad.u8(1);
+  wstring(vmad, "After");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(9);
+  const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_TRUE(scripts.unsupported);
+  EXPECT_EQ(scripts.trailing_bytes, 0u);
+  ASSERT_EQ(scripts.scripts.size(), 1u);
+  ASSERT_EQ(scripts.scripts[0].properties.size(), 1u);
+  EXPECT_EQ(scripts.scripts[0].properties[0].name, "Before");
+  EXPECT_EQ(scripts.scripts[0].properties[0].integer, 7);
+  const auto refr = fo4::Signature::from_string("REFR");
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, refr).unsupported);
+  EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(vmad.bytes, refr).has_value());
+}
+
+TEST(Vmad, VariablePropertyRefusesTheWholeVmadIncludingLaterScriptsAndTail) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(2);
+  wstring(vmad, "FirstScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "Dynamic");
+  vmad.u8(6);
+  vmad.u8(1);
+  wstring(vmad, "SecondScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "Target");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+  vmad.u8(0xAB);
+  vmad.u8(0xCD);
+  const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_TRUE(scripts.unsupported);
+  ASSERT_EQ(scripts.scripts.size(), 1u);
+  EXPECT_EQ(scripts.scripts[0].name, "FirstScript");
+  EXPECT_TRUE(scripts.scripts[0].properties.empty());
+  const auto refr = fo4::Signature::from_string("REFR");
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, refr).unsupported);
+  EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(vmad.bytes, refr).has_value());
+
+  auto out = plugin_with_masters();
+  const auto group = fo4::test::begin_group(out, "ACTI", 0);
+  const auto record = fo4::test::begin_record(out, "ACTI", 0, 0x03000800);
+  fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "VariablePatch.esp");
+  EXPECT_THROW(
+      {
+        fo4::remap_plugin_masters(
+            plugin,
+            {fo4::PluginKey::from_filename("Fallout4.esm"),
+             fo4::PluginKey::from_filename("KeepMe.esm")});
+      },
+      fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), out.bytes);
+}
+
+TEST(Vmad, EmptyVariableArrayThenTailParsesTheTailAsTrailingBytes) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "VariableScript");
+  vmad.u8(0);
+  vmad.u16(2);
+  wstring(vmad, "Before");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(7);
+  wstring(vmad, "Empty");
+  vmad.u8(16);
+  vmad.u8(1);
+  vmad.u32(0);
+  vmad.u8(0xEF);
+  vmad.u8(0x01);
+  const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_FALSE(scripts.unsupported);
+  EXPECT_EQ(scripts.trailing_bytes, 2u);
+  ASSERT_EQ(scripts.scripts.size(), 1u);
+  ASSERT_EQ(scripts.scripts[0].properties.size(), 2u);
+  EXPECT_EQ(scripts.scripts[0].properties[0].integer, 7);
+  EXPECT_EQ(scripts.scripts[0].properties[1].type, 16);
+  EXPECT_EQ(scripts.scripts[0].properties[1].element_count, 0u);
+  const auto actor = fo4::Signature::from_string("ACTI");
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, actor).trailing_data);
+  EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(vmad.bytes, actor).has_value());
+}

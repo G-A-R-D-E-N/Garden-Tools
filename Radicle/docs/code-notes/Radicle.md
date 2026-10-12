@@ -898,3 +898,11 @@ Parses every `Strings/*.STRINGS`, `*.DLSTRINGS` and `*.ILSTRINGS` entry in the g
 ## Radicle/tests/test_pex_corpus.cpp:EveryDataDirArchivePexRoundTripsByteIdentically
 
 Fallback for `FO4_DATA_DIR` when neither `FO4_PEX_CORPUS` nor `FO4_PEX_ARCHIVES` is set. It scans every general archive from `archive_load_order` for `.pex` entries instead of naming `Fallout4 - Misc.ba2`. On AE 1.11.240, `Fallout4 - Misc.ba2` holds 7875 PEX entries, and the DLC and some cc Main archives hold more, so the scan covers all of them. Found and identical counts are recorded per archive, and the same `roundTrip` and `expectClean` checks apply.
+
+## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
+
+The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
+
+## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
+
+Filters the stored LTEX GNAM list from `decode_landscape_grasses`. A null link is one whose owner is empty, as produced by `resolve_plugin_link` for a zero raw form ID. The stored list keeps every entry, including nulls. The view applies no slope, density or placement logic.
