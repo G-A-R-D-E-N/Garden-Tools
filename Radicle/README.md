@@ -20,7 +20,7 @@ Localized string-table support now covers `.STRINGS`, `.DLSTRINGS`, and `.ILSTRI
 
 Material files (`.bgsm` / `.bgem`) read and write byte-identically across the BGSM and BGEM version gates through `fo4/material/material_file.hpp`, the `radicle_material_file_*` C ABI and the `Radicle.Interop.MaterialFile` wrapper; see `docs/MATERIALS.md`.
 
-Still incomplete: broad typed/schema-driven record authoring, safe ESL compaction, remaining mixed-layout FormID surfaces such as NAVM/NAVI, plugin-field integration with localized string tables, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
+Still incomplete: broad typed/schema-driven record authoring, safe ESL compaction, NAVM/NAVI cover, waypoint and NG layout (the stored read surface and indexed geometry edits are in `docs/NAVM_NAVI.md`), plugin-field integration with localized string tables, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
 
 ## Build
 
