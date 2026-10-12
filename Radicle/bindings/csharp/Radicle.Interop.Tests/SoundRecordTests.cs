@@ -127,4 +127,31 @@ public class SoundRecordTests
         var marker = env.Winner(new FormKey("Sound.esm", 0x801))!.Value;
         Assert.Equal(new[] { @"sound\one.xwm", @"sound\two.wav" }, env.SoundFiles(marker));
     }
+
+    [Fact]
+    public void RateAndStandardChoosersFollowTheDeterministicRules()
+    {
+        var rates = new[] { new SoundRateFile(0, "zero.wav"), new SoundRateFile(420, "a.wav"), new SoundRateFile(540, "b.wav") };
+        Assert.Equal((int?)1, RadicleEnvironment.SelectRateFileIndex(rates, 479));
+        Assert.Equal((int?)2, RadicleEnvironment.SelectRateFileIndex(rates, 480));
+        Assert.Equal((int?)2, RadicleEnvironment.SelectRateFileIndex(rates, 1000));
+        Assert.Null(RadicleEnvironment.SelectRateFileIndex(new[] { new SoundRateFile(0, "zero.wav") }, 500));
+        Assert.Equal(0, RadicleEnvironment.SelectStandardFileIndex(1, 0, null));
+        Assert.Equal(0, RadicleEnvironment.SelectStandardFileIndex(1, 0, 0));
+        Assert.Equal(1, RadicleEnvironment.SelectStandardFileIndex(3, 0, 0));
+        Assert.Equal(0, RadicleEnvironment.SelectStandardFileIndex(3, 2, 2));
+        Assert.Throws<RadicleException>(() => RadicleEnvironment.SelectStandardFileIndex(1, 1, null));
+    }
+
+    [Fact]
+    public void DerivedControlsUseTheirBoundaryValues()
+    {
+        Assert.Equal(2.0, RadicleEnvironment.SoundFrequencyFactor(127));
+        Assert.Equal(0.1, RadicleEnvironment.SoundFrequencyFactor(-100));
+        Assert.True(RadicleEnvironment.SoundIsLooping(0x20));
+        Assert.False(RadicleEnvironment.SoundIsLooping(0x40));
+        Assert.Equal(1.0, RadicleEnvironment.SoundSidechainSend(255));
+        Assert.Equal(1.0, RadicleEnvironment.SoundSmallRumbleSend(0x0F));
+        Assert.Equal(1.0, RadicleEnvironment.SoundBigRumbleSend(0xF0));
+    }
 }

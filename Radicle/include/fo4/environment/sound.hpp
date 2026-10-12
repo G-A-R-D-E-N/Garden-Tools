@@ -72,5 +72,13 @@ FootstepData decode_footstep(const Environment& env, const RecordRef& ref);
 FootstepSetData decode_footstep_set(const Environment& env, const RecordRef& ref);
 std::array<std::uint32_t, 5> decode_footstep_counts(const Record& record);
 std::vector<std::string_view> resolve_sound_files(const Environment& env, const RecordRef& ref);
+std::optional<std::size_t> select_rate_file_index(const std::vector<SoundRateFile>& rate_files, std::uint32_t rpm);
+std::size_t select_standard_file_index(std::size_t count, std::size_t draw_index,
+                                       std::optional<std::size_t> previous_index);
+double sound_frequency_factor(std::int8_t frequency_shift);
+bool sound_is_looping(std::uint8_t loop_control);
+double sound_sidechain_send(std::uint8_t sidechain_control);
+double sound_small_rumble_send(std::uint8_t rumble_control);
+double sound_big_rumble_send(std::uint8_t rumble_control);
 
 }
