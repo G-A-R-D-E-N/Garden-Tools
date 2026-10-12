@@ -14,9 +14,9 @@ Evidence record: `RE-Work/subsystems/radicle-re-garden-tools/light-plugin-index-
 |---|---|---|
 | OG 1.10.163 | Verified statically (bytes and decompile) | Official table of 7 names |
 | AE 1.11.240 | Verified statically (bytes and decompile) | Official table of 8 names |
-| NG 1.10.984 | Decompile-only; no byte verification, no unpacked image | Same rules as OG by decompile; no separate claim |
+| NG 1.10.984 | Verified statically against the unpacked image by instruction comparison with AE (#520 comment 13470, evidence commit 78e013b2) | Same load-order assembly as AE, with the 7-name official table |
 
-`OfficialTable::og_ng` is the OG table and the NG decompile table. `OfficialTable::ae` adds `DLCDummy10thAnniversary.esm`. The installed-data test picks the AE table for 1.11.x builds and the OG/NG table otherwise.
+`OfficialTable::og_ng` is the OG table and the NG table. NG's official-name getter (`0x2157150`, id 2320241) compares the count with 7 where AE's (`0x22b4cc0`, id 4506392) compares with 8, and the NG and AE assembly routines (`0x295100`, `0x2e9020`) differ only in that count (#520 comment 13470, evidence commit 78e013b2). `OfficialTable::ae` adds `DLCDummy10thAnniversary.esm`. The installed-data test picks the AE table for 1.11.x builds and the OG/NG table otherwise.
 
 ## Plugin list
 

@@ -152,7 +152,7 @@ persistence point remain tracked separately in #174.
 
 ## TES4 bit 7 and plugin fields
 
-The container format is separate from plugin field classification. [TES4_LOCALIZATION_EVIDENCE.md](TES4_LOCALIZATION_EVIDENCE.md) establishes bit `0x80` set as external string IDs and clear as inline text in OG/AE, with static CK direction evidence. NG reader behavior, CK table emission and live behavior remain separate #390 questions. #29 is partial; complete localized editing also needs field-aware mutation and explicit sidecar ownership proof, not merely this flag classification.
+The container format is separate from plugin field classification. [TES4_LOCALIZATION_EVIDENCE.md](TES4_LOCALIZATION_EVIDENCE.md) establishes bit `0x80` set as external string IDs and clear as inline text in OG/AE, with static CK direction evidence. The NG 1.10.984 LString reader is verified to be AE's reader (NG `0x2FD0D0` and AE `0x3517C0` share Address Library id 2194235, 167/167 instructions; GARDEN-TOOLS #520 comment 13471, RE-007, evidence commit `78e013b2`, `RE-Work/subsystems/radicle-re-garden-tools/localized-strings-390-29/`). CK table emission and live behavior remain separate #390 questions. #29 is partial; complete localized editing also needs field-aware mutation and explicit sidecar ownership proof, not merely this flag classification.
 
 The current API boundary is:
 

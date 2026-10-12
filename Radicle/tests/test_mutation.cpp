@@ -442,7 +442,7 @@ TEST(Mutation, ReserveLocalFormKeyReportsAFullLightPluginAndAnOverflowedNextSepa
   EXPECT_NE(reserveError(0x1001u).find("is outside this plugin's local "), std::string::npos);
 }
 
-TEST(Mutation, LightPluginWithFfPrefixedHedrNextRefusesLocalRecord) {
+TEST(Mutation, LightPluginRefusesFfPrefixedHedrNextAboveTheLightCeiling) {
   auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF002F1Au, true, true), "Lifecycle.esl");
   const auto original = fo4::test::original_bytes(plugin);
   try {
@@ -455,15 +455,28 @@ TEST(Mutation, LightPluginWithFfPrefixedHedrNextRefusesLocalRecord) {
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
 
-TEST(Mutation, FullPluginWithFfPrefixedHedrNextRefusesLocalRecord) {
+TEST(Mutation, FullPluginMasksFfPrefixedHedrNext) {
   auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF002F1Au, false), "Lifecycle.esp");
-  const auto original = fo4::test::original_bytes(plugin);
-  try {
-    static_cast<void>(fo4::create_local_record(plugin, fo4::Signature::from_string("EYES")));
-    ADD_FAILURE() << "create_local_record allocated under a 0xFF-prefixed HEDR next";
-  } catch (const fo4::FormIdError& error) {
-    EXPECT_NE(std::string{error.what()}.find("is outside this plugin's local"), std::string::npos);
-  }
-  EXPECT_EQ(plugin.header.next_form_id, 0xFF002F1Au);
-  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+  const auto key = fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"));
+  EXPECT_EQ(key.local().value(), 0x2F1Au);
+  EXPECT_EQ(plugin.header.next_form_id, 0x2F1Bu);
+}
+
+TEST(Mutation, FullPluginClampsMaskedHedrNextBelowTheFloor) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000001u, false), "Lifecycle.esp");
+  const auto key = fo4::reserve_local_form_key(plugin);
+  EXPECT_EQ(key.local().value(), 0x801u);
+  EXPECT_EQ(plugin.header.next_form_id, 0x802u);
+}
+
+TEST(Mutation, LightPluginMasksFfPrefixedHedrNextInRange) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000ABCu, true, true), "Lifecycle.esl");
+  const auto key = fo4::reserve_local_form_key(plugin);
+  EXPECT_EQ(key.local().value(), 0xABCu);
+  EXPECT_EQ(plugin.header.next_form_id, 0xABDu);
+}
+
+TEST(Mutation, LoweredLightNextIgnoresTheFfPrefix) {
+  const auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000ABCu, true, true), "Lifecycle.esl");
+  EXPECT_FALSE(fo4::lowered_light_next_form_id(plugin).has_value());
 }
