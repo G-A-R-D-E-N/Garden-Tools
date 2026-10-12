@@ -48,6 +48,10 @@ void same_text(const std::optional<fo4::schema::LocalizedString>& source, const 
     EXPECT_EQ(text.string_id, *source->id);
     EXPECT_EQ(text.bytes, nullptr);
     EXPECT_EQ(text.size, 0u);
+  } else if (source->raw_id) {
+    EXPECT_EQ(text.kind, RADICLE_NAME_MALFORMED);
+    const auto* raw = reinterpret_cast<const std::byte*>(text.bytes);
+    EXPECT_EQ(std::vector<std::byte>(raw, raw + text.size), *source->raw_id);
   } else {
     EXPECT_EQ(text.kind, RADICLE_NAME_INLINE);
     same_bytes(source->text, text.bytes, text.size);

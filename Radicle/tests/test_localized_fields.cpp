@@ -242,12 +242,14 @@ TEST(LocalizedFields, RaceCallerKeepsNonFourBytePayloadWithoutId) {
   EXPECT_EQ(fo4::write_plugin(plugin), bytes);
 }
 
-TEST(LocalizedFields, QuestStructureCallerKeepsNonFourByteObjectiveTextWithoutId) {
+TEST(LocalizedFields, QuestStructureCallerReportsNonFourByteObjectiveTextAsMalformed) {
   auto plugin = fo4::test::quest_structure_plugin(true);
-  fo4::test::change_quest(plugin, [](fo4::Record& record) {
+  std::vector<std::byte> truncated;
+  fo4::test::change_quest(plugin, [&truncated](fo4::Record& record) {
     for (auto& subrecord : record.subrecords) {
       if (subrecord.signature == fo4::Signature::from_string("NNAM") && subrecord.data.size() == 4) {
         subrecord.data.resize(3);
+        truncated = subrecord.data;
         return;
       }
     }
@@ -274,13 +276,15 @@ TEST(LocalizedFields, QuestStructureCallerKeepsNonFourByteObjectiveTextWithoutId
   EXPECT_EQ(radicle_quest_structure_get_view(structure, &view), RADICLE_STATUS_OK);
   const bool has_one_objective = view.objective_count == 1u;
   const auto objective_text = has_one_objective ? view.objectives[0].text : radicle_quest_text{};
+  const auto* raw = reinterpret_cast<const std::byte*>(objective_text.bytes);
+  const std::vector<std::byte> objective_bytes(raw, raw + objective_text.size);
   radicle_quest_structure_destroy(structure);
   std::error_code error;
   std::filesystem::remove_all(root, error);
 
   ASSERT_TRUE(has_one_objective);
-  EXPECT_NE(objective_text.kind, RADICLE_NAME_STRING_ID);
+  EXPECT_EQ(objective_text.kind, RADICLE_NAME_MALFORMED);
   EXPECT_EQ(objective_text.string_id, 0u);
-  EXPECT_EQ(objective_text.bytes, nullptr);
-  EXPECT_EQ(objective_text.size, 0u);
+  EXPECT_EQ(objective_text.size, 3u);
+  EXPECT_EQ(objective_bytes, truncated);
 }
