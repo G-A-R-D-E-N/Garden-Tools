@@ -1531,6 +1531,8 @@ public unsafe struct DialogueInfo
     public int HasData;
     public ushort Flags;
     public ushort ResetTimeEncoded;
+    public int HasResetHours;
+    public double ResetHours;
     public FormKey PreviousTopic;
     public FormKey PreviousInfo;
     public FormKey SharedInfo;
@@ -1617,7 +1619,7 @@ public unsafe struct SceneInfo
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 36u;
+    public const uint CompiledAbiVersion = 37u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2248,6 +2250,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_scene_free")]
     public static extern void SceneFree(SceneInfo* scene);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_scene_action_type_name")]
+    public static extern IntPtr SceneActionTypeName(ushort type);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_scalar")]
     public static extern Status PluginSetSceneScalar(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint group_index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? value);

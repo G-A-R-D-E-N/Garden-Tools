@@ -59,6 +59,8 @@ typedef struct radicle_dialogue_info {
   int32_t has_data;
   uint16_t flags;
   uint16_t reset_time_encoded;
+  int32_t has_reset_hours;
+  double reset_hours;
   radicle_form_key previous_topic;
   radicle_form_key previous_info;
   radicle_form_key shared_info;
@@ -143,6 +145,7 @@ RADICLE_API radicle_status radicle_dialogue_info_decode(const radicle_env* env, 
 RADICLE_API void radicle_dialogue_info_free(const radicle_dialogue_info* info);
 RADICLE_API radicle_status radicle_scene_decode(const radicle_env* env, const radicle_record* record, const radicle_scene_info** out_scene);
 RADICLE_API void radicle_scene_free(const radicle_scene_info* scene);
+RADICLE_API const char* radicle_scene_action_type_name(uint16_t type);
 RADICLE_API radicle_status radicle_plugin_set_scene_scalar(radicle_plugin* plugin,
                                                            radicle_form_key key,
                                                            const char* path,

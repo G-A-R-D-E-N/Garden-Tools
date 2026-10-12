@@ -95,6 +95,7 @@ void info(const fo4::env::DialogueInfo& n, const radicle_dialogue_info& v) {
     EXPECT_EQ(v.flags, (*n.data)[0]);
     EXPECT_EQ(v.reset_time_encoded, (*n.data)[1]);
   }
+  optional_value(n.reset_hours(), v.has_reset_hours, v.reset_hours);
   key(n.previous_topic, v.previous_topic);
   key(n.previous_info, v.previous_info);
   key(n.shared_info, v.shared_info);
@@ -192,6 +193,7 @@ TEST_P(DialogueReal, EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentica
   ASSERT_EQ(count, refs.size());
   std::map<std::string, int> totals{{"DIAL", 0}, {"INFO", 0}, {"SCEN", 0}, {"SCEN_actions_with_ENAM", 0}};
   std::map<std::string, int> failures{{"DIAL", 0}, {"INFO", 0}, {"SCEN", 0}};
+  std::map<std::uint16_t, int> action_types;
   const auto* result = testing::UnitTest::GetInstance()->current_test_info()->result();
   int parts_seen = 0;
   const auto new_failed_parts = [&] {
@@ -224,6 +226,7 @@ TEST_P(DialogueReal, EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentica
         for (const auto& action : native.actions) {
           EXPECT_TRUE(action.end_phase.has_value());
           ++totals["SCEN_actions_with_ENAM"];
+          ++action_types[action.type];
         }
         const radicle_scene_info* value = nullptr;
         EXPECT_EQ(radicle_scene_decode(abi, records[i], &value), RADICLE_STATUS_OK);
@@ -242,6 +245,7 @@ TEST_P(DialogueReal, EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentica
   radicle_free_record_array(records);
   radicle_env_destroy(abi);
   for (const auto& [type, total] : totals) { RecordProperty(type, total); }
+  for (const auto& [type, total] : action_types) { RecordProperty("SCEN_action_type_" + std::to_string(type), total); }
   for (const auto& [type, failed] : failures) {
     RecordProperty(type + "_decode_failures", failed);
     EXPECT_EQ(failed, 0) << type;

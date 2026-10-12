@@ -13,7 +13,7 @@ public sealed record DialogueCondition(byte FlagsByte, uint ComparisonRaw, ushor
 public sealed record DialogueResponse(FormKey? Emotion, FormKey? Sound, byte Number, byte Unknown,
     ushort InterruptPercent, int CameraTargetAlias, int CameraLocationAlias, DialogueText Text,
     FormKey? SpeakerIdle, FormKey? ListenerIdle);
-public sealed record DialogueInfo(ushort? Flags, ushort? ResetTimeEncoded, FormKey? PreviousTopic,
+public sealed record DialogueInfo(ushort? Flags, ushort? ResetTimeEncoded, double? ResetHours, FormKey? PreviousTopic,
     FormKey? PreviousInfo, FormKey? SharedInfo, FormKey? InfoGroup, FormKey? Speaker, FormKey? StartScene,
     DialogueText Prompt, IReadOnlyList<DialogueResponse> Responses, IReadOnlyList<DialogueCondition> Conditions);
 public sealed record ScenePhase(string? Name, uint? EditorWidth, ushort? Flags, (short Start, short Completion)? QuestStages,
@@ -57,6 +57,7 @@ public sealed unsafe partial class RadicleEnvironment
                     r.InterruptPercent, r.CameraTargetAlias, r.CameraLocationAlias, DialogueTextValue(r.Text),
                     FormKey.FromNative(r.SpeakerIdle), FormKey.FromNative(r.ListenerIdle))).ToArray();
             return new(d->HasData == 0 ? null : d->Flags, d->HasData == 0 ? null : d->ResetTimeEncoded,
+                d->HasResetHours == 0 ? null : d->ResetHours,
                 FormKey.FromNative(d->PreviousTopic), FormKey.FromNative(d->PreviousInfo), FormKey.FromNative(d->SharedInfo),
                 FormKey.FromNative(d->InfoGroup), FormKey.FromNative(d->Speaker), FormKey.FromNative(d->StartScene),
                 DialogueTextValue(d->Prompt), responses, DialogueConditions(d->Conditions, d->ConditionCount));
@@ -88,4 +89,6 @@ public sealed unsafe partial class RadicleEnvironment
         }
         finally { RadicleNative.SceneFree(s); }
     }
+
+    public static string SceneActionTypeName(ushort type) => Utf8.Read(RadicleNative.SceneActionTypeName(type)) ?? string.Empty;
 }
