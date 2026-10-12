@@ -317,7 +317,8 @@ std::vector<PreflightIssue> preflight_authoring_record(
         "record must be a direct child of its matching top-level GRUP"));
   }
   const std::int32_t required_parent =
-      constraint->placement == RecordPlacement::quest_children   ? static_cast<std::int32_t>(GroupType::quest_children)
+      constraint->placement == RecordPlacement::cell_children ? static_cast<std::int32_t>(GroupType::cell_temporary_children)
+      : constraint->placement == RecordPlacement::quest_children   ? static_cast<std::int32_t>(GroupType::quest_children)
       : constraint->placement == RecordPlacement::topic_children ? static_cast<std::int32_t>(GroupType::topic_children)
                                                                  : -1;
   if (required_parent >= 0 && location.parent_group_type != required_parent) {
@@ -325,7 +326,9 @@ std::vector<PreflightIssue> preflight_authoring_record(
         record_key,
         location.record->header.signature.to_string(),
         "record_placement_invalid",
-        constraint->placement == RecordPlacement::quest_children
+        constraint->placement == RecordPlacement::cell_children
+            ? "record must be a direct child of a cell temporary children GRUP"
+            : constraint->placement == RecordPlacement::quest_children
             ? "record must be a direct child of a quest children GRUP"
             : "record must be a direct child of a topic children GRUP"));
   }

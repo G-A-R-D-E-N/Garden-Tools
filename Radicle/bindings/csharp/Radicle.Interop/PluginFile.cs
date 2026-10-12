@@ -71,6 +71,42 @@ public sealed unsafe class PluginFile : IDisposable
         Call.Check(RadicleNative.PluginSortMasters(use.Pointer, envUse.Pointer));
     }
 
+    public bool SetNavmeshVertex(FormKey record, int index, NavmeshVertex value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var at = Index(index);
+        return Edit(record, (plugin, s, key) =>
+        {
+            var native = new Native.NavmeshVertex { X = value.X, Y = value.Y, Z = value.Z };
+            return RadicleNative.PluginSetNavmeshVertex(plugin, key, at, &native);
+        });
+    }
+
+    public bool SetNavmeshTriangle(FormKey record, int index, NavmeshTriangle value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Vertices is not { Length: 3 } || value.Edges is not { Length: 3 })
+            throw new ArgumentException("A triangle requires three vertices and edges.", nameof(value));
+        var at = Index(index);
+        return Edit(record, (plugin, s, key) =>
+        {
+            var native = new Native.NavmeshTriangle { Clearance = value.Clearance, Traversal = value.Traversal, Flags = value.Flags };
+            for (var i = 0; i < 3; ++i) { native.Vertices[i] = value.Vertices[i]; native.Edges[i] = value.Edges[i]; }
+            return RadicleNative.PluginSetNavmeshTriangle(plugin, key, at, &native);
+        });
+    }
+
+    public bool SetNavmeshDoor(FormKey record, int index, NavmeshDoorLink value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var at = Index(index);
+        return Edit(record, (plugin, s, key) =>
+        {
+            var native = new Native.NavmeshDoorLink { Triangle = value.Triangle, Crc = value.Crc, Door = s.Key(value.Door) };
+            return RadicleNative.PluginSetNavmeshDoor(plugin, key, at, &native);
+        });
+    }
+
     public bool SetTransform(FormKey reference, Vector3 position, Vector3 rotation) =>
         Edit(reference, (plugin, s, key) =>
         {

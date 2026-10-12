@@ -1,4 +1,5 @@
 #include "fo4/schema/field_address.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -77,8 +78,16 @@ FieldSlots resolve_field_slots(const Record& record,
 
   for (const auto index : candidates) {
     const auto& data = record.subrecords[index].data;
-    const bool sized = data.size() >= shape.minimum_payload_size &&
-                       (shape.payload_size == 0 || data.size() == shape.payload_size);
+    bool sized = data.size() >= shape.minimum_payload_size &&
+                 (shape.payload_size == 0 || data.size() == shape.payload_size);
+    if (record.header.signature == Signature::from_string("NAVI") &&
+        shape.subrecord == Signature::from_string("NVMI")) {
+      sized = sized && navmesh_mixed_formid_offsets(record, record.subrecords[index]).has_value();
+      const auto version = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& sub) {
+        return sub.signature == Signature::from_string("NVER");
+      });
+      sized = sized && version != record.subrecords.end() && version->data.size() == 4;
+    }
 
     if (shape.whole_payload) {
       FieldSlot slot{index, 0, false, false};
