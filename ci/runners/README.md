@@ -25,6 +25,9 @@ Installed on the runner host under the runner host path (example) `C:\tools\forg
 | `garden-linux-wsl`, `garden-tools-linux-wsl-dedicated` (WSL) | self-hosted, Linux, X64, garden | 2 each | `DOTNET_INSTALL_DIR=/home/nomad/.dotnet` (no sudo for `/usr/share/dotnet`), `CMAKE_BUILD_PARALLEL_LEVEL=4` |
 | `gardenengine-win-runner-2` (`Gitrunners\windows-garden-engine-source-forgejo`) | self-hosted, Windows, X64, gardenengine, windows-2022, windows-latest | 2 | only `windows-2022` runner for GardenEngine |
 | `gardenengine-ubuntu-runner-2`, `garden-engine-ubuntu-runner` (WSL) | self-hosted, Linux, X64, gardenengine, ubuntu-latest, ubuntu-24.04 | 1 each | the second one previously had only the ubuntu-* labels |
+| `fo4-data` (the user's PC GARDEN runner) | fo4-data | - | `FO4_DATA_DIR` (the Steam `Fallout 4\Data` folder) in the runner config `envs`; only `native-windows-real-data` runs on it |
+
+`native-ci.yml` on main no longer reads the repo variable `FO4_DATA_DIR_WINDOWS`. Leave it unset so branches from before PR #480 print that it is unset and skip the real-data tests. The `fo4-data` runner has only that label, so the `FO4_DATA_DIR` it exports reaches only the real-data job.
 
 All Windows runners: `workdir_parent: C:\ci\act`, HOME/TEMP/APPDATA under the `C:\ci\home`
 junction, no HTTP(S) proxy. Linux runners keep a per-runner `workdir_parent` under

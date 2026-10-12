@@ -5,6 +5,7 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/signature.hpp"
+#include "../plugin/record_edit.hpp"
 
 #include <algorithm>
 #include <array>
@@ -40,15 +41,7 @@ constexpr auto k_dalc = Signature::from_string("DALC");
 constexpr std::uint16_t k_weather_legacy_cloud_form_version = 35;
 constexpr std::uint32_t k_cloud_tex_base = Signature::from_string("00TX").packed();
 
-Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
-  Record* found = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (found == nullptr && record.header.signature != sig_tes4 && record.form_key == key) {
-      found = &record;
-    }
-  });
-  return found;
-}
+using fo4::detail::find_mutable_record;
 
 void mark_modified(Plugin& plugin, Record& record) {
   record.original_range.clear();
@@ -173,8 +166,7 @@ PluginKind resolve_master_kind(const PluginKey& owner,
                                std::span<const Plugin* const> environment) {
   for (const auto* candidate : environment) {
     if (candidate == nullptr || candidate->key != owner) continue;
-    return candidate->header.tes4_flags.is_small_file() ? PluginKind::light
-                                                       : PluginKind::full;
+    return classify_plugin_kind(candidate->header.tes4_flags, candidate->key);
   }
   return owner.looks_light() ? PluginKind::light : PluginKind::full;
 }

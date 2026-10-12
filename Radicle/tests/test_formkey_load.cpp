@@ -51,6 +51,21 @@ TEST(FormKeyLoad, EspSmallFileSetsCurrentKindLight) {
   EXPECT_EQ(ctx.masters[0].kind, fo4::PluginKind::full);
 }
 
+TEST(FormKeyLoad, EslExtensionWithoutLightFlagSetsCurrentKindLight) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto plugin = fo4::read_plugin(out.bytes, "Extension.esl");
+  EXPECT_FALSE(plugin.header.tes4_flags.is_small_file());
+  EXPECT_EQ(fo4::plugin_form_id_context(plugin).current_kind, fo4::PluginKind::light);
+}
+
 TEST(FormKeyLoad, FindRecordByFormKey) {
   const auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
   const auto* spell =

@@ -195,9 +195,8 @@ the reconstructed DDS header), the name/extension/directory hashes, and for
 DX10 the six texture info fields and each chunk's mip range. This does not
 require byte-identical archive padding. `docs/BA2.md` records the named fixture files (checked by `Ba2NamedRealData`)
 and the totals printed by `tools/corpus/ba2_measure.py`. The test reads game
-data only through `FO4_DATA_DIR` and runs only when it is set. CI sets it from
-`FO4_DATA_DIR_WINDOWS` in the Windows Release pass of `native-ci`; the Windows Debug
-pass clears it. The Linux job passes `FO4_DATA_DIR_LINUX`, which is currently unset,
+data only through `FO4_DATA_DIR` and runs only when it is set. In CI
+the `fo4-data` runner supplies it to the `native-windows-real-data` job of `native-ci`; both `native-windows-tests` passes clear it. The Linux job passes `FO4_DATA_DIR_LINUX`, which is currently unset,
 so the test skips there. Missing data or a
 missing named archive skips without committing payloads. A present archive whose
 version, kind or entry count differs fails the test.
@@ -312,6 +311,90 @@ Deliberate policy: `src/environment/navmesh.cpp:decode_navmesh_info` requires NA
 that only the measured version-15 grammar is written; widen it only with evidence for
 other versions.
 
+## src/environment/behavior.cpp:decode_package
+
+The private loader record at
+[packages-combat-idle-407-345/README.md](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md)
+commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 Q1, stamps
+the OG loader at address 0x719180 and schedule consumer at 0x71EC30. xEdit types PSDT duration as unsigned u32 minutes (`source:xEdit Core/wbDefinitionsFO4.pas:10569 @93cc0bc5`, `wbInteger('Duration (Hours)', itU32, wbDiv(60, 4))`), and `decode_package` keeps the raw u32, so 0xFFFFFFFF stays 4294967295 and is not read as -1. Whether the OG schedule consumer reads it as signed is an RE question (RE #407), not settled by xEdit.
+PKDT's final u16 is exposed as an unnamed trailing value rather
+than discarded. Raw signed month/hour/minute bytes remain unchanged;
+legacy month adjustment and schedule execution are not simulated.
+
+## src/environment/dialogue.cpp:decode_scene
+
+Stored action-header SNAM/ENAM are four-byte unsigned values in pinned xEdit
+`93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas:9010-9011`.
+The seven-master corpus test caught the incorrect two-byte requirement. Native,
+C and C# preserve all 32 stored bits, including values above 65535. The private
+record `https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/dialogue-scenes-405-344/README.md`
+stamps OG runtime action storage/range use at addresses 0x5975E0/0x597910 as 16-bit;
+that runtime representation does not establish the on-disk field size. Action
+payload SNAM after the header remains opaque. SCQS values keep schema-derived
+labels only; no quest-stage execution behavior is implemented.
+
+## src/formid.cpp:classify_plugin_kind
+
+`src/formid.cpp:classify_plugin_kind` is the single light test: TES4 SmallFile flag or a case-insensitive `.esl` file name. xEdit does the same: `source:xEdit Core/wbLoadOrder.pas:363-364 @93cc0bc5` forces the light flag from the `.esl` extension, and `source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5` sets the light state for an `.esl` module. Callers with a loaded plugin's header and name use it: `src/environment/environment.cpp:kind_of`, `src/plugin/reader.cpp:plugin_form_id_context` and `stamp_master_kinds`, `src/plugin/master_kinds.cpp:stamp_master_kinds_from_files`, `src/plugin/load_order.cpp:build_runtime_form_id_context`, `src/forms/weather_concept.cpp:resolve_master_kind`, and `src/plugin/mutation.cpp:local_form_id_range` and `owner_kind`. Name-only sites keep `PluginKey::looks_light`: TES4 master references in `src/plugin/tes4.cpp`, the PluginKey overload of `src/plugin/writer.cpp:remap_plugin_masters`, and the fallback branches of `owner_kind`. The stranded-record check in `remap_plugin_masters` uses `classify_plugin_kind`, because xEdit sets light for an `.esl` module on save (`source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5`); test `tests/test_extension_light_kinds.cpp:EslExtensionWithoutFlagRejectsRemovingLastMasterWithLowIds`. `src/plugin/writer.cpp:make_empty_plugin` sets the flag from the extension when it creates a file. `src/forms/placed_reference_copy.cpp:owner_kind` calls it for the owner-is-source branch. Tests: `tests/test_formid.cpp:ClassifyPluginKindUsesLightFlagOrEslExtension`, `tests/test_formkey_load.cpp:EslExtensionWithoutLightFlagSetsCurrentKindLight`, `tests/test_master_kinds.cpp:StampsEslExtensionWithoutLightFlagFromFile`, `tests/test_master_kinds.cpp:StampsEslExtensionWithoutLightFlagFromLoadedPlugin`, `tests/test_environment.cpp:EslExtensionWithoutLightFlagIsLightInPluginInfo`, `tests/test_mutation.cpp:EslExtensionWithoutLightFlagUsesLightRange`.
+
+`src/formid.cpp:is_master_plugin` is the master-status twin: an `.esm` or `.esl` name counts as master (`PluginKey::looks_master`), as xEdit sets ESM for both (`source:xEdit Core/wbImplementation.pas:5301-5306 @93cc0bc5`). It backs `info.master_flag` in `src/environment/environment.cpp:Environment::load` and the PluginEditTool master checks. The dirty-plugin ONAM gate in `src/plugin/writer.cpp:write_plugin` uses it too; see that section below.
+
+## src/plugin/load_order.cpp:build_runtime_form_id_context
+
+Runtime classification uses TES4 SmallFile or the case-insensitive `.esl` extension, as the verified OG/AE header paths establish in `docs/RUNTIME_PLUGIN_INDEX_EVIDENCE.md`. The supplied order is already enabled and resolved by the caller. Existing safe table caps and duplicate refusal remain Radicle policy; no unverified engine sorting or overflow behavior is added. `tests/test_load_order.cpp:EslExtensionAssignsALightSlotWithoutChangingHeaderFlags` checks both classification sources and independent positions.
+
+## src/forms/weather.cpp:resolve_master_kind
+
+Weather master insertion uses the same flag-or-extension classification when the target plugin is present in the supplied environment. `tests/test_weather_concept.cpp:MnamExtensionOnlyLightMasterInsertion` checks the resulting master kind and decoded reference without changing the source header. Evidence: `docs/RUNTIME_PLUGIN_INDEX_EVIDENCE.md`.
+
+## src/schema/localized_fields.cpp:read_localized_string
+
+The existing flag-and-schema classification matches the verified OG read direction, summarized by `docs/TES4_LOCALIZATION_EVIDENCE.md`. `tests/test_localized_fields.cpp:BitSevenSelectsRepresentationForTheSameFourBytes` distinguishes identical bytes by plugin state and preserves both representations. `ZeroExternalIdIsPreservedWithoutTextLookup` preserves the empty-ID representation without inventing a sidecar lookup. No production decoder or semantic API rename is required for this evidence slice.
+
+Matches xEdit (owner decision): xEdit sizes a localized element at `Min(4, remaining)` (`TwbLStringDef.GetSize`, Core/wbInterface.pas:20967 at xEdit 93cc0bc5), but `TwbLStringDef.ToStringNative` treats any payload that is not exactly four bytes as `lstring ID is not Int32` and resolves nothing (Core/wbInterface.pas:21006-21010). Radicle loads such a payload, exposes no ID (`localized()` is false, no text), and keeps the bytes in `raw_id`, so `write_localized_string` writes them back unchanged. Editing the field creates a new value with an ID, which encodes as a normal four-byte ID. The environment name paths (`Radicle/src/environment/environment.cpp`, `placed.cpp`) already treat a non-four-byte localized FULL as malformed and resolve nothing. Test: `Radicle/tests/test_localized_fields.cpp:NonFourByteLocalizedPayloadHasNoIdAndRoundTrips`. Quest stages stay fail-closed for a non-four-byte localized CNAM: `Radicle/src/forms/quest_stages.cpp:decode_quest_stages` throws `QUST CNAM is localized and must be exactly four bytes`, as it did on 2981dc0b, because PET's stage edit rebuilds stages from JSON and would drop those bytes. Test: `Radicle/tests/test_quest_stages.cpp:LocalizedLogTextMustBeFourBytes`. Objectives are not changed: their NNAM is written back unmodified, so the raw bytes round-trip.
+
+- Callers of a non-four-byte localized payload (`Radicle/src/forms/armor.cpp:optional_localized` and `optional_localized_before`, `Radicle/src/forms/race.cpp:optional_localized`, `Radicle/src/c_api_quest_structure.cpp:localized`): the typed decoders keep the `raw_id` value without throwing, and their writers return it unchanged. The C quest view reports such an objective NNAM as `RADICLE_NAME_MALFORMED` with its raw bytes; see `src/c_api_quest_structure.cpp:localized`. Tests: `Radicle/tests/test_localized_fields.cpp:ArmorCallerKeepsNonFourBytePayloadWithoutId`, `RaceCallerKeepsNonFourBytePayloadWithoutId`, `QuestStructureCallerReportsNonFourByteObjectiveTextAsMalformed`.
+
+## src/c_api_quest_structure.cpp:localized
+
+GT-226: a localized quest text whose payload is not four bytes (`LocalizedString::raw_id`, see `src/schema/localized_fields.cpp:read_localized_string`) is reported as `RADICLE_NAME_MALFORMED` with its raw bytes, matching the environment view (`src/c_api_env.cpp`). Before this, it showed as `RADICLE_NAME_INLINE` with null bytes and size 0, which hid the bad data. The bytes live in the snapshot's `radicle_quest_structure::strings` deque, so they stay valid until `radicle_quest_structure_destroy`. C# exposes them as `QuestStoredText.MalformedBytes` (`bindings/csharp/Radicle.Interop/QuestStructure.cs:QuestStructure`). Tests: `Radicle/tests/test_localized_fields.cpp:QuestStructureCallerReportsNonFourByteObjectiveTextAsMalformed`, `bindings/csharp/Radicle.Interop.Tests/QuestStructureTests.cs:ShortLocalizedObjectiveTextIsReportedAsMalformed`.
+
+## src/plugin/reader.cpp:inflate_record_payload
+
+Only zlib framing (`MAX_WBITS`) is accepted; the raw-deflate retry is removed after the verified OG inflater record summarized in `docs/COMPRESSION_EVIDENCE.md` established zlib framing. The size guards match PR #462 (GT-138): the declared size is refused above `compressed.size() * 1032 + 64` and above `k_max_record_uncompressed_bytes` (1 GiB) before the single output allocation. `docs/COMPRESSION_EVIDENCE.md` states the source and remaining version/length limits. `tests/test_compression.cpp:Compression.RawDeflateAndGzipFramingLoadsUndecodable` and `BadZlibChecksumLoadsUndecodable` cover framing; `tests/test_reader_limits.cpp:ReaderLimits.CompressedUncompressedSizeBeyondZlibBoundLoadsUndecodable` and `tests/test_compression.cpp:Compression.OversizedDeclaredSizeLoadsUndecodable` cover the guards, which load the record as undecodable (see the `read_record` note). The existing zero-size early return and produced-length behavior remain outside this change.
+
+A compressed record whose content cannot be decoded (zlib failure, either size cap, or a parse failure on the inflated bytes) no longer fails the plugin read unless it is TES4. See `src/plugin/reader.cpp:read_record` below for the behavior and the xEdit comparison.
+
+## Radicle/src/plugin/reader.cpp:read_record / Radicle/src/plugin/writer.cpp:write_record / remap_plugin_masters
+
+GT-205 PR1 (owner decisions D1, D2, D5 and D6, 2026-10-11). `read_record` catches `parse_error` for the compressed branch after the 4-byte framing check. That is the exception `inflate_record_payload` throws for the zlib failure and both size caps (`1032x+64` and 1 GiB, checked before the output allocation), and the one `parse_subrecords` throws on the inflated bytes. `std::bad_alloc` from the output buffer is not caught, so an allocation failure still fails the read. A caught record keeps its header, original range, `compressed` flag and declared `uncompressed_size`, gets `undecodable = true`, and has empty `subrecords`. The framing check (payload under 4 bytes) and every uncompressed record stay strict. A TES4 record is rethrown, so a corrupt compressed TES4 still fails the plugin.
+
+Write-back: `write_record` emits the raw bytes unchanged while the record keeps its original range, so an untouched undecodable record is byte-identical on save. If a path clears that range, `write_record` throws `std::invalid_argument` naming the record instead of serializing an empty record.
+
+Remap: `remap_plugin_masters` refuses the whole operation with `std::invalid_argument`, before any change, when any record is undecodable. The message gives the count and the first record's form key. `sort_plugin_masters` and the C `radicle_plugin_remap_masters` inherit the refusal; the C wrapper maps it to `RADICLE_STATUS_INVALID_ARGUMENT`. Skipping the record would leave master-indexed form IDs in its raw bytes while the rest of the plugin is rewritten.
+
+D6: a stream that inflates to fewer bytes than declared is still accepted. That matches the game evidence in `docs/COMPRESSION_EVIDENCE.md`, but a plausible prefix can then display; this is a follow-up for GT's display. Edit refusal beyond the writer check is GT-205 PR2; see `src/plugin/record_edit.hpp:require_plugin_decodable` and the PR2 section below for what is and is not yet guarded.
+
+xEdit comparison: `TwbMainRecord.DecompressIfNeeded` (source:xEdit Core/wbImplementation.pas:10273-10306 @93cc0bc5) logs `<Error decompressing ...>`, sets both data pointers to nil and keeps the record with no data. Radicle loads it the same way but is stricter on save: it keeps the raw bytes, where xEdit's save path (`wbImplementation.pas:14826-14838`) re-serializes the record from its now-empty subrecords.
+
+Tests: `tests/test_undecodable_record.cpp` (load, sibling decode, dirty write-back, writer net, remap refusal, C API `INVALID_ARGUMENT`, strict TES4, expansion-bound size). Flipped from strict: `tests/test_compression.cpp:Compression.RawDeflateAndGzipFramingLoadsUndecodable`, `BadZlibChecksumLoadsUndecodable`, `CorruptCompressedPayloadLoadsUndecodable`, `OversizedDeclaredSizeLoadsUndecodable`; `tests/test_reader_limits.cpp:ReaderLimits.CompressedUncompressedSizeBeyondZlibBoundLoadsUndecodable`.
+
+## Radicle/include/fo4/plugin/container.hpp:require_decodable / Radicle/src/plugin/record_edit.hpp:require_plugin_decodable
+
+GT-205 PR2 (owner decisions D3 and D7, 2026-10-12). `require_decodable` throws `std::invalid_argument` ("record <SIG> <form key> is undecodable; edits are refused") for an undecodable record and does nothing otherwise. It lives in the public `container.hpp` because the inline `set_record_conditions` in `include/fo4/plugin/mutation.hpp:set_record_conditions` must call it. `require_plugin_decodable` (`src/plugin/record_edit.hpp:require_plugin_decodable`) is the plugin-wide refusal: while any record in the plugin is undecodable, `delete_local_record` and `renumber_local_record` (`src/plugin/mutation.cpp`) refuse the whole operation. A FormLink stored in raw bytes cannot be seen or rewritten, so a reference scan or a rekey is not proof. The message names the count and the first undecodable form key.
+
+Shared lookups: `detail::find_mutable_record_in` (`src/plugin/record_edit.hpp:find_mutable_record_in`) calls `require_decodable` on the match and skips TES4, so `find_mutable_record` and `locate_mutable_record` inherit the check. The per-domain copies of `find_mutable_record` in `src/forms/{armor,armor_edit,components,eyes,leveled_spell,leveled_spell_creation,proj_expl_hazd,quest_alias_edit,race,race_body,weather}.cpp` and `src/schema/{condition_scopes,nested_formlink_lists}.cpp` were removed and replaced by a `using` of the shared helper. They had the same first-match, skip-TES4 body, and each caller still throws its own not-found error. `mutable_quest` (`src/forms/quest_objectives.cpp:mutable_quest`, `src/forms/quest_stages.cpp:mutable_quest`) keeps its own last-match QUST loop and `QuestError`, and adds `require_decodable` on the match, because a plugin can repeat a form ID across record types and the shared first-match lookup would pick a different record. `require_wthr_record` (`src/forms/weather.cpp:require_wthr_record`) keeps its `WeatherError` and calls the shared helper. `find_top_level_record` (`src/plugin/mutation.cpp:find_top_level_record`) checks its match.
+
+Guarded paths, each before the first write: `set_climate_timing` (`src/environment/base_records.cpp:set_climate_timing`), `set_placed_reference_transform` (`src/forms/placed_reference.cpp:set_placed_reference_transform`), `edit_placed` (`src/forms/placed_reference_edit.cpp:edit_placed`), `set_record_editor_id` and `copy_record_as_override` on both the source and the overwrite target (`src/plugin/mutation.cpp:set_record_editor_id`, `src/plugin/mutation.cpp:copy_record_as_override`), `insert_nested_copy` on the source cell and world and on the existing destination cell and world (`src/plugin/copy_hierarchy.cpp:insert_nested_copy`), `remap_form_links` as a whole-plugin pre-scan so nothing is rewritten first and `rekey_form_links` per record on its working copy (`src/schema/form_links.cpp:remap_form_links`, `src/schema/form_links.cpp:rekey_form_links`), `identical_previous` skipping an undecodable record or an undecodable master record so neither is listed as ITM (`src/plugin/maintenance.cpp:identical_previous`), and `remove_records` refusing an undecodable target (`src/plugin/maintenance.cpp:remove_records`). `records_removed_by_delete` is read-only and is not guarded.
+
+Guarded (D7): `src/forms/placed_reference_copy.cpp:copy_record_for_destination` calls `require_decodable` on the source record, which covers the source REFR, CELL, WRLD and INFO copies of all three copy functions. `src/forms/placed_reference_copy.cpp:replace_record` calls it on the overwrite target before the replacement. `src/forms/placed_reference_copy.cpp:copy_placed_reference_as_override` calls it on the destination WRLD after the world is ensured and on the destination CELL before its children group is ensured; `src/forms/placed_reference_copy.cpp:copy_placed_reference_as_new` calls it on the destination WRLD, when the cell is exterior, and on the destination CELL at the same point; `src/forms/info_copy.cpp:copy_info_as_new` calls it on the destination DIAL before its topic children group is ensured. `ensure_cell_children_group` and `ensure_topic_children_group` take a group rather than the parent record, so the parent check sits at each call site. The split that brought the file under the 750-line gate moved `Radicle/src/forms/info_copy.cpp:copy_info_as_new` and the helpers only it used into `info_copy.cpp`. Helpers both files use are declared in `Radicle/src/forms/placed_reference_copy_internal.hpp` (namespace `fo4::forms::detail`) and defined in `src/forms/placed_reference_copy.cpp`. The public declarations are unchanged.
+
+Tests: `tests/test_undecodable_edit.cpp` covers `SetRecordScalarRefusesUndecodableRecord`, `SetWeatherMnamRefusesUndecodableWeather`, `SetRecordConditionsRefusesUndecodableRecord`, `SetRecordEditorIdRefusesUndecodableRecord`, `CopyAsOverrideRefusesUndecodableSource`, `CopyAsOverrideRefusesUndecodableOverwriteTarget`, `DeleteRefusesUndecodableRecord`, `DeleteRefusesOtherRecordWhilePluginIsUndecodable`, `RenumberRefusesUndecodableRecord`, `RenumberRefusesOtherRecordWhilePluginIsUndecodable`, `RemoveRecordsRefusesUndecodableRecord`, `FindIdenticalToMasterSkipsUndecodableRecord`, `PlacedReferenceCopyRefusesUndecodableSource`, and `PlacedReferenceOverwriteRefusesUndecodableTarget`. Each refusal test checks the throw, that the undecodable record is still undecodable with no subrecords, and that the plugin's output bytes (forced through the dirty write path) equal the original. `FindIdenticalToMasterSkipsUndecodableRecord` checks that an identical valid master override is listed and the undecodable one is not. The two placed-reference tests build an interior CELL with a REFR in its temporary children group; the overwrite test reaches the `replace_record` guard.
+
+## tests/test_compression.cpp:CompressedExtendedSubrecordPreservesPhysicalMarker
+
+The test preserves the physical `XXXX` marker and the expanded payload, while the verified runtime header reader presents only the next logical chunk. `OfficialMastersUseZlibAndPreserveBytes` reads the seven named masters and reconstructs the unmodified plugin from original record/group ranges; it skips when `FO4_DATA_DIR` is unset. Evidence: `docs/COMPRESSION_EVIDENCE.md`.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children
@@ -360,10 +443,17 @@ Unknown four-byte signatures use reversible Latin1 in managed snapshots.
 
 A `radicle_record` handle is only meaningful to the environment that produced it: it
 is a pointer to one of that environment's own `RecordRef` versions, and the plugin
-index it carries is an index into that environment's plugin list. All four exports
-therefore call `src/c_api_records.cpp:belongs_to_env` first, which looks the record's
+index it carries is an index into that environment's plugin list. All ten exports
+therefore call `src/c_api_env_internal.hpp:belongs_to_env` first, which looks the record's
 FormKey up in `env->value.versions` and compares addresses. That is the same
-pointer-identity test `radicle_record_topic_children` already used, now shared.
+pointer-identity test `radicle_record_topic_children` already used, now shared. The
+package, combat-style and idle exports (`src/c_api_behavior.cpp:radicle_package_decode`,
+`radicle_combat_style_get_info`, `radicle_idle_decode`) run the same check after their
+null checks and before decoding, with the same `INVALID_ARGUMENT` status and message. A
+rejected package or idle output is left unchanged, and a rejected combat-style output keeps its
+caller value.
+The dialogue decode exports (`src/c_api_dialogue.cpp:radicle_dialogue_topic_get_info`, `radicle_dialogue_info_decode`,
+`radicle_scene_decode`) run the same check before any output is cleared, so a rejected INFO or SCEN output keeps its caller value.
 `ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
 handle from a second live environment resolved through the supplied environment:
 `ResolveFormId` read `env->value.plugins().at(ref.plugin)` from the wrong plugin list
@@ -394,9 +484,26 @@ bindings/csharp/Radicle.Interop.Tests/RecordReadTests.cs verifies override choic
 duplicate unknown bytes, empty payloads, master/self/null/invalid FormIDs and
 managed byte ownership after disposal. This is not a decoded UI-content claim.
 
+## src/c_api_dialogue.cpp:radicle_dialogue_topic_get_info / radicle_dialogue_info_decode / radicle_scene_decode
+
+These three exports take a `radicle_record` handle like the record readers above, so
+they check it with `src/c_api_env_internal.hpp:belongs_to_env` before decoding, and
+refuse a handle from another live environment with `RADICLE_STATUS_INVALID_ARGUMENT`
+and the same message the record readers use. Without the check a foreign DIAL, INFO
+or SCEN handle decoded through the supplied environment's plugin and link tables, the
+same wrong-answer path `ResolveFormId` had. The helper moved from
+`src/c_api_records.cpp` into the shared internal header so every caller uses one
+definition. `Radicle/tests/test_dialogue_writer_c_api.cpp:DecodeRefusesRecordsFromAnotherEnvironment`
+loads one plugin into two environments, requires both foreign decodes to refuse with
+null outputs, and requires the owner environment to still decode the DIAL.
+
 ## src/schema/form_links.cpp:visit_link_offsets
 
 Record-aware classification precedes generic signature-only handling for the current copy work.
+
+## src/schema/form_links.cpp:visit_link_offsets (SCEN action Topic DATA)
+
+`src/schema/form_links.cpp:visit_link_offsets` with `src/schema/non_formid_slots.cpp:scene_action_topic_data`: SCEN `DATA` is a Topic form ID only in a Dialogue (type 0) or Radio (type 6) action, `wbFormIDCk(DATA, 'Topic', [DIAL,NULL])` at source:xEdit Core/wbDefinitionsFO4.pas:9014 and :9096 @93cc0bc5. The action type is the last 2-byte `ANAM` before the subrecord (`src/schema/non_formid_slots.cpp:scene_action_type`), as xEdit reads it through `wbSceneActionTypeDecider` (source:xEdit Core/wbDefinitionsCommon.pas:5403 @93cc0bc5) and the `ANAM` 'Type' field at source:xEdit Core/wbDefinitionsFO4.pas:8956 @93cc0bc5. The empty closing `ANAM` marker (`wbMarkerReq(ANAM)`, source:xEdit Core/wbDefinitionsFO4.pas:9103 @93cc0bc5) has no 2-byte payload, so it ends the type for later subrecords. SCEN has no top-level `DATA`, so no other `DATA` is visited. `DATA` is not in the generic `formid_subrecords.inc` table, so before this rule a cross-plugin remap left topic links pointing at the old master index. Under strict remap a `DATA` in these actions whose payload is not 4 bytes throws instead of being skipped.
 
 ## src/schema/form_links.cpp:visit_coed_formids
 
@@ -428,7 +535,7 @@ Whole-array replace copies the plugin, rewrites VMAD alias object IDs against th
 
 Whole-array replace remaps fragment Stage by INDX identity or unique body match, then splices. StageIndex and unrelated VMAD bytes stay identical.
 
-## src/forms/placed_reference_copy.cpp:copy_info_as_new
+## src/forms/info_copy.cpp:copy_info_as_new
 
 The contained copy validates its ancestry on a working copy before committing changes.
 
@@ -449,9 +556,9 @@ Whole-load-order "Check for Errors" (#359, xEdit parity). Findings come only fro
 
 ## src/graph/check_errors.cpp:slot_targets
 
-Resolves the allowed target signatures for a `(record, subrecord, offset)` slot. Generated FormLink fields are tried first through `src/schema/formlink_slots.cpp:formlink_field_at`. An unguarded field matches by its static offset (or stride), as before. A guarded field (variant, `FieldAddress::when`) matches only when `src/schema/field_address.cpp:resolve_field_slots` reports a valid slot at that offset, so the selector byte decides which variant is in force. When the selected variant is not a FormLink, or the selector is absent, no field matches and the slot stays unproven (`unresolved_link` is then only a warning). Generated FormLink lists are tried after fields, unchanged.
+Resolves the allowed target signatures for a `(record, subrecord, ordinal, offset)` slot. Generated FormLink fields are tried first through `src/schema/formlink_slots.cpp:formlink_field_at`. An unguarded field matches by its static offset (or stride), as before. A guarded field (variant, `FieldAddress::when`) matches only when `src/schema/field_address.cpp:resolve_field_slots` reports a valid slot at that offset, so the selector byte decides which variant is in force. When the selected variant is not a FormLink, or the selector is absent, no field matches and the slot stays unproven (`unresolved_link` is then only a warning). Generated FormLink lists are tried after fields, unchanged.
 
-Every entry in `include/fo4/schema/generated_formlink_lists.inc` is `FieldAddress{}`, so no real row is guarded yet (GT-018). The variant branch is covered only by `CheckErrors.VariantFormLinkSlotIsProvenOnlyForSelectedVariant` in `tests/test_check_errors.cpp`, which uses a synthetic guarded copy of `EXPL\Light`. `check_load_order` itself still reads the generated tables, so an end-to-end wrong-signature variant error has no test until a guarded row exists.
+Guarded rows now exist (PACK `PTDA` TargetReference/TargetObject/TargetKeyword/TargetUnknownKeyword, selected by the type at offset 0). A guarded field is matched per subrecord instance: the hit's `FormLinkHit::subrecord_ordinal` picks the instance, and the resolved slot's `FieldSlot::subrecord` must be that instance (GT-228). Covered by `CheckErrors.VariantFormLinkSlotIsProvenOnlyForSelectedVariant`, `CheckErrors.RepeatedVariantSubrecordUsesItsOwnSelector` and `CheckErrors.RepeatedVariantSubrecordTargetsAreCheckedPerInstance` in `tests/test_check_errors.cpp`.
 
 ## src/graph/check_errors.cpp:find_leveled_list_cycles
 
@@ -550,12 +657,40 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 - CELL `XCWT`: the cell's water type.
 
 `c_api_env.h` was at the file-size limit, so the typed record decoders moved to `include/fo4/c_api_records.h`, which includes the environment header for the shared types; `generate_interop.py` reads it, and the generated bindings and layout probe are regenerated from the headers, so `radicle_csharp_interop_up_to_date` still holds. Tests: `Radicle.Interop.Tests/HlodFieldTests.cs` builds a plugin with these subrecords and checks every field, including a STAT without `MNAM` and the four-slot ceiling.
+# Dialogue and scene read slice
+
+`src/environment/dialogue.cpp:decode_dialogue_topic`, `decode_dialogue_info` and `decode_scene` use the pinned disk layouts and measured marker grammar in `docs/DIALOGUE_SCENES.md`. Scope readers keep repeated scene and response tags separate. Scene action payloads retain ordered opaque subrecord views. Conditions reuse `schema/ctda.cpp:read_ctda_conditions_in` without executing them; reset values and flags retain their encoded values. Unknown data is preserved, and malformed known fields fail closed.
+
+`src/c_api_dialogue.cpp:radicle_dialogue_info_decode` and `radicle_scene_decode` own all returned arrays and copied condition strings until the matching free call; record-backed strings, keys and opaque bytes require the environment to remain alive. `bindings/csharp/Radicle.Interop/Dialogue.cs` copies every returned array, key, string and opaque payload before releasing the holder. `StringTables.ResolveDialogueText` uses the existing source-selection and lookup contract rather than guessing text from IDs. Runtime semantics remain tracked by RE #405 and TES4 bit 7 by #29.
 
 ## CMakeLists.txt:RADICLE_CSHARP_TESTS
 
 The two native jobs in `.github/workflows/native-ci.yml` enable the existing
 managed test switch, with .NET 8 supplied by setup-dotnet. CI exercises the
 sound getters against this branch's native library, ABI probe and stubs.
+
+## Package, combat-style and idle read slice
+
+`src/environment/behavior.cpp:decode_package`, `decode_combat_style` and `decode_idle` follow `docs/PACKAGES_COMBAT_IDLES.md`. Package prelude links/conditions stop at PKCU; post-PKCU streams retain opaque data, and begin/end/change idle links use separate scopes. Combat arrays retain stored lengths and the CSCR integer slot is not read as a float. No scheduler, procedure evaluator or invented defaults are added. RE #407 tracks the remaining behavior and variant evidence.
+
+`src/c_api_behavior.cpp:radicle_package_decode` and `radicle_idle_decode` own condition arrays and converted CIS strings until free; strings, keys and raw payload bytes borrowed from records require a live environment. `bindings/csharp/Radicle.Interop/Behavior.cs` copies these values before freeing native holders. `radicle_combat_style_get_info` uses a fixed output with presence flags and actual variable-array counts. The initial validation was CI-only; subsequent official-master runs exercise the stored readers and byte preservation. Corpus cases still skip when installed data is unavailable.
+
+## Package location and target views
+
+`src/environment/behavior.cpp:decode_package` returns indexed PLDT/PTDA views
+without assigning them to an unproven procedure/input scope. The verified
+[packages-combat-idle-407-345/README.md](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md)
+sections Q4/Q5 stamp OG addresses 0x726520 and 0x729300: The disk compatibility views accept PLDT 8/12/16 bytes with
+signed i32 type, raw u32 value, optional signed i32 radius and optional u32 item
+index; PTDA is 12 bytes with signed i32 type, raw u32 value and signed
+count-or-distance. These stored fields are not the normalized runtime layout. Only proven form-valued variants
+resolve their value through the owning plugin. Raw values and unknown shapes
+stay preserved in the original container; input and leaf boundaries remain
+opaque. `src/c_api_behavior.cpp:PackageHolder` owns the copied view arrays,
+and `bindings/csharp/Radicle.Interop/Behavior.cs:RadicleEnvironment.Package`
+copies them before freeing the holder.
+
+`src/schema/behavior_layout.cpp:behavior_formid_offsets` remaps only the PLDT/PTDA branches that xEdit defines as form links, and strict remap refuses the xEdit Unknown branches only when their stored 4-byte value at offset 4 is nonzero. The branch is chosen by the Type integer through `source:xEdit Core/wbDefinitionsFO4.pas:2273 @93cc0bc5` (`wbTypeDecider`). PLDT (`source:xEdit Core/wbDefinitionsFO4.pas:4177-4194 @93cc0bc5`): links are 0 Reference, 1 Cell, 4 Object ID and 6 Keyword; 2 and 3 are four-byte ByteArrays, 5 and 8-11 are integers, 7 is `wbUnused(4)`, and 14 is the Ref Collection Alias integer, all kept numeric and unremapped; 12 and 13 are `wbByteArray('Unknown', 4)` branches; the enum at `source:xEdit Core/wbDefinitionsFO4.pas:4139-4140 @93cc0bc5` names them Near self and Near Editor Location Cell. PTDA (`source:xEdit Core/wbDefinitionsFO4.pas:4223-4245 @93cc0bc5`): links are 0 Specific Reference, 1 Object ID, 3 Keyword and 7 Keyword; 2 Object Type, 4 Alias and 5 Interrupt Data are integers; 6 and 8 are `wbByteArray('Unknown', 4, cpIgnore)` branches; the Type enum names them Self at `source:xEdit Core/wbDefinitionsFO4.pas:4231 @93cc0bc5` and Unknown 8 at line 4233, and the union branch decides. Zero in the 4-byte value means no link and is never refused, so strict remap leaves it unchanged. Non-strict remap leaves every refused branch unchanged. `src/schema/behavior_layout.cpp:behavior_field_payload_valid` is unchanged, so these variants keep their payload-valid status.
 
 ## Radicle/src/plugin/flags.cpp:fo4::set_plugin_light_flag
 
@@ -622,8 +757,8 @@ GT-004: the consumer check copies only `Radicle.Interop`, `Radicle.Interop.Tests
 Anchored to `src/plugin/reader.cpp:read_group` and `src/plugin/reader.cpp:inflate_record_payload`.
 
 - GRUP nesting: `read_group` takes a depth (top-level groups start at 1, `read_child` passes `depth + 1` for each nested GRUP) and throws `parse_error` once depth exceeds 16. Recursion was unbounded, so a crafted file of nested 24-byte GRUP headers overflowed the stack, which cannot be caught. Real Fallout 4 nesting is about six levels, so 16 leaves headroom.
-- GT-138 compressed record size: `inflate_record_payload` checks the declared uncompressed size twice, both before the output buffer is allocated. First it refuses anything above `compressed.size() * 1032 + 64`. 1032 is zlib's maximum expansion ratio; the 64-byte slack covers the stream framing. Then it refuses anything above the absolute cap `k_max_record_uncompressed_bytes` (1 GiB, 2^30). The ratio bound keeps a small record from asking for much more output than its size allows, and the cap keeps any one record under 1 GiB. The output buffer is allocated once and shared by the zlib attempt and the raw-deflate retry. Test: `tests/test_compression.cpp:Compression.OversizedDeclaredSizeIsRefusedBeforeAllocating` uses a 1,100,000-byte payload declaring 2^30 + 1 bytes; it passes the ratio bound and is refused by the cap.
-- Tests: `tests/test_reader_limits.cpp` covers 16 levels (parses), 17 and 20 levels (refused), and a declared size of `0xFFFFFFFF` on a tiny payload (refused with the zlib expansion bound message). Ordinary compressed reads are still covered by `tests/test_compression.cpp`.
+- GT-138 compressed record size: `inflate_record_payload` checks the declared uncompressed size twice, both before the output buffer is allocated. First it refuses anything above `compressed.size() * 1032 + 64`. 1032 is zlib's maximum expansion ratio; the 64-byte slack covers the stream framing. Then it refuses anything above the absolute cap `k_max_record_uncompressed_bytes` (1 GiB, 2^30). The ratio bound keeps a small record from asking for much more output than its size allows, and the cap keeps any one record under 1 GiB. The output buffer is allocated once, for the zlib inflate attempt. Test: `tests/test_compression.cpp:Compression.OversizedDeclaredSizeLoadsUndecodable` uses a 1,100,000-byte payload declaring 2^30 + 1 bytes; it passes the ratio bound and is caught by the cap, so it loads as undecodable.
+- Tests: `tests/test_reader_limits.cpp` covers 16 levels (parses), 17 and 20 levels (refused), and a declared size of `0xFFFFFFFF` on a tiny payload (loads as undecodable). Ordinary compressed reads are still covered by `tests/test_compression.cpp`.
 
 ## GT-093 Radicle core hygiene
 
@@ -725,3 +860,11 @@ GT-149: the entry points in `src/c_api_fields.cpp`, `src/c_api_ref_fields.cpp`, 
 ## src/nif/nif.cpp:read_nif
 
 read_nif checks the FO4 stream gate (version 20.2.0.7, user version 12, BS 130), then the block-type table, block sizes, string table and footer roots, all bounded by the remaining bytes before any reserve. It builds the child and parent maps once, skipping null child references and keeping the first parent seen. The layout facts with their F4LODGEN and NifFile.cs citations, and the parity-pending list for values the sources do not pin (rotation order, billboard layout, BSDynamicTriShape, vertex encodings, strict footer), are in `Radicle/docs/NIF.md`.
+
+## Radicle/src/plugin/writer.cpp:write_plugin
+
+The dirty-plugin ONAM rebuild gate is `src/formid.cpp:is_master_plugin` (TES4 master flag or an `.esm`/`.esl` name). xEdit gives an extension-only module its master state at save: `.esm` sets ESM (`source:xEdit Core/wbImplementation.pas:5301-5302 @93cc0bc5`), and `.esl` sets ESM and light (`source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5`). The ONAM rebuild runs when `FileHeader.IsESM` or the `mfHasESMExtension` module flag holds (`source:xEdit Core/wbImplementation.pas:5401 @93cc0bc5`); `source:xEdit Core/wbLoadOrder.pas:332-334 @93cc0bc5` sets that flag for `.esm` and `.esl` on Fallout 4. So a dirty `.esm` or `.esl` without the master flag rebuilds ONAM. Radicle does not set the TES4 master bit on write, while xEdit's save path sets it for `.esm` (`source:xEdit Core/wbImplementation.pas:5301-5302 @93cc0bc5`); the written bytes keep the flag clear, and that difference is open. The writer likewise does not set the Small (light) bit for a loaded extension-only `.esl`, while xEdit sets ESM and Small on save for `.esl` names (`source:xEdit Core/wbImplementation.pas:5304-5306 @93cc0bc5`); the runtime treats such a file as light by name through `src/formid.cpp:classify_plugin_kind`. `Radicle/docs/ONAM.md` states the same rule. Tests: `tests/test_extension_light_kinds.cpp:DirtyEslWithoutMasterFlagRebuildsOnam`, `tests/test_extension_light_kinds.cpp:DirtyEsmWithoutMasterFlagRebuildsOnam`.
+
+## Radicle/src/forms/placed_reference_copy.cpp:owner_kind
+
+The owner-is-source branch now calls `src/formid.cpp:classify_plugin_kind` with the source header and key, so a source named `.esl` without the TES4 SmallFile flag yields a light master entry, as the load-time sites do. Test: `tests/test_extension_light_kinds.cpp:OwnerEqualToEslSourceIsLightMaster`.

@@ -65,5 +65,13 @@ public sealed unsafe class StringTables : IDisposable
         return Call.Found(RadicleNative.StringsResolveName(use.Pointer, record.Handle, &text, &size)) ? Utf8.Raw(text, size) : null;
     }
 
+    public byte[]? ResolveDialogueText(Record record, string subrecordSignature, DialogueText value)
+    {
+        if (value.Kind == NameKind.Inline) return System.Text.Encoding.UTF8.GetBytes(value.Text ?? string.Empty);
+        if (value.Kind != NameKind.StringId) return null;
+        var info = _env.Info(record);
+        return Lookup(info.PluginIndex, SourceFor(info.Signature, subrecordSignature), value.StringId);
+    }
+
     public void Dispose() => _handle.Dispose();
 }

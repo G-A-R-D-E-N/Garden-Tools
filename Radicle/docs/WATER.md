@@ -45,8 +45,8 @@ Two DNAMs are 188 bytes and 45 are 201 bytes. That run passed 14 parameterized
 native and C ABI checks, including untouched byte identity for all seven
 masters. The file now defines 42 parameterized cases (6 tests x 7 masters),
 not re-run at this head. The real-data cases run only when `FO4_DATA_DIR` is set,
-and skip cleanly otherwise. CI sets it from `FO4_DATA_DIR_WINDOWS` in the Windows
-Release pass of `native-ci`; the Windows Debug pass clears it. The Linux job passes
+and skip cleanly otherwise. In CI
+the `fo4-data` runner supplies it to the `native-windows-real-data` job of `native-ci`; both `native-windows-tests` passes clear it. The Linux job passes
 `FO4_DATA_DIR_LINUX`, which is currently unset, so they skip there.
 
 ## Editing

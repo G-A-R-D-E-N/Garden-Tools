@@ -141,6 +141,42 @@ TEST(QuestStages, NonLocalizedPluginKeepsInlineLogText) {
   EXPECT_EQ(text->inline_text(), "Find the thing");
 }
 
+static std::vector<std::byte> localized_cnam_plugin(const std::vector<std::byte>& cnam) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0x80, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto grup = fo4::test::begin_group(out, "QUST", 0);
+  const auto rec = fo4::test::begin_record(out, "QUST", 0, 0x00000800);
+  fo4::test::write_subrecord(out, "INDX", indx(1, 0, 0));
+  fo4::test::write_subrecord(out, "QSDT", byte_of(0));
+  fo4::test::write_subrecord(out, "CNAM", cnam);
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+  return out.bytes;
+}
+
+TEST(QuestStages, LocalizedLogTextMustBeFourBytes) {
+  const auto short_bytes = localized_cnam_plugin({std::byte{0x34}, std::byte{0x12}});
+  const auto short_plugin = fo4::read_plugin(short_bytes, "Quests.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::decode_quest_stages(short_plugin, quest_key())),
+               fo4::forms::QuestError);
+
+  const auto full_bytes = localized_cnam_plugin(u32_of(0x1234));
+  const auto full_plugin = fo4::read_plugin(full_bytes, "Quests.esp");
+  const auto decoded = fo4::forms::decode_quest_stages(full_plugin, quest_key());
+  ASSERT_EQ(decoded.stages.size(), 1u);
+  ASSERT_EQ(decoded.stages[0].log_entries.size(), 1u);
+  const auto& text = decoded.stages[0].log_entries[0].log_text;
+  ASSERT_TRUE(text.has_value());
+  ASSERT_TRUE(text->localized());
+  EXPECT_EQ(*text->id, 0x1234u);
+}
+
 TEST(QuestStages, RejectsMalformedMarkers) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);

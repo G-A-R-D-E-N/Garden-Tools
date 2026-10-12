@@ -235,6 +235,7 @@ bool set_placed_reference_transform(
   if (!is_placed_reference_signature(target->header.signature)) {
     throw PlacedReferenceError("transform mutation requires a placed-reference record");
   }
+  require_decodable(*target);
 
   auto* data = unique_subrecord(*target, k_data);
   if (data == nullptr) {

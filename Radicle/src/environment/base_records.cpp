@@ -132,6 +132,7 @@ bool set_climate_timing(Plugin& plugin, const FormKey& key, const ClimateTiming&
     }
   });
   if (record == nullptr) return false;
+  require_decodable(*record);
   if (record->header.signature != sig("CLMT")) throw WorldDecodeError("expected a CLMT record");
   Subrecord* slot = nullptr;
   for (auto& sub : record->subrecords) {

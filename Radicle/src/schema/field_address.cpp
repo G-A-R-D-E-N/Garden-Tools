@@ -1,5 +1,6 @@
 #include "fo4/schema/field_address.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
+#include "fo4/schema/behavior_layout.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -66,6 +67,7 @@ FieldSlots resolve_field_slots(const Record& record,
   for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
     if (record.subrecords[i].signature == shape.subrecord) candidates.push_back(i);
   }
+  if (auto scoped = behavior_field_candidates(record, shape.subrecord)) candidates = std::move(*scoped);
   if (!address.repeated && candidates.size() > 1) {
     out.duplicate = true;
     return out;
@@ -79,7 +81,8 @@ FieldSlots resolve_field_slots(const Record& record,
   for (const auto index : candidates) {
     const auto& data = record.subrecords[index].data;
     bool sized = data.size() >= shape.minimum_payload_size &&
-                 (shape.payload_size == 0 || data.size() == shape.payload_size);
+                 (shape.payload_size == 0 || data.size() == shape.payload_size) &&
+                 behavior_field_payload_valid(record, record.subrecords[index]);
     if (record.header.signature == Signature::from_string("NAVI") &&
         shape.subrecord == Signature::from_string("NVMI")) {
       sized = sized && navmesh_mixed_formid_offsets(record, record.subrecords[index]).has_value();

@@ -214,6 +214,71 @@ TEST(RemapNonFormIdSlots, SceneActionScalarsStayButRadioSoundAndTemplateRemap) {
   EXPECT_EQ(values, (std::vector<std::uint32_t>{0x40000000u, 0x02000001u, 0x01000ABCu, 0x01000123u}));
 }
 
+TEST(RemapNonFormIdSlots, SceneActionTopicDataRemapsOnlyForDialogueAndRadio) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"DLC01.esm\0", 10});
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Other.esp\0", 10});
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto u32 = [](std::uint32_t v) {
+    fo4::test::ByteWriter w;
+    w.u32(v);
+    return w.bytes;
+  };
+  const auto action = [](std::uint16_t type) {
+    return std::vector<std::byte>{std::byte(type & 0xFF), std::byte(type >> 8)};
+  };
+  const auto group = fo4::test::begin_group(out, "SCEN", 0);
+  const auto record = fo4::test::begin_record(out, "SCEN", 0, 0x00012353);
+  fo4::test::write_subrecord(out, "ANAM", action(0));
+  fo4::test::write_subrecord(out, "DATA", u32(0x02000042));
+  fo4::test::write_subrecord(out, "ANAM", std::vector<std::byte>{});
+  fo4::test::write_subrecord(out, "ANAM", action(2));
+  fo4::test::write_subrecord(out, "DATA", u32(0x02000043));
+  fo4::test::write_subrecord(out, "ANAM", std::vector<std::byte>{});
+  fo4::test::write_subrecord(out, "ANAM", action(6));
+  fo4::test::write_subrecord(out, "DATA", u32(0x02000044));
+  fo4::test::write_subrecord(out, "ANAM", std::vector<std::byte>{});
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto* before = fo4::find_record(plugin, fo4::FormKey::parse("012353:Fallout4.esm"));
+  ASSERT_NE(before, nullptr);
+  const auto original_subs = before->subrecords;
+  ASSERT_EQ(original_subs.size(), 9u);
+  plugin = fo4::remap_plugin_masters(std::move(plugin),
+                                     {fo4::PluginKey::from_filename("Fallout4.esm"),
+                                      fo4::PluginKey::from_filename("Other.esp")});
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* scen = fo4::find_record(reread, fo4::FormKey::parse("012353:Fallout4.esm"));
+  ASSERT_NE(scen, nullptr);
+  ASSERT_EQ(scen->subrecords.size(), original_subs.size());
+  for (std::size_t i = 0; i < original_subs.size(); ++i) {
+    EXPECT_EQ(scen->subrecords[i].signature, original_subs[i].signature);
+    if (i == 1) {
+      EXPECT_EQ(scen->subrecords[i].data, u32(0x01000042));
+    } else if (i == 7) {
+      EXPECT_EQ(scen->subrecords[i].data, u32(0x01000044));
+    } else {
+      EXPECT_EQ(scen->subrecords[i].data, original_subs[i].data);
+    }
+  }
+}
+
 TEST(RemapNonFormIdSlots, SoundAndFootstepStringSlotsStayUnchanged) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);

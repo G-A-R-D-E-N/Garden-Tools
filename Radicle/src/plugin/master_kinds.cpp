@@ -21,8 +21,7 @@ void stamp_master_kinds_from_files(
       }
       known.push_back({
           master.key,
-          master.header.tes4_flags.is_small_file() ? PluginKind::light
-                                                   : PluginKind::full,
+          classify_plugin_kind(master.header.tes4_flags, master.key),
       });
     } catch (const std::exception&) {
       // Missing or unreadable masters intentionally preserve the filename fallback.

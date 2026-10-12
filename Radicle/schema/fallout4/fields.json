@@ -5963,6 +5963,2367 @@
           }
         ]
       }
+    },
+    {
+      "signature": "PACK",
+      "fields": [
+        {
+          "path": "PACK\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "PKDT",
+          "storage": "u32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\Type",
+          "label": "Type",
+          "kind": "scalar",
+          "subrecord": "PKDT",
+          "storage": "u8",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\InterruptOverride",
+          "label": "InterruptOverride",
+          "kind": "scalar",
+          "subrecord": "PKDT",
+          "storage": "u8",
+          "offset": 5,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\PreferredSpeed",
+          "label": "PreferredSpeed",
+          "kind": "scalar",
+          "subrecord": "PKDT",
+          "storage": "u8",
+          "offset": 6,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\InterruptFlags",
+          "label": "InterruptFlags",
+          "kind": "scalar",
+          "subrecord": "PKDT",
+          "storage": "u16",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\Month",
+          "label": "Month",
+          "kind": "scalar",
+          "subrecord": "PSDT",
+          "storage": "i8",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\Weekday",
+          "label": "Weekday",
+          "kind": "scalar",
+          "subrecord": "PSDT",
+          "storage": "i8",
+          "offset": 1,
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\Date",
+          "label": "Date",
+          "kind": "scalar",
+          "subrecord": "PSDT",
+          "storage": "i8",
+          "offset": 2,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 31,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\Hour",
+          "label": "Hour",
+          "kind": "scalar",
+          "subrecord": "PSDT",
+          "storage": "i8",
+          "offset": 3,
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\Minute",
+          "label": "Minute",
+          "kind": "scalar",
+          "subrecord": "PSDT",
+          "storage": "i8",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\DurationMinutes",
+          "label": "DurationMinutes",
+          "kind": "scalar",
+          "subrecord": "PSDT",
+          "storage": "u32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\Version",
+          "label": "Version",
+          "kind": "scalar",
+          "subrecord": "PKCU",
+          "storage": "u32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\LocationRadius",
+          "label": "LocationRadius",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "i32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only",
+          "repeated": true
+        },
+        {
+          "path": "PACK\\LocationCollectionIndex",
+          "label": "LocationCollectionIndex",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "u32",
+          "offset": 12,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "repeated": true
+        },
+        {
+          "path": "PACK\\TargetCountOrDistance",
+          "label": "TargetCountOrDistance",
+          "kind": "scalar",
+          "subrecord": "PTDA",
+          "storage": "i32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only",
+          "repeated": true,
+          "payload_size": 12
+        },
+        {
+          "path": "PACK\\LocationObjectType",
+          "label": "LocationObjectType",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "u32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              5
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationReferenceAlias",
+          "label": "LocationReferenceAlias",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "i32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              8
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationLocationAlias",
+          "label": "LocationLocationAlias",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "i32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              9
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationInterruptData",
+          "label": "LocationInterruptData",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "u32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              10
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationDataInputIndex",
+          "label": "LocationDataInputIndex",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "u32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              11
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationCollectionAlias",
+          "label": "LocationCollectionAlias",
+          "kind": "scalar",
+          "subrecord": "PLDT",
+          "storage": "i32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              14
+            ]
+          }
+        },
+        {
+          "path": "PACK\\TargetObjectType",
+          "label": "TargetObjectType",
+          "kind": "scalar",
+          "subrecord": "PTDA",
+          "storage": "u32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              2
+            ]
+          }
+        },
+        {
+          "path": "PACK\\TargetAlias",
+          "label": "TargetAlias",
+          "kind": "scalar",
+          "subrecord": "PTDA",
+          "storage": "i32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              4
+            ]
+          }
+        },
+        {
+          "path": "PACK\\TargetInterruptData",
+          "label": "TargetInterruptData",
+          "kind": "scalar",
+          "subrecord": "PTDA",
+          "storage": "u32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              5
+            ]
+          }
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PACK\\CombatStyle",
+          "label": "CombatStyle",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "nullable": false,
+          "targets": [
+            "CSTY"
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PACK\\OwnerQuest",
+          "label": "OwnerQuest",
+          "subrecord": "QNAM",
+          "offset": 0,
+          "nullable": false,
+          "targets": [
+            "QUST"
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PACK\\Template",
+          "label": "Template",
+          "subrecord": "PKCU",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "PACK"
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PACK\\Idles",
+          "label": "Idles",
+          "subrecord": "INAM",
+          "offset": 0,
+          "nullable": true,
+          "targets": [
+            "IDLE"
+          ],
+          "insertion": "existing_only",
+          "repeated": true
+        },
+        {
+          "path": "PACK\\LocationReference",
+          "label": "LocationReference",
+          "subrecord": "PLDT",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              0
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationCell",
+          "label": "LocationCell",
+          "subrecord": "PLDT",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "CELL"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              1
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationObject",
+          "label": "LocationObject",
+          "subrecord": "PLDT",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "ACTI",
+            "DOOR",
+            "STAT",
+            "MSTT",
+            "FURN",
+            "SPEL",
+            "NPC_",
+            "CONT",
+            "ARMO",
+            "AMMO",
+            "MISC",
+            "WEAP",
+            "OMOD",
+            "BOOK",
+            "NOTE",
+            "KEYM",
+            "ALCH",
+            "INGR",
+            "LIGH",
+            "FACT",
+            "FLST",
+            "IDLM",
+            "TXST",
+            "PROJ"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              4
+            ]
+          }
+        },
+        {
+          "path": "PACK\\LocationKeyword",
+          "label": "LocationKeyword",
+          "subrecord": "PLDT",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "KYWD"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              6
+            ]
+          }
+        },
+        {
+          "path": "PACK\\TargetReference",
+          "label": "TargetReference",
+          "subrecord": "PTDA",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              0
+            ]
+          }
+        },
+        {
+          "path": "PACK\\TargetObject",
+          "label": "TargetObject",
+          "subrecord": "PTDA",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "ACTI",
+            "DOOR",
+            "STAT",
+            "MSTT",
+            "FURN",
+            "SPEL",
+            "NPC_",
+            "CONT",
+            "ARMO",
+            "AMMO",
+            "MISC",
+            "WEAP",
+            "OMOD",
+            "BOOK",
+            "NOTE",
+            "KEYM",
+            "ALCH",
+            "INGR",
+            "LIGH",
+            "FACT",
+            "FLST",
+            "IDLM",
+            "TXST",
+            "PROJ"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              1
+            ]
+          }
+        },
+        {
+          "path": "PACK\\TargetKeyword",
+          "label": "TargetKeyword",
+          "subrecord": "PTDA",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "KYWD"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              3
+            ]
+          }
+        },
+        {
+          "path": "PACK\\TargetUnknownKeyword",
+          "label": "TargetUnknownKeyword",
+          "subrecord": "PTDA",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "KYWD"
+          ],
+          "insertion": "existing_only",
+          "repeated": true,
+          "when": {
+            "offset": 0,
+            "storage": "i32",
+            "equals": [
+              7
+            ]
+          }
+        }
+      ],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "PKDT",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000001200000000000000"
+          },
+          {
+            "signature": "PSDT",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00ff00ffff00000000000000"
+          },
+          {
+            "signature": "PKCU",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "POBA",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "POEA",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "POCA",
+            "minimum": 1,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      }
+    },
+    {
+      "signature": "CSTY",
+      "fields": [
+        {
+          "path": "CSTY\\OffensiveMult",
+          "label": "OffensiveMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\DefensiveMult",
+          "label": "DefensiveMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\GroupOffensiveMult",
+          "label": "GroupOffensiveMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\MeleeScoreMult",
+          "label": "MeleeScoreMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 12,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\MagicScoreMult",
+          "label": "MagicScoreMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 16,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\RangedScoreMult",
+          "label": "RangedScoreMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 20,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\ShoutScoreMult",
+          "label": "ShoutScoreMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 24,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\UnarmedScoreMult",
+          "label": "UnarmedScoreMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 28,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\StaffScoreMult",
+          "label": "StaffScoreMult",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 32,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\AvoidThreatChance",
+          "label": "AvoidThreatChance",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 36,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\DodgeThreatChance",
+          "label": "DodgeThreatChance",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 40,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\EvadeThreatChance",
+          "label": "EvadeThreatChance",
+          "kind": "scalar",
+          "subrecord": "CSGD",
+          "storage": "f32",
+          "offset": 44,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 48
+        },
+        {
+          "path": "CSTY\\AttackStaggeredMult",
+          "label": "AttackStaggeredMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\PowerAttackStaggeredMult",
+          "label": "PowerAttackStaggeredMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\PowerAttackBlockingMult",
+          "label": "PowerAttackBlockingMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\BashMult",
+          "label": "BashMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 12,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\BashRecoilMult",
+          "label": "BashRecoilMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 16,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\BashAttackMult",
+          "label": "BashAttackMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 20,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\BashPowerAttackMult",
+          "label": "BashPowerAttackMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 24,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\SpecialAttackMult",
+          "label": "SpecialAttackMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 28,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\BlockWhenStaggeredMult",
+          "label": "BlockWhenStaggeredMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 32,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\AttackWhenStaggeredMult",
+          "label": "AttackWhenStaggeredMult",
+          "kind": "scalar",
+          "subrecord": "CSME",
+          "storage": "f32",
+          "offset": 36,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\CircleMult",
+          "label": "CircleMult",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\FallbackMult",
+          "label": "FallbackMult",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\FlankDistance",
+          "label": "FlankDistance",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\StalkTime",
+          "label": "StalkTime",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 12,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\ChargeDistance",
+          "label": "ChargeDistance",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 16,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\ThrowProbability",
+          "label": "ThrowProbability",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 20,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\SprintFastProbability",
+          "label": "SprintFastProbability",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 24,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\SideswipeProbability",
+          "label": "SideswipeProbability",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 28,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\DisengageProbability",
+          "label": "DisengageProbability",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 32,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\StrafeMult",
+          "label": "StrafeMult",
+          "kind": "scalar",
+          "subrecord": "CSLR",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\AdjustRangeMult",
+          "label": "AdjustRangeMult",
+          "kind": "scalar",
+          "subrecord": "CSLR",
+          "storage": "f32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\CrouchMult",
+          "label": "CrouchMult",
+          "kind": "scalar",
+          "subrecord": "CSLR",
+          "storage": "f32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\WaitMult",
+          "label": "WaitMult",
+          "kind": "scalar",
+          "subrecord": "CSLR",
+          "storage": "f32",
+          "offset": 12,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\RangeMult",
+          "label": "RangeMult",
+          "kind": "scalar",
+          "subrecord": "CSLR",
+          "storage": "f32",
+          "offset": 16,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CSTY\\HoverChance",
+          "label": "HoverChance",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\DiveBombChance",
+          "label": "DiveBombChance",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\GroundAttackChance",
+          "label": "GroundAttackChance",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 8,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\HoverTime",
+          "label": "HoverTime",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 12,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\GroundAttackTime",
+          "label": "GroundAttackTime",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 16,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\PerchAttackChance",
+          "label": "PerchAttackChance",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 20,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\PerchAttackTime",
+          "label": "PerchAttackTime",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 24,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\FlyingAttackChance",
+          "label": "FlyingAttackChance",
+          "kind": "scalar",
+          "subrecord": "CSFL",
+          "storage": "f32",
+          "offset": 28,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 32
+        },
+        {
+          "path": "CSTY\\RangedAccuracy",
+          "label": "RangedAccuracy",
+          "kind": "scalar",
+          "subrecord": "CSRA",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 4
+        },
+        {
+          "path": "CSTY\\CoverSearch",
+          "label": "CoverSearch",
+          "kind": "scalar",
+          "subrecord": "CSCV",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 4
+        },
+        {
+          "path": "CSTY\\ThrowMaxTargets",
+          "label": "ThrowMaxTargets",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "u32",
+          "offset": 36,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\FlankVariance",
+          "label": "FlankVariance",
+          "kind": "scalar",
+          "subrecord": "CSCR",
+          "storage": "f32",
+          "offset": 40,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 44
+        },
+        {
+          "path": "CSTY\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "payload_size": 4
+        }
+      ],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CSGD",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000003f0000003f0000803f0000803f0000803f0000803f0000803f0000803f0000803fcdcc4c3fcdcc4c3ecdcc4c3e"
+          },
+          {
+            "signature": "CSMD",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "CSME",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000803f0000803f0000803f0000803f0000803f0000803f0000803fcdcccc3d0000803f0000803f"
+          },
+          {
+            "signature": "CSRA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000403f"
+          },
+          {
+            "signature": "CSCR",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "cdcc4c3ecdcc4c3ecdcc4c3ecdcc4c3e0000000000000000000000000000000000000000000000000000003f"
+          },
+          {
+            "signature": "CSLR",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000003f0000003f0000003f0000003f0000003f"
+          },
+          {
+            "signature": "CSCV",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000003f"
+          },
+          {
+            "signature": "CSFL",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000003f0000803f0000003f0000003f0000003f0000003f0000003f0000403f"
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          }
+        ]
+      }
+    },
+    {
+      "signature": "IDLE",
+      "fields": [
+        {
+          "path": "IDLE\\LoopMin",
+          "label": "LoopMin",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u8",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only",
+          "payload_size": 6
+        },
+        {
+          "path": "IDLE\\LoopMax",
+          "label": "LoopMax",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u8",
+          "offset": 1,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only",
+          "payload_size": 6
+        },
+        {
+          "path": "IDLE\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u8",
+          "offset": 2,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only",
+          "payload_size": 6
+        },
+        {
+          "path": "IDLE\\GroupSection",
+          "label": "GroupSection",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u8",
+          "offset": 3,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only",
+          "payload_size": 6
+        },
+        {
+          "path": "IDLE\\ReplayDelay",
+          "label": "ReplayDelay",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u16",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only",
+          "payload_size": 6
+        },
+        {
+          "path": "IDLE\\BehaviorGraph",
+          "label": "BehaviorGraph",
+          "kind": "string",
+          "subrecord": "DNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLE\\AnimationEvent",
+          "label": "AnimationEvent",
+          "kind": "string",
+          "subrecord": "ENAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLE\\AnimationFile",
+          "label": "AnimationFile",
+          "kind": "string",
+          "subrecord": "GNAM",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "IDLE\\Parent",
+          "label": "Parent",
+          "subrecord": "ANAM",
+          "offset": 0,
+          "nullable": true,
+          "targets": [
+            "AACT",
+            "IDLE"
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLE\\Previous",
+          "label": "Previous",
+          "subrecord": "ANAM",
+          "offset": 4,
+          "nullable": true,
+          "targets": [
+            "AACT",
+            "IDLE"
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000"
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000"
+          },
+          {
+            "signature": "GNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          }
+        ]
+      }
+    },
+    {
+      "signature": "DIAL",
+      "fields": [
+        {
+          "path": "DIAL\\Name",
+          "label": "Name",
+          "kind": "string",
+          "subrecord": "FULL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Priority",
+          "label": "Priority",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\TopicFlags",
+          "label": "Topic flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Category",
+          "label": "Category",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 7,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Subtype",
+          "label": "Subtype",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\SubtypeName",
+          "label": "Subtype name (raw four characters)",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "DIAL\\Branch",
+          "payload_sizes": [4],
+          "label": "Branch",
+          "subrecord": "BNAM",
+          "offset": 0,
+          "targets": [
+            "DLBR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Quest",
+          "payload_sizes": [4],
+          "label": "Quest",
+          "subrecord": "QNAM",
+          "offset": 0,
+          "targets": [
+            "QUST"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "DIAL\\Keyword",
+          "payload_sizes": [4],
+          "label": "Keyword",
+          "subrecord": "KNAM",
+          "offset": 0,
+          "targets": [
+            "KYWD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "quest_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00004842"
+          },
+          {
+            "signature": "BNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "QNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TIFC",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "INFO",
+      "fields": [
+        {
+          "path": "INFO\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "ENAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResetHours",
+          "label": "Reset hours (raw, hours x 2730.625)",
+          "kind": "scalar",
+          "subrecord": "ENAM",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\OverrideFileName",
+          "label": "Override file name",
+          "kind": "string",
+          "subrecord": "IOVR",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResponseNumber",
+          "label": "Response number",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResponseUnknown",
+          "label": "Response unknown byte",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 9,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\InterruptPercentage",
+          "label": "Interrupt percentage",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 10,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\CameraTargetAlias",
+          "label": "Camera target alias",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 12,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\CameraLocationAlias",
+          "label": "Camera location alias",
+          "kind": "scalar",
+          "subrecord": "TRDA",
+          "offset": 16,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 20,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResponseText",
+          "label": "Response text",
+          "kind": "string",
+          "subrecord": "NAM1",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ScriptNotes",
+          "label": "Script notes",
+          "kind": "string",
+          "subrecord": "NAM2",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Edits",
+          "label": "Edits",
+          "kind": "string",
+          "subrecord": "NAM3",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\AlternateLipText",
+          "label": "Alternate LIP text",
+          "kind": "string",
+          "subrecord": "NAM4",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Prompt",
+          "label": "Prompt",
+          "kind": "string",
+          "subrecord": "RNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ForcedAlias",
+          "label": "Forced alias",
+          "kind": "scalar",
+          "subrecord": "ALFA",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\GreetDistance",
+          "label": "Greet distance",
+          "kind": "scalar",
+          "subrecord": "GREE",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ParentQuestStageOnBegin",
+          "label": "Set parent quest stage on begin",
+          "kind": "scalar",
+          "subrecord": "TIQS",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ParentQuestStageOnEnd",
+          "label": "Set parent quest stage on end",
+          "kind": "scalar",
+          "subrecord": "TIQS",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\StartScenePhase",
+          "label": "Start scene phase",
+          "kind": "string",
+          "subrecord": "NAM0",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Challenge",
+          "label": "Challenge",
+          "kind": "scalar",
+          "subrecord": "INCC",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 7,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\SubtitlePriority",
+          "label": "Subtitle priority",
+          "kind": "scalar",
+          "subrecord": "INAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 3,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "INFO\\PreviousTopic",
+          "payload_sizes": [4],
+          "label": "Previous topic",
+          "subrecord": "TPIC",
+          "offset": 0,
+          "targets": [
+            "DIAL"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\PreviousInfo",
+          "payload_sizes": [4],
+          "label": "Previous INFO",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "targets": [
+            "INFO"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\SharedInfo",
+          "payload_sizes": [4],
+          "label": "Shared INFO",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "targets": [
+            "INFO"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\InfoGroup",
+          "payload_sizes": [4],
+          "label": "INFO group",
+          "subrecord": "GNAM",
+          "offset": 0,
+          "targets": [
+            "INFO"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Emotion",
+          "label": "Emotion",
+          "subrecord": "TRDA",
+          "offset": 0,
+          "targets": [
+            "KYWD"
+          ],
+          "nullable": false,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\SoundFile",
+          "label": "Sound file",
+          "subrecord": "TRDA",
+          "offset": 5,
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\Speaker",
+          "payload_sizes": [4],
+          "label": "Speaker",
+          "subrecord": "ANAM",
+          "offset": 0,
+          "targets": [
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\StartScene",
+          "payload_sizes": [4],
+          "label": "Start scene",
+          "subrecord": "TSCE",
+          "offset": 0,
+          "targets": [
+            "SCEN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\AudioOutputOverride",
+          "payload_sizes": [4],
+          "label": "Audio output override",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "targets": [
+            "SOPM"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INFO\\ResetGlobal",
+          "payload_sizes": [4],
+          "label": "Reset global",
+          "subrecord": "MODQ",
+          "offset": 0,
+          "targets": [
+            "GLOB"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "topic_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "TPIC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "GNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "IOVR",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "RNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TSCE",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INTV",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ALFA",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "GREE",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TIQS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM0",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "INCC",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "MODQ",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "NAM1",
+        "RNAM"
+      ]
+    },
+    {
+      "signature": "SCEN",
+      "fields": [
+        {
+          "path": "SCEN\\DeathBehavior",
+          "label": "Death behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\CombatBehavior",
+          "label": "Combat behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\PlayerDialogueBehavior",
+          "label": "Player dialogue behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 8,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\ObserveCombatBehavior",
+          "label": "Observe combat behaviour",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 12,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\CameraDistanceOverride",
+          "label": "Camera distance override",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\DialogueDistanceOverride",
+          "label": "Dialogue distance override",
+          "kind": "scalar",
+          "subrecord": "ACTV",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\Notes",
+          "label": "Notes",
+          "kind": "string",
+          "subrecord": "NNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCEN\\Index",
+          "label": "Index",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "quest_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000000000000000000000000000"
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ACTV",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          }
+        ]
+      },
+      "localized_subrecords": []
     }
   ],
   "keyword_records": [

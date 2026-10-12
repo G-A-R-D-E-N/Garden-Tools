@@ -36,8 +36,8 @@ LocalizedString read_localized_string(const Plugin& plugin,
 
   if (plugin.header.tes4_flags.is_localized() && is_localized_field(record, subrecord)) {
     if (payload.data.size() != 4) {
-      throw std::runtime_error(record.to_string() + " " + subrecord.to_string() +
-                               " is localized and must be exactly four bytes");
+      value.raw_id = payload.data;
+      return value;
     }
     std::uint32_t id = 0;
     std::memcpy(&id, payload.data.data(), 4);
@@ -57,6 +57,7 @@ LocalizedString read_localized_string(const Plugin& plugin,
 }
 
 std::vector<std::byte> write_localized_string(const LocalizedString& value) {
+  if (value.raw_id.has_value()) return *value.raw_id;
   std::vector<std::byte> bytes;
   if (value.id.has_value()) {
     bytes.resize(4);

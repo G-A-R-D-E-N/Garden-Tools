@@ -515,6 +515,23 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   EXPECT_EQ(roundtrip.snam[0].sound->to_string(), snam_before);
 }
 
+TEST(WeatherConcept, MnamExtensionOnlyLightMasterInsertion) {
+  auto plugin = fo4::read_plugin(make_weather_plugin(), "WeatherPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  const auto spgd_plugin = fo4::read_plugin(make_spgd_only_plugin(0x00000100), "FalloutSpgd.ESL");
+  ASSERT_FALSE(spgd_plugin.header.tes4_flags.is_small_file());
+  const fo4::Plugin* environment[] = {&spgd_plugin};
+  const auto target = fo4::FormKey::parse("000100:FalloutSpgd.ESL");
+
+  EXPECT_TRUE(fo4::forms::set_weather_mnam(plugin, key, target, environment));
+  ASSERT_EQ(plugin.header.masters.size(), 1u);
+  EXPECT_EQ(plugin.header.masters[0].kind, fo4::PluginKind::light);
+  const auto model = fo4::forms::decode_weather(plugin, key);
+  ASSERT_TRUE(model.mnam.has_value());
+  EXPECT_EQ(*model.mnam, target);
+  EXPECT_FALSE(spgd_plugin.header.tes4_flags.is_small_file());
+}
+
 TEST(WeatherConcept, MnamNoOpWhenUnchanged) {
   WeatherPluginOptions options;
   options.include_local_spgd = true;

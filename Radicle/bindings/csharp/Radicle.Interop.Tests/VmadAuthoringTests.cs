@@ -17,7 +17,7 @@ public sealed class VmadAuthoringTests
         for (byte type = 1; type <= 5; ++type)
         {
             Name("Property" + type); writer.Write(type); writer.Write((byte)7);
-            if (type == 1) { writer.Write((ushort)0xBEEF); writer.Write((short)-1); writer.Write(0x801u); }
+            if (type == 1) { writer.Write((ushort)0); writer.Write((short)-1); writer.Write(0x801u); }
             if (type == 2) Name("old");
             if (type == 3) writer.Write(-10);
             if (type == 4) writer.Write(1.5f);

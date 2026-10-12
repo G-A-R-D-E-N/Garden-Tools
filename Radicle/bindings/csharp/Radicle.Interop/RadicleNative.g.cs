@@ -1324,10 +1324,292 @@ public unsafe struct GrassLinks
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct BehaviorCondition
+{
+    public byte FlagsByte;
+    public uint ComparisonRaw;
+    public ushort Function;
+    public ushort Unknown2;
+    public int Param1;
+    public int Param2;
+    public uint RunOn;
+    public uint Reference;
+    public int Unknown3;
+    public IntPtr Parameter1String;
+    public IntPtr Parameter2String;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackagePayload
+{
+    public fixed byte Signature[5];
+    public IntPtr Bytes;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageLocation
+{
+    public nuint SubrecordIndex;
+    public int Type;
+    public uint Value;
+    public int HasRadius;
+    public int Radius;
+    public int HasItemIndex;
+    public uint ItemIndex;
+    public FormKey Form;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageTarget
+{
+    public nuint SubrecordIndex;
+    public int Type;
+    public uint Value;
+    public int CountOrDistance;
+    public FormKey Form;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageInfo
+{
+    public int HasData;
+    public uint Flags;
+    public byte Type;
+    public byte InterruptOverride;
+    public byte PreferredSpeed;
+    public byte Unknown;
+    public ushort InterruptFlags;
+    public ushort TrailingValue;
+    public int HasSchedule;
+    public sbyte Month;
+    public sbyte Weekday;
+    public sbyte Date;
+    public sbyte Hour;
+    public sbyte Minute;
+    public uint DurationMinutes;
+    public int HasCounter;
+    public uint InputCount;
+    public uint Version;
+    public FormKey TemplatePackage;
+    public FormKey CombatStyle;
+    public FormKey OwnerQuest;
+    public FormKey BeginIdle;
+    public FormKey EndIdle;
+    public FormKey ChangeIdle;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Opaque;
+    public nuint OpaqueCount;
+    public IntPtr Locations;
+    public nuint LocationCount;
+    public IntPtr Targets;
+    public nuint TargetCount;
+    public IntPtr IdleAnimations;
+    public nuint IdleAnimationCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CombatStyleInfo
+{
+    public int HasGeneral;
+    public fixed float General[12];
+    public nuint MeleeCount;
+    public fixed float Melee[10];
+    public nuint LongRangeCount;
+    public fixed float LongRange[5];
+    public int HasCloseRange;
+    public fixed float CloseRange[9];
+    public uint ThrowMaxTargets;
+    public float FlankVariance;
+    public int HasFlight;
+    public fixed float Flight[8];
+    public int HasRangedAccuracy;
+    public float RangedAccuracy;
+    public int HasCoverSearch;
+    public float CoverSearch;
+    public int HasFlags;
+    public uint Flags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct IdleInfo
+{
+    public int HasData;
+    public byte LoopMin;
+    public byte LoopMax;
+    public byte Flags;
+    public byte GroupSection;
+    public ushort ReplayDelay;
+    public FormKey Parent;
+    public FormKey Previous;
+    public IntPtr BehaviorGraph;
+    public IntPtr AnimationEvent;
+    public IntPtr AnimationFile;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Internal;
+}
+
+public enum ScenePart : int
+{
+    Phase = 0,
+    Actor = 1,
+    Action = 2,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueText
+{
+    public NameKind Kind;
+    public IntPtr Text;
+    public uint StringId;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueTopicInfo
+{
+    public int HasData;
+    public byte Flags;
+    public byte Category;
+    public ushort Subtype;
+    public int HasPriority;
+    public float Priority;
+    public int HasInfoCount;
+    public uint InfoCount;
+    public int HasSubtypeName;
+    public fixed byte SubtypeName[4];
+    public FormKey Branch;
+    public FormKey Quest;
+    public FormKey Keyword;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueCondition
+{
+    public byte FlagsByte;
+    public uint ComparisonRaw;
+    public ushort Function;
+    public ushort Unknown2;
+    public int Param1;
+    public int Param2;
+    public uint RunOn;
+    public uint Reference;
+    public int Unknown3;
+    public IntPtr Parameter1String;
+    public IntPtr Parameter2String;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueResponse
+{
+    public FormKey Emotion;
+    public FormKey Sound;
+    public byte Number;
+    public byte Unknown;
+    public ushort InterruptPercent;
+    public int CameraTargetAlias;
+    public int CameraLocationAlias;
+    public DialogueText Text;
+    public FormKey SpeakerIdle;
+    public FormKey ListenerIdle;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueInfo
+{
+    public int HasData;
+    public ushort Flags;
+    public ushort ResetTimeEncoded;
+    public FormKey PreviousTopic;
+    public FormKey PreviousInfo;
+    public FormKey SharedInfo;
+    public FormKey InfoGroup;
+    public FormKey Speaker;
+    public FormKey StartScene;
+    public DialogueText Prompt;
+    public IntPtr Responses;
+    public nuint ResponseCount;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScenePhase
+{
+    public IntPtr Name;
+    public int HasEditorWidth;
+    public uint EditorWidth;
+    public int HasFlags;
+    public ushort Flags;
+    public int HasQuestStages;
+    public short StartQuestStage;
+    public short CompletionQuestStage;
+    public IntPtr StartConditions;
+    public nuint StartConditionCount;
+    public IntPtr CompletionConditions;
+    public nuint CompletionConditionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneActor
+{
+    public int Alias;
+    public uint Flags;
+    public uint BehaviorFlags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScenePayload
+{
+    public fixed byte Signature[5];
+    public IntPtr Bytes;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneAction
+{
+    public ushort Type;
+    public IntPtr Name;
+    public int HasActorAlias;
+    public int ActorAlias;
+    public int HasIndex;
+    public uint Index;
+    public int HasFlags;
+    public uint Flags;
+    public int HasStartPhase;
+    public uint StartPhase;
+    public int HasEndPhase;
+    public uint EndPhase;
+    public IntPtr Payload;
+    public nuint PayloadCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneInfo
+{
+    public int HasFlags;
+    public uint Flags;
+    public FormKey ParentQuest;
+    public IntPtr Phases;
+    public nuint PhaseCount;
+    public IntPtr Actors;
+    public nuint ActorCount;
+    public IntPtr Actions;
+    public nuint ActionCount;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 31u;
+    public const uint CompiledAbiVersion = 33u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1892,5 +2174,44 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_vmad_bool")]
     public static extern Status PluginSetVmadBool(IntPtr plugin, FormKey key, nuint script, nuint property, nuint element, int value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_decode")]
+    public static extern Status PackageDecode(IntPtr env, IntPtr record, PackageInfo** out_package);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_free")]
+    public static extern void PackageFree(PackageInfo* package);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_combat_style_get_info")]
+    public static extern Status CombatStyleGetInfo(IntPtr env, IntPtr record, CombatStyleInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_idle_decode")]
+    public static extern Status IdleDecode(IntPtr env, IntPtr record, IdleInfo** out_idle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_idle_free")]
+    public static extern void IdleFree(IdleInfo* idle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dialogue_topic_get_info")]
+    public static extern Status DialogueTopicGetInfo(IntPtr env, IntPtr record, DialogueTopicInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dialogue_info_decode")]
+    public static extern Status DialogueInfoDecode(IntPtr env, IntPtr record, DialogueInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dialogue_info_free")]
+    public static extern void DialogueInfoFree(DialogueInfo* info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_scene_decode")]
+    public static extern Status SceneDecode(IntPtr env, IntPtr record, SceneInfo** out_scene);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_scene_free")]
+    public static extern void SceneFree(SceneInfo* scene);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_scalar")]
+    public static extern Status PluginSetSceneScalar(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint group_index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_formlink")]
+    public static extern Status PluginSetSceneFormlink(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, FormKey* target);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_scene_group_count")]
+    public static extern Status PluginSceneGroupCount(IntPtr plugin, FormKey key, ScenePart part, nuint* out_count);
 
 }

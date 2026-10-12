@@ -51,9 +51,10 @@ struct SlotTargets {
 
 std::optional<SlotTargets> slot_targets(const Record& record,
                                         Signature subrecord,
+                                        std::size_t ordinal,
                                         std::size_t offset) {
   if (const auto field = schema::formlink_field_at(schema::formlink_fields(record.header.signature),
-                                                   record, subrecord, offset)) {
+                                                   record, subrecord, ordinal, offset)) {
     return SlotTargets{false, schema::formlink_field_targets(*field)};
   }
   for (const auto& list : schema::k_generated_formlink_lists) {
@@ -116,7 +117,7 @@ void check_links(const Plugin& plugin,
     const auto owner = records.find(hit.record);
     const auto slot = owner == records.end()
                           ? std::nullopt
-                          : slot_targets(*owner->second, hit.subrecord, hit.offset);
+                          : slot_targets(*owner->second, hit.subrecord, hit.subrecord_ordinal, hit.offset);
     const auto target = winners.find(hit.key);
     if (target == winners.end() && hit.key.owner() == game_master &&
         hit.key.local().value() < k_first_non_hardcoded_id) {

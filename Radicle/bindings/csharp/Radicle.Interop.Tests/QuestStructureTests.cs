@@ -14,14 +14,14 @@ public class QuestStructureTests
         (opaque ? new byte[] { 0, 0x12, 0x34, 0x56 } : new byte[4])
         .Concat(U32(0x3f800000, function, 0xfffffffd, 5, 2, 0x800, 0xffffffff)).ToArray();
 
-    private static byte[] Fixture(bool localized = false, bool malformed = false, bool opaque = false) =>
+    private static byte[] Fixture(bool localized = false, bool malformed = false, bool opaque = false, bool shortText = false) =>
         Build(localized ? 0x80u : 0u, Array.Empty<string>(), Top("QUST", new Rec("QUST", 0x800, new[]
         {
             ("EDID", Z("TestQuest")), ("CTDA", Condition(70, opaque)), ("NEXT", Array.Empty<byte>()),
             ("CTDA", Condition(277, opaque)), ("INDX", new byte[] { 10, 0, 2, 7 }), ("QSDT", new byte[] { 1 }),
             ("CTDA", malformed ? new byte[1] : Condition(72, opaque)), ("CIS1", Z("")), ("NAM2", Z("")),
             ("CNAM", localized ? U32(0x1234) : new byte[] { 0xe9, 0 }),
-            ("QOBJ", new byte[] { 30, 0 }), ("FNAM", U32(2)), ("NNAM", localized ? U32(0x2345) : Z("")),
+            ("QOBJ", new byte[] { 30, 0 }), ("FNAM", U32(2)), ("NNAM", localized ? (shortText ? new byte[] { 0x45, 0x23, 0 } : U32(0x2345)) : Z("")),
             ("QSTA", U32(0xffffffff, 6, 0x800)), ("CTDA", Condition(73, opaque)), ("ANAM", U32(3)),
             ("ALST", U32(1)), ("ALID", Z("ref")), ("FNAM", U32(7)), ("ALFI", U32(0xfffffffd)),
             ("ALFR", U32(0x800)), ("CTDA", Condition(74, opaque)), ("ALED", Array.Empty<byte>()),
@@ -80,6 +80,20 @@ public class QuestStructureTests
         Assert.Equal(0x1234u, value.Stages[0].Logs[0].Text!.StringId);
         Assert.Null(value.Stages[0].Logs[0].Text!.InlineBytes);
         Assert.Equal(0x2345u, value.Objectives[0].Text!.StringId);
+    }
+
+    [Fact]
+    public void ShortLocalizedObjectiveTextIsReportedAsMalformed()
+    {
+        using var temp = new TempDirectory();
+        var bytes = Fixture(localized: true, shortText: true);
+        using var plugin = PluginFile.Read(temp.Write("Quests.esp", bytes));
+        var value = QuestStructure.Read(plugin, new Radicle.Interop.FormKey("Quests.esp", 0x800));
+        var text = value.Objectives[0].Text!;
+        Assert.Null(text.StringId);
+        Assert.Null(text.InlineBytes);
+        Assert.Equal(new byte[] { 0x45, 0x23, 0 }, text.MalformedBytes);
+        Assert.Equal(bytes, plugin.ToBytes());
     }
 
     [Fact]
