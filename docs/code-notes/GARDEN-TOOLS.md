@@ -1571,12 +1571,6 @@ The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency
 
 `fo4_tests` uses the relative `testdata` fixture directory, and CTest runs its discovered cases from the Radicle source directory. A downloaded CI executable must likewise run from the matching checkout's `Radicle` directory. This avoids embedding the CI checkout path in the fixture lookup while keeping committed fixtures separate from the installed-game directory supplied through `FO4_DATA_DIR`.
 
-## .github/workflows/native-ci.yml:workflow_dispatch, native-windows-tests
-
-The optional `lane=radicle-cross` dispatch runs the existing Radicle clang-cl/xwin build while skipping the Linux/MSVC suites and the PluginEditTool cross build. The default remains `full`. Pull-request and main-triggered validation retain their existing jobs.
-
-The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency as `radicle-msvc-release-tests` for seven days. This permits official-data tests on the machine with Fallout 4 installed without rebuilding there. Artifact metadata must identify the tested commit; downloading a binary is not a test result. No game payloads or debug symbols are uploaded.
-
 ## Radicle/tests/test_pex_corpus.cpp:compareCode, Radicle/src/c_api_pex.cpp:CodeBuilder
 
 The ABI 9 corpus proof compares every exported row and field against the decoded C++ PEX model, including flattened ranges, property handlers, debug lines, flags, typed names, defaults and every operand. Floats compare by IEEE-754 bits so signed zero and NaN payloads are not hidden by approximate equality. Mismatch diagnostics include file, object, function and the differing field. Synthetic mutations must fail without changing aggregate counts.

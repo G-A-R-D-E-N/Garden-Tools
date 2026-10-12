@@ -369,7 +369,7 @@ pointer-identity test `radicle_record_topic_children` already used, now shared. 
 package, combat-style and idle exports (`src/c_api_behavior.cpp:radicle_package_decode`,
 `radicle_combat_style_get_info`, `radicle_idle_decode`) run the same check after their
 null checks and before decoding, with the same `INVALID_ARGUMENT` status and message. A
-rejected package or idle output stays null, and a rejected combat-style output keeps its
+rejected package or idle output is left unchanged, and a rejected combat-style output keeps its
 caller value.
 `ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
 handle from a second live environment resolved through the supplied environment:
