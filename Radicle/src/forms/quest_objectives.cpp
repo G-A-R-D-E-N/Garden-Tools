@@ -4,6 +4,7 @@
 #include "fo4/schema/localized_fields.hpp"
 
 #include "fo4/plugin/visit.hpp"
+#include "../plugin/record_edit.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -190,11 +191,8 @@ std::vector<Subrecord> encode_objectives(const Plugin& plugin,
 }
 
 Record* mutable_quest(Plugin& plugin, const FormKey& quest) {
-  Record* found = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (record.form_key == quest && record.header.signature == k_qust) found = &record;
-  });
-  if (found == nullptr) {
+  auto* found = fo4::detail::find_mutable_record(plugin, quest);
+  if (found == nullptr || found->header.signature != k_qust) {
     throw QuestError("QUST record " + quest.to_string() + " was not found");
   }
   return found;
