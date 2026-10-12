@@ -1285,10 +1285,139 @@ public unsafe struct GrassLinks
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct BehaviorCondition
+{
+    public byte FlagsByte;
+    public uint ComparisonRaw;
+    public ushort Function;
+    public ushort Unknown2;
+    public int Param1;
+    public int Param2;
+    public uint RunOn;
+    public uint Reference;
+    public int Unknown3;
+    public IntPtr Parameter1String;
+    public IntPtr Parameter2String;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackagePayload
+{
+    public fixed byte Signature[5];
+    public IntPtr Bytes;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageLocation
+{
+    public nuint SubrecordIndex;
+    public int Type;
+    public uint Value;
+    public int HasRadius;
+    public int Radius;
+    public int HasItemIndex;
+    public uint ItemIndex;
+    public FormKey Form;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageTarget
+{
+    public nuint SubrecordIndex;
+    public int Type;
+    public uint Value;
+    public int CountOrDistance;
+    public FormKey Form;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageInfo
+{
+    public int HasData;
+    public uint Flags;
+    public byte Type;
+    public byte InterruptOverride;
+    public byte PreferredSpeed;
+    public byte Unknown;
+    public ushort InterruptFlags;
+    public ushort TrailingValue;
+    public int HasSchedule;
+    public sbyte Month;
+    public sbyte Weekday;
+    public sbyte Date;
+    public sbyte Hour;
+    public sbyte Minute;
+    public uint DurationMinutes;
+    public int HasCounter;
+    public uint InputCount;
+    public uint Version;
+    public FormKey TemplatePackage;
+    public FormKey CombatStyle;
+    public FormKey OwnerQuest;
+    public FormKey BeginIdle;
+    public FormKey EndIdle;
+    public FormKey ChangeIdle;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Opaque;
+    public nuint OpaqueCount;
+    public IntPtr Locations;
+    public nuint LocationCount;
+    public IntPtr Targets;
+    public nuint TargetCount;
+    public IntPtr IdleAnimations;
+    public nuint IdleAnimationCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CombatStyleInfo
+{
+    public int HasGeneral;
+    public fixed float General[12];
+    public nuint MeleeCount;
+    public fixed float Melee[10];
+    public nuint LongRangeCount;
+    public fixed float LongRange[5];
+    public int HasCloseRange;
+    public fixed float CloseRange[9];
+    public uint ThrowMaxTargets;
+    public float FlankVariance;
+    public int HasFlight;
+    public fixed float Flight[8];
+    public int HasRangedAccuracy;
+    public float RangedAccuracy;
+    public int HasCoverSearch;
+    public float CoverSearch;
+    public int HasFlags;
+    public uint Flags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct IdleInfo
+{
+    public int HasData;
+    public byte LoopMin;
+    public byte LoopMax;
+    public byte Flags;
+    public byte GroupSection;
+    public ushort ReplayDelay;
+    public FormKey Parent;
+    public FormKey Previous;
+    public IntPtr BehaviorGraph;
+    public IntPtr AnimationEvent;
+    public IntPtr AnimationFile;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 31u;
+    public const uint CompiledAbiVersion = 32u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1838,5 +1967,20 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_landscape_grasses_free")]
     public static extern void LandscapeGrassesFree(GrassLinks* links);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_decode")]
+    public static extern Status PackageDecode(IntPtr env, IntPtr record, PackageInfo** out_package);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_free")]
+    public static extern void PackageFree(PackageInfo* package);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_combat_style_get_info")]
+    public static extern Status CombatStyleGetInfo(IntPtr env, IntPtr record, CombatStyleInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_idle_decode")]
+    public static extern Status IdleDecode(IntPtr env, IntPtr record, IdleInfo** out_idle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_idle_free")]
+    public static extern void IdleFree(IdleInfo* idle);
 
 }

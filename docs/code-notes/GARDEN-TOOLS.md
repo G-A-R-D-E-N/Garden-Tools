@@ -273,6 +273,7 @@ Ordinary record-edit RPCs stage in-memory dirty state via `stagePluginMutationLo
 The apply loop increments `skipped` for any copy result other than `inserted`/`already_exists` — chiefly `source_containment_unsupported`, which `copy_record_as_override` returns for a nested record (e.g. an INFO under a DIAL) the patch does not already contain. Without this, a record the dry run listed as revertible could fail to copy during apply and disappear from the result entirely, so `Reverted N` under-counted with nothing explaining the difference; it is now reported in the `skipped` total, matching the C# apply loop (which increments `skipped` on an `AddOverride` failure).
 
 In `RadiclePluginBackend::revertOverrides`, the `prior == nullptr` guard is a defensive `continue` that is **not** counted in `skipped`: the C# oracle has no equivalent (it holds the prior record directly), and the "no prior version" case is already excluded earlier during candidate-finding (`versions.size() < 2`), mirroring C#'s separate `noPrior` counter which is likewise absent from the reported `skipped` total. In current native control flow this guard is effectively unreachable — the prior comes from the loaded version stack under the same lock the apply loop holds.
+
 ## PluginEditTool/native/src/plugin/RadiclePluginFormLinkList.cpp:addListItem — target validation
 
 The C# oracle (`WriteService.AddListItem`) stores whatever FormKey it is given: it wraps the value in a `FormLink<T>` without checking that the target resolves in the loaded environment or that its record type matches the list's element type. To stay at oracle parity, native `addListItem` does **not** require the target to be a current `graph_.winner`, and does **not** run its own `formlink_list_target_allowed` check.
@@ -378,6 +379,7 @@ Checks `condition_scopes.cpp:package_branch_ranges` and `condition_scopes.cpp:qu
 **Totals.** The test prints per master and reports via `RecordProperty` (`PackCount`, `BranchCount`, `QuestCount`, `TargetCount`, `ConditionCount`, and the failure counts). No figures are written here. The lane had no game data and nothing was run.
 
 **Cost.** Each write-back calls `set_record_scoped_conditions`, which scans the whole plugin, so runtime grows with branches times records. Not measured.
+
 ## Radicle/src/schema/condition_scopes.cpp:perk_effect_tab_ranges — PERK Tabs[k].Conditions
 
 The `perk_effect_tab` kind. Each `PRKC` ("Run On (Tab Index)", one signed byte) starts one run-on tab of a perk effect (`source:xEdit Core/wbDefinitionsFO4.pas:7643-7647 @93cc0bc5`: `Effects` > `Perk Conditions` > `Perk Condition` = `PRKC` then `wbConditions.SetRequired`). The effect itself is `PRKE` header, `DATA` union, the tab list, then `EPFT`/`EPFB`/`EPF2`/`EPF3`/`EPFD` and the `PRKF` end marker (`source:xEdit Core/wbDefinitionsFO4.pas:7606-7642 @93cc0bc5` and `:7648-7689 @93cc0bc5`). `PRKC` is defined only there in the PERK definition (`source:xEdit Core/wbDefinitionsFO4.pas:7645 @93cc0bc5`), so matching the exact four-byte signature inside PERK cannot collide with another member. The index `k` is the flat ordinal of `PRKC` subrecords across all effects in record order, the same convention as `quest_target`; renumbering effects shifts tab indices.
@@ -989,6 +991,7 @@ Further comparison against the same pinned [xEdit source](https://github.com/TES
 For stage authoring, explicitly select a full source record and use native `PluginEditTool/native/src/plugin/RadiclePluginMutation.cpp:copyAsOverride` with `CopyAsOverride([sourcePlugin, formKey, targetPlugin, true])` before `SetQuestStages`. The overwrite replaces the whole partial record, including its VMAD, with the selected source and remaps FormIDs; it does not combine the partial VMAD with the source's stages. The source must be nonpartial and appropriate for the target's master chain. Radicle's explicit operation does not automatically select that source. This matches the full-record restoration approach in pinned [xEdit `TwbMainRecord.SetIsPartialForm`](https://github.com/TES5Edit/TES5Edit/blob/9fb016884bec138ea6c7b872cec831537d464c3e/Core/wbImplementation.pas#L14602), which restores a visible nonpartial master when clearing the partial flag.
 
 `PluginEditTool/native/tests/unit/RadiclePluginQuestPartialFormTests.cpp:Native full master override makes partial quest stages editable` verifies that overwrite=false keeps the partial-stage rejection, explicit overwrite clears the partial flag, a stage renumber updates only its VMAD binding, and a new stage can be added. Save/reload retains the master's other quest members, leaves the source file unchanged, and retains rejection of removing a bound stage without a replacement. This is file-authoring coverage; partial records with local stages or without fragment bindings remain outside the new exception, and game-runtime acceptance is not claimed.
+
 ## BGS assistant boundary and mesh discovery (PR 311)
 
 `BGS/app/OpencodeCli.cs:OpencodeCli.McpBoundaryHolds` requires the BGS server before examining configured servers. `BGS/tools/tests/OpencodeCliTests.cs:TheResolvedBoundaryRejectsAMissingBgsBridge` failed for an empty map and a map containing only disabled foreign servers before the guard; both now pass.
@@ -1008,6 +1011,7 @@ For stage authoring, explicitly select a full source record and use native `Plug
 `BGS/tools/tests/MultiChatControllerTests.SessionLifecycle.cs:MultiChatControllerTests` groups session disposal, reset, logout, and server replacement proofs in the existing partial test class so the controller suite stays within the source-size limit. Test ownership, fixtures, and behavior are unchanged.
 
 `BGS/app/AssistantChatStore.cs:AssistantChatStore.All` sorts loaded summaries by their persisted UpdatedUtc timestamp. Filesystem write times can tie or be changed by copying files. `BGS/tools/tests/AssistantChatStoreTests.cs:EnumerationReturnsSavedChatsSortedByUpdatedUtcDescending` now reverses the filesystem timestamps to reproduce the former incorrect order deterministically.
+
 ## BGS skeleton and skin authoring validation (PR 161)
 
 `BGS/src/Nif/SkinEdit.cs:SkinEdit.SetInfluences` rejects all non-finite incoming weights before filtering or mutating a vertex. `BGS/tools/tests/SkinEditingProofTests.cs:NonFiniteWeightsAreRejectedWithoutChangingTheVertex` failed for NaN and both infinities before the guard and passes after it.
@@ -1556,6 +1560,7 @@ Each of these now downloads a fixed archive with `URL_HASH SHA256` and `INACTIVI
 zlib keeps its `GIT_REPOSITORY`/`GIT_TAG` form in `PluginEditTool/native/CMakeLists.txt:fo4ide_zlib`, because `.github/scripts/pinned-zlib.sh` and the Windows zlib step in `.github/workflows/native-ci.yml` parse that form (one 40-hex `GIT_TAG` after the madler/zlib `GIT_REPOSITORY`) to fetch and cache the pinned commit, and every Windows lane passes that cache through `FETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB`.
 
 `.github/workflows/native-ci.yml` also sets `timeout-minutes: 15` on each Configure step as a backstop. A hang anywhere else in configure now fails that step instead of holding the job until the 60/90-minute job limit or a manual cancel.
+
 ## .github/workflows/native-ci.yml:workflow_dispatch, native-linux, native-windows-tests, plugineditool-native-windows-cross
 
 The optional `lane=radicle-cross` dispatch runs only `radicle-windows-cross`, the existing Radicle clang-cl/xwin build. `native-linux`, `native-windows-tests` and `plugineditool-native-windows-cross` each have `github.event.inputs.lane != 'radicle-cross'` in their `if:` and are skipped; the default `full` runs them as before. Main has no gate job (`e4b8785a` removed the docs-only gate so every pull request runs the full build), so push and pull-request runs execute the same jobs as main and the `lane` input is only read on `workflow_dispatch`.
@@ -1565,6 +1570,12 @@ The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency
 ## Radicle/CMakeLists.txt:FO4_TESTDATA_DIR, gtest_discover_tests
 
 `fo4_tests` uses the relative `testdata` fixture directory, and CTest runs its discovered cases from the Radicle source directory. A downloaded CI executable must likewise run from the matching checkout's `Radicle` directory. This avoids embedding the CI checkout path in the fixture lookup while keeping committed fixtures separate from the installed-game directory supplied through `FO4_DATA_DIR`.
+
+## .github/workflows/native-ci.yml:workflow_dispatch, native-windows-tests
+
+The optional `lane=radicle-cross` dispatch runs the existing Radicle clang-cl/xwin build while skipping the Linux/MSVC suites and the PluginEditTool cross build. The default remains `full`. Pull-request and main-triggered validation retain their existing jobs.
+
+The Windows Release run retains `fo4_tests.exe` and its `radicle.dll` dependency as `radicle-msvc-release-tests` for seven days. This permits official-data tests on the machine with Fallout 4 installed without rebuilding there. Artifact metadata must identify the tested commit; downloading a binary is not a test result. No game payloads or debug symbols are uploaded.
 
 ## Radicle/tests/test_pex_corpus.cpp:compareCode, Radicle/src/c_api_pex.cpp:CodeBuilder
 
@@ -1653,6 +1664,7 @@ The actions that write to the host follow the same rule. `SpreadsheetPanel.tsx:S
 `PluginEditTool/web/src/SettingsModal.tsx:SettingsModal` needed no code change. `src/SettingsModal.test.tsx` pins the configured and not-set labels for the Anthropic and Gemini keys, and that blank key fields are left out of the `SaveSettings` payload while a typed key is sent.
 
 `PluginEditTool/web/src/Shell/useRecordOpening.ts:useRecordOpening` owns the open-record state that used to live in `MainShell`. `openSeq` is bumped before each open (`openRecordInView`, `openHit`, `openByFormKey`) and a response is dropped once the counter has moved, so the newest open wins whatever order the responses arrive in; `reloadSeq` does the same for `reloadMatrix`. `PluginEditTool/web/src/Shell/useEnvironment.ts:useEnvironment` and `Shell/useConflictBatch.ts:useConflictBatch` hold the environment-load and conflict-batch logic moved out of `MainShell`. `Shell/HelpModal.tsx:HelpModal`, `Shell/BrokenRefsModal.tsx:BrokenRefsModal`, `Shell/EnvLoadingOverlay.tsx:EnvLoadingOverlay`, `Shell/ConflictsPanel.tsx:ConflictsPanel` and `Shell/FavouritesList.tsx:FavouritesList` are presentational components extracted from `MainShell`. Tests: `src/MainShell.openOrder.test.tsx` (`shows the newer conflict record when an earlier open resolves last`, `keeps the newest record reload when an earlier reload resolves last`).
+
 ## GT-086 Papyrus staging containment — PluginEditTool/native/src/app/PapyrusStaging.cpp:stageNamespacedScripts
 
 Compiling a folder copies each `.psc` into a temp staging tree under its ScriptName namespace (`MyMod:Quests:Foo` becomes `MyMod/Quests/Foo.psc`), then runs the Creation Kit over that tree. The name check is `papyrus::safeScriptObjectName` (`PluginEditTool/native/include/fo4ide/papyrus/ScriptNames.hpp:safeScriptObjectName`). It rejects empty parts, `.`, `..`, control characters, `/`, `\`, `<`, `>`, `"`, `|`, `?` and `*` (the last six are refused on every platform, so the result is the same on Windows and Linux), and it runs over the whole name, so every `:` part is covered (`PluginEditTool/native/include/fo4ide/papyrus/ScriptNames.hpp:safeScriptObjectName`). A bad name is refused before any file is copied. `stageNamespacedScripts` returns an `UnsafeScriptName` error, and `PluginEditTool/native/src/app/PapyrusTarget.cpp:PapyrusTarget::compile` returns its message as the tool result without starting the compiler. Before this change the parts were joined unchecked, so `..:..:Evil` wrote above the staging folder and a rooted part replaced the path prefix.
@@ -1862,6 +1874,7 @@ A partial override that does not touch aliases carries neither ANAM nor any alia
 ## Radicle/src/forms/quest_aliases_decode.cpp:decode_quest_aliases_record — trailing alias markers
 
 xEdit places optional NNAM/GNAM/SNAM after the single contiguous Alias array. Once a non-alias tail member is reached, a later alias marker is a malformed second array and must not be silently accepted, so the decoder throws on it.
+
 ## GT-156 HTTP RPC large-body test budget — PluginEditTool/native/tests/integration/HttpServerTests.cpp:HTTP RPC accepts a body carrying the largest dropped file, PluginEditTool/native/tests/integration/CMakeLists.txt:catch_discover_tests, PluginEditTool/native/src/http/HttpServer.cpp:HttpServer::start
 
 The CI failure `***Timeout 10.19 sec` on the largest-dropped-file test was not a stall. The body is read linearly. httplib v0.51.0 reads a Content-Length body in `CPPHTTPLIB_RECV_BUFSIZ` (16384 bytes) chunks and appends each chunk (`read_content_with_length`, httplib.h:7312-7345; `Server::read_content`, httplib.h:11776). The pre-routing handler runs before the body is read, and the `/rpc` route runs only after the whole body has arrived, so the client's full write and the server's read cannot wait on each other. Per request the work is linear in the body size: the `/rpc` route parses about 22 MB of JSON, `Dispatcher::invokeJson` (src/rpc/RpcDispatcher.cpp) and the echo target each copy the `args` value, and the response is dumped with UTF-8 validation through `dumpJson` and sent back. The test also base64-encodes 16 MiB before it sends. The Linux Debug job (`.github/workflows/native-ci.yml`, job `Native (Linux, Debug)`) builds at -O0 without sanitizers and runs `ctest --parallel 4`, so these steps share the runner's CPU.

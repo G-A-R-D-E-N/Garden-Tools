@@ -304,6 +304,16 @@ Deliberate policy: `src/environment/navmesh.cpp:decode_navmesh_info` requires NA
 that only the measured version-15 grammar is written; widen it only with evidence for
 other versions.
 
+## src/environment/behavior.cpp:decode_package
+
+The private loader record at
+[packages-combat-idle-407-345/README.md](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md)
+commit `6916afbcbec8ab09ecc0dfd30661502d0064f4f7`, section 3 Q1, stamps
+the OG loader at address 0x719180 and schedule consumer at 0x71EC30. xEdit types PSDT duration as unsigned u32 minutes (`source:xEdit Core/wbDefinitionsFO4.pas:10569 @93cc0bc5`, `wbInteger('Duration (Hours)', itU32, wbDiv(60, 4))`), and `decode_package` keeps the raw u32, so 0xFFFFFFFF stays 4294967295 and is not read as -1. Whether the OG schedule consumer reads it as signed is an RE question (RE #407), not settled by xEdit.
+PKDT's final u16 is exposed as an unnamed trailing value rather
+than discarded. Raw signed month/hour/minute bytes remain unchanged;
+legacy month adjustment and schedule execution are not simulated.
+
 ## src/c_api_records.cpp:radicle_record_topic_children / bindings/csharp/Radicle.Interop/RecordReads.cs:TopicChildren
 
 TopicChildren returns the ordered physical INFO records in the topic-children
@@ -352,10 +362,15 @@ Unknown four-byte signatures use reversible Latin1 in managed snapshots.
 
 A `radicle_record` handle is only meaningful to the environment that produced it: it
 is a pointer to one of that environment's own `RecordRef` versions, and the plugin
-index it carries is an index into that environment's plugin list. All four exports
-therefore call `src/c_api_records.cpp:belongs_to_env` first, which looks the record's
+index it carries is an index into that environment's plugin list. All seven exports
+therefore call `src/c_api_env_internal.hpp:belongs_to_env` first, which looks the record's
 FormKey up in `env->value.versions` and compares addresses. That is the same
-pointer-identity test `radicle_record_topic_children` already used, now shared.
+pointer-identity test `radicle_record_topic_children` already used, now shared. The
+package, combat-style and idle exports (`src/c_api_behavior.cpp:radicle_package_decode`,
+`radicle_combat_style_get_info`, `radicle_idle_decode`) run the same check after their
+null checks and before decoding, with the same `INVALID_ARGUMENT` status and message. A
+rejected package or idle output stays null, and a rejected combat-style output keeps its
+caller value.
 `ReadPayload`, `CopySubrecord` and `ResolveFormId` did not have it. Without it a
 handle from a second live environment resolved through the supplied environment:
 `ResolveFormId` read `env->value.plugins().at(ref.plugin)` from the wrong plugin list
@@ -548,6 +563,29 @@ GardenEngine's object HLOD and water layers read five things Radicle did not dec
 The two native jobs in `.github/workflows/native-ci.yml` enable the existing
 managed test switch, with .NET 8 supplied by setup-dotnet. CI exercises the
 sound getters against this branch's native library, ABI probe and stubs.
+
+## Package, combat-style and idle read slice
+
+`src/environment/behavior.cpp:decode_package`, `decode_combat_style` and `decode_idle` follow `docs/PACKAGES_COMBAT_IDLES.md`. Package prelude links/conditions stop at PKCU; post-PKCU streams retain opaque data, and begin/end/change idle links use separate scopes. Combat arrays retain stored lengths and the CSCR integer slot is not read as a float. No scheduler, procedure evaluator or invented defaults are added. RE #407 tracks the remaining behavior and variant evidence.
+
+`src/c_api_behavior.cpp:radicle_package_decode` and `radicle_idle_decode` own condition arrays and converted CIS strings until free; strings, keys and raw payload bytes borrowed from records require a live environment. `bindings/csharp/Radicle.Interop/Behavior.cs` copies these values before freeing native holders. `radicle_combat_style_get_info` uses a fixed output with presence flags and actual variable-array counts. The initial validation was CI-only; subsequent official-master runs exercise the stored readers and byte preservation. Corpus cases still skip when installed data is unavailable.
+
+## Package location and target views
+
+`src/environment/behavior.cpp:decode_package` returns indexed PLDT/PTDA views
+without assigning them to an unproven procedure/input scope. The verified
+[packages-combat-idle-407-345/README.md](https://re.nomadicinteractive.dev/ReverseEng/Fallout4_Runtime_Research/src/commit/6916afbcbec8ab09ecc0dfd30661502d0064f4f7/RE-Work/subsystems/radicle-re-garden-tools/packages-combat-idle-407-345/README.md)
+sections Q4/Q5 stamp OG addresses 0x726520 and 0x729300: The disk compatibility views accept PLDT 8/12/16 bytes with
+signed i32 type, raw u32 value, optional signed i32 radius and optional u32 item
+index; PTDA is 12 bytes with signed i32 type, raw u32 value and signed
+count-or-distance. These stored fields are not the normalized runtime layout. Only proven form-valued variants
+resolve their value through the owning plugin. Raw values and unknown shapes
+stay preserved in the original container; input and leaf boundaries remain
+opaque. `src/c_api_behavior.cpp:PackageHolder` owns the copied view arrays,
+and `bindings/csharp/Radicle.Interop/Behavior.cs:RadicleEnvironment.Package`
+copies them before freeing the holder.
+
+`src/schema/behavior_layout.cpp:behavior_formid_offsets` remaps only the PLDT/PTDA branches that xEdit defines as form links, and strict remap refuses the xEdit Unknown branches only when their stored 4-byte value at offset 4 is nonzero. The branch is chosen by the Type integer through `source:xEdit Core/wbDefinitionsFO4.pas:2273 @93cc0bc5` (`wbTypeDecider`). PLDT (`source:xEdit Core/wbDefinitionsFO4.pas:4177-4194 @93cc0bc5`): links are 0 Reference, 1 Cell, 4 Object ID and 6 Keyword; 2 and 3 are four-byte ByteArrays, 5 and 8-11 are integers, 7 is `wbUnused(4)`, and 14 is the Ref Collection Alias integer, all kept numeric and unremapped; 12 and 13 are `wbByteArray('Unknown', 4)` branches; the enum at `source:xEdit Core/wbDefinitionsFO4.pas:4139-4140 @93cc0bc5` names them Near self and Near Editor Location Cell. PTDA (`source:xEdit Core/wbDefinitionsFO4.pas:4223-4245 @93cc0bc5`): links are 0 Specific Reference, 1 Object ID, 3 Keyword and 7 Keyword; 2 Object Type, 4 Alias and 5 Interrupt Data are integers; 6 and 8 are `wbByteArray('Unknown', 4, cpIgnore)` branches; the Type enum names them Self at `source:xEdit Core/wbDefinitionsFO4.pas:4231 @93cc0bc5` and Unknown 8 at line 4233, and the union branch decides. Zero in the 4-byte value means no link and is never refused, so strict remap leaves it unchanged. Non-strict remap leaves every refused branch unchanged. `src/schema/behavior_layout.cpp:behavior_field_payload_valid` is unchanged, so these variants keep their payload-valid status.
 
 ## Radicle/src/plugin/flags.cpp:fo4::set_plugin_light_flag
 

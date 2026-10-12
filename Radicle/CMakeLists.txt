@@ -146,6 +146,7 @@ add_library(fo4
   src/schema/form_links.cpp
   src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
+  src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
   src/schema/formlink_list_read.cpp
@@ -168,6 +169,7 @@ add_library(fo4
   src/environment/strings.cpp
   src/environment/vegetation.cpp
   src/environment/navmesh.cpp
+  src/environment/behavior.cpp
   src/environment/base_records.cpp
   src/environment/sound.cpp
   src/environment/material_swap.cpp
@@ -213,7 +215,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp)
+target_sources(radicle_c PRIVATE src/c_api_behavior.cpp src/c_api_records.cpp src/c_api_authoring.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -412,6 +414,11 @@ if(RADICLE_BUILD_TESTS)
     tests/test_localized_strings.cpp
     tests/test_c_api.cpp
     tests/test_environment.cpp
+    tests/test_behavior.cpp
+    tests/test_behavior_authoring.cpp
+    tests/test_behavior_writer_c_api.cpp
+    tests/test_behavior_writer_real.cpp
+    tests/test_behavior_real.cpp
     tests/test_environment_world.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
