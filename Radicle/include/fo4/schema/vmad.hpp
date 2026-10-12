@@ -106,6 +106,8 @@ struct VmadProperty {
   std::optional<std::vector<float>> real_elements;
   std::optional<std::vector<bool>> boolean_elements;
   std::optional<std::vector<VmadStruct>> struct_elements;
+  std::size_t value_offset{0};
+  std::size_t value_size{0};
 };
 
 struct VmadScript {

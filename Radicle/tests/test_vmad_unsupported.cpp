@@ -48,27 +48,43 @@ fo4::test::ByteWriter plugin_with_masters() {
   return out;
 }
 
-std::vector<std::byte> make_plugin(std::uint8_t unsupported_type) {
+std::vector<std::byte> make_plugin(std::uint8_t unsupported_type,
+                                   bool nested = false,
+                                   std::uint32_t array_count = 1,
+                                   bool following_reference = false) {
   fo4::test::ByteWriter vmad;
   vmad.u16(5);
   vmad.u16(2);
   vmad.u16(1);
   wstring(vmad, "VariableScript");
   vmad.u8(0);
-  vmad.u16(2);
+  vmad.u16(following_reference ? 3 : 2);
 
   wstring(vmad, "KnownRef");
   vmad.u8(1);
   vmad.u8(1);
   object_v2(vmad, 0x0200009A);
 
+  if (nested) {
+    wstring(vmad, "Container");
+    vmad.u8(7);
+    vmad.u8(1);
+    vmad.u32(1);
+  }
   wstring(vmad, "DynamicValue");
   vmad.u8(unsupported_type);
   vmad.u8(1);
-  // Deliberately include FormID-looking bytes after the unsupported type. The
-  // scanner must not guess their meaning or retain the preceding partial hit.
-  vmad.u32(0x0200009B);
-  vmad.u32(0x0200009C);
+  if (unsupported_type == 16) vmad.u32(array_count);
+  if (unsupported_type != 16 || array_count != 0) {
+    vmad.u32(0x0200009B);
+    vmad.u32(0x0200009C);
+  }
+  if (following_reference) {
+    wstring(vmad, "FollowingRef");
+    vmad.u8(1);
+    vmad.u8(1);
+    object_v2(vmad, 0x0200009D);
+  }
 
   auto out = plugin_with_masters();
   const auto group = fo4::test::begin_group(out, "ACTI", 0);
@@ -79,8 +95,17 @@ std::vector<std::byte> make_plugin(std::uint8_t unsupported_type) {
   return out.bytes;
 }
 
-void expect_remap_refused(std::uint8_t type) {
-  auto plugin = fo4::read_plugin(make_plugin(type), "VariablePatch.esp");
+void expect_remap_refused(std::uint8_t type, bool nested = false,
+                          std::uint32_t array_count = 1) {
+  const auto bytes = make_plugin(type, nested, array_count);
+  const auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+  const auto* record = fo4::find_record(
+      plugin, fo4::FormKey::parse("000800:VariablePatch.esp"));
+  ASSERT_NE(record, nullptr);
+  ASSERT_EQ(record->subrecords.size(), 1u);
+  EXPECT_TRUE(fo4::vmad_has_unsupported_properties(
+      record->subrecords[0].data, record->header.signature));
 
   const auto links = fo4::collect_form_links(plugin);
   for (const auto& link : links) {
@@ -89,12 +114,13 @@ void expect_remap_refused(std::uint8_t type) {
 
   EXPECT_THROW(
       {
-        plugin = fo4::remap_plugin_masters(
-            std::move(plugin),
+        fo4::remap_plugin_masters(
+            plugin,
             {fo4::PluginKey::from_filename("Fallout4.esm"),
              fo4::PluginKey::from_filename("KeepMe.esm")});
       },
       fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
 }
 
 fo4::test::ByteWriter object_word_vmad(std::uint16_t format, std::uint16_t word) {
@@ -328,4 +354,63 @@ TEST(Vmad, EmptyQuestFragmentHeaderHasNoFlagsOrProperties) {
   EXPECT_TRUE(coverage.complete());
   EXPECT_EQ(coverage.fragment_count, 1u);
   EXPECT_EQ(coverage.fragment_script_count, 0u);
+}
+
+TEST(Vmad, NestedVariablePropertyClearsEarlierDiscoveries) {
+  expect_remap_refused(6, true);
+}
+
+TEST(Vmad, NestedVariableArrayPropertyClearsEarlierDiscoveries) {
+  expect_remap_refused(16, true);
+}
+
+TEST(Vmad, EmptyVariableArrayPreservesValuesAndRemapsFollowingReferences) {
+  for (const bool nested : {false, true}) {
+    const auto bytes = make_plugin(16, nested, 0, true);
+    const auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
+    EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+    const auto key = fo4::FormKey::parse("000800:VariablePatch.esp");
+    const auto* record = fo4::find_record(plugin, key);
+    ASSERT_NE(record, nullptr);
+    const auto& original = record->subrecords[0].data;
+    ASSERT_TRUE(fo4::vmad_coverage(original, record->header.signature).complete());
+    const auto scripts = fo4::read_vmad_scripts(original);
+    EXPECT_FALSE(scripts.unsupported);
+    ASSERT_EQ(scripts.scripts.size(), 1u);
+    ASSERT_EQ(scripts.scripts[0].properties.size(), 3u);
+    EXPECT_EQ(scripts.scripts[0].properties[1].element_count, nested ? 1u : 0u);
+    EXPECT_EQ(scripts.scripts[0].properties[2].object, fo4::RawFormId{0x0200009D});
+    const auto offsets = fo4::vmad_formid_offsets_for_remap(original, record->header.signature);
+    ASSERT_TRUE(offsets.has_value());
+    ASSERT_EQ(offsets->size(), 2u);
+    const auto remapped = fo4::remap_plugin_masters(
+        plugin, {fo4::PluginKey::from_filename("Fallout4.esm"),
+                 fo4::PluginKey::from_filename("KeepMe.esm")});
+    const auto reparsed = fo4::read_plugin(fo4::write_plugin(remapped), "VariablePatch.esp");
+    const auto* edited = fo4::find_record(reparsed, key);
+    ASSERT_NE(edited, nullptr);
+    auto expected = original;
+    for (const auto offset : *offsets) expected[offset + 3] = std::byte{1};
+    EXPECT_EQ(edited->subrecords[0].data, expected);
+    const auto decoded = fo4::read_vmad_scripts(edited->subrecords[0].data);
+    EXPECT_EQ(decoded.scripts[0].properties[0].object, fo4::RawFormId{0x0100009A});
+    EXPECT_EQ(decoded.scripts[0].properties[2].object, fo4::RawFormId{0x0100009D});
+  }
+}
+
+TEST(Vmad, EmptyVariableArrayDoesNotPermitUnknownTailOrTruncatedCountRemap) {
+  const auto bytes = make_plugin(16, false, 0);
+  const auto plugin = fo4::read_plugin(bytes, "VariablePatch.esp");
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000800:VariablePatch.esp"));
+  ASSERT_NE(record, nullptr);
+  const auto& payload = record->subrecords[0].data;
+  auto tail = payload;
+  tail.push_back(std::byte{0xEF});
+  EXPECT_TRUE(fo4::vmad_coverage(tail, record->header.signature).trailing_data);
+  EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(tail, record->header.signature).has_value());
+  for (std::size_t missing = 1; missing <= 4; ++missing) {
+    const auto truncated = std::span<const std::byte>(payload).first(payload.size() - missing);
+    EXPECT_TRUE(fo4::vmad_coverage(truncated, record->header.signature).failed);
+    EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(truncated, record->header.signature).has_value());
+  }
 }
