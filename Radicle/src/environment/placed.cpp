@@ -289,6 +289,20 @@ private:
         out.real = property.real;
         out.boolean = property.boolean;
         out.element_count = property.element_count;
+        if (property.object_elements) {
+          auto& keys = out.object_elements.emplace();
+          for (const auto& element : *property.object_elements) keys.push_back(env_.resolve_link(ref_, element.object));
+        }
+        if (property.struct_elements) {
+          auto& structs = out.struct_member_objects.emplace();
+          for (const auto& value : *property.struct_elements) {
+            auto& members = structs.emplace_back();
+            for (const auto& member : value.members) {
+              auto& object = members.emplace_back();
+              if (member.object) object = env_.resolve_link(ref_, member.object->object);
+            }
+          }
+        }
         script.properties.push_back(std::move(out));
       }
       scripts.scripts.push_back(std::move(script));

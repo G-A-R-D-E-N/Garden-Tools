@@ -1886,3 +1886,10 @@ Only locks older than five minutes are removed. An action fetch takes seconds, s
 
 Rewrites PATH entries under the real Windows profile to the neutral runner host junction `C:\ci\home` (example path), so tool paths printed in CI logs never show the profile folder name. Called from each runner's `start-runner.ps1`. `$real` comes from `GetFolderPath` rather than `$env:USERPROFILE` because `start-runner.ps1` has already pointed `$env:USERPROFILE` at the junction; the script keeps that as its one-line constraint comment.
 
+## Radicle/src/schema/vmad.cpp:walk_script_entry — empty-name script entries
+
+`source:xEdit Core/wbDefinitionsFO4.pas:3861-3865 @93cc0bc5` (`wbScriptEntry`) is a plain struct: length-prefixed ScriptName, Script Flags, Properties, with no empty-name branch. xEdit reads the flags byte and property count even when the name is empty. `walk_script_entry`, `read_vmad_scripts`, and the alias scripts in `read_quest_vmad_extras` follow that. The leading script list, quest aliases, and the INFO, PACK, PERK, and SCEN fragment headers all use `wbScriptEntry`. `walk_script_entry` still returns whether the name is nonempty, so `fragment_script_count` keeps its meaning.
+
+The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3984-3990 @93cc0bc5` (`wbVMADFragmentedQUST`) wraps Script Data in `wbUnion` with `source:xEdit Core/wbDefinitionsCommon.pas:5866-5876 @93cc0bc5` (`wbScriptFragmentsEmptyScriptDecider`), which picks `wbNull` for an empty ScriptName. So `walk_quest_extra` and `read_quest_vmad_extras` keep the empty-name guard for that header only.
+
+Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Radicle.Interop.Native;
 
@@ -23,6 +24,10 @@ public readonly record struct QuestRuntimeValue
     public short? Alias { get; init; }
 
     public uint? ElementCount { get; init; }
+
+    public IReadOnlyList<ScriptElement>? Elements { get; init; }
+
+    public IReadOnlyList<ScriptStruct>? Structs { get; init; }
 }
 
 public readonly record struct QuestRuntimeProperty(
@@ -108,6 +113,15 @@ public static class QuestRuntime
                         ObjectFormId = property.HasObject != 0 ? property.ObjectFormId : null,
                         Alias = property.HasPropertyAlias != 0 ? property.PropertyAlias : null,
                         ElementCount = property.HasElementCount != 0 ? property.ElementCount : null,
+                        Elements = property.HasElements != 0
+                            ? Call.Copy<Native.ScriptElement>(property.Elements, property.ElementValueCount)
+                                .Select(e => new ScriptElement(FormKey.FromNative(e.Object), e.Alias, Utf8.Read(e.Text),
+                                                               e.Integer, e.Real, e.Boolean != 0))
+                                .ToArray()
+                            : null,
+                        Structs = property.HasStructs != 0
+                            ? RadicleEnvironment.ScriptStructs(property.Structs, property.StructCount)
+                            : null,
                     });
             }
             return entries;
