@@ -96,7 +96,8 @@ ScalarMutationStatus set_navmesh_triangle(Plugin& plugin, const FormKey& key, st
       std::memcpy(&old_edge, data.data() + 6 + i * 2, sizeof old_edge);
       if (value.vertices[i] != old_vertex && value.vertices[i] >= counts[0]) throw schema::ScalarError("triangle vertex is out of range");
       const auto limit = static_cast<std::int64_t>(((value.flags >> i) & 1) ? counts[2] : counts[1]);
-      if (value.edges[i] != old_edge && (value.edges[i] < -1 || value.edges[i] >= limit)) throw schema::ScalarError("triangle edge is out of range");
+      const auto low = ((value.flags >> i) & 1) ? 0 : -1;
+      if (value.edges[i] != old_edge && (value.edges[i] < low || value.edges[i] >= limit)) throw schema::ScalarError("triangle edge is out of range");
       store(data, i * 2, value.vertices[i]); store(data, 6 + i * 2, value.edges[i]);
     }
     store(data, 12, value.clearance);

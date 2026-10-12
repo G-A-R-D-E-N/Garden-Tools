@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <map>
+#include <set>
 
 namespace {
 
@@ -90,7 +92,7 @@ TEST_P(NavmeshReal, EveryOfficialNavmeshDecodesAndUnchangedMasterIsIdentical) {
   const radicle_record** records = nullptr; std::size_t count = 0;
   ASSERT_EQ(radicle_env_plugin_records(abi, 0, &records, &count), RADICLE_STATUS_OK);
   const auto refs = env.plugin_records(0); ASSERT_EQ(count, refs.size());
-  std::size_t navm = 0, navm_failed = 0, navi = 0, navi_failed = 0, infos = 0;
+  std::size_t navm = 0, navm_failed = 0, navi = 0, navi_failed = 0, infos = 0, flag_bits = 0, extra_records = 0;
   for (std::size_t i = 0; i < count; ++i) {
     const auto type = refs[i]->record->header.signature;
     if (type == fo4::Signature::from_string("NAVM")) {
@@ -100,6 +102,10 @@ TEST_P(NavmeshReal, EveryOfficialNavmeshDecodesAndUnchangedMasterIsIdentical) {
       const radicle_navmesh* value = nullptr;
       const bool c_ok = radicle_navmesh_decode(abi, records[i], &value) == RADICLE_STATUS_OK && value != nullptr;
       if (!native_ok || !c_ok) ++navm_failed;
+      if (native) {
+        for (const auto& t : native->triangles) flag_bits += static_cast<std::size_t>(std::popcount(t.flags & 0x7u));
+        extra_records += native->edges.size();
+      }
       if (native_ok && c_ok) {
         EXPECT_EQ(value->has_geometry, native ? 1 : 0);
         if (native) { expect_geometry(*native, *value); }
@@ -124,9 +130,105 @@ TEST_P(NavmeshReal, EveryOfficialNavmeshDecodesAndUnchangedMasterIsIdentical) {
   RecordProperty("NAVM", static_cast<int>(navm)); RecordProperty("NAVM_FAILED", static_cast<int>(navm_failed));
   RecordProperty("NAVI", static_cast<int>(navi)); RecordProperty("NAVI_FAILED", static_cast<int>(navi_failed));
   RecordProperty("NVMI", static_cast<int>(infos));
+  RecordProperty("EXTRA_EDGE_FLAG_BITS", static_cast<int>(flag_bits)); RecordProperty("EXTRA_EDGE_RECORDS", static_cast<int>(extra_records));
+  EXPECT_EQ(flag_bits, extra_records);
   EXPECT_EQ(navm_failed, 0u); EXPECT_EQ(navi_failed, 0u);
   const auto bytes = fo4::write_plugin(env.plugin(0)); const auto original = fo4::plugin_original_bytes(env.plugin(0));
   ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);
+}
+
+const fo4::env::RecordRef* fallout_record(const fo4::env::Environment& env, std::uint32_t id) {
+  return env.winner(fo4::FormKey{fo4::PluginKey::from_filename("Fallout4.esm"), fo4::LocalFormId{id}});
+}
+
+std::size_t nvnm_size(const fo4::env::RecordRef& ref) {
+  for (const auto& sub : ref.record->subrecords) {
+    if (sub.signature == fo4::Signature::from_string("NVNM")) return sub.data.size();
+  }
+  return 0;
+}
+
+TEST(NavmeshCorpus, Fallout4FixturesBoundaryCountsAndNvppSize) {
+  const auto* dir = std::getenv("FO4_DATA_DIR");
+  if (!dir) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  const auto path = std::filesystem::path{dir} / "Fallout4.esm";
+  if (!std::filesystem::exists(path)) GTEST_SKIP() << "missing official master: " << path;
+  const std::filesystem::path native_paths[] = {path}; const auto env = fo4::env::Environment::load(native_paths);
+
+  const auto* blob = fallout_record(env, 0x00249B3E); ASSERT_NE(blob, nullptr);
+  EXPECT_EQ(nvnm_size(*blob), 143u);
+  const auto blob_mesh = fo4::env::decode_navmesh(env, *blob); ASSERT_TRUE(blob_mesh);
+  EXPECT_EQ(blob_mesh->parent.cell.local().value(), 0x0004D414u);
+
+  const auto* portal = fallout_record(env, 0x0015CD5F); ASSERT_NE(portal, nullptr);
+  const auto portal_mesh = fo4::env::decode_navmesh(env, *portal); ASSERT_TRUE(portal_mesh);
+  ASSERT_EQ(portal_mesh->edges.size(), 1u); EXPECT_EQ(portal_mesh->edges[0].type, 0u);
+
+  const auto* ledge = fallout_record(env, 0x002492C4); ASSERT_NE(ledge, nullptr);
+  const auto ledge_mesh = fo4::env::decode_navmesh(env, *ledge); ASSERT_TRUE(ledge_mesh);
+  EXPECT_TRUE(std::any_of(ledge_mesh->edges.begin(), ledge_mesh->edges.end(), [](const auto& e) { return e.type == 1; }));
+
+  const auto* door = fallout_record(env, 0x0024A19A); ASSERT_NE(door, nullptr);
+  const auto door_mesh = fo4::env::decode_navmesh(env, *door); ASSERT_TRUE(door_mesh);
+  ASSERT_FALSE(door_mesh->doors.empty());
+  const auto door_triangle = static_cast<std::size_t>(door_mesh->doors[0].triangle);
+  ASSERT_LT(door_triangle, door_mesh->triangles.size());
+  EXPECT_NE(door_mesh->triangles[door_triangle].flags & 0x400u, 0u);
+
+  const auto* traversal_16 = fallout_record(env, 0x002496F5); ASSERT_NE(traversal_16, nullptr);
+  const auto traversal_16_mesh = fo4::env::decode_navmesh(env, *traversal_16); ASSERT_TRUE(traversal_16_mesh);
+  EXPECT_TRUE(std::any_of(traversal_16_mesh->triangles.begin(), traversal_16_mesh->triangles.end(),
+                          [](const auto& t) { return t.traversal == 0x10; }));
+  const auto* traversal_02 = fallout_record(env, 0x0023B4AE); ASSERT_NE(traversal_02, nullptr);
+  const auto traversal_02_mesh = fo4::env::decode_navmesh(env, *traversal_02); ASSERT_TRUE(traversal_02_mesh);
+  EXPECT_TRUE(std::any_of(traversal_02_mesh->triangles.begin(), traversal_02_mesh->triangles.end(),
+                          [](const auto& t) { return t.traversal == 0x02; }));
+  const auto* traversal_01 = fallout_record(env, 0x002492C4); ASSERT_NE(traversal_01, nullptr);
+  const auto traversal_01_mesh = fo4::env::decode_navmesh(env, *traversal_01); ASSERT_TRUE(traversal_01_mesh);
+  EXPECT_TRUE(std::any_of(traversal_01_mesh->triangles.begin(), traversal_01_mesh->triangles.end(),
+                          [](const auto& t) { return t.traversal == 0x01; }));
+  const auto* single = fallout_record(env, 0x002470C7); ASSERT_NE(single, nullptr);
+  const auto single_mesh = fo4::env::decode_navmesh(env, *single); ASSERT_TRUE(single_mesh);
+  ASSERT_EQ(single_mesh->triangles.size(), 1u);
+  EXPECT_EQ(single_mesh->triangles[0].flags & 0x800u, 0u);
+
+  const auto* counted = fallout_record(env, 0x0003970A); ASSERT_NE(counted, nullptr);
+  const auto counted_mesh = fo4::env::decode_navmesh(env, *counted); ASSERT_TRUE(counted_mesh);
+  EXPECT_EQ(counted_mesh->triangles.size(), 1146u);
+  EXPECT_EQ(std::count_if(counted_mesh->triangles.begin(), counted_mesh->triangles.end(),
+                          [](const auto& t) { return (t.flags & 0x200u) != 0; }), 50);
+
+  std::map<std::uint32_t, fo4::env::NavmeshGeometry> meshes;
+  for (const auto* ref : env.winners_of(fo4::Signature::from_string("NAVM"))) {
+    auto mesh = fo4::env::decode_navmesh(env, *ref);
+    if (mesh) meshes.emplace(ref->record->form_key.local().value(), std::move(*mesh));
+  }
+  std::set<std::pair<std::uint32_t, std::size_t>> doors_without_bit10;
+  std::size_t type0_unflagged = 0;
+  for (const auto& [id, mesh] : meshes) {
+    for (const auto& d : mesh.doors) {
+      const auto triangle = static_cast<std::size_t>(d.triangle);
+      ASSERT_LT(triangle, mesh.triangles.size());
+      if ((mesh.triangles[triangle].flags & 0x400u) == 0) doors_without_bit10.emplace(id, triangle);
+    }
+    for (const auto& e : mesh.edges) {
+      if (e.type != 0) continue;
+      ASSERT_NE(env.winner(e.navmesh), nullptr);
+      const auto destination = meshes.find(e.navmesh.local().value());
+      const auto triangle = static_cast<std::size_t>(e.triangle);
+      const bool flagged = destination != meshes.end() && triangle < destination->second.triangles.size() &&
+                           ((destination->second.triangles[triangle].flags >> e.edge) & 1u) != 0;
+      if (!flagged) ++type0_unflagged;
+    }
+  }
+  EXPECT_EQ(type0_unflagged, 2u);
+  EXPECT_EQ(doors_without_bit10.size(), 0u);
+
+  const auto navi = env.winners_of(fo4::Signature::from_string("NAVI"));
+  ASSERT_EQ(navi.size(), 1u);
+  const auto paths = fo4::env::decode_navmesh_paths(env, *navi[0]);
+  EXPECT_EQ(paths.paths.size(), 196u);
+  EXPECT_EQ(paths.anchors.size(), 14u);
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, NavmeshReal,

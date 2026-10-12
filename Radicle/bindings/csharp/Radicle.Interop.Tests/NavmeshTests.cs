@@ -38,6 +38,34 @@ public class NavmeshTests
         Assert.Equal(new byte[48], mesh.OpaqueTail);
     }
 
+    [Fact]
+    public void EdgeIsExtraReadsFlagBitsZeroToTwoThroughTheNativeAccessor()
+    {
+        var triangle = new NavmeshTriangle(new ushort[] { 0, 1, 2 }, new short[] { -1, 0, 7 }, 4.5f, 0xAA, 0xABCD8012);
+        Assert.False(triangle.EdgeIsExtra(0)); Assert.True(triangle.EdgeIsExtra(1)); Assert.False(triangle.EdgeIsExtra(2));
+        Assert.Throws<RadicleException>(() => triangle.EdgeIsExtra(3));
+    }
+
+    [Fact]
+    public void PathGetterReadsNvppListsAndAnchorsAndRefusesTruncation()
+    {
+        using var temp = new TempDirectory();
+        var nvpp = Payload(w =>
+        {
+            w.Write(2u); w.Write(2u); w.Write(0x800u); w.Write(0x810u); w.Write(1u); w.Write(0x810u);
+            w.Write(1u); w.Write(0x800u); w.Write(7u);
+        });
+        var path = temp.Write("Navigation.esm", Build(1, Array.Empty<string>(), Top("NAVI",
+            new Rec("NAVI", 0x801, new[] { ("NVER", U32(15)), ("NVPP", nvpp) }),
+            new Rec("NAVI", 0x802, new[] { ("NVER", U32(15)), ("NVPP", nvpp[..^1]) }))));
+        using var env = RadicleEnvironment.Load(new[] { path });
+        var good = env.NavmeshPaths(env.Winner(new FormKey("Navigation.esm", 0x801))!.Value);
+        Assert.Equal(new FormKey?[] { new("Navigation.esm", 0x800), new("Navigation.esm", 0x810) }, good.Paths[0]);
+        Assert.Equal(new FormKey?[] { new("Navigation.esm", 0x810) }, good.Paths[1]);
+        Assert.Equal(new NaviAnchor(new("Navigation.esm", 0x800), 7), Assert.Single(good.Anchors));
+        Assert.Throws<RadicleException>(() => env.NavmeshPaths(env.Winner(new FormKey("Navigation.esm", 0x802))!.Value));
+    }
+
     private static byte[] Payload(Action<BinaryWriter> write)
     {
         using var stream = new MemoryStream();
@@ -52,7 +80,7 @@ public class NavmeshTests
         if (exterior) { w.Write((short)-2); w.Write((short)7); } else w.Write(0x811u);
         w.Write(1u); w.Write(1.5f); w.Write(-2f); w.Write(3f);
         w.Write(1u); w.Write((ushort)0); w.Write((ushort)1); w.Write((ushort)2);
-        w.Write((short)-1); w.Write((short)-2); w.Write((short)7); w.Write(4.5f);
+        w.Write((short)-1); w.Write((short)0); w.Write((short)7); w.Write(4.5f);
         w.Write((byte)0xAA); w.Write((ushort)0x8012); w.Write((ushort)0xABCD);
         w.Write(1u); w.Write(0xDEADBEEFu); w.Write(0x812u); w.Write((short)-3); w.Write((byte)2);
         w.Write(1u); w.Write((short)-5); w.Write(0xABCDEFu); w.Write(0x813u);
@@ -96,7 +124,7 @@ public class NavmeshTests
         Assert.Equal(exterior ? (short)7 : (short)0, mesh.Parent.GridX);
         Assert.Equal(new NavmeshVertex(1.5f, -2f, 3f), Assert.Single(mesh.Vertices));
         var t = Assert.Single(mesh.Triangles);
-        Assert.Equal(new ushort[] { 0, 1, 2 }, t.Vertices); Assert.Equal(new short[] { -1, -2, 7 }, t.Edges);
+        Assert.Equal(new ushort[] { 0, 1, 2 }, t.Vertices); Assert.Equal(new short[] { -1, 0, 7 }, t.Edges);
         Assert.Equal(4.5f, t.Clearance); Assert.Equal((byte)0xAA, t.Traversal);
         Assert.Equal(0xABCD8012u, (uint)t.Flags);
         Assert.Equal(new NavmeshEdgeLink(0xDEADBEEF, new("Navigation.esm", 0x812), -3, 2), Assert.Single(mesh.Edges));

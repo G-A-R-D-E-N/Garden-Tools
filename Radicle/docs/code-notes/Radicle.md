@@ -877,11 +877,60 @@ Fail closed: the recursion throws `WorldDecodeError` instead of returning a part
 
 ## Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION
 
-The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin. ABI 35 renames that test to `CApiQuest.AbiVersionIsThirtyFive` and moves its literal to 35.
+The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_file_list_free` moved `RADICLE_ABI_VERSION` from 33 to 34, and `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFour` replaces `AbiVersionIsThirtyThree` as the pin. ABI 35 renames that test to `CApiQuest.AbiVersionIsThirtyFive` and moves its literal to 35; that bump is the #340 sound playback functions (`radicle_sound_select_rate_file`, `radicle_sound_select_standard_file`). The #343 climate helpers (`radicle_climate_moon_phase`, `radicle_climate_volatility_hold_hours`, `radicle_weather_transition_hours`, in `c_api_records.h`) were first numbered 35 on their branch and moved to ABI 36 when nomad/dev merged, so they arrive in ABI 36. The test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtySix`. The #344 dialogue reset hours fields (`has_reset_hours` and `reset_hours` on `radicle_dialogue_info`) and the `radicle_scene_action_type_name` export moved it to ABI 37; the test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtySeven`. ABI 38 adds the #339 navmesh extra-edge accessor `radicle_navmesh_triangle_edge_is_extra` and the NVPP path-list functions `radicle_navi_path_list_decode` and `radicle_navi_path_list_free`; the test is now `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyEight`.
 
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
+
+## Radicle/include/fo4/environment/navmesh.hpp:NavmeshTriangle::edge_is_extra
+
+`edge_is_extra(i)` reports whether flags bit i (0 to 2) is set. A set bit means `edges[i]` indexes the extra-edge array instead of the triangle array. `decode_navmesh` in `Radicle/src/environment/navmesh.cpp` checks every flagged index after the extra-edge table is read, and throws `WorldDecodeError` when an index is at or past the extra-edge count, so the mesh is refused rather than partly read. An unflagged `0xFFFF` is still the open-edge value and is kept as read.
+
+`set_navmesh_triangle` refuses -1 on a flagged slot (`Radicle/tests/test_navmesh_authoring.cpp:FlaggedEdgeSlotRefusesMinusOneWithoutChangingBytes`). The C ABI exposes the same bit test as `radicle_navmesh_triangle_edge_is_extra` in `Radicle/src/c_api_navmesh.cpp`, which returns `RADICLE_STATUS_INVALID_ARGUMENT` for an edge above 2. The C# wrapper is `NavmeshTriangle.EdgeIsExtra` in `Radicle/bindings/csharp/Radicle.Interop/Navmesh.cs`. Tests: `Radicle/tests/test_navmesh.cpp:ExtraEdgeFlagIndexesExtraEdgeArray`, `Radicle/tests/test_navmesh.cpp:FlaggedEdgeIndexPastExtraEdgeCountFailsClosed`, `Radicle/tests/test_navmesh.cpp:NavmeshAbi.TriangleEdgeAccessorReadsFlagBitsAndRefusesOutOfRange`, and `Radicle/tests/test_navmesh_real.cpp:NavmeshReal` (flagged bits 0 to 2 equal the extra-edge count per master).
+
+## Radicle/src/environment/navmesh.cpp:decode_navmesh_paths
+
+`decode_navmesh_paths` reads the NVPP subrecord of a NAVI record. It takes the NAVI record like `decode_navmesh_info` does and shares its NVER 15 check through `require_navi_version`. The payload is validated by `validate`, which calls `navmesh_mixed_formid_offsets`, before the lists are read. A truncated payload or trailing bytes therefore throw `WorldDecodeError`. A record without an NVPP subrecord returns empty lists. Form IDs resolve through the same `link` helper as the other navmesh links. The layout (u32 N, N lists of u32 k and k form IDs, u32 M, M pairs of form ID and u32 value) is in `docs/NAVM_NAVI.md`.
+
+The C ABI reads it through `radicle_navi_path_list_decode`, which returns an owned list released by `radicle_navi_path_list_free` (`Radicle/src/c_api_navmesh.cpp`). The C# binding is `RadicleEnvironment.NavmeshPaths` in `Radicle/bindings/csharp/Radicle.Interop/Navmesh.cs`. These exports, together with the accessor above, move `RADICLE_ABI_VERSION` from 34 to 35, pinned by `Radicle/tests/test_c_api_quest.cpp:CApiQuest.AbiVersionIsThirtyFive`. Tests: `Radicle/tests/test_navmesh.cpp:PathPayloadDecodesListsAndAnchorsAndFailsClosed` and `Radicle/tests/test_navmesh_real.cpp:NavmeshCorpus.Fallout4FixturesBoundaryCountsAndNvppSize`, which asserts N = 196 and M = 14 on Fallout4.esm.
+## Radicle/include/fo4/environment/dialogue.hpp:DialogueInfo::reset_hours
+
+ENAM's second u16 is a reset time in units of 1/65535 of a day (RE #405 comment 7891, reaffirmed in #344 comment 7892), so the derived hours are raw * 24 / 65535 and raw 65535 is exactly 24.0. The method returns an empty optional when ENAM is absent, rather than 0, so an absent reset is not confused with a zero reset. The writer field `INFO\ResetHours` in `include/fo4/schema/generated_scalar_fields.inc` edits the raw u16 and keeps its historical name; it is not the derived value.
+
+## Radicle/include/fo4/environment/dialogue.hpp:SceneActionType
+
+The enumerators are the OG 1.10.163 ANAM action type ids 0 to 6 from RE #405 comment 7891. Only ids 0 to 6 are named. The stored `SceneAction::type` stays the raw u16, so unknown ids such as 7 or 0xFFFF are preserved and report no name rather than being coerced. RE #405 does not state that every shipped id is in 0 to 6, so the corpus test records a histogram instead of asserting it.
+
+## Radicle/src/environment/dialogue.cpp:scene_action_type_name
+
+Unknown ids return an empty view built from a literal, not a default `string_view`, so `data()` is a valid pointer for the C ABI's `radicle_scene_action_type_name`, which must return a non-null C string.
+
+## Radicle/include/fo4/c_api_dialogue.h:radicle_dialogue_info
+
+`has_reset_hours` and `reset_hours` follow the `has_` plus value pattern of the other optional fields. They were added in ABI 37. The C# `DialogueInfo` record gained a `ResetHours` positional parameter after `ResetTimeEncoded`.
+
+## Radicle/src/c_api_dialogue.cpp:radicle_scene_action_type_name
+
+Static names are returned for the named ids and an empty string for every other id. The caller does not free the result, which points into the library's static data.
+
+## Radicle/tests/test_dialogue_real.cpp:DialogueReal
+
+The per-type `SCEN_action_type_<id>` properties are a histogram of the shipped action type ids for the record-level CI report. They are not asserted, because RE #405 only states the meaning of ids 0 to 6 and does not state that every shipped id is in that range.
+
+## Radicle/include/fo4/environment/base_records.hpp:ClimateTiming
+`moon_phase` decodes the packed moon byte as in `days_per_phase`: the phase is `(days passed % (days * 8)) / days`, so there are eight phases (0 to 7) driven by the game day count. Zero days per phase means the phase is never updated, so the helper returns no value rather than 0. Packing and phase formula: #397 comment 7866.
+
+`volatility_hold_hours` takes the multiplier and the hold-time bounds as inputs. The engine's `x = clamp(byte * volatilityMult, 0, 255)` and the result `max(0.1, (max - min) * (255 - x) / 255 + min)` are the proven formula (0x656270, #397 comment 7866). The 0.1 floor is part of the formula; the engine returns 0.1 directly when there is no climate or no current weather, which the helper does not model. The compiled defaults are min 1.0 and max 23.0 game hours. The meaning of the result as the weather hold time is verified from `Sky::UpdateWeather` at 0x64E530 (#397 comment 9745).
+
+## Radicle/src/environment/base_records.cpp:transition_hours
+Computes `byte / 255 * (max - min) + min` in float32 from the WTHR DATA transition byte (`weatherData[3]`, read unsigned by the engine). The bounds are game settings `fWeatherTransMin` and `fWeatherTransMax`, not record fields, so the caller supplies them; the compiled OG defaults are 0.01 and 1.0, and the AE 1.11.240 Fallout4.esm sets fWeatherTransMax 3.0 (OG shipped GMST values unverified) (#397 comments 7866 and 9763 for the GMST routing). Its min and max come from GMSTs where the last matching plugin wins, and the accelerated 5x (compiled) or 17x (AE) multiplier from fWeatherTransAccel is not applied (RE-010 on #520, comment 13142).
+
+## Radicle/src/schema/preflight.cpp:climate_sun_window_issues
+Flags a CLMT TNAM whose sunrise (bytes 0 to 1) or sunset (bytes 2 to 3) window has end minus begin equal to 144 raw units, which is 24 hours at 1/6 hour per unit. The engine divides by zero for that window in 0x647CE0 (#397 comment 9745). Reversed and zero-width windows (end minus begin at or below 0) are flagged as `climate_sun_window_never_opens`, because the engine never opens them (RE-010 on #520, comment 13142); the record is not reordered or clamped.
+
+## Radicle/src/c_api_base_records.cpp:radicle_climate_moon_phase
+C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_hours` and `transition_hours`. They take the stored bytes as scalars, check null out-pointers, and use the same `RADICLE_STATUS_INVALID_ARGUMENT` convention as the other scalar getters. The moon wrapper reports absence with `out_has_phase` (0 when days per phase is 0).
 
 ## Radicle/tests/real_data_build.cpp:detect_game_build
 

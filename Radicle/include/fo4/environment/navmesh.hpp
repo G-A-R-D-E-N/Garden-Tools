@@ -3,9 +3,11 @@
 #include "fo4/environment/world.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace fo4::env {
@@ -23,6 +25,7 @@ struct NavmeshTriangle {
   float clearance{0};
   std::uint8_t traversal{0};
   std::uint32_t flags{0};
+  bool edge_is_extra(std::size_t i) const { return i < edges.size() && ((flags >> i) & 1u) != 0; }
 };
 
 struct NavmeshEdgeLink {
@@ -66,6 +69,12 @@ struct NavmeshInfo {
 };
 
 std::optional<NavmeshGeometry> decode_navmesh(const Environment& env, const RecordRef& ref);
+struct NavmeshPathData {
+  std::vector<std::vector<FormKey>> paths;
+  std::vector<std::pair<FormKey, std::uint32_t>> anchors;
+};
+
 std::vector<NavmeshInfo> decode_navmesh_info(const Environment& env, const RecordRef& ref);
+NavmeshPathData decode_navmesh_paths(const Environment& env, const RecordRef& ref);
 
 }

@@ -230,6 +230,10 @@ std::optional<FormKey> decode_activator_water_type(const Environment& env, const
   return Reader(env, ref, sig("ACTI")).link(sig("WNAM"));
 }
 
+float transition_hours(std::uint8_t transition_delta, float min_hours, float max_hours) {
+  return static_cast<float>(transition_delta) / 255.0f * (max_hours - min_hours) + min_hours;
+}
+
 WaterData decode_water(const Environment& env, const RecordRef& ref) {
   const Reader reader(env, ref, sig("WATR"));
   WaterData out;

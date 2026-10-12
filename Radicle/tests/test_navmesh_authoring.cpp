@@ -98,6 +98,13 @@ TEST(NavmeshAuthoring, EdgeAndDoorIndicesOutsideTheirArraysRefuseWithoutChanging
   EXPECT_EQ(set_navmesh_triangle(plugin, key, 0, triangle), ScalarMutationStatus::updated);
 }
 
+TEST(NavmeshAuthoring, FlaggedEdgeSlotRefusesMinusOneWithoutChangingBytes) {
+  auto plugin = test::navmesh_writer_fixture(0xFFFF, 0); const auto before = write_plugin(plugin);
+  env::NavmeshTriangle triangle{{2, 1, 0}, {-1, -1, -1}, 6.5f, 0xAA, 0xABCD8012};
+  EXPECT_THROW(set_navmesh_triangle(plugin, test::navmesh_key(), 0, triangle), schema::ScalarError);
+  EXPECT_EQ(write_plugin(plugin), before);
+}
+
 TEST(NavmeshAuthoring, UnchangedDanglingTriangleEdgeIsKeptAndChangedOneRefuses) {
   auto plugin = test::navmesh_writer_fixture(1);
   const auto key = test::navmesh_key();
