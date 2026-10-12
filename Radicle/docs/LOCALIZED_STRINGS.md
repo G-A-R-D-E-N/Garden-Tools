@@ -152,11 +152,12 @@ persistence point remain tracked separately in #174.
 
 ## TES4 bit 7 and plugin fields
 
-This support does **not** settle Radicle issue #29 (`TES4 bit 7: localized vs delocalized`). The string-table container and the plugin localization flag are separate questions.
+The container format is separate from plugin field classification. [TES4_LOCALIZATION_EVIDENCE.md](TES4_LOCALIZATION_EVIDENCE.md) establishes bit `0x80` set as external string IDs and clear as inline text in OG/AE, with static CK direction evidence. NG reader behavior, CK table emission and live behavior remain separate #390 questions. #29 is partial; complete localized editing also needs field-aware mutation and explicit sidecar ownership proof, not merely this flag classification.
 
-Until bit 7 semantics are resolved or a caller supplies an explicit localization context:
+The current API boundary is:
 
-- Radicle does not automatically resolve 4-byte `FULL`, `DESC`, or similar payloads through external string tables;
+- `read_localized_string` uses the plugin flag and the per-record schema to distinguish a string ID from inline text; four-byte size alone does not classify a field;
+- Radicle does not automatically fetch text from a language sidecar; language, table kind and ownership must be resolved by the caller;
 - typed EYES `FULL` editing continues to treat a 4-byte payload as opaque/localized and refuses text mutation;
 - string-table APIs may be used explicitly by tooling that already knows which table and string ID it intends to access.
 

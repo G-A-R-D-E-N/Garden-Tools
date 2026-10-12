@@ -192,7 +192,8 @@ bytes.
 
 This is handled by `fo4/schema/localized_fields.hpp`. A string field decodes to
 a `LocalizedString` carrying **either** a four-byte string ID (localized plugin,
-lstring field) **or** inline text, whichever the file used. Decoding performs no
+lstring field) **or** inline text, whichever the file used; a localized payload
+that is not four bytes has neither, and its raw bytes are kept. Decoding performs no
 I/O and picks no language, so a write-back reproduces the original bytes;
 resolve an ID through `fo4::localization` when display text is wanted.
 
