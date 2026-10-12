@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -58,10 +59,13 @@ inline std::filesystem::path utf8_path(std::string_view text) { return std::u8st
 inline std::vector<std::filesystem::path> read_order(const std::filesystem::path& file) {
   std::vector<std::filesystem::path> paths;
   std::ifstream in(file);
+  if (!in) throw std::runtime_error("cannot open load-order input");
   for (std::string line; std::getline(in, line);) {
     if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty()) continue;
     const auto tab = line.find('\t');
-    if (tab != std::string::npos) paths.push_back(utf8_path(std::string_view(line).substr(tab + 1)));
+    if (tab == std::string::npos || tab + 1 == line.size()) throw std::runtime_error("load-order row requires a tab and plugin path");
+    paths.push_back(utf8_path(std::string_view(line).substr(tab + 1)));
   }
   return paths;
 }

@@ -4,6 +4,7 @@
 #include "fo4/environment/strings.hpp"
 #include "fo4/environment/terrain.hpp"
 #include "fo4/environment/world.hpp"
+#include "fo4/schema/vmad.hpp"
 #include "parity/common.hpp"
 
 #include <algorithm>
@@ -56,7 +57,10 @@ void write(const std::filesystem::path& dir, const char* name, std::vector<std::
   std::filesystem::create_directories(dir);
   std::sort(lines.begin(), lines.end());
   std::ofstream out(dir / name, std::ios::binary);
+  if (!out) throw std::runtime_error("cannot open measurement output: " + std::string{name});
   for (const auto& line : lines) out << line << '\n';
+  out.close();
+  if (!out) throw std::runtime_error("cannot save measurement output: " + std::string{name});
 }
 
 std::set<FormKey> keys_of(const Environment& env, std::string_view signature) {
@@ -230,8 +234,63 @@ int dump_ba2(const std::filesystem::path& list, const std::filesystem::path& out
   return 0;
 }
 
+int dump_papyrus(const Environment& env, const std::filesystem::path& out) {
+  std::vector<std::string> rows;
+  std::vector<std::string> fragment_rows;
+  std::vector<std::string> failures;
+  const auto signature = fo4::Signature::from_string("VMAD");
+  for (const auto& form : keys_of(env, "")) {
+    const auto* ref = env.winner(form);
+    if (env.metadata(*ref).deleted) continue;
+    const auto& subrecords = ref->record->subrecords;
+    const auto vmad = std::find_if(subrecords.begin(), subrecords.end(),
+                                 [&](const auto& sub) { return sub.signature == signature; });
+    if (vmad == subrecords.end()) continue;
+    const auto id = key(form);
+    if (std::count_if(subrecords.begin(), subrecords.end(),
+                      [&](const auto& sub) { return sub.signature == signature; }) != 1) {
+      failures.push_back(id + "\tduplicate-vmad");
+      continue;
+    }
+    try {
+      const auto scripts = fo4::read_vmad_scripts(vmad->data);
+      const auto coverage = fo4::vmad_coverage(vmad->data, ref->record->header.signature);
+      if (scripts.unsupported || !coverage.complete()) {
+        failures.push_back(id + "\tincomplete-vmad");
+        continue;
+      }
+      std::size_t fragments = 0;
+      std::size_t aliases = 0;
+      std::size_t alias_scripts = 0;
+      if (ref->record->header.signature.view() == "QUST" && scripts.trailing_bytes != 0) {
+        const auto extras = fo4::read_quest_vmad_extras(
+            std::span<const std::byte>(vmad->data).subspan(vmad->data.size() - scripts.trailing_bytes), scripts.object_format);
+        if (extras.unsupported || !extras.fully_consumed) {
+          failures.push_back(id + "\tincomplete-quest-extras");
+          continue;
+        }
+        fragments = extras.fragments.size();
+        aliases = extras.aliases.size();
+        for (const auto& alias : extras.aliases) alias_scripts += alias.scripts.size();
+      }
+      rows.push_back(std::format("{}\t{}\t{}\t{}\t{}\t{}", id, ref->record->header.signature.view(),
+                                 scripts.scripts.size(), fragments, aliases, alias_scripts));
+      fragment_rows.push_back(std::format("{}\t{}\t{}\t{}", id, ref->record->header.signature.view(),
+                                          coverage.fragment_count, coverage.fragment_script_count));
+    } catch (const std::exception& error) {
+      failures.push_back(id + "\tmalformed-vmad");
+      std::cerr << id << ": " << error.what() << '\n';
+    }
+  }
+  const bool complete = failures.empty();
+  write(out, "papyrus.tsv", std::move(rows));
+  write(out, "papyrus_fragments.tsv", std::move(fragment_rows));
+  write(out, "papyrus_failures.tsv", std::move(failures));
+  return complete ? 0 : 1;
+}
+
 int usage() {
-  std::cerr << "usage: radicle_parity_dump <versions|cells|world> <order.tsv> <out-dir> | names <order.tsv> <out-dir> <data-dir> | "
+  std::cerr << "usage: radicle_parity_dump <versions|cells|world|papyrus> <order.tsv> <out-dir> | names <order.tsv> <out-dir> <data-dir> | "
                "ba2 <archives.txt> <out-dir> [max-mb] | ba2x <archive.ba2> <entry> <out-file>\n";
   return 2;
 }
@@ -250,6 +309,7 @@ int run(const radicle_parity::Args& args) {
   }
   if (mode == "ba2") return dump_ba2(args[2], args[3], args.size() == 5 ? std::stoull(utf8(args[4])) << 20 : 0);
   const auto env = Environment::load(radicle_parity::read_order(args[2]));
+  if (mode == "papyrus") return dump_papyrus(env, args[3]);
   if (mode == "versions") dump_versions(env, args[3]);
   else if (mode == "cells") dump_cells(env, args[3]);
   else if (mode == "world") dump_world(env, args[3]);
