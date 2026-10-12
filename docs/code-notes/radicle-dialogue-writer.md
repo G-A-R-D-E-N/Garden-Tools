@@ -175,7 +175,8 @@ Localized string IDs are validated using the owning plugin flag passed explicitl
   `radicle_plugin_scene_group_count` with `radicle_scene_part` (phase 0, actor 1, action 2). Statuses: updated/unchanged
   OK; missing record, group or subrecord NOT_FOUND; everything thrown INVALID_ARGUMENT. C#:
   `Radicle/bindings/csharp/Radicle.Interop/PluginFile.cs:SetSceneScalar`, `SetSceneFormLink`, `SceneGroupCount`
-  (NOT_FOUND is false or 0, other failures throw).
+  (the setters return false for NOT_FOUND; `SceneGroupCount` throws `KeyNotFoundException` for a missing scene; other
+  failures throw).
 - Not typed (OPAQUE for writing): action ANAM type (it selects the payload layout), phase and action NAM0 names, action
   payloads, phase/action conditions (condition code), adding or removing groups.
 
