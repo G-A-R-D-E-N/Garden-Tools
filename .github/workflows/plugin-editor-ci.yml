@@ -88,7 +88,7 @@ jobs:
           name: plugin-editor-windows-failure
           path: TestResults/**
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
   linux:
     name: Core managed tests (Linux)
@@ -133,4 +133,4 @@ jobs:
           name: plugin-editor-linux-failure
           path: TestResults/**
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
