@@ -328,9 +328,9 @@ public class WriteServiceTests
     }
 
     [Fact]
-    public void SetLightFlag_WarnsWhenRecordsAreOutOfEslRange()
+    public void SetLightFlag_RefusesWhenRecordsAreOutOfEslRange()
     {
-        var plugin = $"LightFlagWarnTest_{Guid.NewGuid():N}.esp";
+        var plugin = $"LightFlagRefuseTest_{Guid.NewGuid():N}.esp";
         WriteService.CreatePlugin(plugin);
         var mod = WriteService.GetMutable(plugin)!;
         var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
@@ -338,7 +338,8 @@ public class WriteServiceTests
 
         var exec = new PluginToolExecutor(() => null);
         exec.Execute("set_light_flag", $"{{\"plugin\":\"{plugin}\",\"light\":true}}")
-            .Should().Contain("WARNING").And.Contain("compact_to_esl first");
+            .Should().Contain("Cannot flag").And.Contain("compact_to_esl first");
+        mod.ModHeader.Flags.HasFlag(Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).Should().BeFalse();
     }
 
     [Fact]
