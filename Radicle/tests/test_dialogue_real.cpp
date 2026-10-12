@@ -8,7 +8,9 @@
 #include <bit>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <filesystem>
+#include <iostream>
 #include <map>
 #include <type_traits>
 
@@ -186,40 +188,70 @@ TEST_P(DialogueReal, EveryOfficialDialogueAndSceneDecodesAndMasterIsByteIdentica
   const auto refs = env.plugin_records(0);
   ASSERT_EQ(count, refs.size());
   std::map<std::string, int> totals{{"DIAL", 0}, {"INFO", 0}, {"SCEN", 0}, {"SCEN_actions_with_ENAM", 0}};
+  std::map<std::string, int> failures{{"DIAL", 0}, {"INFO", 0}, {"SCEN", 0}};
+  const auto* result = testing::UnitTest::GetInstance()->current_test_info()->result();
+  int parts_seen = 0;
+  const auto new_failed_parts = [&] {
+    int failed = 0;
+    for (; parts_seen < result->total_part_count(); ++parts_seen) { failed += result->GetTestPartResult(parts_seen).failed(); }
+    return failed;
+  };
   for (std::size_t i = 0; i < count; ++i) {
     const auto type = refs[i]->record->header.signature.to_string();
     if (type != "DIAL" && type != "INFO" && type != "SCEN") { continue; }
     SCOPED_TRACE(refs[i]->record->form_key.to_string());
     ++totals[type];
-    if (type == "DIAL") {
-      const auto native = fo4::env::decode_dialogue_topic(env, *refs[i]);
-      radicle_dialogue_topic_info value{};
-      ASSERT_EQ(radicle_dialogue_topic_get_info(abi, records[i], &value), RADICLE_STATUS_OK);
-      topic(native, value);
-    } else if (type == "INFO") {
-      const auto native = fo4::env::decode_dialogue_info(env, *refs[i]);
-      const radicle_dialogue_info* value = nullptr;
-      ASSERT_EQ(radicle_dialogue_info_decode(abi, records[i], &value), RADICLE_STATUS_OK);
-      ASSERT_NE(value, nullptr);
-      info(native, *value);
-      radicle_dialogue_info_free(value);
-    } else {
-      const auto native = fo4::env::decode_scene(env, *refs[i]);
-      for (const auto& action : native.actions) {
-        EXPECT_TRUE(action.end_phase.has_value());
-        ++totals["SCEN_actions_with_ENAM"];
+    try {
+      if (type == "DIAL") {
+        const auto native = fo4::env::decode_dialogue_topic(env, *refs[i]);
+        radicle_dialogue_topic_info value{};
+        EXPECT_EQ(radicle_dialogue_topic_get_info(abi, records[i], &value), RADICLE_STATUS_OK);
+        topic(native, value);
+      } else if (type == "INFO") {
+        const auto native = fo4::env::decode_dialogue_info(env, *refs[i]);
+        const radicle_dialogue_info* value = nullptr;
+        EXPECT_EQ(radicle_dialogue_info_decode(abi, records[i], &value), RADICLE_STATUS_OK);
+        EXPECT_NE(value, nullptr);
+        if (value) {
+          info(native, *value);
+          radicle_dialogue_info_free(value);
+        }
+      } else {
+        const auto native = fo4::env::decode_scene(env, *refs[i]);
+        for (const auto& action : native.actions) {
+          EXPECT_TRUE(action.end_phase.has_value());
+          ++totals["SCEN_actions_with_ENAM"];
+        }
+        const radicle_scene_info* value = nullptr;
+        EXPECT_EQ(radicle_scene_decode(abi, records[i], &value), RADICLE_STATUS_OK);
+        EXPECT_NE(value, nullptr);
+        if (value) {
+          scene(native, *value);
+          for (std::size_t a = 0; a < value->action_count; ++a) { EXPECT_EQ(value->actions[a].has_end_phase, 1); }
+          radicle_scene_free(value);
+        }
       }
-      const radicle_scene_info* value = nullptr;
-      ASSERT_EQ(radicle_scene_decode(abi, records[i], &value), RADICLE_STATUS_OK);
-      ASSERT_NE(value, nullptr);
-      scene(native, *value);
-      for (std::size_t a = 0; a < value->action_count; ++a) { EXPECT_EQ(value->actions[a].has_end_phase, 1); }
-      radicle_scene_free(value);
+    } catch (const std::exception& error) {
+      ADD_FAILURE() << "decode threw: " << error.what();
     }
+    if (new_failed_parts() != 0) { ++failures[type]; }
   }
   radicle_free_record_array(records);
   radicle_env_destroy(abi);
   for (const auto& [type, total] : totals) { RecordProperty(type, total); }
+  for (const auto& [type, failed] : failures) {
+    RecordProperty(type + "_decode_failures", failed);
+    EXPECT_EQ(failed, 0) << type;
+  }
+  if (std::strcmp(GetParam(), "Fallout4.esm") == 0) {
+    EXPECT_EQ(totals["DIAL"], 35443);
+    EXPECT_EQ(totals["INFO"], 78087);
+    EXPECT_EQ(totals["SCEN"], 3568);
+  }
+  std::cout << GetParam();
+  for (const auto& [type, total] : totals) { std::cout << ' ' << type << '=' << total; }
+  for (const auto& [type, failed] : failures) { std::cout << ' ' << type << "_decode_failures=" << failed; }
+  std::cout << '\n';
   const auto bytes = fo4::write_plugin(env.plugin(0));
   const auto original = fo4::plugin_original_bytes(env.plugin(0));
   ASSERT_EQ(bytes.size(), original.size());
