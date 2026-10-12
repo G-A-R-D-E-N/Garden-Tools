@@ -1940,3 +1940,7 @@ The current-main integration retains the flag-boundary and zero-ID tests, portab
 ## .github/workflows/plugin-editor-ci.yml:windows, linux — failure artifacts
 
 `plugin-editor-windows-failure` and `plugin-editor-linux-failure` upload `TestResults/**` (the TRX logs written by `dotnet test --results-directory ../TestResults`). The TRX files are not expected to be large, so only the retention changed, from 7 to 3 days.
+
+## F4LODGEN removed
+
+Anchored to `README.md` (tool table) and `.github/workflows/native-ci.yml:on.push.paths-ignore`. F4LODGEN was retired on 2026-10-11 and its tree was deleted. The last commit that contains it is 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3; recover files with `git show 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3:F4LODGEN/<path>`. The README tool table row and the native-ci paths-ignore entry `F4LODGEN/**` were removed with it.
