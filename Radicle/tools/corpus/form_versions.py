@@ -79,6 +79,13 @@ def game_version(exe: Path) -> str | None:
     return None
 
 
+def listed_in_ccc(path: Path) -> set[str] | None:
+    if not path.is_file():
+        return None
+    return {line.strip().lower() for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+            if line.strip()}
+
+
 def expand(args: list[str]) -> tuple[list[Path], str | None]:
     plugins: list[Path] = []
     version = None
@@ -95,8 +102,10 @@ def expand(args: list[str]) -> tuple[list[Path], str | None]:
                 plugins.append(present[name.lower()])
             else:
                 print(f"missing official master: {name}", file=sys.stderr)
+        listed = listed_in_ccc(target.parent / "Fallout4.ccc") or None
         extras = sorted(p for lower, p in present.items()
-                        if lower.startswith("cc") and lower.endswith((".esm", ".esl")))
+                        if lower.startswith("cc") and lower.endswith((".esm", ".esl"))
+                        and (listed is None or lower in listed))
         plugins.extend(extras)
     return plugins, version
 

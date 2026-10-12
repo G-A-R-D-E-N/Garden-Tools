@@ -17,13 +17,13 @@ Confidence: `confirmed` / `strong` / `probable` / `speculative`.
 | 0x14 | 2 | form version |
 | 0x16 | 2 | VC version |
 
-Fallout 4 form version observed: **131** (`confirmed`, Heather patch + `ccBGSFO4096-AS_Enclave.esl`; all 19 local plugins on AE 1.11.240.0, see TES4 / HEDR).
+Fallout 4 form version observed: **131** (`confirmed`, Heather patch + `ccBGSFO4096-AS_Enclave.esl`; the seven official masters and the installed cc Creation ESLs on AE 1.11.240.0, user copies not counted, see TES4 / HEDR).
 
 ### Form version census: AE 1.11.240.0, 2026-10-12
 
 Measured with `Radicle/tools/corpus/form_versions.py` over the install's Data folder: the seven official masters plus every `cc*.esm`/`cc*.esl` Creation present. User mod plugins are not included. `Fallout4.exe` reports 1.11.240.0. The script walks TES4, GRUP and record headers only and never decompresses. The form version is the `uint16` at record offset 0x14. `Min`/`Max` cover every record of the signature across the census plugins. `<131` counts records below 131 per master (`-` means the signature is absent from that master). TES4 is 131 in every plugin, and no ESL has a record below 131.
 
-RACE: all 110 official RACE records are at form version 131 (Fallout4.esm 45, DLCRobot.esm 8, DLCworkshop01.esm 23, DLCCoast.esm 15, DLCworkshop02.esm 2, DLCworkshop03.esm 1, DLCNukaWorld.esm 16).
+RACE: all 110 official RACE records are at form version 131 (Fallout4.esm 45, DLCRobot.esm 8, DLCworkshop01.esm 23, DLCCoast.esm 15, DLCworkshop02.esm 2, DLCworkshop03.esm 1, DLCNukaWorld.esm 16). The cc ESLs add 2 RACE records in ccBGSFO4046-TesCan.esl (OG, NG, AE) and 3 in ccOTMFO4001-Remnants.esl (NG, AE), all at form version 131, for totals of 112 (OG), 115 (NG) and 115 (AE).
 
 Records below 131 are common, so 131 is not the only AE form version. The table lists every signature with a record below 131.
 
@@ -154,6 +154,18 @@ Version gates against the census (official masters):
 
 Record types below 131 that have no gate in this list: VTYP (16 to 128), DMGT (63 to 129), GDRY (122 to 128), MATO (18 to 39), REVB (118 to 130), SPGD (124 to 128), TREE (126), OVIS (128). The census records them only.
 
+### Releases: OG 1.10.163.0, NG 1.10.984.0, AE 1.11.240.0
+
+Read-only measurement of the three Data folders on 2026-10-12. The SHA-256 columns show the first 16 hex digits. Each release covers its official masters and the cc ESLs listed in `Fallout4.ccc`.
+
+| Release | Fallout4.exe | Fallout4.esm | DLCRobot.esm | DLCworkshop01.esm | TES4 form version | TES4 flags | HEDR versions |
+|---|---|---|---|---|---|---|---|
+| OG 1.10.163.0 | 1.10.163.0 | 7b4c60ad47bf60e8 | 116ecb0e1139273d | 6d8b555676a8afcb | 131 | 0x81 / 0x281 | 1.0, 0.95 |
+| NG 1.10.984.0 | 1.10.984.0 | b7dc7c22328258f1 | ecb5cb1ed0bf5252 | 04870da9fd017f90 | 131 | 0x81 / 0x281 | 1.0, 0.95 |
+| AE 1.11.240.0 | 1.11.240.0 | a3fa1e66d75f80f3 | 465b904603caf18c | 9e645faa8620b5e2 | 131 | 0x81 / 0x281 | 1.0, 0.95 |
+
+DLCCoast.esm, DLCworkshop02.esm, DLCworkshop03.esm and DLCNukaWorld.esm have the same SHA-256 prefix on all three releases. Of the cc ESLs that OG has, OG and AE match except `ccBGSFO4046-TesCan.esl`, and NG differs from both for all six. `ccFSVFO4007-Halloween.esl`, `ccOTMFO4001-Remnants.esl` and `ccSBJFO4003-Grenade.esl` are listed in `Fallout4.ccc` only on NG and AE; the OG install has the files but its `Fallout4.ccc` omits them, so they are out of the OG scope. They also differ by SHA between NG and AE. The only gate that throws is RACE exact-131, and every RACE record is 131 on OG, NG and AE (112, 115 and 115 records), so no release reaches a throwing gate. The per-signature minimum and maximum form versions are identical on OG, NG and AE for all 138 signatures. The non-throwing branch counts in the gate table were measured on AE only.
+
 ## Group header (24 bytes)
 
 `strong`. Size includes the header. Children occupy `group_size - 24`. Nested groups are legal (WRLD/CELL).
@@ -194,7 +206,7 @@ Observed HEDR version, measured on AE 1.11.240.0 only (no OG 1.10.163 or NG 1.10
 
 Both 0.95 and 1.0 occur in the official masters, so 1.0 is not the only FO4 value. The 0.95 rule for hardcoded ranges comes from xEdit, not from the engine (see `ESL_FORMIDS.md`).
 
-AE 1.11.240.0 observations: TES4 form version **131** in all 19 local plugins; TES4 flags **0x81** on the official ESMs and **0x281** on the cc ESLs. `Synthesis.esm` (flags 0x01) and `WorkbenchFixerPatch.esp` (flags 0x00) are the exceptions.
+AE 1.11.240.0 observations: TES4 form version **131** in the seven official masters and nine cc ESLs; TES4 flags **0x81** on the official ESMs and **0x281** on the cc ESLs. User plugins outside that set, such as `Synthesis.esm` (flags 0x01) and `WorkbenchFixerPatch.esp` (flags 0x00), are not measured.
 
 HEDR `formCount` counts major records excluding TES4, plus every GRUP including nested groups.
 

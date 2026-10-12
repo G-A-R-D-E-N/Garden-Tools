@@ -44,6 +44,14 @@ Use known definitions and real plugins to prove decoded values. Runtime RE is re
 
 Tests that read `FO4_DATA_DIR` call `detect_game_build` (`tests/real_data_build.hpp`) and record the `game_build` property. Release detection reads `Fallout4.exe` next to the Data folder (VS_FIXEDFILEINFO), and `FO4_GAME_BUILD` (for example `1.11.240.0`) overrides it. The release is OG for 1.10.163, NG for 1.10.980 or 1.10.984, AE for 1.11.x, and Unknown otherwise.
 
+| Release | Fallout4.exe | Exact counts |
+|---|---|---|
+| OG | 1.10.163.0 | recorded only, not asserted |
+| NG | 1.10.984.0 | recorded only, not asserted |
+| AE | 1.11.240.0 | asserted (`exact_counts_known`) |
+
+The NG install used for these measurements was assembled from the NG Steam depots plus the DLC files. It is not byte-identical to the OG or AE DLC files: `DLCRobot.esm` and `DLCworkshop01.esm` differ by SHA, the cc ESLs differ by SHA, and `DLCworkshop03 - Voices_en.ba2` is an incomplete copy (see `docs/FORMAT_NOTES.md`, Releases, and `docs/BA2.md`, Per release).
+
 Exact-count assertions are pinned to AE 1.11.240.0 only (`exact_counts_known`):
 
 - `Fallout4.esm` DIAL 35443, INFO 78087, SCEN 3568 (`test_dialogue_real.cpp`)
