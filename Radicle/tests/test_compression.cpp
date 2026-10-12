@@ -1,8 +1,109 @@
 #include "fo4/error.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
+#include <zlib.h>
+
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <random>
+#include <string>
+
+namespace {
+
+std::vector<std::byte> compressed_plugin(std::span<const std::byte> stream,
+                                       std::uint32_t declared_size) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::end_record(out, tes4);
+  const auto grup = fo4::test::begin_group(out, "MISC", 0);
+  const auto rec = fo4::test::begin_record(out, "MISC", fo4::RecordFlags::compressed, 0x00000801);
+  out.u32(declared_size);
+  out.raw(stream);
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+  return out.bytes;
+}
+
+}
+
+TEST(Compression, RejectsValidRawDeflateAndGzipFraming) {
+  fo4::test::ByteWriter inner;
+  fo4::test::write_subrecord(inner, "EDID", std::string_view{"Framing\0", 8});
+  const auto zlib = fo4::test::zlib_compress(inner.bytes);
+  ASSERT_GT(zlib.size(), 6u);
+  const auto raw = std::span{zlib}.subspan(2, zlib.size() - 6);
+  const auto declared = static_cast<std::uint32_t>(inner.size());
+  EXPECT_THROW(fo4::read_plugin(compressed_plugin(raw, declared)), fo4::parse_error);
+
+  fo4::test::ByteWriter gzip;
+  for (const auto byte : {0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 255}) {
+    gzip.u8(static_cast<std::uint8_t>(byte));
+  }
+  gzip.raw(raw);
+  gzip.u32(static_cast<std::uint32_t>(crc32(
+      0, reinterpret_cast<const Bytef*>(inner.bytes.data()), declared)));
+  gzip.u32(declared);
+  EXPECT_THROW(fo4::read_plugin(compressed_plugin(gzip.bytes, declared)), fo4::parse_error);
+  EXPECT_NO_THROW(fo4::read_plugin(compressed_plugin(zlib, declared)));
+}
+
+TEST(Compression, RejectsBadZlibChecksum) {
+  fo4::test::ByteWriter inner;
+  fo4::test::write_subrecord(inner, "EDID", std::string_view{"Checksum\0", 9});
+  auto stream = fo4::test::zlib_compress(inner.bytes);
+  stream.back() ^= std::byte{1};
+  EXPECT_THROW(fo4::read_plugin(compressed_plugin(
+      stream, static_cast<std::uint32_t>(inner.size()))), fo4::parse_error);
+}
+
+TEST(Compression, CompressedExtendedSubrecordPreservesPhysicalMarker) {
+  fo4::test::ByteWriter inner;
+  const std::vector<std::byte> payload(0x10000, std::byte{0x42});
+  fo4::test::write_xxxx_subrecord(inner, "ZZZZ", payload);
+  const auto bytes = compressed_plugin(fo4::test::zlib_compress(inner.bytes),
+                                       static_cast<std::uint32_t>(inner.size()));
+  auto plugin = fo4::read_plugin(bytes);
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x00000801});
+  ASSERT_NE(record, nullptr);
+  ASSERT_EQ(record->subrecords.size(), 2u);
+  EXPECT_EQ(record->subrecords[0].signature, fo4::sig_xxxx);
+  EXPECT_TRUE(record->subrecords[1].extended_size);
+  EXPECT_EQ(record->subrecords[1].data, payload);
+  plugin.original_range.clear();
+  EXPECT_EQ(fo4::write_plugin(plugin), bytes);
+}
+
+TEST(CompressionRealData, OfficialMastersUseZlibAndPreserveBytes) {
+  const auto* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
+  for (const auto* name : {"Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm",
+                           "DLCCoast.esm", "DLCworkshop02.esm", "DLCworkshop03.esm",
+                           "DLCNukaWorld.esm"}) {
+    const auto path = std::filesystem::path{dir} / name;
+    ASSERT_TRUE(std::filesystem::exists(path)) << name;
+    auto plugin = fo4::read_plugin_file(path);
+    std::size_t count = 0;
+    for (const auto* record : fo4::collect_records(plugin)) {
+      if (!record->compressed) continue;
+      const auto bytes = fo4::record_original_bytes(plugin, *record);
+      ASSERT_GT(bytes.size(), fo4::k_record_header_size + 6) << name;
+      const auto cmf = std::to_integer<unsigned>(bytes[fo4::k_record_header_size + 4]);
+      const auto flg = std::to_integer<unsigned>(bytes[fo4::k_record_header_size + 5]);
+      EXPECT_EQ(cmf & 15u, 8u) << name;
+      EXPECT_EQ((cmf * 256u + flg) % 31u, 0u) << name;
+      ++count;
+    }
+    EXPECT_GT(count, 0u) << name;
+    const auto expected = fo4::test::original_bytes(plugin);
+    plugin.original_range.clear();
+    EXPECT_EQ(fo4::write_plugin(plugin), expected) << name;
+    std::cout << name << ": " << count << " compressed records\n";
+  }
+}
 
 #include <cstdint>
 #include <random>
