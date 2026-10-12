@@ -298,7 +298,7 @@ TEST(SoundPlaybackRules, StandardChooserReturnsTheOnlyFileAndNeverRepeatsAConsec
   std::optional<std::size_t> previous;
   for (const std::size_t draw : {0u, 0u, 1u, 2u, 2u, 0u, 1u, 1u}) {
     const auto pick = fo4::env::select_standard_file_index(3, draw, previous);
-    if (previous) EXPECT_NE(pick, *previous);
+    if (previous) { EXPECT_NE(pick, *previous); }
     previous = pick;
   }
 }
