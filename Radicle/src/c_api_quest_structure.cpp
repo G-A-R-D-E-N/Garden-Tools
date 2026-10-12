@@ -40,6 +40,13 @@ struct radicle_quest_structure {
     return source ? reinterpret_cast<const uint8_t*>(text(*source)) : nullptr;
   }
 
+  const uint8_t* bytes(const std::optional<std::vector<std::byte>>& source, size_t& size) {
+    size = source ? source->size() : 0;
+    if (!source) return nullptr;
+    const std::string_view view(reinterpret_cast<const char*>(source->data()), source->size());
+    return reinterpret_cast<const uint8_t*>(text(view));
+  }
+
   radicle_form_key key(const std::optional<fo4::FormKey>& source) {
     return source ? radicle_form_key{text(source->owner().filename()), source->local().value()}
                   : radicle_form_key{};
@@ -51,6 +58,9 @@ struct radicle_quest_structure {
     if (source->id) {
       out.kind = RADICLE_NAME_STRING_ID;
       out.string_id = *source->id;
+    } else if (source->raw_id) {
+      out.kind = RADICLE_NAME_MALFORMED;
+      out.bytes = bytes(source->raw_id, out.size);
     } else {
       out.kind = RADICLE_NAME_INLINE;
       out.bytes = bytes(source->text, out.size);

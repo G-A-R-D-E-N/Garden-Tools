@@ -6,7 +6,7 @@ using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
 
-public sealed record QuestStoredText(uint? StringId, byte[]? InlineBytes);
+public sealed record QuestStoredText(uint? StringId, byte[]? InlineBytes, byte[]? MalformedBytes = null);
 public sealed record QuestStoredLog(byte Flags, QuestStoredText? Text, byte[]? NoteBytes);
 public sealed record QuestStoredStage(ushort Index, byte Flags, byte OpaqueByte,
                                       IReadOnlyList<QuestStoredLog> Logs);
@@ -46,6 +46,7 @@ public static class QuestStructure
         NameKind.Absent => null,
         NameKind.StringId => new QuestStoredText(text.StringId, null),
         NameKind.Inline => new QuestStoredText(null, Bytes(text.Bytes, text.Size)),
+        NameKind.Malformed => new QuestStoredText(null, null, Bytes(text.Bytes, text.Size)),
         _ => throw new RadicleException(Status.ParseError, "Unsupported stored quest text kind")
     };
 
