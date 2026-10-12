@@ -126,3 +126,23 @@ TEST(WaterCApi, FieldLinkAuthoringAndCreateStatusesMapAndSurviveReload) {
                                           "NAM0", "NAM1", "NAM2", "NAM3", "NAM4"}));
   for (const auto id : {k_full, k_short, k_bare, created_id}) { EXPECT_TRUE(authoring_clean(reread, key(id))) << id; }
 }
+
+TEST(WaterCApi, ResolveRejectsARecordFromAnotherEnvironment) {
+  const TempDir dir;
+  const auto source = (dir.path() / k_plugin).string();
+  write_file(source, build(fixture()));
+  const char* paths[] = {source.c_str()};
+  radicle_env* env_a = nullptr;
+  radicle_env* env_b = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env_a), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_env_load(paths, 1, &env_b), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(env_a, rkey(k_full), &handle), RADICLE_STATUS_OK);
+  radicle_water_selection selection{};
+  selection.uses_default_water = 7;
+  EXPECT_EQ(radicle_water_resolve(env_b, handle, &selection), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  EXPECT_EQ(selection.uses_default_water, 7);
+  radicle_env_destroy(env_b);
+  radicle_env_destroy(env_a);
+}
