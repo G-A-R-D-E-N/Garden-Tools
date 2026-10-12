@@ -1599,7 +1599,7 @@ The earlier branch workflow retained a Windows Release test artifact for seven d
 
 ## Radicle/src/plugin/reader.cpp:inflate_record_payload, Radicle/tests/test_compression.cpp:OfficialMastersUseZlibAndPreserveBytes
 
-The current-main integration retains the published zlib-framing rejection and physical XXXX preservation tests without changing the decoder. Main supplies the required native and offline managed CI jobs and the field-address generator test. No exports or layouts are added, so ABI 11 remains current. NG window bits, zero-size and malformed-input runtime acceptance, and CK behavior remain open under #391.
+The current-main integration retains the published zlib-framing rejection and physical XXXX preservation tests without changing the decoder. Main supplies the required native and offline managed CI jobs and the field-address generator test. No exports or layouts are added, so `RADICLE_ABI_VERSION` is unchanged. NG window bits, zero-size and malformed-input runtime acceptance, and CK behavior remain open under #391.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginCompact.cpp:RadiclePluginBackend::compactToEsl (already in range)
 
