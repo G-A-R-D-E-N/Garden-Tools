@@ -319,6 +319,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
+    tests/test_header_versions_real.cpp
     tests/test_tes4_masters_hedr.cpp
     tests/test_formlinks.cpp
     tests/test_clmt_formlinks.cpp

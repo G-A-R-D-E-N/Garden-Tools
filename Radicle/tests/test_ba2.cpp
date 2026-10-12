@@ -134,14 +134,27 @@ TEST(Ba2General, RoundTripsNextGenVersions7And8) {
     EXPECT_EQ(reread.version, version);
     ASSERT_EQ(reread.entries.size(), 1u);
     EXPECT_EQ(reread.entries[0].path, "Meshes\\Weapons\\NextGen.nif");
+    ASSERT_TRUE(reread.entries[0].chunks[0].compressed);
     EXPECT_EQ(reread.entries[0].chunks[0].decompressed_size, 2048u);
+    EXPECT_EQ(fo4::archive::extract_ba2_general_entry(reread.entries[0]), bytes(payload));
   }
 }
 
-TEST(Ba2General, RejectsUnprovenVersionAndDx10InsteadOfGuessing) {
-  auto unproven = header(2u, 0x4C524E47u, 0u, 0u);
+class Ba2GeneralUnprovenVersion : public testing::TestWithParam<std::uint32_t> {};
+
+TEST_P(Ba2GeneralUnprovenVersion, RejectsOnReadAndWrite) {
+  auto unproven = header(GetParam(), 0x4C524E47u, 0u, 0u);
   EXPECT_THROW(fo4::archive::read_ba2_general(unproven.bytes), fo4::archive::Ba2Error);
 
+  fo4::archive::Ba2GeneralArchive archive;
+  archive.version = GetParam();
+  EXPECT_THROW(fo4::archive::write_ba2_general(archive), fo4::archive::Ba2Error);
+}
+
+INSTANTIATE_TEST_SUITE_P(UnprovenVersions, Ba2GeneralUnprovenVersion,
+                         testing::Values(0u, 2u, 3u, 9u, 0xFFFFFFFFu));
+
+TEST(Ba2General, RejectsDx10TagInGeneralReader) {
   auto dx10 = header(1u, 0x30315844u, 0u, 0u);
   EXPECT_THROW(fo4::archive::read_ba2_general(dx10.bytes), fo4::archive::Ba2Error);
 }

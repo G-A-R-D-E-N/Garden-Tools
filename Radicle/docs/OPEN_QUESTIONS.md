@@ -80,3 +80,8 @@ Speculative answers must not be hardcoded as facts.
 ## Writer policy
 
 23. When CK omits default/zero subrecords, should an unmodified native rewrite match CK or match the original bytes? Default: keep the shared source range when the record was not edited.
+
+24. **No OG 1.10.163 or NG 1.10.98x install has been measured.** Every BA2 version, TES4 header and form-version fact in these docs comes from the AE 1.11.240.0 install. Per install, run:
+    - `python -I tools/corpus/ba2_measure.py <Data folder> --first-chunk --json` for the BA2 version and entry table and the Fallout4.exe file version.
+    - The `HeaderVersionsReal` tests in `tests/test_header_versions_real.cpp` with `FO4_DATA_DIR` set to that Data folder, for TES4 form version, HEDR version, flags, next object ID and the byte-identical rewrite of each official master and installed cc Creation (cc*.esl and cc*.esm).
+    - A form-version census per record signature over the official masters and ESLs. No script for it is in this repo yet.

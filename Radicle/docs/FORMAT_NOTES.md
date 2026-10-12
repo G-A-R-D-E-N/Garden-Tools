@@ -17,7 +17,7 @@ Confidence: `confirmed` / `strong` / `probable` / `speculative`.
 | 0x14 | 2 | form version |
 | 0x16 | 2 | VC version |
 
-Fallout 4 form version observed: **131** (`confirmed`, Heather patch + `ccBGSFO4096-AS_Enclave.esl`).
+Fallout 4 form version observed: **131** (`confirmed`, Heather patch + `ccBGSFO4096-AS_Enclave.esl`; all 19 local plugins on AE 1.11.240.0, see TES4 / HEDR).
 
 ## Group header (24 bytes)
 
@@ -52,7 +52,14 @@ bytes   data
 
 CommonLibF4 `FILE_HEADER` is 12 bytes: `float version`, `uint32 formCount`, `uint32 nextFormID`. `confirmed`.
 
-Observed FO4 HEDR version: **1.0**. `confirmed` on Heather and an official ESL.
+Observed HEDR version, measured on AE 1.11.240.0 only (no OG 1.10.163 or NG 1.10.98x install has been measured):
+
+- **0.95**: `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`.
+- **1.0**: `Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, and every installed cc Creation ESL.
+
+Both 0.95 and 1.0 occur in the official masters, so 1.0 is not the only FO4 value. The 0.95 rule for hardcoded ranges comes from xEdit, not from the engine (see `ESL_FORMIDS.md`).
+
+AE 1.11.240.0 observations: TES4 form version **131** in all 19 local plugins; TES4 flags **0x81** on the official ESMs and **0x281** on the cc ESLs. `Synthesis.esm` (flags 0x01) and `WorkbenchFixerPatch.esp` (flags 0x00) are the exceptions.
 
 HEDR `formCount` counts major records excluding TES4, plus every GRUP including nested groups.
 

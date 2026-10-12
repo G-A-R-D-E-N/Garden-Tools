@@ -882,3 +882,33 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 ## Radicle/tests/test_water_real.cpp:DecodesEveryWaterAndPreservesMasterBytes
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
+
+## Radicle/include/fo4/archive/ba2.hpp:is_supported_ba2_general_version
+
+GNRL versions 1, 7 and 8 are accepted on read and write. The GNRL record layout is the same for all three; only the header version field differs, matching the C# oracle which passes the version through. Version 7 is seen on NG/AE installs and version 8 on the AE 1.11.240.0 build (`docs/BA2.md`). An earlier "Skyrim SE-style" label on version 7 had no source and was removed. Versions 0, 2, 3, 9 and 0xFFFFFFFF are rejected on read and write (`Radicle/tests/test_ba2.cpp:Ba2GeneralUnprovenVersion`).
+
+## Radicle/include/fo4/archive/ba2_texture.hpp:is_supported_ba2_texture_version
+
+DX10 versions 1, 7 and 8 are accepted on read and write, with the same version set and the same reasoning as the GNRL gate in `Radicle/include/fo4/archive/ba2.hpp:is_supported_ba2_general_version`. Rejection of 0, 2, 3, 9 and 0xFFFFFFFF is pinned by `Radicle/tests/test_ba2_texture.cpp:Ba2TextureUnprovenVersion`.
+
+## Radicle/include/fo4/plugin/mutation.hpp:local_form_id_range
+
+Inclusive [min, max] local form ID range this plugin may allocate for its own records, selected by the TES4 SmallFile flag. Light plugins are 0x001..0xFFF. `TESFile::AdjustFormIDFileIndex` in Fallout4.exe 1.10.163 is recorded at RVA 0x131fa0 in `docs/ESL_FORMIDS.md` (lines 19, 43); the 0x131f90 value that earlier comments gave is the older 1.10.155 image, labeled Tool-Build at `docs/ESL_FORMIDS.md:48`. The RVA is documentation only and is not verified in this repository. Evidence: `RE-Work/Runtime/03-FINDINGS.md`, section "FormID compile-index remap decoded", summarized in `docs/ESL_FORMIDS.md`.
+
+The recorded routine rebuilds a light record's runtime form ID as
+
+    *id &= 0xFFF;  *id |= 0xFE000000;  *id |= u16 [this+0x372] << 12;
+
+so bits 12..23 of the on-disk local are discarded before the slot is OR'd in. A local above 0xFFF does not fail to load; it silently aliases onto another record. That is why the ceiling is enforced here, since the engine never reports the violation. See `docs/ESL_FORMIDS.md` and issue #26.
+
+## Radicle/src/plugin/mutation.cpp:reserve_local_form_key
+
+Shipped Bethesda plugins store a 0xFF-prefixed HEDR next object ID. The seven official masters and the cc ESLs on the AE 1.11.240.0 install all do (`docs/FORMAT_NOTES.md`, TES4 / HEDR). The current rule throws `FormIdError` "HEDR nextFormID is outside this plugin's local FormID range" for any light or full plugin whose next ID is above the local ceiling plus one, so creating a local record in a plugin with a 0xFF-prefixed next ID is refused. The pinned behavior is `Radicle/tests/test_mutation.cpp:LightPluginWithFfPrefixedHedrNextRefusesLocalRecord` and `Radicle/tests/test_mutation.cpp:FullPluginWithFfPrefixedHedrNextRefusesLocalRecord`. Whether the engine or the Creation Kit reads or writes this field for user plugins is unanswered. The allocation policy for a 0xFF-prefixed next ID awaits RE-016 on issue #520. Until then the throw is kept; no fallback to the first free local ID is implemented.
+
+## Radicle/tests/test_header_versions_real.cpp:ReadsEveryOfficialMasterAndEslHeaderAndRewritesItIdentically
+
+The test reads the plugins from `installed_master_and_cc_plugins` in `Radicle/tests/real_data_plugins.hpp`: the seven official masters present in `FO4_DATA_DIR`, plus installed cc*.esl and cc*.esm Creations (names matched case-insensitively). It does not scan other files. then asserts the TES4 signature, a finite HEDR version and a byte-identical `write_plugin` result. Form version, HEDR version, flags and next object ID are recorded as properties only. Form version 131 and the 0x81/0x281 flags were observed on AE 1.11.240.0 and are not asserted, so the test runs on other builds without changes.
+
+## Radicle/tools/corpus/ba2_measure.py:exe_file_version
+
+`--json` output includes the Fallout4.exe file version read from the VS_FIXEDFILEINFO block (signature 0xFEEF04BD, then the two version words after the struct-version field). The executable is looked up in the parent folder of the Data folder. The signature search takes the first match in the file; no other match was checked. Without `--json` the Markdown table is unchanged.
