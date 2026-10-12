@@ -31,6 +31,8 @@ inline Plugin navmesh_writer_fixture(std::uint16_t stored_edge0 = 0xFFFF) {
   }
   group = begin_group(out, "MISC", 0); record = begin_record(out, "MISC", 0, 0x813);
   write_subrecord(out, "ZZZZ", sentinel.bytes); end_record(out, record); end_group(out, group);
+  group = begin_group(out, "NAVI", 0); record = begin_record(out, "NAVI", 0, 0x801);
+  write_subrecord(out, "ZZZZ", sentinel.bytes); end_record(out, record); end_group(out, group);
   return read_plugin(out.bytes, "Navigation.esp");
 }
 

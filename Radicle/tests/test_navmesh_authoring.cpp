@@ -40,6 +40,15 @@ TEST(NavmeshAuthoring, TypedEditsPatchOnlyTheirBytesAndReparse) {
   EXPECT_EQ(set_navmesh_triangle(plugin, test::navmesh_key(), 0, triangle), ScalarMutationStatus::unchanged);
 }
 
+TEST(NavmeshAuthoring, UneditedPluginWithNavmeshAndNaviRecordsWritesBackByteIdentical) {
+  auto plugin = test::navmesh_writer_fixture();
+  ASSERT_NE(find_record(plugin, test::navmesh_key()), nullptr);
+  ASSERT_NE(find_record(plugin, test::navmesh_key(0x801)), nullptr);
+  const auto original = test::original_bytes(plugin);
+  ASSERT_FALSE(original.empty());
+  EXPECT_EQ(write_plugin(plugin), original);
+}
+
 TEST(NavmeshAuthoring, RefusalsKeepSerializedBytesIdentical) {
   auto plugin = test::navmesh_writer_fixture(); const auto before = write_plugin(plugin);
   EXPECT_EQ(set_navmesh_vertex(plugin, test::navmesh_key(), 3, {1, 2, 3}), ScalarMutationStatus::subrecord_missing);
