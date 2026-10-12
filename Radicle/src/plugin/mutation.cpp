@@ -182,7 +182,7 @@ std::optional<std::uint32_t> lowered_light_next_form_id(const Plugin& plugin) {
     if (local < lowest || local > k_light_local_mask) return std::nullopt;
     lowered = std::max(lowered, local + 1u);
   }
-  const auto next = plugin.header.next_form_id;
+  const auto next = plugin.header.next_form_id & k_full_local_mask;
   if (next <= k_light_local_mask || next <= lowered) return std::nullopt;
   return lowered;
 }
@@ -197,7 +197,7 @@ FormKey reserve_local_form_key(Plugin& plugin) {
   const auto [lowest, highest] = local_form_id_range(plugin);
   // A light plugin's HEDR nextFormID may legitimately sit below the full-plugin
   // floor, so clamp up to this plugin's own floor rather than rejecting it.
-  auto candidate = std::max(plugin.header.next_form_id, lowest);
+  auto candidate = std::max(plugin.header.next_form_id & k_full_local_mask, lowest);
   if (candidate > highest + 1u) {
     throw FormIdError("HEDR nextFormID is outside this plugin's local FormID range");
   }
@@ -335,7 +335,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   target->header.data_size = 0;
   target->uncompressed_size = 0;
 
-  if (new_local.value() >= next.header.next_form_id) {
+  if (new_local.value() >= (next.header.next_form_id & k_full_local_mask)) {
     set_hedr_next_form_id(next, new_local.value() + 1u);
   }
   next.original_range.clear();
