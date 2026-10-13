@@ -52,6 +52,35 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     } catch (e) { setStatus('Copy failed: ' + errorText(e)); }
   };
 
+  const copyAsWrapperInto = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const picked = await askForTarget({
+      title: 'Copy as wrapper into',
+      description: `Copies ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[col]} into the plugin you choose as a new record, then overrides ${matrix.FormKey} there as a leveled list whose single entry is that copy.`,
+      confirmLabel: 'Create', defaultTarget: editablePlugins[0] ?? '',
+    });
+    if (!picked) return;
+    const sourceEditorId = matrix.EditorID.toLowerCase();
+    const editorId = await askPrompt({
+      title: 'Copy as wrapper',
+      label: 'EditorID for the wrapped copy',
+      placeholder: 'Leave empty for no EditorID',
+      confirmLabel: 'Create',
+      validate: v => v.trim().toLowerCase() === sourceEditorId && sourceEditorId !== ''
+        ? `The wrapped copy needs an EditorID different from ${matrix.EditorID}.` : null,
+    });
+    if (editorId === null) return;
+    setStatus('Creating wrapper…');
+    try {
+      const msg = await b.CopyAsWrapper(matrix.Plugins[col], matrix.FormKey, picked.target, editorId.trim() || null);
+      setStatus(msg.startsWith('LOSES:') ? `Not copied -- ${msg.slice(6).trim()}` : msg);
+      await onReload();
+      onPluginsChanged?.();
+    } catch (e) { setStatus('Copy failed: ' + errorText(e)); }
+  };
+
   const copyInto = async (col: number, target: string) => {
     closeMenu();
     const b = back();
@@ -506,6 +535,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     lootReport,
     updateOnam,
     copyAsDisabledOverrideInto,
+    copyAsWrapperInto,
     copyText,
     elementAction,
     createSchemaRecord,

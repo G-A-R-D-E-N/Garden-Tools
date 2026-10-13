@@ -343,6 +343,25 @@ FormKey create_leveled_list(Plugin& plugin,
   return key;
 }
 
+bool reset_leveled_list(Plugin& plugin, const FormKey& key) {
+  assign_record_form_keys(plugin);
+  auto* record = find_mutable_record(plugin, key);
+  if (record == nullptr) return false;
+  if (!is_leveled_list(record->header.signature)) {
+    throw LeveledListError("leveled list reset requires LVLI, LVLN, or LVSP");
+  }
+
+  std::vector<Subrecord> next;
+  next.push_back(make_subrecord(k_obnd, 12));
+  next.push_back(byte_subrecord(k_lvld, 0));
+  next.push_back(byte_subrecord(k_lvlf, 0));
+  next.push_back(count_subrecord(0));
+
+  record->subrecords = std::move(next);
+  mark_record_modified(plugin, *record);
+  return true;
+}
+
 bool replace_leveled_list_entries(Plugin& plugin,
                                   const FormKey& key,
                                   std::span<const LeveledListEntry> entries) {
