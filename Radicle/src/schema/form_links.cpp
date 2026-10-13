@@ -2,6 +2,7 @@
 
 #include "non_formid_slots.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
+#include "fo4/schema/form_link_schema.hpp"
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
@@ -138,23 +139,6 @@ bool navm_vertex_index_signature(const Record& record, const Subrecord& sub) {
   return record.header.signature == k_navm &&
          (sub.signature == k_pnam || sub.signature == k_nnam);
 }
-
-bool qust_non_formid_signature(Signature signature) {
-  // xEdit FO4 QUST reuses several signatures that are FormIDs in other record
-  // types. Within QUST they are scalar/string data and must never be sent
-  // through the global signature-only FormID table:
-  //   DNAM General quest data
-  //   NAM2 stage note
-  //   CNAM stage log-entry text
-  //   FNAM objective/alias flags
-  //   ANAM next alias ID
-  //   NNAM objective text / quest description
-  //   SNAM SWF filename
-  return signature == k_dnam || signature == k_nam2 || signature == k_cnam ||
-         signature == k_fnam || signature == k_anam || signature == k_nnam ||
-         signature == k_snam;
-}
-
 
 bool visit_tagged_formid_slot(const Subrecord& sub, auto&& fn) {
   if (sub.data.size() < 8) {
@@ -326,7 +310,7 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       }
       return;
     }
-    if (qust_non_formid_signature(sub.signature)) {
+    if (schema::qust_non_formid_signature(sub.signature)) {
       return;
     }
   }
@@ -516,6 +500,25 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   }
 }
 
+void visit_formlink_offsets(const Record& record, const Subrecord& sub,
+                            const schema::SubrecordFormLinkOffsets& schema_offsets,
+                            bool strict_remap, const Plugin* type_source,
+                            const PluginFormIdContext* context, auto&& fn) {
+  const auto index = static_cast<std::size_t>(&sub - record.subrecords.data());
+  if (schema_offsets.empty() || schema_offsets[index].empty()) {
+    visit_link_offsets(record, sub, strict_remap, type_source, context, fn);
+    return;
+  }
+  std::vector<std::size_t> offsets;
+  visit_link_offsets(record, sub, strict_remap, type_source, context,
+                     [&](std::size_t offset) { offsets.push_back(offset); });
+  const auto& extra = schema_offsets[index];
+  offsets.insert(offsets.end(), extra.begin(), extra.end());
+  std::sort(offsets.begin(), offsets.end());
+  offsets.erase(std::unique(offsets.begin(), offsets.end()), offsets.end());
+  for (const auto offset : offsets) fn(offset);
+}
+
 void remap_raw(std::span<std::byte> data, std::size_t offset,
                const PluginFormIdContext& old_context,
                const PluginFormIdContext& new_context) {
@@ -543,10 +546,11 @@ void remap_record_form_links(Record& record,
       same_form_id_context(old_context, new_context)) {
     return;
   }
+  const auto schema_offsets = schema::schema_formlink_offsets(record);
   for (auto& sub : record.subrecords) {
     auto bytes = std::span<std::byte>(sub.data);
-    visit_link_offsets(record, sub, true, type_source, &old_context,
-                       [&](std::size_t offset) {
+    visit_formlink_offsets(record, sub, schema_offsets, true, type_source, &old_context,
+                           [&](std::size_t offset) {
       remap_raw(bytes, offset, old_context, new_context);
     });
   }
@@ -570,9 +574,11 @@ void rekey_form_links(Plugin& plugin,
   visit_records(next, [&](Record& record) {
     require_decodable(record);
     bool changed = false;
+    const auto schema_offsets = schema::schema_formlink_offsets(record);
     for (auto& sub : record.subrecords) {
       auto bytes = std::span<std::byte>(sub.data);
-      visit_link_offsets(record, sub, true, &plugin, &context, [&](std::size_t offset) {
+      visit_formlink_offsets(record, sub, schema_offsets, true, &plugin, &context,
+                             [&](std::size_t offset) {
         if (offset + 4 > bytes.size()) return;
         const auto raw = RawFormId{read_u32(bytes, offset)};
         if (raw.is_null() || raw.is_none()) return;
@@ -610,13 +616,15 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
   visit_records(plugin, [&](const Record& record) {
     current_record_incomplete = false;
     std::map<std::uint32_t, std::size_t> ordinals;
+    const auto schema_offsets = schema::schema_formlink_offsets(record);
     for (const auto& sub : record.subrecords) {
       if (sub.signature == sig_vmad &&
           !vmad_coverage(sub.data, record.header.signature).complete()) {
         current_record_incomplete = true;
       }
       const auto ordinal = ordinals[sub.signature.packed()]++;
-      visit_link_offsets(record, sub, false, &plugin, &context, [&](std::size_t offset) {
+      visit_formlink_offsets(record, sub, schema_offsets, false, &plugin, &context,
+                             [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
           return;
         }

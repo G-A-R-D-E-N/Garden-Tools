@@ -165,6 +165,7 @@ add_library(fo4
   src/schema/form_links.cpp
   src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
+  src/schema/form_link_schema.cpp
   src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
@@ -345,6 +346,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
+    tests/test_form_link_schema_remap.cpp
     tests/test_formlink_lists.cpp
     tests/test_flst_formlink_lists.cpp
     tests/test_kwda_formlink_lists.cpp

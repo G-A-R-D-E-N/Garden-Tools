@@ -1977,3 +1977,19 @@ The fixtures build a CONT record and use the generated group, so the vanilla sha
 ## Radicle/include/fo4/plugin/mutation.hpp:SubrecordGroupSpan
 
 `SubrecordGroupSpan{first, end}` is the half-open range of one run in `Record::subrecords`. `SubrecordGroupMutationStatus` mirrors `CountedArrayMutationStatus` with `updated`, `record_missing`, `index_out_of_range` and `subrecord_missing`. Structural failures are `SubrecordGroupError` throws instead of statuses.
+
+## Radicle/src/schema/form_link_schema.cpp:schema_formlink_offsets
+
+Schema FormLink rows (`k_generated_formlink_fields`) that the global table cannot reach, such as WEAP DNAM with 132-byte payloads, are resolved here with `resolve_field_slots` and returned as byte offsets per subrecord. The global table applies only to 4-byte payloads (see the `is_listed_formid_signature` checks in `src/schema/form_links.cpp`). A slot is kept only when it is valid, its payload size matches the row's `payload_sizes` (any size when `payload_sizes[0]` is zero), and the subrecord is not deliberately non-form ID. Slots on subrecords that `struct_payload_formid_offsets` or `mixed_formid_offsets` own (EXPL DATA, PROJ DNAM and HAZD DNAM among them) are dropped, so those handlers keep their malformed-size rejection. INFO returns nothing because `visit_info_link_offsets` in `src/schema/form_links.cpp` owns that record. NAVI NVMI slots are valid only when the navmesh mixed-offset parse succeeds and NVER is 4 bytes. PACK and IDLE rows also pass the behavior payload rules inside `resolve_field_slots` in `src/schema/field_address.cpp`. Callers compute this once per record, so the row scan is not repeated for each subrecord.
+
+## Radicle/src/schema/form_link_schema.cpp:deliberate_non_formid_subrecord
+
+Excludes subrecords that are deliberately not form IDs from the schema path: any `XXXX` subrecord, RACE `SRAF`, the QUST signatures in `qust_non_formid_signature`, and the corpus rules in `corpus_non_formid_slot` (PACK `CNAM` after `ANAM`, SCEN action scalars, and the static pair list). Without this predicate the schema path would revive links that the existing visitors reject on purpose.
+
+## Radicle/src/schema/form_link_schema.cpp:qust_non_formid_signature
+
+Signatures that QUST reuses for scalar or string data although they are form ID signatures in other record types: DNAM (General quest data), NAM2 (stage note), CNAM (stage log-entry text), FNAM (objective/alias flags), ANAM (next alias ID), NNAM (objective text or quest description), and SNAM (SWF filename). They must never reach the global signature-only form ID table. The list is unchanged from the former `qust_non_formid_signature` in `src/schema/form_links.cpp`.
+
+## Radicle/src/schema/form_links.cpp:visit_formlink_offsets
+
+Wraps `visit_link_offsets` and merges in the schema offsets for the same subrecord. Subrecords with no schema offsets skip the buffer and go straight to `visit_link_offsets`. Otherwise the union is sorted and deduplicated before the callback runs, so a link that both the global table and a schema row list, such as FACT VEND with a 4-byte payload, is visited once (`tests/test_form_link_schema_remap.cpp:LinkAlsoListedByGlobalTableIsVisitedOnce`). Strict mode passes through unchanged. Sorting can reorder output from a handler that did not emit ascending offsets; the remap and rekey callbacks do not depend on order.
