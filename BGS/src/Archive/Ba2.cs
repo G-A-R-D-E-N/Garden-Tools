@@ -93,7 +93,8 @@ public sealed class Ba2 : IDisposable
     }
 
     internal static bool IsNativeLoadFailure(Exception e) =>
-        e is DllNotFoundException or BadImageFormatException or EntryPointNotFoundException or TypeInitializationException;
+        e is DllNotFoundException or BadImageFormatException or EntryPointNotFoundException or TypeInitializationException
+            or RadicleAbiMismatchException || e.InnerException is RadicleAbiMismatchException;
 
     private static InvalidDataException NativeLoadFailure(Exception e) =>
         new InvalidDataException("the Radicle native library could not be loaded: " + e.Message, e);

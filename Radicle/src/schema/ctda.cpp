@@ -219,6 +219,7 @@ CtdaScopeWrite write_ctda_conditions_in(Record& record,
                                         std::size_t end,
                                         std::span<const CtdaCondition> conditions,
                                         std::optional<std::size_t> insert_anchor) {
+  require_decodable(record);
   end = std::min(end, record.subrecords.size());
   std::size_t first = end;
   std::size_t last = end;

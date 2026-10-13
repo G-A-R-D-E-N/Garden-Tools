@@ -55,7 +55,7 @@ Token identity from RE #405 comment 10020 (independent re-run, 2026-10-10): OG 1
 
 Native synthetic tests cover grouping, localization descriptors, raw conditions, opaque payloads and malformed input. Each new C ABI getter has a managed test. The seven-master corpus test compares every native/C exported value, condition and opaque payload and verifies unchanged master byte identity; it skips without `FO4_DATA_DIR`. Local and CI validation are recorded separately for each published head.
 
-Historical GardenEngine main observation at `10ea81f1590b06dad962ff86721c0a55f00ef173` has DIAL/INFO/SCEN names only in `Services/RecordVocabulary.cs`, and no dialogue/scene consumer. GardenEngine #150 needs that consumer before a meaningful probe. With the W0 field writer merged and the scene writer exports added the ABI is 12 over current main ABI 11; re-bump if another additive ABI PR merges first. The consumer probe has not been rerun.
+Historical GardenEngine main observation at `10ea81f1590b06dad962ff86721c0a55f00ef173` has DIAL/INFO/SCEN names only in `Services/RecordVocabulary.cs`, and no dialogue/scene consumer. GardenEngine #150 needs that consumer before a meaningful probe. The scene writer exports are part of the C ABI; the current version is `RADICLE_ABI_VERSION` in `Radicle/include/fo4/c_api.h`. The consumer probe has not been rerun.
 
 ## Editing
 
@@ -118,6 +118,6 @@ The probe loads `Fallout4.esm` only and makes no writes. Records are found by wa
 
 - A DIAL whose QNAM resolves through `env.Winner` to a QUST (`RadicleEnvironment.DialogueTopic`, `TopicChildren`).
 - An INFO child, across all such DIAL winners, whose every non-null INFO-level link (PNAM, TPIC, DNAM, GNAM, ANAM, TSCE) resolves through `env.Winner` (`DialogueInfo`), and which has at least one response whose NAM1 text resolves to non-empty bytes (`ResolveDialogueText`). The first INFO satisfying both is selected; the probe fails only if no INFO in the plugin does.
-- A SCEN whose PNAM parent quest resolves through `env.Winner` to a QUST (`RadicleEnvironment.Scene`).
+- A SCEN whose PNAM parent quest resolves through `env.Winner` to a QUST (`RadicleEnvironment.Scene`), with at least one phase and one action (`Radicle/probes/gardenengine/DialogueProbe.cs`, the `WinnersOf("SCEN")` filter).
 
-Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (GardenEngine pins ABI 9 at 34d16d50).
+Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head. The C ABI version a pin must match is `RADICLE_ABI_VERSION` in `Radicle/include/fo4/c_api.h`; this document does not repeat the number.

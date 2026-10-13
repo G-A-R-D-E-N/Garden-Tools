@@ -25,7 +25,7 @@ public static unsafe class LoadOrderFiles
         Call.Check(RadicleNative.PluginListRead(path, &rows, &count));
         return Call.TakeStrings(rows, count).Select(row =>
         {
-            var fields = row.Split('\t', 3);
+            var fields = SplitTrailing(row, 2);
             return new PluginListEntry(fields[0], fields[1] == "1", int.Parse(fields[2], CultureInfo.InvariantCulture));
         }).ToArray();
     }
@@ -48,7 +48,7 @@ public static unsafe class LoadOrderFiles
         Call.Check(RadicleNative.LoadOrderAssemble(dataDir, pluginListPath, cccPath, table, &rows, &rowCount, &findings, &findingCount, &failed));
         var entries = Call.TakeStrings(rows, rowCount).Select(row =>
         {
-            var fields = row.Split('\t');
+            var fields = SplitTrailing(row, 3);
             return new LoadOrderEntry(fields[0], fields[1] == "1", fields[2] == "1", fields[3] == "1");
         }).ToArray();
         var issues = Call.TakeStrings(findings, findingCount).Select(text =>
@@ -57,5 +57,19 @@ public static unsafe class LoadOrderFiles
             return new LoadOrderFinding(fields[0], fields[1], fields[2]);
         }).ToArray();
         return new AssembledLoadOrder(entries, issues, failed != 0);
+    }
+
+    private static string[] SplitTrailing(string row, int trailing)
+    {
+        var fields = new string[trailing + 1];
+        var end = row.Length;
+        for (var index = trailing; index > 0; index--)
+        {
+            var tab = row.LastIndexOf('\t', end - 1);
+            fields[index] = row[(tab + 1)..end];
+            end = tab;
+        }
+        fields[0] = row[..end];
+        return fields;
     }
 }

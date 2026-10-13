@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fo4/forms/leveled_list.hpp"
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
 
@@ -10,12 +11,10 @@
 #include <stdexcept>
 #include <vector>
 
+// Layouts and sources: Radicle/docs/LEVELED_LISTS.md (TODO-verify until LeveledListReal runs on CI).
 namespace fo4::forms {
 
-class LeveledSpellError : public std::runtime_error {
-public:
-  using std::runtime_error::runtime_error;
-};
+using LeveledSpellError = LeveledListError;
 
 struct LeveledSpellEntry {
   std::uint16_t level{1};

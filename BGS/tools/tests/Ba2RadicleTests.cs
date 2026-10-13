@@ -2,12 +2,22 @@ using System;
 using System.IO;
 using System.Text;
 using OpenCommonwealth.Services.Archive;
+using Radicle.Interop;
 using Xunit;
 
 namespace BehaviourStudio.Tests;
 
 public sealed class Ba2RadicleTests
 {
+    [Fact]
+    public void NativeLoadFailureIncludesRadicleAbiMismatch()
+    {
+        var mismatch = new RadicleAbiMismatchException("stale radicle.dll");
+        Assert.True(Ba2.IsNativeLoadFailure(mismatch));
+        Assert.True(Ba2.IsNativeLoadFailure(new TypeInitializationException("Ba2Archive", mismatch)));
+        Assert.False(Ba2.IsNativeLoadFailure(new InvalidOperationException("unrelated")));
+    }
+
     [Fact]
     public void Ba2WrapperReadsGeneralArchivesThroughRadicleAndRefusesTextureArchives()
     {
