@@ -456,7 +456,8 @@ TEST(FormLink, WeaponDnamFormIdSlotsRemapAndKeepOtherBytes) {
   auto out = plugin_header(1);
   append_record(out, "WEAP", 0x03000800, "DNAM",
                 filled_with_u32(132, {{0, 0x00000099}, {40, 0x02000044}, {44, 0x00000099},
-                                      {73, 0x00000099}}));
+                                      {73, 0x00000099}, {77, 0}, {81, 0}, {85, 0}, {89, 0},
+                                      {93, 0}, {97, 0}, {101, 0}}));
   auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
   plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
@@ -465,7 +466,8 @@ TEST(FormLink, WeaponDnamFormIdSlotsRemapAndKeepOtherBytes) {
   ASSERT_NE(find_sub(*weap, "DNAM"), nullptr);
   EXPECT_EQ(find_sub(*weap, "DNAM")->data,
             filled_with_u32(132, {{0, 0x01000099}, {40, 0x00000044}, {44, 0x01000099},
-                                  {73, 0x01000099}}));
+                                  {73, 0x01000099}, {77, 0}, {81, 0}, {85, 0}, {89, 0},
+                                  {93, 0}, {97, 0}, {101, 0}}));
 
   const auto links = fo4::collect_form_links(reread);
   ASSERT_EQ(links.size(), 4);
