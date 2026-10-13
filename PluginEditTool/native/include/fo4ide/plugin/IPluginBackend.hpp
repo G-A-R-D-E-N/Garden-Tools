@@ -188,6 +188,12 @@ public:
     virtual Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
     }
+    virtual Result<nlohmann::json> createPlacedObject(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference creation is unavailable"});
+    }
+    virtual Result<nlohmann::json> createInteriorCell(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Interior-cell creation is unavailable"});
+    }
 
     virtual Result<nlohmann::json> getLeveledList(const nlohmann::json&) const {
         return std::unexpected(Error{"LeveledListBackendUnavailable", "Leveled list queries are unavailable"});

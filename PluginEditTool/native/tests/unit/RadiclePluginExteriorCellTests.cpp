@@ -10,7 +10,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/forms/cell.hpp>
+#include <fo4/forms/placed_reference.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4ide/app/PluginBackendTarget.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -232,4 +234,97 @@ TEST_CASE("PluginEditTool rejects invalid exterior CELL payloads before writing"
     REQUIRE_FALSE(wrapped.has_value());
     CHECK(wrapped.error().type == "InvalidRecordCreationPayload");
     CHECK(readBytes(path) == before);
+}
+
+TEST_CASE("PluginEditTool places a REFR in a CELL the plugin owns") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "mods" / "CellMod" / "Patch.esp";
+    writeBytes(path, worldspacePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto cellResult = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "CELL",
+            nlohmann::json{{"worldspace", "000800:Patch.esp"}, {"x", -33}, {"y", 32}}
+        }));
+    const auto cell = parseStringResult(cellResult)["formKey"].get<std::string>();
+    const auto baseResult = backend.invokeBackend(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "EYES",
+            nlohmann::json{{"editorId", "PlacedBase"}, {"fullText", "Base"}, {"icon", "Textures\\Eyes\\base.dds"}}
+        }));
+    const auto base = parseStringResult(baseResult)["formKey"].get<std::string>();
+
+    const auto placed = backend.createPlacedObject(nlohmann::json::array({
+        "Patch.esp", cell, base, -135068.0, 131172.0, 30.0, 0.25, -0.5, 1.75, false
+    }));
+    REQUIRE(placed.has_value());
+    const auto placedKey = parseStringResult(placed)["formKey"].get<std::string>();
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto refs = fo4::forms::placed_references_for_cell(disk, fo4::FormKey::parse(cell));
+    REQUIRE(refs.size() == 1u);
+    CHECK(refs[0].record->form_key == fo4::FormKey::parse(placedKey));
+    CHECK_FALSE(refs[0].persistent);
+    CHECK(refs[0].base == fo4::FormKey::parse(base));
+    CHECK(refs[0].transform.x == -135068.0f);
+    CHECK(refs[0].transform.y == 131172.0f);
+    CHECK(refs[0].transform.z == 30.0f);
+    CHECK(refs[0].transform.rx == 0.25f);
+    CHECK(refs[0].transform.ry == -0.5f);
+    CHECK(refs[0].transform.rz == 1.75f);
+
+    const auto foreign = backend.createPlacedObject(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", base, 0.0, 0.0, 0.0
+    }));
+    REQUIRE_FALSE(foreign.has_value());
+    CHECK(foreign.error().type == "PlacedReferenceCreateFailed");
+
+    const auto missing = backend.createPlacedObject(nlohmann::json::array({"Patch.esp", cell, base}));
+    REQUIRE_FALSE(missing.has_value());
+    CHECK(missing.error().type == "PlacedObjectArgumentsMissing");
+}
+
+TEST_CASE("PluginEditTool places a persistent initially disabled REFR in a new interior CELL through the RPC target") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "mods" / "CellMod" / "Patch.esp";
+    writeBytes(path, worldspacePlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto cell = parseStringResult(target.invoke(
+        "CreateInteriorCell",
+        nlohmann::json::array({"Patch.esp", "Kitchen"})))["formKey"].get<std::string>();
+    const auto base = parseStringResult(target.invoke(
+        "CreateRecord",
+        nlohmann::json::array({
+            "Patch.esp",
+            "EYES",
+            nlohmann::json{{"editorId", "PlacedBase"}, {"fullText", "Base"}, {"icon", "Textures\\Eyes\\base.dds"}}
+        })))["formKey"].get<std::string>();
+    const auto placed = target.invoke(
+        "CreatePlacedObject",
+        nlohmann::json::array({"Patch.esp", cell, base, 1.0, 2.0, 3.0, 0.0, 0.0, 0.0, true, true}));
+    REQUIRE(placed.has_value());
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto disk = fo4::read_plugin_file(path);
+    const auto refs = fo4::forms::placed_references_for_cell(disk, fo4::FormKey::parse(cell));
+    REQUIRE(refs.size() == 1u);
+    CHECK(refs[0].persistent);
+    CHECK(refs[0].record->header.flags.test(fo4::RecordFlags::persistent));
+    CHECK(refs[0].record->header.flags.test(fo4::RecordFlags::initially_disabled));
 }

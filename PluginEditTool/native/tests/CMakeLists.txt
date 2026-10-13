@@ -180,7 +180,7 @@ target_compile_definitions(
 )
 target_link_libraries(
     fo4ide_test_plugin_backend
-    PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
+    PRIVATE fo4ide_plugin fo4ide_app Catch2::Catch2WithMain ZLIB::ZLIB
 )
 target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)

@@ -433,4 +433,98 @@ Result<nlohmann::json> RadiclePluginBackend::setPlacedReferenceTransform(
     }
 }
 
+Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::json& arguments) {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto cellText = stringArgument(arguments, 1);
+    const auto baseText = stringArgument(arguments, 2);
+    const auto x = floatArgument(arguments, 3);
+    const auto y = floatArgument(arguments, 4);
+    const auto z = floatArgument(arguments, 5);
+    const auto rx = floatArgument(arguments, 6).value_or(0.0f);
+    const auto ry = floatArgument(arguments, 7).value_or(0.0f);
+    const auto rz = floatArgument(arguments, 8).value_or(0.0f);
+    bool persistent = true;
+    if (arguments.is_array() && arguments.size() > 9 && arguments[9].is_boolean()) {
+        persistent = arguments[9].get<bool>();
+    }
+    bool initiallyDisabled = false;
+    if (arguments.is_array() && arguments.size() > 10 && arguments[10].is_boolean()) {
+        initiallyDisabled = arguments[10].get<bool>();
+    }
+    if (pluginName.empty() || cellText.empty() || baseText.empty() || !x || !y || !z) {
+        return std::unexpected(Error{
+            "PlacedObjectArgumentsMissing",
+            "CreatePlacedObject requires plugin, cell FormKey, base FormKey and numeric x, y and z"
+        });
+    }
+
+    fo4::FormKey cell;
+    fo4::FormKey base;
+    try {
+        cell = fo4::FormKey::parse(cellText);
+        base = fo4::FormKey::parse(baseText);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
+    auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    if (auto guard = writeGuard(*loaded); guard.has_value()) return std::unexpected(*guard);
+
+    try {
+        auto mutated = loaded->plugin;
+        const auto key = fo4::forms::create_placed_reference(
+            mutated,
+            {
+                .cell = cell,
+                .base = base,
+                .transform = {.x = *x, .y = *y, .z = *z, .rx = rx, .ry = ry, .rz = rz},
+                .persistent = persistent,
+                .initially_disabled = initiallyDisabled,
+            });
+        stagePluginMutationLocked(*loaded, std::move(mutated));
+        return nlohmann::json(nlohmann::json{
+            {"ok", true},
+            {"plugin", pluginName},
+            {"formKey", key.to_string()}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"PlacedReferenceCreateFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::createInteriorCell(const nlohmann::json& arguments) {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto editorId = stringArgument(arguments, 1);
+    if (pluginName.empty() || editorId.empty()) {
+        return std::unexpected(Error{
+            "InteriorCellArgumentsMissing",
+            "CreateInteriorCell requires plugin and editor_id"
+        });
+    }
+
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
+    auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    if (auto guard = writeGuard(*loaded); guard.has_value()) return std::unexpected(*guard);
+
+    try {
+        auto mutated = loaded->plugin;
+        const auto key = fo4::forms::create_interior_cell(mutated, editorId);
+        stagePluginMutationLocked(*loaded, std::move(mutated));
+        return nlohmann::json(nlohmann::json{
+            {"ok", true},
+            {"plugin", pluginName},
+            {"formKey", key.to_string()}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InteriorCellCreateFailed", error.what()});
+    }
+}
+
 }  // namespace fo4ide::plugin

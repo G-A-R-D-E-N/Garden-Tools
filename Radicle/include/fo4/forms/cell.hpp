@@ -72,6 +72,8 @@ std::array<std::byte, 4> exterior_grid_group_label(std::int32_t grid_x,
 // occupied coordinate leaves the caller's plugin unchanged.
 FormKey create_exterior_cell(Plugin& plugin, const ExteriorCellCreation& creation);
 
+FormKey create_interior_cell(Plugin& plugin, std::string_view editor_id);
+
 // Finds a non-persistent exterior CELL at the requested coordinate beneath the
 // given WRLD hierarchy. Returns null when the hierarchy/coordinate is absent;
 // malformed matching hierarchy throws CellError instead of guessing.
