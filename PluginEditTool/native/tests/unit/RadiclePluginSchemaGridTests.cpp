@@ -226,7 +226,7 @@ TEST_CASE("Schema enum and flag names reach the grid and record matrix") {
     CHECK_FALSE(presentations.contains("FACT\\CrimeMurder"));
 
     const auto npcFlags =
-        fo4::plugin::scalarPresentationJson(fo4::Signature('N', 'P', 'C', '_'), "NPC_\\ConfigurationFlags");
+        fo4ide::plugin::scalarPresentationJson(fo4::Signature('N', 'P', 'C', '_'), "NPC_\\ConfigurationFlags");
     REQUIRE(npcFlags.at("kind") == "flags");
     CHECK(npcFlags.at("names").back() == nlohmann::json{{"bit", 31}, {"name", "Invulnerable"}});
 
