@@ -73,10 +73,7 @@ public:
   using std::runtime_error::runtime_error;
 };
 
-// Looks a field up by subrecord signature alone. Only whole-payload fields can
-// be found this way: a signature that carries an embedded struct holds many
-// fields and several records disagree about what it means, so there is no one
-// descriptor to return. Embedded fields are addressed by path instead.
+// Resolves only a signature that exactly one whole-payload row names; else use record plus path.
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept;
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     std::string_view path) noexcept;

@@ -710,7 +710,9 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 
 ## src/schema/scalar.cpp:scalar_descriptor
 
-Record-agnostic: it returns the first whole-payload scalar field with the given subrecord signature, whatever record that signature sits in. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`).
+Record-agnostic: it resolves a subrecord signature only when exactly one row of `include/fo4/schema/generated_scalar_fields.inc` names it and that row is a whole-payload, non-repeated, non-string field. Any other count returns nullopt, because a signature that two rows share means different fields in different records and no one descriptor is right. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`, `PluginEditTool/native/tests/unit/RadiclePluginScalarTests.cpp`); production code goes through `scalar_field_descriptor(record, path)`.
+
+The previous rule returned the first whole-payload row and skipped only embedded rows, so a whole-payload row on a shared signature leaked out. Eight signatures were affected: ANAM, DATA, FNAM, LVLD, LVLF, LVLM, NAM4 and VNAM. DATA started leaking when `FACT\Flags` (a whole-payload u32 on DATA, deliberately so a wrong width throws, see `Radicle/schema/fallout4/fields.json:FACT`) arrived with #551 (`cc0a36daa`), which failed `tests/test_scalar_embedded.cpp:ScalarEmbedded.SignatureOnlyLookupSkipsEmbeddedFields` on Linux and Windows. VNAM had always leaked `PROJ\SoundLevel` although `SCEN` VNAM is a 16-byte struct and `WTHR\VolatilityMult` sits in a 4-byte VNAM, so the old VNAM assertion in that test encoded the leak and now expects no match. XHLT and XSCL each have a single `REFR` row and still resolve. A whole-payload registration on a shared signature is therefore safe; registering a field as embedded is no longer needed to hide it from this lookup.
 
 ## Radicle/src/schema/form_link_mixed.cpp:fixed_stride_formid_offsets
 
@@ -1414,3 +1416,8 @@ Same xEdit rules as the `records[FACT]` note above.
 ## Radicle/tests/test_scalar.cpp:ScalarSchema.OnlyEnumAndFlagsRowsCarryNames
 
 For every row of FACT, NPC_, WEAP and REFR, `names` is non-empty exactly when the presentation is `enumeration` or `flags`.
+## tests/test_environment_strings.cpp:StringsEnvironmentTest::write
+
+`StringsEnvironmentTest.RejectsMalformedTablesAndLanguages` failed once on the Windows MSVC job of the nomad/dev run at `9c1b3ae6` (job 22302): `Environment::load` threw "failed to load ...\radicle_strings_<n>\Base.esm: plugin parse error at 0x0: unable to open ..." for the first plugin the fixture had just written. The same test passed in the earlier Windows jobs 22085, 22121, 22247 and 22275, and its five sibling `StringsEnvironmentTest` processes passed beside it in the same job. Nothing on that path changed recently: the open in `src/plugin/reader.cpp:read_plugin_file` and `src/environment/environment.cpp:Environment::load` date from 2026-08-20 to 2026-09-30, and the test file from 2026-09-28. Names cannot collide, since ctest runs each test in its own process and the directory name is a steady clock count in 100 ns ticks. No product or fixture defect explains the failure, so the cause is unproven; it looks like a transient file-system error on the runner, whose default TEMP sits under its reparse-point home.
+
+The fixture's `write` did not check its stream, so a failed write would have surfaced only as that "unable to open" at load. It now closes the stream and throws "cannot write <path>" on any stream failure. A recurrence then names the stage: a SetUp failure means the write failed, and the original message means the file existed but could not be opened.
