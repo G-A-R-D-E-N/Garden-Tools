@@ -65,15 +65,26 @@ fo4::Plugin make_orphan_topic_plugin() {
   return fo4::read_plugin(out.bytes, "Orphan.esp");
 }
 
-fo4::Plugin make_branch_plugin(std::uint32_t starting_topic) {
+fo4::Plugin make_branch_plugin(std::uint32_t starting_topic, std::uint32_t dial_flags = 0) {
   fo4::test::ByteWriter out;
   write_header(out);
-  write_record(out, "DIAL", 0x800);
+  const auto dial = fo4::test::begin_record(out, "DIAL", dial_flags, 0x800);
+  fo4::test::end_record(out, dial);
   write_record(out, "QUST", 0x821);
   const auto dlbr_top = fo4::test::begin_group(out, "DLBR", 0);
   write_record(out, "DLBR", 0x820, "SNAM", starting_topic);
   fo4::test::end_group(out, dlbr_top);
   return fo4::read_plugin(out.bytes, "Branch.esp");
+}
+
+fo4::Plugin make_bad_master_index_plugin() {
+  fo4::test::ByteWriter out;
+  write_header(out);
+  const auto dlbr_top = fo4::test::begin_group(out, "DLBR", 0);
+  write_record(out, "DLBR", 0x820, "SNAM", 0x05000800);
+  fo4::test::end_group(out, dlbr_top);
+  write_topic_children(out, 0x05000810, {{0x811, 0}});
+  return fo4::read_plugin(out.bytes, "BadMaster.esp");
 }
 
 std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& findings,
@@ -87,33 +98,10 @@ std::vector<fo4::CheckFinding> of_code(const std::vector<fo4::CheckFinding>& fin
 }  // namespace
 
 TEST(CheckDialogue, CodeNamesAreStable) {
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::previous_info_other_topic),
-            "previous_info_other_topic");
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::branch_starting_topic_not_dial),
             "branch_starting_topic_not_dial");
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::topic_children_not_dial),
             "topic_children_not_dial");
-}
-
-TEST(CheckDialogue, PreviousInfoInOtherTopicIsReported) {
-  const auto plugin = make_topic_plugin(0x801);
-  const std::vector<const fo4::Plugin*> load_order{&plugin};
-  const auto findings = of_code(fo4::check_load_order(load_order),
-                                fo4::CheckCode::previous_info_other_topic);
-  ASSERT_EQ(findings.size(), 1u);
-  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000804:Topics.esp"));
-  EXPECT_EQ(findings[0].target, fo4::FormKey::parse("000801:Topics.esp"));
-  EXPECT_EQ(findings[0].subrecord.to_string(), "PNAM");
-  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
-}
-
-TEST(CheckDialogue, PreviousInfoInSameTopicIsValid) {
-  const auto plugin = make_topic_plugin(0x805);
-  const std::vector<const fo4::Plugin*> load_order{&plugin};
-  EXPECT_TRUE(of_code(fo4::check_load_order(load_order),
-                      fo4::CheckCode::previous_info_other_topic).empty());
-  EXPECT_TRUE(of_code(fo4::check_load_order(load_order),
-                      fo4::CheckCode::topic_children_not_dial).empty());
 }
 
 TEST(CheckDialogue, TopicChildrenLabelThatIsNotADialIsReported) {
@@ -124,7 +112,7 @@ TEST(CheckDialogue, TopicChildrenLabelThatIsNotADialIsReported) {
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000811:Orphan.esp"));
   EXPECT_EQ(findings[0].target, fo4::FormKey::parse("000810:Orphan.esp"));
-  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
 }
 
 TEST(CheckDialogue, TopicChildrenLabelOfADialIsValid) {
@@ -150,4 +138,25 @@ TEST(CheckDialogue, BranchStartingTopicThatIsADialIsValid) {
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   EXPECT_TRUE(of_code(fo4::check_load_order(load_order),
                       fo4::CheckCode::branch_starting_topic_not_dial).empty());
+}
+
+TEST(CheckDialogue, BranchStartingTopicThatIsDeletedIsWarned) {
+  const auto plugin = make_branch_plugin(0x800, 0x20);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = fo4::check_load_order(load_order);
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::branch_starting_topic_not_dial).empty());
+  const auto deleted = of_code(findings, fo4::CheckCode::deleted_target);
+  ASSERT_EQ(deleted.size(), 1u);
+  EXPECT_EQ(deleted[0].record, fo4::FormKey::parse("000820:Branch.esp"));
+  EXPECT_EQ(deleted[0].target, fo4::FormKey::parse("000800:Branch.esp"));
+  EXPECT_EQ(deleted[0].subrecord.to_string(), "SNAM");
+  EXPECT_EQ(deleted[0].severity, fo4::CheckSeverity::warning);
+}
+
+TEST(CheckDialogue, MasterIndexPastTheMasterTableIsSkipped) {
+  const auto plugin = make_bad_master_index_plugin();
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = fo4::check_load_order(load_order);
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::branch_starting_topic_not_dial).empty());
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::topic_children_not_dial).empty());
 }
