@@ -943,7 +943,7 @@
           {"signature": "NAM8", "minimum": 1, "maximum": 1},
           {"signature": "NAM9", "minimum": 0, "maximum": 1},
           {"signature": "DATA", "minimum": 1, "maximum": 1},
-          {"signature": "DNAM", "minimum": 0, "maximum": 1},
+          {"signature": "DNAM", "minimum": 1, "maximum": 1},
           {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true},
           {"signature": "MODT", "minimum": 0, "maximum": 1},
           {"signature": "MODC", "minimum": 0, "maximum": 1},
@@ -2600,6 +2600,7 @@
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 44,
           "insertion": "existing_only"
         },
         {
@@ -2612,6 +2613,7 @@
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 52,
           "insertion": "existing_only"
         },
         {
@@ -2624,6 +2626,7 @@
           "presentation": "identity",
           "minimum": 0,
           "maximum": 4294967295,
+          "minimum_payload_size": 60,
           "insertion": "existing_only"
         },
         {
@@ -2636,6 +2639,7 @@
           "presentation": "identity",
           "minimum": 0,
           "maximum": 4294967295,
+          "minimum_payload_size": 68,
           "insertion": "existing_only"
         },
         {
@@ -2649,6 +2653,7 @@
           "names": [{"value": 0, "name": "Rain"}, {"value": 1, "name": "Snow"}],
           "minimum": 0,
           "maximum": 4294967295,
+          "minimum_payload_size": 76,
           "insertion": "existing_only"
         },
         {

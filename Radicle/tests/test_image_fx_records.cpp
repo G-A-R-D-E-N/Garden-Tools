@@ -71,7 +71,7 @@ void write_record(fo4::test::ByteWriter& out, std::string_view signature, std::u
   fo4::test::end_group(out, group);
 }
 
-// source:wbDefinitionsFO4.pas @01a11729; fixture payloads follow the R3a rows in fields.json.
+// source:wbDefinitionsFO4.pas @01a11729
 std::vector<std::byte> make_plugin() {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0u, 0);
@@ -154,6 +154,12 @@ Bytes payload(const fo4::Plugin& plugin, std::uint32_t local, std::string_view s
   return {};
 }
 
+std::string decoded_value(const fo4::Plugin& plugin, std::uint32_t local, std::string_view path) {
+  const auto field = scalar(path);
+  const auto data = payload(plugin, local, field.scalar.subrecord.to_string());
+  return fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(data, field.scalar), field.scalar);
+}
+
 constexpr std::pair<std::uint32_t, std::string_view> k_records[] = {
     {3001, "IMAD"}, {3002, "IMAD"}, {3003, "ZOOM"}, {3004, "CAMS"}, {3005, "CAMS"}, {3006, "SPGD"},
     {3007, "GDRY"}, {3008, "IMGS"}, {3009, "IMGS"}, {3010, "EFSH"}};
@@ -175,6 +181,8 @@ TEST(ImageFxSynthetic, EveryNewRowReadsItsFixturePayload) {
     }
   }
   EXPECT_GT(decoded, 0u);
+  EXPECT_EQ(decoded_value(plugin, 3006, "SPGD\\GravityVelocity"), "9");
+  EXPECT_EQ(decoded_value(plugin, 3004, "CAMS\\RotationOffsetZ"), "-2");
 }
 
 TEST(ImageFxSynthetic, RowsWithMinimumPayloadStayAbsentOnShortSubrecords) {

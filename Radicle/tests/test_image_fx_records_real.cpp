@@ -51,12 +51,17 @@ TEST_P(ImageFxRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow
     const auto constraint = fo4::schema::record_authoring_constraint(signature);
     ASSERT_TRUE(constraint.has_value()) << signature.to_string();
     const auto rules = fo4::schema::authoring_subrecords(*constraint);
+    std::size_t last_index = 0;
     for (const auto& subrecord : record.subrecords) {
       if (!printable(subrecord.signature.to_string())) continue;
-      const auto listed = std::any_of(rules.begin(), rules.end(), [&](const auto& rule) {
-        return rule.signature == subrecord.signature;
+      const auto rule = std::find_if(rules.begin(), rules.end(), [&](const auto& candidate) {
+        return candidate.signature == subrecord.signature;
       });
-      EXPECT_TRUE(listed) << record.form_key.to_string() << ' ' << subrecord.signature.to_string();
+      if (rule == rules.end()) continue;
+      const auto index = static_cast<std::size_t>(std::distance(rules.begin(), rule));
+      EXPECT_GE(index, last_index)
+          << record.form_key.to_string() << ' ' << subrecord.signature.to_string();
+      last_index = index;
     }
     for (const auto& rule : rules) {
       const auto count = static_cast<std::size_t>(std::count_if(
