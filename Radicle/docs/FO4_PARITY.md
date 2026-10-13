@@ -130,7 +130,7 @@ The P entries refer to the bounded surfaces below, not every xEdit member. Keywo
 | NAVM | U | U | U | U | U | P | U | G | field audit pending; PR #402; xEdit L7212 |
 | NOCM | U | U | U | U | U | U | U | G | field audit pending; xEdit L12453 |
 | NOTE | U | U | U | U | U | U | U | G | field audit pending; xEdit L12470 |
-| NPC_ | I | I | I | I | U | U | I | G | field audit pending; xEdit L10286 |
+| NPC_ | P | P | P | P | U | U | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit pending for unlisted fields; xEdit L10286 |
 | OMOD | U | U | U | U | U | P | U | G | field audit pending; xEdit L12501 |
 | OTFT | U | U | U | U | U | U | U | G | field audit pending; xEdit L9357 |
 | OVIS | U | U | U | U | U | U | U | G | field audit pending; xEdit L12546 |
