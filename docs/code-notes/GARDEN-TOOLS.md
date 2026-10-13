@@ -2122,7 +2122,7 @@ Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next t
 
 ## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — paging (#32)
 
-`limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000.
+`limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000. The filter matches the text case-insensitively (ASCII) or the decimal ID as a substring.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:displayText — text encoding (#32)
 

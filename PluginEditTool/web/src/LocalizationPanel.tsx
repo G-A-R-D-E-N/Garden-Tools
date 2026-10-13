@@ -173,9 +173,7 @@ export default function LocalizationPanel({ onClose }: { onClose: () => void }) 
                 <tbody>
                   {page.rows.map((row, i) => (
                     <tr key={`${row.id}:${i}`}>
-                      <td>
-                        {row.id}
-                      </td>
+                      <td>{row.id}</td>
                       <td className="localization-text">{row.text}</td>
                     </tr>
                   ))}
