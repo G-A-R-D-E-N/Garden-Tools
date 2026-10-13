@@ -371,12 +371,12 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     const plug = matrix.Plugins[col];
     setStatus(`Checking ${plug} for errors…`);
     try {
-      const rows: { Code: string; Severity: string; FormKey: string; Message: string }[] =
+      const rows: { Code: string; Detail: string; Severity: string; FormKey: string; Message: string }[] =
         JSON.parse(await b.CheckForErrors(plug, 500));
       const errors = rows.filter(r => r.Severity === 'error').length;
       setStatus(rows.length === 0 ? `No errors found in ${plug}.`
         : `${errors} error(s), ${rows.length - errors} warning(s) in ${plug}:\n`
-          + rows.slice(0, 20).map(r => `${r.Severity} ${r.Code} ${r.FormKey}: ${r.Message}`).join('\n')
+          + rows.slice(0, 20).map(r => `${r.Severity} ${r.Code}${r.Detail ? ' (' + r.Detail + ')' : ''} ${r.FormKey}: ${r.Message}`).join('\n')
           + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
     } catch (e) { setStatus('Check failed: ' + errorText(e)); }
   };

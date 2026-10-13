@@ -1,3 +1,4 @@
+#include "fo4/c_api_env.h"
 #include "fo4/graph/check_errors.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -12,7 +13,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -109,6 +112,21 @@ fo4::Plugin make_expl_plugin(std::uint32_t selector) {
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   return fo4::read_plugin(out.bytes, "Variant.esp");
+}
+
+std::vector<std::byte> duplicate_scalar_bytes() {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "REFR", 0);
+  const auto record = fo4::test::begin_record(out, "REFR", 0, 0x000800);
+  for (const std::uint32_t health : {50u, 75u}) {
+    fo4::test::ByteWriter xhlt;
+    xhlt.u32(health);
+    fo4::test::write_subrecord(out, "XHLT", xhlt.bytes);
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
 }
 
 const fo4::Record* find_record(const fo4::Plugin& plugin, std::string_view signature) {
@@ -366,6 +384,42 @@ TEST(CheckErrors, RepeatedVariantSubrecordTargetsAreCheckedPerInstance) {
   const auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
   const std::vector<const fo4::Plugin*> load_order{&plugin};
   EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::wrong_target_type).empty());
+}
+
+TEST(CheckErrors, PreflightFindingCarriesIssueCodeAsDetail) {
+  const auto bytes = duplicate_scalar_bytes();
+  const auto plugin = fo4::read_plugin(bytes, "Dup.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].detail, "duplicate_scalar_subrecord");
+  EXPECT_EQ(findings[0].message.find(" ("), std::string::npos) << findings[0].message;
+}
+
+TEST(CheckErrors, CApiRowEndsWithIssueCode) {
+  const auto root = std::filesystem::temp_directory_path() / "radicle_check_errors_detail";
+  std::filesystem::create_directories(root);
+  const auto path = root / "Dup.esp";
+  const auto bytes = duplicate_scalar_bytes();
+  std::ofstream(path, std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const auto text = path.u8string();
+  const std::string path_text{text.begin(), text.end()};
+  const char* paths[] = {path_text.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+
+  char** strings = nullptr;
+  size_t count = 0;
+  const auto status = radicle_env_check_errors(env, nullptr, 0, &strings, &count);
+  const std::vector<std::string> rows(strings, strings + count);
+  radicle_free_string_array(strings, count);
+  radicle_env_destroy(env);
+  std::filesystem::remove_all(root);
+
+  ASSERT_EQ(status, RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(rows.size(), 1u);
+  EXPECT_TRUE(rows[0].ends_with(" (duplicate_scalar_subrecord)")) << rows[0];
 }
 
 TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
