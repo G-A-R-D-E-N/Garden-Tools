@@ -8859,12 +8859,6 @@
             "maximum": 1
           },
           {
-            "signature": "COCT",
-            "minimum": 0,
-            "maximum": 1,
-            "coupled": true
-          },
-          {
             "signature": "DEST",
             "minimum": 0,
             "maximum": 1,
@@ -9608,6 +9602,11 @@
             "coupled": true
           },
           {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "WBDT",
             "minimum": 1,
             "maximum": 1,
@@ -9785,6 +9784,147 @@
           "minimum": 0,
           "maximum": 9,
           "minimum_payload_size": 1,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\ActiveMarkers",
+          "label": "Active markers / flags",
+          "kind": "scalar",
+          "subrecord": "MNAM",
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Interaction Point 0"
+            },
+            {
+              "bit": 1,
+              "name": "Interaction Point 1"
+            },
+            {
+              "bit": 2,
+              "name": "Interaction Point 2"
+            },
+            {
+              "bit": 3,
+              "name": "Interaction Point 3"
+            },
+            {
+              "bit": 4,
+              "name": "Interaction Point 4"
+            },
+            {
+              "bit": 5,
+              "name": "Interaction Point 5"
+            },
+            {
+              "bit": 6,
+              "name": "Interaction Point 6"
+            },
+            {
+              "bit": 7,
+              "name": "Interaction Point 7"
+            },
+            {
+              "bit": 8,
+              "name": "Interaction Point 8"
+            },
+            {
+              "bit": 9,
+              "name": "Interaction Point 9"
+            },
+            {
+              "bit": 10,
+              "name": "Interaction Point 10"
+            },
+            {
+              "bit": 11,
+              "name": "Interaction Point 11"
+            },
+            {
+              "bit": 12,
+              "name": "Interaction Point 12"
+            },
+            {
+              "bit": 13,
+              "name": "Interaction Point 13"
+            },
+            {
+              "bit": 14,
+              "name": "Interaction Point 14"
+            },
+            {
+              "bit": 15,
+              "name": "Interaction Point 15"
+            },
+            {
+              "bit": 16,
+              "name": "Interaction Point 16"
+            },
+            {
+              "bit": 17,
+              "name": "Interaction Point 17"
+            },
+            {
+              "bit": 18,
+              "name": "Interaction Point 18"
+            },
+            {
+              "bit": 19,
+              "name": "Interaction Point 19"
+            },
+            {
+              "bit": 20,
+              "name": "Interaction Point 20"
+            },
+            {
+              "bit": 21,
+              "name": "Interaction Point 21"
+            },
+            {
+              "bit": 22,
+              "name": "Allow Awake Sound"
+            },
+            {
+              "bit": 23,
+              "name": "Enter With Weapon Drawn"
+            },
+            {
+              "bit": 24,
+              "name": "Play Anim When Full"
+            },
+            {
+              "bit": 25,
+              "name": "Disables Activation"
+            },
+            {
+              "bit": 26,
+              "name": "Is Perch"
+            },
+            {
+              "bit": 27,
+              "name": "Must Exit to Talk"
+            },
+            {
+              "bit": 28,
+              "name": "Use Static Avoid Node"
+            },
+            {
+              "bit": 29,
+              "name": "Unknown 29"
+            },
+            {
+              "bit": 30,
+              "name": "Has Model?"
+            },
+            {
+              "bit": 31,
+              "name": "Is Sleep Furniture"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
           "insertion": "existing_only"
         },
         {
@@ -10205,9 +10345,21 @@
             "coupled": true
           },
           {
+            "signature": "PNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
             "signature": "SNAM",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "FNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000"
           },
           {
             "signature": "VNAM",
@@ -10447,6 +10599,11 @@
             "coupled": true
           },
           {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "WBDT",
             "minimum": 0,
             "maximum": 1
@@ -10595,6 +10752,147 @@
           ],
           "minimum": 0,
           "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TERM\\ActiveMarkers",
+          "label": "Active markers / flags",
+          "kind": "scalar",
+          "subrecord": "MNAM",
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Interaction Point 0"
+            },
+            {
+              "bit": 1,
+              "name": "Interaction Point 1"
+            },
+            {
+              "bit": 2,
+              "name": "Interaction Point 2"
+            },
+            {
+              "bit": 3,
+              "name": "Interaction Point 3"
+            },
+            {
+              "bit": 4,
+              "name": "Interaction Point 4"
+            },
+            {
+              "bit": 5,
+              "name": "Interaction Point 5"
+            },
+            {
+              "bit": 6,
+              "name": "Interaction Point 6"
+            },
+            {
+              "bit": 7,
+              "name": "Interaction Point 7"
+            },
+            {
+              "bit": 8,
+              "name": "Interaction Point 8"
+            },
+            {
+              "bit": 9,
+              "name": "Interaction Point 9"
+            },
+            {
+              "bit": 10,
+              "name": "Interaction Point 10"
+            },
+            {
+              "bit": 11,
+              "name": "Interaction Point 11"
+            },
+            {
+              "bit": 12,
+              "name": "Interaction Point 12"
+            },
+            {
+              "bit": 13,
+              "name": "Interaction Point 13"
+            },
+            {
+              "bit": 14,
+              "name": "Interaction Point 14"
+            },
+            {
+              "bit": 15,
+              "name": "Interaction Point 15"
+            },
+            {
+              "bit": 16,
+              "name": "Interaction Point 16"
+            },
+            {
+              "bit": 17,
+              "name": "Interaction Point 17"
+            },
+            {
+              "bit": 18,
+              "name": "Interaction Point 18"
+            },
+            {
+              "bit": 19,
+              "name": "Interaction Point 19"
+            },
+            {
+              "bit": 20,
+              "name": "Interaction Point 20"
+            },
+            {
+              "bit": 21,
+              "name": "Interaction Point 21"
+            },
+            {
+              "bit": 22,
+              "name": "Allow Awake Sound"
+            },
+            {
+              "bit": 23,
+              "name": "Enter With Weapon Drawn"
+            },
+            {
+              "bit": 24,
+              "name": "Play Anim When Full"
+            },
+            {
+              "bit": 25,
+              "name": "Disables Activation"
+            },
+            {
+              "bit": 26,
+              "name": "Is Perch"
+            },
+            {
+              "bit": 27,
+              "name": "Must Exit to Talk"
+            },
+            {
+              "bit": 28,
+              "name": "Use Static Avoid Node"
+            },
+            {
+              "bit": 29,
+              "name": "Unknown 29"
+            },
+            {
+              "bit": 30,
+              "name": "Has Model?"
+            },
+            {
+              "bit": 31,
+              "name": "Is Sleep Furniture"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
           "insertion": "existing_only"
         },
         {

@@ -15,7 +15,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace {
 
@@ -56,21 +55,16 @@ TEST_P(ObjectBaseRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
     const auto scalars = fo4::schema::scalar_fields(signature);
     const auto links = fo4::schema::formlink_fields(signature);
 
-    std::vector<fo4::FormKey> records;
     fo4::visit_records(plugin, [&](const fo4::Record& record) {
-      if (record.header.signature == signature) records.push_back(record.form_key);
-    });
-    total += records.size();
-
-    for (const auto& key : records) {
-      const auto* record = fo4::find_record(plugin, key);
-      ASSERT_NE(record, nullptr);
+      if (record.header.signature != signature) return;
+      ++total;
+      const auto key = record.form_key.to_string();
       std::size_t last_index = 0;
-      for (const auto& sub : record->subrecords) {
+      for (const auto& sub : record.subrecords) {
         for (const auto& field : scalars) {
           if (sub.signature != field.scalar.subrecord) continue;
           if (field.scalar.payload_size != 0 && sub.data.size() != field.scalar.payload_size) {
-            ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ' ' << field.path << ": "
+            ADD_FAILURE() << GetParam() << ' ' << key << ' ' << field.path << ": "
                           << sub.signature.to_string() << " is " << sub.data.size()
                           << " bytes, expected " << field.scalar.payload_size;
             continue;
@@ -79,7 +73,7 @@ TEST_P(ObjectBaseRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
             const auto bytes = fo4::schema::scalar_field_bytes(sub.data, field.scalar);
             if (!bytes.empty()) static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
           } catch (const std::exception& error) {
-            ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ' ' << field.path << ": "
+            ADD_FAILURE() << GetParam() << ' ' << key << ' ' << field.path << ": "
                           << error.what();
           }
         }
@@ -87,26 +81,25 @@ TEST_P(ObjectBaseRecordsReal, RowsDecodeAndAuthoringLimitsHold) {
           if (sub.signature != field.subrecord) continue;
           const auto& sizes = field.payload_sizes;
           if (sizes[0] != 0 && sub.data.size() != sizes[0] && sub.data.size() != sizes[1]) {
-            ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ' ' << field.path << ": "
+            ADD_FAILURE() << GetParam() << ' ' << key << ' ' << field.path << ": "
                           << sub.signature.to_string() << " is " << sub.data.size() << " bytes";
           }
         }
         const auto index = authored_index(rules, sub.signature);
         if (index < rules.size()) {
-          EXPECT_GE(index, last_index) << GetParam() << ' ' << key.to_string() << ' '
-                                       << signature_text << ' ' << sub.signature.to_string()
-                                       << " is out of authoring order";
+          EXPECT_GE(index, last_index) << GetParam() << ' ' << key << ' ' << signature_text << ' '
+                                       << sub.signature.to_string() << " is out of authoring order";
           last_index = std::max(last_index, index);
         }
       }
       for (const auto& rule : rules) {
-        const auto count = count_subrecords(*record, rule.signature);
-        EXPECT_GE(count, static_cast<std::size_t>(rule.minimum)) << GetParam() << ' ' << key.to_string() << ' '
-                                       << signature_text << ' ' << rule.signature.to_string();
-        EXPECT_LE(count, static_cast<std::size_t>(rule.maximum)) << GetParam() << ' ' << key.to_string() << ' '
-                                       << signature_text << ' ' << rule.signature.to_string();
+        const auto count = count_subrecords(record, rule.signature);
+        EXPECT_GE(count, static_cast<std::size_t>(rule.minimum))
+            << GetParam() << ' ' << key << ' ' << signature_text << ' ' << rule.signature.to_string();
+        EXPECT_LE(count, static_cast<std::size_t>(rule.maximum))
+            << GetParam() << ' ' << key << ' ' << signature_text << ' ' << rule.signature.to_string();
       }
-    }
+    });
   }
   if (std::string_view{GetParam()} == "Fallout4.esm") {
     EXPECT_GT(total, 0u);

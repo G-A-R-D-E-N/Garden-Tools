@@ -95,7 +95,7 @@ Tier counts: L0 80, L1 10, L2 15, L3 1, L4 41.
 | FLST | 7574 | - | - | - | 1 | - | - | - | - | - | - | L3 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FURN | 6848 | 8 | 2 | 6 | - | 2 | yes | yes | - | - | 1 | L4 |
+| FURN | 6848 | 9 | 2 | 6 | - | 2 | yes | yes | - | - | 1 | L4 |
 | GDRY | 12322 | - | - | - | - | - | - | - | - | - | - | L0 |
 | GLOB | 6921 | - | - | - | - | - | - | - | - | - | - | L0 |
 | GMST | 6936 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -181,7 +181,7 @@ Tier counts: L0 80, L1 10, L2 15, L3 1, L4 41.
 | STAG | 12663 | - | - | - | - | - | - | - | - | - | - | L0 |
 | STAT | 12045 | - | - | - | - | - | - | - | environment/base_records | - | 1 | L2 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
-| TERM | 12671 | 7 | 2 | 2 | - | 3 | yes | yes | - | - | 1 | L4 |
+| TERM | 12671 | 8 | 2 | 2 | - | 3 | yes | yes | - | - | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | - | 7 | L0 |
 | TREE | 12134 | 16 | - | 2 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -214,7 +214,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
 | FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
-| FURN | 6 | - | 1 | 1 | 2 | i16, u16, u8 | - | - | - | existing_only |
+| FURN | 6 | - | 1 | 2 | 2 | i16, u16, u32, u8 | - | - | - | existing_only |
 | GRAS | 10 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
 | HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
@@ -237,7 +237,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | TACT | 6 | - | - | - | 1 | i16 | - | - | - | existing_only |
-| TERM | 6 | - | - | 1 | 2 | i16, u16 | - | - | - | existing_only |
+| TERM | 6 | - | - | 2 | 2 | i16, u16, u32 | - | - | - | existing_only |
 | TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |

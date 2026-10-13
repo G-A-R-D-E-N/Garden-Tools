@@ -36,16 +36,25 @@ struct Item {
   std::string_view scalar_value;
   std::string_view text_path;
   std::string_view link_path;
+  std::uint32_t link_start;
+  std::string_view link_target;
 };
 
 constexpr Item k_items[] = {
-    {"ACTI", "000801:Patch.esp", "ACTI\\BoundMaxX", "7", "ACTI\\Model", "ACTI\\LoopingSound"},
-    {"CONT", "000802:Patch.esp", "CONT\\Weight", "2.5", "CONT\\Model", "CONT\\OpenSound"},
-    {"DOOR", "000803:Patch.esp", "DOOR\\Flags", "2", "DOOR\\Model", "DOOR\\OpenSound"},
-    {"FURN", "000804:Patch.esp", "FURN\\BenchType", "7", "FURN\\Model", ""},
-    {"MSTT", "000805:Patch.esp", "MSTT\\OnLocalMap", "0", "MSTT\\Model", "MSTT\\LoopingSound"},
-    {"TACT", "000806:Patch.esp", "TACT\\BoundMinX", "-4", "TACT\\Model", "TACT\\LoopingSound"},
-    {"TERM", "000807:Patch.esp", "TERM\\Flags", "4", "TERM\\Model", ""},
+    {"ACTI", "000801:Patch.esp", "ACTI\\BoundMaxX", "7", "ACTI\\Model", "ACTI\\LoopingSound",
+     0x800, "000808:Patch.esp"},
+    {"CONT", "000802:Patch.esp", "CONT\\Weight", "2.5", "CONT\\Model", "CONT\\OpenSound", 0x800,
+     "000808:Patch.esp"},
+    {"DOOR", "000803:Patch.esp", "DOOR\\Flags", "2", "DOOR\\Model", "DOOR\\OpenSound", 0x800,
+     "000808:Patch.esp"},
+    {"FURN", "000804:Patch.esp", "FURN\\BenchType", "7", "FURN\\Model", "FURN\\PreviewTransform",
+     0x809, "00080A:Patch.esp"},
+    {"MSTT", "000805:Patch.esp", "MSTT\\OnLocalMap", "0", "MSTT\\Model", "MSTT\\LoopingSound",
+     0x800, "000808:Patch.esp"},
+    {"TACT", "000806:Patch.esp", "TACT\\BoundMinX", "-4", "TACT\\Model", "TACT\\LoopingSound",
+     0x800, "000808:Patch.esp"},
+    {"TERM", "000807:Patch.esp", "TERM\\Flags", "4", "TERM\\Model", "TERM\\PreviewTransform",
+     0x809, "00080A:Patch.esp"},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -112,6 +121,8 @@ std::vector<std::byte> make_plugin() {
 
   write_group(out, "SNDR", {{0x800, {{"EDID", zstr("RadicleSoundA")}}},
                             {0x808, {{"EDID", zstr("RadicleSoundB")}}}});
+  write_group(out, "TRNS", {{0x809, {{"EDID", zstr("RadicleTransformA")}}},
+                            {0x80A, {{"EDID", zstr("RadicleTransformB")}}}});
   write_group(out, "ACTI", {{0x801, {{"EDID", zstr("RadicleActi")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Light.nif")},
@@ -129,6 +140,7 @@ std::vector<std::byte> make_plugin() {
                                      {"FNAM", u8_bytes(1)}}}});
   write_group(out, "FURN", {{0x804, {{"EDID", zstr("RadicleFurn")},
                                      {"OBND", zeros(12)},
+                                     {"PTRN", u32_bytes(raw_id(0x809))},
                                      {"MODL", zstr("Bench.nif")},
                                      {"PNAM", zeros(4)},
                                      {"FNAM", u16_bytes(2)},
@@ -141,9 +153,12 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "TACT", {{0x806, {{"EDID", zstr("RadicleTact")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Talk.nif")},
-                                     {"SNAM", u32_bytes(raw_id(0x800))}}}});
+                                     {"PNAM", zeros(4)},
+                                     {"SNAM", u32_bytes(raw_id(0x800))},
+                                     {"FNAM", zeros(2)}}}});
   write_group(out, "TERM", {{0x807, {{"EDID", zstr("RadicleTerm")},
                                      {"OBND", zeros(12)},
+                                     {"PTRN", u32_bytes(raw_id(0x809))},
                                      {"MODL", zstr("Terminal.nif")},
                                      {"FNAM", u16_bytes(1)}}}});
   return out.bytes;
@@ -196,7 +211,6 @@ TEST(ObjectBaseRecordsSynthetic, FlagsRowNamesComeFromXEdit) {
 
 TEST(ObjectBaseRecordsSynthetic, EditsOneRowPerRecordAndRereads) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
-  const auto replacement = fo4::FormKey::parse("000808:Patch.esp");
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto record = fo4::FormKey::parse(item.key);
@@ -208,13 +222,12 @@ TEST(ObjectBaseRecordsSynthetic, EditsOneRowPerRecordAndRereads) {
     EXPECT_EQ(fo4::set_record_string(plugin, record, item.text_path, 0, "Edited.nif"),
               fo4::ScalarMutationStatus::updated)
         << item.text_path;
-    if (!item.link_path.empty()) {
-      const auto link = fo4::schema::formlink_field_descriptor(signature, item.link_path);
-      ASSERT_TRUE(link.has_value()) << item.link_path;
-      EXPECT_EQ(fo4::set_record_formlink_field(plugin, record, *link, replacement),
-                fo4::FormLinkFieldMutationStatus::updated)
-          << item.link_path;
-    }
+    const auto link = fo4::schema::formlink_field_descriptor(signature, item.link_path);
+    ASSERT_TRUE(link.has_value()) << item.link_path;
+    EXPECT_EQ(fo4::set_record_formlink_field(plugin, record, *link,
+                                             fo4::FormKey::parse(item.link_target)),
+              fo4::FormLinkFieldMutationStatus::updated)
+        << item.link_path;
   }
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
@@ -238,20 +251,18 @@ TEST(ObjectBaseRecordsSynthetic, EditsOneRowPerRecordAndRereads) {
     ASSERT_NE(text_sub, nullptr);
     EXPECT_EQ(text_sub->data, zstr("Edited.nif")) << item.text_path;
 
-    if (!item.link_path.empty()) {
-      const auto link = fo4::schema::formlink_field_descriptor(signature, item.link_path);
-      ASSERT_TRUE(link.has_value());
-      const auto* link_sub = find_subrecord(*record, link->subrecord);
-      ASSERT_NE(link_sub, nullptr) << item.link_path;
-      EXPECT_EQ(link_sub->data, u32_bytes(raw_id(0x808))) << item.link_path;
-    }
+    const auto link = fo4::schema::formlink_field_descriptor(signature, item.link_path);
+    ASSERT_TRUE(link.has_value());
+    const auto* link_sub = find_subrecord(*record, link->subrecord);
+    ASSERT_NE(link_sub, nullptr) << item.link_path;
+    const auto target = fo4::FormKey::parse(item.link_target).local().value();
+    EXPECT_EQ(link_sub->data, u32_bytes(raw_id(target))) << item.link_path;
   }
 }
 
-TEST(ObjectBaseRecordsSynthetic, FixtureLinksStartOnTheFirstSoundRecord) {
+TEST(ObjectBaseRecordsSynthetic, FixtureLinksStartOnTheirFirstTarget) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& item : k_items) {
-    if (item.link_path.empty()) continue;
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto link = fo4::schema::formlink_field_descriptor(signature, item.link_path);
     ASSERT_TRUE(link.has_value()) << item.link_path;
@@ -259,7 +270,7 @@ TEST(ObjectBaseRecordsSynthetic, FixtureLinksStartOnTheFirstSoundRecord) {
     ASSERT_NE(record, nullptr);
     const auto* link_sub = find_subrecord(*record, link->subrecord);
     ASSERT_NE(link_sub, nullptr) << item.link_path;
-    EXPECT_EQ(link_sub->data, u32_bytes(raw_id(0x800))) << item.link_path;
+    EXPECT_EQ(link_sub->data, u32_bytes(raw_id(item.link_start))) << item.link_path;
   }
 }
 
