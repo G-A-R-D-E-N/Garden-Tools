@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <fo4/forms/faction.hpp>
 #include <fo4/forms/npc.hpp>
@@ -84,27 +85,46 @@ Result<fo4::forms::NpcInventoryItem> npcInventoryFromJson(const nlohmann::json& 
     return entry;
 }
 
+std::string hexText(const std::vector<std::byte>& bytes) {
+    static constexpr char digits[] = "0123456789ABCDEF";
+    std::string text;
+    for (const auto byte : bytes) {
+        const auto value = std::to_integer<unsigned>(byte);
+        text += digits[value >> 4];
+        text += digits[value & 0xF];
+    }
+    return text;
+}
+
 nlohmann::json titleJson(const std::optional<fo4::schema::LocalizedString>& title) {
     if (!title.has_value()) return nlohmann::json(nullptr);
     if (title->text.has_value()) return nlohmann::json(*title->text);
     if (title->id.has_value()) return nlohmann::json{{"stringId", *title->id}};
+    if (title->raw_id.has_value()) return nlohmann::json{{"rawId", hexText(*title->raw_id)}};
     return nlohmann::json(nullptr);
 }
 
 std::optional<fo4::schema::LocalizedString> titleOf(const nlohmann::json& value) {
-    if (!value.is_string()) return std::nullopt;
     fo4::schema::LocalizedString title;
-    title.text = value.get<std::string>();
+    if (value.is_string()) {
+        title.text = value.get<std::string>();
+        return title;
+    }
+    const auto id = support::integerField<std::uint32_t>(value, "stringId");
+    if (!id) return std::nullopt;
+    title.id = *id;
     return title;
 }
 
-bool stringIdTitle(const nlohmann::json& value) {
-    return value.is_object() && value.contains("stringId");
+bool rawIdTitle(const nlohmann::json& value) {
+    return value.is_object() && value.contains("rawId");
 }
 
 bool validTitle(const nlohmann::json& value, const char* name) {
-    return !value.contains(name) || value.at(name).is_string() || value.at(name).is_null() ||
-           stringIdTitle(value.at(name));
+    if (!value.contains(name)) return true;
+    const auto& title = value.at(name);
+    return title.is_string() || title.is_null() || rawIdTitle(title) ||
+           support::integerField<std::uint32_t>(title, "stringId").has_value();
 }
 
 std::string reactionName(fo4::forms::FactionCombatReaction reaction) {
@@ -149,10 +169,17 @@ Result<void> RadiclePluginBackend::stageTypedRecordEdit(
     if (const auto error = writeGuard(*loaded); error.has_value()) return std::unexpected(*error);
 
     auto mutated = loaded->plugin;
-    if (fo4::find_record(mutated, key) == nullptr) {
+    const auto* record = fo4::find_record(mutated, key);
+    if (record == nullptr) {
         return std::unexpected(Error{
             "RecordNotFound",
             "Record is not present in " + std::string(pluginName) + ": " + key.to_string()
+        });
+    }
+    if (record->header.flags.is_deleted()) {
+        return std::unexpected(Error{
+            "RecordDeleted",
+            "The record is deleted in " + std::string(pluginName) + ": " + key.to_string()
         });
     }
     try {
@@ -362,10 +389,10 @@ Result<nlohmann::json> RadiclePluginBackend::editFactionEntries(const nlohmann::
         }
         fo4::forms::FactionRank rank = op == "set" ? ranks[position] : fo4::forms::FactionRank{};
         rank.number = *number;
-        if (value.contains("maleTitle") && !stringIdTitle(value.at("maleTitle"))) {
+        if (value.contains("maleTitle") && !rawIdTitle(value.at("maleTitle"))) {
             rank.male_title = titleOf(value.at("maleTitle"));
         }
-        if (value.contains("femaleTitle") && !stringIdTitle(value.at("femaleTitle"))) {
+        if (value.contains("femaleTitle") && !rawIdTitle(value.at("femaleTitle"))) {
             rank.female_title = titleOf(value.at("femaleTitle"));
         }
         if (op == "add") {

@@ -1967,7 +1967,7 @@ The strict re-key probe that `deleteRecord` and `renumberRecord` ran inline is n
 
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — shared typed write path (#287 P1)
 
-Used by the leveled list, NPC_ and FACT edits. It takes the write lock on the named plugin, applies `writeGuard`, and refuses a record that is not in that plugin with `RecordNotFound` before any Radicle call. The Radicle edit runs on a copy of the plugin, and only a clean return stages it. A Radicle exception becomes `<Family>WriteFailed` with the Radicle message, so a refused edit leaves the loaded plugin and its saved bytes unchanged. Tests: `PluginEditTool/native/tests/unit/RadiclePluginTypedRecordsTests.cpp` and `PluginEditTool/native/tests/unit/RadiclePluginLeveledTests.cpp`.
+Used by the leveled list, NPC_ and FACT edits. It takes the write lock on the named plugin, applies `writeGuard`, and refuses a record that is not in that plugin with `RecordNotFound`, or a record whose header has the deleted flag with `RecordDeleted`, before any Radicle call. The Radicle edit runs on a copy of the plugin, and only a clean return stages it. A Radicle exception becomes `<Family>WriteFailed` with the Radicle message, so a refused edit leaves the loaded plugin and its saved bytes unchanged. Tests: `PluginEditTool/native/tests/unit/RadiclePluginTypedRecordsTests.cpp` and `PluginEditTool/native/tests/unit/RadiclePluginLeveledTests.cpp`.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:winningPlugin — read versus edit target
 
@@ -1979,7 +1979,7 @@ Reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) decode 
 
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::editFactionEntries — rank set keeps titles and insignia
 
-A rank `set` starts from the existing rank, so a title omitted from the value is kept, and `null` clears it. The rank's insignia is never read into the value, only reported as `hasInsignia`, so a set cannot drop it. Titles are written as inline text; in a localized plugin Radicle refuses the write with `FactionWriteFailed`, so the mismatch is reported instead of silently changed. Test: `Native FACT rank set keeps the male title and round-trips through save and re-read`.
+A rank `set` starts from the existing rank, so a title omitted from the value is kept, and `null` clears it. The rank's insignia is never read into the value, only reported as `hasInsignia`, so a set cannot drop it. Titles are written by shape: a string sets inline text, `null` clears the title, and `{"stringId": n}` sets the localized string ID `n` (`titleOf`). A `{"rawId": "<hex>"}` value is the read-back form of a localized title whose payload is not four bytes; on a rank `set` it keeps the existing title, and on `add` it leaves the title empty. Radicle's `require_string_form` refuses a shape that does not match the plugin's localized flag, reported as `FactionWriteFailed`, so a mismatch is never silently changed. Test: `Native FACT rank set keeps the male title and round-trips through save and re-read`.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::getWeaponDamageTypes — read-only
 
@@ -1987,7 +1987,7 @@ WEAP has no edit method. `curveTable` is `null` for a DAMA entry below form vers
 
 ## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — set replaces the whole entry
 
-`set` rewrites the LVLO and its COED together, so a value without `extra` removes the entry's COED. `add` inserts at `index`, and `remove` ignores `value`. Radicle throws `LeveledListError` for an out-of-range index, reported as `LeveledListWriteFailed`. Round-trip test: `Native leveled list entry edit round-trips through save and re-read`.
+`set` rewrites the LVLO and its COED together, so a value without `extra` removes the entry's COED, except the LVLO reserved bytes, which are kept. `add` inserts at `index`, and `remove` ignores `value`. Radicle throws `LeveledListError` for an out-of-range index, reported as `LeveledListWriteFailed`. Round-trip test: `Native leveled list entry edit round-trips through save and re-read`.
 
 ## PluginEditTool/web/src/recordActions.ts:f2Edit, PluginEditTool/web/src/RecordView.tsx:RecordView — F2 edits the focused cell (#41)
 
@@ -2088,4 +2088,4 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
 
-A rank title with no inline text but a string ID is emitted as `{"stringId": id}`. On a rank `set` or `add`, a `maleTitle` or `femaleTitle` sent in that shape (`stringIdTitle`) leaves the title unchanged, so the string ID is not lost. Plain strings and null still set or clear the title.
+A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one.

@@ -55,8 +55,9 @@ std::vector<std::byte> typedReadBytes(const std::filesystem::path& path) {
 }
 
 void writeHeader(fo4::test::ByteWriter& out,
-                 std::initializer_list<std::string_view> masters) {
-    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+                 std::initializer_list<std::string_view> masters,
+                 std::uint32_t flags = 0) {
+    const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
     fo4::test::ByteWriter hedr;
     hedr.f32(1.0f);
     hedr.u32(0);
@@ -84,12 +85,12 @@ std::vector<std::byte> basePlugin() {
     return out.bytes;
 }
 
-std::vector<std::byte> npcPatchPlugin() {
+std::vector<std::byte> npcPatchPlugin(std::uint32_t flags = 0) {
     fo4::test::ByteWriter out;
     writeHeader(out, {"Base.esm"});
 
     const auto top = fo4::test::begin_group(out, "NPC_", 0);
-    const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x01000800u);
+    const auto npc = fo4::test::begin_record(out, "NPC_", flags, 0x01000800u);
     fo4::test::ByteWriter snam;
     snam.u32(0x00000900u);
     snam.u8(3);
@@ -113,9 +114,9 @@ std::vector<std::byte> npcPatchPlugin() {
     return out.bytes;
 }
 
-std::vector<std::byte> factionPatchPlugin() {
+std::vector<std::byte> factionPatchPlugin(bool localized = false) {
     fo4::test::ByteWriter out;
-    writeHeader(out, {"Base.esm"});
+    writeHeader(out, {"Base.esm"}, localized ? fo4::RecordFlags::localized : 0u);
 
     const auto top = fo4::test::begin_group(out, "FACT", 0);
     const auto faction = fo4::test::begin_record(out, "FACT", 0, 0x01000810u);
@@ -127,7 +128,13 @@ std::vector<std::byte> factionPatchPlugin() {
     fo4::test::ByteWriter rnam;
     rnam.u32(1);
     fo4::test::write_subrecord(out, "RNAM", rnam.bytes);
-    fo4::test::write_subrecord(out, "MNAM", std::string_view{"Rank One\0", 9});
+    if (localized) {
+        fo4::test::ByteWriter mnam;
+        mnam.u32(0x00001234u);
+        fo4::test::write_subrecord(out, "MNAM", mnam.bytes);
+    } else {
+        fo4::test::write_subrecord(out, "MNAM", std::string_view{"Rank One\0", 9});
+    }
     fo4::test::end_record(out, faction);
     fo4::test::end_group(out, top);
     return out.bytes;
@@ -379,4 +386,77 @@ TEST_CASE("Native WEAP damage read refuses a non-WEAP record and leaves the plug
     const bool unchanged = typedReadBytes(patchPath) == before;
     CHECK(unchanged);
     CHECK_FALSE(pendingPlugin(backend, 1));
+}
+
+TEST_CASE("Native FACT localized title reads as a string ID") {
+    const auto root = typedTempRoot();
+    TypedCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    typedWriteBytes(basePath, basePlugin());
+    typedWriteBytes(patchPath, factionPatchPlugin(true));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBaseAndPatch(backend, basePath, patchPath);
+
+    const auto faction = backend.getFaction(nlohmann::json::array({"000810:Patch.esp"}));
+    REQUIRE(faction.has_value());
+    REQUIRE(faction->at("ranks").size() == 1);
+    CHECK(faction->at("ranks")[0].at("maleTitle") == nlohmann::json{{"stringId", 0x1234}});
+}
+
+TEST_CASE("Native FACT localized rank set and add keep a string ID title through save and re-read") {
+    const auto root = typedTempRoot();
+    TypedCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    typedWriteBytes(basePath, basePlugin());
+    typedWriteBytes(patchPath, factionPatchPlugin(true));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBaseAndPatch(backend, basePath, patchPath);
+
+    const nlohmann::json title{{"stringId", 9000}};
+    const auto edited = backend.editFactionEntries(nlohmann::json::array({
+        "Patch.esp", "000810:Patch.esp", "ranks", "set", 0,
+        nlohmann::json{{"number", 2}, {"maleTitle", title}}
+    }));
+    REQUIRE(edited.has_value());
+    const auto added = backend.editFactionEntries(nlohmann::json::array({
+        "Patch.esp", "000810:Patch.esp", "ranks", "add", nullptr,
+        nlohmann::json{{"number", 3}, {"maleTitle", title}}
+    }));
+    REQUIRE(added.has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto reread = fo4::read_plugin_file(patchPath);
+    const auto ranks = fo4::forms::decode_faction_ranks(reread, fo4::FormKey::parse("000810:Patch.esp"));
+    REQUIRE(ranks.size() == 2);
+    REQUIRE(ranks[0].male_title.has_value());
+    CHECK(ranks[0].male_title->id.value_or(0) == 9000u);
+    REQUIRE(ranks[1].male_title.has_value());
+    CHECK(ranks[1].male_title->id.value_or(0) == 9000u);
+}
+
+TEST_CASE("Native NPC reads and edits refuse a deleted record") {
+    const auto root = typedTempRoot();
+    TypedCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    typedWriteBytes(basePath, basePlugin());
+    typedWriteBytes(patchPath, npcPatchPlugin(fo4::RecordFlags::deleted));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBaseAndPatch(backend, basePath, patchPath);
+
+    const auto npc = backend.getNpc(nlohmann::json::array({"000800:Patch.esp"}));
+    REQUIRE_FALSE(npc.has_value());
+    CHECK(npc.error().type == "RecordDeleted");
+
+    const auto edited = backend.editNpcEntries(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "factions", "add", nullptr,
+        nlohmann::json{{"faction", "000901:Base.esm"}, {"rank", 1}}
+    }));
+    REQUIRE_FALSE(edited.has_value());
+    CHECK(edited.error().type == "RecordDeleted");
 }
