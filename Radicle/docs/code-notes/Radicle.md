@@ -1470,7 +1470,7 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
 
-## Radicle/schema/fallout4/fields.json:K1 base items
+## Radicle/schema/fallout4/fields.json:records[ALCH..IDLM]
 
 Batch K1 (#287 C8) moves ALCH, AMMO, BOOK, INGR, KEYM, ARTO and IDLM from keyword-only (L1) to L4. The `keyword_records` entries are unchanged, and the new `records` block sits after EYES. Each citation below quotes the pinned xEdit definition text (pin 01a11729, `wbDefinitionsFO4.pas`). Corpus counts come from a read-only scan of the official masters: ALCH 354, AMMO 106, BOOK 470, INGR 1, KEYM 246, ARTO 258, IDLM 51 records.
 
@@ -1478,9 +1478,11 @@ Batch K1 (#287 C8) moves ALCH, AMMO, BOOK, INGR, KEYM, ARTO and IDLM from keywor
 - Radicle/schema/fallout4/fields.json:AMMO: `wbStruct(DATA, 'Data', [` (:5756) carries `.SetRequired` (:5760), corpus 106/106. `wbStruct(DNAM, '', [` (:5761) is required, 106/106. NAM2 (`wbModelInfo(NAM2)`) is authoring-only with no row.
 - Radicle/schema/fallout4/fields.json:BOOK: `wbDESCreq,` (:5900) is required, corpus 470/470. `wbStruct(DATA, 'Data', [` (:5906) and `wbStruct(DNAM, '', [` (:5910) are required, 470/470 each. The DNAM `wbUnion('Teaches', wbBOOKTeachesDecider, [` is not covered (union decided by a decider callback).
 - Radicle/schema/fallout4/fields.json:INGR: `wbStruct(DATA, '', [` (:9802) and `wbStruct(ENIT, 'Effect Data', [` (:9806) are required; INGR has one vanilla record, so these minimums rest on xEdit plus that record. `wbEffectsReq` (:9820) is not covered.
-- Radicle/schema/fallout4/fields.json:KEYM: `wbFULLReq,` (:9832) is required, corpus 246/246.
-- Radicle/schema/fallout4/fields.json:ARTO: `wbInteger(DNAM, 'Art Type', itU32, wbEnum([` (:9368) is an enum with three names; it is not marked required, and corpus has it in 258/258. OBND is required in xEdit, 258/258.
-- Radicle/schema/fallout4/fields.json:IDLM: `wbObjectBounds,` (:7103) is required, 51/51. `wbIdleAnimation.SetRequired,` (:7105): the group is required, but IDLF, IDLC and IDLT are present in 42, 39 and 39 of 51 records, so their minimums are 0. The IDLA array is not covered.
+- Radicle/schema/fallout4/fields.json:KEYM: `wbFULLReq,` (:9832) is required, corpus 246/246. Its FULL default is a single NUL (`"00"`), as in FLOR. Not covered: VMAD, MODT, MODF, DEST, DAMC.
+- Radicle/schema/fallout4/fields.json:ARTO: `wbInteger(DNAM, 'Art Type', itU32, wbEnum([` (:9368) is an enum with three names; it is not marked required, and corpus has it in 258/258. OBND is required in xEdit, 258/258. Not covered: MODT, MODF.
+- Radicle/schema/fallout4/fields.json:IDLM: `wbObjectBounds,` (:7103) is required, 51/51. `wbIdleAnimation.SetRequired,` (:7105): the group is required, but IDLF, IDLC and IDLT are present in 42, 39 and 39 of 51 records, so their minimums are 0. `wbIdleAnimation` Flags (IDLF, bits 0-5 named per `wbDefinitionsCommon.pas` lines 8630-8637, FO4 branch of each IsFO3/IsFO76/IsSF1) is covered; bit 1 stays unnamed. Not covered: IDLA (array of structs), MODT, MODF.
+- Radicle/tests/test_base_items.cpp:make_plugin: fixture subrecords follow the authoring order (`wbDefinitionsFO4.pas:5896-5900` puts MODL before DESC), since `preflight_authoring_record` rejects out-of-order subrecords (`Radicle/src/schema/preflight.cpp:preflight_authoring_record`).
+- Adding subrecords to records with unlisted subrecords (ALCH/INGR effects, IDLM IDLA) fails closed with `unknown_order` in `Radicle/src/plugin/subrecord_authoring.cpp:add_with_rules`.
 - Radicle/schema/fallout4/fields.json:K1 keyword overlap: the records entries sit beside the keyword_records entries. All six codegen `--check` commands pass with both present; KSIZ and KWDA are authoring rules marked coupled.
 - Radicle/tests/test_base_items.cpp:EditsOneRowPerRecordAndRereads: fixture with one record per signature and SNDR targets; one scalar, one string and one sound link edit per record, then re-read and compared.
 - Radicle/tests/test_base_items_real.cpp:RowsDecodeAndAuthoringLimitsHold: official masters; scalar and FormLink payload sizes and decodes, and authoring minimums and maximums per record.

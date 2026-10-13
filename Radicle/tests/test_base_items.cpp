@@ -3,6 +3,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
@@ -141,34 +142,34 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "ALCH", {{0x801, {{"EDID", zstr("RadicleAlch")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Meat.nif")},
+                                     {"YNAM", u32_bytes(raw_id(0x800))},
                                      {"DATA", f32_bytes(1.5f)},
-                                     {"ENIT", alch_enit()},
-                                     {"YNAM", u32_bytes(raw_id(0x800))}}}});
+                                     {"ENIT", alch_enit()}}}});
   write_group(out, "AMMO", {{0x802, {{"EDID", zstr("RadicleAmmo")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Round.nif")},
+                                     {"YNAM", u32_bytes(raw_id(0x800))},
                                      {"DATA", words(10, 0x3C23D70Au)},
-                                     {"DNAM", ammo_dnam()},
-                                     {"YNAM", u32_bytes(raw_id(0x800))}}}});
+                                     {"DNAM", ammo_dnam()}}}});
   write_group(out, "BOOK", {{0x803, {{"EDID", zstr("RadicleBook")},
                                      {"OBND", zeros(12)},
-                                     {"DESC", zstr("A tome.")},
                                      {"MODL", zstr("Tome.nif")},
+                                     {"DESC", zstr("A tome.")},
+                                     {"YNAM", u32_bytes(raw_id(0x800))},
                                      {"DATA", words(25, 0x3F800000u)},
-                                     {"DNAM", book_dnam()},
-                                     {"YNAM", u32_bytes(raw_id(0x800))}}}});
+                                     {"DNAM", book_dnam()}}}});
   write_group(out, "INGR", {{0x804, {{"EDID", zstr("RadicleIngr")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Herb.nif")},
+                                     {"YNAM", u32_bytes(raw_id(0x800))},
                                      {"DATA", words(4, 0x3E4CCCCDu)},
-                                     {"ENIT", words(4, 0x1u)},
-                                     {"YNAM", u32_bytes(raw_id(0x800))}}}});
+                                     {"ENIT", words(4, 0x1u)}}}});
   write_group(out, "KEYM", {{0x805, {{"EDID", zstr("RadicleKey")},
                                      {"OBND", zeros(12)},
                                      {"FULL", zstr("Key")},
                                      {"MODL", zstr("Key.nif")},
-                                     {"DATA", words(3, 0)},
-                                     {"YNAM", u32_bytes(raw_id(0x800))}}}});
+                                     {"YNAM", u32_bytes(raw_id(0x800))},
+                                     {"DATA", words(3, 0)}}}});
   write_group(out, "ARTO", {{0x806, {{"EDID", zstr("RadicleArto")},
                                      {"OBND", zeros(12)},
                                      {"MODL", zstr("Art.nif")},
@@ -296,5 +297,14 @@ TEST(BaseItemsSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
       EXPECT_GE(count, static_cast<std::size_t>(rule.minimum)) << item.signature << ' ' << rule.signature.to_string();
       EXPECT_LE(count, static_cast<std::size_t>(rule.maximum)) << item.signature << ' ' << rule.signature.to_string();
     }
+  }
+}
+
+TEST(BaseItemsSynthetic, FixtureRecordsPassAuthoringPreflight) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  for (const auto& item : k_items) {
+    const auto issues =
+        fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(item.key));
+    EXPECT_TRUE(issues.empty()) << item.signature;
   }
 }

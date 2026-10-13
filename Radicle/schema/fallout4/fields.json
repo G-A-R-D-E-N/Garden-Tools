@@ -958,6 +958,7 @@
           "offset": 0,
           "targets": ["EQUP"],
           "nullable": true,
+          "payload_sizes": [4],
           "insertion": "existing_only"
         },
         {
@@ -1437,7 +1438,7 @@
             "signature": "DESC",
             "minimum": 1,
             "maximum": 1,
-            "default": "00000000"
+            "default": "00"
           },
           {
             "signature": "DEST",
@@ -2061,6 +2062,7 @@
           "offset": 0,
           "targets": ["EQUP"],
           "nullable": true,
+          "payload_sizes": [4],
           "insertion": "existing_only"
         },
         {
@@ -2126,7 +2128,7 @@
             "signature": "FULL",
             "minimum": 1,
             "maximum": 1,
-            "default": "00000000"
+            "default": "00"
           },
           {
             "signature": "MODL",
@@ -2761,7 +2763,10 @@
           "presentation": "flags",
           "names": [
             { "bit": 0, "name": "Run In Sequence" },
-            { "bit": 2, "name": "Do Once" }
+            { "bit": 2, "name": "Do Once" },
+            { "bit": 3, "name": "Unknown 3" },
+            { "bit": 4, "name": "Ignored By Sandbox" },
+            { "bit": 5, "name": "Unknown 5" }
           ],
           "minimum": 0,
           "maximum": 255,
@@ -2826,6 +2831,7 @@
           "offset": 0,
           "targets": ["KYWD"],
           "nullable": false,
+          "payload_sizes": [4],
           "insertion": "existing_only"
         },
         {
