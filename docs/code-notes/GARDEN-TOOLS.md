@@ -1969,7 +1969,7 @@ The strict re-key probe that `deleteRecord` and `renumberRecord` ran inline is n
 
 ## PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:primaryModelPath — type-aware placed model (#285)
 
-Placed-reference models and SCOL member models now come from Radicle's `fo4::env::primary_model_path` (`Radicle/src/environment/placed.cpp:primary_model_path`) instead of the first raw `MODL` of every base. Per that function, only an allowlisted set of base types yields a model, ARMO yields `MOD2` then `MOD4`, and SCOL yields nothing (SCOL members come from `scolParts`). Consequence: a base type that Radicle does not list (PWAT, for example, is absent from the list; whether it carries a `MODL` was not checked) now has no model and renders as a dot where PET used to draw its `MODL`. Extend Radicle's list with proof rather than re-adding raw `MODL` reads. The allowlist and ARMO rule were read from that source; they were not checked against game data here. Test: `Native cell takes each placed base's model from its type-aware primary model` in `PluginEditTool/native/tests/unit/RadiclePluginCellTests.cpp`; the SCOL case fails on the old raw-`MODL` read.
+Placed-reference models and SCOL member models now come from Radicle's `fo4::env::primary_model_path` (`Radicle/src/environment/placed.cpp:primary_model_path`) instead of the first raw `MODL` of every base. Per that function, only an allowlisted set of base types yields a model, ARMO yields `MOD2` then `MOD4`, and SCOL yields nothing (SCOL members come from `scolParts`). PWAT is not a Fallout 4 record. Against xEdit FO4 `sigBaseObjects`, only SCOL loses its MODL, and its parts render through `scolParts`. Extend Radicle's list with proof rather than re-adding raw `MODL` reads. The allowlist and ARMO rule were read from that source; they were not checked against game data here. Test: `Native cell takes each placed base's model from its type-aware primary model` in `PluginEditTool/native/tests/unit/RadiclePluginCellTests.cpp`; the SCOL empty-model check is a behavior change; the ARMO case is the one that fails without the fix.
 
 ## PluginEditTool/native/src/app/ServiceTargets.cpp:CellTarget::geometryBatch — case and whitespace spellings (#285)
 
@@ -1977,7 +1977,11 @@ Requested model paths are still deduplicated case-insensitively after trimming, 
 
 ## PluginEditTool/native/tests/unit/RadiclePluginCellTests.cpp:typedCellPlugin — fixture layout (#285)
 
-`writeModelBase` and `typedCellPlugin` repeat the record and group calls of `basePlugin()` and `sourcePlugin()` in the same file, which CI already runs. The fixture is not checked against Fallout 4 data. Its `TODO-verify` markers stay until the CI run of this test is read. The ARMO `MOD2` case is covered by the Radicle source only; no fixture exercises it.
+`writeModelBase` and `typedCellPlugin` repeat the record and group calls of `basePlugin()` and `sourcePlugin()` in the same file, which CI already runs. The fixture covers ARMO (`MOD2`, placed reference 0x816, the case that fails without the fix) and CONT (`MODL`, empty, 0x814, `Container`).
+
+## PluginEditTool/web/src/CellPanel.tsx:CellPanel — SCOL layer geometry
+
+`typeGroups` takes a SCOL reference's layer geometry from the first `scolParts` model whose geometry loaded, because a SCOL's own `modelPath` is empty. Other references keep their own `modelPath` geometry.
 
 ## PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveNif — NIF lookup not changed (#285)
 

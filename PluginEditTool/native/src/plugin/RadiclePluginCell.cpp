@@ -70,7 +70,9 @@ std::string zstring(const fo4::Record& record, fo4::Signature signature) {
 }
 
 std::string primaryModelPath(const fo4::Record& record) {
-    const auto path = fo4::env::primary_model_path(fo4::env::RecordRef{.record = &record});
+    fo4::env::RecordRef ref{};
+    ref.record = &record;
+    const auto path = fo4::env::primary_model_path(ref);
     return path ? std::string(*path) : std::string{};
 }
 

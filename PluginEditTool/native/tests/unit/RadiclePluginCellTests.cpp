@@ -155,7 +155,6 @@ std::vector<std::byte> sourcePlugin() {
     return out.bytes;
 }
 
-// TODO-verify: record layout mirrors basePlugin(); confirm in CI, not locally
 void writeModelBase(fo4::test::ByteWriter& out,
                     std::string_view type,
                     std::uint32_t formId,
@@ -171,7 +170,6 @@ void writeModelBase(fo4::test::ByteWriter& out,
     fo4::test::end_group(out, top);
 }
 
-// TODO-verify: cell layout mirrors sourcePlugin(); confirm in CI, not locally
 std::vector<std::byte> typedCellPlugin() {
     fo4::test::ByteWriter out;
     writeHeader(out, {});
@@ -179,8 +177,9 @@ std::vector<std::byte> typedCellPlugin() {
     writeModelBase(out, "MSTT", 0x00000811u, "MODL", "Meshes\\MsttFixture.nif");
     writeModelBase(out, "FURN", 0x00000812u, "MODL", "Meshes\\FurnFixture.nif");
     writeModelBase(out, "ACTI", 0x00000813u, "MODL", "Meshes\\ActiFixture.nif");
-    writeModelBase(out, "STAT", 0x00000814u, "EDID", "");
+    writeModelBase(out, "CONT", 0x00000814u, "MODL", "");
     writeModelBase(out, "SCOL", 0x00000815u, "MODL", "Meshes\\ScolFixture.nif");
+    writeModelBase(out, "ARMO", 0x00000816u, "MOD2", "Armor\\ArmoFixture.nif");
 
     const auto top = fo4::test::begin_group(out, "CELL", 0);
     const auto block = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_block);
@@ -193,7 +192,7 @@ std::vector<std::byte> typedCellPlugin() {
     const auto children = beginGroupRaw(out, 0x00000800u, fo4::GroupType::cell_children);
     const auto temporary = beginGroupRaw(
         out, 0x00000800u, fo4::GroupType::cell_temporary_children);
-    for (std::uint32_t base = 0x00000810u; base <= 0x00000815u; ++base) {
+    for (std::uint32_t base = 0x00000810u; base <= 0x00000816u; ++base) {
         const auto reference = fo4::test::begin_record(out, "REFR", 0, base + 0x10u);
         fo4::test::ByteWriter name;
         name.u32(base);
@@ -337,7 +336,7 @@ TEST_CASE("Native cell takes each placed base's model from its type-aware primar
     const auto view = parseStringResult(
         backend.getPlacedReferences(nlohmann::json::array({"000800:Base.esm"})));
     const auto& refs = view.at("references");
-    REQUIRE(refs.size() == 6);
+    REQUIRE(refs.size() == 7);
     CHECK(refs[0].at("baseType") == "Static");
     CHECK(refs[0].at("modelPath") == "Meshes\\StatFixture.nif");
     CHECK(refs[1].at("baseType") == "MovableStatic");
@@ -346,8 +345,9 @@ TEST_CASE("Native cell takes each placed base's model from its type-aware primar
     CHECK(refs[2].at("modelPath") == "Meshes\\FurnFixture.nif");
     CHECK(refs[3].at("baseType") == "Activator");
     CHECK(refs[3].at("modelPath") == "Meshes\\ActiFixture.nif");
-    CHECK(refs[4].at("baseType") == "Static");
+    CHECK(refs[4].at("baseType") == "Container");
     CHECK(refs[4].at("modelPath") == "");
     CHECK(refs[5].at("baseType") == "StaticCollection");
     CHECK(refs[5].at("modelPath") == "");
+    CHECK(refs[6].at("modelPath") == "Armor\\ArmoFixture.nif");
 }

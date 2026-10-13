@@ -346,13 +346,18 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
 std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPaths) {
     std::vector<std::string> unique;
     std::vector<std::pair<std::string, std::size_t>> requested;
+    std::vector<std::size_t> uses;
     {
         std::map<std::string, std::size_t> slotOf;
         for (const auto& raw : relModelPaths) {
             auto path = trim(raw);
             if (path.empty()) continue;
             const auto [slot, inserted] = slotOf.try_emplace(toLower(path), unique.size());
-            if (inserted) unique.push_back(std::move(path));
+            if (inserted) {
+                unique.push_back(std::move(path));
+                uses.push_back(0);
+            }
+            ++uses[slot->second];
             requested.emplace_back(raw, slot->second);
         }
     }
@@ -422,7 +427,7 @@ std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPa
 
     nlohmann::json geometryMap = nlohmann::json::object();
     for (const auto& [raw, slot] : requested) {
-        geometryMap[raw] = results[slot];
+        geometryMap[raw] = --uses[slot] == 0 ? std::move(results[slot]) : results[slot];
     }
     nlohmann::json payload;
     payload["count"] = total;
