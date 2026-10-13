@@ -186,14 +186,17 @@ TEST(ImageFxSynthetic, EveryNewRowReadsItsFixturePayload) {
 }
 
 TEST(ImageFxSynthetic, RowsWithMinimumPayloadStayAbsentOnShortSubrecords) {
-  const auto plugin = load();
+  auto plugin = load();
   EXPECT_EQ(fo4::record_field_count(plugin, key(3004), "CAMS\\RotationOffsetZ"), 1u);
   EXPECT_EQ(fo4::record_field_count(plugin, key(3005), "CAMS\\NearTargetDistance"), 1u);
-  EXPECT_EQ(fo4::record_field_count(plugin, key(3005), "CAMS\\LocationSpring"), 0u);
-  EXPECT_EQ(fo4::record_field_count(plugin, key(3005), "CAMS\\RotationOffsetX"), 0u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3005), scalar("CAMS\\LocationSpring"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3005), scalar("CAMS\\RotationOffsetX"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::record_field_count(plugin, key(3006), "SPGD\\BoxSize"), 1u);
   EXPECT_EQ(fo4::record_field_count(plugin, key(3008), "IMGS\\VignetteStrength"), 1u);
-  EXPECT_EQ(fo4::record_field_count(plugin, key(3009), "IMGS\\VignetteRadius"), 0u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key(3009), scalar("IMGS\\VignetteRadius"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
 }
 
 TEST(ImageFxSynthetic, EditsOneRowPerRecordAndRereads) {
