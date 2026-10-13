@@ -421,6 +421,18 @@ std::optional<std::vector<std::size_t>> placed_reference_formid_offsets(const Re
                                      strict_remap);
 }
 
+const FixedStrideLayout k_faction_layouts[] = {
+    {"XNAM", 12, {0}, true, 0},
+};
+
+std::optional<std::vector<std::size_t>> faction_formid_offsets(const Record& record,
+                                                              const Subrecord& sub,
+                                                              bool strict_remap) {
+  if (record.header.signature != Signature::from_string("FACT")) return std::nullopt;
+  return fixed_stride_formid_offsets(sub, record.header.form_version, k_faction_layouts,
+                                     strict_remap);
+}
+
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
@@ -431,6 +443,7 @@ std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& recor
                                                   k_repeated_struct_layouts, strict_remap)) {
     return repeated;
   }
+  if (auto faction = faction_formid_offsets(record, sub, strict_remap)) return faction;
   return placed_reference_formid_offsets(record, sub, strict_remap);
 }
 

@@ -8597,6 +8597,484 @@
       "localized_subrecords": []
     },
     {
+      "signature": "FACT",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "JAIL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "WAIT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "STOL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PLCN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CRGR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "JOUT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CRVA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0101000000000000000000000000000000000000"
+          },
+          {
+            "signature": "RNAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "FNAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "INAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "VEND",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VENC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VENV",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000018000000000001000100"
+          },
+          {
+            "signature": "PLVD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CITC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "FACT\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeArrest",
+          "label": "Arrest",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeAttackOnSight",
+          "label": "Attack On Sight",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeMurder",
+          "label": "Murder",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeAssault",
+          "label": "Assault",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 4,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeTrespass",
+          "label": "Trespass",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 6,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimePickpocket",
+          "label": "Pickpocket",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 8,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeUnknown",
+          "label": "Unknown",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 10,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeStealMultiplier",
+          "label": "Steal Multiplier",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeEscape",
+          "label": "Escape",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 16,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "minimum_payload_size": 18,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\CrimeWerewolf",
+          "label": "Werewolf (unused)",
+          "kind": "scalar",
+          "subrecord": "CRVA",
+          "offset": 18,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "minimum_payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorStartHour",
+          "label": "Start Hour",
+          "kind": "scalar",
+          "subrecord": "VENV",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorEndHour",
+          "label": "End Hour",
+          "kind": "scalar",
+          "subrecord": "VENV",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorRadius",
+          "label": "Radius",
+          "kind": "scalar",
+          "subrecord": "VENV",
+          "offset": 4,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorBuysStolenItems",
+          "label": "Buys Stolen Items",
+          "kind": "scalar",
+          "subrecord": "VENV",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorSellsEverythingNotInList",
+          "label": "Buy/Sell Everything Not In List?",
+          "kind": "scalar",
+          "subrecord": "VENV",
+          "offset": 9,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorBuysNonStolenItems",
+          "label": "Buys NonStolen Items",
+          "kind": "scalar",
+          "subrecord": "VENV",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorUnknown",
+          "label": "Unknown",
+          "kind": "scalar",
+          "subrecord": "VENV",
+          "offset": 11,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "FACT\\RelationFaction",
+          "label": "Faction",
+          "subrecord": "XNAM",
+          "offset": 0,
+          "repeated": true,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "RACE"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\ExteriorJailMarker",
+          "label": "Exterior Jail Marker",
+          "subrecord": "JAIL",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\FollowerWaitMarker",
+          "label": "Follower Wait Marker",
+          "subrecord": "WAIT",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\StolenGoodsContainer",
+          "label": "Stolen Goods Container",
+          "subrecord": "STOL",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\PlayerInventoryContainer",
+          "label": "Player Inventory Container",
+          "subrecord": "PLCN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\SharedCrimeFactionList",
+          "label": "Shared Crime Faction List",
+          "subrecord": "CRGR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "FLST"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\JailOutfit",
+          "label": "Jail Outfit",
+          "subrecord": "JOUT",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "OTFT"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\VendorBuySellList",
+          "label": "Vendor Buy/Sell List",
+          "subrecord": "VEND",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "FLST"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FACT\\MerchantContainer",
+          "label": "Merchant Container",
+          "subrecord": "VENC",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": [
+        "FULL",
+        "MNAM",
+        "FNAM"
+      ]
+    },
+    {
       "signature": "WEAP",
       "authoring": {
         "placement": "top_level",
