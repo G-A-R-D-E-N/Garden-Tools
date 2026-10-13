@@ -157,7 +157,7 @@ TEST(InteriorCellCreate, NewLocalCellSortsAfterMasterOverrideWithSameLabels) {
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(2);
-  hedr.u32(0x3F1);
+  hedr.u32(0x83D);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
   fo4::test::write_subrecord(out, "DATA", std::string_view{"\0\0\0\0\0\0\0\0", 8});
@@ -176,7 +176,7 @@ TEST(InteriorCellCreate, NewLocalCellSortsAfterMasterOverrideWithSameLabels) {
 
   auto plugin = fo4::read_plugin(out.bytes, "Cells.esp");
   const auto cell = fo4::forms::create_interior_cell(plugin, "Kitchen");
-  EXPECT_EQ(cell, fo4::FormKey::parse("0003F1:Cells.esp"));
+  EXPECT_EQ(cell, fo4::FormKey::parse("00083D:Cells.esp"));
 
   const auto* top = top_cell_group(plugin);
   ASSERT_NE(top, nullptr);
