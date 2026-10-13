@@ -187,3 +187,27 @@ TEST(PlacedReference, RejectsMalformedDataTransactionally) {
   ASSERT_NE(after, nullptr);
   EXPECT_EQ(after->subrecords[2].data, before);
 }
+
+TEST(PlacedReference, DeletedReferenceWithoutDataDecodesAsDeleted) {
+  auto plugin = fixture();
+  const fo4::FormKey base{plugin.key, fo4::LocalFormId{0x801}};
+  for (const auto* signature : {"REFR", "PHZD"}) {
+    const fo4::FormKey key{plugin.key, fo4::LocalFormId{0x804}};
+    auto record = placed_record(fo4::Signature::from_string(signature), key, base, plugin, 1.0f, 1.0f, true);
+    std::erase_if(record.subrecords, [](const fo4::Subrecord& sub) { return sub.signature == fo4::sig_data; });
+    const auto view = fo4::forms::decode_placed_reference(plugin, record);
+    ASSERT_TRUE(view.has_value()) << signature;
+    EXPECT_TRUE(view->deleted) << signature;
+    EXPECT_FLOAT_EQ(view->transform.x, 0.0f) << signature;
+    EXPECT_FLOAT_EQ(view->transform.rz, 0.0f) << signature;
+  }
+}
+
+TEST(PlacedReference, LiveReferenceWithoutDataIsRejected) {
+  auto plugin = fixture();
+  const fo4::FormKey base{plugin.key, fo4::LocalFormId{0x801}};
+  const fo4::FormKey key{plugin.key, fo4::LocalFormId{0x804}};
+  auto record = placed_record(fo4::Signature::from_string("PHZD"), key, base, plugin, 1.0f, 1.0f);
+  std::erase_if(record.subrecords, [](const fo4::Subrecord& sub) { return sub.signature == fo4::sig_data; });
+  EXPECT_THROW(fo4::forms::decode_placed_reference(plugin, record), fo4::forms::PlacedReferenceError);
+}

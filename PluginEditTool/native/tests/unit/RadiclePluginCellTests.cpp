@@ -204,6 +204,13 @@ std::vector<std::byte> typedCellPlugin() {
         fo4::test::write_subrecord(out, "DATA", transform.bytes);
         fo4::test::end_record(out, reference);
     }
+    const auto hazard = fo4::test::begin_record(out, "PHZD", 0, 0x00000830u);
+    fo4::test::ByteWriter hazardTransform;
+    for (int index = 0; index < 6; ++index) {
+        hazardTransform.f32(0.0f);
+    }
+    fo4::test::write_subrecord(out, "DATA", hazardTransform.bytes);
+    fo4::test::end_record(out, hazard);
     endGroupRaw(out, temporary);
     endGroupRaw(out, children);
     endGroupRaw(out, subblock);
@@ -336,7 +343,7 @@ TEST_CASE("Native cell takes each placed base's model from its type-aware primar
     const auto view = parseStringResult(
         backend.getPlacedReferences(nlohmann::json::array({"000800:Base.esm"})));
     const auto& refs = view.at("references");
-    REQUIRE(refs.size() == 7);
+    REQUIRE(refs.size() == 8);
     CHECK(refs[0].at("baseType") == "Static");
     CHECK(refs[0].at("modelPath") == "Meshes\\StatFixture.nif");
     CHECK(refs[1].at("baseType") == "MovableStatic");
@@ -350,4 +357,5 @@ TEST_CASE("Native cell takes each placed base's model from its type-aware primar
     CHECK(refs[5].at("baseType") == "StaticCollection");
     CHECK(refs[5].at("modelPath") == "");
     CHECK(refs[6].at("modelPath") == "Armor\\ArmoFixture.nif");
+    CHECK(refs[7].at("recordType") == "PlacedTrap");
 }
