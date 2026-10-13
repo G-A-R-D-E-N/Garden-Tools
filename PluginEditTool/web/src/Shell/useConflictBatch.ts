@@ -36,6 +36,7 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
     if (!chosen) return;
     const patch = chosen.target;
     setConflictBusy(true);
+    setErrorStr('');
     try {
       const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
       let overwrite = false;
@@ -79,10 +80,17 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
         allowLosing = true;
         res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
       }
-      const firstFailure = Array.isArray(res.failures) && res.failures.length ? res.failures[0]?.reason : '';
-      const failureNote = res.failed
-        ? ` ${res.failed} failed${firstFailure ? `: ${firstFailure}` : ''}.`
-        : '';
+      const failures: { formKey?: string; reason?: string }[] = Array.isArray(res.failures) ? res.failures : [];
+      const failureNote = res.failed ? ` ${res.failed} failed -- see the error list.` : '';
+      if (res.failed) {
+        const named = (formKey?: string) => {
+          const editorId = picked.find(c => c.FormKey === formKey)?.EditorID;
+          return editorId ? `${formKey} (${editorId})` : formKey || 'unknown record';
+        };
+        const lines = failures.map(f => `${named(f.formKey)}: ${f.reason || 'no reason given'}`);
+        if (lines.length === 0) lines.push('(no details returned)');
+        setErrorStr([`${res.failed} of ${res.total} records could not be copied into ${patch}:`, ...lines].join('\n'));
+      }
       setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
       if (!res.failed) setConflictSel({});
     } catch (e) {

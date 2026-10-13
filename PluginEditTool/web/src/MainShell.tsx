@@ -263,7 +263,7 @@ export default function MainShell() {
       const back = window.chrome?.webview?.hostObjects?.backend;
       if (!back) return;
       try { setSearchResults(JSON.parse(await back.SearchRecords(q, ''))); }
-      catch { setSearchResults([]); }
+      catch (err) { setSearchResults([]); setErrorStr('Search failed: ' + (errorMessage(err) ?? JSON.stringify(err))); }
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
@@ -302,7 +302,7 @@ export default function MainShell() {
     const back = window.chrome?.webview?.hostObjects?.backend;
     if (!back) return [];
     try { return JSON.parse(await back.SearchRecords(q, '')); }
-    catch { return []; }
+    catch (err) { setErrorStr('Search failed: ' + (errorMessage(err) ?? JSON.stringify(err))); return []; }
   }, []);
 
   const closeRecord = () => {
