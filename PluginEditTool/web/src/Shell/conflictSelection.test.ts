@@ -22,6 +22,11 @@ describe('selectRow', () => {
   it('range without an anchor selects just the clicked row', () => {
     expect(selectRow(order, {}, null, 'B', 'range')).toEqual({ sel: { B: true }, anchor: 'B' });
   });
+
+  it('add-range adds the span from the anchor to the existing selection and keeps the anchor', () => {
+    expect(selectRow(order, { A: true }, 'A', 'C', 'add-range')).toEqual({ sel: { A: true, B: true, C: true }, anchor: 'A' });
+    expect(selectRow(order, { D: true }, null, 'B', 'add-range')).toEqual({ sel: { D: true, B: true }, anchor: 'B' });
+  });
 });
 
 describe('pruneSelection', () => {

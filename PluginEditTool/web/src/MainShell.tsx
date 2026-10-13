@@ -272,10 +272,6 @@ export default function MainShell() {
   }, [search]);
   const changeSearch = (v: string) => { setSearch(v); if (v.trim().length < 2) setSearchResults(null); };
 
-  useEffect(() => {
-    if (activeTab === 'explorer' && treeMode === 'conflicts' && conflicts === null) loadConflicts();
-  }, [activeTab, treeMode]);
-
   const handleRefresh = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;
     if (!b) return;

@@ -15,8 +15,8 @@ const entry = (FormKey: string, EditorID: string): ConflictEntry => ({
 });
 const all = [entry('000801:Master.esm', 'RecA'), entry('000802:Master.esm', 'RecB'),
   entry('000803:Master.esm', 'RecC'), entry('000804:Master.esm', 'RecD')];
-const matrix = (FormKey: string): ConflictMatrix => ({
-  FormKey, EditorID: 'RecA', Type: 'WEAP', Winner: 'Later.esp', Plugins: ['Master.esm', 'Later.esp'], Rows: [], Level: 'conflict',
+const matrix = (FormKey: string, EditorID: string): ConflictMatrix => ({
+  FormKey, EditorID, Type: 'WEAP', Winner: 'Later.esp', Plugins: ['Master.esm', 'Later.esp'], Rows: [], Level: 'conflict',
 });
 
 const getConflicts = vi.fn<Backend['GetConflicts']>();
@@ -28,7 +28,7 @@ beforeEach(() => {
   localStorage.clear();
   pickPlugin.mockResolvedValue({ target: 'Patch.esp', extra: '' });
   getConflicts.mockReset().mockResolvedValue(JSON.stringify(all));
-  getMatrix.mockReset().mockImplementation(async key => JSON.stringify(matrix(key)));
+  getMatrix.mockReset().mockImplementation(async key => JSON.stringify(matrix(key, all.find(c => c.FormKey === key)?.EditorID ?? '')));
   batch.mockReset().mockResolvedValue(JSON.stringify({ total: 2, ok: 2, failed: 0 }));
   vi.stubGlobal('chrome', { webview: { addEventListener: vi.fn(), removeEventListener: vi.fn(), hostObjects: { backend: {
     CopyAsOverrideMany: batch,
@@ -48,12 +48,13 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 async function openConflicts() {
   localStorage.setItem('treeMode', 'conflicts');
   render(<DialogProvider><MainShell /></DialogProvider>);
-  await screen.findByRole('listbox');
+  await screen.findByRole('checkbox', { name: 'RecA' });
 }
 
-const row = (name: string) => screen.getByText(name).closest('[role="option"]') as HTMLElement;
+const list = () => document.querySelector('.conflicts-list') as HTMLElement;
+const row = (name: string) => screen.getByText(name).closest('.conflict-row') as HTMLElement;
 const button = (name: RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
-const selected = (name: string) => row(name).getAttribute('aria-selected') === 'true';
+const selected = (name: string) => row(name).classList.contains('selected');
 
 describe('conflict list selection', () => {
   it('ctrl-click toggles one row and a plain click selects only that row', async () => {
@@ -88,7 +89,7 @@ describe('conflict list selection', () => {
     await openConflicts();
     fireEvent.click(row('RecA'), { ctrlKey: true });
     fireEvent.click(row('RecB'), { ctrlKey: true });
-    fireEvent.keyDown(row('RecB'), { key: 'Escape' });
+    fireEvent.keyDown(list(), { key: 'Escape' });
     expect(screen.getByText('0 selected')).toBeTruthy();
     expect(['RecA', 'RecB'].some(selected)).toBe(false);
   });
@@ -141,5 +142,8 @@ describe('conflict list selection', () => {
     const opened = getMatrix.mock.calls.map(([key]) => key);
     expect(opened.indexOf('000801:Master.esm')).toBeGreaterThanOrEqual(0);
     expect(opened.indexOf('000801:Master.esm')).toBeLessThan(opened.indexOf('000803:Master.esm'));
+    expect(await screen.findByText('RecA', { selector: '.editor-tab-label' })).toBeTruthy();
+    expect(await screen.findByText('RecC', { selector: '.editor-tab-label' })).toBeTruthy();
+    expect(screen.queryByText('RecD', { selector: '.editor-tab-label' })).toBeNull();
   });
 });

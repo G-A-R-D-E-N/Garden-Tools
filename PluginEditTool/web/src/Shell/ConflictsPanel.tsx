@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import type { ConflictEntry } from '../backend';
 import type { ConflictSelection, SelectMode } from './conflictSelection';
 
 const modeOf = (e: React.MouseEvent): SelectMode => {
-  if (e.shiftKey) return 'range';
-  return e.ctrlKey || e.metaKey ? 'toggle' : 'plain';
+  const additive = e.ctrlKey || e.metaKey;
+  if (e.shiftKey) return additive ? 'add-range' : 'range';
+  return additive ? 'toggle' : 'plain';
 };
 
 export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, onRescan, onBatchCopy, onSelect, onClear, onOpen }: {
@@ -16,9 +18,13 @@ export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, o
   onClear: () => void;
   onOpen: (formKey: string, winner: string) => Promise<void>;
 }) {
+  const [comparing, setComparing] = useState(false);
   const picked = (conflicts ?? []).filter(c => conflictSel[c.FormKey]);
   const compare = async () => {
-    for (const c of picked) await onOpen(c.FormKey, c.Winner);
+    setComparing(true);
+    try {
+      for (const c of picked) await onOpen(c.FormKey, c.Winner);
+    } finally { setComparing(false); }
   };
 
   return (
@@ -35,7 +41,7 @@ export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, o
         </button>
         <button
           className="sidebar-action-btn"
-          disabled={conflictBusy || picked.length !== 2}
+          disabled={conflictBusy || comparing || picked.length !== 2}
           title={picked.length === 2 ? 'Open the two selected records in the record view' : 'Select exactly two records to compare'}
           onClick={compare}
         >
@@ -48,17 +54,16 @@ export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, o
       ) : conflicts.length === 0 ? (
         <div className="sidebar-empty">No conflicts. Load a modlist and Scan Conflicts.</div>
       ) : (
-        <div className="conflicts-list" role="listbox" aria-multiselectable="true" aria-label="Conflicts">
+        <div className="conflicts-list" tabIndex={0} aria-label="Conflicts">
           {conflicts.map((c, i) => (
             <div
               key={`${c.FormKey}:${i}`}
-              className="conflict-row"
-              role="option"
-              aria-selected={!!conflictSel[c.FormKey]}
+              className={`conflict-row${conflictSel[c.FormKey] ? ' selected' : ''}`}
               onClick={e => onSelect(c.FormKey, modeOf(e))}
             >
               <input
                 type="checkbox"
+                aria-label={c.EditorID || c.FormKey}
                 checked={!!conflictSel[c.FormKey]}
                 onClick={e => e.stopPropagation()}
                 onChange={() => onSelect(c.FormKey, 'toggle')}
