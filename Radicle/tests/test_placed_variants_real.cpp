@@ -72,7 +72,7 @@ class PlacedVariantsReal : public testing::TestWithParam<const char*> {};
 TEST_P(PlacedVariantsReal, EveryTrackedRecordDecodesAndMeetsAuthoringMinimums) {
   bool skip = false;
   const auto path = official(GetParam(), skip);
-  if (skip) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  if (skip) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
   record_game_build(detect_game_build(path.parent_path()));
   const auto plugin = fo4::read_plugin_file(path);
   std::map<std::string, int> totals;
@@ -92,7 +92,7 @@ TEST_P(PlacedVariantsReal, EveryTrackedRecordDecodesAndMeetsAuthoringMinimums) {
     if (variant(signature)) {
       const auto view = fo4::forms::decode_placed_reference(plugin, record);
       EXPECT_TRUE(view.has_value()) << record.form_key.to_string();
-      if (view.has_value()) EXPECT_EQ(view->kind, fo4::forms::PlacedReferenceKind::variant);
+      if (view.has_value()) { EXPECT_EQ(view->kind, fo4::forms::PlacedReferenceKind::variant); }
       if (preflighted[signature.to_string()]++ < 64) {
         for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, record.form_key)) {
           if (issue.code == "record_placement_invalid") violators.push_back(record.form_key.to_string() + " placement");
