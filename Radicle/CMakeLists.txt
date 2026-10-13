@@ -331,6 +331,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_copy_containment.cpp
     tests/test_copy_cell_children.cpp
     tests/test_scalar_mutation.cpp
+    tests/test_counted_array.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp

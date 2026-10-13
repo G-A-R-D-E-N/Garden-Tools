@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from field_address_codegen import parse_address, reject_overlaps, render_address  # noqa: E402
+from field_address_codegen import is_count, parse_address, reject_overlaps, render_address  # noqa: E402
 
 STORAGES = {"u8", "u16", "u32", "i32", "f32", "i8", "i16"}
 KINDS = {"scalar", "string"}
@@ -18,6 +18,8 @@ CPP_PRESENTATIONS = {"enum": "enumeration"}
 # Missing-field insertion is intentionally not generated yet. Safe insertion
 # requires record-level subrecord ordering metadata, not only a scalar field row.
 INSERTIONS = {"existing_only"}
+COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion", "members"}
+MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
 WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2}
 INTEGER_BOUNDS = {
     "i8": (-0x80, 0x7F),
@@ -101,7 +103,53 @@ def parse_names(names, presentation: str, storage: str, minimum: float, maximum:
     return parsed
 
 
+def parse_counted_array(field, record_signature: str):
+    path = field.get("path", "")
+    unknown = sorted(set(field) - COUNTED_ARRAY_KEYS)
+    if unknown:
+        raise ValueError(f"unknown counted_array keys {unknown}: {path!r}")
+    if not isinstance(path, str) or not path.startswith(record_signature + "\\"):
+        raise ValueError(f"counted_array path must be qualified by {record_signature}\\: {path!r}")
+    label = field.get("label", "")
+    if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
+        raise ValueError(f"counted_array label is invalid: {label!r}")
+    subrecord = field.get("subrecord", "")
+    count_subrecord = field.get("count_subrecord", "")
+    for signature in (subrecord, count_subrecord):
+        if not isinstance(signature, str) or not valid_signature(signature):
+            raise ValueError(f"counted_array signatures must be four printable ASCII characters: {signature!r}: {path!r}")
+    if count_subrecord == subrecord:
+        raise ValueError(f"counted_array count_subrecord must differ from its subrecord: {path!r}")
+    stride = field.get("stride")
+    if not is_count(stride, 1):
+        raise ValueError(f"counted_array stride must be a positive integer: {path!r}")
+    if field.get("insertion") not in INSERTIONS:
+        raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
+    members = field.get("members")
+    if not isinstance(members, list) or not members:
+        raise ValueError(f"counted_array members must be a non-empty array: {path!r}")
+    rows = []
+    for member in members:
+        if not isinstance(member, dict) or set(member) - MEMBER_KEYS:
+            raise ValueError(f"counted_array member keys must be a subset of {sorted(MEMBER_KEYS)}: {path!r}")
+        rows.append(dict(member, kind="scalar", subrecord=subrecord, stride=stride, insertion="existing_only"))
+    array = {"record": record_signature, "path": path, "label": label, "subrecord": subrecord,
+             "count_subrecord": count_subrecord, "stride": stride}
+    return array, rows
+
+
+def whole_payload_u32(row) -> bool:
+    address = row["address"]
+    return (not row["embedded"] and row["storage"] == "u32" and not row["payload_size"]
+            and not row["minimum_payload_size"] and not address["repeated"] and not address["stride"]
+            and address["when"] is None)
+
+
 def load_fields(schema_path: Path):
+    return load_schema(schema_path)[0]
+
+
+def load_schema(schema_path: Path):
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     if document.get("version") != 1:
         raise ValueError("unsupported Fallout 4 field schema version")
@@ -111,6 +159,7 @@ def load_fields(schema_path: Path):
         raise ValueError("schema records must be an array")
 
     fields = []
+    arrays = []
     seen_paths = set()
     for record in records:
         if not isinstance(record, dict):
@@ -123,7 +172,19 @@ def load_fields(schema_path: Path):
         if not isinstance(record_fields, list):
             raise ValueError(f"record fields must be an array: {record_signature}")
 
+        expanded = []
         for field in record_fields:
+            if isinstance(field, dict) and field.get("kind") == "counted_array":
+                array, members = parse_counted_array(field, record_signature)
+                if array["path"] in seen_paths:
+                    raise ValueError(f"duplicate schema field path: {array['path']!r}")
+                seen_paths.add(array["path"])
+                arrays.append(array)
+                expanded.extend(members)
+            else:
+                expanded.append(field)
+
+        for field in expanded:
             if not isinstance(field, dict):
                 raise ValueError(f"field entries must be objects: {record_signature}")
             kind = field.get("kind")
@@ -239,17 +300,28 @@ def load_fields(schema_path: Path):
                 "can_insert": False,
             })
 
+    for array in arrays:
+        twins = [other for other in arrays
+                 if (other["record"], other["subrecord"]) == (array["record"], array["subrecord"])]
+        if len(twins) > 1:
+            raise ValueError(f"counted_array subrecord {array['subrecord']} is declared twice in {array['record']}: {array['path']!r}")
+        counts = [row for row in fields
+                  if row["record"] == array["record"] and row["subrecord"] == array["count_subrecord"]]
+        if len(counts) != 1 or not whole_payload_u32(counts[0]):
+            raise ValueError(f"counted_array {array['path']!r} needs exactly one whole-payload u32 row for {array['count_subrecord']}")
+
     reject_overlaps([dict(field, width=WIDTHS.get(field["storage"], 0)) for field in fields], "scalar")
 
     fields.sort(key=lambda item: (item["record"], item["path"]))
-    return fields
+    arrays.sort(key=lambda item: (item["record"], item["path"]))
+    return fields, arrays
 
 
 def names_key(field):
     return tuple((entry["value"], entry["name"]) for entry in field["names"])
 
 
-def render(fields) -> str:
+def render(fields, arrays=()) -> str:
     tables = {}
     for field in fields:
         if field["names"]:
@@ -290,6 +362,21 @@ def render(fields) -> str:
             "},"
         )
     lines.append("};")
+    if arrays:
+        lines.append(f"constexpr std::array<CountedArrayDescriptor, {len(arrays)}> k_counted_arrays{{{{")
+        for array in arrays:
+            lines.append(
+                "{" +
+                f"Signature::from_string({cpp_string(array['record'])}), " +
+                f"{cpp_string(array['path'])}, " +
+                f"{cpp_string(array['label'])}, " +
+                f"Signature::from_string({cpp_string(array['subrecord'])}), " +
+                f"Signature::from_string({cpp_string(array['count_subrecord'])}), " +
+                f"{array['stride']}" +
+                "},")
+        lines.append("}};")
+    else:
+        lines.append("constexpr std::array<CountedArrayDescriptor, 0> k_counted_arrays{};")
     return "\n".join(lines) + "\n"
 
 
@@ -300,7 +387,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
 
-    expected = render(load_fields(args.schema))
+    fields, arrays = load_schema(args.schema)
+    expected = render(fields, arrays)
     if args.check:
         if not args.output.exists() or args.output.read_text(encoding="utf-8") != expected:
             print(f"generated schema is stale: {args.output}")

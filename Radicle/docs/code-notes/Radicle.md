@@ -1469,3 +1469,55 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
+
+## Radicle/include/fo4/schema/scalar.hpp:CountedArrayDescriptor
+
+A counted array-of-struct kind: one payload subrecord holds `count` elements of `stride` bytes, and a whole-payload u32 sibling (`count_subrecord`) stores the count. Members are ordinary scalar rows at `FieldAddress{false, stride, 0, ...}`, so reads and writes reuse the stride addressing that already exists and no new storage is added. The array itself has no row.
+
+## Radicle/src/schema/scalar.cpp:counted_array_descriptor
+
+Looks up a counted array by record and path in the generated `k_counted_arrays` table. `is_counted_array_count_subrecord` answers whether a subrecord is the count of any array in that record.
+
+## Radicle/src/plugin/field_writer.cpp:write_scalar
+
+Refuses a generic scalar write to a counted array's count subrecord (REFR `XWCN`) with `ScalarError`. A raw write would desynchronize the count from the payload, so insert and remove are the only writers of the count. The check runs before any byte changes.
+
+## Radicle/src/plugin/field_writer.cpp:counted_array_subrecords
+
+Finds the payload and count subrecords. It throws `CountedArrayError` on a duplicate subrecord, a count that is not four bytes, or a payload that is not a whole number of stride elements or whose element count differs from the stored count. A missing subrecord returns nullopt, which the mutators report as `subrecord_missing`. Every throw happens before the plugin changes.
+
+## Radicle/src/plugin/field_writer.cpp:insert_record_counted_element
+
+Inserts a zero-filled element at `index` and writes count+1. An `index` equal to the count appends; a larger index returns `index_out_of_range`. Modeled on the packed-array insert in `Radicle/src/schema/formlink_lists.cpp`.
+
+## Radicle/src/plugin/field_writer.cpp:remove_record_counted_element
+
+Removes the element at `index` and writes count-1. An index at or above the count returns `index_out_of_range`. Removing the last element keeps both subrecords, the payload empty and the count zero, so a later insert does not have to create subrecords. Missing-subrecord insertion is not generated; see the insertion policy in `Radicle/tools/schema_codegen.py:parse_counted_array`.
+
+## Radicle/tools/schema_codegen.py:parse_counted_array
+
+Validates a `counted_array` entry. Keys are limited to `COUNTED_ARRAY_KEYS` and `MEMBER_KEYS`; the stride must be a positive integer; insertion must be `existing_only`; members carry no names. Members expand into scalar rows with the array's subrecord and stride, so the shared address and overlap rules check that each member fits one stride element and does not overlap another.
+
+## Radicle/tools/schema_codegen.py:load_schema
+
+After the rows are expanded, requires exactly one whole-payload u32 row for each array's count subrecord, and rejects two arrays that declare the same payload subrecord in one record. The count rule is what lets `write_scalar` refuse plain writes while insert and remove remain the only count writers.
+
+## Radicle/tools/parity_matrix.py:scalar_rows
+
+Expands counted arrays with `schema_codegen.parse_counted_array`, the same function the codegen uses, so the parity counts cannot drift from the generated rows.
+
+## Radicle/src/schema/form_link_mixed.cpp:k_placed_reference_layouts
+
+The XWCU entry (stride 16, `exact` false, empty slot list) makes strict remap in `fixed_stride_formid_offsets` throw `FormIdError` for REFR XWCU payloads whose size is not a multiple of 16, the same as the other entries in this table. Non-strict remap returns no offsets for them. The stride is hand-kept here and in `Radicle/schema/fallout4/fields.json`, so both must change together.
+
+## Radicle/src/schema/preflight.cpp:preflight_record
+
+REFR XWCU members now run through the generic checks. A payload that is not a whole number of 16-byte elements reports `invalid_scalar_storage` once for each member row. A non-finite member is reported through the `ScalarError` from `decode_scalar`, which preflight maps to `invalid_scalar_storage`.
+
+## Radicle/src/plugin/mutation.cpp:set_record_scalar
+
+The overload that takes only a Signature selects the first scalar row for that subrecord. For the counted payload (REFR `XWCU`) that is element 0 of the X member, so counted members should be written with the descriptor and index overload.
+
+## Radicle/include/fo4/schema/generated_scalar_fields.inc:k_counted_arrays
+
+xEdit proof for REFR `XWCU`/`XWCN` against the pinned `Core/wbDefinitionsFO4.pas` @93cc0bc5 (SHA-256 `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`, matched on a build copy). `wbRefRecord(REFR, 'Placed Object', ...)` starts at line 11347 and the next record, REGN, at 11870. Its `Water Current Velocities` block is at lines 11568-11575: `wbInteger(XWCN, 'Velocity Count', itU32, ...)` at 11569 is the u32 count row, and `wbArray(XWCU, 'Velocities', wbStruct('Current', [wbVec3('Velocity'), wbFloat]))` at 11570-11574 is the element. `.SetCountPathOnValue(XWCN, False)` is at 11575. `wbVec3` is three floats X, Y, Z (`Core/wbDefinitionsCommon.pas` lines 6456-6459), and the trailing unnamed `wbFloat` is the fourth float, so an element is 16 bytes at offsets 0, 4, 8, 12, as generated. The same block appears in ACHR at 4583-4590 and CELL at 6052-6059; only REFR is in this schema. The 4-byte width of `wbFloat` is not cited: its definition is in `wbInterface.pas`, which is outside the hash pin.

@@ -69,6 +69,28 @@ def link(**overrides):
     return row
 
 
+def member(name, offset, **overrides):
+    row = {"path": "TEST" + BS + name, "label": name, "offset": offset, "storage": "u32",
+           "presentation": "identity", "minimum": 0, "maximum": 100}
+    row.update(overrides)
+    return {k: v for k, v in row.items() if v is not None}
+
+
+def counted(members=None, **overrides):
+    row = {"kind": "counted_array", "path": "TEST" + BS + "Items", "label": "Items", "subrecord": "DATA",
+           "count_subrecord": "CNT", "stride": 8, "insertion": "existing_only",
+           "members": members if members is not None else [member("ItemA", 0), member("ItemB", 4)]}
+    row.update(overrides)
+    return {k: v for k, v in row.items() if v is not None}
+
+
+def count_row(**overrides):
+    row = {"path": "TEST" + BS + "Count", "label": "Count", "subrecord": "CNT", "offset": None,
+           "maximum": 0xFFFFFFFF}
+    row.update(overrides)
+    return scalar(**row)
+
+
 def write_schema(directory, fields=(), formlink_fields=(), formlink_lists=(),
                  nested_formlink_lists=(), keyword_records=()):
     document = {
@@ -430,6 +452,59 @@ class SchemaCodegenTests(unittest.TestCase):
             fields=[scalar(offset=0, when=dict(when, equals=[1], match_absent=True))],
             formlink_fields=[link(when=dict(when, equals=[2]))])
         self.assertEqual(len(fields), 1)
+
+    def load_schema(self, *fields):
+        with tempfile.TemporaryDirectory() as directory:
+            return schema_codegen.load_schema(write_schema(directory, fields))
+
+    def test_counted_array_expands_to_stride_member_rows(self):
+        fields, arrays = self.load_schema(counted(), count_row())
+        self.assertEqual([(array["path"], array["stride"], array["count_subrecord"]) for array in arrays],
+                         [("TEST" + BS + "Items", 8, "CNT")])
+        members = [field for field in fields if field["path"].startswith("TEST" + BS + "Item")]
+        self.assertEqual([(field["offset"], field["address"]["stride"]) for field in members], [(0, 8), (4, 8)])
+        text = schema_codegen.render(fields, arrays)
+        self.assertIn("FieldAddress{false, 8, 0, FieldDiscriminator{}}", text)
+        self.assertIn('{Signature::from_string("TEST"), "TEST' + BS + BS + 'Items", "Items", '
+                      'Signature::from_string("DATA"), Signature::from_string("CNT"), 8},', text)
+        self.assertIn("constexpr std::array<CountedArrayDescriptor, 1> k_counted_arrays{{", text)
+
+    def test_no_counted_arrays_renders_an_empty_table(self):
+        self.assertIn("constexpr std::array<CountedArrayDescriptor, 0> k_counted_arrays{};",
+                      schema_codegen.render(self.load(scalar())))
+
+    def test_counted_array_members_must_fit_one_stride_element(self):
+        self.rejects("inside one stride element",
+                     counted(members=[member("ItemA", 0), member("ItemB", 6)]), count_row())
+        self.rejects("stride requires an offset",
+                     counted(members=[member("ItemA", 0), member("ItemB", None)]), count_row())
+
+    def test_counted_array_members_must_not_overlap(self):
+        self.rejects("overlapping scalar fields in TEST.DATA",
+                     counted(members=[member("ItemA", 0), member("ItemB", 2)]), count_row())
+
+    def test_counted_array_declaration_is_checked(self):
+        self.rejects("unknown counted_array keys", counted(extra=1), count_row())
+        self.rejects("stride must be a positive integer", counted(stride=0), count_row())
+        self.rejects("stride must be a positive integer", counted(stride=True), count_row())
+        self.rejects("qualified by TEST", counted(path="OTHER" + BS + "Items"), count_row())
+        self.rejects("unsupported insertion policy", counted(insertion="always"), count_row())
+
+    def test_counted_array_members_take_only_plain_scalar_keys(self):
+        self.rejects("member keys", counted(members=[member("ItemA", 0, names=[enum_entry(0, "A")])]), count_row())
+        self.rejects("member keys", counted(members=[member("ItemA", 0, stride=4)]), count_row())
+
+    def test_counted_array_needs_one_whole_payload_u32_count_row(self):
+        for count in (count_row(storage="u16", maximum=0xFFFF), count_row(storage="i32", maximum=0x7FFFFFFF),
+                      count_row(offset=0)):
+            with self.subTest(count=count):
+                self.rejects("needs exactly one whole-payload u32 row", counted(), count)
+        self.rejects("needs exactly one whole-payload u32 row", counted())
+
+    def test_counted_array_subrecord_cannot_be_declared_twice(self):
+        other = counted(path="TEST" + BS + "Other", label="Other",
+                        members=[member("OtherA", 0), member("OtherB", 4)])
+        self.rejects("declared twice", counted(), other, count_row())
 
 
 if __name__ == "__main__":

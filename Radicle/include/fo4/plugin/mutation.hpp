@@ -33,6 +33,13 @@ enum class ScalarMutationStatus {
   subrecord_missing,
 };
 
+enum class CountedArrayMutationStatus {
+  updated,
+  record_missing,
+  index_out_of_range,
+  subrecord_missing,
+};
+
 enum class ConditionMutationStatus {
   updated,
   unchanged,
@@ -156,6 +163,16 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
 std::optional<std::size_t> record_field_count(const Plugin& plugin,
                                               const FormKey& record_key,
                                               std::string_view path);
+
+CountedArrayMutationStatus insert_record_counted_element(Plugin& plugin,
+                                                         const FormKey& record_key,
+                                                         const schema::CountedArrayDescriptor& array,
+                                                         std::size_t index);
+
+CountedArrayMutationStatus remove_record_counted_element(Plugin& plugin,
+                                                         const FormKey& record_key,
+                                                         const schema::CountedArrayDescriptor& array,
+                                                         std::size_t index);
 
 inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
                                   const FormKey& record_key,

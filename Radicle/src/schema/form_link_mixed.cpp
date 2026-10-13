@@ -402,6 +402,7 @@ const FixedStrideLayout k_placed_reference_layouts[] = {
     {"XAPR", 8, {0}, true, 0},
     {"XPLK", 8, {0}, true, 4},
     {"XWPN", 12, {0, 4, 8}, true, 0},
+    {"XWCU", 16, {}, false, 0},
 };
 
 constexpr std::uint16_t k_damage_curve_form_version = 152;

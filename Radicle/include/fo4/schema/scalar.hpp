@@ -73,6 +73,20 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+struct CountedArrayDescriptor {
+  Signature record{};
+  std::string_view path;
+  std::string_view label;
+  Signature subrecord{};
+  Signature count_subrecord{};
+  std::size_t stride{0};
+};
+
+class CountedArrayError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
 // Resolves a signature only if exactly one schema row names it and that row is whole-payload, non-repeated, non-string; else use record plus path.
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept;
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
@@ -81,6 +95,9 @@ std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     Signature record, std::string_view path) noexcept;
 std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept;
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
+std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
+                                                               std::string_view path) noexcept;
+bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept;
 
 // The bytes of one field within a subrecord payload. Empty when an embedded
 // field lies past the end of a legitimately shorter payload -- absent, not
