@@ -19,6 +19,11 @@ describe('ProblemsList', () => {
     expect(screen.getByText(preflight.Description).closest('.rv-prob-row')?.textContent).toContain('schema_preflight');
   });
 
+  it('styles each row by its severity class', () => {
+    render(<ProblemsList problems={[link, preflight]} />);
+    expect(screen.getByText(preflight.Description).closest('.rv-prob-row')?.classList.contains('rv-prob-warning')).toBe(true);
+  });
+
   it('filters rows by code and hides the other codes', () => {
     render(<ProblemsList problems={[link, preflight]} />);
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'schema_preflight' } });

@@ -8,7 +8,7 @@ export default function ProblemsList({ problems, error }: { problems: RecordProb
   if (error) return <div className="rv-drawer-note" style={{ color: '#f44747' }}>
     Problem check failed (not "no problems"): {error}</div>;
   if (problems.length === 0) return <div className="rv-drawer-note">No problems found.</div>;
-  const codes = [...new Set<string>(problems.map(p => p.Code))].sort();
+  const codes = [...new Set<string>(problems.map(p => p.Code ?? ''))].sort();
   const active = codes.includes(code) ? code : 'all';
   return (
     <>
@@ -20,10 +20,10 @@ export default function ProblemsList({ problems, error }: { problems: RecordProb
           </select>
         </label>
       </div>
-      {problems.filter(p => active === 'all' || p.Code === active).map((p, i) => (
+      {problems.filter(p => active === 'all' || (p.Code ?? '') === active).map((p, i) => (
         <div key={i} className={`rv-prob-row rv-prob-${p.Severity}`}>
           <AlertTriangle size={12} className="rv-prob-icon" />
-          <span className="rv-mono">{p.Code}</span>
+          <span className="rv-mono">{p.Code ?? ''}</span>
           {p.Detail && <span className="rv-mono">{p.Detail}</span>}
           <span>{p.Description}</span>
         </div>
