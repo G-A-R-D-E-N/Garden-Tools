@@ -538,6 +538,7 @@ void remap_record_form_links(Record& record,
                              const PluginFormIdContext& old_context,
                              const PluginFormIdContext& new_context,
                              const Plugin* type_source) {
+  require_decodable(record);
   if (record.header.signature == k_info &&
       same_form_id_context(old_context, new_context)) {
     return;

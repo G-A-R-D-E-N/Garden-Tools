@@ -259,6 +259,7 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
         }
 
         try {
+            fo4::require_decodable(*sourceRecord);
             auto mutated = target->plugin;
             std::set<fo4::PluginKey> requiredOwners;
             for (const auto& link : fo4::collect_form_links(source->plugin)) {
@@ -341,7 +342,10 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
             auto mutated = loaded->plugin;
             std::size_t undeleted = 0;
             fo4::visit_records(mutated, [&](fo4::Record& record) {
-                if (record.header.signature == fo4::sig_tes4 || !record.header.flags.is_deleted()) return;
+                if (record.header.signature == fo4::sig_tes4 || record.undecodable ||
+                    !record.header.flags.is_deleted()) {
+                    return;
+                }
                 const auto bits = (record.header.flags.value() & ~fo4::RecordFlags::deleted) |
                                   kInitiallyDisabled;
                 record.header.flags = fo4::RecordFlags{bits};

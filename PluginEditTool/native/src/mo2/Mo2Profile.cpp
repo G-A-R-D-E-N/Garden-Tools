@@ -84,13 +84,15 @@ struct ResolvedPlugin {
 
 void indexFolder(const std::filesystem::path& folder,
                  std::string source,
-                 std::unordered_map<std::string, ResolvedPlugin>& resolved) {
+                 std::unordered_map<std::string, ResolvedPlugin>& resolved,
+                 std::vector<std::filesystem::path>& candidates) {
     std::error_code ec;
     if (!std::filesystem::is_directory(folder, ec)) return;
     for (std::filesystem::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec)) {
         if (!it->is_regular_file(ec) || !pluginExtension(it->path())) continue;
         const auto name = it->path().filename().string();
         resolved.insert_or_assign(lowerAscii(name), ResolvedPlugin{it->path(), source});
+        candidates.push_back(it->path());
     }
 }
 
@@ -205,15 +207,16 @@ Result<ProfileSnapshot> readProfile(const std::filesystem::path& instancePath,
     }
 
     std::unordered_map<std::string, ResolvedPlugin> resolved;
-    indexFolder(info.gameDataFolder, "Data", resolved);
+    std::vector<std::filesystem::path> candidates;
+    indexFolder(info.gameDataFolder, "Data", resolved, candidates);
     snapshot.assetRootsLowToHigh.push_back(info.gameDataFolder);
 
     for (auto it = snapshot.enabledModsHighToLow.rbegin(); it != snapshot.enabledModsHighToLow.rend(); ++it) {
-        indexFolder(it->path, it->name, resolved);
+        indexFolder(it->path, it->name, resolved, candidates);
         snapshot.assetRootsLowToHigh.push_back(it->path);
     }
 
-    indexFolder(info.overwriteFolder, "overwrite", resolved);
+    indexFolder(info.overwriteFolder, "overwrite", resolved, candidates);
     snapshot.assetRootsLowToHigh.push_back(info.overwriteFolder);
 
     fo4::loadorder::PluginList pluginList;
@@ -228,7 +231,9 @@ Result<ProfileSnapshot> readProfile(const std::filesystem::path& instancePath,
             const auto cccPath = gameRoot / "Fallout4.ccc";
             if (std::filesystem::is_regular_file(cccPath)) cccNames = fo4::loadorder::read_ccc(cccPath);
         }
-        for (const auto& entry : resolved) winners.push_back(entry.second.path);
+        for (auto it = candidates.rbegin(); it != candidates.rend(); ++it) {
+            if (resolved.at(lowerAscii(it->filename().string())).path == *it) winners.push_back(*it);
+        }
         assembled = fo4::loadorder::assemble_load_order(winners, pluginList, cccNames, fo4::loadorder::OfficialTable::ae);
     } catch (const std::exception& error) {
         return std::unexpected(Error{"Mo2LoadOrderInvalid", error.what()});

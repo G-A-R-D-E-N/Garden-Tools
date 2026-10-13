@@ -127,6 +127,7 @@ add_executable(
     unit/RadiclePluginNestedFormLinkListTests.cpp
     unit/RadiclePluginElementTests.cpp
     unit/RadiclePluginMaintenanceTests.cpp
+    unit/RadiclePluginUndecodableMaintenanceTests.cpp
     unit/RadiclePluginDeepCopyTests.cpp
     unit/RadiclePluginRenumberTests.cpp
     unit/RadiclePluginLeveledTests.cpp

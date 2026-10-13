@@ -20,6 +20,7 @@ struct PluginListEntry {
 struct PluginList {
   std::vector<PluginListEntry> entries;
   std::vector<PluginListEntry> duplicates;
+  std::vector<std::size_t> invalid_lines;
 };
 
 struct LoadOrderEntry {

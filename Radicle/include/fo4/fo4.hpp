@@ -8,6 +8,7 @@
 #include "fo4/forms/cell.hpp"
 #include "fo4/forms/eyes.hpp"
 #include "fo4/forms/weather.hpp"
+#include "fo4/forms/leveled_list.hpp"
 #include "fo4/forms/leveled_spell.hpp"
 #include "fo4/forms/quest.hpp"
 #include "fo4/graph/check_errors.hpp"
