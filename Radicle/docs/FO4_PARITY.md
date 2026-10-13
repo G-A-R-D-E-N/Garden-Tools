@@ -37,7 +37,7 @@ Derived from the repository by `Radicle/tools/parity_matrix.py`; 147 signatures 
 
 Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
 
-Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these, so remap evidence (Mixed remap column and the form_links.cpp record checks) is not part of the tier. L5 (dedicated PET route) is not derived.
+Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
 Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 

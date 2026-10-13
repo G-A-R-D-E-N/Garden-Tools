@@ -1,4 +1,4 @@
-# Active FO4 record signatures: TES5Edit 93cc0bc5a1251936c3c7859eee3150eda12a62d7 Core/wbDefinitionsFO4.pas, Pascal comments stripped. Each line is SIG and the line of its registration call in that file. SHA-256 (LF) f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e
+# Active FO4 record signatures: TES5Edit 93cc0bc5a1251936c3c7859eee3150eda12a62d7 Core/wbDefinitionsFO4.pas, Pascal comments stripped. Each line is SIG and the line of its registration call in that file. wbDefinitionsFO4.pas SHA-256 (LF) f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e
 AACT 6970
 ACHR 4483
 ACTI 5611
