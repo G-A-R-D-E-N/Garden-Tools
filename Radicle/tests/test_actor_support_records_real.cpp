@@ -73,6 +73,10 @@ TEST_P(ActorSupportReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow) 
     for (const auto& field : fo4::schema::formlink_fields(signature)) {
       static_cast<void>(fo4::record_field_count(plugin, record.form_key, field));
     }
+    if (signature == fo4::Signature::from_string("HDPT")) {
+      static_cast<void>(fo4::schema::record_formlink_list_values(
+          plugin, record.form_key, *fo4::schema::formlink_list_descriptor(signature, "HDPT\\ExtraParts")));
+    }
   });
   if (std::string_view(GetParam()) == "Fallout4.esm") {
     EXPECT_GT(batch_records, 0u);

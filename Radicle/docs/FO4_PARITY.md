@@ -87,7 +87,7 @@ Tier counts: L0 70, L1 16, L2 16, L3 1, L4 44.
 | ECZN | 8022 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | EFSH | 6510 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ENCH | 6726 | - | - | - | - | - | - | - | - | - | 1 | L0 |
-| EQUP | 8835 | 1 | - | 1 | - | - | yes | - | - | yes | 1 | L4 |
+| EQUP | 8835 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | EXPL | 7334 | 15 | - | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |

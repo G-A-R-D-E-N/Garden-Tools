@@ -94,8 +94,6 @@ std::vector<std::byte> make_plugin() {
   write_record(out, "FACT", 3102, {{"EDID", zstr("RadicleFactionOne")}});
   write_record(out, "FACT", 3103, {{"EDID", zstr("RadicleFactionTwo")}});
   write_record(out, "LCTN", 3104, {{"EDID", zstr("RadicleLocationOne")}});
-  write_record(out, "AVIF", 3105, {{"EDID", zstr("RadicleValueOne")}});
-  write_record(out, "AVIF", 3106, {{"EDID", zstr("RadicleValueTwo")}});
   write_record(out, "ASTP", 3107, {{"EDID", zstr("RadicleAssociationOne")}});
   write_record(out, "PROJ", 3108, {{"EDID", zstr("RadicleProjectileOne")}});
   write_record(out, "PROJ", 3109, {{"EDID", zstr("RadicleProjectileTwo")}});
@@ -125,7 +123,7 @@ std::vector<std::byte> make_plugin() {
                                    {"RNAM", u32(3117)}});
   write_record(out, "ECZN", 3125, {{"EDID", zstr("RadicleZone")},
                                    {"DATA", join({u32(3100), u32(3104), i8(4), i8(1), u8(0), i8(5)})}});
-  write_record(out, "EQUP", 3126, {{"EDID", zstr("RadicleSlot")}, {"DATA", u32(1)}, {"ANAM", u32(3105)}});
+  write_record(out, "EQUP", 3126, {{"EDID", zstr("RadicleSlot")}, {"DATA", u32(1)}});
   write_record(out, "MOVT", 3127, {{"EDID", zstr("RadicleMovement")}, {"MNAM", zstr("Walk")},
                                    {"INAM", join({f32(1.0f), f32(2.0f), f32(3.0f)})}, {"JNAM", f32(0.5f)},
                                    {"LNAM", f32(0.1f)}});
@@ -215,8 +213,6 @@ TEST(ActorSupportSynthetic, RelationAndZoneLinksRetargetToSecondRecords) {
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key(3126), scalar("EQUP\\Flags"), 0, "5"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key(3126), link("EQUP\\ConditionActorValue"), key(3106)),
-            fo4::FormLinkFieldMutationStatus::updated);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(payload(reread, 3123, "DATA"),
@@ -225,7 +221,6 @@ TEST(ActorSupportSynthetic, RelationAndZoneLinksRetargetToSecondRecords) {
   EXPECT_EQ(payload(reread, 3125, "DATA"),
             join({u32(3103), u32(3132), i8(-3), i8(1), u8(5), i8(7)}));
   EXPECT_EQ(payload(reread, 3126, "DATA"), u32(5));
-  EXPECT_EQ(payload(reread, 3126, "ANAM"), u32(3106));
 }
 
 TEST(ActorSupportSynthetic, HeadPartRowsAndExtraPartsListRetarget) {
