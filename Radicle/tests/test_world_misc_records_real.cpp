@@ -4,6 +4,7 @@
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
+#include "fo4/signature.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
@@ -46,11 +47,16 @@ TEST_P(WorldMiscRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryR
     if (index == std::size(k_batch)) return;
     ++batch_records;
     const auto rules = fo4::schema::authoring_subrecords(*fo4::schema::record_authoring_constraint(signature));
+    std::size_t last_rule = 0;
     for (const auto& subrecord : record.subrecords) {
-      const auto listed = std::any_of(rules.begin(), rules.end(), [&](const auto& rule) {
+      const auto found = std::find_if(rules.begin(), rules.end(), [&](const auto& rule) {
         return rule.signature == subrecord.signature;
       });
-      EXPECT_TRUE(listed) << record.form_key.to_string() << ' ' << subrecord.signature.to_string();
+      if (found == rules.end()) continue;
+      const auto rule_index = static_cast<std::size_t>(found - rules.begin());
+      EXPECT_GE(rule_index, last_rule)
+          << record.form_key.to_string() << ' ' << subrecord.signature.to_string();
+      last_rule = rule_index;
     }
     for (const auto& rule : rules) {
       const auto count = static_cast<std::size_t>(std::count_if(

@@ -91,7 +91,7 @@ std::vector<std::byte> make_plugin() {
   write_record(out, "LSCR", 3010, {{"EDID", zstr("RadicleLoad")}, {"DESC", u32(1)}, {"NNAM", u32(3001)}, {"TNAM", u32(3003)}, {"ONAM", rotation(-180, 180)}, {"ZNAM", zoom(-1.0f, 1.0f)}, {"MOD2", zstr("old")}});
   write_record(out, "OVIS", 3011, {{"INDX", u32(3001)}, {"DATA", zeros(24)}});
   write_record(out, "NOCM", 3012, {{"INDX", u32(0)}, {"DATA", zeros(8)}, {"INTV", u32(0)}, {"NAM1", zstr("Model.nif")}});
-  write_record(out, "DEBR", 3013, {{"EDID", zstr("RadicleDebris")}, {"DATA", u8(10)}, {"MODT", zeros(8)}});
+  write_record(out, "DEBR", 3013, {{"EDID", zstr("RadicleDebris")}, {"DATA", zeros(33)}, {"MODT", zeros(8)}});
   write_record(out, "RFGP", 3014, {{"EDID", zstr("RadicleGroup")}, {"NNAM", zstr("old")}, {"RNAM", u32(3006)}, {"PNAM", u32(3005)}});
   write_record(out, "MESG", 3015, {{"EDID", zstr("RadicleMessage")}, {"DESC", u32(2)}, {"FULL", u32(3)}, {"INAM", u32(0)}, {"QNAM", u32(3004)}, {"DNAM", u32(1)}, {"TNAM", u32(2)}, {"SNAM", zstr("old")}, {"NNAM", u32(4)}, {"ITXT", u32(5)}});
   return out.bytes;

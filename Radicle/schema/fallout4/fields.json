@@ -7053,11 +7053,6 @@
             "maximum": 65535
           },
           {
-            "signature": "CIS2",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
             "signature": "NNAM",
             "minimum": 0,
             "maximum": 1
@@ -7102,11 +7097,6 @@
             "signature": "INDX",
             "minimum": 0,
             "maximum": 65535
-          },
-          {
-            "signature": "DATA",
-            "minimum": 0,
-            "maximum": 65535
           }
         ]
       }
@@ -7126,21 +7116,6 @@
           },
           {
             "signature": "INDX",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
-            "signature": "DATA",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
-            "signature": "INTV",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
-            "signature": "NAM1",
             "minimum": 0,
             "maximum": 65535
           }
@@ -7163,11 +7138,6 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 65535
-          },
-          {
-            "signature": "MODT",
-            "minimum": 0,
             "maximum": 65535
           }
         ]
@@ -7362,21 +7332,6 @@
           },
           {
             "signature": "ITXT",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
-            "signature": "CTDA",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
-            "signature": "CIS1",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
-            "signature": "CIS2",
             "minimum": 0,
             "maximum": 65535
           }
