@@ -22,6 +22,16 @@ public class LoadOrderTests
     }
 
     [Fact]
+    public void ReadPluginListSkipsNamesWithControlCharactersWithoutThrowing()
+    {
+        using var temp = new TempDirectory();
+        var list = temp.Write("plugins.txt", Encoding.ASCII.GetBytes("*Good.esp\r\n*Bad\tName.esp\r\nLast.esp\r\n"));
+
+        Assert.Equal(new[] { new PluginListEntry("Good.esp", true, 1), new PluginListEntry("Last.esp", false, 3) },
+                     LoadOrderFiles.ReadPluginList(list).ToArray());
+    }
+
+    [Fact]
     public void AssemblesOfficialThenCccThenPluginListWithHoistAndChecks()
     {
         using var temp = new TempDirectory();

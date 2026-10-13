@@ -3,6 +3,7 @@
 #include "fo4/c_api_authoring.h"
 #include "fo4/plugin/navmesh_writer.hpp"
 #include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "fo4/binary/cursor.hpp"
@@ -46,6 +47,8 @@ TEST(NavmeshAuthoring, UneditedPluginWithNavmeshAndNaviRecordsWritesBackByteIden
   ASSERT_NE(find_record(plugin, test::navmesh_key(0x801)), nullptr);
   const auto original = test::original_bytes(plugin);
   ASSERT_FALSE(original.empty());
+  plugin.original_range.clear();
+  fo4::visit_records(plugin, [](auto& record) { record.original_range.clear(); });
   EXPECT_EQ(write_plugin(plugin), original);
 }
 
