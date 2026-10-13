@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 73, L1 16, L2 16, L3 1, L4 41.
 
 ### Per-signature coverage
 
@@ -51,10 +51,10 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | ADDN | 7796 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AECH | 12206 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ALCH | 5691 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| AMDL | 12246 | - | - | - | - | - | - | - | - | - | - | L0 |
+| AMDL | 12246 | 16 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | AMMO | 5741 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | ANIO | 5777 | - | - | - | - | - | - | - | - | - | - | L0 |
-| AORU | 12268 | - | - | - | - | - | - | - | - | - | - | L0 |
+| AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | - | 1 | L4 |
 | ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | - | 1 | L4 |
 | ARTO | 9362 | - | - | - | - | - | - | yes | - | - | - | L1 |
@@ -81,12 +81,12 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | DLBR | 8778 | - | - | - | - | - | - | - | - | - | - | L0 |
 | DLVW | 8819 | - | - | - | - | - | - | - | - | - | - | L0 |
 | DMGT | 12310 | - | - | - | - | - | - | - | - | - | - | L0 |
-| DOBJ | 8618 | - | - | - | - | - | - | - | - | - | - | L0 |
+| DOBJ | 8618 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | DOOR | 6477 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | DUAL | 9452 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ECZN | 8022 | - | - | - | - | - | - | - | - | - | - | L0 |
 | EFSH | 6510 | - | - | - | - | - | - | - | - | - | - | L0 |
-| ENCH | 6726 | - | - | - | - | - | - | - | - | - | 1 | L0 |
+| ENCH | 6726 | 7 | - | 2 | - | 1 | yes | - | - | - | 2 | L4 |
 | EQUP | 8835 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | EXPL | 7334 | 15 | - | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
@@ -108,7 +108,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | IMGS | 7393 | - | - | - | - | - | - | - | - | - | 2 | L0 |
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| INNR | 12337 | - | - | - | - | - | - | - | - | - | - | L0 |
+| INNR | 12337 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IPCT | 7978 | - | - | - | - | - | - | - | - | - | - | L0 |
 | IPDS | 8014 | - | - | - | - | - | - | - | - | - | 1 | L0 |
 | KEYM | 9823 | - | - | - | - | - | - | yes | - | - | - | L1 |
@@ -139,7 +139,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | - | - | - | - | - | L0 |
-| NOTE | 12470 | - | - | - | - | - | - | - | - | - | - | L0 |
+| NOTE | 12470 | 3 | 3 | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 47 | - | - | - | - | yes | yes | forms/npc | - | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -153,7 +153,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | PFLA | 5948 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | PGRE | 5949 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | PHZD | 5950 | - | - | - | - | - | - | - | - | yes | - | L0 |
-| PKIN | 12571 | - | - | - | - | - | - | - | - | - | - | L0 |
+| PKIN | 12571 | 1 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | PLYR | 12129 | - | - | - | - | - | - | - | - | - | - | L0 |
 | PMIS | 5951 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
@@ -199,11 +199,15 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| AMDL | 16 | - | - | - | - | f32, u32 | - | - | - | existing_only |
+| AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
+| DOBJ | - | - | - | - | - | - | - | - | - | - |
+| ENCH | 3 | - | 3 | 1 | - | f32, i32, u32 | - | - | - | existing_only |
 | EXPL | 15 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | EYES | - | - | - | - | - | - | - | - | - | - |
 | FACT | 12 | - | 5 | 1 | - | f32, u16, u32, u8 | 1 | - | - | existing_only |
@@ -215,6 +219,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
+| INNR | - | - | 1 | - | - | u32 | - | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
 | LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
@@ -222,8 +227,10 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
+| NOTE | 2 | - | 1 | - | 3 | f32, u32, u8 | - | - | - | existing_only |
 | NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
+| PKIN | 1 | - | - | - | 1 | u32 | - | - | - | existing_only |
 | PROJ | 16 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |

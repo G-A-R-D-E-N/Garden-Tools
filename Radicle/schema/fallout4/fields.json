@@ -4715,6 +4715,920 @@
       "localized_subrecords": []
     },
     {
+      "signature": "NOTE",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ICON",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "YNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "NOTE\\Type",
+          "label": "Type",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Sound"
+            },
+            {
+              "value": 1,
+              "name": "Voice"
+            },
+            {
+              "value": 2,
+              "name": "Program"
+            },
+            {
+              "value": 3,
+              "name": "Terminal"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NOTE\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NOTE\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NOTE\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NOTE\\Icon",
+          "label": "Inventory icon",
+          "kind": "string",
+          "subrecord": "ICON",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NOTE\\ProgramFile",
+          "label": "Program file",
+          "kind": "string",
+          "subrecord": "PNAM",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "NOTE\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": [
+            "TRNS"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NOTE\\PickUpSound",
+          "label": "Sound - Pick Up",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NOTE\\PutDownSound",
+          "label": "Sound - Put Down",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "ENCH",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ENIT",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000006000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "ENCH\\Cost",
+          "label": "Enchantment cost",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 36,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ENCH\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "No Auto-Calc"
+            },
+            {
+              "bit": 1,
+              "name": "Unknown 2"
+            },
+            {
+              "bit": 2,
+              "name": "Extend Duration On Recast"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 36,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ENCH\\CastType",
+          "label": "Cast type",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 8,
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Constant Effect"
+            },
+            {
+              "value": 1,
+              "name": "Fire and Forget"
+            },
+            {
+              "value": 2,
+              "name": "Concentration"
+            },
+            {
+              "value": 3,
+              "name": "Scroll"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 36,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ENCH\\Amount",
+          "label": "Enchantment amount",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 12,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 36,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ENCH\\TargetType",
+          "label": "Target type",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 16,
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Self"
+            },
+            {
+              "value": 1,
+              "name": "Touch"
+            },
+            {
+              "value": 2,
+              "name": "Aimed"
+            },
+            {
+              "value": 3,
+              "name": "Target Actor"
+            },
+            {
+              "value": 4,
+              "name": "Target Location"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 36,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ENCH\\EnchantType",
+          "label": "Enchant type",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 20,
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 6,
+              "name": "Enchantment"
+            },
+            {
+              "value": 12,
+              "name": "Staff Enchantment"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 36,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ENCH\\ChargeTime",
+          "label": "Charge time",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 36,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "ENCH\\BaseEnchantment",
+          "label": "Base enchantment",
+          "subrecord": "ENIT",
+          "offset": 28,
+          "targets": [
+            "ENCH"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            36
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ENCH\\WornRestrictions",
+          "label": "Worn restrictions",
+          "subrecord": "ENIT",
+          "offset": 32,
+          "targets": [
+            "FLST"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            36
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "AMDL",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "AMDL\\ConeOfFireMinAngle",
+          "label": "Cone of Fire - Min Angle",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\ConeOfFireMaxAngle",
+          "label": "Cone of Fire - Max Angle",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\ConeOfFireIncreasePerShot",
+          "label": "Cone of Fire - Increase Per Shot",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\ConeOfFireDecreasePerSec",
+          "label": "Cone of Fire - Decrease Per Sec",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\ConeOfFireDecreaseDelayMs",
+          "label": "Cone of Fire - Decrease Delay MS",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 16,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\ConeOfFireSneakMult",
+          "label": "Cone of Fire - Sneak Mult",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RecoilDiminishSpringForce",
+          "label": "Recoil - Diminish Spring Force",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RecoilDiminishSightsMult",
+          "label": "Recoil - Diminish Sights Mult",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RecoilMaxPerShot",
+          "label": "Recoil - Max Per Shot",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RecoilMinPerShot",
+          "label": "Recoil - Min Per Shot",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 36,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RecoilHipMult",
+          "label": "Recoil - Hip Mult",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RunawayRecoilShots",
+          "label": "Runaway - Recoil Shots",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 44,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RecoilArc",
+          "label": "Recoil - Arc",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 48,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\RecoilArcRotate",
+          "label": "Recoil - Arc Rotate",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 52,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\ConeOfFireIronSightsMult",
+          "label": "Cone of Fire - Iron Sights Mult",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 56,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMDL\\StabilityBaseStability",
+          "label": "Stability - Base Stability",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 60,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 64,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "AORU",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "AOR2",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "AORU\\Radius",
+          "label": "Radius",
+          "kind": "scalar",
+          "subrecord": "AOR2",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AORU\\MinDelay",
+          "label": "Min delay",
+          "kind": "scalar",
+          "subrecord": "AOR2",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AORU\\MaxDelay",
+          "label": "Max delay",
+          "kind": "scalar",
+          "subrecord": "AOR2",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AORU\\RequiresLineOfSight",
+          "label": "Requires line of sight",
+          "kind": "scalar",
+          "subrecord": "AOR2",
+          "offset": 12,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AORU\\CombatTarget",
+          "label": "Combat target",
+          "kind": "scalar",
+          "subrecord": "AOR2",
+          "offset": 13,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PKIN",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FLTR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PKIN\\Filter",
+          "label": "Filter",
+          "kind": "string",
+          "subrecord": "FLTR",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PKIN\\Version",
+          "label": "Version",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PKIN\\Cell",
+          "label": "Cell",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "targets": [
+            "CELL"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "DOBJ",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "INNR",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "UNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "INNR\\Target",
+          "label": "Target",
+          "kind": "scalar",
+          "subrecord": "UNAM",
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "None"
+            },
+            {
+              "value": 29,
+              "name": "Armor"
+            },
+            {
+              "value": 45,
+              "name": "Actor"
+            },
+            {
+              "value": 42,
+              "name": "Furniture"
+            },
+            {
+              "value": 43,
+              "name": "Weapon"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
       "signature": "SOUN",
       "fields": [
         {
