@@ -74,7 +74,7 @@ it('shows a refused leveled list edit with its error text and does not refresh',
   render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={onChanged} />);
   await screen.findByText('000802:W0.esp');
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-  expect(await screen.findByText('Entry edit failed: Leveled list entry index must be a non-negative integer')).toBeTruthy();
+  expect((await screen.findByRole('alert')).textContent).toBe('Entry edit failed: Leveled list entry index must be a non-negative integer');
   expect(read).toHaveBeenCalledOnce();
   expect(onChanged).not.toHaveBeenCalled();
 });

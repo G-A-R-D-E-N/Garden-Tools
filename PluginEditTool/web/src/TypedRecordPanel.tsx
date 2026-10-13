@@ -259,7 +259,7 @@ export default function TypedRecordPanel({ matrix, plugin, onChanged }: {
     : null;
   return (
     <>
-      {readOnly && panel && <div className="rv-tab-note">{`Showing the winning version from ${matrix.Winner}. Open the record from ${matrix.Winner} to edit.`}</div>}
+      {readOnly && panel && matrix.Type !== 'WEAP' && <div className="rv-tab-note">{`Showing the winning version from ${matrix.Winner}. Open the record from ${matrix.Winner} to edit.`}</div>}
       {panel}
     </>
   );
