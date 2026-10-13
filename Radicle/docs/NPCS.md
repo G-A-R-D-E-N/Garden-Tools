@@ -6,7 +6,7 @@ The schema lives in `schema/fallout4/fields.json` (`NPC_` entry). Scalars are ge
 
 ## Scalar fields
 
-Every scalar uses `identity` presentation and `existing_only` insertion. A fixed struct with a `payload_size` is read only when the subrecord has exactly that many bytes; a shorter payload reports the field as absent.
+Every scalar uses `existing_only` insertion. The presentation is `identity` except on rows that carry xEdit names: `ConfigurationFlags` and `TemplateFlags` use `flags`, and `AIAggression`, `AIConfidence`, `AIMorality`, `AIMood`, `AIAssistance`, `AIAggroRadiusBehavior`, `AINoSlowApproach` and `SoundLevel` use `enum` (`wbAggressionEnum` Common:6973-6982, `wbAssistanceEnum` 7023-7031, `wbConfidenceEnum` 7249-7259, `wbMoodEnum` 7676-7689, `wbMoralityEnum` 7691-7700, `wbBoolEnum` 7240-7247, `wbSoundLevelEnum` FO4:3424-3430). Bounds are unchanged, so the names do not restrict what is written. A fixed struct with a `payload_size` is read only when the subrecord has exactly that many bytes; a shorter payload reports the field as absent.
 
 | Path | Subrecord | Offset | Storage | Payload | xEdit |
 | --- | --- | --- | --- | --- | --- |
@@ -66,11 +66,11 @@ From `wbTemplateFlags` (Common:8155-8178), FO4 names:
 | 5 | AI Packages | 12 | Keywords |
 | 6 | Model/Animation | 13-15 | unnamed in FO4 |
 
-The schema has only `identity` and `percent_0_100` presentations, so the bit names are not in `fields.json`. The field is read and written as a raw `u16`.
+`NPC_\TemplateFlags` has the `flags` presentation with these thirteen names; bits 13 to 15 are unnamed in FO4, so the table has no entry for them. The field is still read and written as a raw `u16`.
 
 ### Configuration flags (ACBS offset 0)
 
-Names from FO4:10300-10331. Bit 0 `Female`, 1 `Essential`, 2 `Is CharGen Face Preset`, 3 `Respawn`, 4 `Auto-calc stats`, 5 `Unique`, 6 `Doesn't affect stealth meter`, 7 `PC Level Mult`, 8 `Has Base Sound Data`, 9 `Calc For Each Template`, 10 `Use Attack Percentage`, 11 `Protected`, 12 `No Loot`, 13 `No Rumors`, 14 `Summonable`, 15 `Disable Non-Combat Regen`, 16 `Doesn't bleed`, 17 `Very Simple Actor`, 18 `Has Bleedout Override`, 19 `Swap Gender Anims`, 20 `Simple Actor`, 21-22 unused, 23 `No Activation/Hellos`, 24 `Diffuse Alpha Test`, 25 `Disable Combat`, 26 `Spawns Dead`, 27 `Player Protected`, 28 `Do Not Use Load Doors`, 29 `Is Ghost`, 30 `No Bleedout Recovery`, 31 `Invulnerable`.
+`NPC_\ConfigurationFlags` has the `flags` presentation with all 32 names from FO4:10300-10331. Bit 0 `Female`, 1 `Essential`, 2 `Is CharGen Face Preset`, 3 `Respawn`, 4 `Auto-calc stats`, 5 `Unique`, 6 `Doesn't affect stealth meter`, 7 `PC Level Mult`, 8 `Has Base Sound Data`, 9 `Calc For Each Template`, 10 `Use Attack Percentage`, 11 `Protected`, 12 `No Loot`, 13 `No Rumors`, 14 `Summonable`, 15 `Disable Non-Combat Regen`, 16 `Doesn't bleed`, 17 `Very Simple Actor`, 18 `Has Bleedout Override`, 19 `Swap Gender Anims`, 20 `Simple Actor`, 21 `Unused 21`, 22 `Unused 22`, 23 `No Activation/Hellos`, 24 `Diffuse Alpha Test`, 25 `Disable Combat`, 26 `Spawns Dead`, 27 `Player Protected`, 28 `Do Not Use Load Doors`, 29 `Is Ghost`, 30 `No Bleedout Recovery`, 31 `Invulnerable`.
 
 ## Typed lists
 
