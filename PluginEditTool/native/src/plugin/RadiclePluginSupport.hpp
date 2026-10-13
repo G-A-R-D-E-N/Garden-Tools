@@ -7,7 +7,9 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <format>
+#include <limits>
 #include <optional>
 #include <set>
 #include <string>
@@ -40,6 +42,58 @@ inline constexpr const char* lightFlagHint =
 inline std::string stringArgument(const nlohmann::json& args, std::size_t index) {
     if (!args.is_array() || index >= args.size() || !args[index].is_string()) return {};
     return args[index].get<std::string>();
+}
+
+inline nlohmann::json argumentAt(const nlohmann::json& args, std::size_t index) {
+    return args.is_array() && index < args.size() ? args[index] : nlohmann::json();
+}
+
+template <class T>
+std::optional<T> integerValue(const nlohmann::json& value) {
+    if (!value.is_number_integer()) return std::nullopt;
+    const auto raw = value.get<std::int64_t>();
+    if (raw < static_cast<std::int64_t>(std::numeric_limits<T>::min()) ||
+        raw > static_cast<std::int64_t>(std::numeric_limits<T>::max())) {
+        return std::nullopt;
+    }
+    return static_cast<T>(raw);
+}
+
+template <class T>
+std::optional<T> integerArgument(const nlohmann::json& args, std::size_t index) {
+    if (!args.is_array() || index >= args.size()) return std::nullopt;
+    return integerValue<T>(args[index]);
+}
+
+template <class T>
+std::optional<T> integerField(const nlohmann::json& object, const char* name) {
+    if (!object.is_object() || !object.contains(name)) return std::nullopt;
+    return integerValue<T>(object.at(name));
+}
+
+inline std::string stringField(const nlohmann::json& object, const char* name) {
+    if (!object.is_object() || !object.contains(name) || !object.at(name).is_string()) return {};
+    return object.at(name).get<std::string>();
+}
+
+inline Result<fo4::FormKey> formKeyArgument(std::string_view text) {
+    try {
+        return fo4::FormKey::parse(text);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+}
+
+inline nlohmann::json formKeyJson(const fo4::FormKey& key) {
+    return key == fo4::FormKey{} ? nlohmann::json(nullptr) : nlohmann::json(key.to_string());
+}
+
+template <class Plugins>
+const fo4::Plugin* winningPlugin(const Plugins& plugins, const fo4::FormKey& key) {
+    for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
+        if (fo4::find_record(it->plugin, key) != nullptr) return &it->plugin;
+    }
+    return nullptr;
 }
 
 inline std::string editorId(const fo4::Record& record) {

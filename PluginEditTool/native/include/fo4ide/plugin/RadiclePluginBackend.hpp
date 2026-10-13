@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -67,6 +68,14 @@ public:
     Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getLeveledList(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setLeveledListSettings(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> editLeveledListEntry(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getNpc(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> editFactionEntries(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
     }
@@ -225,6 +234,10 @@ private:
     bool isEditable(const LoadedPlugin& plugin) const;
     bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
+    Result<void> stageTypedRecordEdit(std::string_view pluginName,
+                                      const fo4::FormKey& key,
+                                      std::string_view failureCode,
+                                      const std::function<void(fo4::Plugin&)>& edit);
     std::optional<Error> requireReferenceCoverage(const fo4::FormKey& key,
                                                   std::string_view operation) const;
     std::optional<std::filesystem::path> allowedSavePath(

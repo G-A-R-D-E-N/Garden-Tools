@@ -1966,3 +1966,27 @@ Top-level `CopyAsNewRecord` calls `fo4::require_decodable` on the source as the 
 ## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp:RadiclePluginBackend::requireReferenceCoverage — shared coverage probe (GT-234)
 
 The strict re-key probe that `deleteRecord` and `renumberRecord` ran inline is now `requireReferenceCoverage`. Both pass their operation name, and `changeReferencingRecords` (`PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp:RadiclePluginBackend::changeReferencingRecords`) calls it with "reference remap" before the graph scan. A reference hidden in an undecodable record therefore refuses the whole remap, dry run included, instead of reporting "Repointed N of N". The error is `ReferenceCoverageIncomplete` with the message "Cannot prove <operation> safety while scanning <plugin>: <error>". Test: `PluginEditTool/native/tests/unit/RadiclePluginReferenceRemapTests.cpp` (`ChangeReferencingRecords refuses while a loaded plugin has an undecodable record`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — shared typed write path (#287 P1)
+
+Used by the leveled list, NPC_ and FACT edits. It takes the write lock on the named plugin, applies `writeGuard`, and refuses a record that is not in that plugin with `RecordNotFound` before any Radicle call. The Radicle edit runs on a copy of the plugin, and only a clean return stages it. A Radicle exception becomes `<Family>WriteFailed` with the Radicle message, so a refused edit leaves the loaded plugin and its saved bytes unchanged. Tests: `PluginEditTool/native/tests/unit/RadiclePluginTypedRecordsTests.cpp` and `PluginEditTool/native/tests/unit/RadiclePluginLeveledTests.cpp`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:winningPlugin — read versus edit target
+
+Reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) decode the winning version, the last loaded plugin that holds the FormKey. Edits change only the named plugin, which must already hold the record; an edit never creates an override in another plugin.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::editNpcEntries — list, op and index contract
+
+`list` is `factions`, `perks` or `inventory`; `op` is `add`, `set` or `remove`. `add` appends and ignores `index`; `set` and `remove` need a non-negative `index`. Radicle throws `NpcError` for an out-of-range index, which surfaces as `NpcWriteFailed`. Test: `Native NPC faction set refuses an out-of-range index and leaves the plugin bytes unchanged`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::editFactionEntries — rank set keeps titles and insignia
+
+A rank `set` starts from the existing rank, so a title omitted from the value is kept, and `null` clears it. The rank's insignia is never read into the value, only reported as `hasInsignia`, so a set cannot drop it. Titles are written as inline text; in a localized plugin Radicle refuses the write with `FactionWriteFailed`, so the mismatch is reported instead of silently changed. Test: `Native FACT rank set keeps the male title and round-trips through save and re-read`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::getWeaponDamageTypes — read-only
+
+WEAP has no edit method. `curveTable` is `null` for a DAMA entry below form version 152, the Radicle `k_weapon_damage_curve_form_version` threshold. Refusal test: `Native WEAP damage read refuses a non-WEAP record and leaves the plugin bytes unchanged`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — set replaces the whole entry
+
+`set` rewrites the LVLO and its COED together, so a value without `extra` removes the entry's COED. `add` inserts at `index`, and `remove` ignores `value`. Radicle throws `LeveledListError` for an out-of-range index, reported as `LeveledListWriteFailed`. Round-trip test: `Native leveled list entry edit round-trips through save and re-read`.
