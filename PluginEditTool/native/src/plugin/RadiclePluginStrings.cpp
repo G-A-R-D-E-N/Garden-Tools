@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <fo4/environment/strings.hpp>
+#include <fo4/io/path_text.hpp>
 #include <fo4/localization/strings.hpp>
 #include <fo4/text/encoding.hpp>
 
@@ -59,12 +60,16 @@ std::shared_ptr<const fo4::archive::AssetResolver> RadiclePluginBackend::stringA
     for (const auto& plugin : plugins_) names.push_back(plugin.name);
     const std::vector<std::string> own{loaded.name};
     const auto dataArchives = fo4::archive::archive_load_order(dataDirectory_, {}, names);
-    const auto folderArchives = fo4::archive::archive_load_order(loaded.path.parent_path(), {}, own);
+    std::vector<std::filesystem::path> folderArchives;
+    if (std::error_code ec; !std::filesystem::equivalent(loaded.path.parent_path(), dataDirectory_, ec)) {
+        folderArchives = fo4::archive::archive_load_order(loaded.path.parent_path(), {}, own);
+    }
     std::vector<std::filesystem::path> archives;
     for (const auto& path : dataArchives) {
         const auto shadowed = std::any_of(folderArchives.begin(), folderArchives.end(),
                                           [&path](const std::filesystem::path& other) {
-                                              return other.filename() == path.filename();
+                                              return fo4::text::equals_folded(fo4::io::utf8(other.filename()),
+                                                                              fo4::io::utf8(path.filename()));
                                           });
         if (!shadowed) archives.push_back(path);
     }

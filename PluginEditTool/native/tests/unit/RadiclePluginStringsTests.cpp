@@ -260,6 +260,52 @@ TEST_CASE("ListStringTables and GetStrings read archives that sit beside the plu
     CHECK(page["rows"][0]["text"] == "Manzana");
 }
 
+TEST_CASE("A plugin folder archive shadows the data directory copy of the same name") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Data";
+    writeArchive(data / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Data copy")}}}));
+    writeArchive(root / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    REQUIRE(tables.size() == 1);
+    CHECK(tables[0]["source"] == "Patch - Main.ba2");
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(page["rows"].size() == 1);
+    CHECK(page["rows"][0]["text"] == "Manzana");
+}
+
+TEST_CASE("A plugin folder archive shadows a data directory copy whose name differs only in case") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Data";
+    writeArchive(data / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Data copy")}}}));
+    writeArchive(root / "PATCH - MAIN.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    REQUIRE(tables.size() == 1);
+    CHECK(tables[0]["source"] == "PATCH - MAIN.ba2");
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(page["rows"].size() == 1);
+    CHECK(page["rows"][0]["text"] == "Manzana");
+}
+
 TEST_CASE("ListStringTables still lists loose tables when a data directory archive is unreadable") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
