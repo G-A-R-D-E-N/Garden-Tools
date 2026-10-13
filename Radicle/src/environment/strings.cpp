@@ -37,9 +37,10 @@ void validate_language(std::string_view language) {
   if (!valid) throw EnvironmentError("string table language must be a non-empty alphanumeric token");
 }
 
-std::unordered_map<std::string, std::vector<std::filesystem::path>> list_directory(
-    const std::filesystem::path& dir) {
-  std::unordered_map<std::string, std::vector<std::filesystem::path>> files;
+using FileIndex = std::unordered_map<std::string, std::vector<std::filesystem::path>>;
+
+FileIndex list_directory(const std::filesystem::path& dir) {
+  FileIndex files;
   std::error_code ec;
   if (!std::filesystem::is_directory(dir, ec)) return files;
   std::filesystem::directory_iterator it(dir, ec);
@@ -56,7 +57,63 @@ std::string plugin_stem(std::string_view filename) {
   return std::string(dot == std::string_view::npos ? filename : filename.substr(0, dot));
 }
 
+std::vector<PluginStringTable> resolve_plugin_tables(const std::vector<FileIndex>& dirs,
+                                                     const Plugin& plugin,
+                                                     std::string_view language,
+                                                     const archive::AssetResolver* archives) {
+  std::vector<PluginStringTable> tables;
+  if (!plugin.header.tes4_flags.is_localized()) return tables;
+  const auto prefix = plugin_stem(plugin.key.filename()) + "_" + std::string(language) + ".";
+  for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
+    const auto name = prefix + std::string(string_source_extension(source));
+    PluginStringTable found{source, {}, {}, {}};
+    std::vector<std::byte> archived;
+    bool loose = false;
+    for (const auto& files : dirs) {
+      const auto it = files.find(text::fold(name));
+      if (it == files.end()) continue;
+      if (it->second.size() > 1) {
+        throw EnvironmentError("string table name matches several files differing only by case: " +
+                               utf8(it->second.front()));
+      }
+      found.path = it->second.front();
+      loose = true;
+      break;
+    }
+    if (!loose) {
+      if (archives == nullptr) continue;
+      const auto location = archives->locate_in_archives("strings/" + name);
+      if (!location) continue;
+      const auto& reader = archives->archives()[location->archive];
+      auto entry_path = reader.entries()[location->entry].path;
+      std::replace(entry_path.begin(), entry_path.end(), '\\', '/');
+      found.path = reader.path() / entry_path;
+      found.archive = utf8(reader.path().filename());
+      archived = archives->read(*location);
+    }
+    try {
+      found.table = loose ? localization::read_string_table_file(found.path, table_kind(source))
+                          : localization::read_string_table(archived, table_kind(source));
+    } catch (const localization::StringTableError& error) {
+      throw EnvironmentError("malformed string table " + utf8(found.path) + ": " + error.what());
+    }
+    tables.push_back(std::move(found));
+  }
+  return tables;
+}
+
 }  // namespace
+
+std::vector<PluginStringTable> load_plugin_string_tables(std::span<const std::filesystem::path> strings_dirs,
+                                                         const Plugin& plugin,
+                                                         std::string_view language,
+                                                         const archive::AssetResolver* archives) {
+  validate_language(language);
+  std::vector<FileIndex> dirs;
+  dirs.reserve(strings_dirs.size());
+  for (const auto& dir : strings_dirs) dirs.push_back(list_directory(dir));
+  return resolve_plugin_tables(dirs, plugin, language, archives);
+}
 
 StringSource string_source(Signature record, Signature subrecord) noexcept {
   if (record != sig("LSCR") && subrecord == sig("DESC")) return StringSource::dl;
@@ -85,45 +142,17 @@ StringTables StringTables::load(const Environment& env,
   StringTables result;
   result.language_ = std::string(language);
   result.tables_.resize(env.plugins().size());
-  const auto files = list_directory(strings_dir);
+  const std::vector<FileIndex> dirs{list_directory(strings_dir)};
   for (std::size_t plugin = 0; plugin < env.plugins().size(); ++plugin) {
-    const auto& info = env.plugins()[plugin];
-    if (!info.localized) continue;
-    const auto prefix = plugin_stem(info.key.filename()) + "_" + result.language_ + ".";
-    for (const auto source : {StringSource::normal, StringSource::dl, StringSource::il}) {
-      const auto name = prefix + std::string(string_source_extension(source));
-      const auto it = files.find(text::fold(name));
+    for (auto& found : resolve_plugin_tables(dirs, env.plugin(plugin), result.language_, archives)) {
       Table table;
-      std::vector<std::byte> archived;
-      if (it != files.end()) {
-        if (it->second.size() > 1) {
-          throw EnvironmentError("string table name matches several files differing only by case: " +
-                                 utf8(it->second.front()));
-        }
-        table.path = it->second.front();
-      } else if (archives != nullptr) {
-        const auto location = archives->locate_in_archives("strings/" + name);
-        if (!location) continue;
-        const auto& reader = archives->archives()[location->archive];
-        auto entry_path = reader.entries()[location->entry].path;
-        std::replace(entry_path.begin(), entry_path.end(), '\\', '/');
-        table.path = reader.path() / entry_path;
-        archived = archives->read(*location);
-      } else {
-        continue;
+      table.path = std::move(found.path);
+      table.strings.reserve(found.table.entries.size());
+      for (auto& entry : found.table.entries) {
+        const auto* text = reinterpret_cast<const char*>(entry.text.data());
+        table.strings.emplace(entry.id, std::string(text, entry.text.size()));
       }
-      try {
-        auto parsed = it != files.end() ? localization::read_string_table_file(table.path, table_kind(source))
-                                        : localization::read_string_table(archived, table_kind(source));
-        table.strings.reserve(parsed.entries.size());
-        for (auto& entry : parsed.entries) {
-          const auto* text = reinterpret_cast<const char*>(entry.text.data());
-          table.strings.emplace(entry.id, std::string(text, entry.text.size()));
-        }
-      } catch (const localization::StringTableError& error) {
-        throw EnvironmentError("malformed string table " + utf8(table.path) + ": " + error.what());
-      }
-      result.tables_[plugin][static_cast<std::size_t>(source)] = std::move(table);
+      result.tables_[plugin][static_cast<std::size_t>(found.source)] = std::move(table);
     }
   }
   return result;

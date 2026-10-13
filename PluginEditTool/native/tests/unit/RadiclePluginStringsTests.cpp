@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/archive/ba2.hpp>
 #include <fo4/localization/strings.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
@@ -59,11 +60,25 @@ void writeStrings(const std::filesystem::path& root) {
         root / "Strings" / "Patch_de.STRINGS");
 }
 
-void loadPlugin(fo4ide::plugin::RadiclePluginBackend& backend, const std::filesystem::path& root) {
-    const auto path = root / "Patch.esp";
+void writeArchive(const std::filesystem::path& path,
+                  std::string_view innerPath,
+                  const std::vector<std::byte>& bytes) {
+    fo4::archive::Ba2GeneralArchive archive;
+    fo4::archive::Ba2GeneralEntry entry;
+    entry.path = std::string(innerPath);
+    entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(bytes));
+    archive.entries.push_back(std::move(entry));
+    std::filesystem::create_directories(path.parent_path());
+    fo4::archive::write_ba2_general_file(archive, path);
+}
+
+void loadPlugin(fo4ide::plugin::RadiclePluginBackend& backend,
+                const std::filesystem::path& root,
+                const std::string& name = "Patch.esp") {
+    const auto path = root / name;
     std::filesystem::create_directories(root);
     {
-        const auto bytes = fo4::test::make_minimal_plugin();
+        const auto bytes = fo4::test::make_tes4_plugin(0x80, 1.0f, {});
         std::ofstream stream(path, std::ios::binary | std::ios::trunc);
         stream.write(reinterpret_cast<const char*>(bytes.data()),
                      static_cast<std::streamsize>(bytes.size()));
@@ -71,7 +86,7 @@ void loadPlugin(fo4ide::plugin::RadiclePluginBackend& backend, const std::filesy
     REQUIRE(backend.invoke(
         "environment.LoadMo2",
         nlohmann::json{{"plugins", nlohmann::json::array({{
-            {"name", "Patch.esp"},
+            {"name", name},
             {"path", path.string()},
             {"source", "PluginStrings"},
             {"resolved", true}
@@ -179,4 +194,134 @@ TEST_CASE("LookupString returns the text for an id in each table that has it") {
 
     CHECK_FALSE(backend.invoke("strings.LookupString",
                                nlohmann::json::array({"Patch.esp", "", "x"})).has_value());
+}
+
+TEST_CASE("ListStringTables matches loose table names case-insensitively") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    std::filesystem::create_directories(root / "Strings");
+    fo4::localization::write_string_table_file(
+        {StringTableKind::strings, {{7, rawBytes("Folded")}}},
+        root / "Strings" / "mod_EN.strings");
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root, "mod.esp");
+
+    const auto rows = rowsOf(backend, "ListStringTables", nlohmann::json::array({"mod.esp", "EN"}));
+    REQUIRE(rows.size() == 1);
+    CHECK(rows[0]["kind"] == "STRINGS");
+    CHECK(rows[0]["source"] == "loose");
+    CHECK(rows[0]["path"].get<std::string>().ends_with("mod_EN.strings"));
+
+    const auto text = rowsOf(backend, "LookupString", nlohmann::json::array({"mod.esp", "EN", 7}));
+    REQUIRE(text.size() == 1);
+    CHECK(text[0]["text"] == "Folded");
+}
+
+TEST_CASE("ListStringTables and GetStrings read tables packed in the data directory's archives") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Data";
+    writeArchive(data / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    REQUIRE(tables.size() == 1);
+    CHECK(tables[0]["kind"] == "STRINGS");
+    CHECK(tables[0]["source"] == "Patch - Main.ba2");
+    CHECK(tables[0]["count"] == 1);
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(page["rows"].size() == 1);
+    CHECK(page["rows"][0]["text"] == "Manzana");
+
+    const auto english = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    CHECK(english.empty());
+}
+
+TEST_CASE("ListStringTables and GetStrings read archives that sit beside the plugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeArchive(root / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    REQUIRE(tables.size() == 1);
+    CHECK(tables[0]["source"] == "Patch - Main.ba2");
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(page["rows"].size() == 1);
+    CHECK(page["rows"][0]["text"] == "Manzana");
+}
+
+TEST_CASE("A plugin folder archive shadows the data directory copy of the same name") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Data";
+    writeArchive(data / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Data copy")}}}));
+    writeArchive(root / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    REQUIRE(tables.size() == 1);
+    CHECK(tables[0]["source"] == "Patch - Main.ba2");
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(page["rows"].size() == 1);
+    CHECK(page["rows"][0]["text"] == "Manzana");
+}
+
+TEST_CASE("A plugin folder archive shadows a data directory copy whose name differs only in case") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Data";
+    writeArchive(data / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Data copy")}}}));
+    writeArchive(root / "PATCH - MAIN.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    REQUIRE(tables.size() == 1);
+    CHECK(tables[0]["source"] == "PATCH - MAIN.ba2");
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(page["rows"].size() == 1);
+    CHECK(page["rows"][0]["text"] == "Manzana");
+}
+
+TEST_CASE("ListStringTables still lists loose tables when a data directory archive is unreadable") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    const auto data = root / "Data";
+    std::filesystem::create_directories(data);
+    {
+        std::ofstream junk(data / "Patch - Junk.ba2", std::ios::binary);
+        junk << "not an archive";
+    }
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    REQUIRE(tables.size() == 2);
+    CHECK(tables[0]["source"] == "loose");
+    CHECK(tables[1]["source"] == "loose");
 }
