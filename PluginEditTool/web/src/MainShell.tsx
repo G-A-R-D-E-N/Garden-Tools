@@ -2,12 +2,13 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow,
+  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
 import MastersPanel from './MastersPanel';
 import ArchivePanel from './ArchivePanel';
+import LocalizationPanel from './LocalizationPanel';
 import AudioPanel from './AudioPanel';
 import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
@@ -60,6 +61,7 @@ export default function MainShell() {
   const [showNif, setShowNif] = useState(false);
   const [showMasters, setShowMasters] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [showLocalization, setShowLocalization] = useState(false);
   const [showAudio, setShowAudio] = useState(false);
   const [showCell, setShowCell] = useState(false);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
@@ -355,6 +357,9 @@ export default function MainShell() {
           <button className={`activity-btn ${showArchive ? 'active' : ''}`} onClick={() => setShowArchive(true)} title="Archive (BA2/BSA browse / extract)">
             <ArchiveIcon size={22} strokeWidth={1.5} />
           </button>
+          <button className={`activity-btn ${showLocalization ? 'active' : ''}`} onClick={() => setShowLocalization(true)} title="Localization (read-only string tables)">
+            <Languages size={22} strokeWidth={1.5} />
+          </button>
           <button className={`activity-btn ${showAudio ? 'active' : ''}`} onClick={() => setShowAudio(true)} title="Audio (convert to/from xWMA, merge/split fuz)">
             <Music size={22} strokeWidth={1.5} />
           </button>
@@ -627,6 +632,7 @@ export default function MainShell() {
       {showNif && <NifPanel onClose={() => setShowNif(false)} />}
       {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
       {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}
+      {showLocalization && <LocalizationPanel onClose={() => setShowLocalization(false)} />}
       {showAudio && <AudioPanel onClose={() => setShowAudio(false)} />}
       {showCell && <CellPanel onClose={() => setShowCell(false)} />}
       {showSpreadsheet && <SpreadsheetPanel onClose={() => setShowSpreadsheet(false)} />}

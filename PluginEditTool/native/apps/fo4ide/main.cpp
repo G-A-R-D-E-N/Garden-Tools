@@ -262,6 +262,7 @@ int main(int argc, char** argv) {
         !registerTarget(rpc, "backend", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "backend"), log) ||
         !registerTarget(rpc, "masters", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "masters"), log) ||
         !registerTarget(rpc, "cell", std::make_shared<fo4ide::app::CellTarget>(plugins, nifService, textureResolver), log) ||
+        !registerTarget(rpc, "strings", std::make_shared<fo4ide::app::PluginBackendTarget>(plugins, "strings"), log) ||
         !registerTarget(rpc, "graph", std::make_shared<fo4ide::app::GraphTarget>(platformServices), log)) {
         fo4ide::logging::shutdown();
         return 1;

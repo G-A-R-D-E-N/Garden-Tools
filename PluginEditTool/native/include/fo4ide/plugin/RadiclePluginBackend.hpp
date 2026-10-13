@@ -229,6 +229,10 @@ private:
     Result<nlohmann::json> getConditionFunctions() const;
     Result<nlohmann::json> getConditionRunOnTypes() const;
 
+    Result<nlohmann::json> listStringTables(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getStrings(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> lookupString(const nlohmann::json& arguments) const;
+
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
     bool isEditable(const LoadedPlugin& plugin) const;

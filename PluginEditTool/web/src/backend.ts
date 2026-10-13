@@ -360,6 +360,18 @@ export interface MastersHost {
   SavePlugin(plugin: string): Promise<string>;
 }
 
+export interface StringTableInfo { kind: string; path: string; count: number; }
+export interface StringRow { id: number; text: string; }
+export interface StringsPage { total: number; offset: number; limit: number; rows: StringRow[]; }
+export interface StringLookupRow { kind: string; id: number; text: string; }
+
+export interface StringsHost {
+  ListStringTables(plugin: string, language: string): Promise<string>;
+  GetStrings(plugin: string, language: string, table: string, filter: string,
+             offset: number, limit: number): Promise<string>;
+  LookupString(plugin: string, language: string, id: number): Promise<string>;
+}
+
 
 export interface ArchiveEntry { path: string; size: number; }
 export interface ArchiveListResult {
@@ -568,6 +580,7 @@ declare global {
           audio?: AudioHost;
           cell?: CellHost;
           graph?: GraphHost;
+          strings?: StringsHost;
         };
         addEventListener(type: string, listener: (event: MessageEvent) => void): void;
         removeEventListener(type: string, listener: (event: MessageEvent) => void): void;
@@ -602,6 +615,9 @@ export const getAudio = (): AudioHost | undefined =>
 
 export const getCell = (): CellHost | undefined =>
   window.chrome?.webview?.hostObjects?.cell;
+
+export const getStrings = (): StringsHost | undefined =>
+  window.chrome?.webview?.hostObjects?.strings;
 
 export const getGraph = (): GraphHost | undefined =>
   window.chrome?.webview?.hostObjects?.graph;

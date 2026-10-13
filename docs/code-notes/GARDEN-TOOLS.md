@@ -2116,6 +2116,26 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 
 A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
 
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:readTables — sibling string tables (#32)
+
+Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next to the loaded plugin, with the same symlink and regular-file check as `questinternal::loadLocalizedQuestTables`, and parses each found table with `fo4::localization::read_string_table_file`. A missing table is skipped; a table that fails to parse fails the whole call with `StringTableInvalid`. Limits: it reads only `<plugin dir>/Strings/<stem>_<lang>.<ext>` with exact case; it reads no BA2 archives, so base-game tables packed in archives are not listed; it does not scan other mod folders; and unsaved staged quest localization is not reflected.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — paging (#32)
+
+`limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000. The filter matches the text case-insensitively (ASCII) or the decimal ID as a substring.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:displayText — text encoding (#32)
+
+English tables are CP1252, the encoding `encodeLocalizedText` writes. Other languages are UTF-8; bytes that are not valid UTF-8 are decoded as CP1252 so the JSON dump cannot throw.
+
+## PluginEditTool/native/apps/fo4ide/main.cpp:main — strings target (#32)
+
+`strings` is registered as a `PluginBackendTarget` namespace, so `strings.<Method>` falls through to the backend operations `strings.ListStringTables`, `strings.GetStrings` and `strings.LookupString`. All three take the backend read lock and never write.
+
+## PluginEditTool/web/src/LocalizationPanel.tsx:LocalizationPanel — read-only view (#32)
+
+Plugin choices come from `appInterop.GetPlugins`, which lists every loaded plugin, so base-game masters can be browsed (`masters.GetPlugins` only lists editable ones). Each table and page load is a separate call guarded by a sequence number, so a late reply for an earlier plugin, table or page cannot replace the current one. The `strings` host object exists only in the native HTTP bridge (`hostbridge.ts` HOST_OBJECTS); without it the panel shows the unavailable message.
+
 ## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:TEST_CASE — compile differential gate (#78 C12)
 
 Port of `PluginEditTool/FO4RecordEditor.Core.Tests/PapyrusDifferentialTests.cs`. Pairs come from `.pex` files under the `FO4RE_PEX_CORPUS` roots (falling back to `FO4_PEX_CORPUS`), each paired with its `.psc` by `sourceFor`, which mirrors the C# `SourceFor` (`Source/User`, then `Source`, with a leading `Compiled` directory skipped). A pair is kept only when the `.pex` header is Fallout 4 (magic, format 3.9, game id 2) and its file name is first seen, as in C# `Pairs`.
