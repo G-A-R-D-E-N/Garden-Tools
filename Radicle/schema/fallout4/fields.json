@@ -4986,6 +4986,1089 @@
       "localized_subrecords": []
     },
     {
+      "signature": "AECH",
+      "fields": [],
+      "formlink_fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "ASPC",
+      "fields": [
+        {
+          "path": "ASPC\\IsInterior",
+          "label": "Is interior",
+          "kind": "scalar",
+          "subrecord": "XTRI",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ASPC\\WeatherAttenuation",
+          "label": "Weather attenuation (dB x100)",
+          "kind": "scalar",
+          "subrecord": "WNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "ASPC\\LoopingSound",
+          "label": "Looping sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ASPC\\RegionSound",
+          "label": "Sound from region (interiors)",
+          "subrecord": "RDAT",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ASPC\\EnvironmentType",
+          "label": "Environment type",
+          "subrecord": "BNAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REVB"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "RDAT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "BNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XTRI",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00"
+          },
+          {
+            "signature": "WNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "0000"
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "REVB",
+      "fields": [
+        {
+          "path": "REVB\\DecayTime",
+          "label": "Decay time (ms)",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\HFReference",
+          "label": "HF reference (Hz)",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\RoomFilter",
+          "label": "Room filter",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "i8",
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\RoomHFFilter",
+          "label": "Room HF filter",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 5,
+          "storage": "i8",
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\Reflections",
+          "label": "Reflections",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 6,
+          "storage": "i8",
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\ReverbAmp",
+          "label": "Reverb amp",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 7,
+          "storage": "i8",
+          "presentation": "identity",
+          "minimum": -128,
+          "maximum": 127,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\DecayHFRatio",
+          "label": "Decay HF ratio (x100)",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\ReflectDelay",
+          "label": "Reflect delay (ms, scaled)",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 9,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\ReverbDelay",
+          "label": "Reverb delay (ms)",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\Diffusion",
+          "label": "Diffusion (%)",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 11,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\Density",
+          "label": "Density (%)",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\Unknown",
+          "label": "Unknown",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 13,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 14,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REVB\\ReverbClass",
+          "label": "Reverb class",
+          "kind": "scalar",
+          "subrecord": "ANAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Default"
+            },
+            {
+              "value": 1,
+              "name": "Class A"
+            },
+            {
+              "value": 2,
+              "name": "Class B"
+            },
+            {
+              "value": 3,
+              "name": "Class C"
+            },
+            {
+              "value": 4,
+              "name": "Class D"
+            },
+            {
+              "value": 5,
+              "name": "Class E"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "e204200300000000640000646400"
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "SNCT",
+      "fields": [
+        {
+          "path": "SNCT\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Mute When Submerged"
+            },
+            {
+              "bit": 1,
+              "name": "Should Appear on Menu"
+            },
+            {
+              "bit": 2,
+              "name": "Immune to Time Speedup"
+            },
+            {
+              "bit": 3,
+              "name": "Pause During Menus (Immed)"
+            },
+            {
+              "bit": 4,
+              "name": "Pause During Menus (Fade)"
+            },
+            {
+              "bit": 5,
+              "name": "Exclude from Player OPM Override"
+            },
+            {
+              "bit": 6,
+              "name": "Pause During Start Menu"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNCT\\StaticVolume",
+          "label": "Static volume multiplier (raw)",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNCT\\DefaultMenuValue",
+          "label": "Default menu value (raw)",
+          "kind": "scalar",
+          "subrecord": "UNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNCT\\MinFrequencyMultiplier",
+          "label": "Min frequency multiplier",
+          "kind": "scalar",
+          "subrecord": "MNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNCT\\SidechainTargetMultiplier",
+          "label": "Sidechain target multiplier",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SNCT\\ParentCategory",
+          "label": "Parent category",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "SNCT"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNCT\\MenuSliderCategory",
+          "label": "Menu slider category",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "SNCT"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "ffff"
+          },
+          {
+            "signature": "UNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "ffff"
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "cdcccc3d"
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "0000803f"
+          }
+        ]
+      },
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "SOPM",
+      "fields": [
+        {
+          "path": "SOPM\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "NAM1",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Attenuates With Distance"
+            },
+            {
+              "bit": 1,
+              "name": "Allows Rumble"
+            },
+            {
+              "bit": 2,
+              "name": "Applies Doppler"
+            },
+            {
+              "bit": 3,
+              "name": "Applies Distance Delay"
+            },
+            {
+              "bit": 4,
+              "name": "Player Output Model"
+            },
+            {
+              "bit": 5,
+              "name": "Try Play on Controller"
+            },
+            {
+              "bit": 6,
+              "name": "Causes Ducking"
+            },
+            {
+              "bit": 7,
+              "name": "Avoids Ducking"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\ReverbSend",
+          "label": "Reverb send %",
+          "kind": "scalar",
+          "subrecord": "NAM1",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\Type",
+          "label": "Type",
+          "kind": "scalar",
+          "subrecord": "MNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Uses HRTF"
+            },
+            {
+              "value": 1,
+              "name": "Defined Speaker Output"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\StaticAttenuation",
+          "label": "Static attenuation (dB x100)",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeInDistanceStart",
+          "label": "Fade in distance start",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeInDistanceEnd",
+          "label": "Fade in distance end",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeOutDistanceStart",
+          "label": "Fade out distance start",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeOutDistanceEnd",
+          "label": "Fade out distance end",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeInCurve1",
+          "label": "Fade in curve value 1",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 16,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeInCurve2",
+          "label": "Fade in curve value 2",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 17,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeInCurve3",
+          "label": "Fade in curve value 3",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 18,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeInCurve4",
+          "label": "Fade in curve value 4",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 19,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeOutCurve1",
+          "label": "Fade out curve value 1",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 20,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeOutCurve2",
+          "label": "Fade out curve value 2",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 21,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeOutCurve3",
+          "label": "Fade out curve value 3",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 22,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FadeOutCurve4",
+          "label": "Fade out curve value 4",
+          "kind": "scalar",
+          "subrecord": "ATTN",
+          "offset": 23,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SOPM\\EffectChain",
+          "label": "Effect chain",
+          "subrecord": "ENAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "AECH"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM1",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "0000"
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "ATTN",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000032505f32140500"
+          },
+          {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "SCSN",
+      "fields": [
+        {
+          "path": "SCSN\\Priority",
+          "label": "Priority",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "0000"
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "STAG",
+      "fields": [],
+      "formlink_fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "MUST",
+      "fields": [
+        {
+          "path": "MUST\\TrackType",
+          "label": "Track type",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 603355331,
+              "name": "Palette Track"
+            },
+            {
+              "value": 1859641416,
+              "name": "Single Track"
+            },
+            {
+              "value": 2712257749,
+              "name": "Silent Track"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\Duration",
+          "label": "Duration",
+          "kind": "scalar",
+          "subrecord": "FLTV",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\FadeOut",
+          "label": "Fade-out",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\LoopBegins",
+          "label": "Loop begins",
+          "kind": "scalar",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\LoopEnds",
+          "label": "Loop ends",
+          "kind": "scalar",
+          "subrecord": "LNAM",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\LoopCount",
+          "label": "Loop count",
+          "kind": "scalar",
+          "subrecord": "LNAM",
+          "offset": 8,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\TrackFileName",
+          "label": "Track file name",
+          "kind": "string",
+          "subrecord": "ANAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MUST\\FinaleFileName",
+          "label": "Finale file name",
+          "kind": "string",
+          "subrecord": "BNAM",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "MUST\\Tracks",
+          "label": "Track",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "MUST"
+          ],
+          "nullable": true,
+          "stride": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "c378f623"
+          },
+          {
+            "signature": "FLTV",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "BNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "LNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
       "signature": "WATR",
       "fields": [
         {
