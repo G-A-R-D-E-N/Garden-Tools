@@ -24,9 +24,10 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         payload->at("schema").is_boolean() && payload->at("schema").get<bool>();
     if (!schemaCreation && signatureText != "ARMA" && signatureText != "ARMO" &&
         signatureText != "CELL" && signatureText != "EXPL" &&
-        signatureText != "EYES" && signatureText != "HAZD" &&
-        signatureText != "LVSP" && signatureText != "PROJ" &&
-        signatureText != "RACE") {
+        signatureText != "EYES" && signatureText != "FACT" &&
+        signatureText != "HAZD" && signatureText != "LVLI" &&
+        signatureText != "LVLN" && signatureText != "LVSP" &&
+        signatureText != "PROJ" && signatureText != "RACE") {
         return std::unexpected(Error{
             "RecordCreationRequiresSchema",
             "Raw record creation is disabled until the schema pre-flight layer defines required fields and insertion order for " +
@@ -230,6 +231,41 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
                     "Newly created LVSP record could not accept its editor ID"
                 });
             }
+        } else if (signatureText == "LVLI" || signatureText == "LVLN") {
+            std::uint8_t chanceNone = 0;
+            std::uint8_t maxCount = 0;
+            std::uint8_t flags = 0;
+            if (!lifecycleUnsignedField(*payload, "chanceNone", std::uint8_t{0}, chanceNone) ||
+                !lifecycleUnsignedField(*payload, "maxCount", std::uint8_t{0}, maxCount) ||
+                !lifecycleUnsignedField(*payload, "flags", std::uint8_t{0}, flags)) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    signatureText + " chanceNone, maxCount, and flags must be 0..255"
+                });
+            }
+            bool editorValid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", editorValid);
+            if (!editorValid) {
+                return std::unexpected(Error{
+                    "InvalidRecordCreationPayload",
+                    signatureText + " editorId must be a string or null"
+                });
+            }
+            key = fo4::forms::create_leveled_list(
+                mutated, fo4::Signature::from_string(signatureText), optionalStringView(editorId),
+                chanceNone, maxCount, flags);
+        } else if (signatureText == "FACT") {
+            bool valid = false;
+            const auto editorId = optionalStringField(*payload, "editorId", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "FACT editorId must be a string or null"});
+            const auto fullName = optionalStringField(*payload, "fullName", valid);
+            if (!valid) return std::unexpected(Error{"InvalidRecordCreationPayload", "FACT fullName must be a string or null"});
+            std::uint32_t flags = 0;
+            if (!lifecycleUnsignedField(*payload, "flags", std::uint32_t{0}, flags)) {
+                return std::unexpected(Error{"InvalidRecordCreationPayload", "FACT flags must be an unsigned 32-bit value"});
+            }
+            key = fo4::forms::create_faction(
+                mutated, optionalStringView(editorId), optionalStringView(fullName), flags);
         } else if (signatureText == "RACE") {
             const auto description = payload->find("description");
             if (description == payload->end() || !description->is_string() ||
@@ -359,7 +395,11 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
     } catch (const fo4::forms::EyesError& error) {
         return std::unexpected(Error{"EyesCreateFailed", error.what()});
     } catch (const fo4::forms::LeveledSpellError& error) {
-        return std::unexpected(Error{"LeveledSpellCreateFailed", error.what()});
+        return std::unexpected(Error{
+            signatureText == "LVSP" ? "LeveledSpellCreateFailed" : "LeveledListCreateFailed",
+            error.what()});
+    } catch (const fo4::forms::FactionError& error) {
+        return std::unexpected(Error{"FactionCreateFailed", error.what()});
     } catch (const fo4::forms::RaceError& error) {
         return std::unexpected(Error{"RaceCreateFailed", error.what()});
     } catch (const fo4::forms::ProjExplHazdError& error) {
@@ -370,6 +410,8 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
             : signatureText == "RACE"             ? "RaceCreateFailed"
             : (signatureText == "ARMO" || signatureText == "ARMA") ? "ArmorCreateFailed"
             : signatureText == "LVSP"             ? "LeveledSpellCreateFailed"
+            : (signatureText == "LVLI" || signatureText == "LVLN") ? "LeveledListCreateFailed"
+            : signatureText == "FACT"             ? "FactionCreateFailed"
                                                   : "ProjExplHazdCreateFailed";
         return std::unexpected(Error{code, error.what()});
     } catch (const std::exception& error) {

@@ -1,7 +1,9 @@
 // Layouts and sources: Radicle/docs/LEVELED_LISTS.md (TODO-verify until LeveledListReal runs on CI).
 #include "fo4/forms/leveled_list.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "../plugin/record_edit.hpp"
 
 #include <algorithm>
@@ -9,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -195,6 +198,45 @@ Subrecord encode_coed(const LeveledListExtraData& extra, const PluginFormIdConte
   return subrecord;
 }
 
+std::vector<std::byte> zstring(std::string_view value) {
+  std::vector<std::byte> data;
+  data.reserve(value.size() + 1);
+  for (const char ch : value) data.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  data.push_back(std::byte{0});
+  return data;
+}
+
+constexpr std::string_view k_lvli_targets[] = {
+    "ACTI", "ADDN", "ALCH", "AMMO", "ARMO", "ARTO", "ASPC", "BNDS", "BOOK", "CMPO", "COBJ",
+    "CONT", "DEBR", "DOOR", "EXPL", "FLST", "FLOR", "FURN", "HAZD", "IDLM", "INGR", "KEYM",
+    "LIGH", "LVLI", "LVLN", "LVSP", "MISC", "MSTT", "NOTE", "NPC_", "OMOD", "PROJ", "SCOL",
+    "SCRL", "SOUN", "SPEL", "STAT", "TACT", "TERM", "TREE", "TXST", "WATR", "WEAP", "ENCH",
+};
+constexpr std::string_view k_lvln_targets[] = {"LVLN", "NPC_"};
+constexpr std::string_view k_lvsp_targets[] = {"LVSP", "SPEL"};
+
+std::span<const std::string_view> allowed_entry_targets(Signature list) {
+  if (list == k_lvln) return k_lvln_targets;
+  if (list == k_lvsp) return k_lvsp_targets;
+  return k_lvli_targets;
+}
+
+void validate_entry_target(const Plugin& plugin, Signature list, const LeveledListEntry& entry) {
+  if (entry.item.owner() != plugin.key) return;
+  const auto* target = find_record(plugin, entry.item);
+  if (target == nullptr) {
+    throw LeveledListError("leveled list entry does not resolve to a record in this plugin: " +
+                           entry.item.to_string());
+  }
+  const auto target_type = target->header.signature.to_string();
+  const auto allowed = allowed_entry_targets(list);
+  if (std::none_of(allowed.begin(), allowed.end(),
+                   [&](std::string_view name) { return name == target_type; })) {
+    throw LeveledListError(entry.item.to_string() + " is " + target_type + ", which " +
+                           list.to_string() + " entries cannot reference");
+  }
+}
+
 }  // namespace
 
 LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
@@ -265,6 +307,40 @@ LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
   return result;
 }
 
+FormKey create_leveled_list(Plugin& plugin,
+                            Signature signature,
+                            std::optional<std::string_view> editor_id,
+                            std::uint8_t chance_none,
+                            std::uint8_t max_count,
+                            std::uint8_t flags) {
+  if (!is_leveled_list(signature)) {
+    throw LeveledListError("leveled list creation requires LVLI, LVLN, or LVSP");
+  }
+  if ((flags & ~0x07u) != 0) {
+    throw LeveledListError("leveled list flags may use only defined bits 0x01, 0x02, and 0x04");
+  }
+
+  auto next = plugin;
+  assign_record_form_keys(next);
+  std::vector<Subrecord> subrecords;
+  if (editor_id.has_value()) {
+    subrecords.push_back(Subrecord{sig_edid, zstring(stored_editor_id(*editor_id)), false});
+  }
+  subrecords.push_back(byte_subrecord(k_lvld, chance_none));
+  subrecords.push_back(byte_subrecord(k_lvlm, max_count));
+  subrecords.push_back(byte_subrecord(k_lvlf, flags));
+  subrecords.push_back(count_subrecord(0));
+
+  const auto key = create_local_record(next, signature, std::move(subrecords));
+  for (const auto& issue : schema::preflight_authoring_record(next, key)) {
+    if (issue.severity == schema::PreflightSeverity::error) {
+      throw LeveledListError(signature.to_string() + " authoring preflight failed: " + issue.message);
+    }
+  }
+  plugin = std::move(next);
+  return key;
+}
+
 bool replace_leveled_list_entries(Plugin& plugin,
                                   const FormKey& key,
                                   std::span<const LeveledListEntry> entries) {
@@ -277,6 +353,13 @@ bool replace_leveled_list_entries(Plugin& plugin,
   if (current.entries.size() == entries.size() &&
       std::equal(current.entries.begin(), current.entries.end(), entries.begin())) {
     return true;
+  }
+
+  const auto list = find_record(plugin, key)->header.signature;
+  for (const auto& entry : entries) {
+    if (std::find(current.entries.begin(), current.entries.end(), entry) == current.entries.end()) {
+      validate_entry_target(plugin, list, entry);
+    }
   }
 
   auto* record = find_mutable_record(plugin, key);

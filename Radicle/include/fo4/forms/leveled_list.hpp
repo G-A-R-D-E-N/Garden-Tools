@@ -11,6 +11,7 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 // Layouts and sources: Radicle/docs/LEVELED_LISTS.md (TODO-verify until LeveledListReal runs on CI).
@@ -53,6 +54,13 @@ struct LeveledList {
 };
 
 LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key);
+
+FormKey create_leveled_list(Plugin& plugin,
+                            Signature signature,
+                            std::optional<std::string_view> editor_id,
+                            std::uint8_t chance_none,
+                            std::uint8_t max_count,
+                            std::uint8_t flags);
 
 bool replace_leveled_list_entries(Plugin& plugin,
                                   const FormKey& key,

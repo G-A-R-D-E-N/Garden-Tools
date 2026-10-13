@@ -32,6 +32,7 @@ constexpr std::uint32_t k_item_list = 0x02000800;
 constexpr std::uint32_t k_npc_list = 0x02000801;
 constexpr std::uint32_t k_empty_list = 0x02000802;
 constexpr std::uint32_t k_plain_record = 0x02000803;
+constexpr std::uint32_t k_npc_target = 0x02000810;
 
 std::vector<std::byte> text(std::string_view value) {
   std::vector<std::byte> out;
@@ -152,6 +153,7 @@ std::vector<std::byte> standard_plugin() {
       {"LVLI", k_item_list, item_list_subs()},
       {"LVLN", k_npc_list, npc_list_subs()},
       {"LVLI", k_empty_list, empty_list_subs()},
+      {"NPC_", k_npc_target, {{"EDID", text("RadicleNpcTarget")}}},
   });
 }
 

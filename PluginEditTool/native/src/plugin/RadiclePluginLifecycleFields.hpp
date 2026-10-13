@@ -18,6 +18,8 @@
 #include <fo4/forms/armor.hpp>
 #include <fo4/forms/cell.hpp>
 #include <fo4/forms/eyes.hpp>
+#include <fo4/forms/faction.hpp>
+#include <fo4/forms/leveled_list.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/forms/proj_expl_hazd.hpp>
 #include <fo4/forms/race.hpp>
