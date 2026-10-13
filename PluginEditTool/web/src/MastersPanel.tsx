@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link2, X, RefreshCw, ArrowUp, ArrowDown, Save, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { getMasters, type MasterRow } from './backend';
+import { errorText } from './errors';
 import './PapyrusPanel.css';
 import './MastersPanel.css';
 
@@ -32,7 +33,7 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
     if (!masters) return;
     masters.GetPlugins()
       .then(raw => setPlugins(JSON.parse(raw) as string[]))
-      .catch(e => { setPlugins([]); setError('Could not list plugins: ' + (e instanceof Error ? e.message : String(e))); });
+      .catch(e => { setPlugins([]); setError('Could not list plugins: ' + errorText(e)); });
   }, [masters]);
 
   const selectPlugin = (name: string) => {

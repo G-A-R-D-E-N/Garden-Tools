@@ -527,6 +527,7 @@ export default function RecordView(
                                 <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
                               </td>
                               {visibleCols.map(ci => {
+                                const editing = edit && edit.field === r.Field && edit.col === ci;
                                 const st = resolveStatus(r, ci);
                                 return (
                                   <td
@@ -536,7 +537,7 @@ export default function RecordView(
                                     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                                   >
                                     {st === 'win' && <Crown size={10} className="rv-win-icon" />}
-                                    {r.Values[ci]}
+                                    {editing ? renderEditor(r, ci) : r.Values[ci]}
                                   </td>
                                 );
                               })}

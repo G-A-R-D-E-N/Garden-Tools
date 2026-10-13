@@ -1979,7 +1979,9 @@ A failed `ResolveFormKeyLabels` fell into an empty `catch`, so rows kept raw for
 
 ## PluginEditTool/web/src — silent catch sites (#41)
 
-The 110 `catch` clauses and the five promise `.catch` handlers under `PluginEditTool/web/src` were read. 31 handled a failure without reporting it. 17 of those now report through the channel their component already uses for backend errors, and 14 stay silent on purpose. No new toast or banner was added.
+The 115 lines that `grep -rn catch PluginEditTool/web/src` matches outside test files were read: 109 `catch` clauses and 6 promise `.catch(` handlers. 31 handled a failure without reporting it. 17 of those now report through the channel their component already uses for backend errors, and 14 stay silent on purpose. No new toast or banner was added.
+
+F2 in the Conflicts matrix now opens the editor. `RecordView.tsx:RecordView` renders `renderEditor(r, ci)` in the matrix value cell when that cell is the edited one, the same condition and call the main grid uses, so F2 or a double-click there shows the input instead of only the stored value.
 
 Reported:
 

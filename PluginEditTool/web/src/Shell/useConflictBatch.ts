@@ -36,6 +36,7 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
     if (!chosen) return;
     const patch = chosen.target;
     setConflictBusy(true);
+    setErrorStr('');
     try {
       const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
       let overwrite = false;
@@ -84,10 +85,11 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
       if (res.failed) {
         const named = (formKey?: string) => {
           const editorId = picked.find(c => c.FormKey === formKey)?.EditorID;
-          return editorId ? `${formKey} (${editorId})` : formKey ?? 'unknown record';
+          return editorId ? `${formKey} (${editorId})` : formKey || 'unknown record';
         };
-        setErrorStr([`${res.failed} of ${res.total} records could not be copied into ${patch}:`,
-          ...failures.map(f => `${named(f.formKey)}: ${f.reason || 'no reason given'}`)].join('\n'));
+        const lines = failures.map(f => `${named(f.formKey)}: ${f.reason || 'no reason given'}`);
+        if (lines.length === 0) lines.push('(no details returned)');
+        setErrorStr([`${res.failed} of ${res.total} records could not be copied into ${patch}:`, ...lines].join('\n'));
       }
       setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
       if (!res.failed) setConflictSel({});

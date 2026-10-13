@@ -37,25 +37,26 @@ jobs:
 
       # No other workflow installs Node; vite 8, vitest 4 and eslint 10 all need 20.19 or newer.
       - name: Set up Node 22
-        uses: https://github.com/actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        uses: https://github.com/actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: PluginEditTool/web/package-lock.json
 
       - name: Install dependencies
+        id: install
         run: npm ci
 
       # The steps below run even after an earlier failure so one run reports lint, type and test results together.
       - name: Lint
-        if: success() || failure()
+        if: (success() || failure()) && steps.install.outcome == 'success'
         run: npm run lint
 
       # The build script is `tsc -b && vite build`.
       - name: Type-check and build
-        if: success() || failure()
+        if: (success() || failure()) && steps.install.outcome == 'success'
         run: npm run build
 
       - name: Unit tests
-        if: success() || failure()
+        if: (success() || failure()) && steps.install.outcome == 'success'
         run: npm test
