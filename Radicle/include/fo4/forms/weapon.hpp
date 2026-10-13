@@ -1,7 +1,5 @@
 #pragma once
 
-// TODO-verify: DAMA entry layout from xEdit Core/wbDefinitionsCommon.pas:8454-8463 (wbDamageTypeArray), not yet checked against official masters.
-
 #include "fo4/formid.hpp"
 #include "fo4/plugin/container.hpp"
 
