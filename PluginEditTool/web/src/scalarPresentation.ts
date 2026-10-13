@@ -9,7 +9,16 @@ export const setFlag = (raw: number, bit: number, on: boolean) => {
   return on ? raw + pow2(bit) : raw - pow2(bit);
 };
 
-const hexOf = (n: number) => `0x${n.toString(16).toUpperCase()}`;
+const unknownLabel = (n: number): string => {
+  const hex = BigInt.asUintN(64, BigInt(n)).toString(16).toUpperCase().replace(/^0+/, '');
+  let label = `<Unknown: ${n}`;
+  if (hex) label += ` $${hex}`;
+  if (hex.length === 8) {
+    const signature = [6, 4, 2, 0].map(i => String.fromCharCode(parseInt(hex.slice(i, i + 2), 16))).join('');
+    if (!/[a-z]/.test(signature)) label += ` ${signature}`;
+  }
+  return label + '>';
+};
 
 export const rawEditable = (raw: string, p: ScalarPresentation): boolean =>
   (p.kind === 'enum' ? /^-?\d+$/ : /^\d+$/).test(raw);
@@ -19,11 +28,13 @@ export function scalarLabel(raw: string, presentation?: ScalarPresentation): str
   const n = Number(raw);
   if (presentation.kind === 'enum') {
     const hit = presentation.names.find(e => e.value === n);
-    return hit ? hit.name : n < 0 ? raw : hexOf(n);
+    return hit ? hit.name : unknownLabel(n);
   }
-  const set = presentation.names.filter(e => flagIsSet(n, e.bit));
-  const unknown = set.reduce((rest, e) => rest - pow2(e.bit), n);
-  const parts = set.map(e => e.name);
-  if (unknown > 0) parts.push(hexOf(unknown));
+  const parts: string[] = [];
+  for (let bit = 0; pow2(bit) <= n; bit++) {
+    if (!flagIsSet(n, bit)) continue;
+    const hit = presentation.names.find(e => e.bit === bit);
+    parts.push(hit ? hit.name : unknownLabel(bit));
+  }
   return parts.length ? parts.join(', ') : 'none';
 }

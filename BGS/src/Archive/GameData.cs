@@ -204,7 +204,7 @@ public sealed class GameData : IDisposable
         var (archive, entry) = FindEntry(projectRoot, declared);
         if (entry == null) return null;
         try { return new AnimationRead(archive.Read(entry), Path.GetFileName(archive.Path), entry.Name); }
-        catch (Exception e) when (e is IOException or InvalidDataException) { return null; }
+        catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
     }
 
     private string? DataRelativePath(string fullPath)
@@ -306,7 +306,7 @@ public sealed class GameData : IDisposable
                 if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) continue;
                 try { return Open(archive).Read(entry); }
-                catch (Exception e) when (e is IOException or InvalidDataException) { return null; }
+                catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
             }
         }
         return null;
@@ -511,7 +511,7 @@ public sealed class GameData : IDisposable
         {
             return false;
         }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
             warning = $"{Path.GetFileName(archivePath)}: {e.Message.Split('\n')[0].Trim()}";
             return false;
@@ -594,7 +594,7 @@ public sealed class GameData : IDisposable
 
         List<EsPlugin.AnimSet> animSets;
         try { animSets = EsPlugin.RaceAnimationSets(master); }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
             return sets;
         }
