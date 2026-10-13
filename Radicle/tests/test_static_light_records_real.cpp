@@ -1,5 +1,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/field_address.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "real_data_build.hpp"
@@ -8,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -53,6 +56,13 @@ TEST_P(StaticLightReal, BatchRowsDecodeAndAuthoringMinimumsHold) {
           if (subrecord.signature != field.scalar.subrecord) continue;
           const auto bytes = fo4::schema::scalar_field_bytes(subrecord.data, field.scalar);
           if (!bytes.empty()) static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
+        }
+      }
+      for (const auto& field : fo4::schema::formlink_fields(record->header.signature)) {
+        const fo4::schema::FieldShape shape{field.subrecord, field.offset, 4, 0, false};
+        const auto slots = fo4::schema::resolve_field_slots(*record, shape, field.address);
+        for (const auto& slot : slots.slots) {
+          if (!slot.valid) ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ' ' << field.path << " is not decodable";
         }
       }
     } catch (const std::exception& error) {

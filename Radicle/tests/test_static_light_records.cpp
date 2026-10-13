@@ -145,7 +145,7 @@ TEST(StaticLightSynthetic, EveryBatchRowDecodesOnItsRecord) {
       }
     }
   });
-  EXPECT_GE(decoded, 60u);
+  EXPECT_GE(decoded, 59u);
 }
 
 TEST(StaticLightSynthetic, EditsOneFieldPerRecordAndRereadsIt) {

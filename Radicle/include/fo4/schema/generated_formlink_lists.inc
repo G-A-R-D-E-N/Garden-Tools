@@ -1223,7 +1223,7 @@ inline constexpr NestedFormLinkListDescriptor k_generated_nested_formlink_lists[
 };
 
 inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
-  {Signature::from_string("BNDS"), "BNDS\\Texture", "Texture", Signature::from_string("TNAM"), 0, true, 0, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("BNDS"), "BNDS\\Texture", "Texture", Signature::from_string("TNAM"), 0, false, 0, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("CLMT"), "CLMT\\Weather", "Weather", Signature::from_string("WLST"), 0, true, 1, 1, FieldAddress{false, 12, 0, FieldDiscriminator{}}},
   {Signature::from_string("CLMT"), "CLMT\\WeatherGlobal", "Weather global", Signature::from_string("WLST"), 8, true, 2, 1, FieldAddress{false, 12, 0, FieldDiscriminator{}}},
   {Signature::from_string("DIAL"), "DIAL\\Branch", "Branch", Signature::from_string("BNAM"), 0, false, 3, 1, FieldAddress{}, {{4}}},
@@ -1264,11 +1264,11 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("INFO"), "INFO\\SoundFile", "Sound file", Signature::from_string("TRDA"), 5, true, 94, 1, FieldAddress{true, 0, 0, FieldDiscriminator{}}},
   {Signature::from_string("INFO"), "INFO\\Speaker", "Speaker", Signature::from_string("ANAM"), 0, false, 95, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("INFO"), "INFO\\StartScene", "Start scene", Signature::from_string("TSCE"), 0, false, 96, 1, FieldAddress{}, {{4}}},
-  {Signature::from_string("LAYR"), "LAYR\\Parent", "Parent", Signature::from_string("PNAM"), 0, true, 97, 1, FieldAddress{}, {{4}}},
-  {Signature::from_string("LGTM"), "LGTM\\GodRays", "God rays", Signature::from_string("WGDR"), 0, true, 98, 1, FieldAddress{}, {{4}}},
-  {Signature::from_string("LIGH"), "LIGH\\GodRays", "God rays", Signature::from_string("WGDR"), 0, true, 99, 1, FieldAddress{}, {{4}}},
-  {Signature::from_string("LIGH"), "LIGH\\Lens", "Lens", Signature::from_string("LNAM"), 0, true, 100, 1, FieldAddress{}, {{4}}},
-  {Signature::from_string("LIGH"), "LIGH\\Sound", "Sound", Signature::from_string("SNAM"), 0, true, 101, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("LAYR"), "LAYR\\Parent", "Parent", Signature::from_string("PNAM"), 0, false, 97, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("LGTM"), "LGTM\\GodRays", "God rays", Signature::from_string("WGDR"), 0, false, 98, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("LIGH"), "LIGH\\GodRays", "God rays", Signature::from_string("WGDR"), 0, false, 99, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("LIGH"), "LIGH\\Lens", "Lens", Signature::from_string("LNAM"), 0, false, 100, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("LIGH"), "LIGH\\Sound", "Sound", Signature::from_string("SNAM"), 0, false, 101, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("LVLI"), "LVLI\\EpicLootChance", "Epic loot chance", Signature::from_string("LVSG"), 0, false, 102, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("LVLI"), "LVLI\\UseGlobal", "Use global", Signature::from_string("LVLG"), 0, false, 103, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("LVLN"), "LVLN\\UseGlobal", "Use global", Signature::from_string("LVLG"), 0, false, 104, 1, FieldAddress{}, {{4}}},
