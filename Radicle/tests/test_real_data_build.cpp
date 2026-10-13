@@ -68,6 +68,7 @@ TEST(RealDataBuild, OtherBuildsAreUnknown) {
 }
 
 TEST(RealDataBuild, MissingExeIsUnknown) {
+  set_env("FO4_GAME_BUILD", "");
   const auto build = detect_game_build(std::filesystem::path{"no-such-folder-for-real-data-build"} / "Data");
   EXPECT_EQ(build.release, GameRelease::Unknown);
   EXPECT_FALSE(exact_counts_known(build));
@@ -86,6 +87,13 @@ TEST(RealDataBuild, DetectReadsFalloutExeNextToDataFolder) {
   std::filesystem::remove_all(root);
   EXPECT_EQ(build.file_version, "1.11.240.0");
   EXPECT_TRUE(exact_counts_known(build));
+}
+
+TEST(RealDataBuildReal, InstalledDataBuildIsKnown) {
+  const char* dir = std::getenv("FO4_DATA_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
+  EXPECT_NE(detect_game_build(dir).release, GameRelease::Unknown)
+      << "Fallout4.exe was not found next to the Data folder, or its version is not a known build";
 }
 
 TEST(RealDataBuild, EnvOverrideTakesPrecedence) {

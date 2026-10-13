@@ -46,6 +46,7 @@ TEST(NavmeshAuthoring, UneditedPluginWithNavmeshAndNaviRecordsWritesBackByteIden
   ASSERT_NE(find_record(plugin, test::navmesh_key(0x801)), nullptr);
   const auto original = test::original_bytes(plugin);
   ASSERT_FALSE(original.empty());
+  plugin.original_range.clear();
   EXPECT_EQ(write_plugin(plugin), original);
 }
 

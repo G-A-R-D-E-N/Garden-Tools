@@ -1101,3 +1101,27 @@ Creates a directory named with the process id and a process-wide atomic counter,
 ## Radicle/src/forms/static_collection.cpp:decode_static_collection_parts
 
 The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
+
+## .github/scripts/check_real_data_regex.py:real_data_tests
+
+Read-only guard for GT-229. It finds every gtest `TEST`, `TEST_F`, `TEST_P` and Catch `TEST_CASE` in `Radicle/tests/*.cpp` and `PluginEditTool/native/tests`, and counts a test as reading game data when its body calls `getenv("FO4_DATA_DIR")`, calls a file-local helper that does, or uses a fixture whose `SetUp` does. Each counted test's `Suite.Name` (or Catch title) must match `REAL_DATA_TEST_REGEX`, which the script reads from the `native-ci.yml` env block. The check runs in the Linux native job, so a game-data test that the real-data job would never select fails CI. Comments and string literals are blanked before brace matching, so a skip message that names `FO4_DATA_DIR` does not count as a read.
+
+## Radicle/tests/test_real_data_build.cpp:InstalledDataBuildIsKnown
+
+GT-247. Runs only when `FO4_DATA_DIR` is set and asserts `detect_game_build` does not return `Unknown`, so the real-data job fails when `Fallout4.exe` is not next to the Data folder instead of reporting green. The suite name `RealDataBuildReal` matches the `[A-Za-z0-9_]*Real\.` alternative. An exported `FO4_GAME_BUILD` overrides the exe read and satisfies the test.
+
+## Radicle/tests/test_real_data_build.cpp:MissingExeIsUnknown
+
+GT-245. Clears `FO4_GAME_BUILD` first, the same way `DetectReadsFalloutExeNextToDataFolder` does, so an exported override cannot turn the missing-exe case into a known build.
+
+## Radicle/tests/test_navmesh_authoring.cpp:UneditedPluginWithNavmeshAndNaviRecordsWritesBackByteIdentical
+
+GT-244. `write_plugin` returns the source bytes whenever `plugin_original_bytes` is non-empty, so the byte comparison could never fail. Clearing `plugin.original_range` (the pattern other round-trip tests use) forces the rebuild path before the comparison. The NAVI record in `navmesh_writer_fixture` is still a `ZZZZ` sentinel: a valid NAVI needs NVER and NVMI payloads, and the builder for those lives in an anonymous namespace in `test_navmesh.cpp`, so it was not copied here.
+
+## Radicle/tests/test_water_authoring.cpp:UnmodifiedWaterRecordsRoundTripByteIdentical
+
+GT-244. Same cause and fix as the navmesh test: the plugin's original range is cleared before `write_plugin`, so the WATR bytes are rebuilt and compared, not copied from the source.
+
+## Radicle/tests/test_sound_real.cpp:DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes
+
+GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The source bytes are taken before the clear, and the span stays valid because the copy keeps the shared `original_data` buffer.
