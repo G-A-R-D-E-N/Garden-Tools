@@ -513,6 +513,10 @@ Record-aware classification precedes generic signature-only handling for the cur
 
 Owner and union dwords are read before `fn(0)` because `remap_raw` rewrites offset 0 into the destination encoding; typing must use the pre-remap bytes with the old context.
 
+## Radicle/src/schema/vmad.cpp:walk_property
+
+The offset walker takes a `nested` flag. A struct (type 7) or struct array (type 17) reached while walking struct members throws `parse_error` ("nested VMAD struct"), so `scan_vmad` reports the record as failed and returns no offsets, the same fail-closed path as other malformed data. Recursion is therefore bounded at two struct levels on the scan path. The typed reader, `read_property`, still walks its own struct members with the default `nested` false, because the existing `test_vmad_array_elements.cpp:StructWithNonScalarMemberStaysDisengagedAndInSync` pins that a nested struct leaves the typed value disengaged and the stream in sync. Test: `Radicle/tests/test_vmad.cpp:NestedStructPropertyFailsClosedInTheWalker`.
+
 ## src/schema/vmad.cpp:inspect_quest_vmad
 
 QUST extras after the primary scripts: bind byte, fragment count, optional fragment script, then fragments `{u16 Stage, u16 unused, i32 StageIndex, u8, wstring, wstring}`, then alias extras `{object, i16 version, i16 objFormat, scripts}`. Object format 2 stores unused u16, alias i16, FormID. Rewrite patches alias i16 (format 2 only) and Stage u16. StageIndex bytes are preserved.
@@ -883,6 +887,10 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
 
+## Radicle/src/environment/sound.cpp:collect_descriptor
+
+Every call counts one visit against `k_max_sound_visits` (4096) and the emitted file list is checked against `k_max_sound_files` (4096) after each call, so a fan-out whose paths multiply cannot run unbounded. Both limits throw `WorldDecodeError` through `Reader::fail`, the same refusal as the depth and cycle checks, and the C ABI returns a non-OK status with a null list. Shipped data peaks at depth 2 and fan-out 10. Test: `Radicle/tests/test_sound.cpp:WideFanOutChainsStopAtTheVisitLimit`.
+
 ## Radicle/src/environment/package_procedure.cpp:decode_package_procedure
 
 Reads the subrecords after PKCU in three stages. Data inputs come first: each ANAM whose zstring is a registered input type runs to the next ANAM, UNAM or XNAM; then one bare UNAM u8 per input (an older shape with a BNAM and a 4-byte PNAM after each UNAM is also accepted); then an optional XNAM kept once per package. The tree follows, if present: a root ANAM Procedure, Sequence, Stacked, Simultaneous or Random. A container reads CITC with that many CTDA (each with optional CIS1 and CIS2), then PRCB (child count, flags), then its children, and then one optional PFO2 or PFOR. A leaf (ANAM Procedure) reads CITC and CTDA, then PNAM naming a registered procedure; the following subrecords up to ANAM, PFO2, PFOR, POBA, POEA, POCA, UNAM or XNAM are an opaque index range, and one optional PFO2 or PFOR directly after that range is consumed. After the tree, the UNAM, BNAM and PNAM triples are consumed as the template input-name table and not exposed; in shipped data they come only after the tree (RE-015, #520 comment 13144). The registered leaf list holds 30 names: the RE #407 comment 7894 names plus Wait and Say from comment 9746. A real-data walk of OG 1.10.163, AE 1.11.240 and NG 1.10.984 found every shipped leaf name inside this list, with 0 fallbacks. Any boundary that does not reconcile throws the internal Unreconciled marker, which the function catches and reports as decoded false with one opaque region from after PKCU to the first POBA, POEA or POCA. The depth limit of 64 bounds recursion on hostile records. Evidence: RE #407 comments 7894 (sections 3 and 5) and 9746, and RE-015.
@@ -897,7 +905,7 @@ Names for PLDT types 0 to 14 follow RE #407 comment 7894, with corrections from 
 
 ## Radicle/src/c_api_behavior.cpp:radicle_package_procedure_decode
 
-Flattens the tree into a node array in pre-order and an input array. Node children are pointers into per-node index arrays owned by the holder, and names are owned strings, so the pointers stay valid until radicle_package_procedure_free.
+Flattens the tree into a node array in pre-order and an input array. Node children are pointers into per-node index arrays owned by the holder, and names are owned strings, so the pointers stay valid until radicle_package_procedure_free. A non-PACK record returns `RADICLE_STATUS_PARSE_ERROR` with "expected a PACK record", the same status and text `radicle_package_decode` gives through `Reader`; it previously returned OK with `decoded` 0. Test: `Radicle/tests/test_behavior.cpp:ProcedureCAbiRefusesANonPackRecordLikePackDecode`.
 
 ## Radicle/tests/test_behavior_real.cpp:EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByteIdentical
 
@@ -954,7 +962,7 @@ C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_
 
 ## Radicle/tests/real_data_build.cpp:detect_game_build
 
-Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The first match wins, so the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
+Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The last match in file order wins: `scan_file_version_backward` walks from the end of the file, and the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
 
 ## Radicle/src/environment/sound.cpp:select_rate_file_index
 
@@ -1036,7 +1044,7 @@ Fallback for `FO4_DATA_DIR` when neither `FO4_PEX_CORPUS` nor `FO4_PEX_ARCHIVES`
 
 ## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
 
-The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
+The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter, as RE-013 (#403 c7887) proves for the GRAS water mode. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
 
 ## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
 

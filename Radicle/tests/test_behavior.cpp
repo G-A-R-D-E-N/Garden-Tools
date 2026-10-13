@@ -279,6 +279,20 @@ TEST_F(BehaviorRead, ProcedureCAbiExposesFlatNodesInputsAndNameTables) {
   EXPECT_STREQ(radicle_package_target_type_name(8), "alias collection item"); EXPECT_EQ(radicle_package_target_type_name(-1), nullptr);
 }
 
+TEST_F(BehaviorRead, ProcedureCAbiRefusesANonPackRecordLikePackDecode) {
+  write({{"IDLE", 0x800, {{"PKCU", words({1, 0, 9})}, {"ANAM", text("Procedure")}}}});
+  const auto path_text = path.string(); const char* paths[] = {path_text.c_str()}; radicle_env* raw_env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_env), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(raw_env, radicle_env_destroy);
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(raw_env, radicle_form_key{"Behavior.esm", 0x800}, &record), RADICLE_STATUS_OK);
+  const radicle_package_info* package = nullptr;
+  EXPECT_EQ(radicle_package_decode(raw_env, record, &package), RADICLE_STATUS_PARSE_ERROR);
+  const radicle_package_procedure_tree* tree = nullptr;
+  EXPECT_EQ(radicle_package_procedure_decode(raw_env, record, &tree), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(tree, nullptr);
+}
+
 TEST(PackageProcedure, ExpectedInputCountsMatchTheVerifiedLeaves) {
   EXPECT_EQ(fo4::env::expected_input_count("Travel"), 8u); EXPECT_EQ(fo4::env::expected_input_count("Sandbox"), 16u);
   EXPECT_EQ(fo4::env::expected_input_count("Sit"), 1u); EXPECT_EQ(fo4::env::expected_input_count("Sleep"), 1u);

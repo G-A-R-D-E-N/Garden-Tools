@@ -80,7 +80,7 @@ GardenEngine probe can exercise it.
 - Compound (`54651A43`): each DNAM child resolved recursively, concatenated in stored order. The Compound's own ANAM and rate blocks are not read.
 - AutoWeapon (`ED157AE3`): the BNAM base descriptor resolved recursively, then its rate files in stored order.
 
-Chains are capped at eight descriptor levels, and a descriptor that reaches one of its own ancestors is a cycle; a child shared by two branches is allowed. A missing or unresolved link, a marker without SDSC, a non-SNDR target, an unknown kind, a depth overflow or a cycle fails closed: the native call throws `WorldDecodeError`, the C ABI returns a non-OK status with a null list, and no partial list is returned.
+Chains are capped at eight descriptor levels, and a descriptor that reaches one of its own ancestors is a cycle; a child shared by two branches is allowed. A resolve also visits at most 4096 descriptors (`k_max_sound_visits`) and emits at most 4096 files (`k_max_sound_files`), so a wide fan-out cannot blow up. Shipped data peaks at depth 2 and fan-out 10. A missing or unresolved link, a marker without SDSC, a non-SNDR target, an unknown kind, a depth overflow, a visit or file limit overflow or a cycle fails closed: the native call throws `WorldDecodeError`, the C ABI returns a non-OK status with a null list, and no partial list is returned.
 
 Divergences from the runtime, recorded here and not changed in code:
 
