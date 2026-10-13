@@ -73,7 +73,7 @@ public:
   using std::runtime_error::runtime_error;
 };
 
-// Resolves only a signature that exactly one whole-payload row names; else use record plus path.
+// Resolves a signature only if exactly one schema row names it and that row is whole-payload, non-repeated, non-string; else use record plus path.
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept;
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     std::string_view path) noexcept;
