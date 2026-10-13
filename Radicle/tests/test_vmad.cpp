@@ -559,3 +559,31 @@ TEST(Vmad, CompletePayloadIsNotCaveated) {
   EXPECT_EQ(collection.records_with_incomplete_vmad, 0u);
   EXPECT_EQ(vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp")).size(), 1u);
 }
+
+TEST(Vmad, NestedStructPropertyFailsClosedInTheWalker) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "DemoScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "Outer");
+  vmad.u8(7);
+  vmad.u8(1);
+  vmad.u32(1);
+  wstring(vmad, "Inner");
+  vmad.u8(7);
+  vmad.u8(0);
+  vmad.u32(1);
+  wstring(vmad, "Target");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+
+  const auto plugin = fo4::read_plugin(
+      plugin_with_vmad_record("ACTI", 0x03000800, vmad), "Patch.esp");
+  const auto collection = fo4::collect_form_links_detailed(plugin);
+  EXPECT_EQ(collection.records_with_incomplete_vmad, 1u);
+  EXPECT_TRUE(vmad_hits(plugin, fo4::FormKey::parse("000800:Patch.esp")).empty());
+}

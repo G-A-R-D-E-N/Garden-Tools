@@ -248,6 +248,19 @@ TEST_F(SoundTest, ChainsStopAtTheDepthLimitOfEightDescriptors) {
   }
 }
 
+TEST_F(SoundTest, WideFanOutChainsStopAtTheVisitLimit) {
+  std::vector<Rec> records;
+  for (std::uint32_t level = 0; level < 7; ++level) {
+    Rec compound{"SNDR", 0x800 + level, {{"CNAM", words({0x54651A43})}}};
+    for (std::uint32_t i = 0; i < 20; ++i) compound.subs.push_back({"DNAM", words({0x801 + level})});
+    records.push_back(compound);
+  }
+  records.push_back({"SNDR", 0x807, {{"CNAM", words({0x1EEF540A})}, {"ANAM", text("leaf.wav")}}});
+  write(records);
+  const auto env = load();
+  EXPECT_THROW(fo4::env::resolve_sound_files(env, record(env, 0x800)), fo4::env::WorldDecodeError);
+}
+
 TEST_F(SoundTest, CAbiRejectsACycleAndNullArgumentsWithoutAList) {
   write({{"SNDR", 0x800, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x800})}}}});
   const auto name = path.string(); const char* names[] = {name.c_str()}; radicle_env* abi = nullptr;

@@ -103,10 +103,14 @@ above are OG 1.10.163 static analysis; NG was not checked for them. Evidence: `R
 
 Still open (#397 follow-ups and #343 comment 12950): the WTHR DATA flag byte (byte 11), including which bits
 the runtime tests; whether WTHR DATA bytes 1-2 are read anywhere; whether 0x656270 is the only consumer of
-CLMT byte 4 across the image (three loads unclassified); the shipped OG Fallout4.esm GMST values;
+CLMT byte 4 across the image (three loads unclassified);
 the low-priority LNAM 4-byte payload, NAM4 float[32] indices and NAM0 color-group mapping. Live in-engine
 observation of the override-release time, the transition length at DATA[3] = 0 and 255, and the effect of the
 game-setting values is not done. The live simulation is separate acceptance work.
+
+Answered: the shipped OG 1.10.163, NG 1.10.984 and AE 1.11.240 Fallout4.esm GMST values (fWeatherTransMax 3.0,
+fWeatherTransAccel 16.0, no fWeatherTransMin) are recorded in the GMST paragraphs above and in
+`Radicle/docs/WTHR_SEMANTIC_PROOF.md` (DATA transition delta).
 
 `src/environment/base_records.cpp:decode_climate` and `decode_weather` expose
 these optional fields through the existing environment decoders. C ABI 25
