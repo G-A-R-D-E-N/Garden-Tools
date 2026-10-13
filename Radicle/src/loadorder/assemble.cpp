@@ -251,6 +251,10 @@ AssembledLoadOrder assemble_load_order(std::span<const std::filesystem::path> pl
     result.findings.push_back({"duplicate_entry", duplicate.name,
                                "line " + std::to_string(duplicate.line) + " repeats an earlier entry"});
   }
+  for (const auto line : plugin_list.invalid_lines) {
+    result.findings.push_back({"invalid_name", "",
+                               "line " + std::to_string(line) + " has a control character in its name"});
+  }
   for (const auto& entry : plugin_list.entries) {
     if (!discovered.contains(PluginKey::from_filename(entry.name))) {
       result.findings.push_back({"missing_file", entry.name,

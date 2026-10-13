@@ -23,7 +23,8 @@ Evidence record: `RE-Work/subsystems/radicle-re-garden-tools/light-plugin-index-
 - UTF-8, with or without a BOM; CRLF or LF line endings.
 - Lines starting with `#` are skipped. Lines shorter than 2 characters after the line ending is removed are skipped.
 - A leading `*` marks the entry active and is stripped before the duplicate test. A bare name is listed but not active.
-- Exact duplicates (after `*` is stripped) are dropped and reported as `duplicate_entry`; the first occurrence keeps its active flag.
+- Duplicates (after `*` is stripped) are compared with the assembler's case folding (`fo4::PluginKey`), so `Mod.esp` and `*MOD.esp` are duplicates. The first occurrence keeps its active flag; later ones are dropped and reported as `duplicate_entry`.
+- A name containing a control character below 0x20 (such as a TAB) is skipped and reported as `invalid_name` with its line number.
 - File order is kept. Each entry records its 1-based physical line number.
 
 ## Fallout4.ccc
@@ -68,6 +69,7 @@ The data directory overload lists the directory. A second overload takes a list 
 |---|---|---|
 | `missing_file` | Listed in the plugin list or `Fallout4.ccc` but not in Data (zero-byte files count as missing) | No |
 | `duplicate_entry` | Plugin-list line repeating an earlier entry | No |
+| `invalid_name` | Plugin-list line whose name contains a control character below 0x20; the line is skipped | No |
 | `unreadable_header` | TES4 record unreadable; file dropped | No |
 | `missing_master` | Checked file lists a master that is not in Data | Yes |
 | `version_unchecked` | Checked file with HEDR version above 1.0 | No |
