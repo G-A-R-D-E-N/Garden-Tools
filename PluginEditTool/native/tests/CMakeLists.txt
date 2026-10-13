@@ -46,6 +46,12 @@ target_link_libraries(fo4ide_test_papyrus_corpus PRIVATE fo4ide_papyrus Catch2::
 fo4ide_enable_warnings(fo4ide_test_papyrus_corpus)
 fo4ide_enable_sanitizers(fo4ide_test_papyrus_corpus)
 catch_discover_tests(fo4ide_test_papyrus_corpus PROPERTIES TIMEOUT 300)
+# The differential compiles every vanilla pair with a fresh index each; give it 3x the corpus headroom.
+add_executable(fo4ide_test_papyrus_differential unit/PapyrusDifferentialTests.cpp)
+target_link_libraries(fo4ide_test_papyrus_differential PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_papyrus_differential)
+fo4ide_enable_sanitizers(fo4ide_test_papyrus_differential)
+catch_discover_tests(fo4ide_test_papyrus_differential PROPERTIES TIMEOUT 900)
 fo4ide_add_test(fo4ide_test_logging unit/LoggerTests.cpp fo4ide_logging)
 fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
 fo4ide_add_test(fo4ide_test_material unit/MaterialServiceTests.cpp fo4ide_material)
@@ -102,6 +108,7 @@ endforeach()
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginStringsTests.cpp
     unit/RadiclePluginWorklistTests.cpp
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp

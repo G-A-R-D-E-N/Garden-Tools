@@ -2119,3 +2119,78 @@ A rank title with no inline text but a string ID is emitted as `{"stringId": id}
 ## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp:createRecord — LVLI, LVLN and FACT payloads
 
 `createRecord` accepts LVLI and LVLN through `fo4::forms::create_leveled_list`, with `editorId`, `chanceNone`, `maxCount` and `flags` (each 0..255). It accepts FACT through `fo4::forms::create_faction`, with `editorId`, `fullName` and a u32 `flags`. A list payload takes no entries: entries are added afterwards with the leveled list entry edit in RadiclePluginLeveled.cpp. Creator errors map to `LeveledListCreateFailed` and `FactionCreateFailed`. LVSP was already accepted through `create_leveled_spell`, so its branch is unchanged. `LeveledSpellError` is an alias of `LeveledListError`, so the catch for it now picks its code from the signature. Every other raw signature is still refused with `RecordCreationRequiresSchema`.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:TypedRecordPanel — one panel per family
+
+RecordView shows the Typed Fields tab only for `TYPED_RECORD_TYPES` (backend.ts). The panel dispatches on `matrix.Type`: LVLI, LVLN and LVSP get settings and an entries table; NPC_ gets factions, perks and inventory; FACT gets relations and ranks; WEAP gets damage types with no edit controls. The panel stays in one file, well under 750 lines.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — read keyed by record, refresh after edit
+
+Reads come from the winning version (the native `Get*` reads, e.g. `GetLeveledList` in `PluginBackendTarget.cpp`), while edits go to `plugin`, the plugin the record was opened from. So when `plugin !== matrix.Winner`, `TypedRecordPanel` is read-only: the edit controls are hidden, the settings inputs are disabled, and a note names the winner. Loaded data carries the FormKey it was read for, so a different record never offers the previous record's rows as the base of an edit. A successful edit clears the error, shows the native message and calls `onChanged` (RecordView's reload). That reload replaces the matrix object, which re-runs the read effect (deps `formKey`, `matrix`, `read`), so the rows also refresh after outside writes. After an edit, rows refresh only when that conflict-matrix reload replaces the matrix; if the reload fails, the panel keeps the old rows until the next successful reload. `busy` is true from the start of an edit until `onChanged` resolves and disables the action buttons. A failed edit shows `errorText(e)` after the "... edit failed:" prefix in a `role="alert"` error and does not refresh.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:ListEditor — set keeps fields the form does not show
+
+Set sends `{...rows[index], ...typed fields}`. Fields the form does not show (LVLI `extra`, NPC inventory `extra`, FACT rank titles and `hasInsignia`) therefore round-trip from the read. A FACT rank `{rawId}` title is passed back unchanged, which the native `rawIdTitle` rule keeps on set. Add sends only the typed fields. A blank numeric field becomes NaN, which JSON turns into null, so the native integer check refuses it instead of writing 0.
+
+## PluginEditTool/web/src/backend.ts:EditLeveledListEntry — value is an object, not a JSON string
+
+`value` is passed as a JS object. The native handlers read `support::argumentAt(arguments, n)` as JSON (`leveledEntryFromJson`, `npcFactionFromJson` and the other typed-record parsers), the same way `CreateRecord` takes `payload`. The index is required for every LVLI op because `editLeveledListEntry` rejects a missing index first. For NPC and FACT, `editNpcEntries` and `editFactionEntries` only require it for set and remove.
+
+## PluginEditTool/web/src/backend.ts:TYPED_RECORD_TYPES — read types are type aliases
+
+The typed-record read shapes are `type` aliases, not interfaces, so `ListEditor` rows typed `Record<string, unknown>[]` accept them without an index signature. The Edit methods return the native success message as a string, as the other Backend methods do.
+
+## PluginEditTool/web/src/RecordView.tsx:RecordView — Typed Fields tab
+
+The tab is added only for typed record types. The multi-line `backend` type import was joined onto one line to keep RecordView.tsx at 750 lines.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:readTables — sibling string tables (#32)
+
+Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next to the loaded plugin, with the same symlink and regular-file check as `questinternal::loadLocalizedQuestTables`, and parses each found table with `fo4::localization::read_string_table_file`. A missing table is skipped; a table that fails to parse fails the whole call with `StringTableInvalid`. Limits: it reads only `<plugin dir>/Strings/<stem>_<lang>.<ext>` with exact case; it reads no BA2 archives, so base-game tables packed in archives are not listed; it does not scan other mod folders; and unsaved staged quest localization is not reflected.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — paging (#32)
+
+`limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000. The filter matches the text case-insensitively (ASCII) or the decimal ID as a substring.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:displayText — text encoding (#32)
+
+English tables are CP1252, the encoding `encodeLocalizedText` writes. Other languages are UTF-8; bytes that are not valid UTF-8 are decoded as CP1252 so the JSON dump cannot throw.
+
+## PluginEditTool/native/apps/fo4ide/main.cpp:main — strings target (#32)
+
+`strings` is registered as a `PluginBackendTarget` namespace, so `strings.<Method>` falls through to the backend operations `strings.ListStringTables`, `strings.GetStrings` and `strings.LookupString`. All three take the backend read lock and never write.
+
+## PluginEditTool/web/src/LocalizationPanel.tsx:LocalizationPanel — read-only view (#32)
+
+Plugin choices come from `appInterop.GetPlugins`, which lists every loaded plugin, so base-game masters can be browsed (`masters.GetPlugins` only lists editable ones). Each table and page load is a separate call guarded by a sequence number, so a late reply for an earlier plugin, table or page cannot replace the current one. The `strings` host object exists only in the native HTTP bridge (`hostbridge.ts` HOST_OBJECTS); without it the panel shows the unavailable message.
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:TEST_CASE — compile differential gate (#78 C12)
+
+Port of `PluginEditTool/FO4RecordEditor.Core.Tests/PapyrusDifferentialTests.cs`. Pairs come from `.pex` files under the `FO4RE_PEX_CORPUS` roots (falling back to `FO4_PEX_CORPUS`), each paired with its `.psc` by `sourceFor`, which mirrors the C# `SourceFor` (`Source/User`, then `Source`, with a leading `Compiled` directory skipped). A pair is kept only when the `.pex` header is Fallout 4 (magic, format 3.9, game id 2) and its file name is first seen, as in C# `Pairs`.
+
+The compile matches C# `PapyrusCompiler.CompileFile` through `fo4ide::papyrus::compileScript`, with `RootsFor` as the import roots plus `FO4RE_PSC_ROOTS`. `FO4RE_PEX_RELEASE=1` turns off debug-only and beta-only code, as the C# `EmitDebugOnlyCode`/`EmitBetaOnlyCode` switches do. Debug info stays on (default, as in C#).
+
+The comparison is the object-level one of C# `PexComparer.FirstDifference`: parent, states and functions, then properties. C# also compares property `Get`/`Set` handlers; the C++ adds that step in `handlerDifference`. The C# does not compare header fields (timestamps, user, computer, source name) or debug info, so this port does not either.
+
+Refusals group by the first error diagnostic code, and differences by class (`differenceClass`). The threshold is 95% identical of compiled pairs, with at least one compiled, as in C#.
+
+## PluginEditTool/native/tests/helpers/CorpusRoots.hpp:rootsFromEnv — root list separator
+
+Root lists split on `;` on Windows and `:` elsewhere, matching C# `Path.PathSeparator`. `rootListSeparator` owns that choice for both `PapyrusCorpusTests.cpp` and `PapyrusDifferentialTests.cpp`. `enumerateFiles` replaces the corpus-local `enumeratePsc` with an extension argument, so the `.pex` walk shares its symlink and sort rules.
+
+## PluginEditTool/native/tests/helpers/PexComparer.hpp:functionDifference — shared per-function comparison
+
+The per-function comparison that `firstDifference` used inline is now `functionDifference`, so the differential test can compare property handlers with the same rules. Messages from `firstDifference` are unchanged except that the `Name: ` prefix is added by the caller.
+
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getProblems — stable row codes (#31)
+
+Every per-record problem row carries a `Code`, a `Detail`, a `Severity` and a `Description`. `Detail` carries the same value as `CheckFinding::detail` (read from `PreflightIssue::code`): the preflight issue's `code` string (for example `duplicate_scalar_subrecord`) for `schema_preflight` rows, and empty for `unresolved_link` rows. The codes are Radicle's `fo4::check_code_name` names, the same strings the whole-plugin Check for Errors path emits, so one code means one thing in both views. Each row source maps to one code, so no PET-local code was needed:
+
+- `unresolved_link` (`fo4::CheckCode::unresolved_link`): a FormLink whose target has no winning record, emitted as `critical` with the `Missing <sig> FormLink target` description.
+- `schema_preflight` (`fo4::CheckCode::schema_preflight`): every `fo4::schema::preflight_record` issue, whether `critical` (error) or `warning`, with `Detail` set to the issue's `code` string.
+
+`PluginEditTool/native/tests/unit/RadiclePluginBackendTests.cpp:Radicle plugin backend reports dangling FormLinks` and `PluginEditTool/native/tests/unit/RadiclePluginPreflightTests.cpp:GetProblems reports duplicate schema scalar storage as critical` pin the two codes. The web side is `PluginEditTool/web/src/ProblemsList.tsx:ProblemsList`, which shows the code on each row and filters by it; `RecordView.tsx` renders it in the Problems drawer. `RecordProblem.Code` in `PluginEditTool/web/src/backend.ts` is an optional `string` (the legacy Mutagen backend omits it), so a new code needs no web type change.
+
+## PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile assembles an OG-style install from the official DLC masters alone
+
+Covers `Mo2Profile.cpp:readProfile` for an OG-style install: Fallout4.esm and the six official DLC masters, no Creation Club plugins, no `Fallout4.ccc`, one active user plugin. `readProfile` always passes `OfficialTable::ae`, so this checks the AE table against OG data. Radicle's `load_order_files.hpp` has `OfficialTable { og_ng, ae }` and no NG-specific table: `og_ng` is the first seven AE names (`Radicle/src/loadorder/assemble.cpp:official_names`, `DLCUltraHighResolution.esm` included), and LOAD_ORDER_FILES.md says NG shares it. So an NG case would repeat this one and is not added. `assemble.cpp:assemble_load_order` skips absent official names silently, with no finding and no failure. The AE-only `DLCDummy10thAnniversary.esm` and the absent `DLCUltraHighResolution.esm` therefore do not change the result. The AE table only differs from `og_ng` when `DLCDummy10thAnniversary.esm` is present, which an OG install does not ship. Not built or run locally (CI only). The partial-DLC case (`Mo2ProfileTests.cpp` second OG test) lists only `DLCRobot.esm` and `DLCCoast.esm` in plugins.txt with `DLCworkshop01`-`03` and no `DLCNukaWorld.esm` on disk, and expects the official masters present on disk to load in AE official order without any plugins.txt entry for them.

@@ -9,7 +9,7 @@ it('keeps native row metadata through edit, reorder and browser JSON transport',
     _native: { ctda: [1, 2, 3], cis1: 'first', cis2: null } };
   const second = { ...first, operator: '==', value: 1,
     _native: { ctda: [4, 5, 6], cis1: 'second', cis2: null } };
-  const set = vi.fn(async (..._arguments: string[]) => 'staged');
+  const set = vi.fn<(...args: string[]) => Promise<string>>(async () => 'staged');
   vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
     GetConditionsAt: vi.fn(async () => JSON.stringify([first, second])),
     GetConditionFunctions: vi.fn(async () => '["GetScale"]'),
@@ -38,7 +38,7 @@ it('keeps native row metadata through edit, reorder and browser JSON transport',
 
 it('drops the reference when a row moves off Reference run-on', async () => {
   const row = { function: 'GetScale', operator: '==', value: 1, runOn: 'Reference', reference: '000803:Patch.esp' };
-  const set = vi.fn(async (..._arguments: string[]) => 'staged');
+  const set = vi.fn<(...args: string[]) => Promise<string>>(async () => 'staged');
   vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
     GetConditionsAt: vi.fn(async () => JSON.stringify([row])),
     GetConditionFunctions: vi.fn(async () => '["GetScale"]'),
@@ -60,7 +60,7 @@ it('drops the reference when a row moves off Reference run-on', async () => {
 it('marks runOn edited when a preserved row leaves Reference run-on', async () => {
   const row = { function: 'GetScale', operator: '==', value: 1, runOn: 'Reference', reference: '000803:Patch.esp',
     _native: { ctda: [1, 2, 3], cis1: null, cis2: null } };
-  const set = vi.fn(async (..._arguments: string[]) => 'staged');
+  const set = vi.fn<(...args: string[]) => Promise<string>>(async () => 'staged');
   vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
     GetConditionsAt: vi.fn(async () => JSON.stringify([row])),
     GetConditionFunctions: vi.fn(async () => '["GetScale"]'),
