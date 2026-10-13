@@ -301,6 +301,148 @@
       "localized_subrecords": []
     },
     {
+      "signature": "GLOB",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FNAM", "minimum": 0, "maximum": 1}, {"signature": "FLTV", "minimum": 1, "maximum": 1, "default": "00000000"}]},
+      "fields": [
+        {"path": "GLOB\\Type", "label": "Type", "kind": "scalar", "subrecord": "FNAM", "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "Unknown"}, {"value": 115, "name": "Short"}, {"value": 108, "name": "Long"}, {"value": 102, "name": "Float"}, {"value": 98, "name": "Boolean"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "GLOB\\Value", "label": "Value", "kind": "scalar", "subrecord": "FLTV", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "GMST",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 1, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00000000"}]},
+      "fields": [
+        {"path": "GMST\\FloatValue", "label": "Float value", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "when": {"subrecord": "EDID", "offset": 0, "storage": "u8", "equals": [102]}, "insertion": "existing_only"},
+        {"path": "GMST\\IntegerValue", "label": "Integer value", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "when": {"subrecord": "EDID", "offset": 0, "storage": "u8", "equals": [105]}, "insertion": "existing_only"},
+        {"path": "GMST\\BooleanValue", "label": "Boolean value", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "when": {"subrecord": "EDID", "offset": 0, "storage": "u8", "equals": [98]}, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "KYWD",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "NNAM", "minimum": 0, "maximum": 1}]},
+      "fields": [
+        {"path": "KYWD\\Notes", "label": "Notes", "kind": "string", "subrecord": "DNAM", "insertion": "existing_only"},
+        {"path": "KYWD\\Type", "label": "Type", "kind": "scalar", "subrecord": "TNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "None"}, {"value": 1, "name": "Component Tech Level"}, {"value": 2, "name": "Attach Point"}, {"value": 3, "name": "Component Property"}, {"value": 4, "name": "Instantiation Filter"}, {"value": 5, "name": "Mod Association"}, {"value": 6, "name": "Sound"}, {"value": 7, "name": "Anim Archetype"}, {"value": 8, "name": "Function Call"}, {"value": 9, "name": "Recipe Filter"}, {"value": 10, "name": "Attraction Type"}, {"value": 11, "name": "Dialogue Subtype"}, {"value": 12, "name": "Quest Target"}, {"value": 13, "name": "Anim Flavor"}, {"value": 14, "name": "Anim Gender"}, {"value": 15, "name": "Anim Face"}, {"value": 16, "name": "Quest Group"}, {"value": 17, "name": "Anim Injured"}, {"value": 18, "name": "Dispel Effect"}], "minimum": 0, "maximum": 18, "insertion": "existing_only"},
+        {"path": "KYWD\\LegacyDisplayName", "label": "Display name (legacy)", "kind": "string", "subrecord": "NNAM", "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "KYWD\\AttractionRule", "label": "Attraction rule", "subrecord": "DATA", "offset": 0, "targets": ["AORU"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "KSSM",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "ENAM", "minimum": 0, "maximum": 1}, {"signature": "VNAM", "minimum": 0, "maximum": 1}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "KNAM", "minimum": 0, "maximum": 65535}, {"signature": "RNAM", "minimum": 0, "maximum": 65535}]},
+      "fields": [
+        {"path": "KSSM\\VATSThreshold", "label": "VATS threshold", "kind": "scalar", "subrecord": "TNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "KSSM\\PrimaryDescriptor", "label": "Primary descriptor", "subrecord": "DNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "KSSM\\ExteriorTail", "label": "Exterior tail", "subrecord": "ENAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "KSSM\\VATSDescriptor", "label": "VATS descriptor", "subrecord": "VNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "KSSM\\Keywords", "label": "Keywords", "subrecord": "KNAM", "targets": ["KYWD"], "nullable": false, "mutation": "appendable"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "CLFM",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "FNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "CTDA", "minimum": 0, "maximum": 65535}]},
+      "fields": [
+        {"path": "CLFM\\ColorIndex", "label": "Color/Index", "kind": "scalar", "subrecord": "CNAM", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "CLFM\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "FNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Playable"}, {"bit": 1, "name": "Remapping Index"}, {"bit": 2, "name": "Extended LUT"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "LCRT",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "TNAM", "minimum": 0, "maximum": 1}]},
+      "fields": [
+        {"path": "LCRT\\Type", "label": "Type", "kind": "scalar", "subrecord": "TNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "None"}, {"value": 1, "name": "Component Tech Level"}, {"value": 2, "name": "Attach Point"}, {"value": 3, "name": "Component Property"}, {"value": 4, "name": "Instantiation Filter"}, {"value": 5, "name": "Mod Association"}, {"value": 6, "name": "Sound"}, {"value": 7, "name": "Anim Archetype"}, {"value": 8, "name": "Function Call"}, {"value": 9, "name": "Recipe Filter"}, {"value": 10, "name": "Attraction Type"}, {"value": 11, "name": "Dialogue Subtype"}, {"value": 12, "name": "Quest Target"}, {"value": 13, "name": "Anim Flavor"}, {"value": 14, "name": "Anim Gender"}, {"value": 15, "name": "Anim Face"}, {"value": 16, "name": "Quest Group"}, {"value": 17, "name": "Anim Injured"}, {"value": 18, "name": "Dispel Effect"}], "minimum": 0, "maximum": 18, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "VTYP",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 1, "maximum": 1, "default": "00"}]},
+      "fields": [
+        {"path": "VTYP\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DNAM", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Allow Default Dialog"}, {"bit": 1, "name": "Female"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "DMGT",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}]},
+      "fields": [],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "AACT",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}]},
+      "fields": [
+        {"path": "AACT\\Notes", "label": "Notes", "kind": "string", "subrecord": "DNAM", "insertion": "existing_only"},
+        {"path": "AACT\\Type", "label": "Type", "kind": "scalar", "subrecord": "TNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "None"}, {"value": 1, "name": "Component Tech Level"}, {"value": 2, "name": "Attach Point"}, {"value": 3, "name": "Component Property"}, {"value": 4, "name": "Instantiation Filter"}, {"value": 5, "name": "Mod Association"}, {"value": 6, "name": "Sound"}, {"value": 7, "name": "Anim Archetype"}, {"value": 8, "name": "Function Call"}, {"value": 9, "name": "Recipe Filter"}, {"value": 10, "name": "Attraction Type"}, {"value": 11, "name": "Dialogue Subtype"}, {"value": 12, "name": "Quest Target"}, {"value": 13, "name": "Anim Flavor"}, {"value": 14, "name": "Anim Gender"}, {"value": 15, "name": "Anim Face"}, {"value": 16, "name": "Quest Group"}, {"value": 17, "name": "Anim Injured"}, {"value": 18, "name": "Dispel Effect"}], "minimum": 0, "maximum": 18, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "AACT\\AttractionRule", "label": "Attraction rule", "subrecord": "DATA", "offset": 0, "targets": ["AORU"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "DFOB",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 0, "maximum": 1}]},
+      "fields": [],
+      "formlink_lists": [
+        {"path": "DFOB\\Object", "label": "Object", "subrecord": "DATA", "targets": "*", "nullable": true, "mutation": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "OTFT",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "INAM", "minimum": 0, "maximum": 65535}]},
+      "fields": [],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "CMPO",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "OBND", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "CUSD", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 0, "maximum": 1}, {"signature": "MNAM", "minimum": 0, "maximum": 1}, {"signature": "GNAM", "minimum": 0, "maximum": 1}]},
+      "fields": [
+        {"path": "CMPO\\AutoCalcValue", "label": "Auto calc value", "kind": "scalar", "subrecord": "DATA", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "CMPO\\ScrapItem", "label": "Scrap item", "subrecord": "MNAM", "offset": 0, "targets": ["MISC"], "nullable": false, "insertion": "existing_only"},
+        {"path": "CMPO\\ModScrapScalar", "label": "Mod scrap scalar", "subrecord": "GNAM", "offset": 0, "targets": ["GLOB"], "nullable": false, "insertion": "existing_only"},
+        {"path": "CMPO\\CraftingSound", "label": "Crafting sound", "subrecord": "CUSD", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "DLBR",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "QNAM", "minimum": 0, "maximum": 1}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "SNAM", "minimum": 0, "maximum": 1}]},
+      "fields": [
+        {"path": "DLBR\\Category", "label": "Category", "kind": "scalar", "subrecord": "TNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Player"}, {"value": 1, "name": "Command"}], "minimum": 0, "maximum": 1, "insertion": "existing_only"},
+        {"path": "DLBR\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Top-Level"}, {"bit": 1, "name": "Blocking"}, {"bit": 2, "name": "Exclusive"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "DLBR\\Quest", "label": "Quest", "subrecord": "QNAM", "offset": 0, "targets": ["QUST"], "nullable": false, "insertion": "existing_only"},
+        {"path": "DLBR\\StartingTopic", "label": "Starting topic", "subrecord": "SNAM", "offset": 0, "targets": ["DIAL"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "DLVW",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "QNAM", "minimum": 0, "maximum": 1}, {"signature": "BNAM", "minimum": 0, "maximum": 1}, {"signature": "ENAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}]},
+      "fields": [],
+      "formlink_fields": [
+        {"path": "DLVW\\Quest", "label": "Quest", "subrecord": "QNAM", "offset": 0, "targets": ["QUST"], "nullable": false, "insertion": "existing_only"},
+        {"path": "DLVW\\Branch", "label": "Branch", "subrecord": "BNAM", "offset": 0, "targets": ["DLBR"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
       "signature": "EXPL",
       "fields": [
         {

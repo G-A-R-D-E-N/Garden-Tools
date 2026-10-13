@@ -1469,3 +1469,41 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
+
+## Radicle/schema/fallout4/fields.json:R1 config records
+
+Batch R1 adds rows and authoring for GLOB, GMST, KYWD, KSSM, CLFM, LCRT, VTYP, DMGT, AACT, DFOB, OTFT, CMPO, DLBR and DLVW, placed directly after CLMT. Layouts are xEdit `Core/wbDefinitionsFO4.pas` at pin 01a11729: GLOB 6921-6934, GMST 6936-6945, KYWD 6947-6958, LCRT 6962-6966, AACT 6970-6981, KSSM 12387-12397, CLFM 9572-9588, VTYP 7950-7955, DMGT 12310-12318, DFOB 12304-12307, OTFT 9357-9360, CMPO 12294-12302, DLBR 8778-8793, DLVW 8819-8824. The keyword type enum is `wbKeywordTypeEnum` (4844-4866); the bool names are `wbBoolEnum` (`Core/wbDefinitionsCommon.pas:7240`).
+
+Corpus counts come from a read-only scan of Fallout4.esm and the six official DLC masters. Records per type: GLOB 1918, GMST 2051, KYWD 4337, KSSM 197, CLFM 166, LCRT 913, VTYP 732, DMGT 8, AACT 175, DFOB 446, OTFT 477, CMPO 33, DLBR 0, DLVW 1. A subrecord is `minimum 1` only when xEdit requires it and every record has it: GLOB FLTV (1918 of 1918), GMST EDID and DATA (2051 of 2051), CLFM FNAM (166 of 166), LCRT CNAM (913 of 913), VTYP DNAM (732 of 732). xEdit requires these but the corpus does not, so they stay at 0: GLOB FNAM (784 of 1918), KYWD CNAM (4305 of 4337) and TNAM (4290 of 4337), LCRT TNAM (904 of 913), AACT CNAM (107 of 175) and TNAM (94 of 175). DLBR QNAM and SNAM are required in xEdit, but no vanilla DLBR record exists, so they stay at 0. Every subrecord the corpus holds is listed in its record's authoring, which the real-data test checks.
+
+GLOB: `Type` is the FNAM u8 enum (`wbInteger(FNAM, 'Type', itU8, wbEnum`, line 6926) with Unknown 0, Short 's', Long 'l', Float 'f', Boolean 'b'. `Value` is FLTV f32 (line 6933, `wbFloat`). xEdit reads FLTV as a float for every type, so FNAM does not change its width and no `when` gate is needed. Corpus FNAM values: 's' 743, 'f' 40, 'l' 1.
+
+GMST: DATA is a union chosen by the first character of EDID (`wbGMSTUnionDecider`, `Core/wbDefinitionsCommon.pas:5620-5640`): 's' is a string, 'i' Int32, 'f' float, 'b' a u32 bool, and any other first character falls back to Int32. The rows are `FloatValue` (f32, `when` EDID byte 0 equals 102), `IntegerValue` (i32, equals 105) and `BooleanValue` (u32 enum False/True, equals 98). Corpus first letters: s 1216, f 744, i 80, u 10, b 1. Not covered: the 's' branch (localized string DATA, with no gate kind for localized values) and the Int32 fallback for every letter other than i. The fallback would need more than the 8 `when` values, so the 10 'u' records in the corpus get no integer row.
+
+KYWD, AACT, LCRT: `Type` is TNAM u32 enum from `wbKeywordTypeEnum` (0..18; KYWD corpus values stay in that range). KYWD `Notes` is DNAM and `Display name (legacy)` is NNAM, both strings; every corpus string is NUL-terminated. `AttractionRule` is DATA, a FormLink to AORU (line 6957), not nullable because the xEdit list has no NULL. AACT `Notes` (DNAM) and `AttractionRule` (DATA, line 6980) follow the same pattern. Not covered: CNAM colour (`wbByteRGBA`, a 4-byte colour with no colour kind).
+
+KSSM: `PrimaryDescriptor`, `ExteriorTail` and `VATSDescriptor` are FormLinks to SNDR (DNAM 12389, ENAM, VNAM). `VATSThreshold` is TNAM f32 (line 12392). `Keywords` is a KNAM FormLink list to KYWD (`appendable`, since the xEdit array can be empty). Not covered: RNAM `Sounds` (`wbRArrayS` of `wbStructSK`, line 12394), a struct array.
+
+CLFM: `ColorIndex` is CNAM u32 identity (`wbInteger(CNAM, 'Color/Index', itU32`, line 9580). The colour and remapping union is commented out at 9579-9581, so CNAM is read as a plain integer. `Flags` is FNAM u32 with Playable bit 0, Remapping Index bit 1 and Extended LUT bit 2 (lines 9582-9585). Corpus values are 0, 1, 3 and 7, all inside those bits. Not covered: CTDA conditions (`wbConditions`, line 9588).
+
+VTYP: `Flags` is DNAM u8 with Allow Default Dialog bit 0 and Female bit 1 (lines 7952-7955). Corpus values are 0 to 3.
+
+DMGT: no rows. DNAM is `wbUnion` on `wbFormVersionDecider(78)` (line 12313): an AVIF array before form version 78 and an AVIF plus SPEL struct array after it. Not covered.
+
+DFOB: `Object` is DATA, a plain `wbFormID` with no target list (line 12306). It is modeled as a FormLink list with the wildcard target `*` (the same wildcard FLST uses), nullable because `wbFormID` has no NULL check.
+
+OTFT: no rows. INAM is a repeated form ID array (`wbArrayS`, line 9359). The brief says arrays are left out. It is a per-subrecord FormLink list, which is a supported kind if the lead wants it.
+
+CMPO: `AutoCalcValue` is DATA u32. `ScrapItem` (MNAM, `wbFormIDCk(MNAM, 'Scrap Item', [MISC])`, line 12300), `ModScrapScalar` (GNAM, GLOB) and `CraftingSound` (CUSD, SNDR, line 5263) are FormLinks. Not covered: OBND, which is the `wbObjectBounds` struct.
+
+DLBR: `Category` is TNAM u32 enum (Player 0, Command 1). `Flags` is DNAM u32 with Top-Level, Blocking and Exclusive at bits 0, 1 and 2. The xEdit labels are `{1}`, `{2}`, `{3}` (lines 8788 onward), so this uses the bit values from the Mutagen `DialogBranch.Flag` enum (`PluginEditTool/Mutagen/Mutagen.Bethesda.Fallout4/Records/Major Records/DialogBranch.cs` lines 8-10: 0x01, 0x02, 0x04). Unverified against data: the corpus has no DLBR records. `Quest` (QNAM, line 8780) and `StartingTopic` (SNAM) are FormLinks.
+
+DLVW: `Quest` (QNAM) and `Branch` (BNAM, DLBR) are FormLinks. ENAM and DNAM are `wbUnused` (line 8823) and are not modeled.
+
+## Radicle/tests/test_config_records.cpp:ConfigRecordsSynthetic
+
+One synthetic plugin with no masters holds a record for each batch type plus the AORU, SNDR, MISC, QUST and DIAL targets. Each test edits one scalar, string or link per record through `set_record_scalar`, `set_record_string`, `set_record_formlink_field` or `set_record_formlink_list_element`, then writes, re-reads and compares the payload bytes. The GMST case also checks that a `when`-gated row returns `subrecord_missing` when the EDID letter does not match. DMGT and OTFT have no rows, so the last test checks that they expose none.
+
+## Radicle/tests/test_config_records_real.cpp:ConfigRecordsReal
+
+For every batch record in each official master, the test checks that every subrecord is listed in the authoring table and that each subrecord count falls within its minimum and maximum. It also decodes every scalar row against its subrecord payloads and calls `record_field_count` for every FormLink row. Records of these types are counted, and Fallout4.esm must contain at least one. The masters have no DLBR records, so DLBR is covered only by the synthetic test.
