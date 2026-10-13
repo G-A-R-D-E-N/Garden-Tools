@@ -74,6 +74,19 @@ std::vector<std::byte> payload_bytes(std::span<const std::uint8_t> values) {
   return data;
 }
 
+std::vector<std::byte> generated_default(Signature record, Signature subrecord) {
+  const auto constraint = schema::record_authoring_constraint(record);
+  if (!constraint.has_value()) {
+    throw FactionError(record.to_string() + " authoring constraints are missing");
+  }
+  for (const auto& entry : schema::authoring_subrecords(*constraint)) {
+    if (entry.signature == subrecord && entry.has_default()) {
+      return payload_bytes(entry.default_bytes());
+    }
+  }
+  throw FactionError(record.to_string() + " " + subrecord.to_string() + " authoring default is missing");
+}
+
 void require_reaction(std::uint32_t value) {
   if (value > static_cast<std::uint32_t>(FactionCombatReaction::friendly)) {
     throw FactionError("FACT XNAM group combat reaction is outside 0..3");
@@ -313,8 +326,8 @@ FormKey create_faction(Plugin& plugin,
   std::vector<std::byte> flag_bytes;
   append_u32(flag_bytes, flags);
   subrecords.push_back(make_subrecord(k_data, std::move(flag_bytes)));
-  subrecords.push_back(make_subrecord(k_crva, payload_bytes(schema::k_generated_authoring_default_24)));
-  subrecords.push_back(make_subrecord(k_venv, payload_bytes(schema::k_generated_authoring_default_25)));
+  subrecords.push_back(make_subrecord(k_crva, generated_default(k_fact, k_crva)));
+  subrecords.push_back(make_subrecord(k_venv, generated_default(k_fact, k_venv)));
 
   const auto key = create_local_record(next, k_fact, std::move(subrecords));
   for (const auto& issue : schema::preflight_authoring_record(next, key)) {

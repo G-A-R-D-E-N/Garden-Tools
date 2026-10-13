@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 72, L1 16, L2 16, L3 1, L4 42.
 
 ### Per-signature coverage
 
@@ -49,7 +49,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
 | ACTI | 5611 | - | - | - | - | - | - | yes | environment/base_records | - | - | L2 |
 | ADDN | 7796 | - | - | - | - | - | - | - | - | - | - | L0 |
-| AECH | 12206 | - | - | - | - | - | - | - | - | - | - | L0 |
+| AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | AMDL | 12246 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AMMO | 5741 | - | - | - | - | - | - | yes | - | - | - | L1 |
@@ -58,7 +58,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | - | 1 | L4 |
 | ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | - | 1 | L4 |
 | ARTO | 9362 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| ASPC | 7057 | - | - | - | - | - | - | - | - | - | - | L0 |
+| ASPC | 7057 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AVIF | 7826 | - | - | - | - | - | - | - | - | - | 1 | L0 |
 | BNDS | 12280 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
@@ -135,7 +135,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | MSTT | 7067 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | MSWP | 12437 | - | - | - | - | - | - | - | environment/material_swap | - | - | L2 |
 | MUSC | 8665 | 4 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| MUST | 8795 | - | - | - | - | - | - | - | - | - | - | L0 |
+| MUST | 8795 | 6 | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -162,23 +162,23 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | REFR | 11347 | 2 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RELA | 8848 | - | - | - | - | - | - | - | - | - | - | L0 |
-| REVB | 9593 | - | - | - | - | - | - | - | - | - | - | L0 |
+| REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RFGP | 12582 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SCCO | 12593 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | - | - | - | - | - | - | - | forms/static_collection | - | - | L2 |
-| SCSN | 12650 | - | - | - | - | - | - | - | - | - | - | L0 |
+| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | SMBN | 8720 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SMEN | 8762 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SMQN | 8735 | - | - | - | - | - | - | - | - | - | - | L0 |
-| SNCT | 9469 | - | - | - | - | - | - | - | - | - | - | L0 |
+| SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | SNDR | 9406 | 10 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
-| SOPM | 9489 | - | - | - | - | - | - | - | - | - | - | L0 |
+| SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | SOUN | 11961 | 3 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
 | SPEL | 12030 | - | - | - | - | - | - | yes | - | - | 2 | L1 |
 | SPGD | 6128 | - | - | - | - | - | - | - | - | - | - | L0 |
-| STAG | 12663 | - | - | - | - | - | - | - | - | - | - | L0 |
+| STAG | 12663 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | STAT | 12045 | - | - | - | - | - | - | - | environment/base_records | - | 1 | L2 |
 | TACT | 5672 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | TERM | 12671 | - | - | - | - | - | - | yes | - | - | - | L1 |
@@ -199,8 +199,10 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| AECH | - | - | - | - | - | - | - | - | - | - |
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
+| ASPC | 1 | - | 1 | - | - | u16, u8 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
@@ -220,6 +222,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVSP | - | - | - | - | - | - | - | - | - | - |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
+| MUST | 5 | - | 1 | - | 2 | f32, u32 | - | 1 | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
@@ -228,9 +231,14 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
 | REFR | 1 | 1 | - | - | - | f32, u32 | - | - | - | existing_only |
+| REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
+| SCSN | 1 | - | - | - | - | u16 | - | - | - | existing_only |
+| SNCT | 4 | - | - | 1 | - | f32, u16, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
+| SOPM | 14 | - | 1 | 1 | - | f32, i16, u32, u8 | - | - | - | existing_only |
 | SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| STAG | - | - | - | - | - | - | - | - | - | - |
 | TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
