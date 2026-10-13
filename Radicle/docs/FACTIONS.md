@@ -109,6 +109,6 @@ Titles in a localized plugin must be string IDs, and inline titles are refused t
 | PLVD (Location) | 4200 to 4206, 6843 | A union decided by a Type value (reference, cell, or near-location). It is not a fixed layout. |
 | CITC (Condition Count) | 6844 | Derived from the condition list. Not a value to edit. |
 | CTDA conditions | 6845 | Shared condition machinery (`schema/ctda.hpp`). FACT is not wired into the condition scopes. |
-| XNAM form ID remap on copy or merge | 8545 | The generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) do not cover a 12-byte FACT XNAM. Typed edits encode the form ID correctly. A merge would not remap it. A follow-up is needed. |
+| XNAM form ID remap | 8545 | The generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) do not list a 12-byte FACT XNAM. `src/schema/form_link_mixed.cpp` (`k_faction_layouts`, `faction_formid_offsets`) remaps it on the generic FormLink path in `src/schema/form_links.cpp`. `FactionXnamRelationFormIdRemapsAndKeepsModifierAndReaction` (`tests/test_packed_formlink_arrays.cpp`) covers it, and `FactionXnamWrongSizeFailsClosedUnderStrictRemap` covers a wrong-size payload. Typed edits encode the form ID correctly. |
 | FACT creation | n/a | No create path. Relations and ranks are edited on existing records. |
 | FULL | 3692 | Localized through the generic localized-field table. No typed FACT API. |

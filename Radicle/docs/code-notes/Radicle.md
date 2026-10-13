@@ -1225,7 +1225,7 @@ FACT XNAM is a 12-byte relation with the faction form ID at offset 0. Modifier a
 
 ## Radicle/include/fo4/forms/leveled_list.hpp:LeveledListEntry
 
-Layout from xEdit `Core/wbDefinitionsCommon.pas:8791-8802` (`wbLeveledListEntry`, FO4 branch through `IsFO4Plus`): level u16 at 0, two bytes at 2-3, item FormID at 4, count u16 at 8, chance none u8 at 10, one byte at 11. The two byte pairs are kept as read. TODO-verify: a one-off byte check of the shipped `Fallout4.esm` on 2026-10-12 (scratch script, not a repo test) found non-zero values in those bytes and no LVLO other than 12 bytes; `LeveledListReal` is the repo check and has not run yet.
+Layout from xEdit `Core/wbDefinitionsCommon.pas:8791-8802` (`wbLeveledListEntry`, FO4 branch through `IsFO4Plus`): level u16 at 0, two bytes at 2-3, item form ID at 4, count u16 at 8, chance none u8 at 10, one byte at 11. The two byte pairs are kept as read. TODO-verify: a one-off byte check of the shipped `Fallout4.esm` on 2026-10-12 (scratch script, not a repo test) found non-zero values in those bytes and no LVLO other than 12 bytes; `LeveledListReal` is the repo check; it runs in the `native-windows-real-data` job, and no pass is recorded in these notes.
 
 ## Radicle/include/fo4/forms/leveled_list.hpp:LeveledListExtraData
 
@@ -1340,6 +1340,14 @@ A non-persistent CELL in an exterior sub-block that is undecodable throws `CellE
 ## Radicle/src/plugin/reader.cpp:read_record — GT-236 coverage
 
 Tests added in `tests/test_compression.cpp`: `Compression.ShortInflatedOutputLoadsAtProducedLength` pins the D6 behavior (a stream that inflates short loads at the produced length, not undecodable), and `Compression.PayloadUnderFourBytesFailsThePluginRead` pins the strict framing check, which throws `fo4::parse_error` outside the compressed-record `try`. Tests added in `tests/test_undecodable_edit.cpp`: `UndecodableEdit.FindIdenticalToMasterSkipsWhenMasterRecordIsUndecodable` covers the previous-record screen in `src/plugin/maintenance.cpp:identical_previous`; `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableParentCell` cover the guards in `src/forms/placed_reference_copy.cpp:copy_placed_reference_as_new`; `UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyInfoAsNewRefusesUndecodableDestinationDial` cover the guards in `src/forms/info_copy.cpp:copy_info_as_new`.
+
+## Radicle/tools/parity_matrix.py:render
+
+`render` builds the per-signature table, the field-kind table and the opaque list that `docs/FO4_PARITY.md` carries between the parity-matrix markers. Inputs: `schema/fallout4/xedit_signatures.txt` (signature set and xEdit registration line), `schema/fallout4/fields.json` (scalar and string rows, FormLink fields, FormLink lists, authoring, keyword lists, localized subrecords), the `TYPED_MODULES` map (each cited file must name the signature, checked by `typed_modules`), the record signatures named in `src/schema/form_link_mixed.cpp` (`mixed_record_signatures`; subrecord-only handlers such as `obts_formid_offsets` and `behavior_formid_offsets`, and the record-specific checks in `src/schema/form_links.cpp`, are not attributed), and the registered `tests/*_real.cpp` files listed in `CMakeLists.txt` that name the signature in quotes (`real_test_sources`). Tier rule in `tier_of`: L4 has rows, FormLink fields or authoring; L2 has a typed module; L3 has FormLink lists only; L1 has a keyword list only; L0 has none. The dedicated PET route (old L5) is not derived. `main --check` compares the block with the doc and exits 1 when it is stale; `main --write` replaces it. The semantic letters stay hand-kept in `docs/FO4_PARITY.md` (Record semantic status).
+
+## Radicle/tools/parity_matrix.py:load_signatures — xedit_signatures.txt pin and method
+
+Pin: TES5Edit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas`, SHA-256 `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e` with LF line endings (same hash as `docs/FO4_PARITY.md`). Method: strip Pascal `{...}`, `(* ... *)` and `//` comments while keeping string literals and line count, then take the bare four-character identifier that is the first argument of `wbRecord(`, `wbRefRecord(` or `ReferenceRecord(`. The first registration line is kept per signature. The result is 147 unique signatures; names that occur only in commented-out definitions (for example `WOOP`, `SCPT`, `TLOD`) are excluded. The lines match the xEdit line numbers cited in `docs/FO4_PARITY.md`.
 
 ## Radicle/tools/schema_codegen.py:parse_names
 

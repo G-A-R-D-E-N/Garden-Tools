@@ -156,7 +156,7 @@ WEAP DNAM, FNAM and CRDT have no version condition in xEdit, so each has one fix
 
 ## Typed read
 
-DAMA is the one layout the tables cannot express: a count-free run of 8-byte entries, or 12-byte entries from form version 152. `Radicle/src/forms/weapon.cpp:decode_weapon_damage_types` decodes it, fails closed on a payload that is not whole entries, and returns an empty list when DAMA is absent. Its layout is xEdit-derived and unchecked against masters until `WeaponReal` runs in CI.
+DAMA is the one layout the tables cannot express: a count-free run of 8-byte entries, or 12-byte entries from form version 152. `Radicle/src/forms/weapon.cpp:decode_weapon_damage_types` decodes it, fails closed on a payload that is not whole entries, and returns an empty list when DAMA is absent. Its layout is xEdit-derived. `WeaponReal` (`tests/test_weapon_real.cpp`) is selected for the native-windows-real-data job and skips without FO4_DATA_DIR; no result is recorded here.
 
 ## Parity
 
