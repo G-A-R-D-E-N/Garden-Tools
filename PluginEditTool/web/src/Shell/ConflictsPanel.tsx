@@ -1,12 +1,6 @@
-import { useState } from 'react';
 import type { ConflictEntry } from '../backend';
-import type { ConflictSelection, SelectMode } from './conflictSelection';
-
-const modeOf = (e: React.MouseEvent): SelectMode => {
-  const additive = e.ctrlKey || e.metaKey;
-  if (e.shiftKey) return additive ? 'add-range' : 'range';
-  return additive ? 'toggle' : 'plain';
-};
+import { modeOf, type ConflictSelection, type SelectMode } from './conflictSelection';
+import { useCompareSelected } from './useConflictBatch';
 
 export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, onRescan, onBatchCopy, onSelect, onClear, onOpen }: {
   conflicts: ConflictEntry[] | null;
@@ -18,14 +12,8 @@ export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, o
   onClear: () => void;
   onOpen: (formKey: string, winner: string) => Promise<void>;
 }) {
-  const [comparing, setComparing] = useState(false);
+  const { comparing, compare } = useCompareSelected();
   const picked = (conflicts ?? []).filter(c => conflictSel[c.FormKey]);
-  const compare = async () => {
-    setComparing(true);
-    try {
-      for (const c of picked) await onOpen(c.FormKey, c.Winner);
-    } finally { setComparing(false); }
-  };
 
   return (
     <div className="conflicts-panel" onKeyDown={e => { if (e.key === 'Escape') onClear(); }}>
@@ -43,7 +31,7 @@ export default function ConflictsPanel({ conflicts, conflictSel, conflictBusy, o
           className="sidebar-action-btn"
           disabled={conflictBusy || comparing || picked.length !== 2}
           title={picked.length === 2 ? 'Open the two selected records in the record view' : 'Select exactly two records to compare'}
-          onClick={compare}
+          onClick={() => compare(picked.map(c => ({ formKey: c.FormKey, plugin: c.Winner })), onOpen)}
         >
           Compare Selected
         </button>

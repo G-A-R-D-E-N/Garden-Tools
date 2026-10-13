@@ -4,6 +4,8 @@ import { errorText } from '../errors';
 import { useDialogs } from '../useDialogs';
 import { pruneSelection, selectRow, type ConflictSelection, type SelectMode } from './conflictSelection';
 
+export interface CopyPick { formKey: string; source: string; editorId?: string }
+
 export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }: {
   activeTab: string;
   treeMode: 'files' | 'conflicts';
@@ -36,23 +38,21 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
     if (activeTab === 'explorer' && treeMode === 'conflicts' && conflicts === null) loadConflicts();
   }, [activeTab, treeMode]);
 
-  const batchCopyAsOverride = async () => {
+  const copyMany = async (picked: CopyPick[]): Promise<boolean> => {
     const b = window.chrome?.webview?.hostObjects?.backend;
-    if (!b || !conflicts) return;
-    const picked = conflicts.filter(c => conflictSel[c.FormKey]);
-    if (picked.length === 0) { setStatus('Select at least one conflict first.'); return; }
+    if (!b) return false;
     const chosen = await askForTarget({
       title: `Copy ${picked.length} record(s) as override`,
-      description: 'Every selected conflict is copied into this plugin as an override. It still has to be saved and enabled last in the load order.',
+      description: 'Every selected record is copied into this plugin as an override. It still has to be saved and enabled last in the load order.',
       confirmLabel: 'Copy',
       defaultTarget: 'ConflictPatch.esp',
     });
-    if (!chosen) return;
+    if (!chosen) return false;
     const patch = chosen.target;
     setConflictBusy(true);
     setErrorStr('');
     try {
-      const items = picked.map(c => ({ formKey: c.FormKey, source: c.Winner }));
+      const items = picked.map(c => ({ formKey: c.formKey, source: c.source }));
       let overwrite = false;
       let allowLosing = false;
       let res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
@@ -69,7 +69,7 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
         });
         if (!proceed) {
           setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
-          return;
+          return false;
         }
         overwrite = true;
         res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
@@ -89,7 +89,7 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
         });
         if (!proceed) {
           setStatus(`Batch copy cancelled -- ${patch} was left unchanged.`);
-          return;
+          return false;
         }
         allowLosing = true;
         res = JSON.parse(await b.CopyAsOverrideMany(JSON.stringify(items), patch, overwrite, allowLosing));
@@ -98,7 +98,7 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
       const failureNote = res.failed ? ` ${res.failed} failed -- see the error list.` : '';
       if (res.failed) {
         const named = (formKey?: string) => {
-          const editorId = picked.find(c => c.FormKey === formKey)?.EditorID;
+          const editorId = picked.find(c => c.formKey === formKey)?.editorId;
           return editorId ? `${formKey} (${editorId})` : formKey || 'unknown record';
         };
         const lines = failures.map(f => `${named(f.formKey)}: ${f.reason || 'no reason given'}`);
@@ -106,14 +106,33 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
         setErrorStr([`${res.failed} of ${res.total} records could not be copied into ${patch}:`, ...lines].join('\n'));
       }
       setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
-      if (!res.failed) setConflictSel({});
+      return !res.failed;
     } catch (e) {
       setStatus('Batch copy failed: ' + errorText(e));
+      return false;
     } finally { setConflictBusy(false); }
+  };
+
+  const batchCopyAsOverride = async () => {
+    if (!conflicts) return;
+    const picked = conflicts.filter(c => conflictSel[c.FormKey]);
+    if (picked.length === 0) { setStatus('Select at least one conflict first.'); return; }
+    if (await copyMany(picked.map(c => ({ formKey: c.FormKey, source: c.Winner, editorId: c.EditorID })))) setConflictSel({});
   };
 
   return {
     conflicts, setConflicts, conflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
-    selectConflict, clearConflictSelection,
+    selectConflict, clearConflictSelection, copyMany,
   };
+}
+
+export function useCompareSelected() {
+  const [comparing, setComparing] = useState(false);
+  const compare = async (picked: { formKey: string; plugin: string }[], open: (formKey: string, plugin: string) => Promise<void>) => {
+    setComparing(true);
+    try {
+      for (const p of picked) await open(p.formKey, p.plugin);
+    } finally { setComparing(false); }
+  };
+  return { comparing, compare };
 }

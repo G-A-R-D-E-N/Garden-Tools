@@ -2210,3 +2210,23 @@ The Conflicts sidebar is the only flat, FormKey-keyed record list with a native 
 ## PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx:conflict list selection — MainShell harness (#39)
 
 The tests drive the real `MainShell` in conflicts mode with the same backend stub as `overrideConfirmation.test.tsx`, so the copy args are asserted at the `CopyAsOverrideMany` call. Not run locally (CI only).
+
+## PluginEditTool/web/src/MainShell.tsx:MainShell — RECORDS multi-select (#39)
+
+The RECORDS search list uses the Conflicts selection model (`conflictSelection.ts:selectRow`, `modeOf`), keyed by `Plugin:FormKey` rather than FormKey alone, because one record can match in several plugins and each match copies from its own plugin. Selected hits are cached in `recHits` as they are picked, because a hit that drops out of the current search has no other source for the `Plugin` and `EditorID` that copy and compare need. The count's hidden figure is the selected hits that are absent from the current `searchResults`. The state lives in `MainShell` rather than a child panel: the sidebar list is conditional on the query and would otherwise unmount and lose the selection when the query drops below two characters. The list stays in `MainShell` because the file is still under the 750-line limit. A plain click selects only the clicked hit and opens it, which replaces the hidden selections as well, matching the Conflicts list. Ctrl, Shift and Ctrl+Shift do not open. Escape on the list and the Clear button empty the selection. The bar also shows when the query is below two characters, so a selection stays visible and can be copied or cleared.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch — copyMany shared by Conflicts and RECORDS (#39)
+
+`copyMany` holds the whole batch flow: the target picker, the overwrite and load-order confirmations, the per-item failure list and the status line. Each caller maps its own rows to `CopyPick` items. Conflicts use `Winner` as the source plugin, and RECORDS use the hit's `Plugin`, which is the plugin the record was found in, so `CopyAsOverrideMany` reads it from there. `copyMany` returns true only when the batch finished with no failures. The caller clears its selection on that result and keeps it on a cancel, an error, or a partial failure, as the Conflicts list always did.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useCompareSelected — sequential compare (#39)
+
+The compare helper is shared by the Conflicts list and RECORDS. It opens the records one after another with `await` for the same reason as the Conflicts note above: `useRecordOpening.ts:openByFormKey` drops a result superseded by a newer open. `comparing` disables the button while the opens run.
+
+## PluginEditTool/web/src/Shell/conflictSelection.ts:modeOf — modifier keys to select mode (#39)
+
+Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifier keys the same way. It takes only the three modifier flags, so it works on a React mouse event without importing React.
+
+## PluginEditTool/web/src/MainShellBridge.test.tsx:sidebar record multi-select — MainShell harness (#39)
+
+The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).
