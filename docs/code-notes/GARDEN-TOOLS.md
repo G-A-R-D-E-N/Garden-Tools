@@ -2115,3 +2115,23 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
 
 A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:readTables — sibling string tables (#32)
+
+Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next to the loaded plugin, with the same symlink and regular-file check as `questinternal::loadLocalizedQuestTables`. A missing table is skipped; a table that fails to parse fails the whole call with `LocalizedLogTableInvalid`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — duplicate flag and paging (#32)
+
+`read_string_table` rejects IDs that are not strictly ascending, so a table it parses never holds a duplicate and `duplicate` is false for every row it returns. The count is still computed over the entries so the flag stays right if that parser contract changes. `limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000. The filter matches the text case-insensitively (ASCII) or the decimal ID as a substring.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:displayText — text encoding (#32)
+
+English tables are CP1252, the encoding `encodeLocalizedText` writes. Other languages are UTF-8; bytes that are not valid UTF-8 are decoded as CP1252 so the JSON dump cannot throw.
+
+## PluginEditTool/native/apps/fo4ide/main.cpp:main — strings target (#32)
+
+`strings` is registered as a `PluginBackendTarget` namespace, so `strings.<Method>` falls through to the backend operations `strings.ListStringTables`, `strings.GetStrings` and `strings.LookupString`. All three take the backend read lock and never write.
+
+## PluginEditTool/web/src/LocalizationPanel.tsx:LocalizationPanel — read-only view (#32)
+
+Plugin choices come from `appInterop.GetPlugins`, which lists every loaded plugin, so base-game masters can be browsed (`masters.GetPlugins` only lists editable ones). Each table and page load is a separate call guarded by a sequence number, so a late reply for an earlier plugin, table or page cannot replace the current one. The `strings` host object exists only in the native HTTP bridge (`hostbridge.ts` HOST_OBJECTS); without it the panel shows the unavailable message.
