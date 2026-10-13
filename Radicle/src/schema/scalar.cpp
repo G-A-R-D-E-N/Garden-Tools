@@ -85,16 +85,17 @@ std::string format_float(float value) {
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
+  const ScalarDescriptor* only = nullptr;
   for (const auto& field : k_scalar_fields) {
-    // Embedded fields share a signature with their neighbours, so a lookup by
-    // signature alone cannot name one of them. See the header.
-    if (field.scalar.embedded || field.scalar.address.repeated ||
-        field.scalar.storage == ScalarStorage::zstring) {
-      continue;
-    }
-    if (field.scalar.subrecord == subrecord) return field.scalar;
+    if (field.scalar.subrecord != subrecord) continue;
+    if (only) return std::nullopt;
+    only = &field.scalar;
   }
-  return std::nullopt;
+  if (!only || only->embedded || only->address.repeated ||
+      only->storage == ScalarStorage::zstring) {
+    return std::nullopt;
+  }
+  return *only;
 }
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
