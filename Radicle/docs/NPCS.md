@@ -97,7 +97,8 @@ Edit rules:
 
 - Add, remove at index, and set at index for each list. Remove and set on an out-of-range index throw. Add, remove and set return `false` when the stored bytes would not change.
 - The list's own subrecords are replaced as one run. A run with other subrecords between its entries is refused.
-- Removing the last entry drops PRKZ or COCT with the run.
+- Removing the last entry keeps PRKZ or COCT at 0. xEdit sets the count element to 0 and keeps it (`Core/wbImplementation.pas:20774-20797`, `TwbSubRecordArray.BeforeActualRemove`).
+- A local CNTO item must be a base object (`is_sig_base_object`, the xEdit `sigBaseObjects` list at `Core/wbDefinitionsFO4.pas:74`), and a local COED owner must be NPC_ or FACT (`Core/wbDefinitionsFO4.pas:3291`). Foreign keys are not checked.
 - A missing run is inserted after the last subrecord that xEdit orders before it. The order is `k_order` in `src/forms/npc.cpp`. A record with no earlier subrecord (no ACBS) is refused.
 
 ## Not covered

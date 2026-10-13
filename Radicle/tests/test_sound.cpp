@@ -261,6 +261,20 @@ TEST_F(SoundTest, WideFanOutChainsStopAtTheVisitLimit) {
   EXPECT_THROW(fo4::env::resolve_sound_files(env, record(env, 0x800)), fo4::env::WorldDecodeError);
 }
 
+TEST_F(SoundTest, FileListLimitIsInclusiveAt4096Files) {
+  for (const unsigned count : {4096u, 4097u}) {
+    std::vector<Sub> subs{{"CNAM", words({0x1EEF540A})}};
+    for (unsigned i = 0; i < count; ++i) subs.push_back({"ANAM", text("a.wav")});
+    write({{"SNDR", 0x800, subs}});
+    const auto env = load();
+    if (count == 4096u) {
+      EXPECT_EQ(fo4::env::resolve_sound_files(env, record(env, 0x800)).size(), 4096u);
+    } else {
+      EXPECT_THROW(fo4::env::resolve_sound_files(env, record(env, 0x800)), fo4::env::WorldDecodeError);
+    }
+  }
+}
+
 TEST_F(SoundTest, CAbiRejectsACycleAndNullArgumentsWithoutAList) {
   write({{"SNDR", 0x800, {{"CNAM", words({0x54651A43})}, {"DNAM", words({0x800})}}}});
   const auto name = path.string(); const char* names[] = {name.c_str()}; radicle_env* abi = nullptr;

@@ -138,3 +138,12 @@ TEST(LeveledListCreation, RefusesOtherSignaturesAndUndefinedFlags) {
   EXPECT_EQ(plugin.header.next_form_id, 0x804u);
   EXPECT_EQ(plugin.groups.size(), 4u);
 }
+
+TEST(LeveledListCreation, RefusesEmbeddedNulInEditorId) {
+  auto plugin = fo4::read_plugin(fixture(), "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_leveled_list(
+                   plugin, fo4::Signature::from_string("LVLI"), std::string_view{"A\0B", 3}, 5, 2, 1)),
+               fo4::forms::LeveledListError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
