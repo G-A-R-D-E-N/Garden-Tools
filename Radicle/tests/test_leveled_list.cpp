@@ -26,6 +26,7 @@ struct Rec {
   std::string_view signature;
   std::uint32_t form_id;
   std::vector<Sub> subs;
+  std::uint16_t form_version{131};
 };
 
 constexpr std::uint32_t k_item_list = 0x02000800;
@@ -33,6 +34,7 @@ constexpr std::uint32_t k_npc_list = 0x02000801;
 constexpr std::uint32_t k_empty_list = 0x02000802;
 constexpr std::uint32_t k_plain_record = 0x02000803;
 constexpr std::uint32_t k_npc_target = 0x02000810;
+constexpr std::uint32_t k_spell_list = 0x02000804;
 
 std::vector<std::byte> text(std::string_view value) {
   std::vector<std::byte> out;
@@ -94,7 +96,7 @@ std::vector<std::byte> make_plugin(const std::vector<Rec>& records) {
 
   for (const auto& rec : records) {
     const auto group = fo4::test::begin_group(out, rec.signature, 0);
-    const auto record = fo4::test::begin_record(out, rec.signature, 0, rec.form_id);
+    const auto record = fo4::test::begin_record(out, rec.signature, 0, rec.form_id, rec.form_version);
     for (const auto& sub : rec.subs) {
       fo4::test::write_subrecord(out, sub.signature, sub.data);
     }
@@ -240,7 +242,8 @@ TEST(LeveledList, ReplaceKeepsOpaqueSubrecordsAndWritesLlctEqualToEntries) {
   ASSERT_TRUE(fo4::forms::replace_leveled_list_entries(plugin, key, entries));
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto decoded = fo4::forms::decode_leveled_list(reread, key);
-  EXPECT_EQ(decoded.entries, entries);
+  const std::vector<fo4::forms::LeveledListEntry> sorted{entries[2], entries[0], entries[1]};
+  EXPECT_EQ(decoded.entries, sorted);
 
   const auto* record = fo4::find_record(reread, key);
   ASSERT_NE(record, nullptr);
@@ -268,8 +271,8 @@ TEST(LeveledList, InsertRemoveAndSetKeepEntriesOrderedAndLlctCurrent) {
   auto decoded = fo4::forms::decode_leveled_list(plugin, key).entries;
   ASSERT_EQ(decoded.size(), 3u);
   EXPECT_EQ(decoded[0], before[0]);
-  EXPECT_EQ(decoded[1], added);
-  EXPECT_EQ(decoded[2], before[1]);
+  EXPECT_EQ(decoded[1], before[1]);
+  EXPECT_EQ(decoded[2], added);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(fo4::forms::decode_leveled_list(reread, key).entries.size(), 3u);
@@ -277,13 +280,13 @@ TEST(LeveledList, InsertRemoveAndSetKeepEntriesOrderedAndLlctCurrent) {
   ASSERT_TRUE(fo4::forms::remove_leveled_list_entry(plugin, key, 0));
   decoded = fo4::forms::decode_leveled_list(plugin, key).entries;
   ASSERT_EQ(decoded.size(), 2u);
-  EXPECT_EQ(decoded[0], added);
-  EXPECT_EQ(decoded[1], before[1]);
+  EXPECT_EQ(decoded[0], before[1]);
+  EXPECT_EQ(decoded[1], added);
 
   ASSERT_TRUE(fo4::forms::set_leveled_list_entry(plugin, key, 0, before[0]));
   decoded = fo4::forms::decode_leveled_list(plugin, key).entries;
   EXPECT_EQ(decoded[0], before[0]);
-  EXPECT_EQ(decoded[1], before[1]);
+  EXPECT_EQ(decoded[1], added);
 
   EXPECT_THROW(fo4::forms::insert_leveled_list_entry(plugin, key, 3, added),
                fo4::forms::LeveledListError);
@@ -416,4 +419,124 @@ TEST(LeveledList, ChangingAnExistingEntryDoesNotRecheckItsMissingTarget) {
   added.item = fo4::FormKey::parse("000901:Patch.esp");
   EXPECT_THROW(fo4::forms::insert_leveled_list_entry(plugin, item_key(), 1, added),
                fo4::forms::LeveledListError);
+}
+
+namespace {
+
+constexpr std::uint32_t k_modern_item_list = 0x02000805;
+
+fo4::forms::LeveledListEntry make_entry(std::uint16_t level,
+                                        std::string_view form_key,
+                                        std::uint16_t count = 1,
+                                        std::uint8_t chance_none = 0) {
+  fo4::forms::LeveledListEntry entry;
+  entry.level = level;
+  entry.item = fo4::FormKey::parse(form_key);
+  entry.count = count;
+  entry.chance_none = chance_none;
+  return entry;
+}
+
+std::vector<Sub> legacy_list_subs() {
+  return {
+      {"EDID", text("Legacy")},
+      {"LVLD", one(0)},
+      {"LVLM", one(0)},
+      {"LVLF", one(0)},
+      {"LLCT", one(1)},
+      {"LVLO", lvlo(1, {0, 0}, 0x01000123, 1, 9, 0)},
+  };
+}
+
+}  // namespace
+
+TEST(LeveledList, EntriesSortByLevelThenReferenceAfterTypedEdits) {
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  const auto key = item_key();
+  ASSERT_TRUE(fo4::forms::insert_leveled_list_entry(plugin, key, 2, make_entry(10, "000123:MagicMaster.esp")));
+  ASSERT_TRUE(fo4::forms::insert_leveled_list_entry(plugin, key, 0, make_entry(1, "000802:Patch.esp")));
+
+  const auto decoded = fo4::forms::decode_leveled_list(plugin, key).entries;
+  ASSERT_EQ(decoded.size(), 4u);
+  EXPECT_EQ(decoded[0].level, 1u);
+  EXPECT_EQ(decoded[1].level, 5u);
+  EXPECT_EQ(decoded[2].item, fo4::FormKey::parse("000123:MagicMaster.esp"));
+  EXPECT_EQ(decoded[2].level, 10u);
+  EXPECT_EQ(decoded[3].item, fo4::FormKey::parse("000802:Patch.esp"));
+}
+
+TEST(LeveledList, EqualSortKeysKeepTheirOrderAndSetResortsTheEdit) {
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  const auto key = item_key();
+  ASSERT_TRUE(fo4::forms::insert_leveled_list_entry(plugin, key, 1, make_entry(10, "000802:Patch.esp", 1, 9)));
+  auto decoded = fo4::forms::decode_leveled_list(plugin, key).entries;
+  ASSERT_EQ(decoded.size(), 3u);
+  EXPECT_EQ(decoded[1].chance_none, 9u);
+  EXPECT_EQ(decoded[2].chance_none, 0u);
+
+  ASSERT_TRUE(fo4::forms::set_leveled_list_entry(plugin, key, 0, make_entry(20, "000123:MagicMaster.esp", 2, 7)));
+  decoded = fo4::forms::decode_leveled_list(plugin, key).entries;
+  ASSERT_EQ(decoded.size(), 3u);
+  EXPECT_EQ(decoded[0].level, 10u);
+  EXPECT_EQ(decoded[2].level, 20u);
+  EXPECT_EQ(decoded[2].count, 2u);
+}
+
+TEST(LeveledList, LegacyFormVersionReportsZeroChanceNoneForLvliAndLvln) {
+  const auto plugin = fo4::read_plugin(
+      make_plugin({{"LVLI", k_item_list, legacy_list_subs(), 68},
+                   {"LVLN", k_npc_list, legacy_list_subs(), 68},
+                   {"LVLI", k_modern_item_list, legacy_list_subs(), 69},
+                   {"LVSP", k_spell_list, legacy_list_subs(), 68}}),
+      "Patch.esp");
+  const auto legacy_item = fo4::forms::decode_leveled_list(plugin, item_key());
+  EXPECT_EQ(legacy_item.entries.at(0).chance_none, 0u);
+  EXPECT_EQ(fo4::forms::decode_leveled_list(plugin, fo4::FormKey::parse("000801:Patch.esp"))
+                .entries.at(0)
+                .chance_none,
+            0u);
+  EXPECT_EQ(fo4::forms::decode_leveled_list(plugin, fo4::FormKey::parse("000805:Patch.esp"))
+                .entries.at(0)
+                .chance_none,
+            9u);
+  EXPECT_EQ(fo4::forms::decode_leveled_list(plugin, fo4::FormKey::parse("000804:Patch.esp"))
+                .entries.at(0)
+                .chance_none,
+            9u);
+}
+
+TEST(LeveledList, LegacyFormVersionEditsWriteZeroChanceNoneAndNoOpStaysIdentical) {
+  auto plugin = fo4::read_plugin(make_plugin({{"LVLI", k_item_list, legacy_list_subs(), 68}}), "Patch.esp");
+  const auto key = item_key();
+  const auto original = fo4::test::original_bytes(plugin);
+  ASSERT_TRUE(fo4::forms::replace_leveled_list_entries(plugin, key, fo4::forms::decode_leveled_list(plugin, key).entries));
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+
+  ASSERT_TRUE(fo4::forms::insert_leveled_list_entry(plugin, key, 1, make_entry(5, "000123:MagicMaster.esp")));
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  const auto* lvlo = find_subrecord(*record, "LVLO");
+  ASSERT_NE(lvlo, nullptr);
+  EXPECT_EQ(lvlo->data[10], std::byte{0});
+  EXPECT_EQ(fo4::forms::decode_leveled_list(reread, key).entries.size(), 2u);
+}
+
+TEST(LeveledList, SpellListEntriesRefuseExtraData) {
+  auto plugin = fo4::read_plugin(make_plugin({{"LVSP", k_spell_list, legacy_list_subs()}}), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000804:Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  auto entry = make_entry(2, "000123:MagicMaster.esp");
+  entry.extra = fo4::forms::LeveledListExtraData{};
+  EXPECT_THROW(fo4::forms::insert_leveled_list_entry(plugin, key, 1, entry), fo4::forms::LeveledListError);
+  EXPECT_THROW(fo4::forms::set_leveled_list_entry(plugin, key, 0, entry), fo4::forms::LeveledListError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+  EXPECT_TRUE(fo4::forms::insert_leveled_list_entry(plugin, key, 1, make_entry(2, "000123:MagicMaster.esp")));
+}
+
+TEST(LeveledList, SettingsNoOpLeavesTheRecordUnchanged) {
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  EXPECT_TRUE(fo4::forms::set_leveled_list_settings(plugin, item_key(), 25, 0, 5));
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }

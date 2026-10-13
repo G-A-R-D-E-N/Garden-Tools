@@ -61,6 +61,9 @@ Subrecord make_subrecord(Signature signature, std::vector<std::byte> data) {
 }
 
 std::vector<std::byte> zstring(std::string_view value) {
+  if (value.find('\0') != std::string_view::npos) {
+    throw FactionError("FACT editor ID and full name cannot contain an embedded NUL");
+  }
   std::vector<std::byte> data;
   data.reserve(value.size() + 1);
   for (const char ch : value) data.push_back(std::byte{static_cast<std::uint8_t>(ch)});

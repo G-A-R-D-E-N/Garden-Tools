@@ -26,6 +26,8 @@ Scope: typed read, entry edits and schema coverage for LVLI and LVLN. LVSP share
 
 Entry, in order: level (u16, offset 0), two bytes (2-3), item form ID (4), count (u16, 8), chance none (u8, 10), one byte (11). The shipped byte check found non-zero values in bytes 2-3 and 11, so both are kept as read.
 
+Chance none is zero for LVLI and LVLN records whose form version is below 69. xEdit zeroes it on load for those records (`Core/wbDefinitionsFO4.pas:2215-2250`, `wbLLEAfterLoad`, attached to LVLN at 10007 and LVLI at 10031). LVSP has no after-load (10044-10049), so its chance is read as stored. The typed decode reports 0 for LVLI and LVLN below version 69, and a typed write of such a record writes 0 for every entry. A record with no typed edit keeps its bytes.
+
 COED, when present: owner form ID (0, NULL allowed), union at 4, item condition float (8). The union is raw: `Core/wbDefinitionsCommon.pas:5451-5469` (`wbCOEDOwnerDecider`) makes it a global variable for an NPC_ owner and a required rank for a FACT owner. The shipped byte check found 60 COED, all with NULL owners, all in LVLI.
 
 ## Shared code
@@ -48,3 +50,5 @@ COED, when present: owner form ID (0, NULL allowed), union at 4, item condition 
 - LLKC and the LVLN model group are not decoded or written. LLKC is kept as an opaque subrecord on replace. Remap reads it as repeated 8-byte entries for LVLI and LVLN (form ID at 0, the 4-byte chance is not checked), so a payload of 8, 16 or 24 bytes is one, two or three entries. xEdit defines LLKC as an uncounted array of that 8-byte struct (`Core/wbDefinitionsFO4.pas:9979-9984`). See `leveled_list_formid_offsets` in `Radicle/docs/code-notes/Radicle.md`.
 - LVLI and LVLN creation writes a minimal record only: EDID (optional), OBND, LVLD, LVLM, LVLF and LLCT, with no entries, LVLG, LVSG, ONAM or model group. Entries are added later through insert or set. See `create_leveled_list` in `Radicle/docs/code-notes/Radicle.md`.
 - LVLG and LVSG are read but not edited. Header settings do not change them.
+- Typed writes store LVLO entries sorted by level, then by the raw reference form ID, then by count, the key xEdit compares for the entry struct (`Core/wbDefinitionsCommon.pas:8788-8802`, `Core/wbImplementation.pas:2151-2175`). The sort is stable. Insert and set take an index into the list as decoded before the call; the written list is then sorted, so the entry may end up at another index. See `sorted_entries` in `Radicle/docs/code-notes/Radicle.md`.
+- An LVSP entry cannot carry COED. A write that includes one is refused, because xEdit's LVSP entry is LVLO only (`Core/wbDefinitionsFO4.pas:10044-10049`).

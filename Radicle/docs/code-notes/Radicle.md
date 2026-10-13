@@ -1527,3 +1527,49 @@ WEAP DNAM (132 bytes), FNAM (41) and CRDT (12) are fixed-size structs with no ve
 ## Radicle/src/schema/form_link_mixed.cpp:faction_plvd_formid_offsets — FACT PLVD location slot
 
 xEdit `wbPLVD` (`Core/wbDefinitionsFO4.pas` lines 4200-4221) is a struct whose first field is a s32 Type that selects the union member at @4. Types 0 (Reference), 1 (Cell), 4 (Object ID) and 6 (Keyword) hold a form ID; the others (2 and 3 byte arrays, 5 Object Type, 7 unused, 8 to 14 aliases and targets) do not. Collection Index is optional from member 3 (`SetOptionalFrom(3)`), so the payload is 12 or 16 bytes. `Radicle/src/graph/reachability.cpp` checks PLVD types 0, 1 and 4 only; this remap includes type 6 as xEdit lists it. The PACK PLDT decider in `Radicle/src/schema/behavior_layout.cpp` uses the same four types as this function.
+
+## Radicle/src/forms/leveled_list.cpp:zeroes_chance_none — LVLO chance on form versions below 69
+
+`decode_leveled_list` reports entry chance none as 0 and `replace_leveled_list_entries` writes 0 for LVLI and LVLN records whose `header.form_version` is below 69. xEdit's `wbLLEAfterLoad` zeroes the entries' Chance None under the same condition (`Core/wbDefinitionsFO4.pas:2215-2250`), attached to LVLN (10007) and LVLI (10031) only. LVSP has no after-load (10044-10049), so LVSP chance is decoded as stored. Unedited records are not rewritten. Tests: `tests/test_leveled_list.cpp:LegacyFormVersionReportsZeroChanceNoneForLvliAndLvln`, `LegacyFormVersionEditsWriteZeroChanceNoneAndNoOpStaysIdentical`.
+
+## Radicle/src/forms/leveled_list.cpp:sorted_entries — LVLO order for typed writes
+
+Typed writes store LVLO entries in xEdit's order. The entry struct's sort key is Level, then the reference, then Count (`Core/wbDefinitionsCommon.pas:8788-8802`, the extended key from `wbStructExSK([0, 2], [3])`). The reference is compared as the raw form ID in this plugin's context, which matches load order for the plugin's masters. Keys are compared as fixed-width hex strings, so the order is numeric. `Core/wbImplementation.pas:2151-2175` (`CompareSortKeys`) and `:20916` (`TwbSubRecordArray.DoInit`) sort the array. `std::stable_sort` keeps the caller's order for equal keys. The sort runs in `replace_leveled_list_entries`, so insert, set and remove all write sorted lists. A list that is already sorted is still a no-op when the caller's entries equal the decoded entries.
+
+Index meaning: `insert_leveled_list_entry` and `set_leveled_list_entry` take an index into the list as decoded before the call. The new entry lands at that index first, and then the list is sorted, so its final index is set by its key. Among equal keys, the index decides the order. Tests: `tests/test_leveled_list.cpp:EntriesSortByLevelThenReferenceAfterTypedEdits`, `EqualSortKeysKeepTheirOrderAndSetResortsTheEdit`.
+
+## Radicle/src/forms/leveled_list.cpp:replace_leveled_list_entries — LVSP COED refusal
+
+An LVSP entry with `extra` is refused before any write. xEdit's LVSP entry is LVLO only (`Core/wbDefinitionsFO4.pas:10044-10049`). A COED-carrying LVSP entry from a file is still decoded, and any write that carries it is refused. Test: `tests/test_leveled_list.cpp:SpellListEntriesRefuseExtraData`.
+
+## Radicle/src/forms/leveled_list.cpp:zstring — editor ID NUL
+
+`create_leveled_list` refuses an editor ID with an embedded NUL before the plugin is copied. A NUL would write an early terminator into the zstring. The same local check is in `Radicle/src/forms/cell.cpp:zstring`. The LVSP creator takes no editor ID, so it has no check to match. Test: `tests/test_leveled_list_creation.cpp:RefusesEmbeddedNulInEditorId`.
+
+## Radicle/src/forms/faction.cpp:zstring — FACT editor ID and full name NUL
+
+`create_faction` refuses an editor ID or full name with an embedded NUL. The local check matches the one in `Radicle/src/forms/leveled_list.cpp:zstring`. Test: `tests/test_faction_creation.cpp:RefusesEmbeddedNulInEditorIdOrFullName`.
+
+## Radicle/src/forms/npc.cpp:k_order — NPC_ run boundaries
+
+`insertion_index` places a missing run after the last known subrecord that orders before the anchor. An unknown subrecord between two known ones can therefore be split off. The order table lists each group's members in xEdit's `NPC_` definition order: `wbDEST` (`Core/wbDefinitionsFO4.pas:4275-4300`: DEST, DAMC, DSTD, DSTA, DMDL, DMDT, DMDC, DMDS, DSTF), `wbAttackData` (`:4073-4121`: ATKD, ATKE, ATKW, ATKS, ATKT), and the SPCT count before SPLO (`:3283-3285`). Without the full groups, a new PRKZ or COCT run landed between DEST and DSTD, or between ATKD and ATKE. Test: `tests/test_npc_lists.cpp:InsertedRunsStayOutsideTheDestAndAttackGroups`.
+
+## Radicle/src/forms/npc.cpp:require_local_base_object — CNTO item targets
+
+`add_npc_inventory_item` and `set_npc_inventory_item` require a local CNTO item to be a base object, using `schema::is_sig_base_object` (the generated xEdit `sigBaseObjects` list, `Core/wbDefinitionsFO4.pas:74`). Foreign keys are not checked, as in `require_local_target`. Test: `tests/test_npc_lists.cpp:InventoryItemsMustBeBaseObjectsAndCoedOwnersNpcOrFact`.
+
+## Radicle/src/forms/npc.cpp:require_local_coed_owner — COED owner targets
+
+A local COED owner must be NPC_ or FACT, as xEdit's `wbCOED` owner (`Core/wbDefinitionsFO4.pas:3291`, `[NPC_, FACT, NULL]`). A null owner is allowed. Foreign keys are not checked. Test: `tests/test_npc_lists.cpp:InventoryItemsMustBeBaseObjectsAndCoedOwnersNpcOrFact`.
+
+## Radicle/src/forms/npc.cpp:encode_perks — count kept at zero
+
+`encode_perks` and `encode_inventory` always write PRKZ or COCT, including 0 when the last entry is removed. xEdit's `TwbSubRecordArray.BeforeActualRemove` sets the count element to 0 and keeps it (`Core/wbImplementation.pas:20774-20797`). Test: `tests/test_npc_lists.cpp:RemovingTheLastEntryKeepsItsCountSubrecordAtZero`.
+
+## Radicle/src/forms/npc.cpp:replace_run — NPC_ SNAM, PRKR and CNTO keep append order
+
+`replace_run` writes the caller's order and does not sort. This deviates from xEdit, which declares the CNTO array with `wbRArrayS` (`Core/wbDefinitionsFO4.pas:3316`). The reason is shipped-corpus evidence: vanilla Fallout4.esm stores 1,011 SNAM, 1,468 CNTO and 127 XNAM lists unsorted, so a sorted write would reorder records that Bethesda stored in another order. LVLO is sorted (see `sorted_entries`).
+
+## Radicle/src/forms/faction.cpp:add_faction_relation — FACT XNAM append order
+
+`add_faction_relation` inserts after the last XNAM and does not sort. The reason is the same shipped-corpus evidence as `replace_run`: a byte scan of the shipped Fallout4.esm found 127 unsorted XNAM lists in Fallout4.esm.
