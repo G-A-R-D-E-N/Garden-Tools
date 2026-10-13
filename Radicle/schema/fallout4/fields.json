@@ -1166,6 +1166,277 @@
         "FULL"
       ]
     },
+      {
+        "signature": "LVLI",
+        "authoring": {
+          "placement": "top_level",
+          "subrecords": [
+            {
+              "signature": "EDID",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "OBND",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "LVLD",
+              "minimum": 1,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLM",
+              "minimum": 0,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLF",
+              "minimum": 1,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLG",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "LLCT",
+              "minimum": 0,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLO",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "signature": "LLKC",
+              "minimum": 0,
+              "maximum": 65535,
+              "uncounted": true
+            },
+            {
+              "signature": "LVSG",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "ONAM",
+              "minimum": 0,
+              "maximum": 1
+            }
+          ]
+        },
+        "fields": [
+          {
+            "path": "LVLI\\ChanceNone",
+            "label": "Chance none",
+            "kind": "scalar",
+            "subrecord": "LVLD",
+            "storage": "u8",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 255,
+            "insertion": "existing_only"
+          },
+          {
+            "path": "LVLI\\MaxCount",
+            "label": "Max count",
+            "kind": "scalar",
+            "subrecord": "LVLM",
+            "storage": "u8",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 255,
+            "insertion": "existing_only"
+          },
+          {
+            "path": "LVLI\\Flags",
+            "label": "Flags",
+            "kind": "scalar",
+            "subrecord": "LVLF",
+            "storage": "u8",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 255,
+            "insertion": "existing_only"
+          }
+        ],
+        "formlink_fields": [
+          {
+            "path": "LVLI\\UseGlobal",
+            "label": "Use global",
+            "subrecord": "LVLG",
+            "offset": 0,
+            "payload_sizes": [
+              4
+            ],
+            "targets": [
+              "GLOB"
+            ],
+            "nullable": false,
+            "insertion": "existing_only"
+          },
+          {
+            "path": "LVLI\\EpicLootChance",
+            "label": "Epic loot chance",
+            "subrecord": "LVSG",
+            "offset": 0,
+            "payload_sizes": [
+              4
+            ],
+            "targets": [
+              "GLOB"
+            ],
+            "nullable": false,
+            "insertion": "existing_only"
+          }
+        ],
+        "localized_subrecords": [
+          "ONAM"
+        ]
+      },
+      {
+        "signature": "LVLN",
+        "authoring": {
+          "placement": "top_level",
+          "subrecords": [
+            {
+              "signature": "EDID",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "OBND",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "LVLD",
+              "minimum": 1,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLM",
+              "minimum": 0,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLF",
+              "minimum": 1,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLG",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "LLCT",
+              "minimum": 0,
+              "maximum": 1,
+              "default": "00"
+            },
+            {
+              "signature": "LVLO",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "signature": "LLKC",
+              "minimum": 0,
+              "maximum": 65535,
+              "uncounted": true
+            },
+            {
+              "signature": "MODL",
+              "minimum": 0,
+              "maximum": 1,
+              "coupled": true
+            },
+            {
+              "signature": "MODT",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "MODC",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "MODS",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "signature": "MODF",
+              "minimum": 0,
+              "maximum": 1
+            }
+          ]
+        },
+        "fields": [
+          {
+            "path": "LVLN\\ChanceNone",
+            "label": "Chance none",
+            "kind": "scalar",
+            "subrecord": "LVLD",
+            "storage": "u8",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 255,
+            "insertion": "existing_only"
+          },
+          {
+            "path": "LVLN\\MaxCount",
+            "label": "Max count",
+            "kind": "scalar",
+            "subrecord": "LVLM",
+            "storage": "u8",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 255,
+            "insertion": "existing_only"
+          },
+          {
+            "path": "LVLN\\Flags",
+            "label": "Flags",
+            "kind": "scalar",
+            "subrecord": "LVLF",
+            "storage": "u8",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 255,
+            "insertion": "existing_only"
+          }
+        ],
+        "formlink_fields": [
+          {
+            "path": "LVLN\\UseGlobal",
+            "label": "Use global",
+            "subrecord": "LVLG",
+            "offset": 0,
+            "payload_sizes": [
+              4
+            ],
+            "targets": [
+              "GLOB"
+            ],
+            "nullable": false,
+            "insertion": "existing_only"
+          }
+        ]
+      },
     {
       "signature": "PROJ",
       "fields": [

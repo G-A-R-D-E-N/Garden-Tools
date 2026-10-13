@@ -113,8 +113,8 @@ The P entries refer to the bounded surfaces below, not every xEdit member. Keywo
 | LIGH | P | I | I | I | U | U | P | G | environment / plugin headers; xEdit L9871 |
 | LSCR | U | U | U | U | U | U | U | G | field audit pending; xEdit L9946 |
 | LTEX | P | U | U | U | U | U | P | G | environment / plugin headers; PR #404; xEdit L9967 |
-| LVLI | U | U | U | U | U | U | U | G | field audit pending; xEdit L10009 |
-| LVLN | U | U | U | U | U | U | U | G | field audit pending; xEdit L9986 |
+| LVLI | P | P | P | P | U | U | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; docs/LEVELED_LISTS.md; xEdit L10009 |
+| LVLN | P | P | P | P | U | U | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; docs/LEVELED_LISTS.md; xEdit L9986 |
 | LVSP | P | P | P | P | P | P | P | G | forms/leveled_spell.hpp; xEdit L10033 |
 | MATO | U | U | U | U | U | U | U | G | field audit pending; xEdit L9375 |
 | MATT | U | U | U | U | U | U | U | G | field audit pending; xEdit L7958 |
@@ -189,7 +189,7 @@ The P entries refer to the bounded surfaces below, not every xEdit member. Keywo
 | --- | --- | --- |
 | ARMA / ARMO models | forms/armor.hpp; tests/test_armor_edit.cpp | Fields outside model bundles; remove/create parity beyond typed shape |
 | EYES EDID / FULL / DATA | forms/eyes.hpp; tests/test_eyes.cpp | Localized/opaque FULL cannot be rewritten as inline text; broad deletion not proven |
-| LVSP settings / entries | forms/leveled_spell.hpp; tests/test_lvsp.cpp | LVLI/LVLN share no proven typed creator; creation defaults need separate evidence |
+| LVSP settings / entries | forms/leveled_spell.hpp, forms/leveled_list.hpp; tests/test_lvsp.cpp | LVLI/LVLN share the entry code but have no creator; creation defaults need separate evidence |
 | PROJ / EXPL / HAZD fixed values | forms/proj_expl_hazd.hpp; tests/test_scalar_embedded.cpp | Complete per-field edited round-trips, C ABI/C# mutation exposure |
 | QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection_authoring.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
 | RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
