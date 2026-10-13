@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validation tests for the field addressing keys of schema_codegen.py and formlink_schema_codegen.py."""
+"""Validation tests for the field addressing keys and the enum and flags names of schema_codegen.py and formlink_schema_codegen.py."""
 
 import json
 import sys
@@ -29,6 +29,18 @@ def scalar(**overrides):
     }
     row.update(overrides)
     return {k: v for k, v in row.items() if v is not None}
+
+
+def named(presentation, *entries, **overrides):
+    return scalar(presentation=presentation, names=list(entries), **overrides)
+
+
+def enum_entry(number, name):
+    return {"value": number, "name": name}
+
+
+def flag_entry(number, name):
+    return {"bit": number, "name": name}
 
 
 def string(**overrides):
@@ -163,6 +175,71 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("do not accept", string(stride=4))
         self.rejects("unsupported field kind", string(kind="blob"))
         self.rejects("insertion", string(insertion="always"))
+
+    def test_flags_names_become_single_bit_masks(self):
+        flags = self.load(named("flags", flag_entry(0, "First"), flag_entry(7, "Last"), storage="u8", maximum=255))[0]
+        self.assertEqual(flags["names"], [{"value": 1, "name": "First"}, {"value": 128, "name": "Last"}])
+        text = schema_codegen.render([flags])
+        self.assertIn("ScalarPresentation::flags", text)
+        self.assertIn('constexpr ScalarName k_scalar_names_0[] = {{1, "First"}, {128, "Last"}};', text)
+        self.assertIn("FieldAddress{}, 0, std::span<const ScalarName>(k_scalar_names_0)}, false},", text)
+        top = self.load(named("flags", flag_entry(31, "Top"), maximum=0xFFFFFFFF))[0]
+        self.assertEqual(top["names"], [{"value": 2 ** 31, "name": "Top"}])
+
+    def test_enum_names_keep_their_values(self):
+        enum = self.load(named("enum", enum_entry(-1, "Auto"), enum_entry(2, "Two"),
+                               storage="i8", minimum=-1, maximum=2))[0]
+        self.assertEqual(enum["names"], [{"value": -1, "name": "Auto"}, {"value": 2, "name": "Two"}])
+        text = schema_codegen.render([enum])
+        self.assertIn("ScalarPresentation::enumeration", text)
+        self.assertIn('= {{-1, "Auto"}, {2, "Two"}};', text)
+
+    def test_identical_name_tables_are_emitted_once(self):
+        entries = (enum_entry(0, "No"), enum_entry(1, "Yes"))
+        text = schema_codegen.render(self.load(
+            named("enum", *entries, offset=0),
+            named("enum", *entries, offset=4, path="TEST" + BS + "Other")))
+        self.assertEqual(text.count("constexpr ScalarName k_scalar_names_"), 1)
+        self.assertEqual(text.count("std::span<const ScalarName>(k_scalar_names_0)"), 2)
+
+    def test_rows_without_names_render_as_before(self):
+        text = schema_codegen.render(self.load(scalar(), scalar(path="TEST" + BS + "Other", offset=8, minimum_payload_size=12)))
+        self.assertNotIn("ScalarName", text.split("k_scalar_fields[]")[1])
+        self.assertIn("FieldAddress{}, 12}, false},", text)
+
+    def test_names_reject_duplicates(self):
+        self.rejects("duplicate name", named("enum", enum_entry(0, "A"), enum_entry(1, "A")))
+        self.rejects("duplicate value", named("enum", enum_entry(0, "A"), enum_entry(0, "B")))
+        self.rejects("duplicate name", named("flags", flag_entry(1, "A"), flag_entry(2, "A")))
+        self.rejects("duplicate bit", named("flags", flag_entry(1, "A"), flag_entry(1, "B")))
+
+    def test_names_reject_values_outside_the_field(self):
+        self.rejects("flag bit 8 exceeds u8", named("flags", flag_entry(8, "A"), storage="u8", maximum=255))
+        self.rejects("flag bit 32 exceeds u32", named("flags", flag_entry(32, "A"), maximum=0xFFFFFFFF))
+        self.rejects("flag bit -1 exceeds u32", named("flags", flag_entry(-1, "A")))
+        self.rejects("enum value 256 exceeds u8", named("enum", enum_entry(256, "A"), storage="u8", maximum=255))
+        self.rejects("enum value -1 exceeds u8", named("enum", enum_entry(-1, "A"), storage="u8", maximum=255))
+        self.rejects("outside the field bounds", named("enum", enum_entry(101, "A")))
+        self.rejects("outside the field bounds", named("flags", flag_entry(7, "A"), storage="u8", maximum=100))
+
+    def test_names_need_an_integer_enum_or_flags_row(self):
+        self.rejects("require the enum or flags", scalar(names=[enum_entry(0, "A")]))
+        self.rejects("require the enum or flags", scalar(presentation="percent_0_100", names=[enum_entry(0, "A")]))
+        self.rejects("non-empty names", scalar(presentation="enum"))
+        self.rejects("non-empty names", named("flags"))
+        self.rejects("integer storage", named("enum", enum_entry(0, "A"), storage="f32", minimum=0, maximum=1))
+        self.rejects("unsigned storage", named("flags", flag_entry(0, "A"), storage="i32", minimum=-1, maximum=1))
+        self.rejects("do not accept", string(names=[enum_entry(0, "A")]))
+
+    def test_names_entries_are_checked(self):
+        self.rejects("exactly 'bit'", named("flags", enum_entry(0, "A")))
+        self.rejects("exactly 'value'", named("enum", {"value": 0}))
+        self.rejects("exactly 'value'", named("enum", "A"))
+        self.rejects("must be an integer", named("enum", enum_entry(True, "A")))
+        self.rejects("must be an integer", named("flags", flag_entry(1.0, "A")))
+        self.rejects("printable ASCII", named("enum", enum_entry(0, "caf" + chr(0xE9))))
+        self.rejects("printable ASCII", named("enum", enum_entry(0, "")))
+        self.rejects("printable ASCII", named("enum", enum_entry(0, 7)))
 
     def test_discriminated_variants_may_share_bytes_but_plain_overlap_is_rejected(self):
         a = scalar(path="TEST" + BS + "A", offset=0, when={"offset": 0, "storage": "u8", "equals": [1]})
