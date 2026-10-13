@@ -522,8 +522,34 @@ TEST(SubrecordGroup, TwoCntoLinksAreRemappedOncePerItem) {
 
 TEST(SubrecordGroup, ItemLinkAcceptsNull) {
   auto plugin = fo4::read_plugin(make_plugin(base_items()), "Patch.esp");
-  const auto item = fo4::schema::formlink_field_descriptor("CONT\ItemObject").value();
+  const auto item = fo4::schema::formlink_field_descriptor("CONT\\ItemObject").value();
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), item, 1, fo4::FormKey{}),
             fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_EQ(cnto_item(reparse(plugin), 1), 0u);
+}
+
+TEST(SubrecordGroup, InsertsAtTheEndWhenTheCountFollowsTheRuns) {
+  auto plugin = fo4::read_plugin(make_plugin({{"CNTO", cnto_bytes(0x900, 5)}, {"COCT", u32_bytes(1)}, {"DATA", zeros(4)}}),
+                                 "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"CNTO", "CNTO", "COCT", "DATA"}));
+  EXPECT_EQ(stored_count(after), 2u);
+  EXPECT_EQ(cnto_item(after, 0), 0x900u);
+  EXPECT_EQ(cnto_item(after, 1), 0u);
+  EXPECT_EQ(read_member(after, "CONT\\ItemCount", 0), "5");
+  EXPECT_EQ(read_member(after, "CONT\\ItemCount", 1), "0");
+  EXPECT_EQ(record_of(after).subrecords[1].data, zeros(8));
+  EXPECT_EQ(record_of(after).subrecords[3].data, zeros(4));
+}
+
+TEST(SubrecordGroup, InsertPastTheEndOfAnItemlessContainerFailsWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_plugin({{"EDID", zeros(4)}, {"DATA", zeros(4)}}), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 1),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(signatures(plugin), (std::vector<std::string>{"EDID", "DATA"}));
+  EXPECT_FALSE(record_of(plugin).original_range.empty());
 }

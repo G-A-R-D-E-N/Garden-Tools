@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -536,7 +537,7 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
     created.push_back(std::move(subrecord));
   }
   target->subrecords.insert(target->subrecords.begin() + static_cast<std::ptrdiff_t>(position),
-                            created.begin(), created.end());
+                            std::make_move_iterator(created.begin()), std::make_move_iterator(created.end()));
   const std::size_t count_index = !counter                ? position
                                   : *counter < position  ? *counter
                                                          : *counter + created.size();
