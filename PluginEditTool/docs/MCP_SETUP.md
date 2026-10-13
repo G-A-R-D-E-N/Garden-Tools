@@ -231,7 +231,7 @@ override: fewer plugins, fewer conflicts, fewer masters.
 
 Settings live in `%APPDATA%\FO4RecordEditor\settings.json` (on Linux
 `$XDG_CONFIG_HOME/FO4RecordEditor/settings.json`, falling back to `~/.config`); `get_settings` shows
-them. The log is `logs\FO4IDE.log` in the same folder (5 MiB per file, three files kept).
+them. The log is `logs\FO4IDE.log` in the same folder (5 MiB per file, the current file plus three rotated ones).
 
 Some tools run helper programs. Each is looked for in this order, and the first hit wins: its
 environment variable, the matching `settings.json` key (where there is one), the location in the last

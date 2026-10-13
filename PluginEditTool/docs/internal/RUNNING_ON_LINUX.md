@@ -53,8 +53,8 @@ example), 5 is `--window`, and 6 means a bad `--port` or `--mo2` argument or an 
 failed to load.
 
 Settings live in `$XDG_CONFIG_HOME/FO4RecordEditor/settings.json` (`~/.config/FO4RecordEditor/` when
-that variable is unset). The log is `logs/FO4IDE.log` in the same folder, 5 MiB per file with three
-files kept.
+that variable is unset). The log is `logs/FO4IDE.log` in the same folder, 5 MiB per file with the
+current file plus three rotated ones.
 
 ## Talking to it directly
 
@@ -110,7 +110,7 @@ Papyrus engine are all native. These helper programs are Windows executables:
 - `xWMAEncode.exe`, `BmlFuzEncode.exe`, `BmlFuzDecode.exe` (audio and FUZ tools)
 - `niftool.exe` and `Texconvx64.exe`, if you only have the Windows builds
 
-The program runs any helper whose file name ends in `.exe` through `wine` when it is installed. Set
+The program runs any helper whose file name ends in `.exe` through `wine` (the call fails if wine is missing). Set
 `FO4RE_WINE` to name a different wine binary, or to an empty value to turn that off. `ffmpeg` is used
 natively from `PATH`, and `niftool` and `texconv` are also looked up on `PATH` without the `.exe`.
 Where each helper is looked for is listed in [../MCP_SETUP.md](../MCP_SETUP.md). How the Windows
@@ -122,7 +122,7 @@ tools cope with Linux paths under Wine has not been checked.
   browser` and keeps running. Start it from a terminal, open the printed address yourself, and stop it
   with Ctrl+C.
 - **The pickers need `zenity` or `kdialog`.** Without either, the Open MO2 button does nothing, as if
-  you had cancelled the dialog. A folder without a `profiles/` subfolder is treated the same way.
+  you had canceled the dialog. A folder without a `profiles/` subfolder is treated the same way.
   Start with `--mo2 <instance>` instead.
 - **"Load Env" cannot detect a game install.** It reloads the MO2 instance saved in `settings.json`
   and fails with `EnvironmentUnavailable` when there is none. Open an MO2 instance once (the picker

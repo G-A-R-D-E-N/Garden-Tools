@@ -108,7 +108,7 @@ if (-not $SkipCkWiki) {
     if ($CkWikiPath -and (Test-Path -LiteralPath $CkWikiPath -PathType Container)) {
         $dest = Join-Path $Staging 'tools\ckwiki\fallout4'
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
-        Copy-Item "$CkWikiPath\*" $dest -Recurse -Force
+        Copy-Item -Path (Join-Path ([WildcardPattern]::Escape($CkWikiPath)) '*') $dest -Recurse -Force
         $count = (Get-ChildItem $dest -Filter '*.html' -Recurse -File).Count
         Write-Host "    CK Wiki mirror ($count pages)"
     } else {
@@ -143,7 +143,7 @@ if ($IncludeBaseScripts) {
     if ($BaseScriptsPath -and (Test-Path -LiteralPath $BaseScriptsPath -PathType Container)) {
         $dest = Join-Path $Staging 'tools\papyrus\Base'
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
-        Copy-Item "$BaseScriptsPath\*" $dest -Recurse -Force
+        Copy-Item -Path (Join-Path ([WildcardPattern]::Escape($BaseScriptsPath)) '*') $dest -Recurse -Force
         Warn 'Bundled vanilla Papyrus base scripts. These are Bethesda assets; do not redistribute this build.'
     } else {
         Warn "-IncludeBaseScripts was set but -BaseScriptsPath / FO4IDE_BASE_SCRIPTS_DIR is unset or not a folder ('$BaseScriptsPath')."

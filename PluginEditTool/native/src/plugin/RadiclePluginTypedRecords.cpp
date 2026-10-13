@@ -117,7 +117,7 @@ std::optional<fo4::schema::LocalizedString> titleOf(const nlohmann::json& value)
 }
 
 bool rawIdTitle(const nlohmann::json& value) {
-    return value.is_object() && value.contains("rawId");
+    return value.is_object() && value.size() == 1 && value.contains("rawId") && value.at("rawId").is_string();
 }
 
 bool validTitle(const nlohmann::json& value, const char* name) {

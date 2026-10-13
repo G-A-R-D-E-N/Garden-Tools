@@ -11,6 +11,7 @@ on:
       - "PluginEditTool/Mutagen/**"
       - "PluginEditTool/README.md"
       - "PluginEditTool/docs/MCP_SETUP.md"
+      - "PluginEditTool/native/apps/fo4ide/McpTools.cpp"
       - ".github/workflows/plugin-editor-ci.yml"
   pull_request:
   workflow_dispatch:

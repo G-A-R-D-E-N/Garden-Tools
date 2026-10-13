@@ -461,6 +461,29 @@ TEST_CASE("Native FACT rank add refuses a rawId title and leaves the plugin byte
     CHECK_FALSE(pendingPlugin(backend, 1));
 }
 
+TEST_CASE("Native FACT rank add refuses a string ID title on a non-localized plugin and leaves the plugin bytes unchanged") {
+    const auto root = typedTempRoot();
+    TypedCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    typedWriteBytes(basePath, basePlugin());
+    typedWriteBytes(patchPath, factionPatchPlugin(false));
+    const auto before = typedReadBytes(patchPath);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBaseAndPatch(backend, basePath, patchPath);
+
+    const auto refused = backend.editFactionEntries(nlohmann::json::array({
+        "Patch.esp", "000810:Patch.esp", "ranks", "add", nullptr,
+        nlohmann::json{{"number", 3}, {"maleTitle", nlohmann::json{{"stringId", 9000}}}}
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "FactionWriteFailed");
+    const bool unchanged = typedReadBytes(patchPath) == before;
+    CHECK(unchanged);
+    CHECK_FALSE(pendingPlugin(backend, 1));
+}
+
 TEST_CASE("Native NPC reads and edits refuse a deleted record") {
     const auto root = typedTempRoot();
     TypedCleanup cleanup{root};

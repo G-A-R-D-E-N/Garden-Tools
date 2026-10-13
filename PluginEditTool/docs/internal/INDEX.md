@@ -3,7 +3,7 @@
 Reference hub for editing Fallout 4 plugins (`.esp`/`.esm`/`.esl`). Two distinct things are
 documented here:
 
-- **FO4RecordEditor** — a Fallout 4 plugin IDE (desktop editor + MCP server, 35 tools) written in
+- **FO4RecordEditor** — a Fallout 4 plugin IDE (desktop editor + MCP server) written in
   native C++23 on Radicle, the C++ plugin library in this repository. Reads and writes real binaries;
   needs no .NET, Mutagen or xEdit. **This is the primary tool.** Its tool list is in
   [../MCP_SETUP.md](../MCP_SETUP.md).
@@ -24,7 +24,7 @@ documented here:
 
 | If you are… | Read |
 |---|---|
-| Using the MCP tools to edit records | [../MCP_SETUP.md](../MCP_SETUP.md) — the 35 native tools, their arguments and the write-safety rules. [KNOWLEDGE.md](KNOWLEDGE.md) is older background from the C# server |
+| Using the MCP tools to edit records | [../MCP_SETUP.md](../MCP_SETUP.md) — the native tools, their arguments and the write-safety rules. [KNOWLEDGE.md](KNOWLEDGE.md) is older background from the C# server |
 | Working on the editor's own code | [ARCHITECTURE.md](ARCHITECTURE.md) — the native host, write-safety invariants, how to add an MCP tool |
 | Generating/compiling plugins as text | [PIPELINE.md](PIPELINE.md) → [SPRIGGIT.md](SPRIGGIT.md) → [JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT.md) |
 | Authoring meshes | [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) |

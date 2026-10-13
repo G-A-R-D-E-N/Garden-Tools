@@ -4,8 +4,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 REM Builds and deploys the native C++ FO4RecordEditor host.
 REM Requires Visual Studio 2022 C++ tools, CMake, Python 3, Node/npm, and internet
 REM access for pinned CMake FetchContent dependencies. No .NET SDK/runtime is used.
-REM Usage: publish.bat [deploy-folder]. The folder can also come from FO4IDE_DEPLOY_DIR;
-REM with neither, the build is made but not copied anywhere.
+REM Usage: publish.bat [deploy-folder]. The folder can also come from FO4IDE_DEPLOY_DIR; with neither, the build is made but not copied anywhere.
 
 set "ROOT=%~dp0"
 set "NATIVE_BUILD=%ROOT%native\build\publish-win-x64"
@@ -99,7 +98,7 @@ echo ============================================================
 echo Native FO4RecordEditor published successfully.
 echo Executable: !NATIVE_EXE!
 echo No .NET runtime is required.
-if defined DEPLOY echo Launch from MO2: %DEPLOY%\FO4RecordEditor.exe
+if defined DEPLOY if exist "%DEPLOY%\" echo Launch from MO2: "%DEPLOY%\FO4RecordEditor.exe"
 echo ============================================================
 
 popd
