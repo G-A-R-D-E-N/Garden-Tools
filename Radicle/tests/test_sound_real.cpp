@@ -36,10 +36,12 @@ void expect_text(std::optional<std::string_view> native, const char* abi) {
 }
 
 bool same_subrecords(const fo4::Record& left, const fo4::Record& right) {
-  return left.subrecords.size() == right.subrecords.size() &&
+  return left.header.flags.value() == right.header.flags.value() &&
+         left.header.form_version == right.header.form_version && left.compressed == right.compressed &&
+         left.subrecords.size() == right.subrecords.size() &&
          std::equal(left.subrecords.begin(), left.subrecords.end(), right.subrecords.begin(),
                     [](const fo4::Subrecord& a, const fo4::Subrecord& b) {
-                      return a.signature == b.signature && a.data == b.data;
+                      return a.signature == b.signature && a.extended_size == b.extended_size && a.data == b.data;
                     });
 }
 
@@ -174,7 +176,7 @@ TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesSubr
   const auto reread = fo4::read_plugin(bytes, plugin.path);
   const fo4::RecordIndex index(reread);
   for (const auto* ref : native_records) {
-    if (ref->record->header.signature.to_string() != "SNDR") continue;
+    if (ref->record->header.signature == fo4::sig_tes4) continue;
     SCOPED_TRACE(ref->record->form_key.to_string());
     const auto* after = index.find(ref->record->form_key);
     ASSERT_NE(after, nullptr);

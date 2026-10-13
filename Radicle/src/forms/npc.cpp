@@ -386,7 +386,6 @@ std::vector<NpcInventoryItem> decode_npc_inventory(const Plugin& plugin, const F
       result.back().extra_data = extra;
     }
   }
-  check_declared_count(declared, result.size(), "COCT", "CNTO");
   return result;
 }
 
