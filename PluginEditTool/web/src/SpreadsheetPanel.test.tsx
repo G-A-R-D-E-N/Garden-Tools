@@ -28,6 +28,7 @@ function installBackend(setField: () => Promise<string>) {
 beforeEach(() => {
   localStorage.setItem('spreadsheet.plugin', 'Mod.esp');
   localStorage.setItem('spreadsheet.type', 'NPC_');
+  dialogs.confirm.mockClear();
   dialogs.confirm.mockResolvedValue(true);
 });
 
