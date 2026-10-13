@@ -521,6 +521,9 @@ PlacedReferenceCopyNewResult copy_placed_reference_as_new(
   const auto& source_cell = containment.source_cell;
   const auto& world = containment.world;
   const auto& source_world = containment.source_world;
+  require_decodable(*containment.reference.record);
+  require_decodable(*source_cell.record);
+  if (source_world.has_value()) require_decodable(*source_world->record);
 
   auto next = destination;
   assign_record_form_keys(next);

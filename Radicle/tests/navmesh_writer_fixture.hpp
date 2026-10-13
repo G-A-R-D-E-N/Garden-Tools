@@ -18,7 +18,7 @@ inline Plugin navmesh_writer_fixture(std::uint16_t stored_edge0 = 0xFFFF, std::u
   for (int i = 0; i < 12; ++i) geometry.u32(0);
   ByteWriter out;
   auto record = begin_record(out, "TES4", 0, 0);
-  ByteWriter header; header.f32(1); header.u32(4); header.u32(0x900);
+  ByteWriter header; header.f32(1); header.u32(10); header.u32(0x900);
   write_subrecord(out, "HEDR", header.bytes); end_record(out, record);
   auto group = begin_group(out, "NAVM", 0);
   record = begin_record(out, "NAVM", 0, 0x800, 131);

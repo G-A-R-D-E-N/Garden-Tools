@@ -87,20 +87,21 @@ inline Bytes visual(std::size_t size) {
 
 inline Bytes build(const std::vector<Entry>& entries, std::uint32_t tes4_flags = 0) {
   ByteWriter out;
+  std::vector<std::string> tops;
+  for (const auto& entry : entries) {
+    if (std::find(tops.begin(), tops.end(), entry.signature) == tops.end()) { tops.push_back(entry.signature); }
+  }
   const auto tes4 = begin_record(out, "TES4", tes4_flags, 0);
   ByteWriter hedr;
   hedr.f32(1.0f);
-  hedr.u32(0);
+  hedr.u32(static_cast<std::uint32_t>(tops.size() + entries.size()));
   hedr.u32(0x900);
   write_subrecord(out, "HEDR", hedr.bytes);
   end_record(out, tes4);
-  std::vector<std::string> done;
-  for (const auto& top : entries) {
-    if (std::find(done.begin(), done.end(), top.signature) != done.end()) { continue; }
-    done.push_back(top.signature);
-    const auto group = begin_group(out, top.signature, 0);
+  for (const auto& top : tops) {
+    const auto group = begin_group(out, top, 0);
     for (const auto& entry : entries) {
-      if (entry.signature != top.signature) { continue; }
+      if (entry.signature != top) { continue; }
       const auto record = begin_record(out, entry.signature, 0, entry.id, entry.version);
       for (const auto& [name, data] : entry.subs) { write_subrecord(out, name, data); }
       end_record(out, record);
