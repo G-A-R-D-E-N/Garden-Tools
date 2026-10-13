@@ -831,6 +831,10 @@ Fourth #114 slice, stacked on the placed-reference slice. It covers the LAND, LT
 - the LTEX/TXST chain, including missing links;
 - the C ABI.
 
+## Radicle/src/environment/strings.cpp:load_plugin_string_tables — per-plugin tables without an Environment (#32)
+
+Public entry for callers that hold one `fo4::Plugin` rather than a full load order, such as the PET strings RPC. It shares `resolve_plugin_tables` with `StringTables::load`, so both apply the same rules: the localized flag, case-folded loose names, duplicate-case errors, and archive fallback through `AssetResolver::locate_in_archives`. The strings directories are searched in the order given, and the first loose match wins before any archive is tried. Each returned `PluginStringTable::archive` is empty for loose files and the BA2 file name otherwise. Test: `Radicle/tests/test_environment_strings.cpp:PluginTablesResolveLooseThenArchivesAndSkipNonLocalized`.
+
 ## Radicle/src/environment/strings.cpp:fo4::env::StringTables / string_source — GardenEngine #114 localization
 
 Fifth #114 slice, stacked on the terrain slice. It replaces Mutagen's `StringsFolderLookupOverlay` for loose string files. Reading strings out of BA2 archives waits for the BA2 slice.
@@ -2144,9 +2148,15 @@ The typed-record read shapes are `type` aliases, not interfaces, so `ListEditor`
 
 The tab is added only for typed record types. The multi-line `backend` type import was joined onto one line to keep RecordView.tsx at 750 lines.
 
-## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:readTables — sibling string tables (#32)
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::readStringTables — resolved through Radicle (#32)
 
-Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next to the loaded plugin, with the same symlink and regular-file check as `questinternal::loadLocalizedQuestTables`, and parses each found table with `fo4::localization::read_string_table_file`. A missing table is skipped; a table that fails to parse fails the whole call with `StringTableInvalid`. Limits: it reads only `<plugin dir>/Strings/<stem>_<lang>.<ext>` with exact case; it reads no BA2 archives, so base-game tables packed in archives are not listed; it does not scan other mod folders; and unsaved staged quest localization is not reflected.
+Calls `fo4::env::load_plugin_string_tables` with `<plugin dir>/Strings` first and `<data dir>/Strings` second, plus the archive resolver from `stringAssets`. Radicle decides what counts: loose names match case-insensitively (`Strings/mod_EN.strings` is found for language `EN`; only the file name is case-folded), a loose file wins over an archive entry, archives are searched for `strings/<stem>_<lang>.<ext>`, and a plugin without the localized flag has no tables. A parse failure fails the call with `StringTableInvalid`. `ListStringTables` adds `source` per table: `loose`, or the BA2 file name (`Radicle/src/environment/strings.cpp:load_plugin_string_tables`). The other RPCs keep their shape. Limits: only the plugin's own folder and the data directory are searched, not other MO2 mod folders, because the backend receives `setDataDirectory` and not the MO2 asset roots; unsaved staged quest localization is not reflected. Changes from the earlier loose-only reader: loose tables are no longer rejected when they are symlinks, because Radicle's directory listing follows links; and a non-localized plugin lists no tables even if `Strings` files sit beside it, as the game ignores them.
+
+Loose tables reached through a symlink are listed here, but the quest localization loader (`PluginEditTool/native/src/plugin/RadiclePluginQuestLocalized.cpp`) refuses symlinks because it writes tables back.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::stringAssets — archive cache (#32)
+
+Opens an `AssetResolver` over the BA2 files that `fo4::archive::archive_load_order` picks, with no INI archive list: the data directory's archives for all loaded plugin names, then the archives beside the loaded plugin for that plugin name. A folder archive with the same file name, compared case-folded with `fo4::text::equals_folded`, replaces the data directory copy and takes precedence, as loose files in the plugin folder do. When the plugin folder is the data directory (`std::filesystem::equivalent`), the folder scan is skipped, since the data directory scan already covers it. The `<stem> - *.ba2` rule covers the vanilla `Fallout4 - *.ba2` and DLC archives; an archive named only in `Fallout4.ini` `sResourceArchive2List` is not found. An archive that fails to open is skipped, so one corrupt or locked BA2 does not fail every strings call. The resolver is cached by each archive's path, size and last write time, and reopened when any of them changes, because opening every archive table of contents on each RPC would be too slow. `readStringTables` builds it only when a localized plugin lacks a loose table.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — paging (#32)
 
