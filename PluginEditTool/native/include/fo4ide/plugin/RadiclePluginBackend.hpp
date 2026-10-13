@@ -71,6 +71,8 @@ public:
     Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> createPlacedObject(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> createInteriorCell(const nlohmann::json& arguments) override;
     Result<nlohmann::json> getLeveledList(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setLeveledListSettings(const nlohmann::json& arguments) override;
     Result<nlohmann::json> editLeveledListEntry(const nlohmann::json& arguments) override;

@@ -62,7 +62,7 @@ TEST_P(StaticLightReal, BatchRowsDecodeAndAuthoringMinimumsHold) {
         const fo4::schema::FieldShape shape{field.subrecord, field.offset, 4, 0, false};
         const auto slots = fo4::schema::resolve_field_slots(*record, shape, field.address);
         for (const auto& slot : slots.slots) {
-          if (!slot.valid) ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ' ' << field.path << " is not decodable";
+          if (!slot.valid) { ADD_FAILURE() << GetParam() << ' ' << key.to_string() << ' ' << field.path << " is not decodable"; }
         }
       }
     } catch (const std::exception& error) {
