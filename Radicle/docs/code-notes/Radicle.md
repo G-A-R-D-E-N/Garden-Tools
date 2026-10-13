@@ -1507,3 +1507,7 @@ One synthetic plugin with no masters holds a record for each batch type plus the
 ## Radicle/tests/test_config_records_real.cpp:ConfigRecordsReal
 
 For every batch record in each official master, the test checks that every subrecord is listed in the authoring table and that each subrecord count falls within its minimum and maximum. It also decodes every scalar row against its subrecord payloads and calls `record_field_count` for every FormLink row. For each GMST record, `record_field_count` of each when-gated row is 1 exactly when the EDID first letter matches its gate (f, i, b) and 0 otherwise. Records of these types are counted, and Fallout4.esm must contain at least one. The seven masters hold 185 DLBR records in quest-children groups, so the real test covers DLBR too.
+
+## Radicle/src/plugin/field_writer.cpp:record_field_count
+
+Gated fields count only slots whose when condition holds; ungated fields count every slot so indexes match the setters.
