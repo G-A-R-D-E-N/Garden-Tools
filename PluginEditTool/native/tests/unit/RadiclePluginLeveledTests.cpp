@@ -42,14 +42,17 @@ void leveledWriteBytes(const std::filesystem::path& path,
     REQUIRE(stream.good());
 }
 
-void writeLvlo(fo4::test::ByteWriter& out, std::uint32_t target) {
+void writeLvlo(fo4::test::ByteWriter& out,
+               std::uint32_t target,
+               std::uint16_t unused = 0,
+               std::uint8_t padding = 0) {
     fo4::test::ByteWriter lvlo;
     lvlo.u16(1);       // level
-    lvlo.u16(0);       // unused
+    lvlo.u16(unused);  // unused
     lvlo.u32(target);  // reference FormID, schema-proven offset 4
     lvlo.u16(1);       // count
     lvlo.u8(100);      // chance none / entry chance byte
-    lvlo.u8(0);        // padding
+    lvlo.u8(padding);  // padding
     fo4::test::write_subrecord(out, "LVLO", lvlo.bytes);
 }
 
@@ -83,7 +86,7 @@ void leveledWriteByte(fo4::test::ByteWriter& out, std::string_view signature, st
     fo4::test::write_subrecord(out, signature, data.bytes);
 }
 
-std::vector<std::byte> settledLeveledBytes() {
+std::vector<std::byte> settledLeveledBytes(std::uint16_t unused = 0, std::uint8_t padding = 0) {
     fo4::test::ByteWriter out;
     const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
     fo4::test::ByteWriter hedr;
@@ -99,13 +102,13 @@ std::vector<std::byte> settledLeveledBytes() {
     leveledWriteByte(out, "LVLD", 10);
     leveledWriteByte(out, "LVLM", 2);
     leveledWriteByte(out, "LVLF", 1);
-    writeLvlo(out, 0x00000801u);
+    leveledWriteByte(out, "LLCT", 1);
+    writeLvlo(out, 0x00000801u, unused, padding);
     fo4::test::ByteWriter coed;
     coed.u32(0x00000800u);
     coed.u32(0);
     coed.f32(1.0f);
     fo4::test::write_subrecord(out, "COED", coed.bytes);
-    leveledWriteByte(out, "LLCT", 1);
     fo4::test::end_record(out, list);
     fo4::test::end_group(out, group);
     return out.bytes;
@@ -243,4 +246,35 @@ TEST_CASE("Native leveled list remove refuses an out-of-range index and leaves t
     CHECK(list->at("entries").size() == 1);
     const bool unchanged = leveledReadBytes(path) == before;
     CHECK(unchanged);
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    CHECK(nlohmann::json::parse(plugins->get<std::string>()).at(0).at("Pending") == false);
+}
+
+TEST_CASE("Native leveled list set keeps the replaced entry's reserved bytes through save and re-read") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes(0xABCDu, 0x5Au));
+    const auto key = fo4::FormKey::parse("000800:Patch.esp");
+    const auto original = fo4::forms::decode_leveled_list(fo4::read_plugin_file(path), key);
+    REQUIRE(original.entries.size() == 1);
+    REQUIRE(original.entries[0].reserved_before_form_id[0] != std::byte{0x00});
+    REQUIRE(original.entries[0].reserved_tail != std::byte{0x00});
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const auto edited = backend.editLeveledListEntry(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "set", 0,
+        nlohmann::json{{"level", 2}, {"item", "000802:Patch.esp"}, {"count", 3}, {"chanceNone", 50}}
+    }));
+    REQUIRE(edited.has_value());
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+
+    const auto reread = fo4::forms::decode_leveled_list(fo4::read_plugin_file(path), key);
+    REQUIRE(reread.entries.size() == 1);
+    CHECK(reread.entries[0].level == 2);
+    CHECK(reread.entries[0].reserved_before_form_id == original.entries[0].reserved_before_form_id);
+    CHECK(reread.entries[0].reserved_tail == original.entries[0].reserved_tail);
 }

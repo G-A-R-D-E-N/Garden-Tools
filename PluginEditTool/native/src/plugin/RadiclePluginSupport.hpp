@@ -77,6 +77,7 @@ inline std::string stringField(const nlohmann::json& object, const char* name) {
 }
 
 inline Result<fo4::FormKey> formKeyArgument(std::string_view text) {
+    if (text.empty()) return std::unexpected(Error{"FormKeyMissing", "FormKey is empty"});
     try {
         return fo4::FormKey::parse(text);
     } catch (const std::exception& error) {
@@ -89,11 +90,19 @@ inline nlohmann::json formKeyJson(const fo4::FormKey& key) {
 }
 
 template <class Plugins>
-const fo4::Plugin* winningPlugin(const Plugins& plugins, const fo4::FormKey& key) {
+Result<const fo4::Plugin*> winningPlugin(const Plugins& plugins, const fo4::FormKey& key) {
     for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
-        if (fo4::find_record(it->plugin, key) != nullptr) return &it->plugin;
+        const auto* record = fo4::find_record(it->plugin, key);
+        if (record == nullptr) continue;
+        if (record->header.flags.is_deleted()) {
+            return std::unexpected(Error{
+                "RecordDeleted",
+                "The winning version of " + key.to_string() + " is deleted in " + it->name
+            });
+        }
+        return &it->plugin;
     }
-    return nullptr;
+    return std::unexpected(Error{"RecordNotFound", "Record not found: " + key.to_string()});
 }
 
 inline std::string editorId(const fo4::Record& record) {

@@ -85,8 +85,10 @@ Result<fo4::forms::NpcInventoryItem> npcInventoryFromJson(const nlohmann::json& 
 }
 
 nlohmann::json titleJson(const std::optional<fo4::schema::LocalizedString>& title) {
-    if (!title.has_value() || !title->text.has_value()) return nlohmann::json(nullptr);
-    return nlohmann::json(*title->text);
+    if (!title.has_value()) return nlohmann::json(nullptr);
+    if (title->text.has_value()) return nlohmann::json(*title->text);
+    if (title->id.has_value()) return nlohmann::json{{"stringId", *title->id}};
+    return nlohmann::json(nullptr);
 }
 
 std::optional<fo4::schema::LocalizedString> titleOf(const nlohmann::json& value) {
@@ -96,8 +98,13 @@ std::optional<fo4::schema::LocalizedString> titleOf(const nlohmann::json& value)
     return title;
 }
 
+bool stringIdTitle(const nlohmann::json& value) {
+    return value.is_object() && value.contains("stringId");
+}
+
 bool validTitle(const nlohmann::json& value, const char* name) {
-    return !value.contains(name) || value.at(name).is_string() || value.at(name).is_null();
+    return !value.contains(name) || value.at(name).is_string() || value.at(name).is_null() ||
+           stringIdTitle(value.at(name));
 }
 
 std::string reactionName(fo4::forms::FactionCombatReaction reaction) {
@@ -162,10 +169,9 @@ Result<nlohmann::json> RadiclePluginBackend::getNpc(const nlohmann::json& argume
     if (!key) return std::unexpected(key.error());
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* source = support::winningPlugin(plugins_, *key);
-    if (source == nullptr) {
-        return std::unexpected(Error{"RecordNotFound", "Record not found: " + key->to_string()});
-    }
+    const auto winner = support::winningPlugin(plugins_, *key);
+    if (!winner) return std::unexpected(winner.error());
+    const auto* source = *winner;
     try {
         nlohmann::json factions = nlohmann::json::array();
         for (const auto& entry : fo4::forms::decode_npc_factions(*source, *key)) {
@@ -269,10 +275,9 @@ Result<nlohmann::json> RadiclePluginBackend::getFaction(const nlohmann::json& ar
     if (!key) return std::unexpected(key.error());
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* source = support::winningPlugin(plugins_, *key);
-    if (source == nullptr) {
-        return std::unexpected(Error{"RecordNotFound", "Record not found: " + key->to_string()});
-    }
+    const auto winner = support::winningPlugin(plugins_, *key);
+    if (!winner) return std::unexpected(winner.error());
+    const auto* source = *winner;
     try {
         nlohmann::json relations = nlohmann::json::array();
         for (const auto& relation : fo4::forms::decode_faction_relations(*source, *key)) {
@@ -357,8 +362,12 @@ Result<nlohmann::json> RadiclePluginBackend::editFactionEntries(const nlohmann::
         }
         fo4::forms::FactionRank rank = op == "set" ? ranks[position] : fo4::forms::FactionRank{};
         rank.number = *number;
-        if (value.contains("maleTitle")) rank.male_title = titleOf(value.at("maleTitle"));
-        if (value.contains("femaleTitle")) rank.female_title = titleOf(value.at("femaleTitle"));
+        if (value.contains("maleTitle") && !stringIdTitle(value.at("maleTitle"))) {
+            rank.male_title = titleOf(value.at("maleTitle"));
+        }
+        if (value.contains("femaleTitle") && !stringIdTitle(value.at("femaleTitle"))) {
+            rank.female_title = titleOf(value.at("femaleTitle"));
+        }
         if (op == "add") {
             fo4::forms::add_faction_rank(mutated, *key, rank);
         } else {
@@ -372,10 +381,9 @@ Result<nlohmann::json> RadiclePluginBackend::getWeaponDamageTypes(const nlohmann
     if (!key) return std::unexpected(key.error());
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* source = support::winningPlugin(plugins_, *key);
-    if (source == nullptr) {
-        return std::unexpected(Error{"RecordNotFound", "Record not found: " + key->to_string()});
-    }
+    const auto winner = support::winningPlugin(plugins_, *key);
+    if (!winner) return std::unexpected(winner.error());
+    const auto* source = *winner;
     try {
         nlohmann::json damageTypes = nlohmann::json::array();
         for (const auto& damage : fo4::forms::decode_weapon_damage_types(*source, *key)) {

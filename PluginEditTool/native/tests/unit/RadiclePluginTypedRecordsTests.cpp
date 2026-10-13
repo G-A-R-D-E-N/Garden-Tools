@@ -89,13 +89,10 @@ std::vector<std::byte> npcPatchPlugin() {
     writeHeader(out, {"Base.esm"});
 
     const auto top = fo4::test::begin_group(out, "NPC_", 0);
-    const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x00000800u);
+    const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x01000800u);
     fo4::test::ByteWriter snam;
     snam.u32(0x00000900u);
     snam.u8(3);
-    snam.u8(0);
-    snam.u8(0);
-    snam.u8(0);
     fo4::test::write_subrecord(out, "SNAM", snam.bytes);
     fo4::test::ByteWriter prkz;
     prkz.u32(1);
@@ -121,7 +118,7 @@ std::vector<std::byte> factionPatchPlugin() {
     writeHeader(out, {"Base.esm"});
 
     const auto top = fo4::test::begin_group(out, "FACT", 0);
-    const auto faction = fo4::test::begin_record(out, "FACT", 0, 0x00000810u);
+    const auto faction = fo4::test::begin_record(out, "FACT", 0, 0x01000810u);
     fo4::test::ByteWriter xnam;
     xnam.u32(0x00000900u);
     xnam.i32(5);
@@ -141,12 +138,12 @@ std::vector<std::byte> weaponPatchPlugin() {
     writeHeader(out, {"Base.esm"});
 
     const auto npcTop = fo4::test::begin_group(out, "NPC_", 0);
-    const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x00000800u);
+    const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x01000800u);
     fo4::test::end_record(out, npc);
     fo4::test::end_group(out, npcTop);
 
     const auto top = fo4::test::begin_group(out, "WEAP", 0);
-    const auto weapon = fo4::test::begin_record(out, "WEAP", 0, 0x00000820u, 152);
+    const auto weapon = fo4::test::begin_record(out, "WEAP", 0, 0x01000820u, 152);
     fo4::test::ByteWriter dama;
     dama.u32(0x00000900u);
     dama.u32(25);
@@ -176,6 +173,12 @@ void loadBaseAndPatch(fo4ide::plugin::RadiclePluginBackend& backend,
         })}
     };
     REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+}
+
+bool pendingPlugin(fo4ide::plugin::RadiclePluginBackend& backend, std::size_t index) {
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    return nlohmann::json::parse(plugins->get<std::string>()).at(index).at("Pending").get<bool>();
 }
 
 }  // namespace
@@ -256,6 +259,7 @@ TEST_CASE("Native NPC faction set refuses an out-of-range index and leaves the p
     CHECK(npc->at("factions")[0].at("rank") == 3);
     const bool unchanged = typedReadBytes(patchPath) == before;
     CHECK(unchanged);
+    CHECK_FALSE(pendingPlugin(backend, 1));
 }
 
 TEST_CASE("Native FACT typed decode reads relations and ranks") {
@@ -335,6 +339,7 @@ TEST_CASE("Native FACT relation set refuses an out-of-range index and leaves the
     CHECK(faction->at("relations")[0].at("modifier") == 5);
     const bool unchanged = typedReadBytes(patchPath) == before;
     CHECK(unchanged);
+    CHECK_FALSE(pendingPlugin(backend, 1));
 }
 
 TEST_CASE("Native WEAP typed decode reads damage types from the winning record") {
@@ -373,4 +378,5 @@ TEST_CASE("Native WEAP damage read refuses a non-WEAP record and leaves the plug
     CHECK(refused.error().type == "WeaponReadFailed");
     const bool unchanged = typedReadBytes(patchPath) == before;
     CHECK(unchanged);
+    CHECK_FALSE(pendingPlugin(backend, 1));
 }

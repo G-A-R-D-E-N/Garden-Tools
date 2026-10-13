@@ -2069,3 +2069,23 @@ Requested model paths are still deduplicated case-insensitively after trimming, 
 ## PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveNif — NIF lookup not changed (#285)
 
 NIF lookup is PET's own: `ensureRootScanned` indexes every `.ba2` under a root, and `scanAndLookup` takes the first alphabetical archive through `try_emplace`. Radicle's `fo4::archive::AssetResolver::locate` (`Radicle/include/fo4/archive/assets.hpp`) uses load order instead. The two differ in which copy of a mesh wins, not in whether a mesh is found, so this was not changed for #285. Still unproven: whether a given vanilla NIF fails in `NifService::geometry` or has no renderable shapes, and the GardenEngine comparison for one exact reference. Radicle's `normalize_asset_path` also strips a leading `data` component, which PET's `norm` does not; no MODL seen here starts with it.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:editLeveledListEntry — set keeps reserved bytes
+
+A `set` decodes the entries of the plugin being mutated and copies `reserved_before_form_id` and `reserved_tail` from the entry at the same position onto the replacement before `set_leveled_list_entry` writes it. The entry JSON has no field for those bytes, so without the copy a `set` would zero them. A `set` past the end of the list gets no copy and is refused by the writer as before.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:leveledEntryFromJson — COED owner optional
+
+`extra.owner` follows the NPC path in RadiclePluginTypedRecords.cpp:npcInventoryFromJson. A missing or null owner is an empty FormKey, a present value is parsed with `formKeyArgument`, and a non-string value fails as `FormKeyMissing`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:winningPlugin — deleted winner refused
+
+`winningPlugin` walks plugins from the last load-order entry and returns the first plugin holding the key. If that record has the deleted flag it returns `RecordDeleted`, as RadiclePluginCell.cpp does for placed-reference edits. Not-found is now `RecordNotFound` from the same helper, so the typed read callers no longer repeat it.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:formKeyArgument — empty text
+
+Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyArgument uses, instead of a parse error.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
+
+A rank title with no inline text but a string ID is emitted as `{"stringId": id}`. On a rank `set` or `add`, a `maleTitle` or `femaleTitle` sent in that shape (`stringIdTitle`) leaves the title unchanged, so the string ID is not lost. Plain strings and null still set or clear the title.

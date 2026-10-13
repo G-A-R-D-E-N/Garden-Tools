@@ -111,14 +111,19 @@ Result<fo4::forms::LeveledListEntry> leveledEntryFromJson(const nlohmann::json& 
     entry.chance_none = *chanceNone;
     if (value.contains("extra") && !value.at("extra").is_null()) {
         const auto& extra = value.at("extra");
-        const auto owner = support::formKeyArgument(support::stringField(extra, "owner"));
+        fo4::FormKey owner{};
+        if (extra.contains("owner") && !extra.at("owner").is_null()) {
+            const auto parsed = support::formKeyArgument(support::stringField(extra, "owner"));
+            if (!parsed) return std::unexpected(parsed.error());
+            owner = *parsed;
+        }
         const auto globalOrRank = support::integerField<std::uint32_t>(extra, "globalOrRank");
-        if (!owner || !globalOrRank || !extra.contains("itemCondition") ||
+        if (!globalOrRank || !extra.contains("itemCondition") ||
             !extra.at("itemCondition").is_number()) {
             return std::unexpected(Error{"InvalidLeveledListEntry", k_invalid_entry});
         }
         entry.extra = fo4::forms::LeveledListExtraData{
-            *owner, *globalOrRank, extra.at("itemCondition").get<float>()};
+            owner, *globalOrRank, extra.at("itemCondition").get<float>()};
     }
     return entry;
 }
@@ -258,10 +263,9 @@ Result<nlohmann::json> RadiclePluginBackend::getLeveledList(const nlohmann::json
     if (!key) return std::unexpected(key.error());
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto* source = support::winningPlugin(plugins_, *key);
-    if (source == nullptr) {
-        return std::unexpected(Error{"RecordNotFound", "Record not found: " + key->to_string()});
-    }
+    const auto winner = support::winningPlugin(plugins_, *key);
+    if (!winner) return std::unexpected(winner.error());
+    const auto* source = *winner;
     try {
         return leveledListJson(fo4::forms::decode_leveled_list(*source, *key));
     } catch (const std::exception& error) {
@@ -320,7 +324,13 @@ Result<nlohmann::json> RadiclePluginBackend::editLeveledListEntry(const nlohmann
             if (op == "add") {
                 fo4::forms::insert_leveled_list_entry(mutated, *key, position, *entry);
             } else if (op == "set") {
-                fo4::forms::set_leveled_list_entry(mutated, *key, position, *entry);
+                auto replacement = *entry;
+                const auto existing = fo4::forms::decode_leveled_list(mutated, *key).entries;
+                if (position < existing.size()) {
+                    replacement.reserved_before_form_id = existing[position].reserved_before_form_id;
+                    replacement.reserved_tail = existing[position].reserved_tail;
+                }
+                fo4::forms::set_leveled_list_entry(mutated, *key, position, replacement);
             } else {
                 fo4::forms::remove_leveled_list_entry(mutated, *key, position);
             }
