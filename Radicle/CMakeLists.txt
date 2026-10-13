@@ -442,6 +442,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_image_fx_records_real.cpp
     tests/test_material_impact_records.cpp
     tests/test_material_impact_records_real.cpp
+    tests/test_actor_support_records.cpp
+    tests/test_actor_support_records_real.cpp
     tests/test_weapon.cpp
     tests/test_weapon_real.cpp
     tests/test_onam.cpp
