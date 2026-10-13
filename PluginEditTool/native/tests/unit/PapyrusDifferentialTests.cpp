@@ -96,6 +96,7 @@ std::optional<fs::path> sourceFor(const fs::path& pex) {
         }
         fs::path relative;
         for (std::size_t j = start; j < parts.size(); ++j) relative /= parts[j];
+        if (relative.has_root_directory()) continue;
 
         const auto name = relative.string();
         const fs::path source = name.substr(0, name.size() - 4) + ".psc";
