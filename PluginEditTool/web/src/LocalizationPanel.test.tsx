@@ -38,10 +38,10 @@ function installHost(): StringsHost {
   return host;
 }
 
-async function pickPlugin() {
+async function pickPlugin(firstRow = 'Apple pie') {
   await screen.findByRole('option', { name: 'Mod.esp' });
   fireEvent.change(screen.getByRole('combobox', { name: 'Plugin' }), { target: { value: 'Mod.esp' } });
-  await screen.findByText('Apple pie');
+  await screen.findByText(firstRow);
 }
 
 afterEach(() => {
@@ -87,7 +87,7 @@ describe('LocalizationPanel', () => {
       rows: [{ id: 10 + offset, text: `row ${offset}` }],
     }));
     render(<LocalizationPanel onClose={() => {}} />);
-    await pickPlugin();
+    await pickPlugin('row 0');
 
     fireEvent.click(screen.getByText('Next', { exact: false }));
     await vi.waitFor(() =>
