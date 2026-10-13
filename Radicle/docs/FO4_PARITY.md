@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 80, L1 16, L2 9, L3 1, L4 41.
 
 ### Per-signature coverage
 
@@ -61,7 +61,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | ASPC | 7057 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AVIF | 7826 | - | - | - | - | - | - | - | - | - | 1 | L0 |
-| BNDS | 12280 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
+| BNDS | 12280 | 8 | - | 1 | - | - | yes | - | environment/base_records | - | - | L4 |
 | BOOK | 5891 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | BPTD | 7693 | - | - | - | - | - | - | - | - | - | - | L0 |
 | CAMS | 7880 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -115,12 +115,12 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | KSSM | 12387 | - | - | - | - | - | - | - | - | - | - | L0 |
 | KYWD | 6947 | - | - | - | - | - | - | - | - | - | - | L0 |
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | - | - | L2 |
-| LAYR | 12400 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
+| LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | - | L4 |
 | LCRT | 6962 | - | - | - | - | - | - | - | - | - | - | L0 |
 | LCTN | 8039 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | LENS | 12405 | - | - | - | - | - | - | - | - | - | - | L0 |
-| LGTM | 8629 | - | - | - | - | - | - | - | environment/world | - | - | L2 |
-| LIGH | 9871 | - | - | - | - | - | - | yes | environment/base_records | - | 1 | L2 |
+| LGTM | 8629 | 37 | - | 1 | - | - | yes | - | environment/world | - | - | L4 |
+| LIGH | 9871 | 19 | 1 | 3 | - | 1 | yes | yes | environment/base_records | - | 1 | L4 |
 | LSCR | 9946 | - | - | - | - | - | - | - | - | - | - | L0 |
 | LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
 | LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | - | 1 | L4 |
@@ -133,7 +133,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | MISC | 10212 | - | - | - | - | - | - | yes | forms/components | - | 1 | L2 |
 | MOVT | 9393 | - | - | - | - | - | - | - | - | - | - | L0 |
 | MSTT | 7067 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| MSWP | 12437 | - | - | - | - | - | - | - | environment/material_swap | - | - | L2 |
+| MSWP | 12437 | - | - | - | - | - | yes | - | environment/material_swap | - | - | L4 |
 | MUSC | 8665 | 4 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | MUST | 8795 | - | - | - | - | - | - | - | - | - | - | L0 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
@@ -179,13 +179,13 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | SPEL | 12030 | - | - | - | - | - | - | yes | - | - | 2 | L1 |
 | SPGD | 6128 | - | - | - | - | - | - | - | - | - | - | L0 |
 | STAG | 12663 | - | - | - | - | - | - | - | - | - | - | L0 |
-| STAT | 12045 | - | - | - | - | - | - | - | environment/base_records | - | 1 | L2 |
+| STAT | 12045 | 3 | 1 | 1 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
 | TACT | 5672 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | TERM | 12671 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | - | 7 | L0 |
 | TREE | 12134 | 16 | - | 2 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | - | - | - | - | - | - | - | - | - | - | L0 |
-| TXST | 6984 | - | - | - | - | - | - | - | environment/terrain | - | 1 | L2 |
+| TXST | 6984 | 13 | 9 | - | - | - | yes | - | environment/terrain | - | 1 | L4 |
 | VTYP | 7950 | - | - | - | - | - | - | - | - | - | - | L0 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
 | WEAP | 12877 | 45 | - | 13 | - | 2 | yes | yes | forms/weapon | - | 2 | L4 |
@@ -201,6 +201,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
+| BNDS | 7 | - | 1 | - | - | f32, u16 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
@@ -215,10 +216,14 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
+| LAYR | - | - | - | - | - | - | - | - | - | existing_only |
+| LGTM | 37 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
+| LIGH | 18 | - | - | 1 | 1 | f32, i32, u32, u8 | - | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
 | LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVSP | - | - | - | - | - | - | - | - | - | - |
+| MSWP | - | - | - | - | - | - | - | - | - | - |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
@@ -231,7 +236,9 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| STAT | 3 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| TXST | 11 | - | - | 2 | 9 | f32, u16, u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |

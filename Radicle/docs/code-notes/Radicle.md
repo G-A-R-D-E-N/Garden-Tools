@@ -1469,3 +1469,56 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
+
+## Radicle/schema/fallout4/fields.json:T1 typed-read records
+
+Batch T1 adds schema rows and authoring constraints for STAT, LIGH, BNDS, LAYR, LGTM, MSWP and TXST. LAND is excluded because its payloads are grids and arrays. The rows are one block placed after TREE. Layouts come from the xEdit pin 01a11729 (`build/xedit/wbDefinitionsFO4.pas`): STAT at line 12045, LIGH at 9871, BNDS at 12280, LAYR at 12400, MSWP at 12437, LGTM at 8629 and TXST at 6984. The `DODT` struct is at line 3400, and `wbObjectBounds` is at `wbDefinitionsCommon.pas:9074`.
+
+Vanilla corpus (Fallout4.esm plus the six DLC masters, read-only) has STAT 23579, LIGH 1065, BNDS 12, LAYR 4595, LGTM 72, MSWP 3937 and TXST 511 records. Authoring minimum 1 is set only where xEdit marks the subrecord required and every vanilla record has it: LIGH `DATA`, `FNAM` and `OBND` (1065 of 1065 each), STAT `DNAM` and `OBND` (23579 of 23579), BNDS `OBND` (12 of 12), LGTM `DATA` and `DALC` (72 of 72), and TXST `DNAM` and `OBND` (511 of 511). The authoring order is the order observed in vanilla. Across all masters, no record has an out-of-order schema-known subrecord, and no record exceeds a maximum or misses a minimum.
+
+Rows per record: STAT 3 scalar, 1 string and 1 FormLink. LIGH 19 scalar, 1 string and 3 FormLinks. BNDS 8 scalar and 1 FormLink. LAYR 1 FormLink. LGTM 37 scalar and 1 FormLink. MSWP none. TXST 13 scalar (9 `DODT` members, 3 `DODT` colour bytes and 1 `DNAM` flags field) and 9 strings.
+
+Rows assume the FO4 form version (30 or later), which is the branch the LGTM reader takes for the 32-byte ambient block. Optional tail members carry `minimum_payload_size` at their end offset, matching the reader thresholds.
+
+Not covered (for the array, struct and blob lane):
+- STAT `MNAM` (distant LOD, four 260-byte mesh slots), `NVNM` (navmesh blob), `VMAD`, `PTRN`, `FTYP`, `PRPS` and the `MOD*` model blobs. Record flags are not rows.
+- LIGH `DATA` byte 11 (colour unused byte), `VMAD`, `PTRN`, `PRPS`, `DEST`, `ICON` and `MICO`. `KWDA` and `KSIZ` stay with `keyword_records`.
+- LGTM `DATA` ambient-unused block at 40-71 (six directional colours, specular and fresnel), `DATA` byte 88 (unused), the colour unused bytes, and `DALC` (32-byte directional ambient block).
+- MSWP `BNAM`, `SNAM`, `CNAM` and the substitution `FNAM`. The flat `FNAM` (Tree Folder, the first `FNAM`) has no row. 207 vanilla records contain more than one `FNAM` because xEdit's obsolete `FNAM` sits in the substitution array, so a row would fail closed on them. MSWP therefore has authoring (`EDID`) only.
+- TXST `DODT` byte 30 (`Alpha Threshold?`, marked as unverified by xEdit), the unused colour byte 35. `TX06` has no vanilla occurrence and is kept in authoring only.
+
+## Radicle/src/environment/base_records.cpp:decode_light — LIGH rows
+
+`LIGH DATA` rows match the reader offsets: time `i32` at 0, radius `u32` at 4, colour bytes 8 to 10, flags at 12, then falloff, FOV, near clip, flicker, constant, scalar, exponent (48, minimum payload 52), god-ray near clip (52, minimum 56), value (56, minimum 60) and weight (60, minimum 64). The reader accepts sizes 48 to 64 in multiples of 4. xEdit sets `SetOptionalFrom(10)` on `DATA` (line 9889 onward), so a 48-byte payload has no exponent. The corpus has 107 records at 48 bytes, 174 at 60 and 784 at 64. `LIGH FNAM` is a 4-byte fade value (`payload_size` 4). The flags names are the 22 xEdit `wbFlags` names in sequential bit order (bit 0 "Unknown 0" through bit 21 "Unknown 21"). The sound (`SNAM`), lens (`LNAM`) and god rays (`WGDR`) FormLinks match `decode_light`. `SNAM` is absent from vanilla but is defined at xEdit line 9941.
+
+## Radicle/src/environment/base_records.cpp:decode_bendable_spline — BNDS rows
+
+`BNDS DNAM` rows use the reader offsets: tiles `f32` at 0, slices `u16` at 4 (minimum 6), relative `u16` enum at 6 (minimum 8, names False and True from `wbBoolEnum`), default colour at 8, 12 and 16 (minimum 20 for each channel, matching the reader's `size >= 20` gate), wind sensibility at 20 (minimum 24) and wind flexibility at 24 (minimum 28). `TNAM` is a TXST FormLink. xEdit has no optional member in `DNAM` (line 12283), so the reader's 20 and 24-byte sizes are a leniency beyond xEdit, not a row conflict. No change was needed.
+
+## Radicle/src/environment/base_records.cpp:decode_layer_parent — LAYR rows
+
+`LAYR PNAM` is a 4-byte LAYR FormLink (`wbFormIDCk(PNAM, 'Parent', [LAYR])` at line 12402). It is optional. `decode_layer_parent` reads the same link at the same offset.
+
+## Radicle/src/environment/base_records.cpp:decode_static_distant_lod — STAT rows
+
+`STAT DNAM` (xEdit line 12075, `SetOptionalFrom(2)` and `SetRequired`) has max angle `f32` at 0 (30 to 120 by its xEdit name; vanilla is 30 to 90), material FormLink at 4 (MATO or NULL, `payload_sizes` 8 and 16), leaf amplitude at 8 (minimum 12) and leaf frequency at 12 (minimum 16). The corpus has 23164 DNAM records at 16 bytes and 415 at 8 bytes. `MODL` is a string row. The reader reads `MNAM` only, and its check (up to four 260-byte slots) is more lenient than xEdit's fixed four slots. No change was made.
+
+## Radicle/src/environment/world.cpp:decode_lighting_template — LGTM rows
+
+`LGTM DATA` (xEdit line 8631, `SetRequired`) uses the XCLL-shaped offsets from `decode_lighting`: directional at 4, fog near colour at 8, fog near and far at 12 and 16, rotation at 20 and 24, directional fade at 28, fog clip at 32 and fog power at 36. The ambient-unused block is 32 bytes at 40 (`wbAmbientColors` with `wbFromVersion(30)`). Fog far colour is at 72, fog max at 76, light fade begin at 80 and end at 84. The reader stops there. The rows continue with xEdit-only members: near height mid and range at 92 and 96, high fog colours at 100 and 104, the five scales at 108 to 124, and far height mid and range at 128 and 132. The corpus has 46 records at 92 bytes, 4 at 128 and 22 at 136. `DALC` (line 8661) is a required 32-byte struct, and `WGDR` (line 8662) is a GDRY FormLink.
+
+## Radicle/src/environment/material_swap.cpp:decode_material_swap — MSWP rows
+
+The reader reads only the repeated `BNAM`, `SNAM` and `CNAM` substitution array (xEdit line 12437). It ignores the flat `FNAM` (line 12442). That flat `FNAM` cannot be a row because 207 vanilla MSWP records contain more than one `FNAM`, and a non-repeated row fails closed on duplicates (`field_address.cpp:resolve_field_slots` sets `duplicate`). MSWP therefore has authoring (`EDID`) and no rows. The array stays with the array lane.
+
+## Radicle/src/environment/terrain.cpp:decode_texture_set — TXST rows
+
+`TX00` to `TX07` are strings (`wbString` at lines 6988 to 6995). `MNAM` is the material string at line 7003. `DNAM` is a `u16` flags field with names "No Specular Map", "Facegen Textures" and "Has Model Space Normal Map" (bits 0 to 2, line 6998), and it is exactly 2 bytes in the corpus (`payload_size` 2). `DODT` (`wbDODT`, line 3400, used at line 6997) is 36 bytes: min and max width and height, depth, shininess, parallax scale at 24, parallax passes at 28, flags at 29 (names "POM Shadows", "Alpha - Blending", "Alpha - Testing", "No Subtextures", "Multiplicative Blending"), alpha threshold at 30 (not covered), and colour bytes 32 to 34. The reader reads the six floats of `DODT` (`size >= 16`) and `DNAM` (`sized 2`), and agrees with these offsets.
+
+## Radicle/tests/test_static_light_records.cpp:StaticLightSynthetic.EditsOneFieldPerRecordAndRereadsIt
+
+A synthetic plugin holds one record per batch signature, each in its own top-level GRUP. The test edits one scalar, string or FormLink per record through `set_record_scalar`, `set_record_string` and `set_record_formlink_field`, writes, re-reads, and compares the changed payload bytes. `StaticLightSynthetic.EveryBatchRowDecodesOnItsRecord` decodes every row on the fixture. `StaticLightSynthetic.MaterialSwapArraysStayUntouchedAndHaveNoRows` checks that MSWP has no rows and that its substitution array is unchanged.
+
+## Radicle/tests/test_static_light_records_real.cpp:StaticLightReal.BatchRowsDecodeAndAuthoringMinimumsHold
+
+Over each official master (`FO4_DATA_DIR`), every batch record decodes every row for its subrecord, and `preflight_authoring_record` reports no error. Authoring is sampled at 64 records per master because the preflight record lookup is a linear scan. The full-corpus order, cardinality and minimum sweep was run read-only over all masters outside the repo.

@@ -2280,6 +2280,1332 @@
       ]
     },
     {
+      "signature": "STAT",
+      "fields": [
+        {
+          "path": "STAT\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\MaxAngle",
+          "label": "Max angle",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 30.0,
+          "maximum": 120.0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\LeafAmplitude",
+          "label": "Leaf amplitude",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "STAT\\LeafFrequency",
+          "label": "Leaf frequency",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 16,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "STAT\\Material",
+          "label": "Material",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "payload_sizes": [8, 16],
+          "targets": ["MATO"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "PTRN", "minimum": 0, "maximum": 1 },
+          { "signature": "FTYP", "minimum": 0, "maximum": 1 },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "PRPS", "minimum": 0, "maximum": 1 },
+          { "signature": "FULL", "minimum": 0, "maximum": 1 },
+          { "signature": "DNAM", "minimum": 1, "maximum": 1, "default": "0000b442000000000000803f0000803f" },
+          { "signature": "MNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "NVNM", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "LIGH",
+      "fields": [
+        {
+          "path": "LIGH\\Gobo",
+          "label": "Gobo",
+          "kind": "string",
+          "subrecord": "NAM0",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\FadeValue",
+          "label": "Fade value",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Time",
+          "label": "Time",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Radius",
+          "label": "Radius",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\ColorRed",
+          "label": "Color red",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\ColorGreen",
+          "label": "Color green",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 9,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\ColorBlue",
+          "label": "Color blue",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "Unknown 0" },
+            { "bit": 1, "name": "Can be Carried" },
+            { "bit": 2, "name": "Unknown 2" },
+            { "bit": 3, "name": "Flicker" },
+            { "bit": 4, "name": "Unknown 4" },
+            { "bit": 5, "name": "Off By Default" },
+            { "bit": 6, "name": "Unknown 6" },
+            { "bit": 7, "name": "Pulse" },
+            { "bit": 8, "name": "Unknown 8" },
+            { "bit": 9, "name": "Unknown 9" },
+            { "bit": 10, "name": "Shadow Spotlight" },
+            { "bit": 11, "name": "Shadow Hemisphere" },
+            { "bit": 12, "name": "Shadow OmniDirectional" },
+            { "bit": 13, "name": "Unknown 13" },
+            { "bit": 14, "name": "NonShadow Spotlight" },
+            { "bit": 15, "name": "Non Specular" },
+            { "bit": 16, "name": "Attenuation Only" },
+            { "bit": 17, "name": "NonShadow Box" },
+            { "bit": 18, "name": "Ignore Roughness" },
+            { "bit": 19, "name": "No Rim Lighting" },
+            { "bit": 20, "name": "Ambient Only" },
+            { "bit": 21, "name": "Unknown 21" }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\FalloffExponent",
+          "label": "Falloff exponent",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\FOV",
+          "label": "FOV",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\NearClip",
+          "label": "Near clip",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\FlickerPeriod",
+          "label": "Flicker period",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\FlickerIntensityAmplitude",
+          "label": "Flicker intensity amplitude",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\FlickerMovementAmplitude",
+          "label": "Flicker movement amplitude",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 36,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Constant",
+          "label": "Constant",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 40,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Scalar",
+          "label": "Scalar",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 44,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Exponent",
+          "label": "Exponent",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 48,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 52,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\GodRaysNearClip",
+          "label": "God rays near clip",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 52,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 56,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 56,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "minimum_payload_size": 60,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 60,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 64,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "LIGH\\Sound",
+          "label": "Sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["SNDR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\Lens",
+          "label": "Lens",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["LENS"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LIGH\\GodRays",
+          "label": "God rays",
+          "subrecord": "WGDR",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["GDRY"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "VMAD", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "PTRN", "minimum": 0, "maximum": 1 },
+          { "signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "MODT", "minimum": 0, "maximum": 1 },
+          { "signature": "MODC", "minimum": 0, "maximum": 1 },
+          { "signature": "MODS", "minimum": 0, "maximum": 1 },
+          { "signature": "MODF", "minimum": 0, "maximum": 1 },
+          { "signature": "KSIZ", "minimum": 0, "maximum": 1 },
+          { "signature": "KWDA", "minimum": 0, "maximum": 1 },
+          { "signature": "PRPS", "minimum": 0, "maximum": 1 },
+          { "signature": "FULL", "minimum": 0, "maximum": 1 },
+          { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "000000000000000000000000000000000000803f0000b44200002041000000000000000000000000000000000000000000000000000000000000000000000000" },
+          { "signature": "FNAM", "minimum": 1, "maximum": 1, "default": "0000803f" },
+          { "signature": "NAM0", "minimum": 0, "maximum": 1 },
+          { "signature": "SNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "LNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "WGDR", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "BNDS",
+      "fields": [
+        {
+          "path": "BNDS\\DefaultTiles",
+          "label": "Default tiles",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BNDS\\DefaultSlices",
+          "label": "Default slices",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "minimum_payload_size": 6,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BNDS\\TilesRelativeToLength",
+          "label": "Tiles relative to length",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 6,
+          "storage": "u16",
+          "presentation": "enum",
+          "names": [
+            { "value": 0, "name": "False" },
+            { "value": 1, "name": "True" }
+          ],
+          "minimum": 0,
+          "maximum": 65535,
+          "minimum_payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BNDS\\DefaultColorRed",
+          "label": "Default color red",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BNDS\\DefaultColorGreen",
+          "label": "Default color green",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BNDS\\DefaultColorBlue",
+          "label": "Default color blue",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BNDS\\WindSensibility",
+          "label": "Wind sensibility",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BNDS\\WindFlexibility",
+          "label": "Wind flexibility",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 28,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "BNDS\\Texture",
+          "label": "Texture",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["TXST"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "DNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "TNAM", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "LAYR",
+      "fields": [],
+      "formlink_fields": [
+        {
+          "path": "LAYR\\Parent",
+          "label": "Parent",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["LAYR"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "PNAM", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "LGTM",
+      "fields": [
+        {
+          "path": "LGTM\\AmbientColorRed",
+          "label": "Ambient color red",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\AmbientColorGreen",
+          "label": "Ambient color green",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\AmbientColorBlue",
+          "label": "Ambient color blue",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\DirectionalColorRed",
+          "label": "Directional color red",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\DirectionalColorGreen",
+          "label": "Directional color green",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 5,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\DirectionalColorBlue",
+          "label": "Directional color blue",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 6,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogNearColorRed",
+          "label": "Fog near color red",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogNearColorGreen",
+          "label": "Fog near color green",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 9,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogNearColorBlue",
+          "label": "Fog near color blue",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 10,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogNear",
+          "label": "Fog near",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogFar",
+          "label": "Fog far",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\DirectionalRotationXY",
+          "label": "Directional rotation XY",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\DirectionalRotationZ",
+          "label": "Directional rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 24,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\DirectionalFade",
+          "label": "Directional fade",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogClipDistance",
+          "label": "Fog clip distance",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogPower",
+          "label": "Fog power",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 36,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogFarColorRed",
+          "label": "Fog far color red",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 72,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 76,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogFarColorGreen",
+          "label": "Fog far color green",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 73,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 76,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogFarColorBlue",
+          "label": "Fog far color blue",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 74,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 76,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogMax",
+          "label": "Fog max",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 76,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 80,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\LightFadeBegin",
+          "label": "Light fade begin",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 80,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 84,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\LightFadeEnd",
+          "label": "Light fade end",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 84,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 88,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\NearHeightMid",
+          "label": "Near height mid",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 92,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 96,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\NearHeightRange",
+          "label": "Near height range",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 96,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighNearColorRed",
+          "label": "Fog high near color red",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 100,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 104,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighNearColorGreen",
+          "label": "Fog high near color green",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 101,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 104,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighNearColorBlue",
+          "label": "Fog high near color blue",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 102,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 104,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighFarColorRed",
+          "label": "Fog high far color red",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 104,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 108,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighFarColorGreen",
+          "label": "Fog high far color green",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 105,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 108,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighFarColorBlue",
+          "label": "Fog high far color blue",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 106,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "minimum_payload_size": 108,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\HighDensityScale",
+          "label": "High density scale",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 108,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 112,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogNearScale",
+          "label": "Fog near scale",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 112,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 116,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogFarScale",
+          "label": "Fog far scale",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 116,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 120,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighNearScale",
+          "label": "Fog high near scale",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 120,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FogHighFarScale",
+          "label": "Fog high far scale",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 124,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 128,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FarHeightMid",
+          "label": "Far height mid",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 128,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 132,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LGTM\\FarHeightRange",
+          "label": "Far height range",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 132,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 136,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "LGTM\\GodRays",
+          "label": "God rays",
+          "subrecord": "WGDR",
+          "offset": 0,
+          "payload_sizes": [4],
+          "targets": ["GDRY"],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "000000000000000000000000000000000000000000000000000000000000803f000000000000803f000000000000000000000000000000000000000000000000000000000000803f000000000000803f0000000000000000000000000000000000401c4600000000000000000000803f0000803f0000803f0000803f0000803f0000000000000000" },
+          { "signature": "DALC", "minimum": 1, "maximum": 1, "default": "000000000000000000000000000000000000000000000000000000000000803f" },
+          { "signature": "WGDR", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "MSWP",
+      "fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
+      "signature": "TXST",
+      "fields": [
+        {
+          "path": "TXST\\Diffuse",
+          "label": "Diffuse",
+          "kind": "string",
+          "subrecord": "TX00",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\NormalGloss",
+          "label": "Normal/Gloss",
+          "kind": "string",
+          "subrecord": "TX01",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Wrinkles",
+          "label": "Wrinkles",
+          "kind": "string",
+          "subrecord": "TX02",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Glow",
+          "label": "Glow",
+          "kind": "string",
+          "subrecord": "TX03",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Height",
+          "label": "Height",
+          "kind": "string",
+          "subrecord": "TX04",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Environment",
+          "label": "Environment",
+          "kind": "string",
+          "subrecord": "TX05",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Multilayer",
+          "label": "Multilayer",
+          "kind": "string",
+          "subrecord": "TX06",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\SmoothSpec",
+          "label": "Smooth spec",
+          "kind": "string",
+          "subrecord": "TX07",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Material",
+          "label": "Material",
+          "kind": "string",
+          "subrecord": "MNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\MinWidth",
+          "label": "Min width",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\MaxWidth",
+          "label": "Max width",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\MinHeight",
+          "label": "Min height",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\MaxHeight",
+          "label": "Max height",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Depth",
+          "label": "Depth",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Shininess",
+          "label": "Shininess",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\ParallaxScale",
+          "label": "Parallax scale",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\ParallaxPasses",
+          "label": "Parallax passes",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 28,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\DecalFlags",
+          "label": "Decal flags",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 29,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "POM Shadows" },
+            { "bit": 1, "name": "Alpha - Blending" },
+            { "bit": 2, "name": "Alpha - Testing" },
+            { "bit": 3, "name": "No Subtextures" },
+            { "bit": 4, "name": "Multiplicative Blending" }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\DecalColorRed",
+          "label": "Decal color red",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 32,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\DecalColorGreen",
+          "label": "Decal color green",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 33,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\DecalColorBlue",
+          "label": "Decal color blue",
+          "kind": "scalar",
+          "subrecord": "DODT",
+          "offset": 34,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TXST\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "No Specular Map" },
+            { "bit": 1, "name": "Facegen Textures" },
+            { "bit": 2, "name": "Has Model Space Normal Map" }
+          ],
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 2,
+          "insertion": "existing_only"
+        }
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "OBND", "minimum": 1, "maximum": 1, "default": "000000000000000000000000" },
+          { "signature": "TX00", "minimum": 0, "maximum": 1 },
+          { "signature": "TX01", "minimum": 0, "maximum": 1 },
+          { "signature": "TX03", "minimum": 0, "maximum": 1 },
+          { "signature": "TX04", "minimum": 0, "maximum": 1 },
+          { "signature": "TX02", "minimum": 0, "maximum": 1 },
+          { "signature": "TX05", "minimum": 0, "maximum": 1 },
+          { "signature": "TX06", "minimum": 0, "maximum": 1 },
+          { "signature": "TX07", "minimum": 0, "maximum": 1 },
+          { "signature": "DODT", "minimum": 0, "maximum": 1 },
+          { "signature": "DNAM", "minimum": 1, "maximum": 1, "default": "0000" },
+          { "signature": "MNAM", "minimum": 0, "maximum": 1 }
+        ]
+      },
+      "localized_subrecords": []
+    },
+    {
       "signature": "WTHR",
       "fields": [
         {
