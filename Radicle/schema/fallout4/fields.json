@@ -9188,6 +9188,1020 @@
         {"path": "WEAP\\CritEffect", "label": "Crit effect", "subrecord": "CRDT", "offset": 8, "payload_sizes": [12], "targets": ["SPEL"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "DESC"]
+    },
+    {
+      "signature": "NPC_",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "STCP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ACBS",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000000000000000000000000000"
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "INAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VTCK",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TPLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "LTPT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "LTPC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TPTA",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "RNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "SPCT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SPLO",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "WNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ATKR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ATKD",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "SPOR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OCOR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "GWOR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ECOR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FCPL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "RCLR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PRKZ",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PRKR",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "PRPS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FTYP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NTRM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "COCT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CNTO",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "COED",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "AIDT",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          },
+          {
+            "signature": "PKID",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "APPR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBTE",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBTF",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "OBTS",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "STOP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "SHRT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "HCLF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "BCLF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "GNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM5",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM6",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM7",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM4",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MWGT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM8",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "CS2H",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CS2K",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "CS2D",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "CS2E",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CS2F",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CSCR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PFRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DOFT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SOFT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DPLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CRIF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FTST",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "QNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MSDK",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MSDV",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TETI",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "TEND",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "MRSV",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FMRI",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "FMRS",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "FMIN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ATTX",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "NPC_\\ConfigurationFlags",
+          "label": "Configuration flags",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "offset": 0,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\XPValueOffset",
+          "label": "XP value offset",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 4,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\Level",
+          "label": "Level, or level multiplier when flag bit 7 is set",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 6,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\CalcMinLevel",
+          "label": "Calc min level",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 8,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\CalcMaxLevel",
+          "label": "Calc max level",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 10,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\DispositionBase",
+          "label": "Disposition base",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 12,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\TemplateFlags",
+          "label": "Template flags",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 14,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\BleedoutOverride",
+          "label": "Bleedout override",
+          "kind": "scalar",
+          "subrecord": "ACBS",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 16,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\CalculatedHealth",
+          "label": "Calculated health",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 0,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\CalculatedActionPoints",
+          "label": "Calculated action points",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 2,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\FarAwayModelDistance",
+          "label": "Far away model distance",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "offset": 4,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\GearedUpWeapons",
+          "label": "Geared up weapons",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 6,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIAggression",
+          "label": "AI aggression",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 0,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIConfidence",
+          "label": "AI confidence",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 1,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIEnergyLevel",
+          "label": "AI energy level",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 2,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIMorality",
+          "label": "AI morality",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 3,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIMood",
+          "label": "AI mood",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIAssistance",
+          "label": "AI assistance",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 5,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIAggroRadiusBehavior",
+          "label": "AI aggro radius behavior",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 6,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIAggroUnknown",
+          "label": "AI aggro unknown",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 7,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIWarn",
+          "label": "AI warn",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "offset": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIWarnAttack",
+          "label": "AI warn attack",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "offset": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AIAttack",
+          "label": "AI attack",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "offset": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AINoSlowApproach",
+          "label": "AI no slow approach",
+          "kind": "scalar",
+          "subrecord": "AIDT",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "offset": 20,
+          "minimum_payload_size": 21,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectBoundsMinX",
+          "label": "Object bounds min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectBoundsMinY",
+          "label": "Object bounds min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 2,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectBoundsMinZ",
+          "label": "Object bounds min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 4,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectBoundsMaxX",
+          "label": "Object bounds max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 6,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectBoundsMaxY",
+          "label": "Object bounds max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 8,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObjectBoundsMaxZ",
+          "label": "Object bounds max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "offset": 10,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\WeightThin",
+          "label": "Weight thin",
+          "kind": "scalar",
+          "subrecord": "MWGT",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 0,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\WeightMuscular",
+          "label": "Weight muscular",
+          "kind": "scalar",
+          "subrecord": "MWGT",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 4,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\WeightFat",
+          "label": "Weight fat",
+          "kind": "scalar",
+          "subrecord": "MWGT",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 8,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\MorphRegionHead",
+          "label": "Body morph region head",
+          "kind": "scalar",
+          "subrecord": "MRSV",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 0,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\MorphRegionUpperTorso",
+          "label": "Body morph region upper torso",
+          "kind": "scalar",
+          "subrecord": "MRSV",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 4,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\MorphRegionArms",
+          "label": "Body morph region arms",
+          "kind": "scalar",
+          "subrecord": "MRSV",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 8,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\MorphRegionLowerTorso",
+          "label": "Body morph region lower torso",
+          "kind": "scalar",
+          "subrecord": "MRSV",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 12,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\MorphRegionLegs",
+          "label": "Body morph region legs",
+          "kind": "scalar",
+          "subrecord": "MRSV",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 16,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\TextureLightingRed",
+          "label": "Texture lighting red",
+          "kind": "scalar",
+          "subrecord": "QNAM",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 0,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\TextureLightingGreen",
+          "label": "Texture lighting green",
+          "kind": "scalar",
+          "subrecord": "QNAM",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 4,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\TextureLightingBlue",
+          "label": "Texture lighting blue",
+          "kind": "scalar",
+          "subrecord": "QNAM",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 8,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\TextureLightingAlpha",
+          "label": "Texture lighting alpha",
+          "kind": "scalar",
+          "subrecord": "QNAM",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "offset": 12,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\HeightMin",
+          "label": "Height min",
+          "kind": "scalar",
+          "subrecord": "NAM6",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\HeightMax",
+          "label": "Height max",
+          "kind": "scalar",
+          "subrecord": "NAM4",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\UnusedFloat",
+          "label": "Unused float",
+          "kind": "scalar",
+          "subrecord": "NAM7",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\FacialMorphIntensity",
+          "label": "Facial morph intensity",
+          "kind": "scalar",
+          "subrecord": "FMIN",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\SoundLevel",
+          "label": "Sound level",
+          "kind": "scalar",
+          "subrecord": "NAM8",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
     }
   ],
   "keyword_records": [

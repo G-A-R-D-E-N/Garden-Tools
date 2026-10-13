@@ -1114,6 +1114,42 @@ Creates a directory named with the process id and a process-wide atomic counter,
 
 The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
 
+## Radicle/src/forms/npc.cpp:replace_run
+
+source:xEdit NPC_ lists are contiguous runs in the record layout, so one edit replaces one run as a unit. A run with other subrecords between its entries is refused rather than reordered. An encoded run equal to the stored run returns false before the record is marked modified, so a no-op set leaves a parsed plugin clean. An empty list drops its count subrecord (PRKZ or COCT) along with its entries.
+
+## Radicle/src/forms/npc.cpp:insertion_index
+
+Places a missing run after the last subrecord whose rank in `k_order` is below the run's anchor. `k_order` follows the top-level order of the NPC_ record at xEdit Core/wbDefinitionsFO4.pas:10286-10489. It throws when no earlier subrecord exists instead of guessing a position.
+
+## Radicle/src/forms/npc.cpp:encode_perks
+
+source:xEdit PRKZ is a count path for PRKR (FO4:10393). The count is written with the run, so PRKZ equals the entry count. Removing the last perk drops PRKZ with the run.
+
+## Radicle/src/forms/npc.cpp:encode_inventory
+
+source:xEdit COCT is a count path for CNTO (FO4:3316). The count is written with the run, so removing the last item drops COCT with the run. COED is emitted only directly after its CNTO, matching its nesting at FO4:3300-3314.
+
+## Radicle/src/forms/npc.cpp:decode_npc_inventory
+
+source:xEdit COED owner allows NULL (FO4:3291), so owner 0 decodes to no owner. A COED that does not directly follow a CNTO throws, because xEdit nests COED inside the CNTO group.
+
+## Radicle/src/forms/npc.cpp:decode_npc_perks
+
+source:xEdit PRKZ is checked against the PRKR count when PRKZ is present (FO4:10393). An absent PRKZ is accepted.
+
+## Radicle/schema/fallout4/fields.json:NPC_
+
+source:xEdit NPC_ is FO4:10286-10489. Fixed structs (ACBS 20 bytes, DNAM 8, OBND 12, MWGT 12, MRSV 20, QNAM 16) carry payload_size, so a wrong-size payload hides its fields. AIDT uses minimum_payload_size 21 for AINoSlowApproach in place of xEdit's record-version gate (FO4:6229). Level and Level Mult are one raw field because the schema has no union; ACBS Flags bit 7 selects which one xEdit shows (Common:5437-5449). PRKZ, COCT, SPCT and CS2H are left out of the scalars because a generic write would desync them from their lists. Template flag names are in docs/NPCS.md, since the schema has no flags presentation.
+
+## Radicle/include/fo4/forms/npc.hpp:NpcItemExtraData
+
+source:xEdit global_or_rank is stored raw. xEdit reads it as a Global FormID or as a rank depending on the owner (Common:5451-5469); this layer does not choose between them.
+
+## Radicle/tests/test_npc_real.cpp:NpcReal
+
+Runs only when FO4_DATA_DIR is set. For every NPC_ in each official master it decodes each scalar that is present and the three lists. The COCT and PRKZ count checks are enforced by the decoders, so a mismatch fails here.
+
 ## Radicle/include/fo4/forms/faction.hpp:FactionCombatReaction
 
 xEdit FO4 `wbFactionRelations` (`Core/wbDefinitionsCommon.pas` lines 8540-8557) gives the
