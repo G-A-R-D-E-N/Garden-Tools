@@ -1739,3 +1739,40 @@ Batch R6 (#287 C6) moves NOTE, ENCH, AMDL, AORU, PKIN, DOBJ and INNR to schema r
 - Radicle/tests/test_item_mod_records.cpp:EveryScalarRowDecodesOnTheFixture: every scalar and string row decodes on the fixture (scalar_fields includes string rows).
 - Radicle/tests/test_item_mod_records.cpp:FlagsRowNamesComeFromXEdit: `ENCH\Flags` bit 2 name from `scalar_value_name`.
 - Radicle/tests/test_item_mod_records_real.cpp:RowsDecodeAndAuthoringLimitsHold: official masters; scalar and FormLink payload sizes and decodes, and authoring minimums and maximums per record.
+
+## Radicle/schema/fallout4/fields.json:records[SMBN..CPTH]
+
+Batch R7a adds rows and authoring for SMBN, SMEN, SMQN, SCCO, TRNS and CPTH, placed directly after FLST. Layouts are xEdit `Core/wbDefinitionsFO4.pas` at pin 01a11729: CPTH 7930-7948, SMBN 8720-8733, SMQN 8735-8760, SMEN 8762-8776, SCCO 12593-12621, TRNS 12774-12786. The ENAM event list is `wbQuestEventEnum` (`Core/wbDefinitionsCommon.pas:7845-7897`).
+
+Corpus counts come from a read-only scan of Fallout4.esm and the six official DLC masters: SMBN 136, SMEN 18, SMQN 346, SCCO 231, TRNS 1409, CPTH 447 records. Every record sits in a top-level group labelled with its own signature, so every record uses `placement: top_level`. No nested group placement was seen.
+
+Required means xEdit-required and present in every vanilla record. CITC is required in SMBN (136 of 136), SMEN (18 of 18) and SMQN (346 of 346) through `wbCITCReq` (`wbDefinitionsFO4.pas:3280`). SMQN QNAM (Quest Count, line 8753) is 346 of 346; its `wbInteger` sixth argument is aRequired (xEdit wbInterface.pas), set True there. SCCO VNAM is an unknown that xEdit requires twice (lines 12609 and 12618) and it appears exactly twice in all 231 records, so authoring is min 2 max 2. TRNS DATA (SetRequired, line 12785) is 1409 of 1409. CPTH ANAM (SetRequired, line 7936) and DATA (line 7937, required) are 447 of 447. Optional subrecords stay minimum 0 even at 100 percent (PNAM, SNAM, DNAM, XNAM, ENAM, MNAM, HNAM, SCCO QNAM).
+
+Authoring order follows xEdit member order and every vanilla record shape: SMBN 3 sequences, SMEN 3, SMQN 5 distinct sequences of listed subrecords (counted over the 346 vanilla SMQN records, with CTDA excluded), SCCO 1, TRNS 2, CPTH 4.
+
+SMBN and SMEN DNAM: Random bit 0 and Warn if no child quest started bit 1 (lines 8726-8731 and 8768-8772). Corpus values are 0 and 1 for SMBN and 0 and 2 for SMEN. SMQN DNAM uses wbSparseFlags with bits 0, 1, 16, 17 and 18 (lines 8741-8749). Corpus bits used are 0, 1, 16, 17 and 18.
+
+SMEN ENAM Type uses 38 names. xEdit gives FO4 the else branch of IsTES5, IsFO76 and IsSF1 (`Core/wbDefinitionsCommon.pas:6201-6205`, `6285-6289`, `6320-6324`). Entries that resolve to an empty name are dropped, so ADBO, CBGN, DOCK, ILOC, LAND, LCPG, PCON, QPMT, SKIL and XPLL have no row name. The 18 corpus ENAM codes are all in the list.
+
+SMEN PNAM: all 18 vanilla SMEN records point at form ID 0x0000005B in Fallout4.esm. No record in the scanned masters defines that object ID, so the link does not resolve to a record. SMEN PNAM holds 0x5B in all 18 vanilla records; that is a Fallout4.esm ID below 0x800, and `src/graph/check_errors.cpp:check_links` skips unresolved targets in that range. Make no claim about what 0x5B is. Parent links point to SMQN, SMBN or SMEN (SMBN parents 83 SMBN and 53 SMEN; SMQN parents 312 SMBN and 34 SMEN). SNAM NULL appears 33 times on SMBN, 1 on SMEN and 114 on SMQN, so PNAM and SNAM are nullable with targets [SMQN, SMBN, SMEN] (xEdit's list adds NULL, which is not a record signature).
+
+SCCO QNAM targets QUST in all 231 records and is not nullable (xEdit list has no NULL). Scene Layout SNAM targets SCEN (797 links; 3 links point at targets not in the masters).
+
+TRNS DATA is 36 bytes in 1109 records and 28 bytes in 300. xEdit makes Zoom Min and Zoom Max optional from member index 2 (SetOptionalFrom(2), line 12784). The Zoom rows use minimum_payload_size 32 and 36, the same gate WTHR uses. The gate is by payload size, not form version: 28-byte payloads occur at form versions 53-130 and 36-byte payloads at 130-131; version 130 has both (16 records at 28 bytes, 61 at 36). Position and rotation are wbVec3PosRot (`Core/wbDefinitionsCommon.pas:6536`, `wbVec3` at 6451): Pos X, Y, Z at offsets 0, 4, 8 and Rot X, Y, Z at 12, 16, 20. Scale is at offset 24. The authoring default is 24 zero bytes, Scale 1.0, Zoom Min -1.0 and Zoom Max 1.0 (SetDefaultEditValue, lines 12781-12783).
+
+CPTH ANAM holds two FormIDs at offsets 0 (Parent) and 4 (Previous). Both targets are [CPTH] with NULL allowed (xEdit list includes NULL). Corpus Parent is CPTH 442 times and NULL 5 times; Previous is CPTH 341 times and NULL 106 times. CPTH DATA is a u8 flags field with Disable bit 0 through Not Must Have Camera Shots bit 7 (lines 7938-7945). Corpus values are 0, 1, 4, 5, 64 and 65.
+
+Not covered:
+- CTDA condition content on SMBN, SMEN, SMQN and CPTH. `condition_scopes` in fields.json covers only nested containers (ALCH, ENCH, INGR and SPEL Effects; PACK Branches; PERK Tabs; QUST Aliases and Targets), so these top-level conditions have no scope row. CTDA is listed in authoring as 0 to 65535, the same as FACT. CIS1 and CIS2 are not listed: corpus has CIS2 on 2 SMBN, CIS1 on 7 SMQN and CIS2 on 14 SMQN, and no CPTH or SMEN CIS subrecords.
+- SMQN Quests array: NNAM (QUST, 1468 links) and RNAM (hours, stored with xEdit scale 1/24, line 8757). QNAM is the array count, so it is listed in authoring (min 1, max 1) with no value row. This matches LLCT, which is derived from its entry count.
+- SCCO Scene Layout array (SNAM SCEN and XNAM X/Y s32, lines 12596-12608) and the Original Coordinates XNAM array (lines 12610-12617). Both VNAM unknowns are listed in authoring without rows.
+- CPTH Camera Shots: SNAM CAMS array (line 7947, 824 entries across 329 records). Not listed in authoring.
+- TRNS record header flag 0x8000 (Around Origin, lines 12775-12776). It is a record header flag, not a subrecord, and the schema has no kind for it.
+
+## Radicle/tests/test_story_manager_records.cpp:StoryManagerRecordsSynthetic
+
+One synthetic plugin with no masters holds one record per type in its own top-level group, plus QUST targets for SCCO. Each test edits one link, scalar or enum per record through `set_record_formlink_field` and `set_record_scalar`, then writes, re-reads and compares the payload bytes. A 28-byte TRNS DATA reports `subrecord_missing` for Zoom Min because the minimum_payload_size gate rejects it, and it still accepts Scale.
+
+## Radicle/tests/test_story_manager_records_real.cpp:StoryManagerRecordsReal
+
+For every batch record in each official master, the test checks each subrecord count against its authoring minimum and maximum, decodes every scalar row, and calls `record_field_count` for FormLink rows. It does not require every subrecord to be listed, because CIS1, CIS2 and the array subrecords are not listed. `record_field_count` is a linear lookup, so FormLink rows are sampled to 64 records per signature per master. Fallout4.esm must contain at least one batch record.

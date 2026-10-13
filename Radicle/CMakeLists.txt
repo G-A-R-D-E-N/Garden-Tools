@@ -446,6 +446,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_actor_support_records_real.cpp
     tests/test_item_mod_records.cpp
     tests/test_item_mod_records_real.cpp
+    tests/test_story_manager_records.cpp
+    tests/test_story_manager_records_real.cpp
     tests/test_weapon.cpp
     tests/test_weapon_real.cpp
     tests/test_onam.cpp
