@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 80, L1 15, L2 16, L3 1, L4 35.
 
 ### Per-signature coverage
 
@@ -72,7 +72,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | CMPO | 12294 | - | - | - | - | - | - | - | - | - | - | L0 |
 | COBJ | 10266 | - | - | - | - | - | - | - | forms/components | - | - | L2 |
 | COLL | 9547 | - | - | - | - | - | - | - | - | - | 1 | L0 |
-| CONT | 6176 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| CONT | 6176 | 2 | - | 1 | - | - | - | yes | - | - | - | L4 |
 | CPTH | 7930 | - | - | - | - | - | - | - | - | - | - | L0 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | DEBR | 7388 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -202,6 +202,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
+| CONT | 2 | - | - | - | - | i32, u32 | 2 | - | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
 | EXPL | 15 | - | - | - | - | f32, u32 | - | - | - | existing_only |

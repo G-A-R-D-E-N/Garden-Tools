@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from field_address_codegen import parse_address, reject_overlaps, render_address  # noqa: E402
-from schema_codegen import WIDTHS, load_fields  # noqa: E402
+from schema_codegen import WIDTHS, load_fields, parse_subrecord_group  # noqa: E402
 
 MUTATIONS = {"existing_only", "existing_neighbors", "appendable"}
 NESTED_MUTATIONS = {"terminated_group"}
@@ -138,6 +138,9 @@ def load_lists(schema_path: Path):
         field_rows = record.get("formlink_fields", [])
         if not isinstance(field_rows, list):
             raise ValueError(f"formlink_fields must be an array: {record_signature}")
+        for group_field in record.get("fields", []):
+            if isinstance(group_field, dict) and group_field.get("kind") == "subrecord_group":
+                field_rows = field_rows + parse_subrecord_group(group_field, record_signature)[2]
         for row in field_rows:
             if not isinstance(row, dict):
                 raise ValueError(f"FormLink field entries must be objects: {record_signature}")

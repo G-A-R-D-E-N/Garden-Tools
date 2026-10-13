@@ -135,9 +135,19 @@ def scalar_rows(record_signature, rows):
     for row in rows:
         if row.get("kind") == "counted_array":
             expanded.extend(schema_codegen.parse_counted_array(row, record_signature)[1])
+        elif row.get("kind") == "subrecord_group":
+            expanded.extend(schema_codegen.parse_subrecord_group(row, record_signature)[1])
         else:
             expanded.append(row)
     return expanded
+
+
+def formlink_rows(record_signature, record):
+    rows = list(record.get("formlink_fields", []))
+    for row in record.get("fields", []):
+        if row.get("kind") == "subrecord_group":
+            rows.extend(schema_codegen.parse_subrecord_group(row, record_signature)[2])
+    return rows
 
 
 def render():
@@ -159,7 +169,7 @@ def render():
         rows = scalar_rows(sig, record.get("fields", []))
         scalar = sum(row["kind"] == "scalar" for row in rows)
         string = sum(row["kind"] == "string" for row in rows)
-        formlink = len(record.get("formlink_fields", []))
+        formlink = len(formlink_rows(sig, record))
         lists = len(record.get("formlink_lists", [])) + len(record.get("nested_formlink_lists", []))
         localized = len(record.get("localized_subrecords", []))
         authoring = "authoring" in record
@@ -177,7 +187,7 @@ def render():
     kind_rows = []
     for sig in sorted(records):
         rows = scalar_rows(sig, records[sig]["fields"])
-        addressed = rows + records[sig].get("formlink_fields", [])
+        addressed = rows + formlink_rows(sig, records[sig])
         identity = sum(row["kind"] == "scalar" and row.get("presentation") == "identity" for row in rows)
         percent = sum(row.get("presentation") == "percent_0_100" for row in rows)
         enum = sum(row["kind"] == "scalar" and row.get("presentation") == "enum" for row in rows)

@@ -28,6 +28,8 @@ constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 {Signature::from_string("CLMT"), "CLMT\\SunsetEnd", ScalarDescriptor{Signature::from_string("TNAM"), "Sunset end", ScalarStorage::u8, ScalarPresentation::identity, 0.0, 255.0, 3, true, 6, FieldAddress{}}, false},
 {Signature::from_string("CLMT"), "CLMT\\Volatility", ScalarDescriptor{Signature::from_string("TNAM"), "Volatility", ScalarStorage::u8, ScalarPresentation::identity, 0.0, 255.0, 4, true, 6, FieldAddress{}}, false},
 {Signature::from_string("CLMT"), "CLMT\\WeatherChance", ScalarDescriptor{Signature::from_string("WLST"), "Weather chance", ScalarStorage::i32, ScalarPresentation::identity, -2147483648.0, 2147483647.0, 4, true, 0, FieldAddress{false, 12, 0, FieldDiscriminator{}}}, false},
+{Signature::from_string("CONT"), "CONT\\ItemCount", ScalarDescriptor{Signature::from_string("CNTO"), "Count", ScalarStorage::i32, ScalarPresentation::identity, -2147483648.0, 2147483647.0, 4, true, 0, FieldAddress{true, 0, 0, FieldDiscriminator{}}}, false},
+{Signature::from_string("CONT"), "CONT\\ItemTotal", ScalarDescriptor{Signature::from_string("COCT"), "Item total", ScalarStorage::u32, ScalarPresentation::identity, 0.0, 4294967295.0, 0, false, 0, FieldAddress{}}, false},
 {Signature::from_string("CSTY"), "CSTY\\AdjustRangeMult", ScalarDescriptor{Signature::from_string("CSLR"), "AdjustRangeMult", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 4, true, 0, FieldAddress{}}, false},
 {Signature::from_string("CSTY"), "CSTY\\AttackStaggeredMult", ScalarDescriptor{Signature::from_string("CSME"), "AttackStaggeredMult", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 0, true, 0, FieldAddress{}}, false},
 {Signature::from_string("CSTY"), "CSTY\\AttackWhenStaggeredMult", ScalarDescriptor{Signature::from_string("CSME"), "AttackWhenStaggeredMult", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 36, true, 0, FieldAddress{}}, false},
@@ -601,4 +603,12 @@ constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 };
 constexpr std::array<CountedArrayDescriptor, 1> k_counted_arrays{{
 {Signature::from_string("REFR"), "REFR\\WaterCurrentVelocities", "Velocities", Signature::from_string("XWCU"), Signature::from_string("XWCN"), 16},
+}};
+constexpr std::uint8_t k_subrecord_group_default_0[] = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_0[] = {
+{Signature::from_string("CNTO"), true, false, 8, std::span<const std::uint8_t>(k_subrecord_group_default_0)},
+{Signature::from_string("COED"), false, false, 12},
+};
+constexpr std::array<SubrecordGroupDescriptor, 1> k_subrecord_groups{{
+{Signature::from_string("CONT"), "CONT\\Items", "Items", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0)},
 }};

@@ -1502,11 +1502,11 @@ Validates a `counted_array` entry. Keys are limited to `COUNTED_ARRAY_KEYS` and 
 
 ## Radicle/tools/schema_codegen.py:load_schema
 
-After the rows are expanded, requires exactly one whole-payload u32 row for each array's count subrecord, and rejects two arrays that declare the same payload subrecord or the same count subrecord in one record. The count rule is what lets `write_scalar` refuse plain writes while insert and remove remain the only count writers.
+After the rows are expanded, requires exactly one whole-payload u32 row for each array's count subrecord, and rejects two arrays that declare the same payload subrecord or the same count subrecord in one record. The count rule is what lets `write_scalar` refuse plain writes while insert and remove remain the only count writers. The same pass checks each `subrecord_group`: where it names a count subrecord, exactly one whole-payload u32 row for it, no member declared by two groups in one record, no count shared by two groups, and no group count that equals a member of another group in that record.
 
 ## Radicle/tools/parity_matrix.py:scalar_rows
 
-Expands counted arrays with `schema_codegen.parse_counted_array`, the same function the codegen uses, so the parity counts cannot drift from the generated rows.
+Expands counted arrays with `schema_codegen.parse_counted_array`, the same function the codegen uses, so the parity counts cannot drift from the generated rows. Subrecord groups expand through `schema_codegen.load_schema` the same way, and `formlink_rows` counts their links.
 
 ## Radicle/src/schema/preflight.cpp:preflight_record
 
@@ -1519,3 +1519,71 @@ The overload that takes only a Signature selects the first scalar row for that s
 ## Radicle/include/fo4/schema/generated_scalar_fields.inc:k_counted_arrays
 
 xEdit proof for REFR `XWCU`/`XWCN` against the pinned `Core/wbDefinitionsFO4.pas` @93cc0bc5 (SHA-256 `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`, matched on a build copy). `wbRefRecord(REFR, 'Placed Object', ...)` starts at line 11347 and the next record, REGN, at 11870. Its `Water Current Velocities` block is at lines 11568-11575: `wbInteger(XWCN, 'Velocity Count', itU32, ...)` at 11569 is the u32 count row, and `wbArray(XWCU, 'Velocities', wbStruct('Current', [wbVec3('Velocity'), wbFloat]))` at 11570-11574 is the element. `.SetCountPathOnValue(XWCN, False)` is at 11575. `wbVec3` is three floats X, Y, Z (`Core/wbDefinitionsCommon.pas` lines 6456-6459), and the trailing unnamed `wbFloat` is the fourth float, so an element is 16 bytes at offsets 0, 4, 8, 12, as generated. The same block appears in ACHR at 4583-4590 and CELL at 6052-6059; only REFR is in this schema. The 4-byte width of `wbFloat` is not cited: its definition is in `wbInterface.pas`, which is outside the hash pin.
+
+## Radicle/include/fo4/schema/scalar.hpp:SubrecordGroupDescriptor
+
+A repeating subrecord group. `members[0]` is the leader, which must be required and non-repeatable and starts each run; the other members may be required, optional or repeatable. `count_subrecord` optionally names a whole-payload u32 row that stores the run count. A group without one still enumerates and accepts member reads and writes, but insert and remove return `subrecord_missing`, because there is no count to keep in step and no anchor for placing a run in an empty group. `SubrecordGroupMemberDescriptor` carries the signature, `required`, `repeatable`, `payload_size` and the `default_payload` that insert writes. The only source of these descriptors is the generated `k_subrecord_groups` table. `schema_codegen.py` enforces the rules; `field_writer.cpp` relies on them and also checks each record it touches.
+
+Not supported yet:
+
+- Insert creates only the required members. It never creates an optional member such as COED, so a run keeps COED only when it already had one.
+- Insert into a record without its count subrecord returns `subrecord_missing`; the count is not created.
+- Only `existing_only` insertion is accepted. Runs cannot be reordered, and a repeatable leader is rejected.
+- Only CONT is generated. The LVLI leveled-list entries use the same COED shape in vanilla (see `generated_scalar_fields.inc:k_subrecord_groups`) and are not wired.
+- This change adds no C API or editor entry point for groups; insert and remove exist only as C++ functions in `mutation.hpp`.
+
+## Radicle/src/schema/scalar.cpp:subrecord_group_for_member
+
+Returns the first group in the generated table, within the record's own groups, whose members name the subrecord. The codegen rejects a member declared by two groups in one record, so the first match is the only match. `is_subrecord_group_count_subrecord` answers whether a subrecord is a group count in its record, and `write_scalar` consults it to refuse plain writes.
+
+## Radicle/src/plugin/field_writer.cpp:group_spans
+
+Splits a record's subrecords into runs. A run starts at a leader and continues while subrecords are members of the group, stopping at the next leader or the first non-member. It throws `SubrecordGroupError` for a member outside a run (an orphan), a member out of order or repeated when its descriptor is not repeatable, a run missing a required member, and a member whose payload size differs from its descriptor. It does not check the count. Scalar and formlink reads and writes reach it through `scalar_slots` and `formlink_slots` and convert the error to `ScalarError` or `FormLinkFieldError`, so a broken run fails closed for member access. A count that disagrees with the run count can still be read and written at member level, as counted arrays allow; insert and remove refuse it through `group_counter`.
+
+## Radicle/src/plugin/field_writer.cpp:group_counter
+
+A group with no count subrecord (zero signature) returns nullopt at once. Otherwise it finds the one `count_subrecord` in the record, requires four bytes, and requires its value to equal the number of runs. A duplicate, a wrong size or a mismatch throws `SubrecordGroupError`. A missing count subrecord returns nullopt, and insert and remove report `subrecord_missing` without changing the plugin.
+
+## Radicle/src/plugin/field_writer.cpp:subrecord_group_spans
+
+Enumerates the runs as `SubrecordGroupSpan{first, end}`, half-open indexes into `Record::subrecords`. It reports structure only. The count is not compared, so a record whose count disagrees still enumerates; insert and remove are the calls that refuse it.
+
+## Radicle/src/plugin/field_writer.cpp:insert_record_subrecord_group
+
+Inserts run `index`. The new run goes before run `index`, or after the last run's end when `index` equals the run count, or straight after the count subrecord when the group is empty. Each required member is created with zero bytes and then its default bytes are copied in. Optional members are never created. The count is written before the insert, and every check runs before the subrecords change, so a throw or a refusal leaves the plugin untouched. An `index` above the run count returns `index_out_of_range`. For CONT, the CNTO default `00000000 01000000` is item 0 with count 1, from xEdit's `wbCNTO` (pinned `Core/wbDefinitionsFO4.pas`, lines 3300-3313): the item form ID at offset 0 and `wbInteger('Count', itS32).SetDefaultNativeValue(1)` at offset 4.
+
+## Radicle/src/plugin/field_writer.cpp:remove_record_subrecord_group
+
+Erases the run's subrecords, its optional and repeated members included, and writes count-1. Removing the last run keeps the count subrecord at zero rather than deleting it, so a later insert does not have to create it.
+
+## Radicle/src/plugin/field_writer.cpp:write_scalar
+
+Refuses a plain write to a group count (CONT `COCT`, field `CONT\ItemTotal`) with `ScalarError` before any byte changes, the same way counted arrays refuse their count. Member rows such as `CONT\ItemCount` go through `scalar_slots`, so a broken run is refused here too.
+
+## Radicle/tools/schema_codegen.py:parse_subrecord_group
+
+Validates one `subrecord_group` row and returns `(group, rows, links)`. Member scalar rows become scalar rows with `repeated: true` on their member subrecord, so they pass through the existing scalar loop and get its alignment, payload and overlap checks. Member FormLink rows come back as links, and `formlink_schema_codegen.load_lists` appends them to the record's FormLink rows. `count_subrecord` may be omitted; when present it must be four printable ASCII characters. Rejected: a leader that is optional or repeatable; a member signature repeated or equal to the count subrecord; member keys outside `GROUP_MEMBER_KEYS`; rows on an optional or repeatable member; a row that does not fit its member, where a whole-payload row must match the member size; a default whose length differs from the payload size; unknown group keys; a path not qualified by the record; and an insertion policy other than `existing_only`.
+
+## Radicle/tools/formlink_schema_codegen.py:load_lists
+
+Appends each group member link to the record's FormLink rows before the usual checks, so a group link gets the same path, offset, target and overlap rules as an ordinary FormLink field. The FormLink/scalar overlap check runs over the expanded group scalars too, so a link and a member scalar in one CNTO payload are checked together.
+
+## Radicle/tools/parity_matrix.py:formlink_rows
+
+Expands group links through `parse_subrecord_group` as `load_lists` does, so the FO4_PARITY FormLink counts and kind table include group links.
+
+## Radicle/include/fo4/schema/generated_scalar_fields.inc:k_subrecord_groups
+
+The CONT `CONT\Items` group. Leader `CNTO` is required, 8 bytes, with default `0000000001000000`. Optional `COED` is 12 bytes with no rows. Count `COCT` is the whole-payload u32 row `CONT\ItemTotal`. Member scalar row: `CONT\ItemCount`, CNTO offset 4, i32, repeated. Member link: `CONT\ItemObject` in `generated_formlink_lists.inc`, CNTO offset 0, targets `sigBaseObjects`, not nullable.
+
+xEdit citations are to the pinned `Core/wbDefinitionsFO4.pas` @93cc0bc5 (SHA-256 `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`, the same bytes as the build copy). `wbCOED` is at 3290 with the owner form ID at offset 0, a global-or-rank union at 4 and a float at 8, so 12 bytes. `wbCNTO` is at 3300-3313, `wbCOCT` at 3315 and `wbCNTOs` at 3316, which sets `SetCountPath(COCT)`. The CONT record at 6176 lists `wbCOCT` before `wbCNTOs`, then `wbDEST` and `DATA`. COED sits in the same repeated struct as CNTO, so a run is CNTO plus its optional COED.
+
+Vanilla survey, read-only over the seven local masters under `D:/SteamLibrary/steamapps/common/Fallout 4/Data`: 635 CONT records, 476 with items. In those 476, COCT is the subrecord directly before the first CNTO, is four bytes, and equals the CNTO count in every record (476 of 476). All 4579 CNTO subrecords are 8 bytes. No CONT record has a COED (0 of 4579 items), no record has more than one COCT, and no non-member subrecord sits inside an item run. Item targets resolve to ALCH 322, LVLI 1558, MISC 1521, ARMO 501, KEYM 31, BOOK 314, WEAP 151, NOTE 168 and AMMO 13, all in `sigBaseObjects` (4579 of 4579). COED has no CONT sample. The only vanilla COED is in LVLI leveled-list entries: 66 subrecords, all 12 bytes, where xEdit uses `wbCOED` at lines 9996-10003 and 10020-10026. The CONT COED member therefore rests on the xEdit layout and the LVLI samples, not on CONT data.
+
+## Radicle/tests/test_subrecord_group.cpp:SubrecordGroup
+
+The fixtures build a CONT record and use the generated group, so the vanilla shape is tested directly. A hand-built descriptor (`custom_group`) covers the leader, required, repeatable, order and payload rules, which the generated table does not express. The remap test uses the same three-master header as `FormLink.CntoRemapsItemLeavesCount` in `test_formlinks.cpp` and leaves COED out, so it checks only the two CNTO item IDs; each one must move to master index 1 exactly once.
+
+## Radicle/include/fo4/plugin/mutation.hpp:SubrecordGroupSpan
+
+`SubrecordGroupSpan{first, end}` is the half-open range of one run in `Record::subrecords`. `SubrecordGroupMutationStatus` mirrors `CountedArrayMutationStatus` with `updated`, `record_missing`, `index_out_of_range` and `subrecord_missing`. Structural failures are `SubrecordGroupError` throws instead of statuses.
