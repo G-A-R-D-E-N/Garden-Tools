@@ -20,6 +20,8 @@ enum class CheckCode {
   deleted_target,
   circular_leveled_list,
   schema_preflight,
+  branch_starting_topic_not_dial,
+  topic_children_not_dial,
 };
 
 enum class CheckSeverity {
@@ -36,6 +38,7 @@ struct CheckFinding {
   std::size_t offset{0};
   FormKey target;
   std::string message;
+  std::string detail;
 };
 
 struct CheckOptions {

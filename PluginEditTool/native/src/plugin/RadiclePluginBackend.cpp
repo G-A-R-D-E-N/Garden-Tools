@@ -182,6 +182,9 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedLocalizationDi
 Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
                                                      const nlohmann::json& arguments) {
     if (operation == "environment.LoadMo2") return loadEnvironment(arguments);
+    if (operation == "strings.ListStringTables") return listStringTables(arguments);
+    if (operation == "strings.GetStrings") return getStrings(arguments);
+    if (operation == "strings.LookupString") return lookupString(arguments);
     if (operation == "appInterop.GetPlugins") return getPlugins();
     if (operation == "appInterop.GetChildren") return getChildren(arguments);
     if (operation == "appInterop.OpenRecord") return openRecord(arguments);
