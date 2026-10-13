@@ -1,6 +1,7 @@
 #include <fo4ide/mo2/Mo2Profile.hpp>
 
 #include <fo4/loadorder/load_order_files.hpp>
+#include <fo4/plugin_key.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -250,6 +251,9 @@ Result<ProfileSnapshot> readProfile(const std::filesystem::path& instancePath,
         }
         return std::unexpected(Error{"Mo2LoadOrderInvalid", message});
     }
+    for (const auto& finding : assembled.findings) {
+        snapshot.warnings.push_back(finding.plugin.empty() ? finding.detail : finding.plugin + ": " + finding.detail);
+    }
 
     const auto reportMissing = [&](const std::string& name) {
         if (std::find(snapshot.missingPlugins.begin(), snapshot.missingPlugins.end(), name) ==
@@ -266,7 +270,7 @@ Result<ProfileSnapshot> readProfile(const std::filesystem::path& instancePath,
     for (const auto& entry : pluginList.entries) {
         if (!entry.active) continue;
         const auto isChecked = std::any_of(assembled.entries.begin(), assembled.entries.end(), [&](const auto& item) {
-            return item.checked && lowerAscii(item.name) == lowerAscii(entry.name);
+            return item.checked && fo4::PluginKey::from_filename(item.name) == fo4::PluginKey::from_filename(entry.name);
         });
         if (!isChecked) reportMissing(entry.name);
     }

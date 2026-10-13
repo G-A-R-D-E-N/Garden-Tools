@@ -2300,3 +2300,31 @@ The compile-differential gate is local only. CI does not set `FO4RE_PEX_CORPUS`,
 ## .github/workflows/native-ci.yml:native-windows-tests — MSVC setup and pinned zlib in .github/scripts
 
 GT-253 moved the MSVC/Ninja/ccache setup and the pinned zlib fetch out of `native-ci.yml` to keep the workflow under the 750-line limit. `native-windows-tests` and `native-windows-real-data` both call `.github/scripts/setup-msvc-ccache.ps1` and `.github/scripts/pinned-zlib-windows.ps1` through `powershell -File`, so each script runs in its own process and `exit` codes still fail the step. The setup script starts with `$ErrorActionPreference = 'stop'`, the line the runner prepends to inline PowerShell. `-ExecutionPolicy Bypass` keeps the file call working on hosts whose default policy is Restricted. The `GITHUB_ENV` and `GITHUB_PATH` writes reach later steps as before.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::versionPlugin — typed reads by plugin (#504 audit2 GT-256)
+
+`getNpc`, `getFaction` and `getLeveledList` take an optional plugin name at argument index 1. With no name they read the winning version, as before, so the web bridge calls are unchanged. With a name they read that plugin's version. `editNpcEntries`, `editFactionEntries` and `editLeveledListEntry` already edit the named plugin's version, so the index a caller reads from a named version is the index the edit applies to. The MCP `get_npc`, `get_faction` and `get_leveled_list` entries expose the optional `plugin` argument. A named plugin that lacks the record, or has it deleted, returns the same codes as the edit path (`RecordNotFound`, `RecordDeleted`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — no-change edits stage nothing (#504 audit2 GT-277)
+
+The function returns `true` when it staged a mutation and `false` when the subrecords of the edited record are unchanged. The FACT setters return `void`, so the NPC and leveled setters' `bool` results alone would not cover FACT. The comparison covers all three families the same way: an edit that rewrites identical bytes is reported as "No change" and does not mark the plugin Pending or rebuild the graph.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — LVSP entries take no extra (#504 audit2 GT-264)
+
+In xEdit an LVSP entry is the LVLO struct only (`Core/wbDefinitionsFO4.pas:10033-10050`, `Core/wbDefinitionsCommon.pas:8788-8810`). COED is defined on LVLN and LVLI only (`Core/wbDefinitionsFO4.pas:10001`). The Radicle entry writer accepts `extra` (COED) for every leveled list type, so this path refuses `extra` on an LVSP record inside the staged edit, before the mutation is kept. The refusal is raised as a `LeveledListError` and surfaces as `LeveledListWriteFailed`. Radicle is being fixed separately.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp:incompleteUsageReason — CleanUnusedMasters refusal names the blocking records (#504 audit2 GT-272)
+
+`fo4::MasterUsage` carries counts only. The refusal lists the undecodable records by signature and FormKey, and reports the VMAD count only when that count is non-zero, so a refusal caused by an undecodable record no longer reads "0 record(s) carry VMAD data".
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — plugins.txt names compare with the Radicle fold (#504 audit2 GT-268)
+
+`isChecked` compares `fo4::PluginKey` values, which fold Unicode the same way the load-order assembler does. ASCII-only folding made `*ä.esp` unchecked when the file on disk is `Ä.esp`. The other name lookups in this function (`resolved`, `pluginPathIndex`) still fold ASCII only and are not changed here.
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — assembly findings reach the status (#504 audit2 GT-266)
+
+Findings were read only when assembly failed. A successful assembly now copies every finding into `ProfileSnapshot::warnings`, and `AppInteropTarget::getMo2Status` returns them as `warnings`, which the reload result also returns. A plugins.txt line with a control character, such as a TAB, is still not loaded, because the game does not trim names, and the status now names its line.
+
+## PluginEditTool/publish.bat — missing deploy folder is a failure (#504 audit2 GT-280)
+
+A deploy folder that does not exist now exits with code 1 and prints no success message. Running without any deploy folder still builds and skips the copy.
