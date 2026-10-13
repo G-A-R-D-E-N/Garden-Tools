@@ -139,7 +139,8 @@ export default function MainShell() {
   } = useEnvironment({ setErrorStr, setProgress });
 
   const {
-    conflicts, setConflicts, conflictSel, setConflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
+    conflicts, setConflicts, conflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
+    selectConflict, clearConflictSelection,
   } = useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr });
 
   const [favourites, setFavourites] = useState(readFavourites);
@@ -487,7 +488,8 @@ export default function MainShell() {
             conflictBusy={conflictBusy}
             onRescan={() => { setConflicts(null); loadConflicts(); }}
             onBatchCopy={batchCopyAsOverride}
-            onToggle={(key, checked) => setConflictSel(s => ({ ...s, [key]: checked }))}
+            onSelect={selectConflict}
+            onClear={clearConflictSelection}
             onOpen={openByFormKey}
           />
         )}
