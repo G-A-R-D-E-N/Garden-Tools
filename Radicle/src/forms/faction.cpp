@@ -27,7 +27,6 @@ constexpr auto k_plvd = Signature::from_string("PLVD");
 constexpr auto k_citc = Signature::from_string("CITC");
 constexpr auto k_ctda = Signature::from_string("CTDA");
 
-// TODO-verify: XNAM 12 bytes, RNAM 4 bytes, reaction 0..3 from xEdit 93cc0bc5 wbDefinitionsCommon.pas:8543-8553 and wbDefinitionsFO4.pas:6773; FactionReal checks them on official masters.
 constexpr std::size_t k_relation_size = 12;
 constexpr std::size_t k_rank_number_size = 4;
 

@@ -304,6 +304,32 @@ TEST(FormLink, FixedStrideStructArraysRemapFormIdsAndKeepValues) {
   EXPECT_EQ(links[5].offset, 8);
 }
 
+TEST(FormLink, FactionXnamRelationFormIdRemapsAndKeepsModifierAndReaction) {
+  auto out = plugin_header(1);
+  append_record(out, "FACT", 0x03000800, "XNAM", words({0x00000099, 0x00000099, 2}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* fact = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(fact, nullptr);
+  ASSERT_NE(find_sub(*fact, "XNAM"), nullptr);
+  EXPECT_EQ(find_sub(*fact, "XNAM")->data, words({0x01000099, 0x00000099, 2}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 1);
+  EXPECT_EQ(links[0].subrecord.to_string(), "XNAM");
+  EXPECT_EQ(links[0].offset, 0);
+}
+
+TEST(FormLink, FactionXnamWrongSizeFailsClosedUnderStrictRemap) {
+  auto out = plugin_header();
+  append_record(out, "FACT", 0x03000800, "XNAM", std::vector<std::byte>(13, std::byte{0x11}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 TEST(FormLink, DamaCurveTableElementsRemapAtFormVersion152) {
   auto out = plugin_header(1);
   const auto group = fo4::test::begin_group(out, "ARMO", 0);

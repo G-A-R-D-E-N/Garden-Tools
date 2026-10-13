@@ -1115,7 +1115,9 @@ for TES4 only, so FO4 always carries it.
 XNAM is a 12-byte relation: form ID at 0, Modifier as int32 at 4, and reaction as u32 at 8
 (xEdit lines 8544-8553). The form ID is allowed to be a FACT or a RACE (line 8545). Radicle
 treats a null form ID as malformed. The schema's `FACT\RelationFaction` formlink row uses
-the same two targets, so `check` validates them as well.
+the same two targets, so `check` validates them as well. The layout is pinned at xEdit
+93cc0bc5 `Core/wbDefinitionsCommon.pas:8543-8553` (XNAM, reaction 0..3), and
+`Radicle/tests/test_faction_real.cpp:FactionReal` is the check against the masters.
 
 ## Radicle/include/fo4/forms/faction.hpp:FactionRank
 
@@ -1124,7 +1126,9 @@ localized strings (lines 6774-6775, `cpTranslate`), so they go through
 `schema::read_localized_string`. INAM (line 6776) is an unused string. Radicle keeps its raw
 bytes so an edit does not drop them. A rank is an RNAM-started group (`wbRStructSK([0], ...)`,
 line 6772) with members in the order RNAM, MNAM, FNAM, INAM. A member that is out of order,
-or is not preceded by an RNAM in the same group, is malformed.
+or is not preceded by an RNAM in the same group, is malformed. The layout is pinned at xEdit
+93cc0bc5 `Core/wbDefinitionsFO4.pas:6771-6776` (RNAM/MNAM/FNAM/INAM), and
+`Radicle/tests/test_faction_real.cpp:FactionReal` is the check against the masters.
 
 ## Radicle/src/forms/faction.cpp:rank_member_stage
 
@@ -1160,3 +1164,7 @@ The formlink rows for JAIL, WAIT, STOL, PLCN, CRGR, JOUT, VEND and VENC are not 
 because xEdit lists no NULL among their targets (lines 6811-6816 and 6831-6832). The
 XNAM relation row is repeated with payload size 12 and targets FACT and RACE (line 8545).
 Localized subrecords are FULL, MNAM and FNAM (lines 3692, 6774, 6775).
+
+## Radicle/src/schema/form_link_mixed.cpp:faction_formid_offsets
+
+FACT XNAM is a 12-byte relation with the faction form ID at offset 0. Modifier and reaction are not form IDs, so only offset 0 is remapped. The table is qualified by record signature because XNAM means other things elsewhere: PACK XNAM is handled by `behavior_formid_offsets` in `src/schema/behavior_layout.cpp`, and it is checked before this function. A payload that is not exactly 12 bytes throws under strict remap and is skipped otherwise. Test: `Radicle/tests/test_packed_formlink_arrays.cpp:FactionXnamRelationFormIdRemapsAndKeepsModifierAndReaction` and `FactionXnamWrongSizeFailsClosedUnderStrictRemap`.

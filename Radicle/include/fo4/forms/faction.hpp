@@ -24,14 +24,12 @@ enum class FactionCombatReaction : std::uint32_t {
   friendly = 3,
 };
 
-// TODO-verify: XNAM layout and reaction values from xEdit 93cc0bc5 wbDefinitionsCommon.pas:8543-8553; FactionReal checks them on official masters.
 struct FactionRelation {
   FormKey faction{};
   std::int32_t modifier{0};
   FactionCombatReaction reaction{FactionCombatReaction::neutral};
 };
 
-// TODO-verify: RNAM/MNAM/FNAM/INAM from xEdit 93cc0bc5 wbDefinitionsFO4.pas:6771-6776; FactionReal checks them on official masters.
 struct FactionRank {
   std::uint32_t number{0};
   std::optional<schema::LocalizedString> male_title;

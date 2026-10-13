@@ -1,6 +1,6 @@
 # FACT (Faction) field coverage
 
-Verification status: TODO-verify. Layouts below are read from xEdit 93cc0bc5 source. The `FactionReal` suite in `tests/test_faction_real.cpp` has not yet run against official masters, so it must confirm them.
+The layouts follow xEdit 93cc0bc5 and `FactionReal` (tests/test_faction_real.cpp) checks them against the official masters.
 
 Ground truth: xEdit at 93cc0bc5, `Core/wbDefinitionsFO4.pas` `wbRecord(FACT, ...)` at line 6785 to 6846, with helpers in `Core/wbDefinitionsCommon.pas` (`wbFactionRelations` at line 8540, `wbFactionRelationToStr` at line 4646) and `wbFactionRank` at lines 6771 to 6783.
 
