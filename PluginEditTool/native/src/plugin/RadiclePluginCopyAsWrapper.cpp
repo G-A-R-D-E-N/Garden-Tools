@@ -112,6 +112,12 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
                 "Wrapper override is not present in " + targetName + ": " + key.to_string()
             });
         }
+        if (!sourceEditorId.empty() && !fo4::set_record_editor_id(mutated, key, sourceEditorId)) {
+            return std::unexpected(Error{
+                "LeveledListCreateFailed",
+                "Wrapper override EditorID could not be set on " + key.to_string()
+            });
+        }
 
         fo4::forms::LeveledListEntry entry;
         entry.item = *copiedKey;
@@ -125,7 +131,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
         return nlohmann::json(
             "Copied " + key.to_string() + " as wrapper in " + targetName +
             "; entries moved to NEW record " + copiedKey->to_string() +
-            " ('" + wrapperEditorId + "').");
+            (wrapperEditorId.empty() ? std::string{} : " ('" + wrapperEditorId + "')") + ".");
     } catch (const fo4::forms::LeveledListError& error) {
         return std::unexpected(Error{"LeveledListCreateFailed", error.what()});
     } catch (const std::exception& error) {

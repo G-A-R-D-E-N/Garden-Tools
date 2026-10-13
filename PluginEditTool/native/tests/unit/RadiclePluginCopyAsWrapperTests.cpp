@@ -81,12 +81,6 @@ std::vector<std::byte> makeWrapperMaster() {
     fo4::test::end_record(out, spell);
     fo4::test::end_group(out, spellGroup);
 
-    const auto cellGroup = fo4::test::begin_group(out, "CELL", 0);
-    const auto cell = fo4::test::begin_record(out, "CELL", 0, 0x00000803);
-    fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterCell\0", 11});
-    fo4::test::end_record(out, cell);
-    fo4::test::end_group(out, cellGroup);
-
     auto plugin = fo4::read_plugin(out.bytes, "Master.esm");
     addLeveledList(plugin, "LVLI", "MasterList", {"000800:Master.esm", "000801:Master.esm"});
     addLeveledList(plugin, "LVLN", "MasterNpcList", {"000801:Master.esm"});
@@ -257,7 +251,7 @@ TEST_CASE("Native CopyAsWrapper wraps an LVLN and an LVSP once each") {
     const std::vector<std::pair<std::string, std::string>> wrapped{
         {npcMessage, "LVLN"}, {spellMessage, "LVSP"}};
     for (const auto& [message, signature] : wrapped) {
-        SCOPED_TRACE(signature);
+        INFO(signature);
         const auto key = overrideKeyFrom(message);
         const auto* wrapper = fo4::find_record(reloaded, key);
         REQUIRE(wrapper != nullptr);
@@ -289,7 +283,7 @@ TEST_CASE("Native CopyAsWrapper refuses a wrapped EDID equal to the source EDID"
     loadWrapperEnvironment(backend, root);
 
     for (const auto* editorId : {"MasterList", "masterlist"}) {
-        SCOPED_TRACE(editorId);
+        INFO(editorId);
         const auto rejected = backend.copyAsWrapper(nlohmann::json::array(
             {"Master.esm", "000804:Master.esm", "Target.esp", editorId}));
         REQUIRE_FALSE(rejected.has_value());
@@ -315,4 +309,24 @@ TEST_CASE("Native CopyAsWrapper adds the source owner as a master of the target"
     const auto after = fo4::read_plugin_file(root / "Target.esp");
     CHECK(std::any_of(after.header.masters.begin(), after.header.masters.end(),
                       [&](const auto& master) { return master.key == owner; }));
+}
+
+TEST_CASE("Native CopyAsWrapper gives an existing override the source EDID") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadWrapperEnvironment(backend, root);
+
+    textResult(backend.invoke("backend.CopyAsOverride", nlohmann::json::array(
+        {"Master.esm", "000804:Master.esm", "Target.esp", false})));
+    REQUIRE(backend.invokeBackend("SetField", nlohmann::json::array(
+        {"Target.esp", "000804:Master.esm", "EDID", "OverrideName"})).has_value());
+    const auto message = textResult(backend.copyAsWrapper(nlohmann::json::array(
+        {"Master.esm", "000804:Master.esm", "Target.esp", "WrapList"})));
+    saveTarget(backend);
+
+    const auto reloaded = fo4::read_plugin_file(root / "Target.esp");
+    const auto* wrapper = fo4::find_record(reloaded, overrideKeyFrom(message));
+    REQUIRE(wrapper != nullptr);
+    CHECK(editorIdOf(*wrapper) == "MasterList");
 }

@@ -20,16 +20,16 @@ PluginEditTool: `CopyAsDisabledOverride` is `CopyAsOverride` followed by setting
 
 ## Copy as wrapper
 
-- Only offered for leveled-list signatures. In the navigation tree these are `LVLB, LVLC, LVLI, LVLN, LVLP, LVSC, LVSP` (lines 15629-15638). In the view header they are `LVLC, LVLI, LVSP, LVLN` (line 15867). Fallout 4 has `LVLI`, `LVLN` and `LVSP`.
-- `CopyInto` with `AsWrapper` (function at line 2817, wrapper branch at lines 3195-3231), for each record:
-  1. Copy the source as a new record into the target, with an EditorID that has a user prefix or suffix applied (line 3202). A different EditorID is required for one record (line 3072), a prefix or suffix for several (line 3101).
-  2. Copy the source as an override into the target, reset it to defaults (`MainRecord.Assign(Low(Integer), nil, False)`, line 3213), and make sure "Leveled List Entries" holds exactly one entry (lines 3214-3218).
-  3. Point that entry's reference at the new record from step 1, with Count 1 and Level 1, and restore the original EditorID on the override (lines 3223-3226).
+- Only offered for leveled-list signatures. In the navigation tree these are `LVLB, LVLC, LVLI, LVLN, LVLP, LVSC, LVSP` (lines 14660-14669). In the view header they are `LVLC, LVLI, LVSP, LVLN` (line 14898). Fallout 4 has `LVLI`, `LVLN` and `LVSP`.
+- `TfrmMain.CopyInto` with `AsWrapper` (function at line 2360, wrapper branch at lines 2738-2770), for each record:
+  1. Copy the source as a new record into the target, with an EditorID that has a user prefix or suffix applied (line 2745). A different EditorID is required for one record (lines 2612-2616), a prefix or suffix for several (lines 2633-2639).
+  2. Copy the source as an override into the target, reset it to defaults (`MainRecord.Assign(Low(Integer), nil, False)`, line 2756), and make sure "Leveled List Entries" holds exactly one entry (lines 2757-2768).
+  3. Point that entry's reference at the new record from step 1, with Count 1 and Level 1, and restore the original EditorID on the override (lines 2767-2769).
 - Result: the override becomes a one-entry list that defers to a renamed copy of the original list.
 
-PluginEditTool (#362): `CopyAsWrapper` follows the flow above for LVLI, LVLN and LVSP only; other types are refused with `WrapperUnsupportedType`. xEdit's menu test (`xeMainForm.pas:15631-15638`) also shows the wrapper for LVLB, LVLC, LVLP and LVSC, which this port does not accept. The copy's EditorID is the caller's value, required to differ from the source EditorID case-insensitively (`WrapperEditorIdSameAsSource`); empty is allowed. The source owner is added as a master of the target, as copy-as-override does. The selected FormKey becomes the one-entry wrapper, and the copy gets a new FormKey. An existing override of the selected FormKey in the target is reused.
+PluginEditTool (#362): `CopyAsWrapper` follows the flow above for LVLI, LVLN and LVSP only; other types are refused with `WrapperUnsupportedType`. xEdit's menu test (`xeMainForm.pas:14660-14669`) also shows the wrapper for LVLB, LVLC, LVLP and LVSC, which this port does not accept. The copy's EditorID is the caller's value, required to differ from the source EditorID case-insensitively (`WrapperEditorIdSameAsSource`); empty is allowed. The source owner is added as a master of the target, as copy-as-override does. The selected FormKey becomes the one-entry wrapper, and the copy gets a new FormKey. An existing override of the selected FormKey in the target is reused.
 
-Differences from xEdit: a reused override keeps its own EditorID, while xEdit writes the source EditorID back (`xeMainForm.pas:3226`); for a new override the two are the same. A `LOSES:` result is returned without writing when a plugin that loads after the target also overrides the record, as `CopyAsOverride` does.
+The wrapper override takes the picked source record's EditorID, or none if the source has none. A `LOSES:` result is returned without writing when a plugin that loads after the target also overrides the record, as `CopyAsOverride` does.
 
 ## Inject Forms into master
 

@@ -352,9 +352,6 @@ bool reset_leveled_list(Plugin& plugin, const FormKey& key) {
   }
 
   std::vector<Subrecord> next;
-  for (const auto& subrecord : record->subrecords) {
-    if (subrecord.signature == sig_edid) next.push_back(subrecord);
-  }
   next.push_back(make_subrecord(k_obnd, 12));
   next.push_back(byte_subrecord(k_lvld, 0));
   next.push_back(byte_subrecord(k_lvlf, 0));

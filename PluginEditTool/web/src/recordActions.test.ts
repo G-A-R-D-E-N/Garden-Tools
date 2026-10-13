@@ -58,3 +58,13 @@ it('refuses a wrapped EditorID equal to the source EditorID, ignoring case', asy
   expect(validate('')).toBeNull();
   expect(CopyAsWrapper).not.toHaveBeenCalled();
 });
+
+it('reports a LOSES wrapper result as not copied', async () => {
+  dialogs.prompt.mockResolvedValue('WrapList');
+  CopyAsWrapper.mockResolvedValueOnce('LOSES: Target.esp loads before Other.esp, which also override 000800:Patch.esp.');
+  const result = renderActions();
+
+  await act(async () => { await result.current.copyAsWrapperInto(0); });
+
+  expect(setStatus).toHaveBeenLastCalledWith('Not copied -- Target.esp loads before Other.esp, which also override 000800:Patch.esp.');
+});

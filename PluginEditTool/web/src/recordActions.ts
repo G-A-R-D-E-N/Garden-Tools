@@ -75,7 +75,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     setStatus('Creating wrapper…');
     try {
       const msg = await b.CopyAsWrapper(matrix.Plugins[col], matrix.FormKey, picked.target, editorId.trim() || null);
-      setStatus(msg);
+      setStatus(msg.startsWith('LOSES:') ? `Not copied -- ${msg.slice(6).trim()}` : msg);
       await onReload();
       onPluginsChanged?.();
     } catch (e) { setStatus('Copy failed: ' + errorText(e)); }
