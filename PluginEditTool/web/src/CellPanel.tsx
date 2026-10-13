@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogs } from './useDialogs';
 import { Boxes, X, Play, CheckCircle2, AlertTriangle, XCircle, Search, Eye, EyeOff, Info, ScrollText } from 'lucide-react';
 import { getCell, getBackend, type CellPlacedReference, type CellReferencesResult, type CellSearchHit } from './backend';
+import { errorText } from './errors';
 import CellViewport, { type CellGeoMap, type CellTextureStats } from './CellViewport';
 import { cellLayerOf, MARKER_LAYER } from './util/cellLayer';
 import { parseCellGridCoordinate } from './util/cellGrid';
@@ -126,7 +127,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const list = JSON.parse(raw) as string[];
       setPluginCount(Array.isArray(list) ? list.length : 0);
     })
-    .catch(() => setPluginCount(0));
+    .catch(e => { setPluginCount(0); setStatus('Could not list plugins: ' + errorText(e)); });
 
   useEffect(() => { checkPlugins(); }, []);
 
@@ -151,8 +152,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         const raw = await cell.SearchCells(cellId.trim(), 30);
         if (searchSeq.current !== mySeq) return;
         setMatches(JSON.parse(raw) as CellSearchHit[]);
-      } catch {
-        if (searchSeq.current === mySeq) setMatches([]);
+      } catch (e) {
+        if (searchSeq.current === mySeq) { setMatches([]); setStatus('Could not search cells: ' + errorText(e)); }
       } finally {
         if (searchSeq.current === mySeq) setMatchesLoading(false);
       }
@@ -182,8 +183,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         const raw = await cell.SearchWorldspaces(worldspace.trim(), 100);
         if (wsSeq.current !== mySeq) return;
         setWsMatches(JSON.parse(raw) as CellSearchHit[]);
-      } catch {
-        if (wsSeq.current === mySeq) setWsMatches([]);
+      } catch (e) {
+        if (wsSeq.current === mySeq) { setWsMatches([]); setStatus('Could not search worldspaces: ' + errorText(e)); }
       } finally {
         if (wsSeq.current === mySeq) setWsLoading(false);
       }

@@ -76,7 +76,7 @@ From `wbTemplateFlags` (Common:8155-8178), FO4 names:
 
 | Subrecord | Entry | Layout | xEdit |
 | --- | --- | --- | --- |
-| SNAM | Faction FormID + Rank | 8 bytes: FormID u32, Rank s8, 3 unused | wbFaction, Common:8527-8538; list at FO4:10347 |
+| SNAM | Faction form ID + Rank | 5 bytes: form ID u32, Rank s8 | wbFaction, Common:8527-8538 (FO4 drops the 3 unused bytes: IsFO4Plus(nil, wbUnused(3))); list at FO4:10347 |
 | PRKZ | Count | u32 | FO4:10384 |
 | PRKR | Perk FormID + Rank | 5 bytes: FormID u32, Rank u8 | FO4:10385-10393 (`SetCountPath(PRKZ)`) |
 | COCT | Count | u32 | FO4:10397; wbCOCT FO4:3315 |
@@ -88,7 +88,7 @@ Decode rules:
 - Each list is read in subrecord order.
 - A payload of the wrong size throws `NpcError`.
 - A null FormID throws, except COED owner, which decodes to no owner. xEdit's `wbFormIDCk` for SNAM ([FACT]), PRKR ([PERK]) and CNTO (`sigBaseObjects`, NULL excluded) does not allow null; COED owner allows NULL (FO4:3291).
-- PRKZ and COCT must equal the number of PRKR and CNTO entries when present, or decode throws. xEdit uses them as count paths (FO4:10393, FO4:3316).
+- PRKZ must equal the number of PRKR entries when present, or decode throws. xEdit uses it as the count path (FO4:10393). COCT is not checked: decode returns the CNTO entries present, and edits rewrite COCT to the CNTO count (xEdit 93cc0bc5 Core/wbDefinitionsFO4.pas:3315-3316, COCT cpBenign, count path of the CNTO array).
 - COED must immediately follow its CNTO. xEdit nests COED inside the CNTO group (FO4:3300-3314).
 
 COED's third field is `global_or_rank`, stored raw. xEdit reads it as a Global FormID or as a required rank s32 depending on the owner: `wbCOEDOwnerDecider` (Common:5451-5469) selects rank for NPC_ or FACT owners. Radicle keeps the raw `u32`.
@@ -97,9 +97,8 @@ Edit rules:
 
 - Add, remove at index, and set at index for each list. Remove and set on an out-of-range index throw. Add, remove and set return `false` when the stored bytes would not change.
 - The list's own subrecords are replaced as one run. A run with other subrecords between its entries is refused.
-- The count subrecord is always written with the run, so removing the last entry leaves PRKZ or COCT at 0.
+- Removing the last entry drops PRKZ or COCT with the run.
 - A missing run is inserted after the last subrecord that xEdit orders before it. The order is `k_order` in `src/forms/npc.cpp`. A record with no earlier subrecord (no ACBS) is refused.
-- SNAM's three unused bytes are written as zero, so an edit to an existing SNAM does not keep nonzero unused bytes.
 
 ## Not covered
 

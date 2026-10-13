@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Table2, X, RefreshCw, Save } from 'lucide-react';
 import { getBackend, type RecordTypeEntry } from './backend';
+import { errorText } from './errors';
 import { useDialogs } from './useDialogs';
 import './PapyrusPanel.css';
 import './SpreadsheetPanel.css';
@@ -46,10 +47,11 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           .filter((name): name is string => typeof name === 'string' && name.length > 0);
         if (cancelled) return;
         setPlugins(names);
-      } catch {
+      } catch (e) {
         if (!cancelled && plugins.length === 0) {
           setPlugins([]);
         }
+        if (!cancelled) setError('Could not list plugins: ' + errorText(e));
       }
     })();
     return () => { cancelled = true; };
