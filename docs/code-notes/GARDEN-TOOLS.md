@@ -831,6 +831,10 @@ Fourth #114 slice, stacked on the placed-reference slice. It covers the LAND, LT
 - the LTEX/TXST chain, including missing links;
 - the C ABI.
 
+## Radicle/src/environment/strings.cpp:load_plugin_string_tables — per-plugin tables without an Environment (#32)
+
+Public entry for callers that hold one `fo4::Plugin` rather than a full load order, such as the PET strings RPC. It shares `resolve_plugin_tables` with `StringTables::load`, so both apply the same rules: the localized flag, case-folded loose names, duplicate-case errors, and archive fallback through `AssetResolver::locate_in_archives`. The strings directories are searched in the order given, and the first loose match wins before any archive is tried. Each returned `PluginStringTable::archive` is empty for loose files and the BA2 file name otherwise. Test: `Radicle/tests/test_environment_strings.cpp:PluginTablesResolveLooseThenArchivesAndSkipNonLocalized`.
+
 ## Radicle/src/environment/strings.cpp:fo4::env::StringTables / string_source — GardenEngine #114 localization
 
 Fifth #114 slice, stacked on the terrain slice. It replaces Mutagen's `StringsFolderLookupOverlay` for loose string files. Reading strings out of BA2 archives waits for the BA2 slice.
@@ -2144,9 +2148,15 @@ The typed-record read shapes are `type` aliases, not interfaces, so `ListEditor`
 
 The tab is added only for typed record types. The multi-line `backend` type import was joined onto one line to keep RecordView.tsx at 750 lines.
 
-## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:readTables — sibling string tables (#32)
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::readStringTables — resolved through Radicle (#32)
 
-Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next to the loaded plugin, with the same symlink and regular-file check as `questinternal::loadLocalizedQuestTables`, and parses each found table with `fo4::localization::read_string_table_file`. A missing table is skipped; a table that fails to parse fails the whole call with `StringTableInvalid`. Limits: it reads only `<plugin dir>/Strings/<stem>_<lang>.<ext>` with exact case; it reads no BA2 archives, so base-game tables packed in archives are not listed; it does not scan other mod folders; and unsaved staged quest localization is not reflected.
+Calls `fo4::env::load_plugin_string_tables` with `<plugin dir>/Strings` first and `<data dir>/Strings` second, plus the archive resolver from `stringAssets`. Radicle decides what counts: loose names match case-insensitively (`Strings/mod_EN.strings` is found for language `EN`; only the file name is case-folded), a loose file wins over an archive entry, archives are searched for `strings/<stem>_<lang>.<ext>`, and a plugin without the localized flag has no tables. A parse failure fails the call with `StringTableInvalid`. `ListStringTables` adds `source` per table: `loose`, or the BA2 file name (`Radicle/src/environment/strings.cpp:load_plugin_string_tables`). The other RPCs keep their shape. Limits: only the plugin's own folder and the data directory are searched, not other MO2 mod folders, because the backend receives `setDataDirectory` and not the MO2 asset roots; unsaved staged quest localization is not reflected. Changes from the earlier loose-only reader: loose tables are no longer rejected when they are symlinks, because Radicle's directory listing follows links; and a non-localized plugin lists no tables even if `Strings` files sit beside it, as the game ignores them.
+
+Loose tables reached through a symlink are listed here, but the quest localization loader (`PluginEditTool/native/src/plugin/RadiclePluginQuestLocalized.cpp`) refuses symlinks because it writes tables back.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::stringAssets — archive cache (#32)
+
+Opens an `AssetResolver` over the BA2 files that `fo4::archive::archive_load_order` picks, with no INI archive list: the data directory's archives for all loaded plugin names, then the archives beside the loaded plugin for that plugin name. A folder archive with the same file name, compared case-folded with `fo4::text::equals_folded`, replaces the data directory copy and takes precedence, as loose files in the plugin folder do. When the plugin folder is the data directory (`std::filesystem::equivalent`), the folder scan is skipped, since the data directory scan already covers it. The `<stem> - *.ba2` rule covers the vanilla `Fallout4 - *.ba2` and DLC archives; an archive named only in `Fallout4.ini` `sResourceArchive2List` is not found. An archive that fails to open is skipped, so one corrupt or locked BA2 does not fail every strings call. The resolver is cached by each archive's path, size and last write time, and reopened when any of them changes, because opening every archive table of contents on each RPC would be too slow. `readStringTables` builds it only when a localized plugin lacks a loose table.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — paging (#32)
 
@@ -2195,6 +2205,34 @@ Every per-record problem row carries a `Code`, a `Detail`, a `Severity` and a `D
 
 Covers `Mo2Profile.cpp:readProfile` for an OG-style install: Fallout4.esm and the six official DLC masters, no Creation Club plugins, no `Fallout4.ccc`, one active user plugin. `readProfile` always passes `OfficialTable::ae`, so this checks the AE table against OG data. Radicle's `load_order_files.hpp` has `OfficialTable { og_ng, ae }` and no NG-specific table: `og_ng` is the first seven AE names (`Radicle/src/loadorder/assemble.cpp:official_names`, `DLCUltraHighResolution.esm` included), and LOAD_ORDER_FILES.md says NG shares it. So an NG case would repeat this one and is not added. `assemble.cpp:assemble_load_order` skips absent official names silently, with no finding and no failure. The AE-only `DLCDummy10thAnniversary.esm` and the absent `DLCUltraHighResolution.esm` therefore do not change the result. The AE table only differs from `og_ng` when `DLCDummy10thAnniversary.esm` is present, which an OG install does not ship. Not built or run locally (CI only). The partial-DLC case (`Mo2ProfileTests.cpp` second OG test) lists only `DLCRobot.esm` and `DLCCoast.esm` in plugins.txt with `DLCworkshop01`-`03` and no `DLCNukaWorld.esm` on disk, and expects the official masters present on disk to load in AE official order without any plugins.txt entry for them.
 
+## PluginEditTool/native/src/plugin/RadiclePluginFields.cpp:scalarPresentationJson — enum and flag names for PET (#287)
+
+Returns `{"kind", "names"}` only for a schema field whose presentation is `enumeration` or `flags`, and `null` for every other field, so callers add the key only when a field has names. Enum names are `{"value", "name"}` as authored in fields.json. Flag names are `{"bit", "name"}`; the descriptor stores the single-bit mask, and the bit index is recovered with `std::countr_zero`. Lookup is by record signature plus path, so a path shared by two records resolves per record.
+
+## PluginEditTool/native/src/plugin/RadiclePluginReadApi.cpp:RadiclePluginBackend::getRecordsGrid — presentations map (#287)
+
+The grid JSON gains a top-level `presentations` object keyed by column path, holding the `scalarPresentationJson` value for each enum or flags column. Rows are unchanged, so cells stay the raw decimal integers that `SetField` writes back. The key is only correct for non-repeated columns, where the column path equals the schema path. No enum or flags row in fields.json is repeated today; a repeated one would need index mapping.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQueries.cpp:RadiclePluginBackend::getConflictMatrix — row Presentation key (#287)
+
+Each semantic row gets a `Presentation` key only when `scalarPresentationJson` returns one for its path. The row's `Values` stay raw so diffing, filtering and the integer write path are unchanged; names are a display and picker concern on the web side.
+
+## PluginEditTool/web/src/scalarPresentation.ts:scalarLabel — label for enum and flag cells (#287)
+
+Shows the enum name, or the comma-joined names of set flag bits. Bits no name covers, and enum values no name covers, show as hex. Non-integer raw text (for example `<opaque>` or an empty absent cell) passes through unchanged. `flagIsSet` and `setFlag` use `Math.floor` and powers of two rather than bitwise operators, so a `u32` bit 31 stays exact in JavaScript numbers.
+
+## PluginEditTool/web/src/ScalarEditor.tsx:ScalarEditor — record view enum and flag editor (#287)
+
+Enum edits use a `<select>` that commits on change, so the write is the picked integer. Flag edits use a checkbox list that keeps unknown bits: `setFlag` changes only the toggled bit, and Save commits the combined integer. Cancel discards the edit. `ScalarText` and `ScalarCell` are the display used by RecordView and by the spreadsheet cell.
+
+## PluginEditTool/web/src/SpreadsheetPanel.tsx:SpreadsheetPanel — enum and flag cells (#287)
+
+A column with a `presentations` entry renders `ScalarCell` (a `<select>` for enums, a `<details>` checkbox list for flags) instead of the plain text `<input>`. Its edits feed the same `edits` map and `SetField` call as text cells, so saves still send integers.
+
+## PluginEditTool/web/src/RecordView.tsx:RecordView — scalar display and editing (#287)
+
+Scalar rows render through `ScalarText` and open `ScalarEditor` on edit. The file sits near the 750-line cap, so the presentation logic lives in `ScalarEditor.tsx` and RecordView only wires it in.
+
 ## PluginEditTool/web/src/Shell/conflictSelection.ts:selectRow — Ctrl, Shift and plain clicks (#39)
 
 The selection is a `Record<string, boolean>` keyed by FormKey, the same map the batch copy already reads, so Ctrl and Shift only change how it is written. `plain` replaces it with the clicked row, `toggle` flips one row, and `range` replaces it with the inclusive span from the anchor. The anchor is the row of the last `plain` or `toggle` click and does not move on a `range` click, so repeated Shift clicks pivot on the same row. With no anchor, or an anchor that is no longer listed, a range click selects only the clicked row.
@@ -2214,3 +2252,23 @@ The tests drive the real `MainShell` in conflicts mode with the same backend stu
 ## PluginEditTool/native/src/plugin/RadiclePluginFields.cpp:semanticFieldCells — strided rows and the `\Count` column (counted arrays)
 
 A strided or repeated scalar row (including the REFR `WaterCurrentVelocities` members, stride 16) emits one `<path>\Count` cell, and that cell is the field's column; `<path>[i]` cells appear only for present elements. With the source subrecord absent the count is `0` and read-only, the same as CLMT `WeatherChance` and LTEX `Grasses` (pinned by RadiclePluginClimateSemanticTests.cpp and RadiclePluginVegetationSemanticTests.cpp). Not run locally (CI only).
+
+## PluginEditTool/web/src/MainShell.tsx:MainShell — RECORDS multi-select (#39)
+
+The RECORDS search list uses the Conflicts selection model (`conflictSelection.ts:selectRow`, `modeOf`), keyed by FormKey alone, so a record cannot be picked twice (`CopyAsOverrideMany` rejects a batch that repeats a FormKey). The copy source is the `Plugin` of the latest hit for that FormKey, which `recHits` holds. Selected hits are cached in `recHits` as they are picked, because a hit that drops out of the current search has no other source for the `Plugin` and `EditorID` that copy and compare need. The count's hidden figure is the selected hits that are absent from the current `searchResults`. While `loadOrderSummary.Plugins` is known, picks whose `Plugin` is not in it are dropped from the picked list, the count, copy and compare; a null summary keeps all picks. The state lives in `MainShell` rather than a child panel: the sidebar list is conditional on the query and would otherwise unmount and lose the selection when the query drops below two characters. The list stays in `MainShell` because the file is still under the 750-line limit. A plain click selects only the clicked hit and opens it, which replaces the hidden selections as well, matching the Conflicts list. Ctrl, Shift and Ctrl+Shift do not open. Escape on the list and the Clear button empty the selection. The bar also shows when the query is below two characters, so a selection stays visible and can be copied or cleared.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch — copyMany shared by Conflicts and RECORDS (#39)
+
+`copyMany` holds the whole batch flow: the target picker, the overwrite and load-order confirmations, the per-item failure list and the status line. Each caller maps its own rows to `CopyPick` items. Conflicts use `Winner` as the source plugin, and RECORDS use the hit's `Plugin`, which is the plugin the record was found in, so `CopyAsOverrideMany` reads it from there. `copyMany` returns true only when the batch finished with no failures. The caller clears its selection on that result and keeps it on a cancel, an error, or a partial failure, as the Conflicts list always did.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useCompareSelected — sequential compare (#39)
+
+The compare helper is shared by the Conflicts list and RECORDS. It opens the records one after another with `await` for the same reason as the Conflicts note above: `useRecordOpening.ts:openByFormKey` drops a result superseded by a newer open. `comparing` disables the button while the opens run.
+
+## PluginEditTool/web/src/Shell/conflictSelection.ts:modeOf — modifier keys to select mode (#39)
+
+Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifier keys the same way. It takes only the three modifier flags, so it works on a React mouse event without importing React.
+
+## PluginEditTool/web/src/MainShellBridge.test.tsx:sidebar record multi-select — MainShell harness (#39)
+
+The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).

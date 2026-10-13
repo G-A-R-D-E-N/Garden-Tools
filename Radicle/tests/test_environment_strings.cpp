@@ -1,3 +1,5 @@
+#include "fo4/archive/assets.hpp"
+#include "fo4/archive/ba2.hpp"
 #include "fo4/c_api_env.h"
 #include "fo4/environment/strings.hpp"
 #include "fo4/localization/strings.hpp"
@@ -183,6 +185,39 @@ TEST_F(StringsEnvironmentTest, ResolvesNamesInTheOwningPluginsTable) {
   EXPECT_FALSE(tables.resolve_name(env, env.versions(key("Base.esm", 0x801))[0]).has_value());
   EXPECT_FALSE(tables.resolve_name(env, *env.winner(key("Base.esm", 0x803))).has_value());
   EXPECT_FALSE(tables.resolve_name(env, *env.winner(key("Inline.esp", 0x900))).has_value());
+}
+
+TEST_F(StringsEnvironmentTest, PluginTablesResolveLooseThenArchivesAndSkipNonLocalized) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const std::vector<std::filesystem::path> dirs{strings_};
+
+  const auto base = fo4::env::load_plugin_string_tables(dirs, env.plugin(0), "en");
+  ASSERT_EQ(base.size(), 2u);
+  EXPECT_EQ(base[0].source, fo4::env::StringSource::normal);
+  EXPECT_TRUE(base[0].archive.empty());
+  EXPECT_EQ(base[0].path.filename(), "base_EN.strings");
+  EXPECT_EQ(base[1].source, fo4::env::StringSource::dl);
+
+  fo4::archive::Ba2GeneralEntry entry;
+  entry.path = "Strings\\Patch_fr.STRINGS";
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(fo4::localization::write_string_table(
+      table(fo4::localization::StringTableKind::strings, {{0x11, "Patched French"}}))));
+  fo4::archive::Ba2GeneralArchive archive;
+  archive.entries.push_back(std::move(entry));
+  fo4::archive::write_ba2_general_file(archive, root_ / "Patch - Main.ba2");
+  const std::vector<std::filesystem::path> archives{root_ / "Patch - Main.ba2"};
+  const auto assets = fo4::archive::AssetResolver::open(root_, archives);
+
+  const auto french = fo4::env::load_plugin_string_tables(dirs, env.plugin(1), "fr", &assets);
+  ASSERT_EQ(french.size(), 1u);
+  EXPECT_EQ(french[0].archive, "Patch - Main.ba2");
+  EXPECT_EQ(french[0].path.filename(), "Patch_fr.STRINGS");
+  EXPECT_EQ(french[0].table.entries.size(), 1u);
+  EXPECT_TRUE(fo4::env::load_plugin_string_tables(dirs, env.plugin(1), "fr").empty());
+
+  fo4::localization::write_string_table_file(
+      table(fo4::localization::StringTableKind::strings, {{0x10, "Inline"}}), strings_ / "Inline_en.STRINGS");
+  EXPECT_TRUE(fo4::env::load_plugin_string_tables(dirs, env.plugin(2), "en").empty());
 }
 
 TEST_F(StringsEnvironmentTest, MissingDirectoryYieldsNoTables) {
