@@ -47,15 +47,14 @@ TEST_P(MagicLocationReal, RowsDecodeAndAuthoringLimitsHold) {
     const auto scalars = fo4::schema::scalar_fields(signature);
     const auto links = fo4::schema::formlink_fields(signature);
 
-    std::vector<fo4::FormKey> records;
+    std::vector<const fo4::Record*> records;
     fo4::visit_records(plugin, [&](const fo4::Record& record) {
-      if (record.header.signature == signature) records.push_back(record.form_key);
+      if (record.header.signature == signature) records.push_back(&record);
     });
     total += records.size();
 
-    for (const auto& key : records) {
-      const auto* record = fo4::find_record(plugin, key);
-      ASSERT_NE(record, nullptr);
+    for (const auto* record : records) {
+      const auto& key = record->form_key;
       for (const auto& sub : record->subrecords) {
         for (const auto& field : scalars) {
           if (sub.signature != field.scalar.subrecord) continue;
@@ -81,6 +80,15 @@ TEST_P(MagicLocationReal, RowsDecodeAndAuthoringLimitsHold) {
                           << sub.signature.to_string() << " is " << sub.data.size() << " bytes";
           }
         }
+      }
+      std::size_t last = 0;
+      for (const auto& sub : record->subrecords) {
+        const auto it = std::find_if(rules.begin(), rules.end(),
+            [&](const auto& rule) { return rule.signature == sub.signature; });
+        if (it == rules.end()) continue;
+        const auto index = static_cast<std::size_t>(it - rules.begin());
+        EXPECT_GE(index, last) << GetParam() << ' ' << key.to_string() << ' ' << sub.signature.to_string();
+        last = index;
       }
       for (const auto& rule : rules) {
         const auto count = count_subrecords(*record, rule.signature);

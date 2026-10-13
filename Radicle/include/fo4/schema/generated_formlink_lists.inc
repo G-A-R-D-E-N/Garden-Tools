@@ -1336,7 +1336,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("SNDR"), "SNDR\\OutputModel", "Output model", Signature::from_string("ONAM"), 0, false, 215, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("SOUN"), "SOUN\\SoundDescriptor", "Sound descriptor", Signature::from_string("SDSC"), 0, false, 216, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("SPEL"), "SPEL\\CastingPerk", "Casting Perk", Signature::from_string("SPIT"), 32, true, 217, 1, FieldAddress{}, {{36}}},
-  {Signature::from_string("SPEL"), "SPEL\\EquipmentType", "Equipment type", Signature::from_string("ETYP"), 0, true, 218, 1, FieldAddress{}, {{4}}},
+  {Signature::from_string("SPEL"), "SPEL\\EquipmentType", "Equipment Type", Signature::from_string("ETYP"), 0, true, 218, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("TREE"), "TREE\\HarvestSound", "Harvest sound", Signature::from_string("SNAM"), 0, true, 219, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("TREE"), "TREE\\Ingredient", "Ingredient", Signature::from_string("PFIG"), 0, true, 220, 44, FieldAddress{}, {{4}}},
   {Signature::from_string("WATR"), "WATR\\ConsumeSpell", "Consume spell", Signature::from_string("XNAM"), 0, false, 264, 1, FieldAddress{}},

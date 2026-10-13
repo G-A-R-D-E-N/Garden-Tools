@@ -9457,7 +9457,7 @@
         },
         {
           "path": "MGEF\\CastingType",
-          "label": "Casting type",
+          "label": "Casting Type",
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 80,
@@ -9677,7 +9677,7 @@
       ],
       "formlink_fields": [
         {"path": "SPEL\\CastingPerk", "label": "Casting Perk", "subrecord": "SPIT", "offset": 32, "payload_sizes": [36], "targets": ["PERK"], "nullable": true, "insertion": "existing_only"},
-        {"path": "SPEL\\EquipmentType", "label": "Equipment type", "subrecord": "ETYP", "offset": 0, "payload_sizes": [4], "targets": ["EQUP"], "nullable": true, "insertion": "existing_only"}
+        {"path": "SPEL\\EquipmentType", "label": "Equipment Type", "subrecord": "ETYP", "offset": 0, "payload_sizes": [4], "targets": ["EQUP"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "DESC"]
     },
