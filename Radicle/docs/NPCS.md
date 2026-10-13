@@ -99,7 +99,6 @@ Edit rules:
 - The list's own subrecords are replaced as one run. A run with other subrecords between its entries is refused.
 - The count subrecord is always written with the run, so removing the last entry leaves PRKZ or COCT at 0.
 - A missing run is inserted after the last subrecord that xEdit orders before it. The order is `k_order` in `src/forms/npc.cpp`. A record with no earlier subrecord (no ACBS) is refused.
-- SNAM's three unused bytes are written as zero, so an edit to an existing SNAM does not keep nonzero unused bytes.
 
 ## Not covered
 
