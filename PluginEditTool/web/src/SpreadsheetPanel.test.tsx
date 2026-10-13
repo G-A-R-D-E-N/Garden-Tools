@@ -197,3 +197,12 @@ describe('SpreadsheetPanel unsaved cell edits (GT-089)', () => {
     expect(dialogs.confirm).not.toHaveBeenCalled();
   });
 });
+
+describe('SpreadsheetPanel plugin list', () => {
+  it('shows a failed plugin list read', async () => {
+    const backend = installBackend(async () => 'Updated.');
+    backend.GetActivePlugins.mockRejectedValue(new Error('plugins offline'));
+    render(<SpreadsheetPanel onClose={() => {}} />);
+    await screen.findByText('Could not list plugins: plugins offline');
+  });
+});

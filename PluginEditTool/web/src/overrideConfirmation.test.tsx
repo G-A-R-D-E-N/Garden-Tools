@@ -118,6 +118,17 @@ describe('losing override confirmation', () => {
     expect(batch.mock.calls[2].slice(1)).toEqual(['Patch.esp', true, true]);
     expect(JSON.parse(batch.mock.calls[2][0])).toEqual([{ formKey: matrix.FormKey, source: 'Later.esp' }]);
   });
+
+  it('clears the batch error when a later batch succeeds', async () => {
+    batch.mockResolvedValueOnce(JSON.stringify({
+      total: 1, ok: 0, failed: 1, failures: [{ formKey: matrix.FormKey, reason: 'locked' }],
+    })).mockResolvedValueOnce(JSON.stringify({ total: 1, ok: 1, failed: 0 }));
+    await openBatchCopy();
+    await screen.findByText(/1 of 1 records could not be copied into Patch.esp/);
+    fireEvent.click(screen.getByRole('button', { name: /Copy selected/ }));
+    await screen.findByText(/Copied 1\/1 into Patch.esp/);
+    expect(screen.queryByText(/could not be copied/)).toBeNull();
+  });
 });
 
 describe('deep copy losing override confirmation', () => {

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -118,6 +119,8 @@ protected:
     const auto path = root_ / std::string(name);
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    stream.close();
+    if (!stream) throw std::runtime_error("cannot write " + path.string());
     return path;
   }
 

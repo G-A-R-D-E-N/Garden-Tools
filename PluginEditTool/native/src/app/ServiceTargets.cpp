@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <exception>
-#include <set>
+#include <map>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -345,12 +345,20 @@ Result<nlohmann::json> CellTarget::invoke(std::string_view method,
 // geo`, its JSON object embedded as-is or replaced with an { error } entry.
 std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPaths) {
     std::vector<std::string> unique;
+    std::vector<std::pair<std::string, std::size_t>> requested;
+    std::vector<std::size_t> uses;
     {
-        std::set<std::string> seen;
+        std::map<std::string, std::size_t> slotOf;
         for (const auto& raw : relModelPaths) {
             auto path = trim(raw);
             if (path.empty()) continue;
-            if (seen.insert(toLower(path)).second) unique.push_back(std::move(path));
+            const auto [slot, inserted] = slotOf.try_emplace(toLower(path), unique.size());
+            if (inserted) {
+                unique.push_back(std::move(path));
+                uses.push_back(0);
+            }
+            ++uses[slot->second];
+            requested.emplace_back(raw, slot->second);
         }
     }
 
@@ -418,8 +426,8 @@ std::string CellTarget::geometryBatch(const std::vector<std::string>& relModelPa
     }
 
     nlohmann::json geometryMap = nlohmann::json::object();
-    for (std::size_t i = 0; i < unique.size(); ++i) {
-        geometryMap[unique[i]] = std::move(results[i]);
+    for (const auto& [raw, slot] : requested) {
+        geometryMap[raw] = --uses[slot] == 0 ? std::move(results[slot]) : results[slot];
     }
     nlohmann::json payload;
     payload["count"] = total;

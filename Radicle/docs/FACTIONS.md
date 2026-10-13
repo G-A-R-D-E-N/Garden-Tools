@@ -49,9 +49,11 @@ Subrecord minimum and maximum, as recorded in `fields.json` (`authoring`):
 
 A payload shorter than a field's gate hides that field (the existing embedded-scalar rule). A payload whose size does not match the VENV gate hides every VENV field.
 
+`CrimeArrest`, `CrimeAttackOnSight`, `VendorBuysStolenItems`, `VendorSellsEverythingNotInList` and `VendorBuysNonStolenItems` use the `enum` presentation with xEdit's `False` (0) and `True` (1) (`wbBoolEnum`, Common 7240 to 7247). Their bounds stay 0 to 255, so the names do not restrict what is written.
+
 ## Flags (DATA)
 
-The schema stores DATA as a plain u32. The bit names below are documentation only; the scalar presentation has no flags type. Source: `wbDefinitionsFO4.pas` lines 6791 to 6807.
+`FACT\Flags` stores DATA as a u32 with the `flags` presentation. The names below are the `names` table of that row in `fields.json`, so `ScalarDescriptor::names` carries one single-bit mask per name. Source: `wbDefinitionsFO4.pas` lines 6791 to 6807.
 
 | Bit | Name |
 | --- | --- |
@@ -103,11 +105,10 @@ Titles in a localized plugin must be string IDs, and inline titles are refused t
 
 | xEdit element | Lines | Reason |
 | --- | --- | --- |
-| DATA flag presentation | 6790 to 6808 | The scalar presentation is `identity` or `percent_0_100` only. Adding a flags presentation would change the shared codegen and the C++ enum. Bits are listed above instead. |
 | VENV unknown bytes 6 and 7 | 6837 | `wbUnknown(2)`, not a named field. Bytes are kept as they are on disk. |
 | PLVD (Location) | 4200 to 4206, 6843 | A union decided by a Type value (reference, cell, or near-location). It is not a fixed layout. |
 | CITC (Condition Count) | 6844 | Derived from the condition list. Not a value to edit. |
 | CTDA conditions | 6845 | Shared condition machinery (`schema/ctda.hpp`). FACT is not wired into the condition scopes. |
-| XNAM form ID remap on copy or merge | 8545 | The generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) do not cover a 12-byte FACT XNAM. Typed edits encode the form ID correctly. A merge would not remap it. A follow-up is needed. |
+| XNAM form ID remap | 8545 | The generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) do not list a 12-byte FACT XNAM. `src/schema/form_link_mixed.cpp` (`k_faction_layouts`, `faction_formid_offsets`) remaps it on the generic FormLink path in `src/schema/form_links.cpp`. `FactionXnamRelationFormIdRemapsAndKeepsModifierAndReaction` (`tests/test_packed_formlink_arrays.cpp`) covers it, and `FactionXnamWrongSizeFailsClosedUnderStrictRemap` covers a wrong-size payload. Typed edits encode the form ID correctly. |
 | FACT creation | n/a | No create path. Relations and ranks are edited on existing records. |
 | FULL | 3692 | Localized through the generic localized-field table. No typed FACT API. |

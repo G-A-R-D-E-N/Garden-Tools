@@ -111,3 +111,17 @@ describe('Blueprint close over unsaved changes (GT-088)', () => {
     expect(dialogs.confirm).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Blueprint background calls report failures (#41)', () => {
+  it('shows a failed palette search', async () => {
+    graph.SearchPalette.mockRejectedValueOnce(new Error('palette offline'));
+    render(<BlueprintPanel onClose={() => {}} />);
+    expect(await screen.findByText('Error: palette offline')).toBeTruthy();
+  });
+
+  it('shows a failed validation', async () => {
+    graph.ValidateGraph.mockRejectedValueOnce(new Error('validator offline'));
+    render(<BlueprintPanel onClose={() => {}} />);
+    expect(await screen.findByText('Error: validator offline', {}, { timeout: 3000 })).toBeTruthy();
+  });
+});

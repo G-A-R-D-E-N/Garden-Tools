@@ -42,9 +42,12 @@ export default function ConditionsEditor(
         if (Array.isArray(parsed)) setRows(parsed);
         else { setError(String(raw)); setRows([]); }
       } catch (e) { setError('Could not read conditions: ' + errorText(e)); setRows([]); }
-      try { setFunctions(JSON.parse(await b.GetConditionFunctions())); } catch { setFunctions([]); }
-      try { setRunOns(JSON.parse(await b.GetConditionRunOnTypes())); } catch { setRunOns(['Subject']); }
-      try { setParamTable(JSON.parse(await b.GetConditionFunctionParams())); } catch { setParamTable({}); }
+      try { setFunctions(JSON.parse(await b.GetConditionFunctions())); }
+      catch (e) { setError(prev => prev || 'Could not read condition functions: ' + errorText(e)); setFunctions([]); }
+      try { setRunOns(JSON.parse(await b.GetConditionRunOnTypes())); }
+      catch (e) { setError(prev => prev || 'Could not read run-on types: ' + errorText(e)); setRunOns(['Subject']); }
+      try { setParamTable(JSON.parse(await b.GetConditionFunctionParams())); }
+      catch (e) { setError(prev => prev || 'Could not read function parameters: ' + errorText(e)); setParamTable({}); }
     })();
   }, [plugin, record, path]);
 
@@ -64,7 +67,7 @@ export default function ConditionsEditor(
       try {
         const got = JSON.parse(await b.ResolveFormKeyLabels(missing.join(',')));
         setLabels(prev => ({ ...prev, ...got }));
-      } catch {  }
+      } catch (e) { setError(prev => prev || 'Could not resolve record names: ' + errorText(e)); }
     })();
   }, [rows]);
 

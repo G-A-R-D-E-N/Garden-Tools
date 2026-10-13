@@ -256,9 +256,10 @@ TEST(ScalarEmbedded, TreatsAFieldPastATruncatedPayloadAsAbsent) {
 TEST(ScalarEmbedded, SignatureOnlyLookupSkipsEmbeddedFields) {
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DNAM")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DATA")).has_value());
-  // Whole-payload fields still resolve.
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("VNAM")).has_value());
+  // A signature only one whole-payload row names still resolves.
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XHLT")).has_value());
   EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("VNAM")).has_value());
 }
 
 TEST(ScalarEmbedded, ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbsent) {

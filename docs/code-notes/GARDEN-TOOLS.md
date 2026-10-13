@@ -1533,11 +1533,9 @@ Main's behaviour before this (traced on `ffd3a341`): `MainShell` holds the field
 
 Tranche 1 clears the lint findings that can be fixed without changing UI behaviour; the react-hooks rendering refactors and the two `react-refresh/only-export-components` findings in `dialogs.tsx` and `Shell/StatusBar.tsx` are left to later tranches. `PluginEditTool/web/eslint.config.js` runs `js.configs.recommended`, `tseslint.configs.recommended`, `reactHooks.configs.flat.recommended` and `reactRefresh.configs.vite` over `src/**/*.{ts,tsx}`.
 
-The empty `catch` bodies are deliberate best-effort paths, and they carry no source comment. `no-empty` treats a block holding a comment as non-empty, so the explanation used to live in the source; it lives here instead, and the three files that need it are named in `eslint.config.js` with `'no-empty': ['error', { allowEmptyCatch: true }]`, which keeps the rule strict everywhere else. What each one swallows:
+The empty `catch` bodies were deliberate best-effort paths, and they carry no source comment. `no-empty` treats a block holding a comment as non-empty, so the explanation lives here instead, and the files that need it are named in `eslint.config.js` with `'no-empty': ['error', { allowEmptyCatch: true }]`, which keeps the rule strict everywhere else. Tranche 1 named three files. The palette search and live validation in `Blueprint/BlueprintPanel.tsx` and the label lookup in `ConditionsEditor.tsx` now report their failures (see "silent catch sites (#41)" below), so one file is left:
 
-- `Blueprint/BlueprintPanel.tsx`: the palette search keeps the previous entries when `SearchRecords` fails, and the next keystroke retries; live validation keeps the last result when `Validate` fails, and the next edit revalidates.
 - `CellPanel.tsx`: the 200 ms `GetGeometryBatchProgress` poll is ignored when it fails; the batch call itself reports the real failure.
-- `ConditionsEditor.tsx`: a failed `ResolveFormKeyLabels` leaves the labels as they are; they are cosmetic and every row keeps its raw FormKey.
 
 `MainShell.tsx:HostMessage` types what the host posts to the page. Only the fields each `Type` reads are declared: `SetStatus.Text`, `SetProgress.Value`, and the `McpLive` fields. A `SetProgress` message without `Value` now sets progress to `null` (hidden) instead of `undefined`, which is what the state's `number | null` says.
 
@@ -1947,7 +1945,7 @@ Anchored to `README.md` (tool table) and `.github/workflows/native-ci.yml:on.pus
 
 ## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile
 
-MO2 winners are resolved as before: Data, then enabled mods low to high, then the overwrite folder, each overwriting the earlier name. `indexFolder` also records every indexed path in `candidates`, low to high. `winners` is built from `candidates` highest priority first, keeping only the path `resolved` holds for each ASCII-lowercased name. Radicle keeps the first path it sees for each Unicode-folded name, so when two folders ship names that differ only by non-ASCII case (`Ä.esp` and `ä.esp`), the MO2 winner is the one Radicle keeps. Test: `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile keeps the higher-priority winner when names differ only by non-ASCII case`. `readProfile` then passes the winner paths to the resolved-files overload of `fo4::loadorder::assemble_load_order` (Radicle `src/loadorder/assemble.cpp`), with `plugins.txt` read by `fo4::loadorder::read_plugin_list` and `Fallout4.ccc` read from the parent of the game Data folder when that file exists. The table is `OfficialTable::ae`. Master-flag files therefore precede non-masters as the engine orders them. Official and ccc names that are not in the winners are skipped by the assembler.
+MO2 winners are resolved as before: Data, then enabled mods low to high, then the overwrite folder, each overwriting the earlier name. `indexFolder` also records every indexed path in `candidates`, low to high. `winners` is built from `candidates` highest priority first, keeping only the path `resolved` holds for each ASCII-lowercased name. Radicle keeps the first path it sees for each Unicode-folded name, so when two folders ship names that differ only by non-ASCII case (`Ä.esp` and `ä.esp`), the MO2 winner is the one Radicle keeps. Test: `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile keeps the higher-priority winner when names differ only by non-ASCII case`. That test builds both names from code points: no build file passes `/utf-8` and the source has no BOM, so MSVC reads it in the ANSI code page, and raw `Ä` and `ä` in `u"..."` literals became two mis-decoded characters each on the Windows runner. The files then did not match the UTF-8 `plugins.txt` entry, `readProfile` found no `Ä.esp`, and the snapshot held one plugin instead of two (Windows job 22302 of the nomad/dev run at 9c1b3ae6; product behavior was correct). Write non-ASCII test names as code points, as `MO2 profile resolves plugins in non-ANSI mod folders` does. `readProfile` then passes the winner paths to the resolved-files overload of `fo4::loadorder::assemble_load_order` (Radicle `src/loadorder/assemble.cpp`), with `plugins.txt` read by `fo4::loadorder::read_plugin_list` and `Fallout4.ccc` read from the parent of the game Data folder when that file exists. The table is `OfficialTable::ae`. Master-flag files therefore precede non-masters as the engine orders them. Official and ccc names that are not in the winners are skipped by the assembler.
 
 Ceiling: the AE table is the seven OG/NG names plus `DLCDummy10thAnniversary.esm`. On an OG/NG install without that file the result equals the OG/NG result. If the file is present, it is ordered as an official name, which the OG/NG table would not do.
 
@@ -1990,3 +1988,84 @@ WEAP has no edit method. `curveTable` is `null` for a DAMA entry below form vers
 ## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — set replaces the whole entry
 
 `set` rewrites the LVLO and its COED together, so a value without `extra` removes the entry's COED. `add` inserts at `index`, and `remove` ignores `value`. Radicle throws `LeveledListError` for an out-of-range index, reported as `LeveledListWriteFailed`. Round-trip test: `Native leveled list entry edit round-trips through save and re-read`.
+
+## PluginEditTool/web/src/recordActions.ts:f2Edit, PluginEditTool/web/src/RecordView.tsx:RecordView — F2 edits the focused cell (#41)
+
+`RecordContextMenu` printed F2 beside "Edit value" and nothing handled the key. `RecordView` owns the record grid and the editor state, so the key is wired there. `recordActions.ts:f2Edit(edit)` returns `tabIndex: -1` and an `onKeyDown` that calls `edit()` on F2. `RecordView` spreads it on the four cells that can start an edit, each with the call it already makes: the value cells in the grid and in the Conflicts matrix call `startEdit(row, col)` for their own column (the double-click and the menu item make that call), and the property-name cells call `startEdit(row, winnerCol)`, the column their context menu targets. `startEdit` keeps every guard (parent rows, backend-refused cells, `Ref` fields opening the picker), so F2 on a cell that cannot be edited does nothing, as a double-click does.
+
+The handler ignores events whose target is not the cell itself, so F2 pressed inside an open editor input or select does not restart the edit. Focus comes from a click: `tabIndex={-1}` makes a cell focusable by mouse without putting every cell in the Tab order, and a right-click focuses it too, so F2 works while the context menu is open (`startEdit` closes the menu). `RecordView.css:.rv-grid td:focus` draws an inset accent outline so the target cell is visible. The grid has no arrow-key cell navigation, so the flow is: click a cell, press F2. A window-level F2 listener was rejected because it would also fire behind the record picker, the dialogs and the other tabs, with no cell to target; removing the label was rejected because the cells are already a natural focus target.
+
+`RecordView.tsx` was 754 lines, over the 750-line guard, so six blank lines left behind by earlier comment removals went first. Every other edit there is line-neutral, and the file is now 748 lines. Tests: `RecordView.semantic.test.tsx` presses F2 on a value cell and expects the inline editor, and presses F2 on a backend-refused cell and expects none.
+
+## PluginEditTool/web/src/ConditionsEditor.tsx:ConditionsEditor, PluginEditTool/web/eslint.config.js — read failures reach the error line (#41)
+
+A failed `ResolveFormKeyLabels` fell into an empty `catch`, so rows kept raw form keys with no sign the lookup had failed. The load effect's four reads now report through the editor's existing `error` line (`.ce-error`, the line `Could not read conditions` and `Save failed` already use): `ResolveFormKeyLabels` ("Could not resolve record names") and the three metadata tables, `GetConditionFunctions`, `GetConditionRunOnTypes` and `GetConditionFunctionParams`, whose fallbacks (an empty list, `Subject`, an empty table) were silent too and left an empty function dropdown unexplained. They call `setError(prev => prev || message)`: the first failure wins, so a secondary failure never overwrites the conditions-read message, and Save still clears the line. `eslint.config.js` now applies `'no-empty': ['error', { allowEmptyCatch: true }]` to `src/CellPanel.tsx` only, the one file with an empty catch left. Tests: `ConditionsEditor.test.tsx` rejects `ResolveFormKeyLabels` and `GetConditionFunctions` and expects each message.
+
+## PluginEditTool/web/src — silent catch sites (#41)
+
+The 115 lines that `grep -rn catch PluginEditTool/web/src` matches outside test files were read: 109 `catch` clauses and 6 promise `.catch(` handlers. 31 handled a failure without reporting it. 17 of those now report through the channel their component already uses for backend errors, and 14 stay silent on purpose. No new toast or banner was added.
+
+F2 in the Conflicts matrix now opens the editor. `RecordView.tsx:RecordView` renders `renderEditor(r, ci)` in the matrix value cell when that cell is the edited one, the same condition and call the main grid uses, so F2 or a double-click there shows the input instead of only the stored value.
+
+Reported:
+
+| Site | Channel |
+| --- | --- |
+| `ConditionsEditor.tsx:ConditionsEditor` load effect, four reads | `error` line, first failure wins |
+| `Blueprint/BlueprintPanel.tsx:BlueprintPanel` palette search, live validation | `status`, as `Error: <message>` like its other graph calls; the result of a superseded request is ignored |
+| `CellPanel.tsx:checkPlugins` | `status`, `Could not list plugins` |
+| `CellPanel.tsx:CellPanel` cell search, worldspace search | `status`, `Could not search cells` / `Could not search worldspaces` |
+| `MainShell.tsx:MainShell` sidebar search effect, `commandSearch` | `errorStr` banner, `Search failed: <message>`, in the `errorMessage(err) ?? JSON.stringify(err)` form its neighbors use |
+| `MastersPanel.tsx:MastersPanel` plugin list | `error`, `Could not list plugins`; the rejected call had no handler before, and only a parse failure was caught |
+| `RecordPicker.tsx:RecordPicker` search | the results note reads `Search failed: <message>` instead of `No matches.` |
+| `RecordView.tsx:RecordView` context-menu effect (editable plugins, element actions) | `status`, `Could not list editable plugins` / `Could not read element actions` |
+| `Shell/DetailRail.tsx:DetailRail` details load | the rail's `toast`, `Could not load record details`; the next successful load clears it |
+| `SpreadsheetPanel.tsx:SpreadsheetPanel` plugin list | `error`, `Could not list plugins` |
+
+Silent on purpose:
+
+| Site | Why |
+| --- | --- |
+| `ArchivePanel.tsx:ArchivePanel` `packSources` initializer, `favourites.ts:readFavourites` | stored JSON that no longer parses falls back to an empty list |
+| `hostbridge.ts:takeToken` | `sessionStorage` can be unavailable; the token from the URL still works for this load |
+| `hostbridge.ts:install` message dispatch | a host message that is not JSON is passed on as a string by design |
+| `hostbridge.ts:pumpEvents` | the event stream reconnects every second; reporting each failed attempt would flood the UI |
+| `ChatPanel.tsx:copy` | optional clipboard write; the Copied label just does not show |
+| `MainShell.tsx:handleRejection` | the fallback inside the unhandled-rejection reporter; its result is the report |
+| `CellPanel.tsx:loadTexture` | misses are counted by `CellViewport` and shown as the missing-texture bar and the log line |
+| `NifPanel.tsx:loadTexture` | optional texture; the viewport falls back to the untextured material |
+| `CellPanel.tsx` geometry progress poll | advisory 200 ms poll; the batch call reports the real failure. It is the one empty catch left |
+| `Shell/useEnvironment.ts:parseMo2Status`, `refreshMo2Status`, the status tick | a polled, best-effort MO2 chip that hides when unavailable; reporting every poll would repeat the same message |
+| `Workspace/WorkspaceHeader.tsx:WorkspaceHeader` breadcrumb | decorative; record opening and the detail rail report backend failures |
+
+Tests reject the host call and expect the message in `ConditionsEditor.test.tsx`, `Blueprint/BlueprintPanel.test.tsx`, `CellPanel.searchError.test.tsx`, `MainShellBridge.test.tsx`, `MastersPanel.test.tsx`, `RecordPicker.test.tsx`, `RecordView.semantic.test.tsx`, `Shell/DetailRail.test.tsx` and `SpreadsheetPanel.test.tsx`. The `CellPanel.tsx` plugin-count and worldspace catches, the `MainShell.tsx` command-palette search and the `RecordView.tsx` element-actions catch have the same shape as the tested ones and no test of their own.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch, PluginEditTool/web/src/MainShell.css:.sidebar-error-text — every batch failure is listed (#39)
+
+`CopyAsOverrideMany` returns `failures: [{ formKey, source, reason }]`, and the status line showed only `failures[0].reason`, so a batch with five failures hid four. When `failed > 0` the hook now sends the whole list to the sidebar error banner (`setErrorStr`, the channel `loadConflicts` and the environment reload already use): a first line `N of M records could not be copied into <patch>:` and then one line per failure, `<form key> (<EditorID>): <reason>`. The EditorID comes from the selected conflict rows (`picked`), because the failure rows do not carry it. A failure whose form key is not in the selection prints the bare form key, and a failure without a reason prints "no reason given". The status line keeps the `Copied ok/total into <patch>.` prefix that `overrideConfirmation.test.tsx` matches and now says `N failed -- see the error list.` in place of the first reason. `.sidebar-error-text` gained `white-space: pre-line` so the newlines render, and `max-height: 40vh` with `overflow-y: auto` so a long list scrolls inside the banner instead of pushing the tree out of view; the banner's other messages are single-line and unchanged. The banner shows on the explorer tab only, which is where the batch copy runs from. Test: `MainShellBridge.test.tsx` (`lists every failed record with its reason`). The banner is cleared at the start of each batch. A failure with an empty form key prints `unknown record`. If `failed > 0` but `failures` is empty, the banner shows `(no details returned)`. Test: `overrideConfirmation.test.tsx` (`clears the batch error when a later batch succeeds`).
+
+## .github/workflows/pet-web-ci.yml:web — web lint, build and tests (#77)
+
+No workflow built or tested `PluginEditTool/web`: `native-ci.yml` ignores that path on main pushes and its pull-request run only builds the native code, and the native build reads `web/dist` without producing it. `pet-web-ci.yml` runs on pull requests and main pushes that touch `PluginEditTool/web/**` or the workflow itself, on the `[self-hosted, Linux, X64, garden]` runner, with the checkout pin and concurrency group shape the other workflows use (a newer push cancels a pull-request run; main runs always finish). Work-branch pushes are not a trigger, as in `bgs-ci.yml` and `native-ci.yml`, so one pull-request commit takes one runner slot.
+
+No other workflow installs Node, so the job uses `actions/setup-node` v6.5.0, pinned by commit hash like the other actions and fetched by full GitHub URL as `setup-dotnet` is, with Node 22 (vite 8, vitest 4 and eslint 10 need 20.19 or newer) and the npm cache keyed on `PluginEditTool/web/package-lock.json`. Steps: `npm ci`, `npm run lint`, `npm run build` and `npm test`. The build script is `tsc -b && vite build`, so it covers the type-check and also proves the bundle builds, and the test script is already `vitest run`, so `-- --run` would only repeat the flag. The three checks run with `if: (success() || failure()) && steps.install.outcome == 'success'`, so a failed `npm ci` skips them. One run reports lint, build and test results together. The ESLint, `tsc` and vitest results for this change come from the first run of this job.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:primaryModelPath — type-aware placed model (#285)
+
+Placed-reference models and SCOL member models now come from Radicle's `fo4::env::primary_model_path` (`Radicle/src/environment/placed.cpp:primary_model_path`) instead of the first raw `MODL` of every base. Per that function, only an allowlisted set of base types yields a model, ARMO yields `MOD2` then `MOD4`, and SCOL yields nothing (SCOL members come from `scolParts`). PWAT is not a Fallout 4 record. Against xEdit FO4 `sigBaseObjects`, only SCOL loses its MODL, and its parts render through `scolParts`. Extend Radicle's list with proof rather than re-adding raw `MODL` reads. The allowlist and ARMO rule were read from that source; they were not checked against game data here. Test: `Native cell takes each placed base's model from its type-aware primary model` in `PluginEditTool/native/tests/unit/RadiclePluginCellTests.cpp`; the SCOL empty-model check is a behavior change; the ARMO case is the one that fails without the fix.
+
+## PluginEditTool/native/src/app/ServiceTargets.cpp:CellTarget::geometryBatch — case and whitespace spellings (#285)
+
+Requested model paths are still deduplicated case-insensitively after trimming, so each unique mesh is resolved and run through `niftool` once. The result map is now keyed by every requested spelling, which matches the exact `modelPath` lookups in `PluginEditTool/web/src/CellViewport.tsx` (`goodGeo`). Before, only the first-seen spelling was keyed, so a second spelling of the same mesh (for example `Meshes\\X.nif` and `meshes\\x.nif`) had no entry and its references fell through to markers. Test: `CellTarget geometry batch reports not-found meshes and dedupes case-insensitively` in `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp`, which fails on the old map size and on `geometry.at("A/B.NIF")`.
+
+## PluginEditTool/native/tests/unit/RadiclePluginCellTests.cpp:typedCellPlugin — fixture layout (#285)
+
+`writeModelBase` and `typedCellPlugin` repeat the record and group calls of `basePlugin()` and `sourcePlugin()` in the same file, which CI already runs. The fixture covers ARMO (`MOD2`, placed reference 0x816, the case that fails without the fix) and CONT (`MODL`, empty, 0x814, `Container`).
+
+## PluginEditTool/web/src/CellPanel.tsx:CellPanel — SCOL layer geometry
+
+`typeGroups` takes a SCOL reference's layer geometry from the first `scolParts` model whose geometry loaded, because a SCOL's own `modelPath` is empty. Other references keep their own `modelPath` geometry.
+
+## PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveNif — NIF lookup not changed (#285)
+
+NIF lookup is PET's own: `ensureRootScanned` indexes every `.ba2` under a root, and `scanAndLookup` takes the first alphabetical archive through `try_emplace`. Radicle's `fo4::archive::AssetResolver::locate` (`Radicle/include/fo4/archive/assets.hpp`) uses load order instead. The two differ in which copy of a mesh wins, not in whether a mesh is found, so this was not changed for #285. Still unproven: whether a given vanilla NIF fails in `NifService::geometry` or has no renderable shapes, and the GardenEngine comparison for one exact reference. Radicle's `normalize_asset_path` also strips a leading `data` component, which PET's `norm` does not; no MODL seen here starts with it.

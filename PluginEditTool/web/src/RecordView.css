@@ -134,6 +134,7 @@ td.rv-section {
 
 
 .rv-cell { font-family: 'JetBrains Mono', monospace; cursor: default; }
+.rv-grid td:focus { outline: 1px solid var(--accent-color); outline-offset: -1px; }
 
 
 .rv-c-notdefined,

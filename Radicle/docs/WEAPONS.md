@@ -113,6 +113,8 @@ Embedded fields have `payload_size`, so the scalar reader returns absent for a D
 
 Enum ranges are the count of xEdit enum members (`On Hit` 4, `Animation Type` 12, `Sound Level` 5, `Stagger` 5, `Pattern` 4, `Melee Speed` 5). The schema accepts only these values on write. Reads are not range-checked, so an out-of-range stored value stays readable. f32 fields use the same range as the other f32 scalars.
 
+`Flags`, `ModelFlags` and `FirstPersonModelFlags` use the `flags` presentation, and `OnHit`, `AnimationType`, `SoundLevel`, `Stagger`, `Pattern` and `MeleeSpeed` use `enum`. Their xEdit names are in `fields.json` and in `ScalarDescriptor::names`: `Flags` 12924-12957, `ModelFlags` and `FirstPersonModelFlags` 4256-4259, `OnHit` 3677-3682, `AnimationType` 12959-12972, `SoundLevel` 3424-3430, `Stagger` 5106-5112, `Pattern` 13005-13010 and `MeleeSpeed` 13025-13031.
+
 ## FormLinks
 
 Embedded FormIDs go through the single-FormLink table with a payload size. Top-level FormID subrecords (INAM, LNAM, WAMD, WZMD, CNAM, BIDS, BAMT, ETYP, NNAM, INRD, YNAM, ZNAM, PTRN, STCP, FLTR, MODS, MO4S) are covered by `Radicle/include/fo4/schema/formid_subrecords.inc`, which is keyed by signature.
@@ -154,7 +156,7 @@ WEAP DNAM, FNAM and CRDT have no version condition in xEdit, so each has one fix
 
 ## Typed read
 
-DAMA is the one layout the tables cannot express: a count-free run of 8-byte entries, or 12-byte entries from form version 152. `Radicle/src/forms/weapon.cpp:decode_weapon_damage_types` decodes it, fails closed on a payload that is not whole entries, and returns an empty list when DAMA is absent. Its layout is xEdit-derived and unchecked against masters until `WeaponReal` runs in CI.
+DAMA is the one layout the tables cannot express: a count-free run of 8-byte entries, or 12-byte entries from form version 152. `Radicle/src/forms/weapon.cpp:decode_weapon_damage_types` decodes it, fails closed on a payload that is not whole entries, and returns an empty list when DAMA is absent. Its layout is xEdit-derived. `WeaponReal` (`tests/test_weapon_real.cpp`) is selected for the native-windows-real-data job and skips without FO4_DATA_DIR; no result is recorded here.
 
 ## Parity
 
