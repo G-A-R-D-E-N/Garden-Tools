@@ -173,28 +173,75 @@ TEST(LoadOrderFiles, LongLineIsReadInFgetsChunks) {
   EXPECT_EQ(list.entries[1].line, 1u);
 }
 
+TEST(LoadOrderFiles, FullChunkWithLfGivesOneName) {
+  const auto list = fo4::loadorder::parse_plugin_list(std::string(511, 'a') + "\n");
+  ASSERT_EQ(list.entries.size(), 1u);
+  EXPECT_EQ(list.entries[0].name, std::string(511, 'a'));
+}
+
+TEST(LoadOrderFiles, OverlongChunkThenOneByteNameWithLf) {
+  const auto list = fo4::loadorder::parse_plugin_list(std::string(512, 'a') + "\n");
+  ASSERT_EQ(list.entries.size(), 2u);
+  EXPECT_EQ(list.entries[0].name.size(), 511u);
+  EXPECT_EQ(list.entries[1].name, "a");
+  EXPECT_EQ(list.entries[1].line, 1u);
+}
+
 TEST(LoadOrderFiles, Windows1252HighByteDecodesToUtf8) {
   const auto list = fo4::loadorder::parse_plugin_list("Caf\xE9.esp\n");
   ASSERT_EQ(list.entries.size(), 1u);
   EXPECT_EQ(list.entries[0].name, "Caf\xC3\xA9.esp");
 }
 
-TEST(LoadOrderFiles, UndefinedWindows1252ByteMakesAnInvalidLine) {
-  const auto list = fo4::loadorder::parse_plugin_list("Bad\x81.esp\nGood.esp\n");
+TEST(LoadOrderFiles, UndefinedWindows1252ByteDecodesToC1Code) {
+  const auto list = fo4::loadorder::parse_plugin_list("Bad\x81" ".esp\nGood.esp\n");
+  ASSERT_EQ(list.entries.size(), 2u);
+  EXPECT_EQ(list.entries[0].name, "Bad\xC2\x81" ".esp");
+  EXPECT_EQ(list.entries[1].name, "Good.esp");
+  EXPECT_EQ(list.entries[1].line, 2u);
+  EXPECT_TRUE(list.invalid_lines.empty());
+}
+
+TEST(LoadOrderFiles, LoneCrInsideALineMakesAnInvalidLine) {
+  const auto list = fo4::loadorder::parse_plugin_list("A\rB.esp\nGood.esp\n");
   ASSERT_EQ(list.entries.size(), 1u);
   EXPECT_EQ(list.entries[0].name, "Good.esp");
-  EXPECT_EQ(list.entries[0].line, 2u);
   EXPECT_EQ(list.invalid_lines, (std::vector<std::size_t>{1}));
 }
 
-TEST(LoadOrderFiles, CccKeepsSpacesAndTabsAndSkipsEmptyTokens) {
-  const auto names = fo4::loadorder::parse_ccc("  cc_b.esl \r\n\r\n\tcc_a.esl\r\n   \ncc_c.esl\t \n");
-  EXPECT_EQ(names, (std::vector<std::string>{"  cc_b.esl ", "\tcc_a.esl", "   ", "cc_c.esl\t "}));
+TEST(LoadOrderFiles, CtrlZEndsThePluginListText) {
+  const auto list = fo4::loadorder::parse_plugin_list("A.esp\n\x1A" "B.esp\n");
+  ASSERT_EQ(list.entries.size(), 1u);
+  EXPECT_EQ(list.entries[0].name, "A.esp");
+  EXPECT_TRUE(list.invalid_lines.empty());
 }
 
-TEST(LoadOrderFiles, CccBomStaysOnFirstNameAndUndefinedByteDropsTheName) {
+TEST(LoadOrderFiles, BomOnlyFileIsOneUnstarredEntry) {
+  const auto list = fo4::loadorder::parse_plugin_list("\xEF\xBB\xBF");
+  ASSERT_EQ(list.entries.size(), 1u);
+  EXPECT_EQ(list.entries[0].name, "\xC3\xAF\xC2\xBB\xC2\xBF");
+  EXPECT_FALSE(list.entries[0].active);
+  EXPECT_EQ(list.entries[0].line, 1u);
+}
+
+TEST(LoadOrderFiles, CccSplitsOnCarriageReturn) {
+  const auto names = fo4::loadorder::parse_ccc("a\rb");
+  EXPECT_EQ(names, (std::vector<std::string>{"a", "b"}));
+}
+
+TEST(LoadOrderFiles, CccKeepsSpacesAndSkipsEmptyTokens) {
+  const auto names = fo4::loadorder::parse_ccc("  cc_b.esl \r\n\r\n\tcc_a.esl\r\n   \ncc_c.esl\t \n");
+  EXPECT_EQ(names, (std::vector<std::string>{"  cc_b.esl ", "   "}));
+}
+
+TEST(LoadOrderFiles, CccDropsTokensWithAControlCharacter) {
+  const auto names = fo4::loadorder::parse_ccc("cc_a.esl\tx\ncc_b.esl\n");
+  EXPECT_EQ(names, (std::vector<std::string>{"cc_b.esl"}));
+}
+
+TEST(LoadOrderFiles, CccBomStaysOnFirstNameAndUndefinedByteDecodesToC1) {
   const auto names = fo4::loadorder::parse_ccc("\xEF\xBB\xBF" "cc_a.esl\nBad\x81\ncc_b.esl\n");
-  EXPECT_EQ(names, (std::vector<std::string>{"\xC3\xAF\xC2\xBB\xC2\xBF" "cc_a.esl", "cc_b.esl"}));
+  EXPECT_EQ(names, (std::vector<std::string>{"\xC3\xAF\xC2\xBB\xC2\xBF" "cc_a.esl", "Bad\xC2\x81", "cc_b.esl"}));
 }
 
 TEST(LoadOrderFiles, OfficialNamesFollowTheSelectedTable) {

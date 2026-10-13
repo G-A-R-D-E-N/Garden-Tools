@@ -2,14 +2,13 @@
 
 #include "fo4/io/path_text.hpp"
 #include "fo4/plugin_key.hpp"
+#include "fo4/text/encoding.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <fstream>
 #include <iterator>
 #include <map>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -20,12 +19,6 @@ namespace {
 // RE-020: fgets with a 512-byte buffer returns at most 511 bytes per call
 constexpr std::size_t k_chunk_limit = 511;
 
-// RE-020: 0 marks a byte that Windows-1252 leaves undefined
-constexpr std::array<char32_t, 32> k_windows_1252_high{
-    0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160,
-    0x2039, 0x0152, 0, 0x017D, 0, 0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022,
-    0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178};
-
 struct Chunk {
   std::string_view text;
   std::size_t line = 0;
@@ -35,35 +28,8 @@ bool has_control_character(std::string_view name) {
   return std::any_of(name.begin(), name.end(), [](char ch) { return static_cast<unsigned char>(ch) < 0x20; });
 }
 
-void append_utf8(std::string& out, char32_t code) {
-  if (code < 0x80) {
-    out.push_back(static_cast<char>(code));
-  } else if (code < 0x800) {
-    out.push_back(static_cast<char>(0xC0 | (code >> 6)));
-    out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
-  } else {
-    out.push_back(static_cast<char>(0xE0 | (code >> 12)));
-    out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
-  }
-}
-
-std::optional<std::string> decode_windows_1252(std::string_view bytes) {
-  std::string out;
-  out.reserve(bytes.size());
-  for (const char ch : bytes) {
-    const auto byte = static_cast<unsigned char>(ch);
-    char32_t code = byte;
-    if (byte >= 0x80 && byte < 0xA0) {
-      code = k_windows_1252_high[static_cast<std::size_t>(byte - 0x80)];
-      if (code == 0) return std::nullopt;
-    }
-    append_utf8(out, code);
-  }
-  return out;
-}
-
 std::string text_mode(std::string_view text) {
+  text = text.substr(0, text.find('\x1A'));
   std::string out;
   out.reserve(text.size());
   for (std::size_t at = 0; at < text.size(); ++at) {
@@ -104,12 +70,11 @@ PluginList parse_plugin_list(std::string_view text) {
     const bool active = chunk.text.front() == '*';
     auto name = active ? chunk.text.substr(1) : chunk.text;
     if (name.ends_with('\n')) name.remove_suffix(1);
-    const auto decoded = has_control_character(name) ? std::nullopt : decode_windows_1252(name);
-    if (!decoded) {
+    if (has_control_character(name)) {
       list.invalid_lines.push_back(chunk.line);
       continue;
     }
-    PluginListEntry entry{*decoded, active, chunk.line};
+    PluginListEntry entry{text::windows1252_to_utf8(name), active, chunk.line};
     const auto key = PluginKey::from_filename(entry.name);
     const auto found = seen.find(key);
     if (found != seen.end()) {
@@ -132,9 +97,7 @@ std::vector<std::string> parse_ccc(std::string_view text) {
   while (!text.empty()) {
     const auto end = text.find_first_of("\r\n");
     const auto token = text.substr(0, end);
-    if (!token.empty()) {
-      if (const auto name = decode_windows_1252(token)) names.push_back(*name);
-    }
+    if (!token.empty() && !has_control_character(token)) names.push_back(text::windows1252_to_utf8(token));
     if (end == std::string_view::npos) break;
     text.remove_prefix(end + 1);
   }
