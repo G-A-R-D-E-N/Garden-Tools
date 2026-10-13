@@ -346,8 +346,11 @@ TEST_CASE("REFR spreadsheet keeps missing generated scalars blank and read-only"
     REQUIRE(value.at("rows").size() == 1);
     for (const auto& field :
          fo4::schema::scalar_fields(fo4::Signature::from_string("REFR"))) {
-        const auto index = columnIndex(value, field.path);
-        CHECK(value.at("rows")[0].at("cells")[index] == "");
+        const auto& address = field.scalar.address;
+        const bool counted = address.repeated || address.stride != 0;
+        const auto index = columnIndex(
+            value, std::string(field.path) + (counted ? "\\Count" : ""));
+        CHECK(value.at("rows")[0].at("cells")[index] == (counted ? "0" : ""));
         CHECK(value.at("rows")[0].at("editable")[index] == false);
     }
 }

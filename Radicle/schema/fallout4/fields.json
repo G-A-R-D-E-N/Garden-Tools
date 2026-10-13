@@ -6584,6 +6584,64 @@
           "minimum": 0,
           "maximum": 10,
           "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\WaterCurrentVelocities",
+          "label": "Velocities",
+          "kind": "counted_array",
+          "subrecord": "XWCU",
+          "count_subrecord": "XWCN",
+          "stride": 16,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "REFR\\WaterCurrentVelocityX",
+              "label": "Velocity X",
+              "offset": 0,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            },
+            {
+              "path": "REFR\\WaterCurrentVelocityY",
+              "label": "Velocity Y",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            },
+            {
+              "path": "REFR\\WaterCurrentVelocityZ",
+              "label": "Velocity Z",
+              "offset": 8,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            },
+            {
+              "path": "REFR\\WaterCurrentUnnamed",
+              "label": "Unnamed float",
+              "offset": 12,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        },
+        {
+          "path": "REFR\\WaterCurrentVelocityCount",
+          "label": "Velocity Count",
+          "kind": "scalar",
+          "subrecord": "XWCN",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
         }
       ],
       "localized_subrecords": []

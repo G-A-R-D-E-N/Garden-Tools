@@ -143,7 +143,10 @@ TEST_CASE("Spreadsheet scalar columns come from generated record descriptors") {
     REQUIRE(grid.at("columns").size() == fields.size() + 1);
     CHECK(grid.at("columns")[0] == "EDID");
     for (std::size_t index = 0; index < fields.size(); ++index) {
-        CHECK(grid.at("columns")[index + 1].get<std::string>() == fields[index].path);
+        const auto& address = fields[index].scalar.address;
+        const auto expected = std::string(fields[index].path) +
+            (address.repeated || address.stride != 0 ? "\\Count" : "");
+        CHECK(grid.at("columns")[index + 1].get<std::string>() == expected);
     }
 
     REQUIRE(grid.at("rows").size() == 1);
@@ -151,12 +154,16 @@ TEST_CASE("Spreadsheet scalar columns come from generated record descriptors") {
     CHECK(row.at("cells")[0] == "SchemaRef");
     for (std::size_t index = 0; index < fields.size(); ++index) {
         const auto subrecord = fields[index].scalar.subrecord;
+        const auto& address = fields[index].scalar.address;
         if (subrecord == fo4::Signature::from_string("XHLT")) {
             CHECK(row.at("cells")[index + 1] == "50");
             CHECK(row.at("editable")[index + 1] == true);
         } else if (subrecord == fo4::Signature::from_string("XSCL")) {
             CHECK(row.at("cells")[index + 1] == "1.25");
             CHECK(row.at("editable")[index + 1] == true);
+        } else if (address.repeated || address.stride != 0) {
+            CHECK(row.at("cells")[index + 1] == "0");
+            CHECK(row.at("editable")[index + 1] == false);
         } else {
             CHECK(row.at("cells")[index + 1] == "");
             CHECK(row.at("editable")[index + 1] == false);
@@ -181,7 +188,9 @@ TEST_CASE("Missing generated scalar subrecords remain blank and read-only") {
     REQUIRE(grid.at("rows").size() == 1);
     const auto& row = grid.at("rows")[0];
     for (std::size_t index = 0; index < fields.size(); ++index) {
-        CHECK(row.at("cells")[index + 1] == "");
+        const auto& address = fields[index].scalar.address;
+        const bool counted = address.repeated || address.stride != 0;
+        CHECK(row.at("cells")[index + 1] == (counted ? "0" : ""));
         CHECK(row.at("editable")[index + 1] == false);
     }
 }

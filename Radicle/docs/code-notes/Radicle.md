@@ -1470,6 +1470,56 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
 
+## Radicle/include/fo4/schema/scalar.hpp:CountedArrayDescriptor
+
+A counted array-of-struct kind: one payload subrecord holds `count` elements of `stride` bytes, and a whole-payload u32 sibling (`count_subrecord`) stores the count. Members are ordinary scalar rows at `FieldAddress{false, stride, 0, ...}`, so reads and writes reuse the stride addressing that already exists and no new storage is added. The array itself has no row.
+
+Not supported yet: a count stored inside another subrecord or in a non-u32 type; header-then-array payloads (no array_offset); repeating subrecord groups such as CNTO+COED or EFID+EFIT+CTDA; prefix-count arrays; members with enum or flags names, strings or links; per-record duplication for ACHR/CELL XWCU.
+
+## Radicle/src/schema/scalar.cpp:counted_array_descriptor
+
+Looks up a counted array by record and path in the generated `k_counted_arrays` table. `is_counted_array_count_subrecord` answers whether a subrecord is the count of any array in that record.
+
+## Radicle/src/plugin/field_writer.cpp:write_scalar
+
+Refuses a generic scalar write to a counted array's count subrecord (REFR `XWCN`) with `ScalarError`. A raw write would desynchronize the count from the payload, so insert and remove are the only writers of the count. The check runs before any byte changes.
+
+## Radicle/src/plugin/field_writer.cpp:counted_array_subrecords
+
+Finds the payload and count subrecords. It throws `CountedArrayError` on a duplicate subrecord, a count that is not four bytes, or a payload that is not a whole number of stride elements or whose element count differs from the stored count. A missing subrecord returns nullopt, which the mutators report as `subrecord_missing`. Every throw happens before the plugin changes.
+
+## Radicle/src/plugin/field_writer.cpp:insert_record_counted_element
+
+Inserts a zero-filled element at `index` and writes count+1. An `index` equal to the count appends; a larger index returns `index_out_of_range`. Modeled on the packed-array insert in `Radicle/src/schema/formlink_lists.cpp`.
+
+## Radicle/src/plugin/field_writer.cpp:remove_record_counted_element
+
+Removes the element at `index` and writes count-1. An index at or above the count returns `index_out_of_range`. Removing the last element keeps both subrecords, the payload empty and the count zero, so a later insert does not have to create subrecords. Missing-subrecord insertion is not generated; see the insertion policy in `Radicle/tools/schema_codegen.py:parse_counted_array`.
+
+## Radicle/tools/schema_codegen.py:parse_counted_array
+
+Validates a `counted_array` entry. Keys are limited to `COUNTED_ARRAY_KEYS` and `MEMBER_KEYS`; the stride must be a positive integer; insertion must be `existing_only`; members carry no names. Members expand into scalar rows with the array's subrecord and stride, so the shared address and overlap rules check that each member fits one stride element and does not overlap another.
+
+## Radicle/tools/schema_codegen.py:load_schema
+
+After the rows are expanded, requires exactly one whole-payload u32 row for each array's count subrecord, and rejects two arrays that declare the same payload subrecord or the same count subrecord in one record. The count rule is what lets `write_scalar` refuse plain writes while insert and remove remain the only count writers.
+
+## Radicle/tools/parity_matrix.py:scalar_rows
+
+Expands counted arrays with `schema_codegen.parse_counted_array`, the same function the codegen uses, so the parity counts cannot drift from the generated rows.
+
+## Radicle/src/schema/preflight.cpp:preflight_record
+
+REFR XWCU members now run through the generic checks. A payload that is not a whole number of 16-byte elements reports `invalid_scalar_storage` once for each member row. A non-finite member is reported through the `ScalarError` from `decode_scalar`, which preflight maps to `invalid_scalar_storage`.
+
+## Radicle/src/plugin/mutation.cpp:set_record_scalar
+
+The overload that takes only a Signature selects the first scalar row for that subrecord. Rows sort by path, so for the counted payload (REFR `XWCU`) the first row is `REFR\WaterCurrentUnnamed` at offset 12, not X. Counted members should be written with the descriptor and index overload.
+
+## Radicle/include/fo4/schema/generated_scalar_fields.inc:k_counted_arrays
+
+xEdit proof for REFR `XWCU`/`XWCN` against the pinned `Core/wbDefinitionsFO4.pas` @93cc0bc5 (SHA-256 `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e`, matched on a build copy). `wbRefRecord(REFR, 'Placed Object', ...)` starts at line 11347 and the next record, REGN, at 11870. Its `Water Current Velocities` block is at lines 11568-11575: `wbInteger(XWCN, 'Velocity Count', itU32, ...)` at 11569 is the u32 count row, and `wbArray(XWCU, 'Velocities', wbStruct('Current', [wbVec3('Velocity'), wbFloat]))` at 11570-11574 is the element. `.SetCountPathOnValue(XWCN, False)` is at 11575. `wbVec3` is three floats X, Y, Z (`Core/wbDefinitionsCommon.pas` lines 6456-6459), and the trailing unnamed `wbFloat` is the fourth float, so an element is 16 bytes at offsets 0, 4, 8, 12, as generated. The same block appears in ACHR at 4583-4590 and CELL at 6052-6059; only REFR is in this schema. The 4-byte width of `wbFloat` is not cited: its definition is in `wbInterface.pas`, which is outside the hash pin.
+
 ## Radicle/schema/fallout4/fields.json:R2 audio records
 
 Batch R2 (#287 C2) adds schema rows and authoring for AECH, ASPC, REVB, SNCT, SOPM, SCSN, STAG and MUST. The block sits right after the FSTS entry. Layouts and authoring defaults come from `wbDefinitionsFO4.pas` at pin 01a11729 (`build/xedit`), and `wbDefinitionsCommon.pas` for `wbObjectBounds` (`:9074`, `SetRequired`) and `wbBoolEnum` (`:7240`). Corpus counts come from a read-only scan of Fallout4.esm and the six official DLC masters: records per signature, subrecord presence, occurrences per record and payload sizes. Required means xEdit marks the subrecord required and every vanilla record of that signature has it. xEdit `wbDiv(n)` fields are stored raw with identity presentation; the label names the scale. Enum and flag names are the xEdit `wbEnum` and `wbFlags` lists.

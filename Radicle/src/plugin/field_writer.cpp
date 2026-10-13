@@ -128,6 +128,9 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   auto* target = find_mutable_record(plugin, record_key);
   if (target == nullptr) return ScalarMutationStatus::record_missing;
   require_scalar_record(*target, field);
+  if (schema::is_counted_array_count_subrecord(field.record, field.scalar.subrecord)) {
+    throw schema::ScalarError(std::string(field.path) + " is maintained by counted array insert and remove");
+  }
 
   const bool is_string = field.scalar.storage == schema::ScalarStorage::zstring;
   if (is_string != string_setter) {
@@ -165,6 +168,68 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   }
   mark_record_modified(plugin, *target);
   return ScalarMutationStatus::updated;
+}
+
+void require_counted_array_record(const Record& record, const schema::CountedArrayDescriptor& array) {
+  if (record.header.signature != array.record) {
+    throw schema::CountedArrayError(std::string(array.path) + " does not apply to " +
+                                    record.header.signature.to_string() + " records");
+  }
+}
+
+std::uint32_t read_counter(const std::vector<std::byte>& data) {
+  std::uint32_t value = 0;
+  for (std::size_t i = 0; i < 4; ++i) {
+    value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(data[i])) << (8 * i);
+  }
+  return value;
+}
+
+void write_counter(std::vector<std::byte>& data, std::uint32_t value) {
+  for (std::size_t i = 0; i < 4; ++i) {
+    data[i] = std::byte{static_cast<std::uint8_t>(value >> (8 * i))};
+  }
+}
+
+struct CountedArraySubrecords {
+  std::size_t payload;
+  std::size_t counter;
+  std::size_t count;
+};
+
+std::optional<CountedArraySubrecords> counted_array_subrecords(const Record& record,
+                                                               const schema::CountedArrayDescriptor& array) {
+  std::optional<std::size_t> payload;
+  std::optional<std::size_t> counter;
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    const auto signature = record.subrecords[i].signature;
+    if (signature == array.subrecord) {
+      if (payload) {
+        throw schema::CountedArrayError(std::string(array.path) + " has duplicate " +
+                                        array.subrecord.to_string() + " subrecords");
+      }
+      payload = i;
+    } else if (signature == array.count_subrecord) {
+      if (counter) {
+        throw schema::CountedArrayError(std::string(array.path) + " has duplicate " +
+                                        array.count_subrecord.to_string() + " subrecords");
+      }
+      counter = i;
+    }
+  }
+  if (!payload || !counter) return std::nullopt;
+
+  const auto& count_data = record.subrecords[*counter].data;
+  const auto& data = record.subrecords[*payload].data;
+  if (count_data.size() != 4) {
+    throw schema::CountedArrayError(std::string(array.path) + " count subrecord must be four bytes");
+  }
+  const auto count = static_cast<std::size_t>(read_counter(count_data));
+  if (data.size() % array.stride != 0 || data.size() / array.stride != count) {
+    throw schema::CountedArrayError(std::string(array.path) + " count does not match its " +
+                                    array.subrecord.to_string() + " payload");
+  }
+  return CountedArraySubrecords{*payload, *counter, count};
 }
 
 }
@@ -281,6 +346,45 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
     return record_field_count(plugin, record_key, *link);
   }
   throw schema::ScalarError("unknown field path: " + std::string(path));
+}
+
+CountedArrayMutationStatus insert_record_counted_element(Plugin& plugin,
+                                                         const FormKey& record_key,
+                                                         const schema::CountedArrayDescriptor& array,
+                                                         std::size_t index) {
+  assign_record_form_keys(plugin);
+  auto* target = find_mutable_record(plugin, record_key);
+  if (target == nullptr) return CountedArrayMutationStatus::record_missing;
+  require_counted_array_record(*target, array);
+  const auto found = counted_array_subrecords(*target, array);
+  if (!found) return CountedArrayMutationStatus::subrecord_missing;
+  if (index > found->count) return CountedArrayMutationStatus::index_out_of_range;
+
+  auto& data = target->subrecords[found->payload].data;
+  data.insert(data.begin() + static_cast<std::ptrdiff_t>(index * array.stride), array.stride, std::byte{0});
+  write_counter(target->subrecords[found->counter].data, static_cast<std::uint32_t>(found->count + 1));
+  mark_record_modified(plugin, *target);
+  return CountedArrayMutationStatus::updated;
+}
+
+CountedArrayMutationStatus remove_record_counted_element(Plugin& plugin,
+                                                         const FormKey& record_key,
+                                                         const schema::CountedArrayDescriptor& array,
+                                                         std::size_t index) {
+  assign_record_form_keys(plugin);
+  auto* target = find_mutable_record(plugin, record_key);
+  if (target == nullptr) return CountedArrayMutationStatus::record_missing;
+  require_counted_array_record(*target, array);
+  const auto found = counted_array_subrecords(*target, array);
+  if (!found) return CountedArrayMutationStatus::subrecord_missing;
+  if (index >= found->count) return CountedArrayMutationStatus::index_out_of_range;
+
+  auto& data = target->subrecords[found->payload].data;
+  const auto first = data.begin() + static_cast<std::ptrdiff_t>(index * array.stride);
+  data.erase(first, first + static_cast<std::ptrdiff_t>(array.stride));
+  write_counter(target->subrecords[found->counter].data, static_cast<std::uint32_t>(found->count - 1));
+  mark_record_modified(plugin, *target);
+  return CountedArrayMutationStatus::updated;
 }
 
 }
