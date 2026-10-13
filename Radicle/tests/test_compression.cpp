@@ -70,6 +70,33 @@ TEST(Compression, BadZlibChecksumLoadsUndecodable) {
   EXPECT_TRUE(record->undecodable);
 }
 
+TEST(Compression, ShortInflatedOutputLoadsAtProducedLength) {
+  fo4::test::ByteWriter inner;
+  fo4::test::write_subrecord(inner, "EDID", std::string_view{"Short\0", 6});
+  const auto stream = fo4::test::zlib_compress(inner.bytes);
+  const auto declared = static_cast<std::uint32_t>(inner.size() + 16);
+  const auto plugin = fo4::read_plugin(compressed_plugin(stream, declared));
+  const auto* record = fo4::find_record(plugin, fo4::RawFormId{0x00000801});
+  ASSERT_NE(record, nullptr);
+  EXPECT_FALSE(record->undecodable);
+  ASSERT_EQ(record->subrecords.size(), 1u);
+  EXPECT_EQ(record->subrecords[0].signature.to_string(), "EDID");
+}
+
+TEST(Compression, PayloadUnderFourBytesFailsThePluginRead) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::end_record(out, tes4);
+  const auto grup = fo4::test::begin_group(out, "MISC", 0);
+  const auto rec = fo4::test::begin_record(out, "MISC", fo4::RecordFlags::compressed, 0x00000801);
+  out.u8(1);
+  out.u8(2);
+  out.u8(3);
+  fo4::test::end_record(out, rec);
+  fo4::test::end_group(out, grup);
+  EXPECT_THROW(static_cast<void>(fo4::read_plugin(out.bytes)), fo4::parse_error);
+}
+
 TEST(Compression, CompressedExtendedSubrecordPreservesPhysicalMarker) {
   fo4::test::ByteWriter inner;
   const std::vector<std::byte> payload(0x10000, std::byte{0x42});

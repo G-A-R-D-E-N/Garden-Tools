@@ -225,6 +225,8 @@ private:
     bool isEditable(const LoadedPlugin& plugin) const;
     bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
+    std::optional<Error> requireReferenceCoverage(const fo4::FormKey& key,
+                                                  std::string_view operation) const;
     std::optional<std::filesystem::path> allowedSavePath(
         const std::filesystem::path& path) const;
     std::optional<std::filesystem::path> allowedLocalizationDirectory(
