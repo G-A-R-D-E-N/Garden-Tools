@@ -1469,3 +1469,23 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
+
+## Radicle/src/forms/placed_reference_create.cpp:create_placed_reference — REFR creation (#182)
+
+Creates a REFR over a base in a CELL this plugin owns. Refused unless the CELL is owned by this plugin, is a decodable CELL record inside a GRUP, and the base is owned by this plugin or by a master already in its header. No master is added here (TODO-verify whether the managed editor's Mutagen layer adds one on save). Work runs on a copy, and the FormID is reserved only after every refusal passes, so a refused request leaves the plugin unchanged and consumes no FormID. Tests: `tests/test_placed_reference_create.cpp:PlacedReferenceCreate.PlacesTwoReferencesInPersistentAndTemporaryBucketsAndRoundTrips` and `PlacedReferenceCreate.RefusesForeignCellsAndUnownedBasesWithoutMutation`.
+
+Record layout, from the pinned `Core/wbDefinitionsFO4.pas`:
+- REFR is `wbRefRecord(REFR, 'Placed Object', ...)` at line 11347. Flag `0x00000400` Persistent is at line 11351 and `0x00000800` Initially Disabled at 11352. Only Persistent is written here.
+- NAME (base FormID, 4 bytes) is `wbFormIDCk(NAME, 'Base', ...)` at line 11450.
+- DATA is `wbVec3PosRot(DATA)` at line 11864: position x,y,z then rotation x,y,z as six float32 (24 bytes).
+- The rotation members are `wbFloatAngle` (`wbDefinitionsCommon.pas:6507-6509`). Their definition is not in the pinned copy, so the stored unit is TODO-verify. The tool text says radians, and the value is written unchanged, as the managed C# does.
+
+The pinned copy has no GRUP placement rule, so child-group placement follows the existing copy path (`src/forms/placed_reference_copy.cpp:ensure_cell_children_group`) and its real-data tests. GRUP placement against xEdit is TODO-verify.
+
+## Radicle/src/forms/placed_reference_create.cpp:ensure_child_group — CELL child GRUP placement
+
+The CELL children GRUP (type 6) is inserted directly after the CELL record in the CELL's parent GRUP, as `placed_reference_copy.cpp:ensure_cell_children_group` does. Its label is the CELL FormID. The persistent (type 8) or temporary (type 9) bucket is appended inside it with the same label. Type-and-label identity is `flags.hpp:group_label_is_form_id`. Existing groups are found through `detail::unique_child_group`, which throws on a duplicate, so no second bucket is created.
+
+## Radicle/src/forms/cell.cpp:create_exterior_cell — no interior CELL creator (open, #182)
+
+Native `create_cell` for interior cells is not built. The interior block and sub-block GRUP labels (types 2 and 3) are unverified. The managed `KNOWLEDGE.md` gives block = `FormID % 10` and sub-block = `(FormID / 10) % 10`, but no pinned xEdit rule confirms it (TODO-verify), and `docs/OPEN_QUESTIONS.md` item 12 is still open. Exterior cells keep `create_exterior_cell`.

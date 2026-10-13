@@ -125,6 +125,15 @@ bool set_placed_reference_transform(
     const FormKey& reference,
     const PositionRotation& transform);
 
+struct PlacedReferenceCreation {
+  FormKey cell;
+  FormKey base;
+  PositionRotation transform{};
+  bool persistent{true};
+};
+
+FormKey create_placed_reference(Plugin& plugin, const PlacedReferenceCreation& creation);
+
 
 bool set_placed_reference_scale(Plugin& plugin, const FormKey& reference, std::optional<float> scale);
 bool set_placed_reference_editor_id(Plugin& plugin, const FormKey& reference, std::string_view editor_id);

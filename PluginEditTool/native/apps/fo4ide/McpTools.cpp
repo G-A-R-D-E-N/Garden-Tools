@@ -76,7 +76,9 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
                     const std::string_view type(field.type);
                     const bool valid = (type == "string" && value->is_string()) ||
                                        (type == "object" && value->is_object()) ||
-                                       (type == "integer" && value->is_number_integer());
+                                       (type == "integer" && value->is_number_integer()) ||
+                                       (type == "number" && value->is_number()) ||
+                                       (type == "boolean" && value->is_boolean());
                     if (!valid) return ToolResult{std::string(field.name) + " must be " + field.type, true};
                 }
                 return bridge->call(args);
@@ -91,6 +93,13 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}})) return false;
     if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, HAZD, LVLI, LVLN, LVSP, PROJ, RACE. Payload fields are validated by the native backend", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
+    if (!add("create_placed_object",
+             "Create a placed reference (REFR) over a base object in a CELL this plugin owns and return its formKey. The CELL must be owned by this plugin. persistent defaults to true (persistent list), false puts it in the temporary list. Rotations are in radians and default to 0",
+             "backend", "CreatePlacedObject",
+             {{"plugin", "string"}, {"cell", "string"}, {"baseObject", "string"},
+              {"x", "number"}, {"y", "number"}, {"z", "number"},
+              {"rotX", "number", true}, {"rotY", "number", true}, {"rotZ", "number", true},
+              {"persistent", "boolean", true}})) return false;
     if (!add("get_record", "Get record fields and plugin versions by FormKey, including pending edits", "backend", "GetConflictMatrix",
              {{"form_key", "string"}})) return false;
     if (!add("get_record_fields", "Get the field paths and values for one plugin's record version", "backend", "GetRecordTree",

@@ -122,6 +122,7 @@ add_library(fo4
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
   src/forms/placed_reference_edit.cpp
+  src/forms/placed_reference_create.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather.cpp
@@ -355,6 +356,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_creation.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
+    tests/test_placed_reference_create.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
