@@ -1,6 +1,7 @@
 #include "fo4/schema/form_link_schema.hpp"
 
 #include "fo4/schema/field_address.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "non_formid_slots.hpp"
 
@@ -25,6 +26,11 @@ bool payload_size_allowed(const FormLinkFieldDescriptor& field, std::size_t size
   if (field.payload_sizes[0] == 0) return true;
   return size == field.payload_sizes[0] ||
          (field.payload_sizes[1] != 0 && size == field.payload_sizes[1]);
+}
+
+bool struct_or_mixed_handler_owns(const Record& record, const Subrecord& subrecord) {
+  return struct_payload_formid_offsets(record, subrecord, false).has_value() ||
+         mixed_formid_offsets(record, subrecord, false).has_value();
 }
 
 }  // namespace
@@ -60,7 +66,8 @@ SubrecordFormLinkOffsets schema_formlink_offsets(const Record& record) {
       if (!slot.valid) continue;
       const auto& subrecord = record.subrecords[slot.subrecord];
       if (!payload_size_allowed(field, subrecord.data.size()) ||
-          deliberate_non_formid_subrecord(record, subrecord)) {
+          deliberate_non_formid_subrecord(record, subrecord) ||
+          struct_or_mixed_handler_owns(record, subrecord)) {
         continue;
       }
       offsets[slot.subrecord].push_back(slot.offset);

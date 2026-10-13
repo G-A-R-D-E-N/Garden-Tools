@@ -504,13 +504,16 @@ void visit_formlink_offsets(const Record& record, const Subrecord& sub,
                             const schema::SubrecordFormLinkOffsets& schema_offsets,
                             bool strict_remap, const Plugin* type_source,
                             const PluginFormIdContext* context, auto&& fn) {
+  const auto index = static_cast<std::size_t>(&sub - record.subrecords.data());
+  if (schema_offsets.empty() || schema_offsets[index].empty()) {
+    visit_link_offsets(record, sub, strict_remap, type_source, context, fn);
+    return;
+  }
   std::vector<std::size_t> offsets;
   visit_link_offsets(record, sub, strict_remap, type_source, context,
                      [&](std::size_t offset) { offsets.push_back(offset); });
-  if (!schema_offsets.empty()) {
-    const auto& extra = schema_offsets[static_cast<std::size_t>(&sub - record.subrecords.data())];
-    offsets.insert(offsets.end(), extra.begin(), extra.end());
-  }
+  const auto& extra = schema_offsets[index];
+  offsets.insert(offsets.end(), extra.begin(), extra.end());
   std::sort(offsets.begin(), offsets.end());
   offsets.erase(std::unique(offsets.begin(), offsets.end()), offsets.end());
   for (const auto offset : offsets) fn(offset);

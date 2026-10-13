@@ -1,9 +1,9 @@
-// TODO-verify: FormID master-index expectations and owned-branch exemptions are unrun until CI.
 #include "fo4/formid.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/plugin_key.hpp"
 #include "fo4/schema/field_address.hpp"
+#include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/schema/form_link_schema.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -66,6 +66,11 @@ std::vector<const fo4::schema::FormLinkFieldDescriptor*> rows_for(std::string_vi
     }
   }
   return rows;
+}
+
+bool handler_owns(const fo4::Record& record, const fo4::Subrecord& sub) {
+  return fo4::struct_payload_formid_offsets(record, sub, false).has_value() ||
+         fo4::mixed_formid_offsets(record, sub, false).has_value();
 }
 
 bool owned_by_other_branch(const fo4::schema::FormLinkFieldDescriptor& field) {
@@ -142,6 +147,10 @@ TEST(FormLinkSchemaRemap, SchemaOffsetsCoverGeneratedRowsOutsideOwnedBranches) {
     const auto offsets = fo4::schema::schema_formlink_offsets(*record);
     const auto target = record->subrecords.size() - 1;
     ASSERT_LT(target, offsets.size());
+    if (handler_owns(*record, record->subrecords[target])) {
+      EXPECT_TRUE(offsets[target].empty());
+      continue;
+    }
     EXPECT_TRUE(std::find(offsets[target].begin(), offsets[target].end(), link_offset(field)) !=
                 offsets[target].end());
   }
@@ -240,5 +249,68 @@ TEST(FormLinkSchemaRemap, RekeyChangesSchemaRowLinks) {
   ASSERT_NE(sub, nullptr);
   for (const auto* row : rows) {
     EXPECT_EQ(read_u32(sub->data, link_offset(*row)), k_own_new);
+  }
+}
+
+TEST(FormLinkSchemaRemap, OversizedWeaponDnamBytesAreNotRemapped) {
+  const auto rows = rows_for("WEAP", "DNAM");
+  ASSERT_FALSE(rows.empty());
+  auto dnam = zeroed(136);
+  for (const auto* row : rows) put_value(dnam, link_offset(*row), k_fallout_link, 4);
+  const auto original = dnam;
+  auto plugin = single_record_plugin("Remap.esp", "WEAP", {{"DNAM", dnam}},
+                                     {"Fallout4.esm", "Other.esm"}, 0x02000802u);
+  plugin = fo4::remap_plugin_masters(
+      std::move(plugin), std::vector<fo4::PluginKey>{fo4::PluginKey::from_filename("Other.esm"),
+                                                     fo4::PluginKey::from_filename("Fallout4.esm")});
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Remap.esp");
+  const auto* weap = fo4::find_record(reread, fo4::FormKey::parse("000802:Remap.esp"));
+  ASSERT_NE(weap, nullptr);
+  const auto* sub = find_sub(*weap, fo4::Signature::from_string("DNAM"));
+  ASSERT_NE(sub, nullptr);
+  EXPECT_EQ(sub->data, original);
+}
+
+TEST(FormLinkSchemaRemap, FailedWhenGateSkipsSchemaRow) {
+  const auto rows = rows_for("SNDR", "BNAM");
+  ASSERT_FALSE(rows.empty());
+  const auto match = static_cast<std::uint64_t>(rows.front()->address.when.equals[0]);
+  auto bnam = zeroed(4);
+  put_value(bnam, 0, k_fallout_link, 4);
+  for (const auto gate : {match, match + 1}) {
+    auto cnam = zeroed(4);
+    put_value(cnam, 0, gate, 4);
+    const auto plugin = single_record_plugin("Schema.esp", "SNDR",
+                                             {{"CNAM", cnam}, {"BNAM", bnam}}, {}, k_own_record);
+    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000802:Schema.esp"));
+    ASSERT_NE(record, nullptr);
+    const auto offsets = fo4::schema::schema_formlink_offsets(*record);
+    ASSERT_EQ(offsets.size(), 2u);
+    EXPECT_EQ(offsets[1].empty(), gate != match);
+  }
+}
+
+TEST(FormLinkSchemaRemap, DuplicateNonRepeatedRowYieldsNoSchemaHits) {
+  const auto rows = rows_for("WEAP", "DNAM");
+  ASSERT_FALSE(rows.empty());
+  const auto size = rows.front()->payload_sizes[0];
+  auto dnam = zeroed(size);
+  for (const auto* row : rows) put_value(dnam, link_offset(*row), k_fallout_link, 4);
+  const auto hits = fo4::collect_form_links(single_record_plugin(
+      "Schema.esp", "WEAP", {{"DNAM", dnam}, {"DNAM", dnam}}, {}, k_own_record));
+  for (const auto* row : rows) {
+    EXPECT_EQ(hits_at(hits, "DNAM", link_offset(*row)), 0u);
+  }
+}
+
+TEST(FormLinkSchemaRemap, MalformedStructPayloadYieldsNoSchemaHits) {
+  const auto rows = rows_for("EXPL", "DATA");
+  ASSERT_FALSE(rows.empty());
+  auto data = zeroed(40);
+  for (const auto* row : rows) put_value(data, link_offset(*row), k_fallout_link, 4);
+  const auto hits = fo4::collect_form_links(
+      single_record_plugin("Schema.esp", "EXPL", {{"DATA", data}}, {}, k_own_record));
+  for (const auto* row : rows) {
+    EXPECT_EQ(hits_at(hits, "DATA", link_offset(*row)), 0u);
   }
 }
