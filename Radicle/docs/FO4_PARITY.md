@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 73, L1 16, L2 16, L3 1, L4 41.
 
 ### Per-signature coverage
 
@@ -64,7 +64,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | BNDS | 12280 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
 | BOOK | 5891 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | BPTD | 7693 | - | - | - | - | - | - | - | - | - | - | L0 |
-| CAMS | 7880 | - | - | - | - | - | - | - | - | - | - | L0 |
+| CAMS | 7880 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | CELL | 5953 | - | - | - | - | - | - | - | forms/cell, environment/world | - | 1 | L2 |
 | CLAS | 6102 | - | - | - | - | - | - | - | - | - | - | L0 |
 | CLFM | 9572 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -85,7 +85,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | DOOR | 6477 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | DUAL | 9452 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ECZN | 8022 | - | - | - | - | - | - | - | - | - | - | L0 |
-| EFSH | 6510 | - | - | - | - | - | - | - | - | - | - | L0 |
+| EFSH | 6510 | - | 5 | - | - | - | yes | - | - | - | 1 | L4 |
 | ENCH | 6726 | - | - | - | - | - | - | - | - | - | 1 | L0 |
 | EQUP | 8835 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | EXPL | 7334 | 15 | - | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
@@ -96,7 +96,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FURN | 6848 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| GDRY | 12322 | - | - | - | - | - | - | - | - | - | - | L0 |
+| GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | - | - | - | - | - | - | - | - | - | - | L0 |
 | GMST | 6936 | - | - | - | - | - | - | - | - | - | - | L0 |
 | GRAS | 9612 | 10 | - | - | - | - | yes | - | environment/vegetation | - | 1 | L4 |
@@ -104,8 +104,8 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | HDPT | 7006 | - | - | - | - | - | - | - | - | - | - | L0 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| IMAD | 7466 | - | - | - | - | - | - | - | - | - | - | L0 |
-| IMGS | 7393 | - | - | - | - | - | - | - | - | - | 2 | L0 |
+| IMAD | 7466 | 62 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | INNR | 12337 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -177,7 +177,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | SOPM | 9489 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SOUN | 11961 | 3 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
 | SPEL | 12030 | - | - | - | - | - | - | yes | - | - | 2 | L1 |
-| SPGD | 6128 | - | - | - | - | - | - | - | - | - | - | L0 |
+| SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | - | - | - | - | - | L0 |
 | STAT | 12045 | - | - | - | - | - | - | - | environment/base_records | - | 1 | L2 |
 | TACT | 5672 | - | - | - | - | - | - | yes | - | - | - | L1 |
@@ -191,7 +191,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | WEAP | 12877 | 45 | - | 13 | - | 2 | yes | yes | forms/weapon | - | 2 | L4 |
 | WRLD | 13110 | - | - | - | - | - | - | - | environment/world | - | 1 | L2 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
-| ZOOM | 13180 | - | - | - | - | - | - | - | - | - | - | L0 |
+| ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 
 ### Field-kind coverage
 
@@ -201,9 +201,11 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
+| CAMS | 12 | - | 3 | 1 | - | f32, u32 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
+| EFSH | - | - | - | - | 5 | - | - | - | - | existing_only |
 | EXPL | 15 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | EYES | - | - | - | - | - | - | - | - | - | - |
 | FACT | 12 | - | 5 | 1 | - | f32, u16, u32, u8 | 1 | - | - | existing_only |
@@ -211,9 +213,12 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
 | FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
+| GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GRAS | 10 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
 | HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
+| IMAD | 58 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
 | LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
@@ -231,10 +236,12 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| SPGD | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
 | TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
+| ZOOM | 4 | - | 1 | - | - | f32, u32 | - | - | - | existing_only |
 
 ### Unsupported or opaque (not attributable by the script)
 
