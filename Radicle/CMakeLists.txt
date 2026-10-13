@@ -421,6 +421,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_base_items_real.cpp
     tests/test_magic_location_records.cpp
     tests/test_magic_location_records_real.cpp
+    tests/test_object_base_records.cpp
+    tests/test_object_base_records_real.cpp
     tests/test_weather_concept.cpp
     tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp
