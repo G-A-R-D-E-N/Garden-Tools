@@ -1469,3 +1469,7 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
+
+## Radicle/src/forms/leveled_list.cpp:leveled_list_for_entry_target — wrapper list type (#362)
+
+Chooses the list for a wrapped record from the same entry tables that `validate_entry_target` checks (`allowed_entry_targets`). It tries LVLN, then LVSP, then LVLI, and returns the first list whose table holds the target. NPC_ therefore gives LVLN and SPEL gives LVSP, because both also appear in the LVLI table. The other LVLI targets give LVLI. A target in no table, such as CELL, gives no list.

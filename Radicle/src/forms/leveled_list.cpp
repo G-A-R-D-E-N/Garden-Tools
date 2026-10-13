@@ -240,6 +240,18 @@ void validate_entry_target(const Plugin& plugin, Signature list, const LeveledLi
 
 }  // namespace
 
+std::optional<Signature> leveled_list_for_entry_target(Signature target) {
+  const auto name = target.to_string();
+  for (const auto list : {k_lvln, k_lvsp, k_lvli}) {
+    const auto allowed = allowed_entry_targets(list);
+    if (std::any_of(allowed.begin(), allowed.end(),
+                    [&](std::string_view candidate) { return candidate == name; })) {
+      return list;
+    }
+  }
+  return std::nullopt;
+}
+
 LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
   const auto* record = find_record(plugin, key);
   if (record == nullptr) {

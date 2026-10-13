@@ -5,7 +5,7 @@ Evidence source: `xEdit/xeMainForm.pas` and `xEdit/xeMainForm.dfm` in TES5Edit/T
 | Workflow | Status |
 |---|---|
 | Copy as disabled override | Implemented: `PluginEditTool/native/src/plugin/RadiclePluginDisabledOverride.cpp` |
-| Copy as wrapper | Not implemented yet. Not declined. |
+| Copy as wrapper | Implemented: `PluginEditTool/native/src/plugin/RadiclePluginCopyAsWrapper.cpp`. Shape differs from xEdit, see below. |
 | Inject Forms into master | Not implemented yet. Not declined. The runtime behavior is recorded below. |
 | Fixup race-specific leveled items | Declined (#364) |
 | Copy idle animations into... | Declined (#364) |
@@ -27,7 +27,9 @@ PluginEditTool: `CopyAsDisabledOverride` is `CopyAsOverride` followed by setting
   3. Point that entry's reference at the new record from step 1, with Count 1 and Level 1, and restore the original EditorID on the override (lines 3223-3226).
 - Result: the override becomes a one-entry list that defers to a renamed copy of the original list.
 
-Not implemented yet, and not declined. Step 2's "reset to defaults" has no Radicle equivalent for LVLI/LVLN/LVSP: `Radicle/docs/LEVELED_LISTS.md` records no LVLI or LVLN creator. It needs the authoring schema for those records (#287) so that the defaults are written from evidence rather than guessed.
+PluginEditTool (#362): `CopyAsWrapper` creates a new LVLI, LVLN or LVSP in the target plugin, with one entry at level 1 and count 1 that references the selected record. The list type comes from `Radicle/src/forms/leveled_list.cpp:leveled_list_for_entry_target`: NPC_ or LVLN gives LVLN, SPEL or LVSP gives LVSP, and any other LVLI-allowed base type gives LVLI. Other types are refused with `WrapperUnsupportedType`. The source owner is added as a master of the target, as copy-as-override does. The result is a new FormKey; the selected record is not changed.
+
+Deviation from xEdit, recorded and not declined: xEdit keeps the selected FormKey as the wrapper override and moves the list content to a renamed copy, so existing references to the original record reach the wrapper. PluginEditTool does not do that. Matching xEdit would need the override path (copy as override, reset, move the entries). Whether to do that is a decision for the issue owner.
 
 ## Inject Forms into master
 

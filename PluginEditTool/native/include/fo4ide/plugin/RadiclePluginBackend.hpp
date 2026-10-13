@@ -53,6 +53,7 @@ public:
     Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json& arguments) override;
     Result<nlohmann::json> updateOnam(const nlohmann::json& arguments) override;
     Result<nlohmann::json> copyAsDisabledOverride(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> copyAsWrapper(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;

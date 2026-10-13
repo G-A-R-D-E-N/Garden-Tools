@@ -383,6 +383,13 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
             return finishAutoCreatedTarget(
                 backend_, *ensured, backend_.invokeLegacyBackend(method, normalizedArgs), "Copied ");
         }
+        if (method == "CopyAsWrapper") {
+            auto ensured = ensureWriteTarget(backend_, args, 2);
+            if (!ensured) return std::unexpected(ensured.error());
+            auto normalizedArgs = withTargetName(args, 2, ensured->name);
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.copyAsWrapper(normalizedArgs), "Copied ");
+        }
         if (method == "ResolveFormKeyLabels") return resolveFormKeyLabels(backend_, args);
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
         if (method == "GetConditionFunctionParams") return backend_.conditionFunctionParams();

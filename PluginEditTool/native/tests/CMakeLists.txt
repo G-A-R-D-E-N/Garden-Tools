@@ -150,6 +150,7 @@ add_executable(
     unit/RadiclePluginLvspGridTests.cpp
     unit/RadiclePluginBatchMutationTests.cpp
     unit/RadiclePluginAddMastersTests.cpp
+    unit/RadiclePluginCopyAsWrapperTests.cpp
     unit/RadiclePluginItmNestedTests.cpp
     unit/RadiclePluginCompareTests.cpp
     unit/RadiclePluginReachableTests.cpp

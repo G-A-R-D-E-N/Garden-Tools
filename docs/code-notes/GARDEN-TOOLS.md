@@ -2194,3 +2194,19 @@ Every per-record problem row carries a `Code`, a `Detail`, a `Severity` and a `D
 ## PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile assembles an OG-style install from the official DLC masters alone
 
 Covers `Mo2Profile.cpp:readProfile` for an OG-style install: Fallout4.esm and the six official DLC masters, no Creation Club plugins, no `Fallout4.ccc`, one active user plugin. `readProfile` always passes `OfficialTable::ae`, so this checks the AE table against OG data. Radicle's `load_order_files.hpp` has `OfficialTable { og_ng, ae }` and no NG-specific table: `og_ng` is the first seven AE names (`Radicle/src/loadorder/assemble.cpp:official_names`, `DLCUltraHighResolution.esm` included), and LOAD_ORDER_FILES.md says NG shares it. So an NG case would repeat this one and is not added. `assemble.cpp:assemble_load_order` skips absent official names silently, with no finding and no failure. The AE-only `DLCDummy10thAnniversary.esm` and the absent `DLCUltraHighResolution.esm` therefore do not change the result. The AE table only differs from `og_ng` when `DLCDummy10thAnniversary.esm` is present, which an OG install does not ship. Not built or run locally (CI only). The partial-DLC case (`Mo2ProfileTests.cpp` second OG test) lists only `DLCRobot.esm` and `DLCCoast.esm` in plugins.txt with `DLCworkshop01`-`03` and no `DLCNukaWorld.esm` on disk, and expects the official masters present on disk to load in AE official order without any plugins.txt entry for them.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCopyAsWrapper.cpp:RadiclePluginBackend::copyAsWrapper — wrapper arguments (#362)
+
+Arguments are `[sourcePlugin, formKey, targetPlugin, editorId|null]`. The issue names `sourceFormKey`, but the source plugin is needed to find the record, as in CopyAsOverride. The list type comes from `Radicle/src/forms/leveled_list.cpp:leveled_list_for_entry_target`. The list is created with chance none, max count and flags all 0. Its one entry takes the LeveledListEntry defaults, level 1 and count 1. The source owner is added as a master with `ensureOwnerMaster`. The op takes one write lock on target and source, as copy as override does. The success text starts with `Copied ` and includes the new FormKey, so `finishAutoCreatedTarget` keeps an auto-created target. The xEdit shape differs; see `PluginEditTool/docs/xedit-copy-workflows.md`.
+
+## PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke — CopyAsWrapper dispatch (#362)
+
+`CopyAsWrapper` takes the same target handling as `CopyAsNewRecord`: `ensureWriteTarget` creates a missing target, then `finishAutoCreatedTarget` rolls it back if the op fails. It calls `copyAsWrapper` directly, as `CopyAsDisabledOverride` does.
+
+## PluginEditTool/web/src/RecordContextMenu.tsx:wrapperTypes — Copy as wrapper menu gate (#362)
+
+The set copies the LVLI entry targets in `Radicle/src/forms/leveled_list.cpp:allowed_entry_targets`. The LVLN and LVSP targets are subsets of it. The web layer keeps its own copy, so when the native table changes, this set must change too. The native refusal (`WrapperUnsupportedType`) stays the authority.
+
+## PluginEditTool/web/src/recordActions.ts:useRecordActions — copyAsWrapperInto (#362)
+
+Two steps: the target chooser (`askForTarget`), then an optional editor ID prompt (`askPrompt`). Empty input is sent as `null`, and canceling the prompt stops the copy. The chooser's `extraField` is not used because it requires a non-empty value. Errors go through `errorText`.
