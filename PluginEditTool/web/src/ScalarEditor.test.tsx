@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScalarPresentation } from './backend';
 import { ScalarCell, ScalarEditor, ScalarText } from './ScalarEditor';
-import { scalarLabel } from './scalarPresentation';
+import { flagIsSet, scalarLabel, setFlag } from './scalarPresentation';
 
 const crimeArrest: ScalarPresentation = {
   kind: 'enum', names: [{ value: 0, name: 'False' }, { value: 1, name: 'True' }],
@@ -38,6 +38,19 @@ describe('scalarLabel', () => {
   it('passes through raw text that is not an integer', () => {
     expect(scalarLabel('<opaque>', crimeArrest)).toBe('<opaque>');
     expect(scalarLabel('', flags)).toBe('');
+  });
+
+  it('names negative enum values and passes negative flag values through', () => {
+    const signed: ScalarPresentation = { kind: 'enum', names: [{ value: -1, name: 'Minus' }] };
+    expect(scalarLabel('-1', signed)).toBe('Minus');
+    expect(scalarLabel('-1', flags)).toBe('-1');
+  });
+});
+
+describe('flag bits', () => {
+  it('sets and reads bit 31 without going negative', () => {
+    expect(setFlag(0, 31, true)).toBe(2147483648);
+    expect(flagIsSet(2147483648, 31)).toBe(true);
   });
 });
 

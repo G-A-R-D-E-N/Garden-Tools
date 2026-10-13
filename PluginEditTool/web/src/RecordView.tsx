@@ -129,7 +129,7 @@ export default function RecordView(
   if (prevFormKey !== matrix.FormKey) {
     setPrevFormKey(matrix.FormKey);
     setRefBy(null); setProblems(null); setCollapsedGroups({});
-    setDeps(null); setHistory(null); setAnchors(null);
+    setDeps(null); setHistory(null); setAnchors(null); setEdit(null);
     setScanErrors({});
   }
 

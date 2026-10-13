@@ -12,7 +12,8 @@ export const setFlag = (raw: number, bit: number, on: boolean) => {
 export const hexOf = (n: number) => `0x${n.toString(16).toUpperCase()}`;
 
 export function scalarLabel(raw: string, presentation?: ScalarPresentation): string {
-  if (!presentation || !/^\d+$/.test(raw)) return raw;
+  const intPattern = presentation?.kind === 'enum' ? /^-?\d+$/ : /^\d+$/;
+  if (!presentation || !intPattern.test(raw)) return raw;
   const n = Number(raw);
   if (presentation.kind === 'enum') {
     const hit = presentation.names.find(e => e.value === n);

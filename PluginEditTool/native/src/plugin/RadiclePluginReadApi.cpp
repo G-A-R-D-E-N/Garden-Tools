@@ -275,9 +275,10 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
             }
             semanticRows.push_back(std::move(*projected));
         }
+        const auto recordSignature = fo4::Signature::from_string(signature);
         for (const auto& column : columns) {
             const auto path = column.get<std::string>();
-            auto presentation = scalarPresentationJson(fo4::Signature::from_string(signature), path);
+            auto presentation = scalarPresentationJson(recordSignature, path);
             if (!presentation.is_null()) presentations[path] = std::move(presentation);
         }
     }

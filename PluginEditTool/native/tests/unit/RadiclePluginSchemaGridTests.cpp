@@ -220,6 +220,7 @@ TEST_CASE("Schema enum and flag names reach the grid and record matrix") {
     REQUIRE(presentations.at("FACT\\Flags").at("names").size() == 17);
     CHECK(presentations.at("FACT\\Flags").at("names")[0] == nlohmann::json{{"bit", 0}, {"name", "Hidden From NPC"}});
     CHECK(presentations.at("FACT\\Flags").at("names")[1] == nlohmann::json{{"bit", 1}, {"name", "Special Combat"}});
+    CHECK(presentations.at("FACT\\Flags").at("names")[16] == nlohmann::json{{"bit", 16}, {"name", "Ignore Crimes: Werewolf (unused)"}});
     CHECK_FALSE(presentations.contains("FACT\\CrimeMurder"));
 
     const auto columns = grid.at("columns");

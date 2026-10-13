@@ -62,3 +62,14 @@ it('edits flags with a checkbox list and writes the combined integer', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(SetField).toHaveBeenCalledWith('W0.esp', '000800:W0.esp', 'FACT\\Flags', '195'));
 });
+
+it('closes an open flag editor when the record changes and writes nothing', () => {
+  const view = renderView();
+  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, 0x80'));
+  expect(view.container.querySelector('.scalar-flags-edit')).not.toBeNull();
+  view.rerender(
+    <DialogProvider><RecordView matrix={{ ...matrix, FormKey: '000801:W0.esp' }} plugin="W0.esp" onReload={async () => {}} /></DialogProvider>,
+  );
+  expect(view.container.querySelector('.scalar-flags-edit')).toBeNull();
+  expect(SetField).not.toHaveBeenCalled();
+});
