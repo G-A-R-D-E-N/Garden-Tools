@@ -13,6 +13,7 @@
 #include <system_error>
 #include <utility>
 
+#include <fo4/environment/placed.hpp>
 #include <fo4/forms/cell.hpp>
 #include <fo4/forms/placed_reference.hpp>
 #include <fo4/forms/static_collection.hpp>
@@ -31,7 +32,6 @@ constexpr auto k_cell = fo4::Signature::from_string("CELL");
 constexpr auto k_wrld = fo4::Signature::from_string("WRLD");
 constexpr auto k_scol = fo4::Signature::from_string("SCOL");
 constexpr auto k_txst = fo4::Signature::from_string("TXST");
-constexpr auto k_modl = fo4::Signature::from_string("MODL");
 constexpr auto k_tx00 = fo4::Signature::from_string("TX00");
 constexpr auto k_full = fo4::Signature::from_string("FULL");
 
@@ -67,6 +67,11 @@ std::string zstring(const fo4::Record& record, fo4::Signature signature) {
         return std::string(begin, nul);
     }
     return {};
+}
+
+std::string primaryModelPath(const fo4::Record& record) {
+    const auto path = fo4::env::primary_model_path(fo4::env::RecordRef{.record = &record});
+    return path ? std::string(*path) : std::string{};
 }
 
 std::string friendlyBaseType(fo4::Signature signature) {
@@ -153,7 +158,7 @@ nlohmann::json staticCollectionPartsJson(
     for (const auto& part : decoded) {
         const auto* staticRecord = winningRecord(plugins, part.static_record);
         if (staticRecord == nullptr) continue;
-        const auto modelPath = zstring(*staticRecord, k_modl);
+        const auto modelPath = primaryModelPath(*staticRecord);
         if (modelPath.empty() || part.placements.empty()) continue;
 
         nlohmann::json placements = nlohmann::json::array();
@@ -224,7 +229,7 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
                 if (baseRecord == nullptr) continue;
                 baseEditorId = editorId(*baseRecord);
                 baseType = friendlyBaseType(baseRecord->header.signature);
-                modelPath = zstring(*baseRecord, k_modl);
+                modelPath = primaryModelPath(*baseRecord);
                 if (baseRecord->header.signature == k_scol) {
                     scolParts = staticCollectionPartsJson(plugins, it->plugin, *baseRecord);
                 } else if (baseRecord->header.signature == k_txst) {
