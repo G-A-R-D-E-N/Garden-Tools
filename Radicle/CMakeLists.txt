@@ -415,6 +415,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_armor_edit.cpp
     tests/test_eyes.cpp
     tests/test_eyes_creation.cpp
+    tests/test_magic_location_records.cpp
+    tests/test_magic_location_records_real.cpp
     tests/test_weather_concept.cpp
     tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp

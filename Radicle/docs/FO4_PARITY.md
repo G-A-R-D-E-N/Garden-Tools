@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 80, L1 13, L2 16, L3 1, L4 37.
 
 ### Per-signature coverage
 
@@ -117,7 +117,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | - | - | L2 |
 | LAYR | 12400 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
 | LCRT | 6962 | - | - | - | - | - | - | - | - | - | - | L0 |
-| LCTN | 8039 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| LCTN | 8039 | 2 | - | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | LENS | 12405 | - | - | - | - | - | - | - | - | - | - | L0 |
 | LGTM | 8629 | - | - | - | - | - | - | - | environment/world | - | - | L2 |
 | LIGH | 9871 | - | - | - | - | - | - | yes | environment/base_records | - | 1 | L2 |
@@ -129,7 +129,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | MATO | 9375 | - | - | - | - | - | - | - | - | - | - | L0 |
 | MATT | 7958 | - | - | - | - | - | - | - | - | - | 1 | L0 |
 | MESG | 8179 | - | - | - | - | - | - | - | - | - | - | L0 |
-| MGEF | 10052 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | - | 1 | L4 |
 | MISC | 10212 | - | - | - | - | - | - | yes | forms/components | - | 1 | L2 |
 | MOVT | 9393 | - | - | - | - | - | - | - | - | - | - | L0 |
 | MSTT | 7067 | - | - | - | - | - | - | yes | - | - | - | L1 |
@@ -176,7 +176,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | SNDR | 9406 | 10 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
 | SOPM | 9489 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SOUN | 11961 | 3 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
-| SPEL | 12030 | - | - | - | - | - | - | yes | - | - | 2 | L1 |
+| SPEL | 12030 | 8 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | - | - | - | - | - | - | - | - | - | - | L0 |
 | STAG | 12663 | - | - | - | - | - | - | - | - | - | - | L0 |
 | STAT | 12045 | - | - | - | - | - | - | - | environment/base_records | - | 1 | L2 |
@@ -215,10 +215,12 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
+| LCTN | 2 | - | - | - | - | f32 | - | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
 | LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVSP | - | - | - | - | - | - | - | - | - | - |
+| MGEF | 12 | - | 4 | 1 | - | f32, u32 | - | - | - | existing_only |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
@@ -231,6 +233,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| SPEL | 4 | - | 3 | 1 | - | f32, u32 | - | - | - | existing_only |
 | TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
