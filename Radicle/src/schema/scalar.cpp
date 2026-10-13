@@ -13,9 +13,7 @@
 namespace fo4::schema {
 namespace {
 
-constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 #include "fo4/schema/generated_scalar_fields.inc"
-};
 
 void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
   out.push_back(std::byte{static_cast<std::uint8_t>(value)});
@@ -85,16 +83,17 @@ std::string format_float(float value) {
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
+  const ScalarDescriptor* only = nullptr;
   for (const auto& field : k_scalar_fields) {
-    // Embedded fields share a signature with their neighbours, so a lookup by
-    // signature alone cannot name one of them. See the header.
-    if (field.scalar.embedded || field.scalar.address.repeated ||
-        field.scalar.storage == ScalarStorage::zstring) {
-      continue;
-    }
-    if (field.scalar.subrecord == subrecord) return field.scalar;
+    if (field.scalar.subrecord != subrecord) continue;
+    if (only) return std::nullopt;
+    only = &field.scalar;
   }
-  return std::nullopt;
+  if (!only || only->embedded || only->address.repeated ||
+      only->storage == ScalarStorage::zstring) {
+    return std::nullopt;
+  }
+  return *only;
 }
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
@@ -192,6 +191,22 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
       return 0;
   }
   return 0;
+}
+
+std::optional<std::string_view> scalar_value_name(const ScalarDescriptor& descriptor,
+                                                  std::int64_t value) noexcept {
+  for (const auto& entry : descriptor.names) {
+    if (entry.value == value) return entry.name;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor,
+                                              std::string_view name) noexcept {
+  for (const auto& entry : descriptor.names) {
+    if (entry.name == name) return entry.value;
+  }
+  return std::nullopt;
 }
 
 std::string decode_scalar(std::span<const std::byte> data,
