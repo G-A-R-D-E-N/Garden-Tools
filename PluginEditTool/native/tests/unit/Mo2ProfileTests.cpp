@@ -311,7 +311,7 @@ TEST_CASE("MO2 profile keeps the higher-priority winner when names differ only b
     writeFile(root / "ModOrganizer.ini",
         "selected_profile=Test\n"
         "gamePath=" + game.string() + "\n");
-    writeFile(profile / "plugins.txt", "*\xC3\x84.esp\n");
+    writeFile(profile / "plugins.txt", "*\xC4.esp\n");
     writeFile(profile / "modlist.txt", "+High\n+Low\n");
     writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
     writeFile(high / upper, minimalPlugin(0, "high"));

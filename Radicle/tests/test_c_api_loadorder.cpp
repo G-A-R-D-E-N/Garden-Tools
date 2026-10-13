@@ -132,7 +132,7 @@ TEST(CApiLoadOrder, PluginListAndCccRowsAreFreedWithStringArrayFree) {
 
   const auto ccc = (data.path() / "Fallout4.ccc").string();
   ASSERT_EQ(radicle_ccc_read(ccc.c_str(), &rows, &count), RADICLE_STATUS_OK) << radicle_last_error();
-  EXPECT_EQ(take_strings(rows, count), (std::vector<std::string>{"cc_a.esl"}));
+  EXPECT_EQ(take_strings(rows, count), (std::vector<std::string>{"\xC3\xAF\xC2\xBB\xC2\xBF" "cc_a.esl"}));
 }
 
 TEST(CApiLoadOrder, AssembleRowsAndFindingsAreFreedWithStringArrayFree) {

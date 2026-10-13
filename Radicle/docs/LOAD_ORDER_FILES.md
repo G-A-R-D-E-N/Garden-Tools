@@ -20,16 +20,22 @@ Evidence record: `RE-Work/subsystems/radicle-re-garden-tools/light-plugin-index-
 
 ## Plugin list
 
-- UTF-8, with or without a BOM; CRLF or LF line endings.
-- Lines starting with `#` are skipped. Lines shorter than 2 characters after the line ending is removed are skipped.
-- A leading `*` marks the entry active and is stripped before the duplicate test. A bare name is listed but not active.
-- Duplicates (after `*` is stripped) are compared with the assembler's case folding (`fo4::PluginKey`), so `Mod.esp` and `*MOD.esp` are duplicates. The first occurrence keeps its active flag; later ones are dropped and reported as `duplicate_entry`.
-- A name containing a control character below 0x20 (such as a TAB) is skipped and reported as `invalid_name` with its line number.
+Engine rules, RE-020 (#520 c14028), verified on OG 1.10.163, NG 1.10.984 and AE 1.11.240:
+
+- The engine reads the file with `fopen_s` in text mode and `fgets` into a 512-byte buffer. CRLF becomes LF; each `fgets` call returns at most 511 bytes, so a longer line is read as several chunks. Radicle does the same.
+- The UTF-8 BOM is not stripped. It stays on line 1, so a BOM-prefixed `*Fallout4.esm` is neither starred nor matched, and BOM + `# x` is not a comment.
+- Names are code-page bytes. Radicle decodes each name as Windows-1252 to UTF-8 for its string model. Other ANSI code pages are not modeled. A line with an undefined Windows-1252 byte (0x81, 0x8D, 0x8F, 0x90, 0x9D) is reported as `invalid_name`.
+- Nothing is trimmed: leading and trailing spaces, tabs and a lone CR stay in the name.
+- `#` is a comment only at byte 0. A leading `*` counts only at byte 0, after the `#` test, so `A.esp # note` is one name and `*#x` is the active name `#x`.
+- A chunk of one byte or less, counting its LF, is skipped. `A` with an LF is the name `A`; a final unterminated `B` is skipped; `*` with an LF is an empty active name that matches nothing.
+- Duplicates: names equal under the assembler's case folding (`fo4::PluginKey`) collapse to one entry. The first line keeps its position, and the entry is active if any of its lines is starred. Later repeats are kept in `duplicates` and reported as `duplicate_entry`. A later bare line never deactivates an entry.
+- A name containing a control character below 0x20 (such as a TAB) is reported as `invalid_name` with its line number. The engine never matches such a name, so Radicle's report is a Radicle addition, not an engine rule.
 - File order is kept. Each entry records its 1-based physical line number.
+- Folding: the engine folds ASCII only (RE-020, INFERRED). `PluginKey` folds Unicode, which differs only for non-ASCII names.
 
 ## Fallout4.ccc
 
-One name per line. A UTF-8 BOM is stripped, whitespace around each name is trimmed, blank lines are skipped, and file order is kept. The engine lower-cases the names; Radicle matches names case-insensitively instead, so the stored text is not lower-cased.
+RE-020 (#520 c14028). The engine reads the stream and splits it with `strtok_s` on CR and LF, so empty lines are skipped because consecutive delimiters collapse. There is no comment, star, BOM or whitespace handling. Radicle keeps that: the names are split on CR and LF, empty tokens are skipped, nothing is trimmed, and each token is decoded as Windows-1252 like `plugins.txt`. A token with an undefined Windows-1252 byte is dropped, since the engine can never match it; `parse_ccc` has no line report to carry it. The engine lower-cases the names; Radicle matches names case-insensitively instead, so the stored text is not lower-cased.
 
 ## Assembly
 
@@ -69,7 +75,7 @@ The data directory overload lists the directory. A second overload takes a list 
 |---|---|---|
 | `missing_file` | Listed in the plugin list or `Fallout4.ccc` but not in Data (zero-byte files count as missing) | No |
 | `duplicate_entry` | Plugin-list line repeating an earlier entry | No |
-| `invalid_name` | Plugin-list line whose name contains a control character below 0x20; the line is skipped | No |
+| `invalid_name` | Plugin-list line whose name contains a control character below 0x20 or an undefined Windows-1252 byte; the line is skipped | No |
 | `unreadable_header` | TES4 record unreadable; file dropped | No |
 | `missing_master` | Checked file lists a master that is not in Data | Yes |
 | `version_unchecked` | Checked file with HEDR version above 1.0 | No |
