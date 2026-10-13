@@ -2206,3 +2206,19 @@ Takes `[plugin, editorId]`, which is the order the `create_interior_cell` MCP to
 ## PluginEditTool/native/apps/fo4ide/McpTools.cpp:registerPluginTools — number and boolean arguments
 
 The `add` lambda validated only string, object and integer arguments, so a float or boolean field would be refused as "must be number". It now also accepts `number` (any JSON number) and `boolean`. `create_placed_object` is the first tool to use them. `create_interior_cell` is registered (`CreateInteriorCell`); its record and grouping rules are in `Radicle/docs/code-notes/Radicle.md` under `Radicle/src/forms/cell_create.cpp:create_interior_cell`.
+
+## PluginEditTool/web/src/Shell/conflictSelection.ts:selectRow — Ctrl, Shift and plain clicks (#39)
+
+The selection is a `Record<string, boolean>` keyed by FormKey, the same map the batch copy already reads, so Ctrl and Shift only change how it is written. `plain` replaces it with the clicked row, `toggle` flips one row, and `range` replaces it with the inclusive span from the anchor. The anchor is the row of the last `plain` or `toggle` click and does not move on a `range` click, so repeated Shift clicks pivot on the same row. With no anchor, or an anchor that is no longer listed, a range click selects only the clicked row.
+
+## PluginEditTool/web/src/Shell/conflictSelection.ts:pruneSelection — stability across reloads (#39)
+
+Selection is not derived from the visible rows, so it survives re-renders. Keys are dropped only in `useConflictBatch.ts:useConflictBatch` `loadConflicts`, which runs after the explicit Rescan returns, and only keys missing from the new list go. The sidebar Refresh button does not reload the conflict list, so it does not prune. The conflict list has no filter or paging, so there is no filter path to be stable across.
+
+## PluginEditTool/web/src/Shell/ConflictsPanel.tsx:ConflictsPanel — multi-select, count, copy and compare (#39)
+
+The Conflicts sidebar is the only flat, FormKey-keyed record list with a native batch flow (`CopyAsOverrideMany` through `useConflictBatch.ts:useConflictBatch` `batchCopyAsOverride`), so the multi-select lives there. Rows are `role="option"` in a `role="listbox"` with `aria-multiselectable`. Checkbox clicks stop propagation so they toggle without resetting the others. The `conflict-id` click opens the record only without a modifier. Escape on the panel clears the selection. Copy is disabled at zero selected and Compare at any count other than two, each with a `title`. Compare opens the two records one after the other, because `useRecordOpening.ts:useRecordOpening` `openByFormKey` drops a result when a newer open starts, so two calls in the same tick would keep only the second record. No record-versus-record compare view exists: `PluginCompareDialog.tsx` compares one FormKey across two plugins, and `ConflictsView.tsx` shows one record's per-plugin matrix. So the two records open in record tabs, and the second is active.
+
+## PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx:conflict list selection — MainShell harness (#39)
+
+The tests drive the real `MainShell` in conflicts mode with the same backend stub as `overrideConfirmation.test.tsx`, so the copy args are asserted at the `CopyAsOverrideMany` call. Not run locally (CI only).
