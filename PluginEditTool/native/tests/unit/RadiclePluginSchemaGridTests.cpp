@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <iterator>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -65,6 +67,32 @@ std::vector<std::byte> makeRefrPlugin(bool includeScalars,
         scale.f32(1.25f);
         fo4::test::write_subrecord(out, "XSCL", scale.bytes);
     }
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+    return out.bytes;
+}
+
+std::vector<std::byte> makeFactPlugin() {
+    fo4::test::ByteWriter out;
+    const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+    fo4::test::ByteWriter hedr;
+    hedr.f32(1.0f);
+    hedr.u32(1);
+    hedr.u32(0x801);
+    fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+    fo4::test::end_record(out, tes4);
+
+    const auto group = fo4::test::begin_group(out, "FACT", 0);
+    const auto record = fo4::test::begin_record(out, "FACT", 0, 0x00000800);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"SchemaFaction\0", 14});
+    fo4::test::ByteWriter flags;
+    flags.u32(0x3);
+    fo4::test::write_subrecord(out, "DATA", flags.bytes);
+    fo4::test::ByteWriter crime;
+    crime.u8(1);
+    crime.u8(0);
+    for (std::uint8_t index = 2; index < 20; ++index) crime.u8(0);
+    fo4::test::write_subrecord(out, "CRVA", crime.bytes);
     fo4::test::end_record(out, record);
     fo4::test::end_group(out, group);
     return out.bytes;
@@ -170,4 +198,48 @@ TEST_CASE("Duplicate generated scalar subrecords fail closed in Spreadsheet") {
         nlohmann::json::array({"Schema.esp", "REFR", 200, 0}));
     REQUIRE_FALSE(grid.has_value());
     CHECK(grid.error().type == "ScalarReadFailed");
+}
+
+TEST_CASE("Schema enum and flag names reach the grid and record matrix") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto path = root / "Schema.esp";
+    writeBytes(path, makeFactPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    load(backend, path);
+
+    const auto grid = parseResult(backend.invokeBackend(
+        "GetRecordsGrid",
+        nlohmann::json::array({"Schema.esp", "FACT", 200, 0})));
+    const auto& presentations = grid.at("presentations");
+    REQUIRE(presentations.at("FACT\\CrimeArrest").at("kind") == "enum");
+    REQUIRE(presentations.at("FACT\\CrimeArrest").at("names").size() == 2);
+    CHECK(presentations.at("FACT\\CrimeArrest").at("names")[1] == nlohmann::json{{"value", 1}, {"name", "True"}});
+    REQUIRE(presentations.at("FACT\\Flags").at("kind") == "flags");
+    REQUIRE(presentations.at("FACT\\Flags").at("names").size() == 17);
+    CHECK(presentations.at("FACT\\Flags").at("names")[0] == nlohmann::json{{"bit", 0}, {"name", "Hidden From NPC"}});
+    CHECK(presentations.at("FACT\\Flags").at("names")[1] == nlohmann::json{{"bit", 1}, {"name", "Special Combat"}});
+    CHECK_FALSE(presentations.contains("FACT\\CrimeMurder"));
+
+    const auto columns = grid.at("columns");
+    const auto& cells = grid.at("rows")[0].at("cells");
+    const auto columnIndex = [&](std::string_view column) {
+        return static_cast<std::size_t>(std::distance(
+            columns.begin(), std::find(columns.begin(), columns.end(), std::string(column))));
+    };
+    CHECK(cells[columnIndex("FACT\\Flags")] == "3");
+    CHECK(cells[columnIndex("FACT\\CrimeArrest")] == "1");
+
+    const auto matrix = parseResult(backend.invokeBackend(
+        "GetConflictMatrix", nlohmann::json::array({"000800:Schema.esp"})));
+    const auto& rows = matrix.at("Rows");
+    const auto row = [&](std::string_view field) {
+        return *std::find_if(rows.begin(), rows.end(), [&](const auto& candidate) {
+            return candidate.at("Field").template get<std::string>() == field;
+        });
+    };
+    CHECK(row("FACT\\Flags").at("Presentation").at("kind") == "flags");
+    CHECK(row("FACT\\CrimeArrest").at("Presentation").at("names")[1].at("name") == "True");
+    CHECK_FALSE(row("FACT\\CrimeMurder").contains("Presentation"));
 }

@@ -1,6 +1,7 @@
 #include "RadiclePluginFields.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <charconv>
 #include <cstdint>
 #include <cstring>
@@ -23,6 +24,27 @@ std::string indexedPath(std::string_view path, const fo4::schema::FieldAddress& 
     return std::string(path) + "[" + std::to_string(index) + "]";
 }
 
+}
+
+nlohmann::json scalarPresentationJson(fo4::Signature record, std::string_view path) {
+    const auto field = fo4::schema::scalar_field_descriptor(record, path);
+    if (!field) return nullptr;
+    const auto& scalar = field->scalar;
+    nlohmann::json names = nlohmann::json::array();
+    if (scalar.presentation == fo4::schema::ScalarPresentation::enumeration) {
+        for (const auto& entry : scalar.names) {
+            names.push_back({{"value", entry.value}, {"name", std::string(entry.name)}});
+        }
+        return {{"kind", "enum"}, {"names", std::move(names)}};
+    }
+    if (scalar.presentation == fo4::schema::ScalarPresentation::flags) {
+        for (const auto& entry : scalar.names) {
+            names.push_back({{"bit", std::countr_zero(static_cast<std::uint64_t>(entry.value))},
+                {"name", std::string(entry.name)}});
+        }
+        return {{"kind", "flags"}, {"names", std::move(names)}};
+    }
+    return nullptr;
 }
 
 std::optional<SemanticFieldAddress> semanticFieldAddress(std::string_view path) {

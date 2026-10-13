@@ -171,6 +171,10 @@ export interface AppInterop {
 }
 
 
+export type ScalarPresentation =
+  | { kind: 'enum'; names: { value: number; name: string }[] }
+  | { kind: 'flags'; names: { bit: number; name: string }[] };
+
 export interface ConflictFieldRow {
   Field: string;
   DisplayLabel: string;
@@ -189,6 +193,7 @@ export interface ConflictFieldRow {
   EnumOptions: string[] | null;
   RefType: string | null;
   RefTypes: string | null;
+  Presentation?: ScalarPresentation;
 }
 
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }

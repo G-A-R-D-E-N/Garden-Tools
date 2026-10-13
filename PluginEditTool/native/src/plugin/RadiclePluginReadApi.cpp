@@ -262,6 +262,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
 
     auto columns = gridColumns(signature, maxEntries);
     std::vector<std::vector<SemanticFieldCell>> semanticRows;
+    nlohmann::json presentations = nlohmann::json::object();
     if (signature.size() == 4 && signature != "EYES" && signature != "LVSP") {
         columns = nlohmann::json::array({"EDID"});
         for (std::size_t index = begin; index < end; ++index) {
@@ -273,6 +274,11 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
                 }
             }
             semanticRows.push_back(std::move(*projected));
+        }
+        for (const auto& column : columns) {
+            const auto path = column.get<std::string>();
+            auto presentation = scalarPresentationJson(fo4::Signature::from_string(signature), path);
+            if (!presentation.is_null()) presentations[path] = std::move(presentation);
         }
     }
     nlohmann::json rows = nlohmann::json::array();
@@ -360,7 +366,8 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
         {"columns", columns},
         {"rows", std::move(rows)},
         {"total", matching.size()},
-        {"offset", begin}
+        {"offset", begin},
+        {"presentations", std::move(presentations)}
     }.dump());
 }
 
