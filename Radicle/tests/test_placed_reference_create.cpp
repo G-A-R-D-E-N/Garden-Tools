@@ -152,7 +152,11 @@ TEST(PlacedReferenceCreate, RefusesPersistentAndOutOfGridReferencesInExteriorCel
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto cell = fo4::forms::create_exterior_cell(
       plugin,
-      fo4::forms::ExteriorCellCreation{.worldspace = world, .x = -33, .y = 32});
+      fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = -33,
+          .y = 32,
+          .editor_id = std::nullopt});
   const auto before = fo4::write_plugin(plugin);
 
   const auto persistent_refusal = placed_reference_refusal(
@@ -282,7 +286,11 @@ TEST(PlacedReferenceCreate, RefusesForeignCellsAndUnownedBasesWithoutMutation) {
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto cell = fo4::forms::create_exterior_cell(
       plugin,
-      fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 1, .y = 2});
+      fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 1,
+          .y = 2,
+          .editor_id = std::nullopt});
   const auto before = fo4::write_plugin(plugin);
 
   EXPECT_THROW(static_cast<void>(fo4::forms::create_placed_reference(
