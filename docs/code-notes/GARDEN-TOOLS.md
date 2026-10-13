@@ -2268,3 +2268,7 @@ Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifie
 ## PluginEditTool/web/src/MainShellBridge.test.tsx:sidebar record multi-select — MainShell harness (#39)
 
 The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).
+
+## BGS/app/Settings.cs:Settings.WriteAll — retry on transient Windows file locks
+
+The CI job "BGS build and test (win-x64)" failed intermittently in the uismoke step. `SettingsRetentionSmoke.Run` saves the settings file many times in a row, and `File.Move(tempPath, finalPath, overwrite: true)` threw "Access to the path is denied." while another process (antivirus or the indexer) held the file. `Settings.WriteAll` now retries the temp write and the move up to five attempts, sleeping 50 ms times the attempt number between tries. It retries only an `UnauthorizedAccessException` or a Windows sharing or lock violation (the HRESULT low word is 32 or 33). Other `IOException`s, such as a missing directory, are not retried. The final failure still propagates to `Settings.TryMutate`, which reports it as before. Real users with antivirus can hit the same lock. Covered by `SettingsTests.SaveRetriesWhileTheSettingsFileIsLocked`, which holds the target with `FileShare.None` for 100 ms (Windows only). Not run locally (CI only).
