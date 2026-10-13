@@ -126,7 +126,7 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
       const list = JSON.parse(raw) as string[];
       setPluginCount(Array.isArray(list) ? list.length : 0);
     })
-    .catch(() => setPluginCount(0));
+    .catch(e => { setPluginCount(0); setStatus('Could not list plugins: ' + (e instanceof Error ? e.message : String(e))); });
 
   useEffect(() => { checkPlugins(); }, []);
 
@@ -151,8 +151,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         const raw = await cell.SearchCells(cellId.trim(), 30);
         if (searchSeq.current !== mySeq) return;
         setMatches(JSON.parse(raw) as CellSearchHit[]);
-      } catch {
-        if (searchSeq.current === mySeq) setMatches([]);
+      } catch (e) {
+        if (searchSeq.current === mySeq) { setMatches([]); setStatus('Could not search cells: ' + (e instanceof Error ? e.message : String(e))); }
       } finally {
         if (searchSeq.current === mySeq) setMatchesLoading(false);
       }
@@ -182,8 +182,8 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
         const raw = await cell.SearchWorldspaces(worldspace.trim(), 100);
         if (wsSeq.current !== mySeq) return;
         setWsMatches(JSON.parse(raw) as CellSearchHit[]);
-      } catch {
-        if (wsSeq.current === mySeq) setWsMatches([]);
+      } catch (e) {
+        if (wsSeq.current === mySeq) { setWsMatches([]); setStatus('Could not search worldspaces: ' + (e instanceof Error ? e.message : String(e))); }
       } finally {
         if (wsSeq.current === mySeq) setWsLoading(false);
       }

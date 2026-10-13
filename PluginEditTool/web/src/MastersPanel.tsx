@@ -30,9 +30,9 @@ export default function MastersPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!masters) return;
-    masters.GetPlugins().then(raw => {
-      try { setPlugins(JSON.parse(raw) as string[]); } catch { setPlugins([]); }
-    });
+    masters.GetPlugins()
+      .then(raw => setPlugins(JSON.parse(raw) as string[]))
+      .catch(e => { setPlugins([]); setError('Could not list plugins: ' + (e instanceof Error ? e.message : String(e))); });
   }, [masters]);
 
   const selectPlugin = (name: string) => {

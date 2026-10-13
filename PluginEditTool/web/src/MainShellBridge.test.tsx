@@ -129,6 +129,21 @@ describe('batch copy failure display', () => {
     await openBatchCopy();
     await screen.findByText(expected);
   });
+
+  it('lists every failed record with its reason', async () => {
+    copyMany.mockResolvedValue(JSON.stringify({
+      total: 3, ok: 1, failed: 2,
+      failures: [
+        { formKey: '000800:Master.esm', source: 'Later.esp', reason: 'first reason' },
+        { formKey: '000900:Master.esm', source: 'Later.esp', reason: 'second reason' },
+      ],
+    }));
+    await openBatchCopy();
+    await screen.findByText(/Copied 1\/3 into Patch\.esp\. 2 failed/);
+    const list = await screen.findByText(/2 of 3 records could not be copied into Patch\.esp/);
+    expect(list.textContent).toContain('000800:Master.esm (TestWeapon): first reason');
+    expect(list.textContent).toContain('000900:Master.esm: second reason');
+  });
 });
 
 describe('sidebar record search', () => {
@@ -151,5 +166,13 @@ describe('sidebar record search', () => {
 
     await screen.findByText('ArmorOne');
     expect(screen.queryByText('WeaponOne')).toBeNull();
+  });
+
+  it('reports a failed search instead of showing no results', async () => {
+    searchRecords.mockRejectedValue(new Error('index offline'));
+    getPlugins.mockResolvedValue(JSON.stringify([pluginRow]));
+    render(<DialogProvider><MainShell /></DialogProvider>);
+    fireEvent.change(await screen.findByPlaceholderText('Search plugins & records…'), { target: { value: 'weapon' } });
+    await screen.findByText('Search failed: index offline');
   });
 });

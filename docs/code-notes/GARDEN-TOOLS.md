@@ -1533,11 +1533,9 @@ Main's behaviour before this (traced on `ffd3a341`): `MainShell` holds the field
 
 Tranche 1 clears the lint findings that can be fixed without changing UI behaviour; the react-hooks rendering refactors and the two `react-refresh/only-export-components` findings in `dialogs.tsx` and `Shell/StatusBar.tsx` are left to later tranches. `PluginEditTool/web/eslint.config.js` runs `js.configs.recommended`, `tseslint.configs.recommended`, `reactHooks.configs.flat.recommended` and `reactRefresh.configs.vite` over `src/**/*.{ts,tsx}`.
 
-The empty `catch` bodies are deliberate best-effort paths, and they carry no source comment. `no-empty` treats a block holding a comment as non-empty, so the explanation used to live in the source; it lives here instead, and the three files that need it are named in `eslint.config.js` with `'no-empty': ['error', { allowEmptyCatch: true }]`, which keeps the rule strict everywhere else. What each one swallows:
+The empty `catch` bodies were deliberate best-effort paths, and they carry no source comment. `no-empty` treats a block holding a comment as non-empty, so the explanation lives here instead, and the files that need it are named in `eslint.config.js` with `'no-empty': ['error', { allowEmptyCatch: true }]`, which keeps the rule strict everywhere else. Tranche 1 named three files. The palette search and live validation in `Blueprint/BlueprintPanel.tsx` and the label lookup in `ConditionsEditor.tsx` now report their failures (see "silent catch sites (#41)" below), so one file is left:
 
-- `Blueprint/BlueprintPanel.tsx`: the palette search keeps the previous entries when `SearchRecords` fails, and the next keystroke retries; live validation keeps the last result when `Validate` fails, and the next edit revalidates.
 - `CellPanel.tsx`: the 200 ms `GetGeometryBatchProgress` poll is ignored when it fails; the batch call itself reports the real failure.
-- `ConditionsEditor.tsx`: a failed `ResolveFormKeyLabels` leaves the labels as they are; they are cosmetic and every row keeps its raw FormKey.
 
 `MainShell.tsx:HostMessage` types what the host posts to the page. Only the fields each `Type` reads are declared: `SetStatus.Text`, `SetProgress.Value`, and the `McpLive` fields. A `SetProgress` message without `Value` now sets progress to `null` (hidden) instead of `undefined`, which is what the state's `number | null` says.
 
@@ -1966,3 +1964,62 @@ Top-level `CopyAsNewRecord` calls `fo4::require_decodable` on the source as the 
 ## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp:RadiclePluginBackend::requireReferenceCoverage — shared coverage probe (GT-234)
 
 The strict re-key probe that `deleteRecord` and `renumberRecord` ran inline is now `requireReferenceCoverage`. Both pass their operation name, and `changeReferencingRecords` (`PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp:RadiclePluginBackend::changeReferencingRecords`) calls it with "reference remap" before the graph scan. A reference hidden in an undecodable record therefore refuses the whole remap, dry run included, instead of reporting "Repointed N of N". The error is `ReferenceCoverageIncomplete` with the message "Cannot prove <operation> safety while scanning <plugin>: <error>". Test: `PluginEditTool/native/tests/unit/RadiclePluginReferenceRemapTests.cpp` (`ChangeReferencingRecords refuses while a loaded plugin has an undecodable record`).
+
+## PluginEditTool/web/src/recordActions.ts:f2Edit, PluginEditTool/web/src/RecordView.tsx:RecordView — F2 edits the focused cell (#41)
+
+`RecordContextMenu` printed F2 beside "Edit value" and nothing handled the key. `RecordView` owns the record grid and the editor state, so the key is wired there. `recordActions.ts:f2Edit(edit)` returns `tabIndex: -1` and an `onKeyDown` that calls `edit()` on F2. `RecordView` spreads it on the four cells that can start an edit, each with the call it already makes: the value cells in the grid and in the Conflicts matrix call `startEdit(row, col)` for their own column (the double-click and the menu item make that call), and the property-name cells call `startEdit(row, winnerCol)`, the column their context menu targets. `startEdit` keeps every guard (parent rows, backend-refused cells, `Ref` fields opening the picker), so F2 on a cell that cannot be edited does nothing, as a double-click does.
+
+The handler ignores events whose target is not the cell itself, so F2 pressed inside an open editor input or select does not restart the edit. Focus comes from a click: `tabIndex={-1}` makes a cell focusable by mouse without putting every cell in the Tab order, and a right-click focuses it too, so F2 works while the context menu is open (`startEdit` closes the menu). `RecordView.css:.rv-grid td:focus` draws an inset accent outline so the target cell is visible. The grid has no arrow-key cell navigation, so the flow is: click a cell, press F2. A window-level F2 listener was rejected because it would also fire behind the record picker, the dialogs and the other tabs, with no cell to target; removing the label was rejected because the cells are already a natural focus target.
+
+`RecordView.tsx` was 754 lines, over the 750-line guard, so six blank lines left behind by earlier comment removals went first. Every other edit there is line-neutral, and the file is now 748 lines. Tests: `RecordView.semantic.test.tsx` presses F2 on a value cell and expects the inline editor, and presses F2 on a backend-refused cell and expects none.
+
+## PluginEditTool/web/src/ConditionsEditor.tsx:ConditionsEditor, PluginEditTool/web/eslint.config.js — read failures reach the error line (#41)
+
+A failed `ResolveFormKeyLabels` fell into an empty `catch`, so rows kept raw form keys with no sign the lookup had failed. The load effect's four reads now report through the editor's existing `error` line (`.ce-error`, the line `Could not read conditions` and `Save failed` already use): `ResolveFormKeyLabels` ("Could not resolve record names") and the three metadata tables, `GetConditionFunctions`, `GetConditionRunOnTypes` and `GetConditionFunctionParams`, whose fallbacks (an empty list, `Subject`, an empty table) were silent too and left an empty function dropdown unexplained. They call `setError(prev => prev || message)`: the first failure wins, so a secondary failure never overwrites the conditions-read message, and Save still clears the line. `eslint.config.js` now applies `'no-empty': ['error', { allowEmptyCatch: true }]` to `src/CellPanel.tsx` only, the one file with an empty catch left. Tests: `ConditionsEditor.test.tsx` rejects `ResolveFormKeyLabels` and `GetConditionFunctions` and expects each message.
+
+## PluginEditTool/web/src — silent catch sites (#41)
+
+The 110 `catch` clauses and the five promise `.catch` handlers under `PluginEditTool/web/src` were read. 31 handled a failure without reporting it. 17 of those now report through the channel their component already uses for backend errors, and 14 stay silent on purpose. No new toast or banner was added.
+
+Reported:
+
+| Site | Channel |
+| --- | --- |
+| `ConditionsEditor.tsx:ConditionsEditor` load effect, four reads | `error` line, first failure wins |
+| `Blueprint/BlueprintPanel.tsx:BlueprintPanel` palette search, live validation | `status`, as `Error: <message>` like its other graph calls; the result of a superseded request is ignored |
+| `CellPanel.tsx:checkPlugins` | `status`, `Could not list plugins` |
+| `CellPanel.tsx:CellPanel` cell search, worldspace search | `status`, `Could not search cells` / `Could not search worldspaces` |
+| `MainShell.tsx:MainShell` sidebar search effect, `commandSearch` | `errorStr` banner, `Search failed: <message>`, in the `errorMessage(err) ?? JSON.stringify(err)` form its neighbors use |
+| `MastersPanel.tsx:MastersPanel` plugin list | `error`, `Could not list plugins`; the rejected call had no handler before, and only a parse failure was caught |
+| `RecordPicker.tsx:RecordPicker` search | the results note reads `Search failed: <message>` instead of `No matches.` |
+| `RecordView.tsx:RecordView` context-menu effect (editable plugins, element actions) | `status`, `Could not list editable plugins` / `Could not read element actions` |
+| `Shell/DetailRail.tsx:DetailRail` details load | the rail's `toast`, `Could not load record details`; the next successful load clears it |
+| `SpreadsheetPanel.tsx:SpreadsheetPanel` plugin list | `error`, `Could not list plugins` |
+
+Silent on purpose:
+
+| Site | Why |
+| --- | --- |
+| `ArchivePanel.tsx:ArchivePanel` `packSources` initializer, `favourites.ts:readFavourites` | stored JSON that no longer parses falls back to an empty list |
+| `hostbridge.ts:takeToken` | `sessionStorage` can be unavailable; the token from the URL still works for this load |
+| `hostbridge.ts:install` message dispatch | a host message that is not JSON is passed on as a string by design |
+| `hostbridge.ts:pumpEvents` | the event stream reconnects every second; reporting each failed attempt would flood the UI |
+| `ChatPanel.tsx:copy` | optional clipboard write; the Copied label just does not show |
+| `MainShell.tsx:handleRejection` | the fallback inside the unhandled-rejection reporter; its result is the report |
+| `CellPanel.tsx:loadTexture` | misses are counted by `CellViewport` and shown as the missing-texture bar and the log line |
+| `NifPanel.tsx:loadTexture` | optional texture; the viewport falls back to the untextured material |
+| `CellPanel.tsx` geometry progress poll | advisory 200 ms poll; the batch call reports the real failure. It is the one empty catch left |
+| `Shell/useEnvironment.ts:parseMo2Status`, `refreshMo2Status`, the status tick | a polled, best-effort MO2 chip that hides when unavailable; reporting every poll would repeat the same message |
+| `Workspace/WorkspaceHeader.tsx:WorkspaceHeader` breadcrumb | decorative; record opening and the detail rail report backend failures |
+
+Tests reject the host call and expect the message in `ConditionsEditor.test.tsx`, `Blueprint/BlueprintPanel.test.tsx`, `CellPanel.searchError.test.tsx`, `MainShellBridge.test.tsx`, `MastersPanel.test.tsx`, `RecordPicker.test.tsx`, `RecordView.semantic.test.tsx`, `Shell/DetailRail.test.tsx` and `SpreadsheetPanel.test.tsx`. The `CellPanel.tsx` plugin-count and worldspace catches, the `MainShell.tsx` command-palette search and the `RecordView.tsx` element-actions catch have the same shape as the tested ones and no test of their own.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch, PluginEditTool/web/src/MainShell.css:.sidebar-error-text — every batch failure is listed (#39)
+
+`CopyAsOverrideMany` returns `failures: [{ formKey, source, reason }]`, and the status line showed only `failures[0].reason`, so a batch with five failures hid four. When `failed > 0` the hook now sends the whole list to the sidebar error banner (`setErrorStr`, the channel `loadConflicts` and the environment reload already use): a first line `N of M records could not be copied into <patch>:` and then one line per failure, `<form key> (<EditorID>): <reason>`. The EditorID comes from the selected conflict rows (`picked`), because the failure rows do not carry it. A failure whose form key is not in the selection prints the bare form key, and a failure without a reason prints "no reason given". The status line keeps the `Copied ok/total into <patch>.` prefix that `overrideConfirmation.test.tsx` matches and now says `N failed -- see the error list.` in place of the first reason. `.sidebar-error-text` gained `white-space: pre-line` so the newlines render, and `max-height: 40vh` with `overflow-y: auto` so a long list scrolls inside the banner instead of pushing the tree out of view; the banner's other messages are single-line and unchanged. The banner shows on the explorer tab only, which is where the batch copy runs from. Test: `MainShellBridge.test.tsx` (`lists every failed record with its reason`).
+
+## .github/workflows/pet-web-ci.yml:web — web lint, build and tests (#77)
+
+No workflow built or tested `PluginEditTool/web`: `native-ci.yml` ignores that path on main pushes and its pull-request run only builds the native code, and the native build reads `web/dist` without producing it. `pet-web-ci.yml` runs on pull requests and main pushes that touch `PluginEditTool/web/**` or the workflow itself, on the `[self-hosted, Linux, X64, garden]` runner, with the checkout pin and concurrency group shape the other workflows use (a newer push cancels a pull-request run; main runs always finish). Work-branch pushes are not a trigger, as in `bgs-ci.yml` and `native-ci.yml`, so one pull-request commit takes one runner slot.
+
+No other workflow installs Node, so the job uses `actions/setup-node` v6, pinned by commit hash like the other actions and fetched by full GitHub URL as `setup-dotnet` is, with Node 22 (vite 8, vitest 4 and eslint 10 need 20.19 or newer) and the npm cache keyed on `PluginEditTool/web/package-lock.json`. Steps: `npm ci`, `npm run lint`, `npm run build` and `npm test`. The build script is `tsc -b && vite build`, so it covers the type-check and also proves the bundle builds, and the test script is already `vitest run`, so `-- --run` would only repeat the flag. The three checks run with `if: success() || failure()` so one run reports lint, build and test results together. The ESLint, `tsc` and vitest results for this change come from the first run of this job.

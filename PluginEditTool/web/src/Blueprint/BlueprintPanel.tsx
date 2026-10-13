@@ -78,8 +78,8 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
         const parsed = JSON.parse(raw) as { entries: BpPaletteEntry[]; total: number };
         setEntries(parsed.entries);
         setTotal(parsed.total);
-      } catch {
-
+      } catch (e) {
+        if (mine === searchSeq.current) setStatus('Error: ' + (e instanceof Error ? e.message : String(e)));
       }
     }, 200);
     return () => clearTimeout(timer);
@@ -98,8 +98,8 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
         if (mine !== validateSeq.current || raw.startsWith('Error:')) return;
         setValidation(JSON.parse(raw));
         setValidatedDoc(doc);
-      } catch {
-
+      } catch (e) {
+        if (mine === validateSeq.current) setStatus('Error: ' + (e instanceof Error ? e.message : String(e)));
       }
     }, 600);
     return () => clearTimeout(timer);

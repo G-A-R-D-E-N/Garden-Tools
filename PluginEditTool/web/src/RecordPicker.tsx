@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import type { SearchHit } from './backend';
+import { errorText } from './errors';
 import './RecordPicker.css';
 
 const back = () => window.chrome?.webview?.hostObjects?.backend;
@@ -11,6 +12,7 @@ export default function RecordPicker(
 ) {
   const [query, setQueryState] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [error, setError] = useState('');
   const setQuery = (v: string) => { setQueryState(v); setHits(null); };
   const [filterOn, setFilterOn] = useState(!!refTypes);
   const timer = useRef<number | null>(null);
@@ -23,7 +25,8 @@ export default function RecordPicker(
     if (!b) return;
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
-      try { setHits(JSON.parse(await b.SearchRecords(query, activeFilter))); } catch { setHits([]); }
+      try { setHits(JSON.parse(await b.SearchRecords(query, activeFilter))); setError(''); }
+      catch (e) { setError(errorText(e)); setHits([]); }
     }, 250);
     return () => { if (timer.current) window.clearTimeout(timer.current); };
   }, [query, activeFilter]);
@@ -50,7 +53,7 @@ export default function RecordPicker(
         </div>
         <div className="rp-results">
           {hits === null ? <div className="rp-note">Searching…</div>
-            : hits.length === 0 ? <div className="rp-note">No matches.</div>
+            : hits.length === 0 ? <div className="rp-note">{error ? `Search failed: ${error}` : 'No matches.'}</div>
             : hits.map(h => (
               <div key={h.Plugin + h.FormKey} className="rp-row" onClick={() => onPick(h.FormKey)}>
                 <span className="rp-type">{h.Type}</span>

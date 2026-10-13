@@ -46,10 +46,11 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           .filter((name): name is string => typeof name === 'string' && name.length > 0);
         if (cancelled) return;
         setPlugins(names);
-      } catch {
+      } catch (e) {
         if (!cancelled && plugins.length === 0) {
           setPlugins([]);
         }
+        if (!cancelled) setError('Could not list plugins: ' + (e instanceof Error ? e.message : String(e)));
       }
     })();
     return () => { cancelled = true; };

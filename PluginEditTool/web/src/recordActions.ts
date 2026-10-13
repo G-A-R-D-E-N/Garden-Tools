@@ -1,9 +1,17 @@
+import type { KeyboardEvent } from 'react';
 import type { ConflictFieldRow, ConflictMatrix } from './backend';
 import { useDialogs } from './useDialogs';
 import type { CompareRow } from './PluginCompareDialog';
 import { errorText } from './errors';
 
 export const back = () => window.chrome?.webview?.hostObjects?.backend;
+
+export const f2Edit = (edit: () => void) => ({
+  tabIndex: -1,
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'F2' && e.target === e.currentTarget) { e.preventDefault(); edit(); }
+  },
+});
 
 export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus, onReload, onPluginsChanged }: {
   matrix: ConflictMatrix;
