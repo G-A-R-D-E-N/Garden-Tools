@@ -59,6 +59,7 @@ radicle_status radicle_env_check_errors(const radicle_env* env,
       row += finding.target.to_string();
       row += '\t';
       row += finding.message;
+      if (!finding.detail.empty()) row += " (" + finding.detail + ")";
       rows.push_back(std::move(row));
     }
     return copy_strings(rows, out_strings, out_count);

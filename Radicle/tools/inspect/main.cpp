@@ -276,6 +276,7 @@ void print_check(const std::vector<std::string>& paths) {
                                                                    : finding.subrecord.to_string())
               << ", \"offset\": " << finding.offset
               << ", \"target\": " << json_string(finding.target.to_string())
+              << ", \"detail\": " << json_string(finding.detail)
               << ", \"message\": " << json_string(finding.message) << "}";
     if (i + 1 != findings.size()) {
       std::cout << ",";
