@@ -710,7 +710,9 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 
 ## src/schema/scalar.cpp:scalar_descriptor
 
-Record-agnostic: it returns the first whole-payload scalar field with the given subrecord signature, whatever record that signature sits in. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`).
+Record-agnostic: it resolves a subrecord signature only when exactly one row of `include/fo4/schema/generated_scalar_fields.inc` names it and that row is a whole-payload, non-repeated, non-string field. Any other count returns nullopt, because a signature that two rows share may mean different fields, so the lookup does not choose between them. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`, `PluginEditTool/native/tests/unit/RadiclePluginScalarTests.cpp`); production code goes through `scalar_field_descriptor(record, path)`.
+
+The previous rule returned the first whole-payload row and skipped only embedded rows, so a whole-payload row on a shared signature leaked out. Eight signatures were affected: ANAM, DATA, FNAM, LVLD, LVLF, LVLM, NAM4 and VNAM. DATA started leaking when `FACT\Flags` (a whole-payload u32 on DATA, deliberately so a wrong width throws, see `Radicle/schema/fallout4/fields.json:FACT`) arrived with #551 (`cc0a36daa`), which failed `tests/test_scalar_embedded.cpp:ScalarEmbedded.SignatureOnlyLookupSkipsEmbeddedFields` on Linux and Windows. VNAM had always leaked `PROJ\SoundLevel` although `SCEN` VNAM is a 16-byte struct and `WTHR\VolatilityMult` sits in a 4-byte VNAM, so the old VNAM assertion in that test encoded the leak and now expects no match. XHLT and XSCL each have a single `REFR` row and still resolve. A whole-payload registration on a shared signature is therefore safe; registering a field as embedded is no longer needed to hide it from this lookup.
 
 ## Radicle/src/schema/form_link_mixed.cpp:fixed_stride_formid_offsets
 
@@ -1128,7 +1130,7 @@ source:xEdit PRKZ is a count path for PRKR (FO4:10393). The count is written wit
 
 ## Radicle/src/forms/npc.cpp:encode_inventory
 
-source:xEdit COCT is a count path for CNTO (FO4:3316). The count is written with the run, so removing the last item drops COCT with the run. COED is emitted only directly after its CNTO, matching its nesting at FO4:3300-3314.
+source:xEdit COCT is a count path for CNTO (xEdit 93cc0bc5 Core/wbDefinitionsFO4.pas:3315-3316). COCT is tolerated: decode returns the CNTO entries present without checking COCT, and edits rewrite COCT to the CNTO count. Fallout4.esm NPC_ 0x0003D62A is the example, with COCT=2 and one CNTO. Removing the last item drops COCT with the run. COED is emitted only directly after its CNTO, matching its nesting at FO4:3300-3314.
 
 ## Radicle/src/forms/npc.cpp:decode_npc_inventory
 
@@ -1140,7 +1142,7 @@ source:xEdit PRKZ is checked against the PRKR count when PRKZ is present (FO4:10
 
 ## Radicle/schema/fallout4/fields.json:NPC_
 
-source:xEdit NPC_ is FO4:10286-10489. Fixed structs (ACBS 20 bytes, DNAM 8, OBND 12, MWGT 12, MRSV 20, QNAM 16) carry payload_size, so a wrong-size payload hides its fields. AIDT uses minimum_payload_size 21 for AINoSlowApproach in place of xEdit's record-version gate (FO4:6229). Level and Level Mult are one raw field because the schema has no union; ACBS Flags bit 7 selects which one xEdit shows (Common:5437-5449). PRKZ, COCT, SPCT and CS2H are left out of the scalars because a generic write would desync them from their lists. Template flag names are in docs/NPCS.md, since the schema has no flags presentation.
+source:xEdit NPC_ is FO4:10286-10489. Fixed structs (ACBS 20 bytes, DNAM 8, OBND 12, MWGT 12, MRSV 20, QNAM 16) carry payload_size, so a wrong-size payload hides its fields. AIDT uses minimum_payload_size 21 for AINoSlowApproach in place of xEdit's record-version gate (FO4:6229). Level and Level Mult are one raw field because the schema has no union; ACBS Flags bit 7 selects which one xEdit shows (Common:5437-5449). PRKZ, COCT, SPCT and CS2H are left out of the scalars because a generic write would desync them from their lists. Configuration and template flag names are the `flags` names of `NPC_\ConfigurationFlags` and `NPC_\TemplateFlags` (see the `records[NPC_] — enum and flags names` note below).
 
 ## Radicle/include/fo4/forms/npc.hpp:NpcItemExtraData
 
@@ -1148,7 +1150,11 @@ source:xEdit global_or_rank is stored raw. xEdit reads it as a Global FormID or 
 
 ## Radicle/tests/test_npc_real.cpp:NpcReal
 
-Runs only when FO4_DATA_DIR is set. For every NPC_ in each official master it decodes each scalar that is present and the three lists. The COCT and PRKZ count checks are enforced by the decoders, so a mismatch fails here.
+Runs only when FO4_DATA_DIR is set. For every NPC_ in each official master it decodes each scalar that is present and the three lists. The PRKZ count check is enforced by the decoder, so a mismatch fails here. COCT is tolerated: Fallout4.esm NPC_ 0x0003D62A has COCT=2 with one CNTO, and decode returns the entries present.
+
+## Radicle/src/forms/npc.cpp:decode_npc_factions
+
+Measured 2026-10-13 on the official masters, not from memory: every NPC_ SNAM is a 5-byte payload (Fallout4.esm 6571 SNAM, DLCRobot.esm 371, DLCworkshop01.esm 84, DLCCoast.esm 773, DLCworkshop02.esm 2, DLCworkshop03.esm 93, DLCNukaWorld.esm 1193). CI job 22303 first failed on DLCRobot.esm NPC_ 0x002A9F, whose SNAM is 5 bytes. The 8-byte check was wrong. The NPC_ record holds one SNAM kind, the faction list, so the edit run is the whole SNAM group. Test: `tests/test_npc_lists.cpp:NpcLists.FactionEditsTouchOnlyTheSnamRun`.
 
 ## Radicle/include/fo4/forms/faction.hpp:FactionCombatReaction
 
@@ -1219,7 +1225,7 @@ FACT XNAM is a 12-byte relation with the faction form ID at offset 0. Modifier a
 
 ## Radicle/include/fo4/forms/leveled_list.hpp:LeveledListEntry
 
-Layout from xEdit `Core/wbDefinitionsCommon.pas:8791-8802` (`wbLeveledListEntry`, FO4 branch through `IsFO4Plus`): level u16 at 0, two bytes at 2-3, item FormID at 4, count u16 at 8, chance none u8 at 10, one byte at 11. The two byte pairs are kept as read. TODO-verify: a one-off byte check of the shipped `Fallout4.esm` on 2026-10-12 (scratch script, not a repo test) found non-zero values in those bytes and no LVLO other than 12 bytes; `LeveledListReal` is the repo check and has not run yet.
+Layout from xEdit `Core/wbDefinitionsCommon.pas:8791-8802` (`wbLeveledListEntry`, FO4 branch through `IsFO4Plus`): level u16 at 0, two bytes at 2-3, item form ID at 4, count u16 at 8, chance none u8 at 10, one byte at 11. The two byte pairs are kept as read. TODO-verify: a one-off byte check of the shipped `Fallout4.esm` on 2026-10-12 (scratch script, not a repo test) found non-zero values in those bytes and no LVLO other than 12 bytes; `LeveledListReal` is the repo check; it runs in the `native-windows-real-data` job, and no pass is recorded in these notes.
 
 ## Radicle/include/fo4/forms/leveled_list.hpp:LeveledListExtraData
 
@@ -1307,9 +1313,9 @@ Refuses an undecodable source reference, source parent CELL, or source parent WR
 
 Refuses an undecodable source INFO and an undecodable source parent DIAL (its QNAM is read by the copy) right after containment resolves, before `reserve_local_form_key`. Same ordering cause and test as `placed_reference_copy.cpp:copy_placed_reference_as_new`: `tests/test_undecodable_edit.cpp:UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource`.
 
-## Radicle/tests/test_sound_real.cpp:DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes
+## Radicle/tests/test_sound_real.cpp:DecodesEverySoundRecordThroughNativeAndAbiAndPreservesSubrecords
 
-GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The source bytes are taken before the clear, and the span stays valid because the copy keeps the shared `original_data` buffer. The record-range clear skips TES4: the official masters store HEDR counts that differ from the recomputed count (see `docs/HEDR_RECORD_COUNT.md`), so a TES4 rebuild would change their bytes. HEDR rebuild is covered by `tests/test_hedr_count.cpp`.
+GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The rewritten file is not compared byte for byte. Compressed records re-encode at zlib level 6 (`Radicle/src/plugin/writer.cpp:zlib_compress`, default `compress()`), while the official masters were compressed at levels 7 to 9 per record (FLEVEL 3 throughout; first 400 compressed records of DLCRobot.esm: 331 match level 7, 63 level 8, 6 level 9; Fallout4.esm: 268 level 7, 132 level 8), so no single level reproduces them. Re-encoding every compressed Fallout4.esm record at level 6 adds exactly 378074 bytes, the whole gap the CI reported (331154650 against 330776576). Only compressed bytes change; the data does not. The test therefore compares every record except TES4 (header flags, form version, compressed flag, and each subrecord's signature, extended size and data) against the source record. The record-range clear skips TES4: the official masters store HEDR counts that differ from the recomputed count (see `docs/HEDR_RECORD_COUNT.md`), so a TES4 rebuild would change their bytes. HEDR rebuild is covered by `tests/test_hedr_count.cpp`.
 
 ## Radicle/src/schema/form_links.cpp:remap_record_form_links — single-record refusal (GT-232)
 
@@ -1334,3 +1340,96 @@ A non-persistent CELL in an exterior sub-block that is undecodable throws `CellE
 ## Radicle/src/plugin/reader.cpp:read_record — GT-236 coverage
 
 Tests added in `tests/test_compression.cpp`: `Compression.ShortInflatedOutputLoadsAtProducedLength` pins the D6 behavior (a stream that inflates short loads at the produced length, not undecodable), and `Compression.PayloadUnderFourBytesFailsThePluginRead` pins the strict framing check, which throws `fo4::parse_error` outside the compressed-record `try`. Tests added in `tests/test_undecodable_edit.cpp`: `UndecodableEdit.FindIdenticalToMasterSkipsWhenMasterRecordIsUndecodable` covers the previous-record screen in `src/plugin/maintenance.cpp:identical_previous`; `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableParentCell` cover the guards in `src/forms/placed_reference_copy.cpp:copy_placed_reference_as_new`; `UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyInfoAsNewRefusesUndecodableDestinationDial` cover the guards in `src/forms/info_copy.cpp:copy_info_as_new`.
+
+## Radicle/tools/parity_matrix.py:render
+
+`render` builds the per-signature table, the field-kind table and the opaque list that `docs/FO4_PARITY.md` carries between the parity-matrix markers. Inputs: `schema/fallout4/xedit_signatures.txt` (signature set and xEdit registration line), `schema/fallout4/fields.json` (scalar and string rows, FormLink fields, FormLink lists, authoring, keyword lists, localized subrecords), the `TYPED_MODULES` map (each cited file must name the signature, checked by `typed_modules`), the record signatures named in `src/schema/form_link_mixed.cpp` (`mixed_record_signatures`; subrecord-only handlers such as `obts_formid_offsets` and `behavior_formid_offsets`, and the record-specific checks in `src/schema/form_links.cpp`, are not attributed), and the registered `tests/*_real.cpp` files listed in `CMakeLists.txt` that name the signature in quotes (`real_test_sources`). Tier rule in `tier_of`: L4 has rows, FormLink fields or authoring; L2 has a typed module; L3 has FormLink lists only; L1 has a keyword list only; L0 has none. The dedicated PET route (old L5) is not derived. `main --check` compares the block with the doc and exits 1 when it is stale; `main --write` replaces it. The semantic letters stay hand-kept in `docs/FO4_PARITY.md` (Record semantic status).
+
+## Radicle/tools/parity_matrix.py:load_signatures — xedit_signatures.txt pin and method
+
+Pin: TES5Edit `93cc0bc5a1251936c3c7859eee3150eda12a62d7`, `Core/wbDefinitionsFO4.pas`, SHA-256 `f0bacc90a7dbd62bf90ff570d1974932bd4b99488bd0da9bbcf4e01abdfb9c5e` with LF line endings (same hash as `docs/FO4_PARITY.md`). Method: strip Pascal `{...}`, `(* ... *)` and `//` comments while keeping string literals and line count, then take the bare four-character identifier that is the first argument of `wbRecord(`, `wbRefRecord(` or `ReferenceRecord(`. The first registration line is kept per signature. The result is 147 unique signatures; names that occur only in commented-out definitions (for example `WOOP`, `SCPT`, `TLOD`) are excluded. The lines match the xEdit line numbers cited in `docs/FO4_PARITY.md`.
+
+## Radicle/tools/schema_codegen.py:parse_names
+
+A scalar row declares names through its existing `presentation` key: `"presentation": "enum"` with `"names": [{ "value": N, "name": "..." }]`, or `"presentation": "flags"` with `"names": [{ "bit": N, "name": "..." }]`. `NAME_KEYS` maps each presentation to its entry key, and `parse_names` returns `{value, name}` entries for the generator; a flags entry becomes the mask `1 << bit`, so one lookup serves both presentations. Names are a list of entries rather than a JSON object because `json.loads` drops a repeated key without complaint, and the generator has to be able to reject a repeated value. Rules, each covered in `tools/test_field_address_codegen.py:SchemaCodegenTests`: only integer storage may carry names, and flags also need unsigned storage so a mask is never negative (`test_names_need_an_integer_enum_or_flags_row`, which also refuses `names` on `identity`, `percent_0_100` and string rows); an entry has exactly its key and `name`, the key is an integer (not a bool or a float) and the name is non-empty printable ASCII (`test_names_entries_are_checked`); names are unique, and so are values or bits (`test_names_reject_duplicates`); a flag bit is below 8 times the storage width, an enum value fits the storage, and the resulting value or mask lies inside the row's `minimum` and `maximum`, so no name stands for a value the writer would reject (`test_names_reject_values_outside_the_field`). The names are display metadata. They do not narrow the write bounds, a stored value with no name stays readable, and a table need not cover every storable value (the boolean rows are 0 to 255 with two names).
+
+## Radicle/tools/schema_codegen.py:render
+
+`render` emits one `constexpr ScalarName k_scalar_names_N[]` per distinct table, numbered in first-use order over the rows sorted by record and path, and then declares `k_scalar_fields` itself. `names_key` is the sharing key, so the two `SoundLevel` rows use one array and the seven boolean rows another. Before this change the generated file held only the row initializers and `src/schema/scalar.cpp` declared the array around its `#include`. The tables must precede the array that points at them, so the declaration moved into the generated file and `scalar.cpp` includes it at namespace scope. The five CMake `--check` commands and their arguments are unchanged, and the other four generated files are byte-identical. A row without names renders as before, with the trailing `minimum_payload_size` argument only when it is non-zero. A row with names always writes `minimum_payload_size` (0 when unset) because `names` follows it positionally. `CPP_PRESENTATIONS` writes the JSON presentation `enum` as `ScalarPresentation::enumeration`, since `enum` is a C++ keyword. Tests: `tools/test_field_address_codegen.py:SchemaCodegenTests.test_flags_names_become_single_bit_masks`, `test_enum_names_keep_their_values`, `test_identical_name_tables_are_emitted_once` and `test_rows_without_names_render_as_before`.
+
+## Radicle/tools/schema_codegen.py:names_key
+
+The sharing key of a name table: the tuple of `(value, name)` pairs in row order. Two rows share one `k_scalar_names_N` array only when their pairs match exactly, order included, whatever their presentation. `render` keys a dict by it, so the array numbers follow first use. Test: `tools/test_field_address_codegen.py:SchemaCodegenTests.test_identical_name_tables_are_emitted_once`.
+
+## Radicle/tools/schema_codegen.py:NAME_KEYS
+
+`PRESENTATIONS` is the accepted set. `NAME_KEYS` maps `enum` to the entry key `value` and `flags` to the entry key `bit`; a presentation with no entry there takes no names, which is how `parse_names` refuses `names` on `identity` and `percent_0_100`. `CPP_PRESENTATIONS` maps a JSON presentation to its C++ enumerator where the spelling differs (`enum` to `enumeration`). String rows list `names` in `STRING_FORBIDDEN`, so `load_fields` rejects them there.
+
+## Radicle/src/schema/scalar.cpp:k_scalar_fields
+
+`k_scalar_fields` and the `k_scalar_names_N` tables now come from one `#include "fo4/schema/generated_scalar_fields.inc"` at namespace scope inside the anonymous namespace. The include used to sit inside a braced array initializer, which cannot hold the tables (see the `render` note above).
+
+## Radicle/include/fo4/schema/scalar.hpp:ScalarName
+
+One entry of a name table. `value` is the stored integer for an `enumeration` row and the single-bit mask for a `flags` row; `int64_t` holds every u32 mask and every i32 enum value. The tables are the generated `k_scalar_names_N` arrays in `src/schema/scalar.cpp`, which have static storage, so a copied `ScalarDescriptor` stays valid for the life of the process.
+
+## Radicle/include/fo4/schema/scalar.hpp:ScalarPresentation
+
+`enumeration` and `flags` follow `identity` and `percent_0_100`. Nothing switches on this enum: encode, decode, the range checks and the field writer read `storage`, `minimum` and `maximum` only, so an enum or flags row is read and written exactly like an `identity` row of the same storage. A caller that shows names reads `ScalarDescriptor::names`.
+
+## Radicle/include/fo4/schema/scalar.hpp:ScalarDescriptor
+
+`names` is the last member and defaults to an empty span, so the aggregate initializers that already exist keep compiling without it: generated rows without names, `tests/test_field_writer.cpp:scalar_field` and `src/plugin/scene_writer.cpp:descriptor_for`. It is empty for every `identity` and `percent_0_100` row; `tests/test_scalar.cpp:ScalarSchema.OnlyEnumAndFlagsRowsCarryNames` checks that for FACT, NPC_, WEAP and REFR.
+
+## Radicle/src/schema/scalar.cpp:scalar_value_name
+
+Linear search of `ScalarDescriptor::names` for the entry whose `value` equals the argument, `std::nullopt` when there is none or the row has no names. For a flags row the match is an exact single-bit mask, so a multi-bit raw value has no name; a caller that wants every set flag walks `names` and tests `raw & value` itself. Tests: `tests/test_scalar.cpp:ScalarSchema.EnumRowExposesItsXEditNames` and `ScalarSchema.FlagsRowExposesOneMaskPerNamedBit`.
+
+## Radicle/src/schema/scalar.cpp:scalar_name_value
+
+The reverse of `scalar_value_name`: an exact, case-sensitive name match that returns the enum value or the flag mask, `std::nullopt` otherwise. Neither lookup throws. Tests as for `scalar_value_name`.
+
+## Radicle/schema/fallout4/fields.json:records[FACT] — enum and flags names
+
+Every name and value in the enum and flags tables comes from xEdit at pin 93cc0bc5 (`Core/wbDefinitionsFO4.pas`, `Core/wbDefinitionsCommon.pas`, `Core/wbInterface.pas`). `wbFlags([...])` takes the list position as the bit (`TwbFlagsDef.Create`, Core/wbInterface.pas:14421-14422) and `wbEnum([...])` takes it as the value (`TwbEnumDef.Create`, Core/wbInterface.pas:15020-15024). An empty string is an unnamed slot and is left out of the tables. The `{0x...}` and `{n}` comments in the source agree with the list position at every entry used here. Placeholder names such as `Unknown 3` and `Unused 21` are ordinary xEdit names and are kept. The `names` do not change any row's bounds.
+
+- `FACT\Flags` (`flags`, u32, bits 0 to 16): Core/wbDefinitionsFO4.pas:6790-6808, names at 6791-6807.
+- `FACT\CrimeArrest` (FO4:6818), `FACT\CrimeAttackOnSight` (6819), `FACT\VendorBuysStolenItems` (6838), `FACT\VendorSellsEverythingNotInList` (6839) and `FACT\VendorBuysNonStolenItems` (6840): `enum` with `wbBoolEnum`, Core/wbDefinitionsCommon.pas:7240-7247 (0 `False`, 1 `True`).
+
+## Radicle/schema/fallout4/fields.json:records[NPC_] — enum and flags names
+
+Same xEdit rules as the `records[FACT]` note above.
+
+- `NPC_\ConfigurationFlags` (`flags`, u32 at ACBS +0, bits 0 to 31): Core/wbDefinitionsFO4.pas:10299-10332, names at 10300-10331.
+- `NPC_\TemplateFlags` (`flags`, u16 at ACBS +14, bits 0 to 12): FO4:10342 uses `wbTemplateFlags`, Core/wbDefinitionsCommon.pas:8155-8178 (list at 8159-8177). For FO4, `IsFO3`, `IsFO76` and `IsSF1` return their second argument (Common:6173-6178, 6285-6290 and 6320-6325), so bit 3 is `Spell List`, bits 10 to 12 are `Def Pack List`, `Attack Data` and `Keywords`, and bits 13 to 15 are empty and have no entry.
+- AIDT, all `enum` on u8: `NPC_\AIAggression` FO4:6216 with `wbAggressionEnum` Common:6973-6982; `NPC_\AIConfidence` 6217 with `wbConfidenceEnum` Common:7249-7259; `NPC_\AIMorality` 6219 with `wbMoralityEnum` Common:7691-7700; `NPC_\AIMood` 6220 with `wbMoodEnum` Common:7676-7689 (its `IsFO3` pairs resolve to the second name, `Angry` through `Disgusted`); `NPC_\AIAssistance` 6221 with `wbAssistanceEnum` Common:7023-7031; `NPC_\AIAggroRadiusBehavior` 6223 and `NPC_\AINoSlowApproach` 6229 with `wbBoolEnum` Common:7240-7247.
+- `NPC_\SoundLevel` (`enum`, u32, NAM8): FO4:10431 with `wbSoundLevelEnum`, FO4:3424-3430.
+
+## Radicle/schema/fallout4/fields.json:records[WEAP] — enum and flags names
+
+Same xEdit rules as the `records[FACT]` note above.
+
+- `WEAP\Flags` (`flags`, u32 at DNAM +48, bits 0 to 31): Core/wbDefinitionsFO4.pas:12924-12957, names at 12925-12956.
+- `WEAP\ModelFlags` (MODF, u8) and `WEAP\FirstPersonModelFlags` (MO4F, u8): `wbMODF` (FO4:4260, listed at 1038 in `wbGenericModel`, 1030-1045) and `wbMO4F` (4263, listed at 12909) both use `wbModelFlags`, FO4:4256-4259: bit 0 `Has FaceBones Model`, bit 1 `Has 1stPerson Model`.
+- `enum`: `WEAP\OnHit` (u32 at DNAM +36) FO4:12921 with `wbHitBehaviourEnum` 3677-3682; `WEAP\AnimationType` (u8 at +54) 12959-12972; `WEAP\SoundLevel` (u32 at +69) 12977 with `wbSoundLevelEnum` 3424-3430; `WEAP\Stagger` (u32 at +124) 12992 with `wbStaggerEnum` 5106-5112; `WEAP\Pattern` (u32 at FNAM +33) 13005-13010; `WEAP\MeleeSpeed` (u32, MASE) 13025-13031. The rows' existing bounds are exactly these enum ranges, so every name lies inside them.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.EnumRowExposesItsXEditNames
+
+`WEAP\Stagger` (FO4:12992, 5106-5112) exposes its five names in value order, and `scalar_value_name` and `scalar_name_value` map both ways. A value outside the table and a name in the wrong case have no match.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.FlagsRowExposesOneMaskPerNamedBit
+
+`FACT\Flags` (FO4:6790-6808) exposes 17 names whose values are the masks `1 << bit`. A single-bit mask maps to its name and back; a two-bit value and an unnamed bit have no name.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.EmbeddedFlagsRowKeepsItsRawU16Encoding
+
+`NPC_\TemplateFlags` is a flags row embedded at ACBS +14 with 13 names. `decode_scalar` and `encode_scalar` still treat it as a plain u16 (bytes `01 10` are "4097" and back), which is the check that a named row keeps the existing read and write behavior.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.OnlyEnumAndFlagsRowsCarryNames
+
+For every row of FACT, NPC_, WEAP and REFR, `names` is non-empty exactly when the presentation is `enumeration` or `flags`.
+## tests/test_environment_strings.cpp:StringsEnvironmentTest::write
+
+`StringsEnvironmentTest.RejectsMalformedTablesAndLanguages` failed once on the Windows MSVC job of the nomad/dev run at `9c1b3ae6` (job 22302): `Environment::load` threw "failed to load ...\radicle_strings_<n>\Base.esm: plugin parse error at 0x0: unable to open ..." for the first plugin the fixture had just written. The same test passed in the earlier Windows jobs 22085, 22121, 22247 and 22275, and its five sibling `StringsEnvironmentTest` processes passed beside it in the same job. Nothing on that path changed recently: the open in `src/plugin/reader.cpp:read_plugin_file` and `src/environment/environment.cpp:Environment::load` date from 2026-08-20 to 2026-09-30, and the test file from 2026-09-28. Names cannot collide, since ctest runs each test in its own process and the directory name is a steady clock count in 100 ns ticks. No product or fixture defect explains the failure, so the cause is unproven; it looks like a transient file-system error on the runner, whose default TEMP sits under its reparse-point home.
+
+The fixture's `write` did not check its stream, so a failed write would have surfaced only as that "unable to open" at load. It now closes the stream and throws "cannot write <path>" on any stream failure. A recurrence then names the stage: a SetUp failure means the write failed, and the original message means the file existed but could not be opened.

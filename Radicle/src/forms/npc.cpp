@@ -211,7 +211,7 @@ std::vector<Subrecord> encode_factions(const std::vector<NpcFaction>& entries,
                                        const PluginFormIdContext& context) {
   std::vector<Subrecord> encoded;
   for (const auto& entry : entries) {
-    auto subrecord = make_subrecord(k_snam, 8);
+    auto subrecord = make_subrecord(k_snam, 5);
     write_at(subrecord.data, 0, encode_non_null(entry.faction, context, "SNAM faction"));
     write_at(subrecord.data, 4, entry.rank);
     encoded.push_back(std::move(subrecord));
@@ -284,7 +284,7 @@ std::vector<NpcFaction> decode_npc_factions(const Plugin& plugin, const FormKey&
   std::vector<NpcFaction> result;
   for (const auto& subrecord : record.subrecords) {
     if (subrecord.signature != k_snam) continue;
-    require_size(subrecord, 8);
+    require_size(subrecord, 5);
     NpcFaction entry;
     entry.faction = resolve_non_null(read_at<std::uint32_t>(subrecord.data, 0), context, "SNAM faction");
     entry.rank = read_at<std::int8_t>(subrecord.data, 4);
@@ -386,7 +386,6 @@ std::vector<NpcInventoryItem> decode_npc_inventory(const Plugin& plugin, const F
       result.back().extra_data = extra;
     }
   }
-  check_declared_count(declared, result.size(), "COCT", "CNTO");
   return result;
 }
 

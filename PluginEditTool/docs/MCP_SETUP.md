@@ -5,7 +5,7 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **35 tools**: 15 for plugins and records, 4 for MO2 profile and host state, 5 for
+It advertises **43 tools**: 15 for plugins and records, 8 for typed records, 4 for MO2 profile and host state, 5 for
 Papyrus, 4 for NIFs, 2 for materials, 4 for audio and 1 for BA2 archives.
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
@@ -136,6 +136,21 @@ that does not fit is rejected with `InvalidRecordCreationPayload`, and the messa
 Any other signature is refused (`RecordCreationRequiresSchema`) unless the payload contains
 `"schema": true`. The record is then built from the schema's defaults, with an optional `editorId`, and
 only for record types the schema layer can create on its own (`RecordNotAuthorable`, `RecordNoDefault`).
+
+### Typed records
+
+These read the winning version of a leveled list, NPC_, FACT or WEAP record and edit one plugin's version in memory. An edit needs `plugin` to already hold the record; call `save_plugin` to persist. `op` is `add`, `set` or `remove`. A refused edit leaves the plugin unchanged.
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `get_leveled_list` | `form_key` | no | An LVLI, LVLN or LVSP record's chance none, max count, flags, use global and entries. |
+| `set_leveled_list_settings` | `plugin`, `form_key`, `chance_none`, `max_count`, `flags` | memory | Sets the chance none, max count and flags bytes (0-255). |
+| `edit_leveled_list_entry` | `plugin`, `form_key`, `op`, `index`, [`value`] | memory | Adds (inserted at `index`), sets or removes one entry. `value` is `{level, item, count, chanceNone, extra}` and is required for `add` and `set`; `set` keeps the entry's reserved bytes. |
+| `get_npc` | `form_key` | no | An NPC_ record's factions, perks and inventory. |
+| `edit_npc_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one entry; `list` is `factions`, `perks` or `inventory`. `index` is required for `set` and `remove`, `value` for `add` and `set`. |
+| `get_faction` | `form_key` | no | A FACT record's relations and ranks. A localized rank title reads as `{"stringId": n}`. |
+| `edit_faction_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one relation or rank; `list` is `relations` or `ranks`. |
+| `get_weapon_damage_types` | `form_key` | no | A WEAP record's damage types (read-only). |
 
 ### Profile and host state
 

@@ -20,7 +20,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/Blueprint/BlueprintPanel.tsx', 'src/CellPanel.tsx', 'src/ConditionsEditor.tsx'],
+    files: ['src/CellPanel.tsx'],
     rules: {
       'no-empty': ['error', { allowEmptyCatch: true }],
     },

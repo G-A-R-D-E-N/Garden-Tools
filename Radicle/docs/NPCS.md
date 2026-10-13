@@ -6,7 +6,7 @@ The schema lives in `schema/fallout4/fields.json` (`NPC_` entry). Scalars are ge
 
 ## Scalar fields
 
-Every scalar uses `identity` presentation and `existing_only` insertion. A fixed struct with a `payload_size` is read only when the subrecord has exactly that many bytes; a shorter payload reports the field as absent.
+Every scalar uses `existing_only` insertion. The presentation is `identity` except on rows that carry xEdit names: `ConfigurationFlags` and `TemplateFlags` use `flags`, and `AIAggression`, `AIConfidence`, `AIMorality`, `AIMood`, `AIAssistance`, `AIAggroRadiusBehavior`, `AINoSlowApproach` and `SoundLevel` use `enum` (`wbAggressionEnum` Common:6973-6982, `wbAssistanceEnum` 7023-7031, `wbConfidenceEnum` 7249-7259, `wbMoodEnum` 7676-7689, `wbMoralityEnum` 7691-7700, `wbBoolEnum` 7240-7247, `wbSoundLevelEnum` FO4:3424-3430). Bounds are unchanged, so the names do not restrict what is written. A fixed struct with a `payload_size` is read only when the subrecord has exactly that many bytes; a shorter payload reports the field as absent.
 
 | Path | Subrecord | Offset | Storage | Payload | xEdit |
 | --- | --- | --- | --- | --- | --- |
@@ -66,17 +66,17 @@ From `wbTemplateFlags` (Common:8155-8178), FO4 names:
 | 5 | AI Packages | 12 | Keywords |
 | 6 | Model/Animation | 13-15 | unnamed in FO4 |
 
-The schema has only `identity` and `percent_0_100` presentations, so the bit names are not in `fields.json`. The field is read and written as a raw `u16`.
+`NPC_\TemplateFlags` has the `flags` presentation with these thirteen names; bits 13 to 15 are unnamed in FO4, so the table has no entry for them. The field is still read and written as a raw `u16`.
 
 ### Configuration flags (ACBS offset 0)
 
-Names from FO4:10300-10331. Bit 0 `Female`, 1 `Essential`, 2 `Is CharGen Face Preset`, 3 `Respawn`, 4 `Auto-calc stats`, 5 `Unique`, 6 `Doesn't affect stealth meter`, 7 `PC Level Mult`, 8 `Has Base Sound Data`, 9 `Calc For Each Template`, 10 `Use Attack Percentage`, 11 `Protected`, 12 `No Loot`, 13 `No Rumors`, 14 `Summonable`, 15 `Disable Non-Combat Regen`, 16 `Doesn't bleed`, 17 `Very Simple Actor`, 18 `Has Bleedout Override`, 19 `Swap Gender Anims`, 20 `Simple Actor`, 21-22 unused, 23 `No Activation/Hellos`, 24 `Diffuse Alpha Test`, 25 `Disable Combat`, 26 `Spawns Dead`, 27 `Player Protected`, 28 `Do Not Use Load Doors`, 29 `Is Ghost`, 30 `No Bleedout Recovery`, 31 `Invulnerable`.
+`NPC_\ConfigurationFlags` has the `flags` presentation with all 32 names from FO4:10300-10331. Bit 0 `Female`, 1 `Essential`, 2 `Is CharGen Face Preset`, 3 `Respawn`, 4 `Auto-calc stats`, 5 `Unique`, 6 `Doesn't affect stealth meter`, 7 `PC Level Mult`, 8 `Has Base Sound Data`, 9 `Calc For Each Template`, 10 `Use Attack Percentage`, 11 `Protected`, 12 `No Loot`, 13 `No Rumors`, 14 `Summonable`, 15 `Disable Non-Combat Regen`, 16 `Doesn't bleed`, 17 `Very Simple Actor`, 18 `Has Bleedout Override`, 19 `Swap Gender Anims`, 20 `Simple Actor`, 21 `Unused 21`, 22 `Unused 22`, 23 `No Activation/Hellos`, 24 `Diffuse Alpha Test`, 25 `Disable Combat`, 26 `Spawns Dead`, 27 `Player Protected`, 28 `Do Not Use Load Doors`, 29 `Is Ghost`, 30 `No Bleedout Recovery`, 31 `Invulnerable`.
 
 ## Typed lists
 
 | Subrecord | Entry | Layout | xEdit |
 | --- | --- | --- | --- |
-| SNAM | Faction FormID + Rank | 8 bytes: FormID u32, Rank s8, 3 unused | wbFaction, Common:8527-8538; list at FO4:10347 |
+| SNAM | Faction form ID + Rank | 5 bytes: form ID u32, Rank s8 | wbFaction, Common:8527-8538 (FO4 drops the 3 unused bytes: IsFO4Plus(nil, wbUnused(3))); list at FO4:10347 |
 | PRKZ | Count | u32 | FO4:10384 |
 | PRKR | Perk FormID + Rank | 5 bytes: FormID u32, Rank u8 | FO4:10385-10393 (`SetCountPath(PRKZ)`) |
 | COCT | Count | u32 | FO4:10397; wbCOCT FO4:3315 |
@@ -88,7 +88,7 @@ Decode rules:
 - Each list is read in subrecord order.
 - A payload of the wrong size throws `NpcError`.
 - A null FormID throws, except COED owner, which decodes to no owner. xEdit's `wbFormIDCk` for SNAM ([FACT]), PRKR ([PERK]) and CNTO (`sigBaseObjects`, NULL excluded) does not allow null; COED owner allows NULL (FO4:3291).
-- PRKZ and COCT must equal the number of PRKR and CNTO entries when present, or decode throws. xEdit uses them as count paths (FO4:10393, FO4:3316).
+- PRKZ must equal the number of PRKR entries when present, or decode throws. xEdit uses it as the count path (FO4:10393). COCT is not checked: decode returns the CNTO entries present, and edits rewrite COCT to the CNTO count (xEdit 93cc0bc5 Core/wbDefinitionsFO4.pas:3315-3316, COCT cpBenign, count path of the CNTO array).
 - COED must immediately follow its CNTO. xEdit nests COED inside the CNTO group (FO4:3300-3314).
 
 COED's third field is `global_or_rank`, stored raw. xEdit reads it as a Global FormID or as a required rank s32 depending on the owner: `wbCOEDOwnerDecider` (Common:5451-5469) selects rank for NPC_ or FACT owners. Radicle keeps the raw `u32`.
@@ -97,9 +97,8 @@ Edit rules:
 
 - Add, remove at index, and set at index for each list. Remove and set on an out-of-range index throw. Add, remove and set return `false` when the stored bytes would not change.
 - The list's own subrecords are replaced as one run. A run with other subrecords between its entries is refused.
-- The count subrecord is always written with the run, so removing the last entry leaves PRKZ or COCT at 0.
+- Removing the last entry drops PRKZ or COCT with the run.
 - A missing run is inserted after the last subrecord that xEdit orders before it. The order is `k_order` in `src/forms/npc.cpp`. A record with no earlier subrecord (no ACBS) is refused.
-- SNAM's three unused bytes are written as zero, so an edit to an existing SNAM does not keep nonzero unused bytes.
 
 ## Not covered
 

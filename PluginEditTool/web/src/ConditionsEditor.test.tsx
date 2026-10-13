@@ -99,3 +99,29 @@ it('locks the function select on preserved rows only', async () => {
   expect(selects[0].title).toBe('Replace the row to change its function');
   expect(selects[1].disabled).toBe(false);
 });
+
+it('shows an error instead of swallowing a failed record name lookup', async () => {
+  const row = { function: 'GetScale', operator: '==', value: 1, runOn: 'Reference', reference: '000803:Patch.esp' };
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
+    GetConditionsAt: vi.fn(async () => JSON.stringify([row])),
+    GetConditionFunctions: vi.fn(async () => '["GetScale"]'),
+    GetConditionRunOnTypes: vi.fn(async () => '["Subject","Reference"]'),
+    GetConditionFunctionParams: vi.fn(async () => '{}'),
+    ResolveFormKeyLabels: vi.fn(async () => { throw new Error('lookup offline'); }),
+  } } } });
+  render(<ConditionsEditor plugin="Patch.esp" record="000800:Patch.esp"
+    path="Conditions" label="Test" onClose={() => {}} onSaved={() => {}} />);
+  expect(await screen.findByText('Could not resolve record names: lookup offline')).toBeTruthy();
+});
+
+it('shows an error instead of swallowing a failed function list read', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
+    GetConditionsAt: vi.fn(async () => '[]'),
+    GetConditionFunctions: vi.fn(async () => { throw new Error('functions offline'); }),
+    GetConditionRunOnTypes: vi.fn(async () => '["Subject"]'),
+    GetConditionFunctionParams: vi.fn(async () => '{}'),
+  } } } });
+  render(<ConditionsEditor plugin="Patch.esp" record="000800:Patch.esp"
+    path="Conditions" label="Test" onClose={() => {}} onSaved={() => {}} />);
+  expect(await screen.findByText('Could not read condition functions: functions offline')).toBeTruthy();
+});

@@ -98,9 +98,6 @@ Bytes snam(std::uint32_t form_id, std::uint8_t rank) {
   fo4::test::ByteWriter out;
   out.u32(form_id);
   out.u8(rank);
-  out.u8(0);
-  out.u8(0);
-  out.u8(0);
   return out.bytes;
 }
 
@@ -198,6 +195,15 @@ std::size_t count_of(const fo4::Record& record, std::string_view signature) {
     if (subrecord.signature == wanted) ++count;
   }
   return count;
+}
+
+std::vector<Entry> subrecords_except(const fo4::Record& record, std::string_view signature) {
+  std::vector<Entry> result;
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature.to_string() == signature) continue;
+    result.emplace_back(subrecord.signature.to_string(), subrecord.data);
+  }
+  return result;
 }
 
 std::uint32_t u32_of(const fo4::Record& record, std::string_view signature) {
@@ -324,6 +330,23 @@ TEST(NpcLists, AddRemoveAndSetFactionsRoundTripInOrder) {
   EXPECT_EQ(count_of(npc(reread(plugin)), "SNAM"), 2u);
 }
 
+TEST(NpcLists, FactionEditsTouchOnlyTheSnamRun) {
+  auto plugin = fo4::read_plugin(build(base()), "Patch.esp");
+  const auto before = subrecords_except(npc(plugin), "SNAM");
+  ASSERT_TRUE(fo4::forms::add_npc_faction(plugin, key(), {fo4::FormKey::parse("000777:Fallout4.esm"), 4}));
+  ASSERT_TRUE(fo4::forms::set_npc_faction(plugin, key(), 0, {fo4::FormKey::parse("000123:Fallout4.esm"), 9}));
+  ASSERT_TRUE(fo4::forms::remove_npc_faction(plugin, key(), 1));
+  EXPECT_EQ(subrecords_except(npc(reread(plugin)), "SNAM"), before);
+  EXPECT_EQ(count_of(npc(reread(plugin)), "SNAM"), 2u);
+}
+
+TEST(NpcLists, EightByteFactionSnamIsRefused) {
+  const auto legacy = replaced(3, {"SNAM", Bytes(8, std::byte{0x11})});
+  auto plugin = read_npc(legacy);
+  EXPECT_THROW(fo4::forms::decode_npc_factions(plugin, key()), NpcError);
+  EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), {fo4::FormKey::parse("000777:Fallout4.esm"), 1}), NpcError);
+}
+
 TEST(NpcLists, InsertsMissingFactionRunAfterAcbs) {
   std::vector<Entry> entries;
   for (const auto& entry : base()) {
@@ -410,7 +433,6 @@ TEST(NpcLists, FailsClosedOnMalformedSizesCountsAndNulls) {
   const auto short_prkr = replaced(6, {"PRKR", Bytes(4, std::byte{0x22})});
   const auto short_cnto = replaced(9, {"CNTO", Bytes(7, std::byte{0x33})});
   const auto long_coed = replaced(10, {"COED", Bytes(11, std::byte{0x44})});
-  const auto wrong_coct = replaced(8, {"COCT", u32_value(3)});
   const auto wrong_prkz = replaced(5, {"PRKZ", u32_value(1)});
   const auto null_faction = replaced(3, {"SNAM", snam(0, 1)});
   const auto null_perk = replaced(6, {"PRKR", prkr(0, 1)});
@@ -420,7 +442,6 @@ TEST(NpcLists, FailsClosedOnMalformedSizesCountsAndNulls) {
   EXPECT_THROW(fo4::forms::decode_npc_perks(read_npc(short_prkr), key()), NpcError);
   EXPECT_THROW(fo4::forms::decode_npc_inventory(read_npc(short_cnto), key()), NpcError);
   EXPECT_THROW(fo4::forms::decode_npc_inventory(read_npc(long_coed), key()), NpcError);
-  EXPECT_THROW(fo4::forms::decode_npc_inventory(read_npc(wrong_coct), key()), NpcError);
   EXPECT_THROW(fo4::forms::decode_npc_perks(read_npc(wrong_prkz), key()), NpcError);
   EXPECT_THROW(fo4::forms::decode_npc_factions(read_npc(null_faction), key()), NpcError);
   EXPECT_THROW(fo4::forms::decode_npc_perks(read_npc(null_perk), key()), NpcError);
@@ -432,6 +453,21 @@ TEST(NpcLists, FailsClosedOnMalformedSizesCountsAndNulls) {
 
   auto plugin = read_npc(short_snam);
   EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), {fo4::FormKey::parse("000777:Fallout4.esm"), 1}), NpcError);
+}
+
+TEST(NpcLists, CoctMismatchIsTolerantAndEditsRewriteTheCount) {
+  const auto wrong_coct = replaced(8, {"COCT", u32_value(3)});
+  auto plugin = read_npc(wrong_coct);
+  const auto items = fo4::forms::decode_npc_inventory(plugin, key());
+  ASSERT_EQ(items.size(), 2u);
+  EXPECT_EQ(items[0].count, 5);
+  EXPECT_EQ(items[1].count, -1);
+
+  auto item = items[0];
+  item.count = 6;
+  ASSERT_TRUE(fo4::forms::set_npc_inventory_item(plugin, key(), 0, item));
+  EXPECT_EQ(u32_of(npc(reread(plugin)), "COCT"), 2u);
+  EXPECT_EQ(fo4::forms::decode_npc_inventory(reread(plugin), key()).at(0).count, 6);
 }
 
 TEST(NpcLists, RefusesMissingRecordsOutOfRangeIndexesAndNullEntries) {

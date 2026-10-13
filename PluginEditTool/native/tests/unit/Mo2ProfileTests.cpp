@@ -250,8 +250,8 @@ TEST_CASE("MO2 profile keeps the higher-priority winner when names differ only b
     const auto profile = root / "profiles" / "Test";
     const auto high = root / "mods" / "High";
     const auto low = root / "mods" / "Low";
-    const std::filesystem::path upper(std::u16string{u"Ä.esp"});
-    const std::filesystem::path lower(std::u16string{u"ä.esp"});
+    const std::filesystem::path upper(std::u16string{0x00C4, u'.', u'e', u's', u'p'});
+    const std::filesystem::path lower(std::u16string{0x00E4, u'.', u'e', u's', u'p'});
 
     writeFile(root / "ModOrganizer.ini",
         "selected_profile=Test\n"

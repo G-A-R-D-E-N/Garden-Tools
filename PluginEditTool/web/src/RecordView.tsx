@@ -11,7 +11,7 @@ import { useDialogs } from './useDialogs';
 import WorkspaceHeader from './Workspace/WorkspaceHeader';
 import { buildActions } from './Workspace/actions';
 import ConflictsView, { type ConflictLayout } from './Workspace/ConflictsView';
-import { back, useRecordActions } from './recordActions';
+import { back, f2Edit, useRecordActions } from './recordActions';
 import RecordContextMenu from './RecordContextMenu';
 import {
   defaultExpanded, resolveStatus, type SeverityFilter, SEVERITY_SETS, LEVEL_BADGES, LEGEND_ROWS, LEGEND_CELLS,
@@ -138,7 +138,6 @@ export default function RecordView(
     const mine = ++loadSeq.current;
     const live = () => mine === loadSeq.current;
     (async () => {
-
       const fail = (k: string, e: unknown) => {
         if (live()) setScanErrors(prev => ({ ...prev, [k]: e instanceof Error ? e.message : String(e) }));
       };
@@ -188,7 +187,6 @@ export default function RecordView(
       if (r.HasChildren && isCollapsed(r)) collapsedLevels.push(r.Level);
     }
     return out;
-
   }, [matched, ov, filtering]);
 
   const isGenuineConflict = (r: ConflictFieldRow) => {
@@ -200,7 +198,6 @@ export default function RecordView(
 
   const conflictLeafRows = useMemo(
     () => viewRows.filter(isGenuineConflict),
-
     [viewRows]
   );
 
@@ -253,13 +250,12 @@ export default function RecordView(
     const live = () => mine === menuSeq.current;
     (async () => {
       try { const raw = await b.GetEditablePlugins(); if (live()) setEditablePlugins(JSON.parse(raw)); }
-      catch { if (live()) setEditablePlugins([]); }
+      catch (e) { if (live()) { setEditablePlugins([]); setStatus('Could not list editable plugins: ' + errorText(e)); } }
       try {
         const raw = await b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field);
         if (live()) setElementActions(JSON.parse(raw));
-      } catch { if (live()) setElementActions(null); }
+      } catch (e) { if (live()) { setElementActions(null); setStatus('Could not read element actions: ' + errorText(e)); } }
     })();
-
   }, [menu]);
 
   const actions = useRecordActions({
@@ -284,7 +280,6 @@ export default function RecordView(
     compactToEsl: () => void compactEsl(winnerCol),
     cleanUdr: () => void cleanPlugin(winnerCol),
     deleteRecord: () => void deleteRecord(winnerCol),
-
   }), [matrix.FormKey, matrix.Winner, editablePlugins]);
 
   const renderEditor = (r: ConflictFieldRow, ci: number) => {
@@ -339,7 +334,7 @@ export default function RecordView(
           <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
             <td
               className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
-              onDoubleClick={() => r.HasChildren && toggle(r)}
+              onDoubleClick={() => r.HasChildren && toggle(r)} {...f2Edit(() => startEdit(r, winnerCol))}
               onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
             >
               <span className="rv-prop-inner" style={{ paddingLeft: r.Level * 14 }}>
@@ -358,7 +353,7 @@ export default function RecordView(
                 <td
                   key={ci}
                   className={`rv-cell rv-c-${st}`}
-                  onDoubleClick={() => !r.HasChildren && startEdit(r, ci)}
+                  onDoubleClick={() => !r.HasChildren && startEdit(r, ci)} {...f2Edit(() => startEdit(r, ci))}
                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                 >
                   {st === 'win' && <Crown size={10} className="rv-win-icon" />}
@@ -378,7 +373,6 @@ export default function RecordView(
 
   return (
     <div className="rv-container">
-
       <div className="rv-tab-bar">
         <TabBtn id="grid" current={recordTab} set={setRecordTab}>Record View</TabBtn>
         <TabBtn id="fields" current={recordTab} set={setRecordTab} count={matrix.Rows.length}>Field View</TabBtn>
@@ -527,22 +521,23 @@ export default function RecordView(
                           {!collapsed && g.rows.map((r, ri) => (
                             <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
                               <td
-                                className="rv-prop-col rv-sticky"
+                                className="rv-prop-col rv-sticky" {...f2Edit(() => startEdit(r, winnerCol))}
                                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
                               >
                                 <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
                               </td>
                               {visibleCols.map(ci => {
+                                const editing = edit && edit.field === r.Field && edit.col === ci;
                                 const st = resolveStatus(r, ci);
                                 return (
                                   <td
                                     key={ci}
                                     className={`rv-cell rv-c-${st}`}
-                                    onDoubleClick={() => startEdit(r, ci)}
+                                    onDoubleClick={() => startEdit(r, ci)} {...f2Edit(() => startEdit(r, ci))}
                                     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                                   >
                                     {st === 'win' && <Crown size={10} className="rv-win-icon" />}
-                                    {r.Values[ci]}
+                                    {editing ? renderEditor(r, ci) : r.Values[ci]}
                                   </td>
                                 );
                               })}

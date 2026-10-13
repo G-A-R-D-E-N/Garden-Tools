@@ -4,7 +4,10 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace {
 
@@ -127,6 +130,79 @@ TEST(ScalarSchema, WeaponDnamFieldsUseTheirPayloadAndEnumBounds) {
 
   const auto fields = fo4::schema::scalar_fields(fo4::Signature::from_string("WEAP"));
   EXPECT_EQ(fields.size(), 45u);
+}
+
+TEST(ScalarSchema, EnumRowExposesItsXEditNames) {
+  const auto stagger = fo4::schema::scalar_field_descriptor("WEAP\\Stagger");
+  ASSERT_TRUE(stagger.has_value());
+  const auto& scalar = stagger->scalar;
+  EXPECT_EQ(scalar.presentation, fo4::schema::ScalarPresentation::enumeration);
+  ASSERT_EQ(scalar.names.size(), 5u);
+  EXPECT_EQ(scalar.names[0].value, 0);
+  EXPECT_EQ(scalar.names[0].name, "None");
+  EXPECT_EQ(scalar.names[4].value, 4);
+  EXPECT_EQ(scalar.names[4].name, "Extra Large");
+
+  const auto large = fo4::schema::scalar_value_name(scalar, 3);
+  ASSERT_TRUE(large.has_value());
+  EXPECT_EQ(*large, "Large");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(scalar, 5).has_value());
+
+  const auto small_value = fo4::schema::scalar_name_value(scalar, "Small");
+  ASSERT_TRUE(small_value.has_value());
+  EXPECT_EQ(*small_value, 1);
+  EXPECT_FALSE(fo4::schema::scalar_name_value(scalar, "small").has_value());
+}
+
+TEST(ScalarSchema, FlagsRowExposesOneMaskPerNamedBit) {
+  const auto flags = fo4::schema::scalar_field_descriptor("FACT\\Flags");
+  ASSERT_TRUE(flags.has_value());
+  const auto& scalar = flags->scalar;
+  EXPECT_EQ(scalar.presentation, fo4::schema::ScalarPresentation::flags);
+  ASSERT_EQ(scalar.names.size(), 17u);
+  EXPECT_EQ(scalar.names[0].value, std::int64_t{1});
+  EXPECT_EQ(scalar.names[0].name, "Hidden From NPC");
+  EXPECT_EQ(scalar.names[16].value, std::int64_t{1} << 16);
+  EXPECT_EQ(scalar.names[16].name, "Ignore Crimes: Werewolf (unused)");
+
+  const auto vendor = fo4::schema::scalar_name_value(scalar, "Vendor");
+  ASSERT_TRUE(vendor.has_value());
+  EXPECT_EQ(*vendor, std::int64_t{1} << 14);
+  const auto track = fo4::schema::scalar_value_name(scalar, std::int64_t{1} << 6);
+  ASSERT_TRUE(track.has_value());
+  EXPECT_EQ(*track, "Track Crime");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(scalar, 3).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_value_name(scalar, std::int64_t{1} << 17).has_value());
+}
+
+TEST(ScalarSchema, EmbeddedFlagsRowKeepsItsRawU16Encoding) {
+  const auto templates = fo4::schema::scalar_field_descriptor("NPC_\\TemplateFlags");
+  ASSERT_TRUE(templates.has_value());
+  const auto& scalar = templates->scalar;
+  EXPECT_EQ(scalar.presentation, fo4::schema::ScalarPresentation::flags);
+  EXPECT_EQ(scalar.storage, fo4::schema::ScalarStorage::u16);
+  EXPECT_EQ(scalar.offset, 14u);
+  ASSERT_EQ(scalar.names.size(), 13u);
+  EXPECT_EQ(scalar.names[12].value, std::int64_t{1} << 12);
+  EXPECT_EQ(scalar.names[12].name, "Keywords");
+
+  const std::array<std::byte, 2> raw{std::byte{0x01}, std::byte{0x10}};
+  EXPECT_EQ(fo4::schema::decode_scalar(raw, scalar), "4097");
+  EXPECT_EQ(fo4::schema::encode_scalar("4097", scalar),
+            (std::vector<std::byte>{std::byte{0x01}, std::byte{0x10}}));
+}
+
+TEST(ScalarSchema, OnlyEnumAndFlagsRowsCarryNames) {
+  for (const std::string_view record : {"FACT", "NPC_", "WEAP", "REFR"}) {
+    const auto fields = fo4::schema::scalar_fields(fo4::Signature::from_string(record));
+    ASSERT_FALSE(fields.empty()) << record;
+    for (const auto& field : fields) {
+      const auto presentation = field.scalar.presentation;
+      const bool named = presentation == fo4::schema::ScalarPresentation::enumeration ||
+                         presentation == fo4::schema::ScalarPresentation::flags;
+      EXPECT_EQ(!field.scalar.names.empty(), named) << field.path;
+    }
+  }
 }
 
 TEST(ScalarSchema, WrongBinaryWidthFailsClosed) {

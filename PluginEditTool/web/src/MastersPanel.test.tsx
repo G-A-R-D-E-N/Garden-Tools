@@ -124,3 +124,12 @@ describe('MastersPanel Load button after a switch while an operation is pending'
     expect((screen.getByText('Loading…').closest('button') as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('MastersPanel plugin list', () => {
+  it('shows a failed plugin list read instead of an empty list', async () => {
+    const host = installHost();
+    host.GetPlugins = vi.fn(async () => { throw new Error('list offline'); });
+    render(<MastersPanel onClose={() => {}} />);
+    await screen.findByText('Could not list plugins: list offline');
+  });
+});
