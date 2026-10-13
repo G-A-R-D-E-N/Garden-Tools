@@ -1,25 +1,26 @@
 # FO4IDE as an MCP server
 
-## What this actually is
+## What this is
 
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
-FO4IDE implements it: launched with `--mcp`, it does not open a window. It sits on stdin and
-stdout speaking JSON-RPC, and it advertises **109 tools** for reading and writing Fallout 4 plugins.
+FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
+line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
+It advertises **43 tools**: 15 for plugins and records, 8 for typed records, 4 for MO2 profile and host state, 5 for
+Papyrus, 4 for NIFs, 2 for materials, 4 for audio and 1 for BA2 archives.
 
-The public product name is FO4IDE. The executable remains `FO4RecordEditor.exe` for compatibility.
+The server is the native C++23 host that the desktop editor also runs on, and it needs no other
+runtime. Radicle, the C++ plugin library built into the app, parses, edits and writes the plugins.
+The practical effect is that your AI stops guessing about your load order and starts querying it:
+it can open a plugin, read the winning version of a record, change a field in memory and, when you
+say so, save.
 
-The practical effect is that your AI stops guessing about your load order and starts *querying* it. It
-can open a plugin, resolve an EditorID, read the winning override of a record, edit a field, save, and
-run a validity check -- without you opening xEdit once, and without the AI ever hand-writing a binary
-record. Every write goes through Mutagen, so the file it produces is structurally valid or the call
-fails loudly.
-
-It is not a chatbot and it has no model inside it. It is the hands; your AI client is the brain.
+It has no model inside it. It is the hands; your AI client is the brain. The executable keeps its
+historical name `FO4RecordEditor.exe` so existing MO2 entries and client configurations keep working.
 
 ## Wiring it up
 
-Create `.mcp.json` in the folder you run your AI from (Claude Code reads it from the project root). A
-ready-made copy sits next to the exe as `mcp.sample.json`.
+Add the server to your client's MCP configuration. Clients that read a project-level `.mcp.json`
+use this shape (a ready-made copy ships next to the exe as `mcp.sample.json`):
 
 ```jsonc
 {
@@ -33,462 +34,264 @@ ready-made copy sits next to the exe as `mcp.sample.json`.
 }
 ```
 
-Use **backslashes, doubled** -- it is JSON, so `C:\Tools` must be written `C:\\Tools`. Use the absolute
-path to the exe.
+Use **backslashes, doubled**: it is JSON, so `C:\Tools` is written `C:\\Tools`. Use the absolute path
+to the exe. If your client supports an `env` object next to `args`, that is the place for the
+environment variables listed under "Helper programs and settings".
 
-### Choosing the load-order source
+### Arguments
 
-The server needs to know what your game sees. Pass exactly one of:
+| Argument | What it does |
+|---|---|
+| `--mcp` | Run as a stdio MCP server. No window opens. |
+| `--mo2 <instance>` | Load the active profile of a Mod Organizer 2 instance before serving. The instance is the folder that holds `ModOrganizer.ini` and `profiles\`. |
+| `--health` | Print a JSON status and exit. A quick check that the exe starts at all. |
 
-| Argument | Use when | What it does |
-|---|---|---|
-| `--mo2 <instance>` | You use Mod Organizer 2 | Reads the active profile's `plugins.txt` and rebuilds that exact load order from `mods\`. This is the accurate one -- conflicts and overrides resolve the way they do in game. |
-| `--data <folder>` | Vanilla / no mod manager | Uses a plain `Data` folder. |
+The other flags (`--window`, `--browser`, `--headless`, `--port`, `--web-root`) start the desktop
+editor and are not used for MCP.
 
-The MO2 instance path is the folder containing `mods\` and `profiles\` -- not the MO2 program folder,
-and not a single mod.
+`--mo2` reads the profile named by `selected_profile` in `ModOrganizer.ini` and finds each plugin the
+way MO2's virtual file system would: the game `Data` folder, then enabled mods from lowest to highest
+priority, then the overwrite folder. It assembles the load order with the official and Creation Club
+plugins included and loads every enabled plugin, so winners and conflicts resolve the way they do in
+game. It also records the instance path in `settings.json`.
 
-`papyrus_function_lookup` and `papyrus_script_info` read from an offline Creation Kit Wiki HTML
-mirror, and work out of the box -- a copy ships bundled with the release package under
-`tools\ckwiki\fallout4\`, so there's nothing to configure. Pass `--ck-wiki <folder>` only if you want
-to point at a different or newer mirror; this is independent of `--mo2`/`--data` and unrelated to
-plugin loading. In the desktop app, the same override lives under Settings -> CK Wiki Path -- the tool
-executor reads it live, so it takes effect immediately with no restart and no launch flag. If neither
-override is set AND the bundled copy is missing (e.g. a `-SkipCkWiki` dev build), those two tools
-return a "not configured" message instead of silently failing.
+If the instance cannot be loaded (a missing folder, a profile without `plugins.txt`, or a load order
+the engine would refuse, such as a missing master), the process prints the reason to stderr and exits
+with code 6. MCP clients show stderr in their server log.
+
+Without `--mo2` the server starts with nothing loaded. `open_plugin` still loads a plugin by absolute
+path, and `reload_mo2_profile` loads the instance saved in `settings.json` (the one the desktop editor
+used last), if there is one. `create_plugin` needs a loaded MO2 profile, because new plugins are
+written to its overwrite folder.
 
 ### Confirming it connected
 
-Restart the client, or in Claude Code run `/mcp reconnect`. Then ask it to call `list_plugins` -- if
-you get your load order back, it works. Each row includes `Pending` for unsaved in-memory edits.
-Call `list_plugins` or `get_mo2_status` (`pendingPlugins`) before `save_plugin`, `discard_plugin`, or
-`reload_mo2_profile`. (`ping` is a JSON-RPC method the client uses for its own
-health checks, not a tool; asking the AI to "call ping" will not work.)
+Restart the client, or use its reconnect action for MCP servers. Then ask the assistant to call
+`list_plugins`: if you get your load order back, it works. Each row has a `Pending` flag for unsaved
+edits. (`ping` is a protocol message that clients use for their own health checks, not a tool; asking
+the assistant to "call ping" will not work.)
 
-> **After you rebuild the exe, the running server is the old code.** Stop every `FO4RecordEditor.exe`
-> process, rebuild, then `/mcp reconnect`. Skipping the reconnect is the single most common way to
-> spend twenty minutes debugging a fix that already worked.
+> **After you rebuild or replace the exe, the running server is the old code.** Stop every
+> `FO4RecordEditor.exe` process, then reconnect. Skipping the reconnect is the single most common way
+> to spend twenty minutes debugging a fix that already worked.
+
+### Reading results
+
+A failed plugin or host call (the first two tables below) is a tool error (`isError: true`) whose text
+is `ErrorType: message`, for example `PluginChangedOnDisk: ...`. The plugin tools check their
+arguments strictly: an unknown, missing or mistyped argument is rejected before anything runs.
+
+The Papyrus, NIF, material, audio and archive tools return failures as an ordinary result instead
+(`isError` stays false). The text starts with `Error:`, except that the Papyrus tools answer with a
+plain sentence such as `Source not found: ...` and `material_inspect` returns an `error` key. Read the
+result text, not just the error flag.
 
 ---
 
-## The tool surface
-
-### Plugin lifecycle
-`open_plugin` · `create_plugin` · `save_plugin` · `reload_plugin` · `backup_plugin` · `list_plugins`
-· `check_plugin` · `clean_plugin` · `strip_masters_clean` · `list_masters` · `reorder_masters`
-
-`get_mo2_status` reports whether the loaded profile is current or stale. `staleConfig` means
-`ModOrganizer.ini` changed; `staleLoadOrder` means `plugins.txt`, `modlist.txt`, or `loadorder.txt`
-changed; `stale` is either. `pendingPlugins` lists dirty plugins. Call it before `reload_mo2_profile`.
-Reload fails closed unless `discard_pending` is true.
-
-### Reading and analysis
-`get_record` · `get_winning_record` · `list_records` · `list_records_summary` · `list_record_types` ·
-`list_plugin_worklist` · `search_records` · `search_all` · `resolve_editorid` · `get_scripts` · `diff_records` ·
-`get_referenced_by` · `get_problems` · `search_robco_configs`
-
-### Conflict detection
-`get_conflicts` · `scan_conflicts` · `scan_all_plugins` · `scan_broken_refs`
-
-### ModGroups (xEdit's "these plugins are meant to be used together")
-`create_mod_group` · `update_mod_group` · `delete_mod_group` · `list_mod_groups`
-
-A ModGroup names a set of two or more plugins that ship as a suite -- a framework plus its official
-patches, a compatibility-patch bundle for one mod. Conflicts where **every** plugin touching the
-record belongs to one common group are the intended kind, so `scan_conflicts` hides them by default
-(`hide_grouped: false` shows them again, tagged `[MODGROUP]`, and the header always reports how many
-were suppressed). Membership in *some* group is not enough: the group has to cover every party to
-that specific conflict, since a plugin can belong to several groups for several reasons.
-
-On a real 651-plugin load order the raw scan reports ~45,000 conflicting records; this is what makes
-that number actionable. Groups are stored as plain JSON in `%APPDATA%\FO4RecordEditor\modgroups.json`
--- a per-installation preference, not something that travels with a plugin. xEdit's GUI half of the
-feature (group-picker dialogs, CRC staleness tracking) is deliberately not ported: it exists to
-declutter an always-on colored grid a human stares at, and there is no such grid here.
-
-### Writing records
-`create_record` · `set_field` · `get_conditions` · `set_conditions` · `set_components` ·
-`add_list_item` · `remove_list_item` · `attach_script` · `set_script_property` · `copy_as_override` ·
-`copy_as_new_record` · `set_conditions_at` · `delete_record` · `renumber_formid` · `compact_to_esl` ·
-`check_esl_eligibility` · `set_light_flag` · `set_localized_flag` ·
-`batch_patch_records` · `revert_overrides`
-
-`check_esl_eligibility` is the read-only half of `compact_to_esl`: it reports whether a plugin's
-record count and FormID range fit the ESL window before you commit to rewriting anything.
-`set_light_flag` / `set_localized_flag` toggle the two TES4 header flags directly.
-
-`set_conditions` REPLACES the whole Conditions list, so to add or change one condition read the
-current list with `get_conditions` first, edit that array, and hand it back. `get_conditions` returns
-exactly the schema `set_conditions` accepts.
-
-Conditions are not always the record's own list. A magic effect keeps its own at
-`Effects[0].Conditions`; a perk keeps them two deep at `Effects[0].Conditions[0].Conditions`, where
-the outer list holds the run-on tab wrapper rather than conditions. Pass that path to
-`get_conditions` and write it back with `set_conditions_at`. The resolver accepts the list itself,
-one entry in it, or a perk tab wrapper, and refuses the tab list with a message saying which level
-to use.
-
-`copy_as_new_record` is the other half of xEdit's copy menu: it duplicates a record into the target
-plugin under a **brand new FormID** rather than overriding the original, which is how you make a
-variant of an existing item.
-
-`deep_copy_as_override` is xEdit's **Deep copy as override**: for a container-type record it brings
-the children across too, not just the record you pointed at. `change_referencing_records` is xEdit's
-**Change referencing records**, which repoints every record that references one FormID at another --
-the tool you want when replacing a record rather than editing it. Both dry-run unless `apply: true`.
-
-### The element menu (xEdit's Add / Remove / Move / Clear on a list row)
-`element_describe` · `element_add` · `element_remove` · `element_move` · `element_clear`
-
-This is xEdit's element menu as it actually behaves, read out of
-`xeMainForm.pas` (`pmuViewPopup`, `mniViewAddClick`, `mniViewRemoveClick`, `mniViewMoveUpClick`):
-
-- **Add never asks for a value.** xEdit calls `TargetElement.Assign(TargetIndex, template, False)`,
-  which constructs an empty element of the container's own type and then focuses it for editing.
-  `element_add` does the same: it creates the entry, you fill it in with `set_field`.
-- **Add inserts at the clicked row's position.** `GetAddElement` walks up from the focused node
-  keeping its index, so right-clicking `Conditions[2]` inserts *before* entry 2. Pass the list path
-  instead (`Conditions`) to append.
-- **Add offers a choice when the list accepts more than one type.** That is xEdit's
-  `GetAssignTemplates`; here it is the concrete subclasses of an abstract element type. A
-  `Conditions` list holds the abstract `Condition`, so the templates are `ConditionFloat` and
-  `ConditionGlobal`; a perk's `Effects` list offers all twelve `APerkEffect` types.
-- `element_describe` reports which of these are legal at a path, so a UI can show only what applies,
-  the way xEdit enables each item from `IsRemovable` / `CanMoveUp` / `CanMoveDown` / `IsClearable`.
-
-Unlike `add_list_item`, which only ever appends a FormLink, these work on STRUCT lists: conditions,
-effects, leveled entries, components. A FormLink list still works too, and adds an empty link for
-you to point somewhere.
-
-Not implemented, because they depend on xEdit's multi-record selection and sibling compare, which
-this editor does not have: Copy to selected records, Remove from selected, Compare referenced row,
-Sort, Stick, and member switching for unions.
-
-### Whole-plugin xEdit passes
-`remove_identical_to_master` · `create_merged_patch` · `add_masters` · `renumber_plugin_formids` ·
-`create_seq_file` · `check_circular_leveled_lists`
-
-`remove_identical_to_master` is the ITM half of the standard cleaning pass (`clean_plugin` does the
-UDR half). An ITM is an override whose every field equals the version it overrides, so it costs a
-conflict row and a load-order slot while changing nothing. Comparison is Mutagen's generated
-structural equality over the whole record, and it includes the record header's version control
-bytes, so the check errs toward keeping a record: a false "not identical" is harmless, a false
-"identical" would delete real edits.
-
-`create_merged_patch` builds a patch carrying the winning version of every record two or more of the
-selected plugins touch.
-
-`add_masters` declares a plugin as a master. Needed BEFORE authoring a reference into a file the
-plugin does not already master, since the reference has nowhere valid to point otherwise.
-`save_plugin` re-derives the master list from actual references, so write the reference before
-saving or the added master will not survive.
-
-`renumber_plugin_formids` renumbers every record in a plugin consecutively from a base object id and
-repoints all in-plugin references (`renumber_formid` does one record). References from OTHER plugins
-into this one will break: they still point at the old ids.
-
-`create_seq_file` writes the `.seq` a plugin's start-game-enabled quests need. Without it those
-quests silently never start on an existing save, so it is a required build step for quest mods. The
-file is a bare array of little-endian 4-byte FormIDs written with the plugin's own file-local index,
-which is what the Creation Kit produces; output was verified byte-identical to a CK-generated SEQ
-file from a real modlist. Deploy it as `Data/Seq/<plugin>.seq`.
-
-`check_circular_leveled_lists` finds leveled lists that contain themselves, directly or through
-another list. The engine hangs or crashes resolving one. Read-only.
-
-`remove_identical_to_master`, `create_merged_patch` and `renumber_plugin_formids` default to a
-**dry run** that reports what they would do; pass `apply: true` to write.
-
-### Cells and placed objects
-`create_cell` · `create_placed_object` · `cleanup_placed_references` · `disable_previs` · `precombine_plan`
-
-`create_record` only adds **top-level** records, so it cannot make either of these -- a placed object
-lives inside a cell's persistent/temporary list, and cells live in a block tree. This is the pair you
-need for map markers and for parking references you relocate at runtime.
-
-`cleanup_placed_references` is xEdit's `Remove duplicate references` / `Remove excess references`
-pass: it drops references that duplicate another at the same position with the same base object, and
-references beyond what a cell should carry. Dry run by default; pass `apply: true` to write.
-
-`precombine_plan` is phase 1 of generating precombines **without the Creation Kit**: for one interior
-cell it reports which placed references are eligible to be baked into a combined mesh, grouped by the
-model they use. Read-only -- nothing is written. It also reports why every other reference was
-skipped, with counts and examples, because on a real cell the useful question is usually "why did so
-few qualify". A real vanilla interior gives a sense of the ratio: `Vault111Cryo` has 2,385 temporary
-references, of which 710 are eligible across 108 model groups; the rest are actors and other
-non-statics, references with scripts or enable parents or links, and statics with a material swap.
-
-A reference qualifies only if it is not deleted or initially disabled, has no script, enable parent,
-teleport destination, activate parent or linked reference, belongs to this plugin rather than being
-an override of another's, and its base object is a Static with a model, no script and no material
-swap. The reference must be this plugin's own because phase 3 stamps `XCRI` from that FormID
-verbatim.
-
-This is also what closes the half of #59 that was given up on. "Filter for precombined statics"
-failed because `CellCombinedMeshReference` exposes only a bare mesh index with no link back to a
-reference, so `XCRI` cannot be read forwards; this computes the same association from the other
-direction and never touches `XCRI`.
-
-Interiors only. Exterior precombines interact with worldspace object LOD, and the tool refuses an
-exterior cell rather than producing a plan that would bake the wrong thing.
-
-`disable_previs` is xEdit's **Fallout4 - Disable PreVis** script. Editing an exterior cell without
-invalidating its previs/precombine data is one of the most common real FO4 failures -- your edit
-silently does not show, or the cell breaks. It clears `PreVisFilesTimestamp`, `InPreVisFileOf`,
-`PreCombinedFilesTimestamp` and the combined-mesh lists, and sets the cell's `NoPreVis` flag. Dry run
-by default; refuses interior cells and cells that have no precombine data, matching the script's own
-guards. The other half of that xEdit script pair (**Filter for precombined statics**) is not ported:
-Mutagen's `CellCombinedMeshReference` exposes only a bare mesh index with no FormLink back to the
-placed reference, so there is no way to map a combined mesh to its object without new reverse
-engineering. Tracked as issue #59.
-
-### Struct lists that `add_list_item` cannot express
-`add_leveled_entry` · `set_perk_effects` · `set_magic_effects` · `set_quest_aliases` ·
-`set_quest_stages` · `set_quest_objectives` · `set_furniture_markers` · `set_message_buttons`
-
-### Typed records (leveled lists, NPCs, factions, weapons)
-- `get_leveled_list` -- reads a leveled list (LVLI, LVLN or LVSP): chance none, max count, flags, use global and entries.
-- `set_leveled_list_settings` -- sets a leveled list's chance none, max count and flags bytes in memory.
-- `edit_leveled_list_entry` -- adds, sets or removes one leveled list entry by index in memory.
-- `get_npc` -- reads an NPC_ record's factions, perks and inventory.
-- `edit_npc_entries` -- adds, sets or removes one faction, perk or inventory entry on an NPC_ record in memory.
-- `get_faction` -- reads a FACT record's relations and ranks.
-- `edit_faction_entries` -- adds, sets or removes one relation or rank on a FACT record in memory.
-- `get_weapon_damage_types` -- reads a WEAP record's damage types (read-only).
-
-### Papyrus (built in -- no Champollion needed)
-`compile_papyrus` (`.psc` → `.pex`) · `decompile_papyrus` (`.pex` → `.psc`, recursive)
-
-`compile_papyrus` has two engines, chosen with `engine`:
-
-- **`builtin`** is this tool's own compiler -- lexer, parser, resolver, type checker, code generator
-  and `.pex` writer -- and needs **no `PapyrusCompiler.exe`**. It does still need the vanilla base
-  script *sources* on the import path, to resolve `Form`, `ObjectReference` and the rest; those are
-  plain `.psc` text rather than the Windows-only compiler, and `PAPYRUS_BASE_IMPORTS` or
-  **Settings → Papyrus base imports** is where you point it at them.
-- **`creationkit`** shells out to `PapyrusCompiler.exe`.
-- **`auto`**, the default, uses the Creation Kit when one is installed and the built-in engine when
-  there is not.
-
-`release` means the same thing to both engines: strip `DebugOnly` and `BetaOnly` calls, which is the
-Creation Kit's `-r`. `optimize` is a Creation Kit switch and is reported as ignored by the built-in
-engine rather than silently dropped.
-
-The built-in engine **refuses rather than guessing** when a script a call goes into is not on the
-import roots: the number of operands a call emits depends on that script's optional parameters, so
-there is no safe approximation. A failure naming `PAP0050` or `PAP0051` is almost always a missing
-import root and not bad source.
-
-### Papyrus source analysis (built in -- **no Creation Kit needed**)
-`papyrus_check` · `papyrus_outline` · `papyrus_definition`
-
-These read `.psc` source with the tool's own Papyrus front end, so they need no `PapyrusCompiler.exe`
-and work on a machine with no Creation Kit installed.
-
-- `papyrus_check` checks a script or a whole folder and reports `file(line,col): error CODE: message`
-  for each problem: syntax first, then -- with `semantic=true`, the default -- name resolution and
-  type checking. Name and type reporting **switches off** for a file whose parent, import or a named
-  type is not on the roots, because otherwise every inherited member reads as undefined; those files
-  are counted separately in the summary, so a "clean" count never quietly means "could not tell".
-  Pass `imports` (semicolon-separated roots) to widen what it can see.
-- `papyrus_outline` lists everything a script declares -- header, imports, structs and their members,
-  custom events, groups, properties, variables, functions, events, states -- with signatures and
-  positions. It still works on a file that has syntax errors, reporting what could be read.
-- `papyrus_definition` takes a 1-based line and column and reports where that symbol is declared,
-  with its signature and doc comment.
-
-The desktop app exposes the same front end as the Papyrus panel's **Analyze** mode: an editor with a
-line gutter, syntax errors and an outline that update as you type, click-to-inspect and
-Ctrl+click / F12 go-to-definition (following `Extends` and imports into other files), and Ctrl+S to
-save. It edits the buffer, not the file on disk, so the errors it shows are the ones in front of you.
-
-**They check; they do not emit.** A clean `papyrus_check` now covers syntax, names and types, which
-is most of what a compile would tell you, but only `compile_papyrus` actually produces a `.pex`.
-`papyrus_outline` and `papyrus_definition` are still name-based: `papyrus_definition` answers
-`not resolved` for a member reached through an expression whose type is not written in the source
-(`GetOwner().MyProperty`) rather than guessing at it.
-
-### Papyrus node graphs
-`graph_validate` · `graph_compile` · `graph_palette_search` · `graph_node_info`
-
-These operate on the editor's readable `.fograph` node-graph format:
-
-- `graph_validate` checks graph structure, node types, pins, value types, required connections and
-  control-flow rules without writing output.
-- `graph_compile` generates readable `.psc` source and optionally compiles it to `.pex`;
-  `source_only: true` stops after source generation.
-- `graph_palette_search` discovers node definitions from the active Papyrus import roots, including
-  functions, events, properties and built-in operators.
-- `graph_node_info` describes one definition's input/output pins, control-flow pins, value types,
-  optional values and defaults so a graph can be authored without guessing its schema.
-
-### NIF
-`nif_import` · `nif_inspect` · `nif_fix` · `nif_verify`
-
-### Archives (BA2/BSA)
-`archive_list` · `archive_extract` · `archive_extract_all` -- read packed archives. `archive_pack`
-is the other direction, and it is now **written in process: the Creation Kit is not needed**.
-
-Packing used to shell out to the CK's `Archive2.exe`, which is not redistributable and therefore
-could not be bundled -- so a user without the Creation Kit installed simply could not pack. The
-writer produces General (GNRL) archives, zlib-compressed, storing any file that would grow.
-
-`format: "DDS"` is in process as well. A texture archive stores a per-file texture header and one
-chunk per mip range, so each DDS is read for its dimensions, mip count and DXGI format, and its
-payload split the way vanilla splits it: **a mip gets its own chunk while it is at least 512x512
-pixels, up to three such chunks, then one chunk for all the rest.** That rule reproduces the chunk
-layout of all 42,036 texture entries in the 37 vanilla DX10 archives exactly, and the mip arithmetic
-behind it reconciles every one of their stored chunk sizes with no slack. A DDS archive holds `.dds`
-files only; anything else under the source folder is an error rather than a silent skip.
-`use_archive2: true` forces the old Archive2 path, if you specifically need its own byte-for-byte
-output.
-
-Textures are also **decoded in process**. The Cell Viewer used to write a temp `.dds`, launch
-`Texconv.exe` and read a temp `.png` back for every texture it showed; it now decodes BC1 through
-BC7 and the uncompressed layouts directly from the bytes. `Texconv.exe` is still the fallback for
-BC6H, the signed BCn spellings, the float formats and 24bpp uncompressed, none of which appear on a
-mesh. The decoder was checked against DirectXTex's own output pixel for pixel over 484 real mod
-textures: BC2/BC3/BC5/BC7 and the uncompressed layouts exact, BC1 and BC4 within 1 on a rounding
-tie. One deliberate difference: an sRGB-tagged texture keeps its stored values, where Texconv
-converting to `R8G8B8A8_UNORM` also converted sRGB to linear and darkened it.
-
-The format was taken from the real archives rather than from any spec, and the writer is checked by
-rewriting every `.ba2` in a vanilla Data folder and comparing whole files: **all 79 archives, ~31 GB,
-versions 1/7/8, both General and DirectX, rewrite byte-for-byte identical.** Two things that sweep
-caught, both invisible to a sampling test:
-
-- `DLCCoast - Main.ba2` stores `Strings/DLCCoast_cn.DLSTRINGS` with a **forward slash** while hashing
-  the backslash form. Names are stored exactly as authored, never normalized.
-- Three names in `Fallout4 - Voices.ba2` are **Windows-1252, not UTF-8** (`María_F.fuz`,
-  `María_M.fuz`, `Sánchez_F.fuz`). Entries keep raw name bytes, because decoding those to a
-  string and re-encoding replaces the byte and grows the file.
-
-Typical flow to re-encode a mod's packed sounds: `archive_extract_all` its BA2 ->
-`audio_convert_to_xwm` on the extracted Sound folder -> `archive_pack` that same folder back into a
-new BA2.
-
-### Cells
-`cell_get_placed_references` -- list a CELL's placed references (position/rotation/scale + base object
-model path), unioned across the whole load order rather than just the winning record (a plugin can
-"win" a CELL with an empty reference list while every other plugin's own placed objects still load
-in-game). Powers the desktop app's Cell Viewer panel; useful for an AI agent to inspect what's actually
-placed in a cell without opening the UI.
-
-`cell_search` -- type-ahead search for CELL records by EditorID/Name/FormKey substring. Use this
-instead of `search_all` with `type=CELL`: `search_all` builds a full index of every record type in
-every loaded plugin (and caches it for the process's lifetime), which on a real large modlist measured
-~2.3 GB and 7 seconds for a single cell search. `cell_search` only ever touches CELL records and caches
-nothing.
-
-### Papyrus wiki lookup
-`papyrus_function_lookup` · `papyrus_script_info` -- reads an offline Creation Kit Wiki HTML mirror
-directly instead of you grepping wiki pages yourself. Works out of the box against the mirror bundled
-with the app; `--ck-wiki <folder>` at launch (headless server) or Settings -> CK Wiki Path in the
-desktop app only override which mirror is used. Also reachable by hand in the desktop app's Papyrus
-panel -> "Wiki Lookup" tab.
-
-### Materials
-`bgsm_inspect` · `bgsm_set_field` -- read and edit individual shader fields directly, no
-material-editor GUI needed. Both FO4 material formats are supported:
-
-- **`.bgsm`** (lighting materials): Smoothness, SpecularColor, texture paths, PBR/porosity,
-  emissive, translucency, terrain, tessellation.
-- **`.bgem`** (effect materials -- glowing, additive, refractive and animated surfaces): BaseColor
-  and scale, falloff angles and opacities, lighting influence, soft depth, glass (fresnel colour,
-  blur and refraction scales), adaptive emissive.
-
-The format is detected from the file's **own magic**, not its extension, because mods do ship
-`.bgsm`-named files that are really BGEM and the engine reads the magic. The tool names keep the
-`bgsm_` prefix for compatibility.
-
-Both codecs are byte-for-byte ports of `native/materials/src/{base.rs,bgsm.rs,bgem.rs}` from
-`Bryant-21/py-creation-lib` (GPL-3.0, permission granted), verified against every material in
-`Fallout4 - Materials.ba2`: all 6,623 `.bgsm` and all 283 `.bgem` files round-trip byte-identical,
-zero parse failures.
-
-One trap the port preserves deliberately: an empty texture slot is written as `len=1, byte=0x00`,
-never `len=0`. A zero-length string there misaligns FO4's own parser and every field after it, which
-shows up in game as a pink material rather than as an error.
-
-### Mod folder triage
-### Asset resolution
-`resolve_asset` -- xEdit's `ResourceExists` / `ResourceContainerList`: given a game-relative path
-(`Meshes\Clutter\Rock01.nif`), answer whether it exists anywhere in the load order and **which mod
-folder or BA2 actually serves it**, without you having to already know which archive to open. Pass
-`extract: true` to also materialize the winning copy as a real file (pulled out of its BA2 if
-needed), which is how you hand a packed mesh to `nif_inspect`.
-
-Search order is MO2's own: the overwrite folder, then every enabled mod top-to-bottom of
-`modlist.txt`, then the vanilla game Data folder; within one of those, a loose file beats that
-folder's archives. Loose lookups are a direct existence check per root, so nothing is scanned; only
-archives get indexed, and only the first time a given root is consulted.
-
-This is the tool that makes "verify the MODL path instead of recalling it" a single call. It needs a
-loaded modlist (`Open MO2`) or a configured Data folder -- with neither there is nowhere to look, and
-it says so rather than reporting "not found".
-
-`audit_asset_usage` -- walk every record in a plugin for asset paths (models, textures, materials,
-sounds, scripts) and report which of them actually exist as a loose file or inside a BA2, so a mod
-ships without dangling references.
-
-`catalog_mod_folder` -- bucket an unfamiliar mod's files by category (meshes/textures/materials/
-sounds/scripts/plugins/archives/voice/...) with per-category counts, to get oriented before deciding
-what to inspect next.
-
-### Audio
-`audio_convert_to_xwm` · `audio_convert_from_xwm` · `audio_make_fuz` · `audio_extract_fuz` -- convert
-any ffmpeg-readable audio/video to Fallout 4's xWMA format (and back), and pack/split the `.fuz` voice
-container (xwm + lip sync). `audio_convert_to_xwm` also accepts a whole folder as `source` -- recursed,
-converted in parallel, with the original structure preserved (a mod's extracted `Sound\` folder, say).
-Works out of the box against ffmpeg/xWMAEncode/BmlFuzEncode/BmlFuzDecode bundled with the app --
-nothing to configure. Also reachable by hand in the desktop app's Audio panel.
-
-### Escape hatch
-`run_script` -- executes C# against the loaded mod through Mutagen, for anything the tools above do not
-cover. `host.New(sig, editorId)` creates records from inside a script.
+## Tool reference
+
+The **Writes** column says what a call can change: **no** (nothing), **memory** (the loaded plugins or
+their unsaved edits; no plugin file is touched) or **disk** (it writes files). A plugin with unsaved
+edits shows `Pending: true` until it is saved or discarded. Argument names are exact: the plugin tools use
+`snake_case`, the audio and archive tools use `camelCase`. Arguments in brackets are optional.
+
+`plugin` is always a plugin file name such as `MyMod.esp`. A form key is written `001234:Fallout4.esm`:
+six hex digits, a colon and the plugin that owns the record.
+
+### Plugins and records
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `list_plugins` | none | no | One row per loaded plugin: `Key` (file name), `FilePath`, `Pending`, plus the tree fields the editor UI uses. |
+| `open_plugin` | `path` | memory | Loads one `.esp`, `.esm` or `.esl` by absolute path. Opening a plugin that is already loaded refreshes it, but is refused while it has pending edits (`PluginHasPendingChanges`); a different file with the same name is refused (`PluginAlreadyLoaded`). |
+| `create_plugin` | `plugin` | disk | Writes a new empty plugin into the active profile's overwrite folder and loads it. `plugin` is a file name, not a path. `.esp` is added when it has no plugin extension, and an `.esm` or `.esl` name sets the master or light flag. Refuses official and Creation Club names, names already loaded, files that already exist and invalid file names. |
+| `create_record` | `plugin`, `type`, `payload` | memory | Creates a record from a four-letter signature and returns its `formKey`. The payload fields are listed under "create_record payloads". |
+| `get_record` | `form_key` | no | Every loaded version of a record: `Winner`, `Plugins`, per-field `Rows` and an overall `Level` of `onlyone`, `override` or `conflict`. Includes pending edits. `RecordNotFound` when no loaded plugin has it. |
+| `get_record_fields` | `plugin`, `form_key` | no | Field paths and values of one plugin's version of the record (`RecordVersionNotFound` if that plugin has none). |
+| `list_record_types` | `plugin` | no | The record signatures in a plugin with counts, as strings such as `EYES (3)`. |
+| `list_records` | `type` [`filter`, `limit`, `offset`] | no | Winning records of one signature across the loaded plugins. `filter` is a case-insensitive substring of the form key or EditorID. Rows: `FormKey`, `EditorID`, `Type`, `Plugin` (the winner). `limit` defaults to 200 and is capped at 5000. |
+| `list_records_summary` | `plugin`, `type` [`limit`, `offset`] | no | The records of one signature that a plugin contains (added and overridden) as a grid: `columns`, `rows` (`formKey`, `editorId`, `cells`, `editable`), `total` and `offset`. The column paths are what `set_field` takes as `path`. `limit` defaults to 200 and is capped at 1000. |
+| `list_plugin_worklist` | `plugin` [`filter`, `type`, `limit`, `offset`] | no | Every record the plugin adds or overrides, with override depth, winner and later overriding plugins. `filter` is `all` (default), `added`, `overrides`, `winning`, `losing` or `conflicted`; `type` is one signature. Returns `Total`, `Offset`, `Counts` and `Rows`. `limit` defaults to 200 and is capped at 5000. |
+| `search_records` | `query` [`type`] | no | Case-insensitive substring search over form keys, EditorIDs and signatures across all loaded plugins; `type` limits it to one signature. At most 500 rows. |
+| `set_field` | `plugin`, `form_key`, `path`, `value` | memory | Sets one field using a column path from `list_records_summary`, such as `EYES\Full`. `value` is always text. Paths that are not editable columns are refused (for example with `FieldWriteUnsupported`), and a value that does not fit leaves nothing changed. A form-link field checks that the target is loaded and of an allowed record type (`NULL` only where the field allows it), and adds the target's plugin to the edited plugin's masters when needed. |
+| `save_plugin` | `plugin` | disk | Writes the plugin atomically to the path it was loaded from. No other path can be chosen over MCP. Refused for read-only plugins and for files changed on disk since loading. |
+| `discard_plugin` | `plugin` | memory | Drops the plugin's pending edits and restores the state from when it was loaded or last saved. Writes nothing. |
+| `list_masters` | `plugin` | no | The plugin's declared masters (`index`, `name`, `size`, `used`, `kind` of `light` or `full`) and whether the plugin itself is light. Returns `{}` if the plugin is not loaded. |
+
+#### create_record payloads
+
+`type` is the signature and `payload` is an object. These nine types have a verified layout. A payload
+that does not fit is rejected with `InvalidRecordCreationPayload`, and the message names the field.
+
+| Type | Required fields | Optional fields |
+|---|---|---|
+| `ARMO` | none | `editorId`, `maleWorldModel`, `maleIcon`, `maleMessageIcon`, `femaleWorldModel`, `femaleIcon`, `femaleMessageIcon`, `value`, `weight`, `health` |
+| `ARMA` | none | `editorId`, `maleBipedModel`, `femaleBipedModel`, `maleFirstPersonModel`, `femaleFirstPersonModel`, `malePriority`, `femalePriority`, `maleWeightSlider`, `femaleWeightSlider`, `detectionSoundValue`, `weaponAdjust` |
+| `CELL` | `worldspace` (a form key), `x`, `y` | `editorId`. Creates an exterior cell. |
+| `EYES` | `fullText`, `icon` | `editorId`, `dataFlags`, `recordFlags` |
+| `LVSP` | `entries`: a list of objects, each with a `spell` form key that resolves to a loaded `SPEL` or `LVSP` | `chanceNone`, `maxCount`, `flags`, `editorId`; per entry `level`, `count`, `chanceNone` |
+| `RACE` | `description`, `maleHeight`, `femaleHeight` | `editorId`, `fullName`, `flags`, `flags2`, `size`, `accelerationRate`, `decelerationRate`, `injuredHealthPct` |
+| `PROJ`, `EXPL`, `HAZD` | none | `editorId`, `name`, `bounds` (six integers), and the type's own numbers and form-key links, for example `speed`, `range` and `explosionType` on `PROJ`; `force`, `damage` and `innerRadius` on `EXPL`; `radius`, `lifetime` and `spell` on `HAZD` |
+
+Any other signature is refused (`RecordCreationRequiresSchema`) unless the payload contains
+`"schema": true`. The record is then built from the schema's defaults, with an optional `editorId`, and
+only for record types the schema layer can create on its own (`RecordNotAuthorable`, `RecordNoDefault`).
+
+### Typed records
+
+These read the winning version of a leveled list, NPC_, FACT or WEAP record and edit one plugin's version in memory. An edit needs `plugin` to already hold the record; call `save_plugin` to persist. `op` is `add`, `set` or `remove`. A refused edit leaves the plugin unchanged.
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `get_leveled_list` | `form_key` | no | An LVLI, LVLN or LVSP record's chance none, max count, flags, use global and entries. |
+| `set_leveled_list_settings` | `plugin`, `form_key`, `chance_none`, `max_count`, `flags` | memory | Sets the chance none, max count and flags bytes (0-255). |
+| `edit_leveled_list_entry` | `plugin`, `form_key`, `op`, `index`, [`value`] | memory | Adds (inserted at `index`), sets or removes one entry. `value` is `{level, item, count, chanceNone, extra}` and is required for `add` and `set`; `set` keeps the entry's reserved bytes. |
+| `get_npc` | `form_key` | no | An NPC_ record's factions, perks and inventory. |
+| `edit_npc_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one entry; `list` is `factions`, `perks` or `inventory`. `index` is required for `set` and `remove`, `value` for `add` and `set`. |
+| `get_faction` | `form_key` | no | A FACT record's relations and ranks. A localized rank title reads as `{"stringId": n}`. |
+| `edit_faction_entries` | `plugin`, `form_key`, `list`, `op`, [`index`], [`value`] | memory | Adds, sets or removes one relation or rank; `list` is `relations` or `ranks`. |
+| `get_weapon_damage_types` | `form_key` | no | A WEAP record's damage types (read-only). |
+
+### Profile and host state
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `native_status` | none | no | Host status: `pluginBackend`, `pluginRead`, `pluginWrite`, `archiveReadBackend`, `nifTool` (niftool was found at startup) and `embeddedWindow`. `materialCodec` and `audioTools` are fixed at `true` and do not check for helper programs. |
+| `get_mo2_status` | none | no | `loaded`; for a loaded profile also `instancePath`, `profile`, `dataFolder`, `overwriteFolder`, `pluginCount`, `missingPluginCount` and `loadedAtUnixMs`. Always `pendingPlugins` (plugins with unsaved edits) and staleness flags: `staleConfig` (`ModOrganizer.ini` changed), `staleLoadOrder` (`plugins.txt`, `modlist.txt` or `loadorder.txt` changed) and `stale` (either). |
+| `reload_mo2_profile` | [`discard_pending`] | memory | Reloads the enabled plugins from the configured profile, replacing everything that is loaded (plugins added with `open_plugin` included), and returns the `get_mo2_status` fields. Refused with `PluginHasPendingChanges` while any plugin has unsaved edits, unless `discard_pending` is `true`, which throws those edits away. Also saves the instance path to `settings.json`. |
+| `get_settings` | none | no | The current settings: folders, tool paths and flags, including values that came from environment variables. Secrets are redacted. |
+
+### Papyrus
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `compile_papyrus` | `source` [`output`, `imports`, `flags`, `all`, `optimize`, `release`, `engine`, `debug_info`, `compiler_path`] | disk | Compiles `.psc` source to `.pex`: one file, or a folder. `engine` is `auto` (default: the Creation Kit compiler if `PapyrusCompiler.exe` is found, otherwise the built-in compiler), `builtin` or `creationkit`. `imports` is a semicolon-separated list of extra source roots. The `.pex` files go to `output`, by default next to the source. `optimize` applies to the Creation Kit compiler only. The built-in compiler ends with a `RESULT: X succeeded, Y failed` summary; the Creation Kit route returns the compiler's own output and exit code. |
+| `decompile_papyrus` | `source` [`output`, `assembly`, `write`] | no, or disk | Decompiles `.pex` to `.psc` (a `.pas` bytecode listing with `assembly`). A single file comes back as text unless `write` is `true` or `output` is given. A folder is always written, into `output` or by default the source folder, with namespaced scripts in namespace subfolders. |
+| `papyrus_check` | `source` [`semantic`, `imports`] | no | Checks `.psc` source with the built-in front end, with no Creation Kit: syntax, then (with `semantic`, default `true`) name resolution and types. Reports `file(line,col): error CODE: message`. Files that refer to scripts not found on the import roots are counted separately. |
+| `papyrus_function_lookup` | `function` [`script`] | no | Looks a function up in the offline Creation Kit Wiki mirror. |
+| `papyrus_script_info` | `script` | no | A script's overview (Extends, global and member functions, events) from the same mirror. |
+
+`.pas` is assembly, not source: `compile_papyrus` compiles `.psc`.
+
+### NIFs, materials, audio and archives
+
+| Tool | Arguments | Writes | What it does |
+|---|---|---|---|
+| `nif_inspect`, `nif_verify`, `nif_tree`, `nif_geometry` | `path` | no | Run niftool on a NIF: summary, verification, block tree and geometry. Need niftool. |
+| `material_inspect` | `path` | no | Reads a BGSM or BGEM material: `fileName`, `format`, `version` and its named `fields`. |
+| `material_set_fields` | `path`, `fields` [`output`] | disk | Sets named material fields (`fields` maps a name to a text value) and writes the result atomically to `output`, or back to `path` when no output is given. A conditional field such as `EmittanceColor` can be set only when its switch (`EmitEnabled`) is already true in the saved file: set the switch in one call and the field in the next. |
+| `audio_convert_to_xwm` | `source` [`output`, `bitrateBps`] | disk | Converts one audio or video file, or every supported file under a folder, to Fallout 4 XWM. Without `output` each `.xwm` goes next to its source; with a folder source, `output` is a folder that mirrors the layout. Needs xWMAEncode, plus ffmpeg for anything that is not PCM WAV. |
+| `audio_convert_from_xwm` | `source` [`output`, `targetExt`] | disk | Decodes one XWM file to WAV (default) or another format ffmpeg supports. Without `output` the result goes next to the source. Needs xWMAEncode, plus ffmpeg for anything but WAV. |
+| `audio_make_fuz` | `audioSource`, `fuzOutput` [`lipPath`, `noLip`] | disk | Packs audio into a FUZ together with a LIP file. Audio that is not already `.xwm` is converted first. Without `lipPath` it looks for a `.lip` next to the audio; `noLip` leaves the LIP out. Needs BmlFuzEncode (and the XWM tools for the conversion). |
+| `audio_extract_fuz` | `fuzPath` [`xwmOutput`, `lipOutput`, `alsoWav`] | disk | Splits a FUZ into XWM and LIP files, next to the FUZ unless outputs are given; `alsoWav` also decodes a WAV. Needs BmlFuzDecode (and xWMAEncode for `alsoWav`). |
+| `archive_pack` | `sources`, `output`, `rootDir` [`format`, `compress`] | disk | Packs folders into a BA2 with `Archive2.exe`. `sources` is a list of folders and `rootDir` is Archive2's root folder (`-r`). `format` is `General` (default) or `DDS`; `compress` defaults to `true`. `.ba2` is added to `output` when missing and missing parent folders are created. Gives up after 10 minutes. |
+
+Materials go through Radicle's BGSM and BGEM codec. Its round trip is checked against the vanilla
+`Fallout4 - Materials.ba2` (6,623 `.bgsm` and 283 `.bgem` files when the figure was first recorded):
+reading a file and writing it back must reproduce its bytes. `Radicle/tests/test_material_file_real.cpp`
+runs that check when `FO4_DATA_DIR` names a Fallout 4 `Data` folder.
+
+The audio tools refuse to overwrite their own source file. The authoritative list is whatever the
+server's `tools/list` returns; this reference follows `native/apps/fo4ide/McpTools.cpp`.
 
 ---
 
-## Rules that keep it from corrupting your plugins
+## Write safety
 
-These are not style preferences. Each one is a real failure that has happened.
+These rules are enforced by the backend, not by the client, so they hold whichever AI is connected.
 
-**1. `create_record` takes signatures; `list_records` takes full names.** `create_record` wants
-`COBJ`, `WEAP`, `GLOB`. `list_records` wants `ConstructibleObject`, `Weapon`, `GlobalVariable`. Passing
-the wrong form to either returns "no records of that type", which reads like a bug and is not one.
+- **Edits stay in memory until you save.** `create_record` and `set_field` work on a copy of the
+  plugin and swap it in only after the change has validated, so a rejected call leaves nothing
+  half-applied. The file on disk is untouched until `save_plugin`, and `discard_plugin` throws the
+  edits away. `list_plugins` and `get_mo2_status` show which plugins are dirty. (`create_plugin` is the
+  exception: it writes the new empty file at once.)
+- **Saves are atomic and in place.** The plugin is written to a temporary file next to the original,
+  checked, then moved over it, at the path the plugin was loaded from. There is no "save as" over MCP.
+- **Files changed behind the server's back are not overwritten.** Every loaded plugin remembers the
+  modification time it had when it was read. If the file on disk has a different time later, edits and
+  saves fail with `PluginChangedOnDisk`. Discard any pending edits, then `open_plugin` the plugin again
+  (or `reload_mo2_profile`) to pick up the new file.
+- **Game files are read-only.** `Fallout4.esm`, the official DLC plugins, any plugin whose file name
+  starts with `cc` (the Creation Club naming) and anything inside the game's `Data` folder refuse edits
+  and saves (`PluginReadOnly`). `create_plugin` refuses those names too.
+- **New plugins go to MO2's overwrite folder and nowhere else.** `create_plugin` takes a file name,
+  never a path, and refuses a name that already exists there.
+- **Unproven structures fail closed.** `create_record` builds only record types it has a verified
+  layout for, and `set_field` refuses paths it cannot validate, rather than guessing.
+- **Reloading cannot silently lose work.** `reload_mo2_profile` fails while any plugin has unsaved
+  edits unless `discard_pending` is `true`.
 
-**2. Check the master order after every save on a multi-master plugin.** A plugin whose masters are
-written out of load order makes the game **hang on load with no crash log** -- the worst possible
-failure mode, because there is nothing to read. After any `save_plugin`, verify the master list.
+The MCP tools cannot copy a record into another plugin as an override; the desktop editor can. Edit
+the plugin you own directly rather than stacking a fix plugin on top, unless you specifically want an
+override: fewer plugins, fewer conflicts, fewer masters.
 
-**3. FormID encoding is `(masterIndex << 24) | objectId` for all masters.** Not just for ESLs.
+---
 
-**4. A new `GLOB`'s value is set via `set_field` on `Data`** -- not by a constructor argument.
+## Helper programs and settings
 
-**5. `.pas` is assembly, not source.** `compile_papyrus` compiles `.psc`. Feeding it the decompiler's
-assembly listing is a common and confusing mistake; the tool now detects it and tells you.
+Settings live in `%APPDATA%\FO4RecordEditor\settings.json` (on Linux
+`$XDG_CONFIG_HOME/FO4RecordEditor/settings.json`, falling back to `~/.config`); `get_settings` shows
+them. The log is `logs\FO4IDE.log` in the same folder (5 MiB per file, the current file plus three rotated ones).
 
-**6. Edit the source plugin directly rather than stacking a fix plugin on top,** unless you have a
-specific reason to want an override. Fewer plugins, fewer conflicts, fewer masters.
+Some tools run helper programs. Each is looked for in this order, and the first hit wins: its
+environment variable, the matching `settings.json` key (where there is one), the location in the last
+column, then `PATH` for programs.
 
-**7. Deleted records lose their EditorID.** Mutagen strips it. Do not try to filter a deleted-record
-pool by EditorID; there is nothing to match on.
+| Helper | Used by | Environment variable | `settings.json` key | Location |
+|---|---|---|---|---|
+| niftool | `nif_*` | `NIFTOOL_PATH` | `NiftoolPath` | `tools\niftool\niftool.exe` beside the exe |
+| Creation Kit Wiki mirror (a folder) | `papyrus_function_lookup`, `papyrus_script_info` | `CK_WIKI_PATH` | `CkWikiPath` | `tools\ckwiki\fallout4` |
+| `xWMAEncode.exe` | `audio_convert_to_xwm`, `audio_convert_from_xwm` | `XWMAENCODE_PATH` | `XwmaEncodePath` | `tools\audio\` |
+| ffmpeg | `audio_convert_to_xwm` (input that is not PCM WAV), `audio_convert_from_xwm` (output other than WAV) | `FFMPEG_PATH` | `FfmpegPath` | `tools\audio\` |
+| `BmlFuzEncode.exe` | `audio_make_fuz` | `BMLFUZENCODE_PATH` | none | `tools\audio\` |
+| `BmlFuzDecode.exe` | `audio_extract_fuz` | `BMLFUZDECODE_PATH` | none | `tools\audio\` |
+| `PapyrusCompiler.exe` | `compile_papyrus` with the Creation Kit engine | `PAPYRUS_COMPILER_PATH` | `PapyrusCompilerPath` | `<Fallout 4>\Papyrus Compiler\` |
+| `Archive2.exe` | `archive_pack` | `ARCHIVE2_PATH` | `Archive2Path` | `<Fallout 4>\Tools\Archive2\` |
+
+`<Fallout 4>` is the install folder from the `Fallout4Path` setting, `FALLOUT4_PATH`, the registry or
+a Steam library. `PapyrusCompiler.exe` and `Archive2.exe` come with the Creation Kit and are not
+shipped in the package. The package bundles niftool, the Creation Kit Wiki mirror and the audio tools
+only if they were available when it was built; a missing one disables just the tools in its row.
+niftool is looked up once at startup, so restart the server after installing it.
+
+The built-in Papyrus engine (`compile_papyrus` with `builtin`, or with `auto` when there is no
+Creation Kit compiler, and `papyrus_check`) needs no `PapyrusCompiler.exe`, but it does need the
+vanilla script **sources** to resolve types such as `Form` and `Actor`. Give it the folder, normally
+`<Fallout 4>\Data\Scripts\Source\Base`, through the `imports` argument or by setting
+`PAPYRUS_BASE_IMPORTS` (semicolon-separated) in the server's environment. The built-in engine reads
+that environment variable and `imports`; the `PapyrusBaseImports` setting and `tools\papyrus\Base`
+only feed the Creation Kit compiler route.
 
 ---
 
 ## When something is wrong
 
-- **The AI reports "not found" for a tool that should exist** → the server is an old build, or it
-  never started. Reconnect.
-- **`compile_papyrus` says the compiler is missing** → you asked for `engine="creationkit"` and there
-  is none. Install the Creation Kit, set `PAPYRUS_COMPILER_PATH` (the compiler is Bethesda's and
-  cannot be shipped here), or use `engine="builtin"`, which does not need it.
-- **The built-in engine reports `PAP0050` on every vanilla type** → it has no base script sources to
-  resolve against. Set `PAPYRUS_BASE_IMPORTS`, or Settings → Papyrus base imports, to a folder of
-  vanilla `.psc`.
-- **The `nif_*` tools fail** → `tools\niftool\niftool.exe` is missing from the package, or
-  `NIFTOOL_PATH` points somewhere stale.
-- **Nothing starts at all, no window, no log** → almost always the .NET 9 **Desktop** Runtime is
-  missing (the ASP.NET or plain runtime is not enough), or you are launching a self-contained build
-  under MO2. Startup traces land next to the exe as `FO4RecordEditor.startup.log`, falling back to
-  `%APPDATA%\FO4RecordEditor\startup.log` when the exe folder is read-only.
+- **A tool is missing, or a fix has no effect.** The running server is an older build, or it never
+  started. Stop every `FO4RecordEditor.exe`, reconnect, and check the client's server log.
+- **The server exits at once.** Read stderr in the client's log. `--mo2 requires an instance folder`
+  or `MO2 load failed: ...` (exit code 6) means the instance path is missing or wrong, the profile
+  has no `plugins.txt`, or its load order is invalid.
+- **`list_plugins` is empty.** You started without `--mo2` (call `reload_mo2_profile` or
+  `open_plugin`), or the profile has no enabled plugins.
+- **One plugin is missing from `list_plugins`.** It is not enabled in the profile, its file was not
+  found (`get_mo2_status` shows `missingPluginCount`), or it could not be read. `open_plugin` on its
+  path shows the read error.
+- **`PluginChangedOnDisk`.** Something else rewrote the plugin after it was loaded. See "Write
+  safety".
+- **`PluginHasPendingChanges`.** The call would throw away unsaved edits. Save or discard them first.
+- **`PluginReadOnly`.** The plugin is protected (see "Write safety"). Edit a plugin of your own
+  instead.
+- **`compile_papyrus` says `PapyrusCompiler.exe` was not found.** You asked for
+  `engine="creationkit"` and there is none. Install the Creation Kit, set `PAPYRUS_COMPILER_PATH` (the
+  compiler is Bethesda's and is not shipped here), or use `engine="builtin"`.
+- **The built-in engine reports every vanilla type as unknown.** It has no base script sources to
+  resolve against. Set `PAPYRUS_BASE_IMPORTS` or pass `imports`, as described above.
+- **The `nif_*` tools say `niftool executable not found`.** niftool is missing from the package, or
+  `NIFTOOL_PATH` points somewhere stale. Restart the server after fixing it.
+- **`archive_pack` says `Archive2.exe is not configured`.** Install the Creation Kit or set
+  `ARCHIVE2_PATH`.
+- **An audio tool answers `Error: set ..._PATH or place ... in tools/audio`.** A helper program is
+  missing. Set the environment variable the message names, or put the program in `tools\audio`.
+- **Nothing starts, with no window and no output.** Run the exe with `--health` from a terminal. On a
+  clean Windows install the usual cause is a missing Microsoft Visual C++ 2015-2022 Redistributable
+  (x64), which the package needs.

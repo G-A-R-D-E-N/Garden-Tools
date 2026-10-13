@@ -1,8 +1,15 @@
 # The Papyrus subsystem
 
 Everything the tool owns for reading, understanding and writing Papyrus, with no Creation Kit
-involved. It lives in `FO4RecordEditor.Core/Services/Papyrus/` (about 6,500 lines) and it is Core, so
-it builds and tests on Linux.
+involved. The shipped implementation is native C++ in `PluginEditTool/native/src/papyrus/` (headers in
+`native/include/fo4ide/papyrus/`). The `.pex` model, reader and writer live in Radicle
+(`Radicle/include/fo4/pex/pex.hpp`, `Radicle/src/pex/pex.cpp`) and the UI and MCP surface is
+`native/src/app/PapyrusTarget.cpp`. It builds and tests on Linux and Windows.
+
+The C# files named below (`FO4RecordEditor.Core/Services/Papyrus/`, about 6,500 lines) are the
+original implementation that the native code was ported from. They stay in the tree as the oracle
+until native parity is complete, and the figures in this record were measured on them. "The layers"
+gives the native file for each one.
 
 This is the engineering record for issue #78. The issue thread is the decision history; this is the
 current state.
@@ -21,24 +28,41 @@ a `.psc` and a set of roots and writes a `.pex`, with no Creation Kit anywhere i
 
 Read top to bottom; each consumes the one above.
 
-| File | What it is | State |
-|---|---|---|
-| `PapyrusToken.cs`, `PapyrusLexer.cs` | Tokens. 45 keywords, case-insensitive. | done |
-| `PapyrusParser.cs`, `PapyrusAst.cs` | Hand-written recursive descent over 56 BNF productions. | done |
-| `PapyrusScriptIndex.cs` | Script name to file, namespace colons as folder separators, roots in priority order, first match wins. Parse cache keyed on size + mtime. | done |
-| `PapyrusFileWalk.cs` | The recursive directory walk everything else uses. | done |
-| `PapyrusType.cs` | The type model and `PapyrusConversions`, the cast rules. | done |
-| `PapyrusBinding.cs` | What a name turned out to be; `PapyrusResolution`, the per-script result. | done |
-| `PapyrusResolver.cs` | Binds every name, types every expression. | done |
-| `PapyrusTypeChecker.cs` | Judges what the resolver resolved. | done |
-| `PapyrusUserFlags.cs` | `Institute_Papyrus_Flags.flg`, parsed or built in. Flag name to bit. | done |
-| `PapyrusCodeGenerator.cs` | Resolved AST to `List<PexInstruction>` and a whole `PexObject`. | done |
-| `PapyrusCompiler.cs` | The one entry point: parse, resolve, check, generate, write. | done |
-| `PexFile.cs` | `.pex` object model and reader. 47 opcodes including the FO4 additions. | done |
-| `PexStringTable.cs` | Rebuilds the string table for a file that was generated rather than read. | done |
-| `PexWriter.cs` | `.pex` writer. | done |
-| `PapyrusDecompiler.cs` | `.pex` to `.psc`. | done |
-| `PapyrusSymbols.cs`, `PapyrusAnalysisService.cs` | Outline, hover, go-to-definition for the panel and the MCP tools. | done |
+Native paths are under `native/src/papyrus/` and `native/include/fo4ide/papyrus/` unless they
+start with `Radicle/` or `native/`.
+
+| C# file | What it is | Native | State (C#) |
+|---|---|---|---|
+| `PapyrusToken.cs`, `PapyrusLexer.cs` | Tokens. 45 keywords, case-insensitive. | `Token.hpp`, `Lexer.cpp` | done |
+| `PapyrusParser.cs`, `PapyrusAst.cs` | Hand-written recursive descent over 56 BNF productions. | `Parser.cpp`, `Ast.hpp` | done |
+| `PapyrusScriptIndex.cs` | Script name to file, namespace colons as folder separators, roots in priority order, first match wins. Parse cache keyed on size + mtime. | `ScriptIndex.cpp` | done |
+| `PapyrusFileWalk.cs` | The recursive directory walk everything else uses. | `enumeratePapyrusFiles` in `AnalysisService.cpp` | done |
+| `PapyrusType.cs` | The type model and `PapyrusConversions`, the cast rules. | `Type.cpp` (`isImplicit`, `isExplicit`) | done |
+| `PapyrusBinding.cs` | What a name turned out to be; `PapyrusResolution`, the per-script result. | `Binding.cpp` (`Resolution`) | done |
+| `PapyrusResolver.cs` | Binds every name, types every expression. | `Resolver.cpp` | done |
+| `PapyrusTypeChecker.cs` | Judges what the resolver resolved. | `TypeChecker.cpp` | done |
+| `PapyrusUserFlags.cs` | `Institute_Papyrus_Flags.flg`, parsed or built in. Flag name to bit. | `UserFlagTable` in `CodeGenerator.cpp` | done |
+| `PapyrusCodeGenerator.cs` | Resolved AST to `List<PexInstruction>` and a whole `PexObject`. | `CodeGenerator.cpp` | done |
+| `PapyrusCompiler.cs` | The one entry point: parse, resolve, check, generate, write. | `compileFile`, `compileScript` in `AnalysisService.cpp` | done |
+| `PexFile.cs` | `.pex` object model and reader. 47 opcodes including the FO4 additions. | `Radicle/include/fo4/pex/pex.hpp`, `Radicle/src/pex/pex.cpp` | done |
+| `PexStringTable.cs` | Rebuilds the string table for a file that was generated rather than read. | `PexFile::rebuildStringTable` in `Radicle/src/pex/pex.cpp` | done |
+| `PexWriter.cs` | `.pex` writer. | `Radicle/src/pex/pex.cpp` | done |
+| `PapyrusDecompiler.cs` | `.pex` to `.psc`. | `Decompiler.cpp` | done |
+| `PapyrusSymbols.cs`, `PapyrusAnalysisService.cs` | Outline, hover, go-to-definition for the panel and the MCP tools. | `Symbols.cpp`, `AnalysisService.cpp`; the RPC and MCP surface is `native/src/app/PapyrusTarget.cpp` | done |
+| `PapyrusDeclarationCheck.cs` | Duplicate declarations (`PAP0020`), checked before name resolution. | `declarationCheck` in `CodeGenerator.cpp` | done |
+| `PapyrusCreationKitFidelity.cs` | Post-generation touches that make the `.pex` match the Creation Kit where the compiler is free to choose. | `CreationKitFidelity.cpp` | done |
+
+Other C# names used in the prose below map to the native code as follows. `PapyrusCompiler.CompileFile`
+is `compileFile`. `PapyrusResolution.BaseChainComplete` is `Resolution::baseChainComplete`
+(`Binding.hpp`). `PapyrusCodeGenOptions.EmitDebugOnlyCode` is `CodeGenOptions::emitDebugOnlyCode`.
+`PapyrusAnalysisService.NaturalRootsFor` is `AnalysisService::naturalRootsFor` and `.ResolveSources` is
+the free function `resolveSources`, both in `AnalysisService.cpp`. `PapyrusCodeGenerator.ArrayBuiltinArity`
+is `arrayBuiltinArity()` in `CodeGenerator.cpp`. `PexObject.SizeIncludesItself`, `PexFile.TrailingBytes`
+and `PexFile.RebuildStringTable()` are `sizeIncludesItself`, `trailingBytes` and `rebuildStringTable()`
+in `Radicle/include/fo4/pex/pex.hpp`. `ToolPaths.PapyrusBaseImports()` is `papyrusBaseImports()`
+(`AnalysisService.cpp`, built-in engine) and `Locator::papyrusBaseImports`
+(`native/src/tools/ToolLocator.cpp`, Creation Kit route); `ToolPaths.Fallout4Root` is
+`Locator::fallout4Root` in the same file.
 
 Codegen was bracketed on both sides, which is why it was worth doing last: a resolved, type-checked
 AST sits above it and a writer that reproduces real compiler output byte for byte sits below it.
@@ -101,9 +125,14 @@ string-insertion ORDER that decides which spelling is interned first (the hash r
 the insert-order caller is not). Full record: issue #176; the earlier "not a string-table mechanism"
 line was wrong.
 
-`FO4RecordEditor.Core.Tests` is 936 tests and runs on Linux. `FO4RecordEditor.Tests` targets
-`net9.0-windows` through its WPF reference and its host does not start here, so put anything testable
-without WPF in Core.Tests.
+The native tests are `native/tests/unit/Papyrus*Tests.cpp` (Catch2, run by CTest) and
+`Radicle/tests/test_pex*.cpp` for the `.pex` layer; CI runs them (`.github/workflows/native-ci.yml`).
+The native corpus sweep, `PapyrusCorpusTests.cpp`, reads `FO4RE_PSC_CORPUS` and `FO4RE_PSC_ROOTS` like
+the C# one, but it always splits them on `:`, so a Windows drive path cannot be used there. Radicle's
+`.pex` round-trip gate, `Radicle/tests/test_pex_corpus.cpp`, reads `FO4_PEX_CORPUS` (and
+`FO4_PEX_ARCHIVES`) instead of `FO4RE_PEX_CORPUS`. The original C# suite, `FO4RecordEditor.Core.Tests`,
+runs on Linux; `FO4RecordEditor.Tests` targets `net9.0-windows` through its WPF reference and its host
+does not start there.
 
 ### Building the vanilla corpus, and the flag that decides what it means
 
@@ -291,10 +320,13 @@ cleaner oracle, so do not retarget to it.
 
 Two further reasons it was not worth carrying on at the time. The remaining difference is about 123
 scripts of 7,585, roughly 1.6%, and it is cosmetic: Papyrus compares strings and resolves states case
-insensitively, so `"Off"` and `"off"` behave alike at run time. And the change would land in
-`PexStringTable`, which every string in every object passes through, so a wrong winner rule would
-move mismatches rather than remove them. `PexStringTable` interns with `StringComparer.Ordinal`
-today, which is the concrete difference from the Creation Kit if anyone picks this up.
+insensitively, so `"Off"` and `"off"` behave alike at run time. And the change would land in the
+string-table rebuild (C# `PexStringTable`, native `PexFile::rebuildStringTable` in
+`Radicle/src/pex/pex.cpp`), which every string in every object passes through, so a wrong winner
+rule would move mismatches rather than remove them. Both intern by exact, case-sensitive string
+equality (C# `StringComparer.Ordinal`, native `std::unordered_map<std::string, ...>`), so `"Off"` and
+`"off"` get separate entries. That is the concrete difference from the Creation Kit if anyone picks
+this up.
 
 Two limits in the sweep that produced the percentages above, so nobody reads them as tighter than
 they are: it treated keywords as names, which inflates the group count, and it only read the calling
@@ -438,7 +470,8 @@ bit order, which is deterministic.
 
 ## The surface
 
-Two existing tools grew; **no tool was added, so the count is still 105.** A new
+Two existing tools grew; **no tool was added.** (In the C# server that left the count at 105; the
+native server has five Papyrus tools, listed in `docs/MCP_SETUP.md`.) A new
 `papyrus_compile_native` beside `compile_papyrus` would have meant two ways to do one thing and a
 caller having to know which, which is the failure mode the Workshop Menu Editor note in KNOWLEDGE.md
 is about.
@@ -457,8 +490,9 @@ for those and "clean" must never quietly mean "could not tell".
 **The Papyrus panel** gained an engine picker in compile mode, and hides the compiler-path field and
 `-op` when the built-in engine is selected, since neither applies to it.
 
-Both routes go through `PapyrusAnalysisService`, which is Core, so the native Linux build
-(`FO4RecordEditor.Server`) gets all of it.
+Both routes go through `AnalysisService` (`native/src/papyrus/AnalysisService.cpp`), reached from
+`native/src/app/PapyrusTarget.cpp`, so the Linux and Windows builds get all of it. In the C# server it
+was `PapyrusAnalysisService` in Core, which is why `FO4RecordEditor.Server` got it too.
 
 ### The one honest caveat
 
@@ -474,9 +508,13 @@ sources lying around; it does not compile out of thin air. When no base root is 
 `compile_papyrus` says exactly that instead of listing thirty unresolved type names.
 
 Roots come from three places, in order: the source's own folder plus its `Source/User` and `Source`
-ancestors (`PapyrusAnalysisService.NaturalRootsFor`, because a namespaced script is named relative to
-`Source/User`, not to its own folder), then the caller's `imports`, then
-`ToolPaths.PapyrusBaseImports()`.
+ancestors (`AnalysisService::naturalRootsFor`, because a namespaced script is named relative to
+`Source/User`, not to its own folder), then the caller's `imports`, then the base roots. The C#
+`ToolPaths.PapyrusBaseImports()` also read the Settings value, `tools/papyrus/{F4SE,Base}` and
+`<Fallout 4>/Data/Scripts/Source/{User,Base}`. The native built-in engine's `papyrusBaseImports()`
+(`AnalysisService.cpp`) reads only the semicolon-separated `PAPYRUS_BASE_IMPORTS` environment
+variable and deliberately leaves those machine conveniences out; they feed only the Creation Kit
+route, through `Locator::papyrusBaseImports` (`native/src/tools/ToolLocator.cpp`).
 
 ## Two declarations of one name
 
@@ -529,6 +567,9 @@ Known gaps in the layers that are built, stated rather than hidden:
   effort, and that has not changed.
 
 ## Gotchas
+
+The first three bullets concern the original C# build and are kept with it. The rest hold for the
+native code too, under the names mapped in "The layers".
 
 - `dotnet build` on `FO4RecordEditor.csproj` needs `-p:EnableWindowsTargeting=true` on Linux.
 - An XML comment in a `.csproj` cannot contain `--` (MSB4025).

@@ -1,6 +1,11 @@
 [CmdletBinding()]
 param(
     [string] $Version = (Get-Date -Format 'yyyy.MM.dd'),
+    [string] $NiftoolPath = $env:NIFTOOL_PATH,
+    [string] $TexconvPath = $env:TEXCONV_PATH,
+    [string] $CkWikiPath = $env:CK_WIKI_PATH,
+    [string] $AudioToolsDir = $env:FO4IDE_AUDIO_TOOLS_DIR,
+    [string] $BaseScriptsPath = $env:FO4IDE_BASE_SCRIPTS_DIR,
     [switch] $SkipWeb,
     [switch] $SkipCkWiki,
     [switch] $SkipAudioTools,
@@ -16,12 +21,6 @@ $NativeBuild = Join-Path $NativeDir 'build\package-win-x64'
 $WebDir      = Join-Path $Root 'web'
 $Staging     = Join-Path $Root "dist\FO4RecordEditor-$Version"
 $ZipPath     = Join-Path $Root "dist\FO4RecordEditor-$Version.zip"
-
-$Niftool   = Join-Path $Root '..\tools\niftool\build\windows\x64\release\niftool.exe'
-$Texconv   = Join-Path $Root 'TES5Edit-dev-4.1.6\Build\Edit Scripts\Texconvx64.exe'
-$BaseScripts = Join-Path $Root '..\papyrus\Base'
-$CkWiki    = 'E:\F4SE OG\docs\Knowledge Materials\Creation Kit Wiki\Fallout 4 Creation Kit Wiki-52183-21-05-20-1621512739\FO4CKWiki_210520\fallout4'
-$AudioToolsDir = 'E:\F4SE OG\Tools\Audio Converter\bin'
 
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
@@ -87,40 +86,40 @@ New-Item -ItemType Directory -Path $WebStage -Force | Out-Null
 Copy-Item (Join-Path $WebDist '*') $WebStage -Recurse -Force
 
 Step 'Bundling optional external tools'
-if (Test-Path $Niftool) {
+if ($NiftoolPath -and (Test-Path -LiteralPath $NiftoolPath -PathType Leaf)) {
     $dest = Join-Path $Staging 'tools\niftool'
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
-    Copy-Item $Niftool $dest -Force
-    Write-Host '    niftool.exe'
+    Copy-Item -LiteralPath $NiftoolPath (Join-Path $dest 'niftool.exe') -Force
+    Write-Host "    niftool ($NiftoolPath)"
 } else {
-    Warn "niftool.exe not found at $Niftool; the nif_* external-tool operations will be unavailable."
+    Warn "niftool not bundled: -NiftoolPath / NIFTOOL_PATH is unset or not a file ('$NiftoolPath'); the nif_* external-tool operations will be unavailable."
 }
 
-if (Test-Path $Texconv) {
+if ($TexconvPath -and (Test-Path -LiteralPath $TexconvPath -PathType Leaf)) {
     $dest = Join-Path $Staging 'tools\texconv'
     New-Item -ItemType Directory -Path $dest -Force | Out-Null
-    Copy-Item $Texconv $dest -Force
-    Write-Host '    Texconvx64.exe'
+    Copy-Item -LiteralPath $TexconvPath (Join-Path $dest 'Texconvx64.exe') -Force
+    Write-Host "    texconv ($TexconvPath)"
 } else {
-    Warn 'Texconvx64.exe not found; native DDS support still works, but texconv-only fallbacks will be unavailable.'
+    Warn "texconv not bundled: -TexconvPath / TEXCONV_PATH is unset or not a file ('$TexconvPath'); native DDS support still works, but texconv-only fallbacks will be unavailable."
 }
 
 if (-not $SkipCkWiki) {
-    if (Test-Path $CkWiki) {
+    if ($CkWikiPath -and (Test-Path -LiteralPath $CkWikiPath -PathType Container)) {
         $dest = Join-Path $Staging 'tools\ckwiki\fallout4'
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
-        Copy-Item "$CkWiki\*" $dest -Recurse -Force
+        Copy-Item -Path (Join-Path ([WildcardPattern]::Escape($CkWikiPath)) '*') $dest -Recurse -Force
         $count = (Get-ChildItem $dest -Filter '*.html' -Recurse -File).Count
         Write-Host "    CK Wiki mirror ($count pages)"
     } else {
-        Warn "CK wiki mirror not found at $CkWiki; offline wiki lookups require CK_WIKI_PATH on the target machine."
+        Warn "CK wiki mirror not bundled: -CkWikiPath / CK_WIKI_PATH is unset or not a folder ('$CkWikiPath'); offline wiki lookups then need CK_WIKI_PATH on the target machine."
     }
 } else {
     Warn 'Skipping the CK Wiki mirror (-SkipCkWiki).'
 }
 
 if (-not $SkipAudioTools) {
-    if (Test-Path $AudioToolsDir) {
+    if ($AudioToolsDir -and (Test-Path -LiteralPath $AudioToolsDir -PathType Container)) {
         $dest = Join-Path $Staging 'tools\audio'
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
         $missing = @()
@@ -134,20 +133,20 @@ if (-not $SkipAudioTools) {
             Warn "Missing from ${AudioToolsDir}: $($missing -join ', ')"
         }
     } else {
-        Warn "Audio tools folder not found at $AudioToolsDir; configure FFMPEG_PATH/XWMAENCODE_PATH if needed."
+        Warn "Audio tools not bundled: -AudioToolsDir / FO4IDE_AUDIO_TOOLS_DIR is unset or not a folder ('$AudioToolsDir'); configure FFMPEG_PATH/XWMAENCODE_PATH on the target machine if needed."
     }
 } else {
     Warn 'Skipping the audio tools (-SkipAudioTools).'
 }
 
 if ($IncludeBaseScripts) {
-    if (Test-Path $BaseScripts) {
+    if ($BaseScriptsPath -and (Test-Path -LiteralPath $BaseScriptsPath -PathType Container)) {
         $dest = Join-Path $Staging 'tools\papyrus\Base'
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
-        Copy-Item "$BaseScripts\*" $dest -Recurse -Force
+        Copy-Item -Path (Join-Path ([WildcardPattern]::Escape($BaseScriptsPath)) '*') $dest -Recurse -Force
         Warn 'Bundled vanilla Papyrus base scripts. These are Bethesda assets; do not redistribute this build.'
     } else {
-        Warn "-IncludeBaseScripts was set but $BaseScripts does not exist."
+        Warn "-IncludeBaseScripts was set but -BaseScriptsPath / FO4IDE_BASE_SCRIPTS_DIR is unset or not a folder ('$BaseScriptsPath')."
     }
 }
 
