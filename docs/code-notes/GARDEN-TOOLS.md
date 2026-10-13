@@ -2210,3 +2210,7 @@ The Conflicts sidebar is the only flat, FormKey-keyed record list with a native 
 ## PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx:conflict list selection — MainShell harness (#39)
 
 The tests drive the real `MainShell` in conflicts mode with the same backend stub as `overrideConfirmation.test.tsx`, so the copy args are asserted at the `CopyAsOverrideMany` call. Not run locally (CI only).
+
+## PluginEditTool/native/src/plugin/RadiclePluginFields.cpp:semanticFieldCells — strided rows and the `\Count` column (counted arrays)
+
+A strided or repeated scalar row (including the REFR `WaterCurrentVelocities` members, stride 16) emits one `<path>\Count` cell, and that cell is the field's column; `<path>[i]` cells appear only for present elements. With the source subrecord absent the count is `0` and read-only, the same as CLMT `WeatherChance` and LTEX `Grasses` (pinned by RadiclePluginClimateSemanticTests.cpp and RadiclePluginVegetationSemanticTests.cpp). Not run locally (CI only).
