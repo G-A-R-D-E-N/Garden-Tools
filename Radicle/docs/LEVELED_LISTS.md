@@ -1,6 +1,6 @@
 # Leveled lists (LVLI, LVLN, LVSP)
 
-Status: the xEdit citations below were read at commit `93cc0bc5` (`Core/wbDefinitionsFO4.pas`, `Core/wbDefinitionsCommon.pas`) on 2026-10-12. A one-off byte check of the shipped `Fallout4.esm` on the same day read 2098 LVLI and 228 LVLN records; it was a scratch script, not a repo test. The repo check is `LeveledListReal` in `tests/test_leveled_list_real.cpp` (registered in `CMakeLists.txt`). Its name matches `REAL_DATA_TEST_REGEX` in `.github/workflows/native-ci.yml`, so the `native-windows-real-data` job runs it; pull requests select that group by changed paths. This document does not record a pass result for it.
+Status: TODO-verify. LeveledListReal is selected by REAL_DATA_TEST_REGEX and is in no path group, so native-windows-real-data runs it on every PR when FO4 data is configured (it skips otherwise). No pass result is recorded.
 
 Scope: typed read, entry edits and schema coverage for LVLI and LVLN. LVSP shares the entry and header code.
 

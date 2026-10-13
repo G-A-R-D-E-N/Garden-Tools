@@ -75,6 +75,8 @@ def load_signatures():
         if not line or line.startswith("#"):
             continue
         sig, line_no = line.split()
+        if sig in sigs:
+            fail(f"duplicate {sig}")
         sigs[sig] = int(line_no)
     return sigs
 
@@ -116,10 +118,10 @@ def cell(value):
 def tier_of(scalar, string, formlink, authoring, modules, lists, keyword):
     if scalar or string or formlink or authoring:
         return "L4"
-    if modules:
-        return "L2"
     if lists:
         return "L3"
+    if modules:
+        return "L2"
     if keyword:
         return "L1"
     return "L0"
@@ -184,13 +186,13 @@ def render():
         "",
         "Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.",
         "",
-        "Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module and no rows; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these, so only generic remap can apply. L5 (dedicated PET route) is not derived.",
+        "Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these, so remap evidence (Mixed remap column and the form_links.cpp record checks) is not part of the tier. L5 (dedicated PET route) is not derived.",
         "",
         f"Tier counts: {tier_line}.",
         "",
         "### Per-signature coverage",
         "",
-        "| Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests | Tier |",
+        "| Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |",
         *main_rows,
         "",
