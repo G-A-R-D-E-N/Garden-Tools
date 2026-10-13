@@ -1130,7 +1130,7 @@ source:xEdit PRKZ is a count path for PRKR (FO4:10393). The count is written wit
 
 ## Radicle/src/forms/npc.cpp:encode_inventory
 
-source:xEdit COCT is a count path for CNTO (FO4:3316). The count is written with the run, so removing the last item drops COCT with the run. COED is emitted only directly after its CNTO, matching its nesting at FO4:3300-3314.
+source:xEdit COCT is a count path for CNTO (xEdit 93cc0bc5 Core/wbDefinitionsFO4.pas:3315-3316). COCT is tolerated: decode returns the CNTO entries present without checking COCT, and edits rewrite COCT to the CNTO count. Fallout4.esm NPC_ 0x0003D62A is the example, with COCT=2 and one CNTO. Removing the last item drops COCT with the run. COED is emitted only directly after its CNTO, matching its nesting at FO4:3300-3314.
 
 ## Radicle/src/forms/npc.cpp:decode_npc_inventory
 
@@ -1150,7 +1150,11 @@ source:xEdit global_or_rank is stored raw. xEdit reads it as a Global FormID or 
 
 ## Radicle/tests/test_npc_real.cpp:NpcReal
 
-Runs only when FO4_DATA_DIR is set. For every NPC_ in each official master it decodes each scalar that is present and the three lists. The COCT and PRKZ count checks are enforced by the decoders, so a mismatch fails here.
+Runs only when FO4_DATA_DIR is set. For every NPC_ in each official master it decodes each scalar that is present and the three lists. The PRKZ count check is enforced by the decoder, so a mismatch fails here. COCT is tolerated: Fallout4.esm NPC_ 0x0003D62A has COCT=2 with one CNTO, and decode returns the entries present.
+
+## Radicle/src/forms/npc.cpp:decode_npc_factions
+
+Measured 2026-10-13 on the official masters, not from memory: every NPC_ SNAM is a 5-byte payload (Fallout4.esm 6571 SNAM, DLCRobot.esm 371, DLCworkshop01.esm 84, DLCCoast.esm 773, DLCworkshop02.esm 2, DLCworkshop03.esm 93, DLCNukaWorld.esm 1193). CI job 22303 first failed on DLCRobot.esm NPC_ 0x002A9F, whose SNAM is 5 bytes. The 8-byte check was wrong. The NPC_ record holds one SNAM kind, the faction list, so the edit run is the whole SNAM group. Test: `tests/test_npc_lists.cpp:NpcLists.FactionEditsTouchOnlyTheSnamRun`.
 
 ## Radicle/include/fo4/forms/faction.hpp:FactionCombatReaction
 
@@ -1309,9 +1313,9 @@ Refuses an undecodable source reference, source parent CELL, or source parent WR
 
 Refuses an undecodable source INFO and an undecodable source parent DIAL (its QNAM is read by the copy) right after containment resolves, before `reserve_local_form_key`. Same ordering cause and test as `placed_reference_copy.cpp:copy_placed_reference_as_new`: `tests/test_undecodable_edit.cpp:UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource`.
 
-## Radicle/tests/test_sound_real.cpp:DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes
+## Radicle/tests/test_sound_real.cpp:DecodesEverySoundRecordThroughNativeAndAbiAndPreservesSubrecords
 
-GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The source bytes are taken before the clear, and the span stays valid because the copy keeps the shared `original_data` buffer. The record-range clear skips TES4: the official masters store HEDR counts that differ from the recomputed count (see `docs/HEDR_RECORD_COUNT.md`), so a TES4 rebuild would change their bytes. HEDR rebuild is covered by `tests/test_hedr_count.cpp`.
+GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The rewritten file is not compared byte for byte. Compressed records re-encode at zlib level 6 (`Radicle/src/plugin/writer.cpp:zlib_compress`, default `compress()`), while the official masters were compressed at levels 7 to 9 per record (FLEVEL 3 throughout; first 400 compressed records of DLCRobot.esm: 331 match level 7, 63 level 8, 6 level 9; Fallout4.esm: 268 level 7, 132 level 8), so no single level reproduces them. Re-encoding every compressed Fallout4.esm record at level 6 adds exactly 378074 bytes, the whole gap the CI reported (331154650 against 330776576). Only compressed bytes change; the data does not. The test therefore compares every record except TES4 (header flags, form version, compressed flag, and each subrecord's signature, extended size and data) against the source record. The record-range clear skips TES4: the official masters store HEDR counts that differ from the recomputed count (see `docs/HEDR_RECORD_COUNT.md`), so a TES4 rebuild would change their bytes. HEDR rebuild is covered by `tests/test_hedr_count.cpp`.
 
 ## Radicle/src/schema/form_links.cpp:remap_record_form_links — single-record refusal (GT-232)
 
