@@ -188,6 +188,33 @@ TEST(AuthoringPreflight, NestedEyesPlacementFails) {
   EXPECT_TRUE(has_issue(issues, "record_placement_invalid"));
 }
 
+TEST(AuthoringPreflight, CellReferenceVariantAcceptsPersistentAndTemporaryChildren) {
+  for (const auto type : {fo4::GroupType::cell_persistent_children, fo4::GroupType::cell_temporary_children}) {
+    fo4::Plugin plugin;
+    plugin.key = fo4::PluginKey::from_filename("Patch.esp");
+    auto outer = top_group("CELL");
+    fo4::Group children;
+    children.header.group_type = static_cast<std::int32_t>(fo4::GroupType::cell_children);
+    fo4::Group nested;
+    nested.header.group_type = static_cast<std::int32_t>(type);
+    nested.children.emplace_back(authored_record("PHZD", 0x800, {}));
+    children.children.emplace_back(std::move(nested));
+    outer.children.emplace_back(std::move(children));
+    plugin.groups.push_back(std::move(outer));
+
+    const auto issues = fo4::schema::preflight_authoring_record(
+        plugin, fo4::FormKey::parse("000800:Patch.esp"));
+    EXPECT_FALSE(has_issue(issues, "record_placement_invalid")) << static_cast<int>(type);
+  }
+}
+
+TEST(AuthoringPreflight, CellReferenceVariantAtTopLevelFails) {
+  auto plugin = plugin_with_top_record(authored_record("PHZD", 0x800, {}));
+  const auto issues = fo4::schema::preflight_authoring_record(
+      plugin, fo4::FormKey::parse("000800:Patch.esp"));
+  EXPECT_TRUE(has_issue(issues, "record_placement_invalid"));
+}
+
 TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) {
   auto record = authored_record("LVSP", 0x800, {"OBND", "LVLD", "LVLM", "LVLF", "LLCT"});
   record.subrecords.front().data.resize(12);

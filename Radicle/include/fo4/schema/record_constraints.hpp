@@ -14,6 +14,7 @@ enum class RecordPlacement {
   quest_children,
   topic_children,
   cell_children,
+  cell_reference_children,
 };
 
 struct SubrecordAuthoringConstraint {

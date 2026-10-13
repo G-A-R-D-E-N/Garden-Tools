@@ -1,6 +1,7 @@
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "real_data_build.hpp"
@@ -87,10 +88,13 @@ TEST_P(PlacedVariantsReal, EveryTrackedRecordDecodesAndMeetsAuthoringMinimums) {
         if (!bytes.empty()) static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
       }
     }
-    if (variant(signature) && !record.header.flags.is_deleted()) {
+    if (variant(signature)) {
       const auto view = fo4::forms::decode_placed_reference(plugin, record);
       EXPECT_TRUE(view.has_value()) << record.form_key.to_string();
       if (view.has_value()) EXPECT_EQ(view->kind, fo4::forms::PlacedReferenceKind::variant);
+      for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, record.form_key)) {
+        if (issue.code == "record_placement_invalid") violators.push_back(record.form_key.to_string() + " placement");
+      }
     }
     check_authoring(record, violators);
   });

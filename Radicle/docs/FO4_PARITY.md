@@ -48,7 +48,7 @@ Tier counts: L0 70, L1 16, L2 16, L3 1, L4 44.
 | AACT | 6970 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
 | ACTI | 5611 | - | - | - | - | - | - | yes | environment/base_records | - | - | L2 |
-| ADDN | 7796 | 3 | - | 2 | - | - | yes | - | - | - | - | L4 |
+| ADDN | 7796 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ALCH | 5691 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | AMDL | 12246 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -145,17 +145,17 @@ Tier counts: L0 70, L1 16, L2 16, L3 1, L4 44.
 | OTFT | 9357 | - | - | - | - | - | - | - | - | - | - | L0 |
 | OVIS | 12546 | - | - | - | - | - | - | - | - | - | - | L0 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
-| PARW | 5944 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
-| PBAR | 5945 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
-| PBEA | 5946 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
-| PCON | 5947 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PARW | 5944 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PBAR | 5945 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PBEA | 5946 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PCON | 5947 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PERK | 7582 | - | - | - | - | - | - | - | - | yes | 1 | L0 |
-| PFLA | 5948 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
-| PGRE | 5949 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
-| PHZD | 5950 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PFLA | 5948 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PGRE | 5949 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PHZD | 5950 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PKIN | 12571 | - | - | - | - | - | - | - | - | - | - | L0 |
-| PLYR | 12129 | - | - | - | - | - | yes | - | - | - | - | L4 |
-| PMIS | 5951 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
+| PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 2 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | - | 4 | - | 8 | 2 | yes | yes | forms/race, forms/race_body | - | 2 | L4 |
@@ -225,15 +225,15 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
-| PARW | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
-| PBAR | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
-| PBEA | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
-| PCON | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
-| PFLA | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
-| PGRE | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
-| PHZD | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PARW | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PBAR | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PBEA | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PCON | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PFLA | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PGRE | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PHZD | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PLYR | - | - | - | - | - | - | - | - | - | - |
-| PMIS | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PMIS | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PROJ | 16 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |

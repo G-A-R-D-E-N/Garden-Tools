@@ -2026,7 +2026,7 @@
     {
       "signature": "PARW",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -2191,6 +2191,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PARW\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PARW\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -2275,7 +2286,7 @@
     {
       "signature": "PBAR",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -2440,6 +2451,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PBAR\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PBAR\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -2524,7 +2546,7 @@
     {
       "signature": "PBEA",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -2689,6 +2711,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PBEA\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PBEA\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -2773,7 +2806,7 @@
     {
       "signature": "PCON",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -2938,6 +2971,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PCON\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PCON\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -3022,7 +3066,7 @@
     {
       "signature": "PFLA",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -3187,6 +3231,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PFLA\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PFLA\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -3271,7 +3326,7 @@
     {
       "signature": "PGRE",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -3436,6 +3491,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PGRE\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PGRE\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -3520,7 +3586,7 @@
     {
       "signature": "PHZD",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -3684,6 +3750,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PHZD\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PHZD\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -3768,7 +3845,7 @@
     {
       "signature": "PMIS",
       "authoring": {
-        "placement": "cell_children",
+        "placement": "cell_reference_children",
         "subrecords": [
           {
             "signature": "EDID",
@@ -3933,6 +4010,17 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PMIS\\OwnerRank",
+          "label": "Faction rank",
+          "kind": "scalar",
+          "subrecord": "XRNK",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "PMIS\\OwnerNoCrime",
           "label": "No Crime",
           "kind": "scalar",
@@ -4027,7 +4115,8 @@
           {
             "signature": "PLYR",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "07000000"
           }
         ]
       },
