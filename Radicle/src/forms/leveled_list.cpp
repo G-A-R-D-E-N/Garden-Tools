@@ -464,6 +464,9 @@ bool set_leveled_list_settings(Plugin& plugin,
                                std::uint8_t chance_none,
                                std::uint8_t max_count,
                                std::uint8_t flags) {
+  if ((flags & ~0x07u) != 0) {
+    throw LeveledListError("leveled list flags may use only defined bits 0x01, 0x02, and 0x04");
+  }
   assign_record_form_keys(plugin);
   const auto current = decode_leveled_list(plugin, key);
   if (current.chance_none == chance_none && current.max_count == max_count &&

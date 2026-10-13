@@ -123,8 +123,8 @@ Tier counts: L0 72, L1 16, L2 16, L3 1, L4 42.
 | LIGH | 9871 | - | - | - | - | - | - | yes | environment/base_records | - | 1 | L2 |
 | LSCR | 9946 | - | - | - | - | - | - | - | - | - | - | L0 |
 | LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
-| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | - | 1 | L4 |
-| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | - | 1 | L4 |
+| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVSP | 10033 | - | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
 | MATO | 9375 | - | - | - | - | - | - | - | - | - | - | L0 |
 | MATT | 7958 | - | - | - | - | - | - | - | - | - | 1 | L0 |
@@ -140,7 +140,7 @@ Tier counts: L0 72, L1 16, L2 16, L3 1, L4 42.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | - | - | - | - | - | L0 |
 | NOTE | 12470 | - | - | - | - | - | - | - | - | - | - | L0 |
-| NPC_ | 10286 | 47 | - | - | - | - | yes | yes | forms/npc | - | 1 | L4 |
+| NPC_ | 10286 | 47 | - | - | - | - | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | - | - | - | - | - | L0 |
 | OVIS | 12546 | - | - | - | - | - | - | - | - | - | - | L0 |

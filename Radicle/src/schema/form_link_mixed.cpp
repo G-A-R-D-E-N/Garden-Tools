@@ -433,6 +433,33 @@ std::optional<std::vector<std::size_t>> faction_formid_offsets(const Record& rec
                                      strict_remap);
 }
 
+const FixedStrideLayout k_npc_layouts[] = {
+    {"SNAM", 5, {0}, true, 0},
+    {"PRKR", 5, {0}, true, 0},
+};
+
+std::optional<std::vector<std::size_t>> npc_formid_offsets(const Record& record,
+                                                          const Subrecord& sub,
+                                                          bool strict_remap) {
+  if (record.header.signature != Signature::from_string("NPC_")) return std::nullopt;
+  return fixed_stride_formid_offsets(sub, record.header.form_version, k_npc_layouts, strict_remap);
+}
+
+const FixedStrideLayout k_leveled_list_layouts[] = {
+    {"LLKC", 8, {0}, false, 0},
+};
+
+std::optional<std::vector<std::size_t>> leveled_list_formid_offsets(const Record& record,
+                                                                   const Subrecord& sub,
+                                                                   bool strict_remap) {
+  const auto signature = record.header.signature;
+  if (signature != Signature::from_string("LVLI") && signature != Signature::from_string("LVLN")) {
+    return std::nullopt;
+  }
+  return fixed_stride_formid_offsets(sub, record.header.form_version, k_leveled_list_layouts,
+                                     strict_remap);
+}
+
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
@@ -444,6 +471,8 @@ std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& recor
     return repeated;
   }
   if (auto faction = faction_formid_offsets(record, sub, strict_remap)) return faction;
+  if (auto npc = npc_formid_offsets(record, sub, strict_remap)) return npc;
+  if (auto leveled = leveled_list_formid_offsets(record, sub, strict_remap)) return leveled;
   return placed_reference_formid_offsets(record, sub, strict_remap);
 }
 

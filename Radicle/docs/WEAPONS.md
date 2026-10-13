@@ -117,7 +117,7 @@ Enum ranges are the count of xEdit enum members (`On Hit` 4, `Animation Type` 12
 
 ## FormLinks
 
-Embedded FormIDs go through the single-FormLink table with a payload size. Top-level FormID subrecords (INAM, LNAM, WAMD, WZMD, CNAM, BIDS, BAMT, ETYP, NNAM, INRD, YNAM, ZNAM, PTRN, STCP, FLTR, MODS, MO4S) are covered by `Radicle/include/fo4/schema/formid_subrecords.inc`, which is keyed by signature.
+Embedded form IDs go through the single-FormLink table with a payload size. Top-level form ID subrecords (INAM, LNAM, WAMD, WZMD, CNAM, BIDS, BAMT, ETYP, NNAM, INRD, YNAM, ZNAM, PTRN, STCP, FLTR, MODS, MO4S) are covered by `Radicle/include/fo4/schema/formid_subrecords.inc`, which is keyed by signature.
 
 | Path | Subrecord | Offset | Targets | xEdit |
 | --- | --- | --- | --- | --- |
@@ -144,7 +144,7 @@ All FormLink fields are nullable, matching the `wbFormIDCk(..., [X, NULL])` help
 | DNAM Unknown, 2 bytes at 110 (12988) and 4 bytes at 128 (12993) | wbByteArray, not a scalar. Preserved as bytes. |
 | FNAM Bolt Anim Seconds, 4 bytes at 20 (13001) | wbByteArray, not a scalar. Preserved as bytes. |
 | OBTE count (12902, 5521) | Count tied to the OBTS combinations. Authoring coupled, no scalar. |
-| OBTS combination block (5499-5512, 5523-5526) | Variable-length, not typed. FormIDs remapped by `Radicle/src/schema/form_links.cpp` (validated on 813 WEAP OBTS bodies). |
+| OBTS combination block (5499-5512, 5523-5526) | Variable-length, not typed. form IDs remapped by `Radicle/src/schema/form_links.cpp` (validated on 813 WEAP OBTS bodies). |
 | DEST stage members (4275 onward, DSTD and others) | Only DEST and DAMC are listed. Stages are repeated. |
 | MODT texture hashes (Common 8918) | Not a scalar. Preserved. |
 | KSIZ count (12898) | Counter of the keyword list, maintained by the list editor. |
@@ -152,7 +152,7 @@ All FormLink fields are nullable, matching the `wbFormIDCk(..., [X, NULL])` help
 
 ## Version gates
 
-WEAP DNAM, FNAM and CRDT have no version condition in xEdit, so each has one fixed size. The only version gate is the DAMA entry. xEdit adds a Curve Table FormID from form version 152 (`Common 8460`, `wbFromVersion(152, ...)`). The FormLink remap already applies this at `Radicle/src/schema/form_link_mixed.cpp:k_repeated_struct_layouts`.
+WEAP DNAM, FNAM and CRDT have no version condition in xEdit, so each has one fixed size. The only version gate is the DAMA entry. xEdit adds a Curve Table form ID from form version 152 (`Common 8460`, `wbFromVersion(152, ...)`). The FormLink remap already applies this at `Radicle/src/schema/form_link_mixed.cpp:k_repeated_struct_layouts`.
 
 ## Typed read
 

@@ -27,6 +27,8 @@ constexpr auto k_prkr = Signature::from_string("PRKR");
 constexpr auto k_coct = Signature::from_string("COCT");
 constexpr auto k_cnto = Signature::from_string("CNTO");
 constexpr auto k_coed = Signature::from_string("COED");
+constexpr auto k_fact = Signature::from_string("FACT");
+constexpr auto k_perk = Signature::from_string("PERK");
 
 constexpr std::array k_faction_run{k_snam};
 constexpr std::array k_perk_run{k_prkz, k_prkr};
@@ -117,6 +119,22 @@ const Record& npc_record(const Plugin& plugin, const FormKey& key) {
     throw NpcError("record is not NPC_: " + key.to_string());
   }
   return *record;
+}
+
+void require_local_target(const Plugin& plugin,
+                          const FormKey& target,
+                          Signature expected,
+                          std::string_view label) {
+  if (target.owner() != plugin.key) return;
+  const auto* record = find_record(plugin, target);
+  if (record == nullptr) {
+    throw NpcError(std::string(label) + " must resolve to a record in this plugin: " +
+                   target.to_string());
+  }
+  if (record->header.signature != expected) {
+    throw NpcError(std::string(label) + " target " + target.to_string() + " is " +
+                   record->header.signature.to_string() + ", not " + expected.to_string());
+  }
 }
 
 void check_declared_count(const std::optional<std::uint32_t>& declared,
@@ -294,6 +312,7 @@ std::vector<NpcFaction> decode_npc_factions(const Plugin& plugin, const FormKey&
 }
 
 bool add_npc_faction(Plugin& plugin, const FormKey& key, const NpcFaction& value) {
+  require_local_target(plugin, value.faction, k_fact, "SNAM faction");
   auto entries = decode_npc_factions(plugin, key);
   entries.push_back(value);
   return write_factions(plugin, key, entries);
@@ -307,6 +326,7 @@ bool remove_npc_faction(Plugin& plugin, const FormKey& key, std::size_t index) {
 }
 
 bool set_npc_faction(Plugin& plugin, const FormKey& key, std::size_t index, const NpcFaction& value) {
+  require_local_target(plugin, value.faction, k_fact, "SNAM faction");
   auto entries = decode_npc_factions(plugin, key);
   require_index(entries, index, "SNAM");
   entries[index] = value;
@@ -336,6 +356,7 @@ std::vector<NpcPerk> decode_npc_perks(const Plugin& plugin, const FormKey& key) 
 }
 
 bool add_npc_perk(Plugin& plugin, const FormKey& key, const NpcPerk& value) {
+  require_local_target(plugin, value.perk, k_perk, "PRKR perk");
   auto entries = decode_npc_perks(plugin, key);
   entries.push_back(value);
   return write_perks(plugin, key, entries);
@@ -349,6 +370,7 @@ bool remove_npc_perk(Plugin& plugin, const FormKey& key, std::size_t index) {
 }
 
 bool set_npc_perk(Plugin& plugin, const FormKey& key, std::size_t index, const NpcPerk& value) {
+  require_local_target(plugin, value.perk, k_perk, "PRKR perk");
   auto entries = decode_npc_perks(plugin, key);
   require_index(entries, index, "PRKR");
   entries[index] = value;

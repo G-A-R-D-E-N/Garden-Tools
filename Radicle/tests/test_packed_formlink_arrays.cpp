@@ -20,6 +20,13 @@ std::vector<std::byte> words(std::initializer_list<std::uint32_t> values) {
   return out.bytes;
 }
 
+std::vector<std::byte> u32_then_u8(std::uint32_t value, std::uint8_t tail) {
+  fo4::test::ByteWriter out;
+  out.u32(value);
+  out.u8(tail);
+  return out.bytes;
+}
+
 void write_master(fo4::test::ByteWriter& out, std::string_view name) {
   std::vector<std::byte> bytes;
   bytes.reserve(name.size() + 1);
@@ -355,4 +362,84 @@ TEST(FormLink, DamaCurveTableElementsRemapAtFormVersion152) {
   EXPECT_EQ(links[1].offset, 8);
   EXPECT_EQ(links[2].offset, 12);
   EXPECT_EQ(links[3].offset, 20);
+}
+
+TEST(FormLink, NpcFactionSnamRemapsFormIdAndKeepsRank) {
+  auto out = plugin_header(1);
+  append_record(out, "NPC_", 0x03000800, "SNAM", u32_then_u8(0x00000099, 0xFE));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* npc = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(npc, nullptr);
+  ASSERT_NE(find_sub(*npc, "SNAM"), nullptr);
+  EXPECT_EQ(find_sub(*npc, "SNAM")->data, u32_then_u8(0x01000099, 0xFE));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 1);
+  EXPECT_EQ(links[0].subrecord.to_string(), "SNAM");
+  EXPECT_EQ(links[0].offset, 0);
+}
+
+TEST(FormLink, NpcFactionSnamWrongSizeFailsClosedUnderStrictRemap) {
+  auto out = plugin_header();
+  append_record(out, "NPC_", 0x03000800, "SNAM", std::vector<std::byte>(6, std::byte{0x11}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(FormLink, NpcPerkPrkrRemapsFormIdAndKeepsRank) {
+  auto out = plugin_header(1);
+  append_record(out, "NPC_", 0x03000800, "PRKR", u32_then_u8(0x02000044, 3));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* npc = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(npc, nullptr);
+  ASSERT_NE(find_sub(*npc, "PRKR"), nullptr);
+  EXPECT_EQ(find_sub(*npc, "PRKR")->data, u32_then_u8(0x00000044, 3));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 1);
+  EXPECT_EQ(links[0].subrecord.to_string(), "PRKR");
+  EXPECT_EQ(links[0].offset, 0);
+}
+
+TEST(FormLink, NpcPerkWrongSizeFailsClosedUnderStrictRemap) {
+  auto out = plugin_header();
+  append_record(out, "NPC_", 0x03000800, "PRKR", std::vector<std::byte>(4, std::byte{0x11}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(FormLink, LeveledListLlkcKeywordsRemapAndKeepChances) {
+  auto out = plugin_header(1);
+  append_record(out, "LVLI", 0x03000800, "LLKC",
+                words({0x00000099, 50, 0x02000044, 0x00000005}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* lvli = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(lvli, nullptr);
+  ASSERT_NE(find_sub(*lvli, "LLKC"), nullptr);
+  EXPECT_EQ(find_sub(*lvli, "LLKC")->data, words({0x01000099, 50, 0x00000044, 0x00000005}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 2);
+  EXPECT_EQ(links[0].subrecord.to_string(), "LLKC");
+  EXPECT_EQ(links[0].offset, 0);
+  EXPECT_EQ(links[1].offset, 8);
+}
+
+TEST(FormLink, LeveledListLlkcWrongSizeFailsClosedUnderStrictRemap) {
+  auto out = plugin_header();
+  append_record(out, "LVLN", 0x03000800, "LLKC", std::vector<std::byte>(12, std::byte{0x11}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

@@ -15,18 +15,18 @@ Scope: typed read, entry edits and schema coverage for LVLI and LVLN. LVSP share
 | LVLI, LVLN | LVLD | Chance none (u8) | `LeveledList::chance_none`; scalar `LVLI\ChanceNone`, `LVLN\ChanceNone` | 9989, 10012; definition 3281 |
 | LVLI, LVLN | LVLM | Max count (u8) | `LeveledList::max_count`; scalar `...\MaxCount` | 9990, 10013 |
 | LVLI, LVLN | LVLF | Flags (u8) | `LeveledList::flags`; scalar `...\Flags` | 9991-9995, 10014-10018 |
-| LVLI, LVLN | LVLG | Use global (FormID, GLOB) | `LeveledList::use_global`; formlink `...\UseGlobal` | 9996, 10019 |
+| LVLI, LVLN | LVLG | Use global (form ID, GLOB) | `LeveledList::use_global`; formlink `...\UseGlobal` | 9996, 10019 |
 | LVLI, LVLN | LLCT | Entry count (u8) | derived from entries; not a schema scalar | 9997, 10020; definition 3278 |
 | LVLI, LVLN | LVLO | Entry, 12 bytes | `LeveledListEntry`; reference remapped by `structured_formids.inc` | 10000, 10023; `Core/wbDefinitionsCommon.pas:8791-8802` |
 | LVLI, LVLN | COED | Extra data after an entry, 12 bytes | `LeveledListEntry::extra` | 10001, 10024; `Core/wbDefinitionsFO4.pas:3290-3298` |
 | LVLI, LVLN | LLKC | Filter keyword chances | not implemented; authoring only | 9980-9984, 10028 |
-| LVLI | LVSG | Epic loot chance (FormID, GLOB) | `LeveledList::epic_loot_chance`; formlink `LVLI\EpicLootChance` | 10029 |
+| LVLI | LVSG | Epic loot chance (form ID, GLOB) | `LeveledList::epic_loot_chance`; formlink `LVLI\EpicLootChance` | 10029 |
 | LVLI | ONAM | Override name (localized string) | `LeveledList::override_name` | 10030 |
 | LVLN | MODL, MODT, MODC, MODS, MODF | Model group | not implemented; authoring only | 10006; `wbGenericModel` at `Core/wbDefinitionsFO4.pas:1030-1046` |
 
-Entry, in order: level (u16, offset 0), two bytes (2-3), item FormID (4), count (u16, 8), chance none (u8, 10), one byte (11). The shipped byte check found non-zero values in bytes 2-3 and 11, so both are kept as read.
+Entry, in order: level (u16, offset 0), two bytes (2-3), item form ID (4), count (u16, 8), chance none (u8, 10), one byte (11). The shipped byte check found non-zero values in bytes 2-3 and 11, so both are kept as read.
 
-COED, when present: owner FormID (0, NULL allowed), union at 4, item condition float (8). The union is raw: `Core/wbDefinitionsCommon.pas:5451-5469` (`wbCOEDOwnerDecider`) makes it a global variable for an NPC_ owner and a required rank for a FACT owner. The shipped byte check found 60 COED, all with NULL owners, all in LVLI.
+COED, when present: owner form ID (0, NULL allowed), union at 4, item condition float (8). The union is raw: `Core/wbDefinitionsCommon.pas:5451-5469` (`wbCOEDOwnerDecider`) makes it a global variable for an NPC_ owner and a required rank for a FACT owner. The shipped byte check found 60 COED, all with NULL owners, all in LVLI.
 
 ## Shared code
 
@@ -36,7 +36,7 @@ COED, when present: owner FormID (0, NULL allowed), union at 4, item condition f
 ## Schema coverage
 
 - Scalars: LVLD, LVLM, LVLF for LVLI and LVLN.
-- Formlinks: LVLG (both), LVSG (LVLI). Four-byte FormIDs, `payload_sizes` 4, targets GLOB, not nullable (xEdit `[GLOB]` without NULL).
+- Formlinks: LVLG (both), LVSG (LVLI). Four-byte form IDs, `payload_sizes` 4, targets GLOB, not nullable (xEdit `[GLOB]` without NULL).
 - Localized: ONAM on LVLI.
 - Authoring order follows xEdit: EDID, OBND, LVLD, LVLM, LVLF, LVLG, LLCT, LVLO, LLKC, then LVSG and ONAM (LVLI) or MODL, MODT, MODC, MODS, MODF (LVLN). LVLM and LLCT have minimum 0 because the shipped byte check found 65 LVLI without LVLM and 7 empty LVLI without LLCT.
 
@@ -45,6 +45,6 @@ COED, when present: owner FormID (0, NULL allowed), union at 4, item condition f
 - LLCT is not a schema scalar. The generic field writer has no derived-field guard, so a scalar write could desync LLCT from the entry count. Entry edits keep it equal.
 - LVLO entry fields are not schema scalars or formlink fields. The schema addresses one subrecord payload, and LVLO repeats. The reference is already remapped by `structured_formids.inc`.
 - LVLO target type is checked only for a local entry whose item is new to the list, on insert or set. Foreign entries and entries already present are not checked. Allowed types follow xEdit `sigBaseObjects` for LVLI (10023), `NPC_` or `LVLN` for LVLN (10000). See `validate_entry_target` in `Radicle/docs/code-notes/Radicle.md`.
-- LLKC and the LVLN model group are not decoded. The shipped byte check found LLKC payloads of 8, 16 and 24 bytes, so the 8-byte element in xEdit (`Core/wbDefinitionsFO4.pas:9979-9984`) does not describe every record.
+- LLKC and the LVLN model group are not decoded or written. LLKC is kept as an opaque subrecord on replace. Remap reads it as repeated 8-byte entries for LVLI and LVLN (form ID at 0, the 4-byte chance is not checked), so a payload of 8, 16 or 24 bytes is one, two or three entries. xEdit defines LLKC as an uncounted array of that 8-byte struct (`Core/wbDefinitionsFO4.pas:9979-9984`). See `leveled_list_formid_offsets` in `Radicle/docs/code-notes/Radicle.md`.
 - LVLI and LVLN creation writes a minimal record only: EDID (optional), OBND, LVLD, LVLM, LVLF and LLCT, with no entries, LVLG, LVSG, ONAM or model group. Entries are added later through insert or set. See `create_leveled_list` in `Radicle/docs/code-notes/Radicle.md`.
 - LVLG and LVSG are read but not edited. Header settings do not change them.

@@ -1464,9 +1464,10 @@ An INFO's DIAL topic is the label of its nearest enclosing topic-children group 
 
 Dialogue stored-link checks. Each rule reads only stored subrecords. A stored form ID whose master index is past the plugin's master table is skipped, so neither rule below fires for it.
 
-- `branch_starting_topic_not_dial` (error): DLBR `SNAM` (Starting Topic) must target a loaded DIAL, including a missing target. Cites `Core/wbDefinitionsFO4.pas:8792` (`wbFormIDCk(SNAM, 'Starting Topic', [DIAL]).SetRequired`). DLBR has no entry in the generated schema, so the generic checker never sees this slot.
+- `branch_starting_topic_not_dial` (error): DLBR `SNAM` (Starting Topic) must target a loaded DIAL, including a missing target. Cites `Core/wbDefinitionsFO4.pas:8792` (`wbFormIDCk(SNAM, 'Starting Topic', [DIAL]).SetRequired`). DLBR has no record row in the generated schema, so the slot is unproven. The generic `check_links` pass does see the `SNAM`, because `formid_subrecords.inc` lists it and a 4-byte payload is remapped as a form ID. For a missing target that pass is skipped (see `check_links` below), so this rule is the only finding.
 - `deleted_target` (warning): a DLBR `SNAM` whose loaded winner is deleted. This comes only from the generic `check_links` `deleted_target` check, which already covers the DLBR SNAM link; `check_dialogue_links` adds no second warning for it.
-- `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
+- `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.
+- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
 
@@ -1494,3 +1495,27 @@ One generic edit per record that has rows: `set_record_scalar` for scalars, `set
 ## Radicle/tests/test_audio_records_real.cpp:AudioRecordsReal.EveryRowDecodesAndAuthoringMinimumsHold
 
 Over each official master, every batch record must have no `preflight_record` error and every scalar row that is present must decode. Each authoring subrecord's count must fall inside its minimum and maximum. Defaults are not compared against the corpus.
+
+## Radicle/src/graph/check_errors.cpp:check_links — DLBR SNAM with a missing target
+
+`check_links` skips a DLBR `SNAM` whose target is in no loaded plugin. Before this, that link also got an `unresolved_link` finding, a warning because the DLBR `SNAM` slot has no schema proof, next to the `branch_starting_topic_not_dial` error from `check_dialogue_links`. The dialogue rule is kept because it names the requirement (a loaded DIAL). Deleted targets still come from `check_links`. Test: `tests/test_check_errors.cpp:MissingBranchStartingTopicIsReportedOnce`.
+
+## Radicle/src/schema/form_link_mixed.cpp:npc_formid_offsets — NPC_ SNAM and PRKR
+
+NPC_ `SNAM` (faction) is 5 bytes: form ID u32 at 0, rank s8 at 4. NPC_ `PRKR` (perk) is also 5 bytes: form ID u32 at 0, rank u8 at 4. Both layouts are exact, so any other size throws under strict remap and is skipped otherwise. The sizes match `encode_factions` and `encode_perks` in `src/forms/npc.cpp`, which write 5 bytes, and `decode_npc_factions` and `decode_npc_perks`, which require 5. xEdit defines the perk struct at `Core/wbDefinitionsFO4.pas:10386-10388`. Before this layout, the generic `SNAM` entry in `formid_subrecords.inc` remapped only 4-byte payloads, and `PRKR` was in no remap table, so the perk form ID was never remapped. Tests: `tests/test_packed_formlink_arrays.cpp:NpcFactionSnamRemapsFormIdAndKeepsRank` and `NpcPerkPrkrRemapsFormIdAndKeepsRank`.
+
+## Radicle/src/schema/form_link_mixed.cpp:leveled_list_formid_offsets — LVLI and LVLN LLKC
+
+LLKC is an uncounted array of 8-byte structs: keyword form ID u32 at 0 and a u32 chance at 4 (`Core/wbDefinitionsFO4.pas:9979-9984`, `wbArrayS` with `wbStructSK([0], ...)`). The layout is non-exact, `size % 8 == 0`, like `XPOD` in `k_placed_reference_layouts`. Reason: the shipped byte check found 8, 16 and 24 byte payloads, and xEdit accepts any element count. The chance is not remapped. Tests: `tests/test_packed_formlink_arrays.cpp:LeveledListLlkcKeywordsRemapAndKeepChances` and `LeveledListLlkcWrongSizeFailsClosedUnderStrictRemap`.
+
+## Radicle/src/forms/npc.cpp:require_local_target — typed NPC_ targets
+
+`add_npc_faction` and `set_npc_faction` require a local SNAM target to be FACT. `add_npc_perk` and `set_npc_perk` require a local PRKR target to be PERK. A local key that does not resolve throws `NpcError`. Foreign keys are not resolved here and are not checked, the same rule as `validate_local_entry_targets` in `src/forms/leveled_spell_creation.cpp` and `validate_entry_target` in `src/forms/leveled_list.cpp`. xEdit uses `wbFormIDCk('Faction', [FACT])` for SNAM and `wbFormIDCk('Perk', [PERK])` for PRKR (`Core/wbDefinitionsFO4.pas:10387`). Test: `tests/test_npc_lists.cpp:LocalFactionAndPerkTargetsMustHaveTheirSignature`.
+
+## Radicle/src/forms/faction.cpp:require_relation_target — FACT XNAM targets
+
+`add_faction_relation` and `set_faction_relation` require a local XNAM faction to be FACT or RACE, before the plugin is copied. A local key that does not resolve throws `FactionError`. Foreign keys are not checked, as in `require_local_target` (`src/forms/npc.cpp`). xEdit defines the relation struct with `wbFormIDCkNoReach('Faction', [FACT, RACE])` (`Core/wbDefinitionsCommon.pas:8818-8819`). Test: `tests/test_faction.cpp:RelationTargetOfThisPluginMustBeFactOrRace`.
+
+## Radicle/src/forms/leveled_list.cpp:set_leveled_list_settings — LVLF bits
+
+LVLF flags may use only bits 0x01, 0x02 and 0x04 (mask 0x07). `set_leveled_list_settings` applies the same check as `create_leveled_list`, before any read or write, so a rejected call leaves the plugin unchanged. Test: `tests/test_leveled_list.cpp:SettingsRejectFlagBitsOutsideTheDefinedMask`.

@@ -323,6 +323,14 @@ TEST(LeveledList, SettingsEditKeepsEntriesAndOpaqueSubrecords) {
   EXPECT_EQ(after.use_global, before.use_global);
 }
 
+TEST(LeveledList, SettingsRejectFlagBitsOutsideTheDefinedMask) {
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  EXPECT_THROW(fo4::forms::set_leveled_list_settings(plugin, item_key(), 50, 0, 0x08),
+               fo4::forms::LeveledListError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
 TEST(LeveledList, NoOpReplacementDoesNotDirtyAParsedPlugin) {
   auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
   const auto key = item_key();

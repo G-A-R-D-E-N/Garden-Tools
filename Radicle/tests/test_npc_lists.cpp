@@ -455,6 +455,32 @@ TEST(NpcLists, FailsClosedOnMalformedSizesCountsAndNulls) {
   EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), {fo4::FormKey::parse("000777:Fallout4.esm"), 1}), NpcError);
 }
 
+TEST(NpcLists, LocalFactionAndPerkTargetsMustHaveTheirSignature) {
+  fo4::test::ByteWriter out;
+  out.bytes = build(base());
+  const auto perk_group = fo4::test::begin_group(out, "PERK", 0);
+  const auto perk = fo4::test::begin_record(out, "PERK", 0, 0x01000801);
+  fo4::test::end_record(out, perk);
+  fo4::test::end_group(out, perk_group);
+  const auto fact_group = fo4::test::begin_group(out, "FACT", 0);
+  const auto fact = fo4::test::begin_record(out, "FACT", 0, 0x01000802);
+  fo4::test::end_record(out, fact);
+  fo4::test::end_group(out, fact_group);
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+
+  const auto to_perk = fo4::FormKey::parse("000801:Patch.esp");
+  const auto to_fact = fo4::FormKey::parse("000802:Patch.esp");
+  EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), {to_perk, 1}), NpcError);
+  EXPECT_THROW(fo4::forms::set_npc_faction(plugin, key(), 0, {to_perk, 1}), NpcError);
+  EXPECT_THROW(fo4::forms::add_npc_perk(plugin, key(), {to_fact, 1}), NpcError);
+  EXPECT_THROW(fo4::forms::set_npc_perk(plugin, key(), 0, {to_fact, 1}), NpcError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+
+  EXPECT_TRUE(fo4::forms::add_npc_faction(plugin, key(), {to_fact, 1}));
+  EXPECT_TRUE(fo4::forms::add_npc_perk(plugin, key(), {to_perk, 1}));
+}
+
 TEST(NpcLists, CoctMismatchIsTolerantAndEditsRewriteTheCount) {
   const auto wrong_coct = replaced(8, {"COCT", u32_value(3)});
   auto plugin = read_npc(wrong_coct);
