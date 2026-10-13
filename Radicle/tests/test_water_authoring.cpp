@@ -337,6 +337,7 @@ TEST(WaterAuthoring, UnmodifiedWaterRecordsRoundTripByteIdentical) {
   EXPECT_EQ(payload(plugin, k_full, "DNAM").size(), 201u);
   EXPECT_EQ(payload(plugin, k_short, "DNAM").size(), 188u);
   plugin.original_range.clear();
+  fo4::visit_records(plugin, [](auto& record) { record.original_range.clear(); });
   const auto bytes = fo4::write_plugin(plugin);
   ASSERT_EQ(bytes.size(), original.size());
   EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);

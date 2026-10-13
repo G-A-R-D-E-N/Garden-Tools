@@ -1,6 +1,7 @@
 #include "fo4/c_api_sound.h"
 #include "fo4/environment/sound.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/text/encoding.hpp"
 #include "plugin_bytes.hpp"
@@ -159,7 +160,9 @@ TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesByte
   RecordProperty("SoundMarkerCrossMaster", cross_master);
   EXPECT_EQ(unresolved, 0);
   auto plugin = env.plugin(0); const auto original = fo4::plugin_original_bytes(plugin);
-  plugin.original_range.clear(); const auto bytes = fo4::write_plugin(plugin);
+  plugin.original_range.clear();
+  fo4::visit_records(plugin, [](auto& record) { record.original_range.clear(); });
+  const auto bytes = fo4::write_plugin(plugin);
   ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);
   const auto reread = fo4::read_plugin(bytes, plugin.path);
   const fo4::RecordIndex index(reread);
