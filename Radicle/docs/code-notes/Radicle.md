@@ -375,7 +375,7 @@ Remap: `remap_plugin_masters` refuses the whole operation with `std::invalid_arg
 
 D6: a stream that inflates to fewer bytes than declared is still accepted. That matches the game evidence in `docs/COMPRESSION_EVIDENCE.md`, but a plausible prefix can then display; this is a follow-up for GT's display. Edit refusal beyond the writer check is GT-205 PR2; see `src/plugin/record_edit.hpp:require_plugin_decodable` and the PR2 section below for what is and is not yet guarded.
 
-xEdit comparison: `TwbMainRecord.DecompressIfNeeded` (source:xEdit Core/wbImplementation.pas:10273-10306 @93cc0bc5) logs `<Error decompressing ...>`, sets both data pointers to nil and keeps the record with no data. Radicle loads it the same way but is stricter on save: it keeps the raw bytes, where xEdit's save path (`wbImplementation.pas:14826-14838`) re-serializes the record from its now-empty subrecords.
+xEdit comparison: `TwbMainRecord.DecompressIfNeeded` (source:xEdit Core/wbImplementation.pas:10273-10306 @93cc0bc5) logs `<Error decompressing ...>`, sets its decompressed data pointers (`dcDataBasePtr`, `dcDataEndPtr`) to nil and keeps the record with no data. xEdit re-serializes from those empty subrecords only when the record was modified: the `esModified in eStates` branch (source:xEdit Core/wbImplementation.pas:14806), whose compressed write is at 14826-14838. An untouched record is written from its raw stored bytes (`dcBasePtr` to `dcEndPtr`, source:xEdit Core/wbImplementation.pas:14857-14869, write at 14865), so an untouched undecodable record is byte-identical on save in both tools; Radicle matches xEdit there and is not stricter. For a modified record xEdit would write the emptied record, while Radicle refuses the write (`src/plugin/writer.cpp:write_record`, throw at lines 106-110).
 
 Tests: `tests/test_undecodable_record.cpp` (load, sibling decode, dirty write-back, writer net, remap refusal, C API `INVALID_ARGUMENT`, strict TES4, expansion-bound size). Flipped from strict: `tests/test_compression.cpp:Compression.RawDeflateAndGzipFramingLoadsUndecodable`, `BadZlibChecksumLoadsUndecodable`, `CorruptCompressedPayloadLoadsUndecodable`, `OversizedDeclaredSizeLoadsUndecodable`; `tests/test_reader_limits.cpp:ReaderLimits.CompressedUncompressedSizeBeyondZlibBoundLoadsUndecodable`.
 
@@ -1113,3 +1113,27 @@ Creates a directory named with the process id and a process-wide atomic counter,
 ## Radicle/src/forms/static_collection.cpp:decode_static_collection_parts
 
 The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
+
+## Radicle/src/schema/form_links.cpp:remap_record_form_links — single-record refusal (GT-232)
+
+`remap_record_form_links` calls `require_decodable` on entry, so each single-record caller refuses an undecodable record before any FormLink is rewritten. Callers: `src/plugin/copy_hierarchy.cpp:clone_record`, `src/plugin/mutation.cpp:copy_record_as_override`, `src/forms/placed_reference_copy.cpp:copy_record_for_destination`, `src/plugin/maintenance.cpp:previous_normalizes_equal` (its previous record is already screened by `identical_previous`), and the PET copy path in `PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RadiclePluginBackend::invokeLegacyBackend`. `remap_form_links` still refuses the whole plugin in its pre-scan, so its behavior is unchanged. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.RemapRecordFormLinksRefusesUndecodableRecord`.
+
+## Radicle/src/forms/quest_vmad.cpp:sync_quest_vmad_aliases, Radicle/src/forms/quest_vmad.cpp:sync_quest_vmad_stages — entry refusal (GT-232)
+
+Both call `require_decodable` on the record before reading its VMAD. Their callers, `src/forms/quest_alias_edit.cpp` and `src/forms/quest_stages.cpp:write_quest_stages`, already pass a record from a decodable lookup, so the check is a guard for direct callers. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.SyncQuestVmadRefusesUndecodableRecord`.
+
+## Radicle/src/schema/ctda.cpp:write_ctda_conditions_in — entry refusal (GT-232)
+
+`write_ctda_conditions` goes through this function, so both are refused for an undecodable record before the condition list is scanned. `set_record_conditions` (`include/fo4/plugin/mutation.hpp`) and the scoped condition writer already check earlier. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.WriteCtdaConditionsRefusesUndecodableRecord`.
+
+## Radicle/src/plugin/master_usage.cpp:scan_master_usage — undecodable records (GT-233)
+
+`scan_master_usage` counts each undecodable non-TES4 record in `MasterUsage::undecodable_records`, and `MasterUsage::complete()` (`include/fo4/plugin/master_usage.hpp:MasterUsage::complete`) is false while that count is non-zero. The FormLinks of such a record are raw bytes the scan cannot see, so a master's use there is unproven. `radicle_env_unused_masters` (`src/c_api_maintenance.cpp:radicle_env_unused_masters`) therefore reports `complete` as 0, and `used_masters` keeps every master. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.MasterUsageIsIncompleteWhileRecordIsUndecodable`.
+
+## Radicle/src/forms/cell.cpp:find_exterior_cell — undecodable CELL (GT-237)
+
+A non-persistent CELL in an exterior sub-block that is undecodable throws `CellError` ("undecodable CELL inside an exterior sub-block") before its XCLC is read, so it is no longer reported as missing XCLC. The lookup still throws rather than skipping the cell, which keeps it fail-closed. Test: `tests/test_exterior_cell_creation.cpp:ExteriorCellCreation.UndecodableExistingCellFailsClosedWithDistinctMessage`.
+
+## Radicle/src/plugin/reader.cpp:read_record — GT-236 coverage
+
+Tests added in `tests/test_compression.cpp`: `Compression.ShortInflatedOutputLoadsAtProducedLength` pins the D6 behavior (a stream that inflates short loads at the produced length, not undecodable), and `Compression.PayloadUnderFourBytesFailsThePluginRead` pins the strict framing check, which throws `fo4::parse_error` outside the compressed-record `try`. Tests added in `tests/test_undecodable_edit.cpp`: `UndecodableEdit.FindIdenticalToMasterSkipsWhenMasterRecordIsUndecodable` covers the previous-record screen in `src/plugin/maintenance.cpp:identical_previous`; `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableParentCell` cover the guards in `src/forms/placed_reference_copy.cpp:copy_placed_reference_as_new`; `UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyInfoAsNewRefusesUndecodableDestinationDial` cover the guards in `src/forms/info_copy.cpp:copy_info_as_new`.

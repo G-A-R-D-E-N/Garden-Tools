@@ -254,6 +254,27 @@ TEST(ExteriorCellCreation, MalformedExistingGridFailsClosedWithoutAllocation) {
   EXPECT_EQ(plugin.header.next_form_id, next_before);
 }
 
+TEST(ExteriorCellCreation, UndecodableExistingCellFailsClosedWithDistinctMessage) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  const auto world = fo4::FormKey::parse("000800:Cells.esp");
+  static_cast<void>(fo4::forms::create_exterior_cell(
+      plugin, cell_creation(world, 1, 2)));
+
+  auto* created = const_cast<fo4::Record*>(
+      fo4::forms::find_exterior_cell(plugin, world, 1, 2));
+  ASSERT_NE(created, nullptr);
+  created->undecodable = true;
+  created->subrecords.clear();
+
+  try {
+    static_cast<void>(fo4::forms::find_exterior_cell(plugin, world, 1, 2));
+    FAIL() << "undecodable exterior CELL was accepted";
+  } catch (const fo4::forms::CellError& error) {
+    EXPECT_NE(std::string(error.what()).find("undecodable CELL"), std::string::npos)
+        << error.what();
+  }
+}
+
 // Bit 1 is set on 61,542 of the 61,543 exterior cells across Fallout4.esm,
 // DLCCoast and DLCNukaWorld, so an all-clear DATA is not the shape the game
 // ships. New cells default to it and the caller can override.

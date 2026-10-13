@@ -12,6 +12,7 @@ MasterUsage scan_master_usage(const Plugin& plugin) {
 
   visit_records(plugin, [&](const Record& record) {
     if (record.header.signature == sig_tes4) return;
+    if (record.undecodable) ++usage.undecodable_records;
     for (std::size_t i = 0; i < masters.size(); ++i) {
       if (record.form_key.owner() == masters[i].key) ++usage.references[i];
     }

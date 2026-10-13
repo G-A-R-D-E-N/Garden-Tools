@@ -137,6 +137,7 @@ bool stage_body_equal(const QuestStage& lhs, const QuestStage& rhs) {
 void sync_quest_vmad_aliases(Record& record,
                              const QuestAliases& previous,
                              std::span<const QuestAliasCreation> next) {
+  require_decodable(record);
   auto* vmad = unique_vmad(record);
   if (vmad == nullptr) return;
   const auto layout = inspect_quest_vmad(vmad->data);
@@ -186,6 +187,7 @@ void sync_quest_vmad_aliases(Record& record,
 void sync_quest_vmad_stages(Record& record,
                             const QuestStages& previous,
                             const QuestStages& next) {
+  require_decodable(record);
   auto* vmad = unique_vmad(record);
   if (vmad == nullptr) return;
   const auto layout = inspect_quest_vmad(vmad->data);
