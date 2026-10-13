@@ -341,9 +341,13 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
         try {
             auto mutated = loaded->plugin;
             std::size_t undeleted = 0;
+            std::size_t skipped = 0;
             fo4::visit_records(mutated, [&](fo4::Record& record) {
-                if (record.header.signature == fo4::sig_tes4 || record.undecodable ||
-                    !record.header.flags.is_deleted()) {
+                if (record.header.signature == fo4::sig_tes4 || !record.header.flags.is_deleted()) {
+                    return;
+                }
+                if (record.undecodable) {
+                    ++skipped;
                     return;
                 }
                 const auto bits = (record.header.flags.value() & ~fo4::RecordFlags::deleted) |
@@ -355,14 +359,18 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 record.uncompressed_size = 0;
                 ++undeleted;
             });
+            const auto skippedNote = skipped == 0
+                ? std::string{}
+                : ", skipped " + std::to_string(skipped) + " undecodable";
             if (undeleted == 0) {
-                return nlohmann::json("Cleaned " + pluginName + ": undeleted + disabled 0 record(s).");
+                return nlohmann::json(
+                    "Cleaned " + pluginName + ": undeleted + disabled 0 record(s)" + skippedNote + ".");
             }
             mutated.original_range.clear();
             stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json(
                 "Cleaned " + pluginName + ": undeleted + disabled " +
-                std::to_string(undeleted) + " record(s).");
+                std::to_string(undeleted) + " record(s)" + skippedNote + ".");
         } catch (const std::exception& error) {
             return std::unexpected(Error{"CleanPluginFailed", error.what()});
         }

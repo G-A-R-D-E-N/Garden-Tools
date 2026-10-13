@@ -53,7 +53,7 @@ const readNpc = (b: Backend, key: string) => b.GetNpc(key);
 const readFaction = (b: Backend, key: string) => b.GetFaction(key);
 const readWeapon = (b: Backend, key: string) => b.GetWeaponDamageTypes(key);
 
-function useTypedRecord<T>(matrix: ConflictMatrix, read: (b: Backend, key: string) => Promise<string>, onChanged: () => Promise<void>) {
+function useTypedRecord<T>(matrix: ConflictMatrix, read: (b: Backend, key: string) => Promise<string | object>, onChanged: () => Promise<void>) {
   const formKey = matrix.FormKey;
   const [loaded, setLoaded] = useState<{ key: string; data: T } | null>(null);
   const [error, setError] = useState('');
@@ -66,7 +66,8 @@ function useTypedRecord<T>(matrix: ConflictMatrix, read: (b: Backend, key: strin
       try {
         const b = getBackend();
         if (!b) throw new Error('No backend bridge.');
-        const parsed = JSON.parse(await read(b, formKey)) as T;
+        const raw: unknown = await read(b, formKey);
+        const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as T;
         if (live) { setLoaded({ key: formKey, data: parsed }); setError(''); }
       } catch (e) {
         if (live) setError('Could not read record: ' + errorText(e));

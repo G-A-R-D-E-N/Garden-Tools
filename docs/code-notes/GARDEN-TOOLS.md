@@ -2268,3 +2268,31 @@ Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifie
 ## PluginEditTool/web/src/MainShellBridge.test.tsx:sidebar record multi-select — MainShell harness (#39)
 
 The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — object or JSON-string reads (#504 audit F1)
+
+The native typed-record reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) return JSON objects. The RPC path does not stringify them: `PluginEditTool/native/src/rpc/RpcDispatcher.cpp:Response::toJson` puts `value` through as is, `PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke` calls the backend methods directly, and `PluginEditTool/web/src/hostbridge.ts:call` returns `body.value`. The hook now parses only when the bridge hands back a string, so both shapes work. The edit callbacks are unchanged because the native edit methods return plain message strings. `TypedRecordPanel.leveled.test.tsx` covers the object shape.
+
+## PluginEditTool/web/src/MainShell.tsx:selectHit — RECORDS cached source per FormKey (#504 audit F2)
+
+`recHits` is keyed by FormKey only. Every selection used to re-cache all visible hits, so a later search that showed the same FormKey from another plugin replaced the source that Copy and Compare read. Now only newly selected visible hits are added, existing entries win, and the clicked row replaces its own key. Covered by `PluginEditTool/web/src/MainShell.recordSources.test.tsx`.
+
+## PluginEditTool/web/src/MainShell.tsx:MainShell — conflict list reset on load-order change (#504 audit F3)
+
+The Conflicts list and its selection are reset during render when the load-order summary content changes from a previous value, the same summary `loadedSet` uses. The first summary after startup does not reset, so a list loaded before the summary arrives is kept. The render-phase form follows `prevOpenKey` in this file. A reset inside a `useEffect` would call setState synchronously, which the react-hooks rules reject. Rescan now only clears the list.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch — reload when the list is cleared (#504 audit F3)
+
+The load effect depends on `conflicts` as well as the tab and tree mode. A cleared list in the Conflicts tab therefore reloads on its own, which is why Rescan no longer calls `loadConflicts` directly and does not double-fetch. Covered by the load-order reload test in `PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:invokeLegacyBackend — CleanPlugin skipped count (#504 audit F4)
+
+Deleted records that cannot be decoded are still left untouched, now counted. The status appends ", skipped N undecodable" only when N is above zero. The C# `CleanPluginCore` in `PluginEditTool/FO4RecordEditor.Core/Services/WriteService.cs` has its own wording and was not changed. The existing test in `PluginEditTool/native/tests/unit/RadiclePluginUndecodableMaintenanceTests.cpp` asserts the full message.
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:Compiled output matches the Creation Kit instruction for instruction — empty corpus is a SKIP (#504 audit F5)
+
+The compile-differential gate is local only. CI does not set `FO4RE_PEX_CORPUS`, so the test reports SKIP there. A variable pointing at a folder with no `.psc`/`.pex` pairs now also reports SKIP instead of passing silently. `PluginEditTool/docs/internal/PAPYRUS.md` describes the same gate.
+
+## BGS/src/Archive/GameData.cs:GameData.IsSkippableArchiveFailure — archive listing catch filter (#504 audit F6)
+
+`Entries` and `Names` share one predicate. An `IOException`, `InvalidDataException` or `UnauthorizedAccessException` whose inner exception is a Radicle ABI mismatch, or another native load failure, propagates instead of being read as an empty archive. Driving `GameData` itself needs the native Radicle library to open a real archive, and no seam injects the failure, so `BGS/tools/tests/Ba2RadicleTests.cs` calls the predicate directly.

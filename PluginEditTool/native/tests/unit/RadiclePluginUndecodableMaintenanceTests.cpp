@@ -161,6 +161,7 @@ TEST_CASE("Native CleanPlugin leaves an undecodable deleted record untouched") {
         "CleanPlugin", nlohmann::json::array({"Patch.esp"}));
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
-    CHECK(result->get<std::string>().find("undeleted + disabled 0 record") != std::string::npos);
+    CHECK(result->get<std::string>() ==
+          "Cleaned Patch.esp: undeleted + disabled 0 record(s), skipped 1 undecodable.");
     undecodableExpectNothingPending(backend);
 }

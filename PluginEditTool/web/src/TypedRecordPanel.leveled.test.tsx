@@ -64,6 +64,14 @@ it('shows the winner read-only with no edit controls when opened from another pl
   expect(edit).not.toHaveBeenCalled();
 });
 
+it('renders the record when the bridge hands back the parsed object instead of a JSON string', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: vi.fn(async () => list) } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  expect(await screen.findByText('000802:W0.esp')).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByDisplayValue('5')).toBeTruthy();
+});
+
 it('shows a refused leveled list edit with its error text and does not refresh', async () => {
   const read = vi.fn(async () => JSON.stringify(list));
   const onChanged = vi.fn(async () => {});
