@@ -1,44 +1,26 @@
 #include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <vector>
 
+#include <fo4/environment/strings.hpp>
+#include <fo4/io/path_text.hpp>
 #include <fo4/localization/strings.hpp>
 #include <fo4/text/encoding.hpp>
 
 namespace fo4ide::plugin {
 
 namespace {
-
-using fo4::localization::LocalizedStringTable;
-using fo4::localization::StringTableKind;
-
-struct TableSpec {
-    StringTableKind kind;
-    const char* label;
-    const char* extension;
-};
-
-constexpr std::array<TableSpec, 3> k_tables{{
-    {StringTableKind::strings, "STRINGS", ".STRINGS"},
-    {StringTableKind::dlstrings, "DLSTRINGS", ".DLSTRINGS"},
-    {StringTableKind::ilstrings, "ILSTRINGS", ".ILSTRINGS"},
-}};
-
-struct FoundTable {
-    const TableSpec* spec;
-    std::filesystem::path path;
-    LocalizedStringTable table;
-};
 
 Result<std::string> stringLanguage(const nlohmann::json& arguments) {
     auto language = support::stringArgument(arguments, 1);
@@ -55,33 +37,10 @@ Result<std::string> stringLanguage(const nlohmann::json& arguments) {
     return language;
 }
 
-Result<std::vector<FoundTable>> readTables(const std::filesystem::path& pluginPath,
-                                           std::string_view language) {
-    const auto stem = pluginPath.stem().string() + "_" + std::string(language);
-    const auto directory = pluginPath.parent_path() / "Strings";
-    std::vector<FoundTable> found;
-    for (const auto& spec : k_tables) {
-        const auto path = directory / (stem + spec.extension);
-        std::error_code ec;
-        const auto status = std::filesystem::symlink_status(path, ec);
-        if (ec || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) {
-            continue;
-        }
-        try {
-            found.push_back({&spec, path, fo4::localization::read_string_table_file(path, spec.kind)});
-        } catch (const std::exception& error) {
-            return std::unexpected(Error{
-                "StringTableInvalid",
-                "could not read string table " + path.string() + ": " + error.what()
-            });
-        }
-    }
-    return found;
-}
-
-const FoundTable* findTable(const std::vector<FoundTable>& tables, std::string_view label) {
-    const auto it = std::find_if(tables.begin(), tables.end(), [label](const FoundTable& table) {
-        return table.spec->label == label;
+const fo4::env::PluginStringTable* findTable(const std::vector<fo4::env::PluginStringTable>& tables,
+                                             std::string_view label) {
+    const auto it = std::find_if(tables.begin(), tables.end(), [label](const fo4::env::PluginStringTable& table) {
+        return fo4::env::string_source_extension(table.source) == label;
     });
     return it == tables.end() ? nullptr : &*it;
 }
@@ -92,6 +51,68 @@ std::string displayText(std::string_view language, const std::vector<std::byte>&
     return fo4::text::windows1252_to_utf8(raw);
 }
 
+}
+
+std::shared_ptr<const fo4::archive::AssetResolver> RadiclePluginBackend::stringAssets(
+    const LoadedPlugin& loaded) const {
+    std::vector<std::string> names;
+    names.reserve(plugins_.size());
+    for (const auto& plugin : plugins_) names.push_back(plugin.name);
+    const std::vector<std::string> own{loaded.name};
+    const auto dataArchives = fo4::archive::archive_load_order(dataDirectory_, {}, names);
+    std::vector<std::filesystem::path> folderArchives;
+    if (std::error_code ec; !std::filesystem::equivalent(loaded.path.parent_path(), dataDirectory_, ec)) {
+        folderArchives = fo4::archive::archive_load_order(loaded.path.parent_path(), {}, own);
+    }
+    std::vector<std::filesystem::path> archives;
+    for (const auto& path : dataArchives) {
+        const auto shadowed = std::any_of(folderArchives.begin(), folderArchives.end(),
+                                          [&path](const std::filesystem::path& other) {
+                                              return fo4::text::equals_folded(fo4::io::utf8(other.filename()),
+                                                                              fo4::io::utf8(path.filename()));
+                                          });
+        if (!shadowed) archives.push_back(path);
+    }
+    archives.insert(archives.end(), folderArchives.begin(), folderArchives.end());
+
+    std::vector<StringArchiveStamp> stamps;
+    stamps.reserve(archives.size());
+    for (const auto& path : archives) {
+        std::error_code ec;
+        stamps.emplace_back(path, std::filesystem::file_size(path, ec), std::filesystem::last_write_time(path, ec));
+    }
+    std::scoped_lock lock(stringAssetsMutex_);
+    if (!stringAssets_ || stamps != stringArchives_) {
+        std::vector<std::filesystem::path> readable;
+        for (const auto& path : archives) {
+            try {
+                fo4::archive::Ba2Reader::open(path);
+                readable.push_back(path);
+            } catch (const std::exception&) {
+            }
+        }
+        stringAssets_ = std::make_shared<fo4::archive::AssetResolver>(
+            fo4::archive::AssetResolver::open(dataDirectory_, readable));
+        stringArchives_ = std::move(stamps);
+    }
+    return stringAssets_;
+}
+
+Result<std::vector<fo4::env::PluginStringTable>> RadiclePluginBackend::readStringTables(
+    const LoadedPlugin& loaded, std::string_view language) const {
+    try {
+        std::vector<std::filesystem::path> directories{loaded.path.parent_path() / "Strings"};
+        if (!dataDirectory_.empty()) directories.push_back(dataDirectory_ / "Strings");
+        auto tables = fo4::env::load_plugin_string_tables(directories, loaded.plugin, language);
+        if (tables.size() == 3 || !loaded.plugin.header.tes4_flags.is_localized()) return tables;
+        const auto assets = stringAssets(loaded);
+        return fo4::env::load_plugin_string_tables(directories, loaded.plugin, language, assets.get());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{
+            "StringTableInvalid",
+            std::string("could not read string tables: ") + error.what()
+        });
+    }
 }
 
 Result<nlohmann::json> RadiclePluginBackend::listStringTables(const nlohmann::json& arguments) const {
@@ -105,15 +126,16 @@ Result<nlohmann::json> RadiclePluginBackend::listStringTables(const nlohmann::js
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     }
-    auto tables = readTables(loaded->path, *language);
+    auto tables = readStringTables(*loaded, *language);
     if (!tables) return std::unexpected(tables.error());
 
     nlohmann::json rows = nlohmann::json::array();
     for (const auto& found : *tables) {
         rows.push_back({
-            {"kind", found.spec->label},
+            {"kind", std::string(fo4::env::string_source_extension(found.source))},
             {"path", found.path.string()},
-            {"count", found.table.entries.size()}
+            {"count", found.table.entries.size()},
+            {"source", found.archive.empty() ? std::string("loose") : found.archive}
         });
     }
     return nlohmann::json(rows.dump());
@@ -136,7 +158,7 @@ Result<nlohmann::json> RadiclePluginBackend::getStrings(const nlohmann::json& ar
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     }
-    auto tables = readTables(loaded->path, *language);
+    auto tables = readStringTables(*loaded, *language);
     if (!tables) return std::unexpected(tables.error());
     const auto* found = findTable(*tables, tableLabel);
     if (found == nullptr) {
@@ -186,7 +208,7 @@ Result<nlohmann::json> RadiclePluginBackend::lookupString(const nlohmann::json& 
     if (loaded == nullptr) {
         return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
     }
-    auto tables = readTables(loaded->path, *language);
+    auto tables = readStringTables(*loaded, *language);
     if (!tables) return std::unexpected(tables.error());
 
     nlohmann::json rows = nlohmann::json::array();
@@ -194,7 +216,7 @@ Result<nlohmann::json> RadiclePluginBackend::lookupString(const nlohmann::json& 
         const auto* entry = fo4::localization::find_string(found.table, *id);
         if (entry == nullptr) continue;
         rows.push_back({
-            {"kind", found.spec->label},
+            {"kind", std::string(fo4::env::string_source_extension(found.source))},
             {"id", *id},
             {"text", displayText(*language, entry->text)}
         });

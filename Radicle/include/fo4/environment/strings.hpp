@@ -2,11 +2,13 @@
 
 #include "fo4/archive/assets.hpp"
 #include "fo4/environment/environment.hpp"
+#include "fo4/localization/strings.hpp"
 
 #include <array>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -23,6 +25,18 @@ enum class StringSource : std::uint8_t {
 StringSource string_source(Signature record, Signature subrecord) noexcept;
 
 std::string_view string_source_extension(StringSource source) noexcept;
+
+struct PluginStringTable {
+  StringSource source{StringSource::normal};
+  std::filesystem::path path;
+  std::string archive;
+  localization::LocalizedStringTable table;
+};
+
+std::vector<PluginStringTable> load_plugin_string_tables(std::span<const std::filesystem::path> strings_dirs,
+                                                         const Plugin& plugin,
+                                                         std::string_view language,
+                                                         const archive::AssetResolver* archives = nullptr);
 
 // Per-plugin string tables for one language; immutable after load and thread-safe for reads.
 class StringTables {
