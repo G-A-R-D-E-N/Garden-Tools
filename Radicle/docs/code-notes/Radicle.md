@@ -1993,3 +1993,13 @@ Signatures that QUST reuses for scalar or string data although they are form ID 
 ## Radicle/src/schema/form_links.cpp:visit_formlink_offsets
 
 Wraps `visit_link_offsets` and merges in the schema offsets for the same subrecord. Subrecords with no schema offsets skip the buffer and go straight to `visit_link_offsets`. Otherwise the union is sorted and deduplicated before the callback runs, so a link that both the global table and a schema row list, such as FACT VEND with a 4-byte payload, is visited once (`tests/test_form_link_schema_remap.cpp:LinkAlsoListedByGlobalTableIsVisitedOnce`). Strict mode passes through unchanged. Sorting can reorder output from a handler that did not emit ascending offsets; the remap and rekey callbacks do not depend on order.
+
+## Radicle/src/plugin/subrecord_authoring.cpp:editable — coupled count subrecords
+
+Count subrecords are marked `coupled` in `schema/fallout4/fields.json` (NPC_ SPCT, DEST, PRKZ, COCT, KSIZ, KWDA, OBTE, CS2H; LVLI and LVLN LLCT; FACT CITC; LIGH KSIZ and KWDA). Older records mark KSIZ and KWDA together and DEST alone, and `editable` reads the flag, so an unmarked count with minimum 0 could be removed while its entries stay. The entries the counts describe (PRKR, CNTO, LVLO, CTDA, SPLO, OBTF, OBTS, CS2K) are repeated without `uncounted`, so `editable` already refuses them.
+
+LVSP LLCT (minimum 1) and SMBN, SMEN and SMQN CITC (minimum 1) are not coupled. Removal already stops at the minimum and add stops at the maximum. Coupling them would make `create_with_rules` refuse those records, because it requires every minimum-1 rule to be editable, and `tests/test_c_api_authoring.cpp` creates an LVSP through that path.
+
+## Radicle/schema/fallout4/fields.json:NPC_ — NAM7 minimum 0
+
+NPC_ NAM7 has minimum 0 (it was 1). xEdit marks it required (`Core/wbDefinitionsFO4.pas:10424`, `wbFloat(NAM7, 'Unused', cpNormal, True)`), but the audit count found it on none of the 3015 vanilla NPC_ records, so the minimum follows the corpus. This is a deliberate deviation from the xEdit flag.
