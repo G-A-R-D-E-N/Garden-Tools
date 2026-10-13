@@ -2118,11 +2118,11 @@ A rank title with no inline text but a string ID is emitted as `{"stringId": id}
 
 ## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:readTables — sibling string tables (#32)
 
-Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next to the loaded plugin, with the same symlink and regular-file check as `questinternal::loadLocalizedQuestTables`. A missing table is skipped; a table that fails to parse fails the whole call with `LocalizedLogTableInvalid`.
+Looks up `Strings/<plugin stem>_<language>.<STRINGS|DLSTRINGS|ILSTRINGS>` next to the loaded plugin, with the same symlink and regular-file check as `questinternal::loadLocalizedQuestTables`, and parses each found table with `fo4::localization::read_string_table_file`. A missing table is skipped; a table that fails to parse fails the whole call with `StringTableInvalid`. Limits: it reads only `<plugin dir>/Strings/<stem>_<lang>.<ext>` with exact case; it reads no BA2 archives, so base-game tables packed in archives are not listed; it does not scan other mod folders; and unsaved staged quest localization is not reflected.
 
-## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — duplicate flag and paging (#32)
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — paging (#32)
 
-`read_string_table` rejects IDs that are not strictly ascending, so a table it parses never holds a duplicate and `duplicate` is false for every row it returns. The count is still computed over the entries so the flag stays right if that parser contract changes. `limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000. The filter matches the text case-insensitively (ASCII) or the decimal ID as a substring.
+`limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:displayText — text encoding (#32)
 

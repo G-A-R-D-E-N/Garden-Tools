@@ -1,4 +1,3 @@
-#include "RadiclePluginQuestInternal.hpp"
 #include "RadiclePluginSupport.hpp"
 
 #include <algorithm>
@@ -8,7 +7,6 @@
 #include <cstdint>
 #include <exception>
 #include <filesystem>
-#include <map>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -57,7 +55,6 @@ Result<std::string> stringLanguage(const nlohmann::json& arguments) {
     return language;
 }
 
-// Same sibling-table lookup as questinternal::loadLocalizedQuestTables: Strings/<stem>_<language>.<ext>.
 Result<std::vector<FoundTable>> readTables(const std::filesystem::path& pluginPath,
                                            std::string_view language) {
     const auto stem = pluginPath.stem().string() + "_" + std::string(language);
@@ -71,11 +68,10 @@ Result<std::vector<FoundTable>> readTables(const std::filesystem::path& pluginPa
             continue;
         }
         try {
-            const auto bytes = questinternal::readLocalizedFileBytes(path);
-            found.push_back({&spec, path, fo4::localization::read_string_table(bytes, spec.kind)});
+            found.push_back({&spec, path, fo4::localization::read_string_table_file(path, spec.kind)});
         } catch (const std::exception& error) {
             return std::unexpected(Error{
-                "LocalizedLogTableInvalid",
+                "StringTableInvalid",
                 "could not read string table " + path.string() + ": " + error.what()
             });
         }
@@ -90,7 +86,6 @@ const FoundTable* findTable(const std::vector<FoundTable>& tables, std::string_v
     return it == tables.end() ? nullptr : &*it;
 }
 
-// UTF-8 text is used as stored for non-English tables; everything else is CP1252.
 std::string displayText(std::string_view language, const std::vector<std::byte>& bytes) {
     const std::string raw(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     if (language != "en" && fo4::text::is_valid_utf8(raw)) return raw;
@@ -152,9 +147,6 @@ Result<nlohmann::json> RadiclePluginBackend::getStrings(const nlohmann::json& ar
     }
 
     const auto& entries = found->table.entries;
-    std::map<std::uint32_t, std::size_t> idCounts;
-    for (const auto& entry : entries) ++idCounts[entry.id];
-
     const auto needle = support::asciiLower(filter);
     nlohmann::json rows = nlohmann::json::array();
     std::size_t total = 0;
@@ -167,8 +159,7 @@ Result<nlohmann::json> RadiclePluginBackend::getStrings(const nlohmann::json& ar
         if (total >= offset && rows.size() < limit) {
             rows.push_back({
                 {"id", entry.id},
-                {"text", text},
-                {"duplicate", idCounts[entry.id] > 1}
+                {"text", text}
             });
         }
         ++total;

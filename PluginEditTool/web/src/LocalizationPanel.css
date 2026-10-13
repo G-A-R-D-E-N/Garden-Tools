@@ -61,8 +61,3 @@
 .localization-text {
   overflow-wrap: anywhere;
 }
-
-.localization-dup-flag {
-  margin-left: 6px;
-  color: var(--warn-color, #d9a441);
-}

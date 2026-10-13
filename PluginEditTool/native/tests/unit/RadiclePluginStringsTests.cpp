@@ -130,7 +130,6 @@ TEST_CASE("GetStrings filters by text or id, pages, and caps the limit") {
     CHECK(byText["rows"][0]["id"] == 10);
     CHECK(byText["rows"][0]["text"] == "Apple pie");
     CHECK(byText["rows"][1]["id"] == 30);
-    CHECK(byText["rows"][0]["duplicate"] == false);
 
     const auto byId = rowsOf(backend, "GetStrings", nlohmann::json::array(
         {"Patch.esp", "", "STRINGS", "40", 0, 200}));

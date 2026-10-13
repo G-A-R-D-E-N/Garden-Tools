@@ -62,6 +62,7 @@ export default function LocalizationPanel({ onClose }: { onClose: () => void }) 
     setTables([]);
     setTable('');
     setError('');
+    setBusy(false);
     if (!strings || !p) return;
     strings.ListStringTables(p, lang)
       .then(raw => {
@@ -119,19 +120,19 @@ export default function LocalizationPanel({ onClose }: { onClose: () => void }) 
         {unavailable && <div className="papyrus-warn">Strings bridge not available -- run the desktop app (not the browser dev server).</div>}
 
         <div className="localization-toolbar">
-          <select value={plugin} onChange={e => selectPlugin(e.target.value)} disabled={unavailable}>
+          <select aria-label="Plugin" value={plugin} onChange={e => selectPlugin(e.target.value)} disabled={unavailable}>
             <option value="">Choose a plugin…</option>
             {plugins.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select value={language} onChange={e => selectLanguage(e.target.value)} disabled={unavailable}>
+          <select aria-label="Language" value={language} onChange={e => selectLanguage(e.target.value)} disabled={unavailable}>
             {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
-          <select value={table} onChange={e => selectTable(e.target.value)} disabled={unavailable || tables.length === 0}>
+          <select aria-label="String table" value={table} onChange={e => selectTable(e.target.value)} disabled={unavailable || tables.length === 0}>
             {tables.length === 0 && <option value="">No tables</option>}
             {tables.map(t => <option key={t.kind} value={t.kind}>{`${t.kind} (${t.count})`}</option>)}
           </select>
           <form className="localization-search" onSubmit={e => { e.preventDefault(); submitSearch(); }}>
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Text or ID"
+            <input aria-label="Search text or ID" value={query} onChange={e => setQuery(e.target.value)} placeholder="Text or ID"
                    disabled={unavailable || !table} />
             <button type="submit" disabled={unavailable || busy || !table}>
               <Search size={13} /> Search
@@ -174,7 +175,6 @@ export default function LocalizationPanel({ onClose }: { onClose: () => void }) 
                     <tr key={`${row.id}:${i}`}>
                       <td>
                         {row.id}
-                        {row.duplicate && <span className="localization-dup-flag">duplicate</span>}
                       </td>
                       <td className="localization-text">{row.text}</td>
                     </tr>

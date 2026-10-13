@@ -6,17 +6,19 @@ import LocalizationPanel from './LocalizationPanel';
 const pageJson = (page: Partial<StringsPage> & Pick<StringsPage, 'rows'>) =>
   JSON.stringify({ total: page.rows.length, offset: 0, limit: 200, ...page });
 
+const TABLES_JSON = JSON.stringify([
+  { kind: 'STRINGS', path: 'Data/Strings/Mod_en.STRINGS', count: 3 },
+  { kind: 'DLSTRINGS', path: 'Data/Strings/Mod_en.DLSTRINGS', count: 1 },
+]);
+
 function installHost(): StringsHost {
   const host: StringsHost = {
-    ListStringTables: vi.fn(async () => JSON.stringify([
-      { kind: 'STRINGS', path: 'Data/Strings/Mod_en.STRINGS', count: 3 },
-      { kind: 'DLSTRINGS', path: 'Data/Strings/Mod_en.DLSTRINGS', count: 1 },
-    ])),
+    ListStringTables: vi.fn(async () => TABLES_JSON),
     GetStrings: vi.fn(async () => pageJson({
       total: 2,
       rows: [
-        { id: 10, text: 'Apple pie', duplicate: true },
-        { id: 20, text: 'Banana', duplicate: false },
+        { id: 10, text: 'Apple pie' },
+        { id: 20, text: 'Banana' },
       ],
     })),
     LookupString: vi.fn(async () => '[]'),
@@ -37,9 +39,8 @@ function installHost(): StringsHost {
 }
 
 async function pickPlugin() {
-  const [pluginSelect] = screen.getAllByRole('combobox');
   await screen.findByRole('option', { name: 'Mod.esp' });
-  fireEvent.change(pluginSelect, { target: { value: 'Mod.esp' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Plugin' }), { target: { value: 'Mod.esp' } });
   await screen.findByText('Apple pie');
 }
 
@@ -55,14 +56,13 @@ describe('LocalizationPanel', () => {
     expect(screen.getByText(/Strings bridge not available/)).toBeTruthy();
   });
 
-  it('lists tables for the chosen plugin and marks duplicate ids', async () => {
+  it('lists tables for the chosen plugin and shows their rows', async () => {
     const host = installHost();
     render(<LocalizationPanel onClose={() => {}} />);
     await pickPlugin();
 
     expect(host.ListStringTables).toHaveBeenCalledWith('Mod.esp', 'en');
     expect(host.GetStrings).toHaveBeenCalledWith('Mod.esp', 'en', 'STRINGS', '', 0, 200);
-    expect(screen.getByText('duplicate')).toBeTruthy();
     expect(screen.getByText('Banana')).toBeTruthy();
   });
 
@@ -71,7 +71,7 @@ describe('LocalizationPanel', () => {
     render(<LocalizationPanel onClose={() => {}} />);
     await pickPlugin();
 
-    const input = screen.getByPlaceholderText('Text or ID');
+    const input = screen.getByRole('textbox', { name: 'Search text or ID' });
     fireEvent.change(input, { target: { value: '  apple ' } });
     fireEvent.submit(input.closest('form')!);
 
@@ -84,7 +84,7 @@ describe('LocalizationPanel', () => {
     vi.mocked(host.GetStrings).mockImplementation(async (_p, _l, _t, _f, offset) => pageJson({
       total: 450,
       offset,
-      rows: [{ id: 10 + offset, text: `row ${offset}`, duplicate: false }],
+      rows: [{ id: 10 + offset, text: `row ${offset}` }],
     }));
     render(<LocalizationPanel onClose={() => {}} />);
     await pickPlugin();
@@ -98,10 +98,23 @@ describe('LocalizationPanel', () => {
     const host = installHost();
     vi.mocked(host.GetStrings).mockRejectedValue(new Error('boom'));
     render(<LocalizationPanel onClose={() => {}} />);
-    const [pluginSelect] = screen.getAllByRole('combobox');
     await screen.findByRole('option', { name: 'Mod.esp' });
-    fireEvent.change(pluginSelect, { target: { value: 'Mod.esp' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plugin' }), { target: { value: 'Mod.esp' } });
 
     expect(await screen.findByText('Could not read strings: boom')).toBeTruthy();
+  });
+
+  it('does not stay on Loading when the language has no tables', async () => {
+    const host = installHost();
+    vi.mocked(host.ListStringTables).mockImplementation(async (_p, lang) => lang === 'de' ? '[]' : TABLES_JSON);
+    vi.mocked(host.GetStrings).mockImplementation(async (_p, _l, t) =>
+      t === 'DLSTRINGS' ? new Promise<string>(() => {}) : pageJson({ total: 2, rows: [{ id: 10, text: 'Apple pie' }] }));
+    render(<LocalizationPanel onClose={() => {}} />);
+    await pickPlugin();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'String table' }), { target: { value: 'DLSTRINGS' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), { target: { value: 'de' } });
+    expect(await screen.findByText('No string tables for this plugin and language.')).toBeTruthy();
+    expect(screen.queryByText('Loading…')).toBeNull();
   });
 });

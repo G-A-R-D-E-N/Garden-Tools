@@ -361,7 +361,7 @@ export interface MastersHost {
 }
 
 export interface StringTableInfo { kind: string; path: string; count: number; }
-export interface StringRow { id: number; text: string; duplicate: boolean; }
+export interface StringRow { id: number; text: string; }
 export interface StringsPage { total: number; offset: number; limit: number; rows: StringRow[]; }
 export interface StringLookupRow { kind: string; id: number; text: string; }
 
