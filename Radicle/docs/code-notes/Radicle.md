@@ -1101,3 +1101,35 @@ Creates a directory named with the process id and a process-wide atomic counter,
 ## Radicle/src/forms/static_collection.cpp:decode_static_collection_parts
 
 The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
+
+## Radicle/include/fo4/forms/leveled_list.hpp:LeveledListEntry
+
+Layout from xEdit `Core/wbDefinitionsCommon.pas:8791-8802` (`wbLeveledListEntry`, FO4 branch through `IsFO4Plus`): level u16 at 0, two bytes at 2-3, item FormID at 4, count u16 at 8, chance none u8 at 10, one byte at 11. The two byte pairs are kept as read. TODO-verify: a one-off byte check of the shipped `Fallout4.esm` on 2026-10-12 (scratch script, not a repo test) found non-zero values in those bytes and no LVLO other than 12 bytes; `LeveledListReal` is the repo check and has not run yet.
+
+## Radicle/include/fo4/forms/leveled_list.hpp:LeveledListExtraData
+
+Layout from xEdit `Core/wbDefinitionsFO4.pas:3290-3298` (`wbCOED`): owner FormID at 0 (NULL allowed), a union at 4, item condition float at 8. The union stays raw because `Core/wbDefinitionsCommon.pas:5451-5469` (`wbCOEDOwnerDecider`) picks its meaning from the owner's signature, which Plugin decode cannot resolve across masters. TODO-verify, same status as LeveledListEntry.
+
+## Radicle/src/forms/leveled_list.cpp:decode_leveled_list
+
+Reads the LVLI, LVLN and LVSP header and entries in one pass. A COED attaches only when it directly follows an LVLO, and it is an error otherwise, because xEdit's `wbRStructExSK([0], [1], ...)` (`Core/wbDefinitionsFO4.pas:9998-10004`, `10021-10027`) only accepts it there. Entries with no LLCT are an error, and a present LLCT must equal the entry count (`Core/wbDefinitionsFO4.pas:3278`). LVLG and LVSG with a NULL FormID decode to no value; the shipped masters have none. ONAM goes through `schema::read_localized_string`, so a localized plugin keeps its string ID. Unmodeled subrecords (LLKC, the model group) are skipped, not rejected.
+
+## Radicle/src/forms/leveled_list.cpp:replace_leveled_list_entries
+
+Rebuilds the entry region. Every LVLO, and the COED directly after each LVLO, is dropped. The new entries go at the first existing LVLO; with no LVLO they go at the existing LLCT; with neither they go after the last LVLD, LVLM, LVLF or LVLG, or at the end. LLCT is written as the entry count. Unmodeled subrecords keep their place. A replacement equal to the current entries returns before any write, so a parsed plugin is not dirtied. The old LVSP code placed the new entries after LVLF only, so a record with LVLG and no LLCT now gets them after LVLG, which is the xEdit order.
+
+## Radicle/src/forms/leveled_list.cpp:insert_leveled_list_entry
+
+Copy, edit, replace. The record is decoded, the entry vector is changed, and `replace_leveled_list_entries` writes it, so LLCT always follows the count and an out-of-range index throws before anything is written. `remove_leveled_list_entry` and `set_leveled_list_entry` follow the same path.
+
+## Radicle/src/forms/leveled_list.cpp:set_leveled_list_settings
+
+The LVSP settings logic, moved here unchanged in behavior: a missing LVLD, LVLM or LVLF is inserted before the first LLCT or LVLO, and existing ones are rewritten in place. LVLG and LVSG are untouched.
+
+## Radicle/src/forms/leveled_spell.cpp:decode_leveled_spell
+
+The LVSP public API is now a thin layer over `decode_leveled_list`. A COED after an LVLO is attached to the shared entry but has no field in `LeveledSpellEntry`, so an LVSP replacement drops it. xEdit defines no COED on LVSP and the shipped masters have no LVSP, so nothing real is lost. LVSP also now fails when entries exist without LLCT, where the old code accepted that.
+
+## Radicle/include/fo4/forms/leveled_spell.hpp:LeveledSpellError
+
+An alias of `LeveledListError`. The LVSP tests and `leveled_spell_creation.cpp` keep catching `LeveledSpellError`, so the public name is unchanged.
