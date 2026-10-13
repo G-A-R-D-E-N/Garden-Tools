@@ -67,6 +67,29 @@ inline std::string normalise(const PexInstruction& instruction) {
     return out;
 }
 
+inline std::string functionDifference(const PexFunction& fn, const PexFunction& ourFn) {
+    if (fn.isNative != ourFn.isNative) return "native flag";
+    if (fn.isGlobal != ourFn.isGlobal) return "global flag";
+    if (!cmpIequals(fn.returnType, ourFn.returnType)) {
+        return "returns " + fn.returnType + " vs " + ourFn.returnType;
+    }
+    if (fn.params.size() != ourFn.params.size()) return "parameter count";
+
+    const std::size_t shared = std::min(fn.instructions.size(), ourFn.instructions.size());
+    for (std::size_t i = 0; i < shared; ++i) {
+        const std::string a = normalise(fn.instructions[i]);
+        const std::string b = normalise(ourFn.instructions[i]);
+        if (a != b) {
+            return "[" + std::to_string(i) + "] original: " + a + " | ours: " + b;
+        }
+    }
+    if (fn.instructions.size() != ourFn.instructions.size()) {
+        return std::to_string(fn.instructions.size()) + " instructions vs " +
+               std::to_string(ourFn.instructions.size());
+    }
+    return std::string();
+}
+
 inline std::string firstDifference(const PexObject& theirs, const PexObject& ours) {
     if (!cmpIequals(theirs.parentClassName, ours.parentClassName)) {
         return "parent '" + theirs.parentClassName + "' vs '" + ours.parentClassName + "'";
@@ -91,26 +114,8 @@ inline std::string firstDifference(const PexObject& theirs, const PexObject& our
             }
             if (!ourFn) return "missing function " + fn.name;
 
-            if (fn.isNative != ourFn->isNative) return fn.name + ": native flag";
-            if (fn.isGlobal != ourFn->isGlobal) return fn.name + ": global flag";
-            if (!cmpIequals(fn.returnType, ourFn->returnType)) {
-                return fn.name + ": returns " + fn.returnType + " vs " + ourFn->returnType;
-            }
-            if (fn.params.size() != ourFn->params.size()) return fn.name + ": parameter count";
-
-            const std::size_t shared = std::min(fn.instructions.size(), ourFn->instructions.size());
-            for (std::size_t i = 0; i < shared; ++i) {
-                const std::string a = normalise(fn.instructions[i]);
-                const std::string b = normalise(ourFn->instructions[i]);
-                if (a != b) {
-                    return fn.name + ": [" + std::to_string(i) + "] original: " + a +
-                           " | ours: " + b;
-                }
-            }
-            if (fn.instructions.size() != ourFn->instructions.size()) {
-                return fn.name + ": " + std::to_string(fn.instructions.size()) +
-                       " instructions vs " + std::to_string(ourFn->instructions.size());
-            }
+            const auto difference = functionDifference(fn, *ourFn);
+            if (!difference.empty()) return fn.name + ": " + difference;
         }
 
         for (const auto& fn : ourState->functions) {
