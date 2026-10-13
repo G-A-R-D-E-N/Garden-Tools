@@ -1433,3 +1433,18 @@ For every row of FACT, NPC_, WEAP and REFR, `names` is non-empty exactly when th
 `StringsEnvironmentTest.RejectsMalformedTablesAndLanguages` failed once on the Windows MSVC job of the nomad/dev run at `9c1b3ae6` (job 22302): `Environment::load` threw "failed to load ...\radicle_strings_<n>\Base.esm: plugin parse error at 0x0: unable to open ..." for the first plugin the fixture had just written. The same test passed in the earlier Windows jobs 22085, 22121, 22247 and 22275, and its five sibling `StringsEnvironmentTest` processes passed beside it in the same job. Nothing on that path changed recently: the open in `src/plugin/reader.cpp:read_plugin_file` and `src/environment/environment.cpp:Environment::load` date from 2026-08-20 to 2026-09-30, and the test file from 2026-09-28. Names cannot collide, since ctest runs each test in its own process and the directory name is a steady clock count in 100 ns ticks. No product or fixture defect explains the failure, so the cause is unproven; it looks like a transient file-system error on the runner, whose default TEMP sits under its reparse-point home.
 
 The fixture's `write` did not check its stream, so a failed write would have surfaced only as that "unable to open" at load. It now closes the stream and throws "cannot write <path>" on any stream failure. A recurrence then names the stage: a SetUp failure means the write failed, and the original message means the file existed but could not be opened.
+
+## Radicle/src/graph/check_errors.cpp:info_topics
+
+An INFO's DIAL topic is the label of its nearest enclosing topic-children group (GRUP type 7). Records outside such a group map to no topic. `winning_info_topics` merges the per-plugin maps in load order, so the last plugin wins, matching `winning_records`. xEdit derives the same DIAL from the group: `Core/wbDefinitionsFO4.pas:1017-1025` ("get DIAL for INFO", the group's ChildrenOf must be a DIAL). A label that is null or uses index 0xFF maps to an empty key, which resolves to no loaded DIAL.
+
+## Radicle/src/graph/check_errors.cpp:check_dialogue_links
+
+Dialogue stored-link checks. Each rule is an error and reads only stored subrecords.
+
+- `previous_info_other_topic`: INFO `PNAM` (Previous INFO) must target an INFO in the same DIAL topic. Cites `Core/wbDefinitionsFO4.pas:9726` (`wbFormIDCkNoReach(PNAM, 'Previous INFO', [INFO,NULL])`, which proves only the type) and `:1017-1025` (topic from the group). A target that is not a loaded INFO is skipped, because the generic `unresolved_link` already covers that slot.
+- `branch_starting_topic_not_dial`: DLBR `SNAM` (Starting Topic) must target a loaded DIAL, including a missing target. Cites `Core/wbDefinitionsFO4.pas:8792` (`wbFormIDCk(SNAM, 'Starting Topic', [DIAL]).SetRequired`). DLBR has no entry in the generated schema, so the generic checker never sees this slot.
+- `topic_children_not_dial`: the label of an INFO's topic-children group must be a loaded DIAL. Cites `Core/wbDefinitionsFO4.pas:1017-1025`, where xEdit takes an INFO's DIAL only when the group's ChildrenOf is a DIAL.
+- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
+- No INFO merge-order rule is included; that needs engine evidence.
+- Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).

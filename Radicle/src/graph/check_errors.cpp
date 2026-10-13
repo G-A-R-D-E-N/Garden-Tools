@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string_view>
 #include <map>
 #include <optional>
@@ -20,6 +21,11 @@ namespace {
 constexpr Signature k_sig_lvli = Signature::from_string("LVLI");
 constexpr Signature k_sig_lvln = Signature::from_string("LVLN");
 constexpr Signature k_sig_lvsp = Signature::from_string("LVSP");
+constexpr Signature k_sig_info = Signature::from_string("INFO");
+constexpr Signature k_sig_dial = Signature::from_string("DIAL");
+constexpr Signature k_sig_dlbr = Signature::from_string("DLBR");
+constexpr Signature k_sig_pnam = Signature::from_string("PNAM");
+constexpr Signature k_sig_snam = Signature::from_string("SNAM");
 
 struct WinnerInfo {
   Signature signature{};
@@ -169,6 +175,105 @@ void check_preflight(const Plugin& plugin, FindingSink& sink) {
   }
 }
 
+using InfoTopics = std::map<FormKey, std::optional<FormKey>>;
+
+FormKey resolved_or_empty(RawFormId raw, const PluginFormIdContext& context) {
+  if (raw.is_null() || raw.is_created()) return {};
+  return resolve_plugin_form_id(raw, context);
+}
+
+std::optional<FormKey> stored_form_link(const Record& record, Signature subrecord,
+                                        const PluginFormIdContext& context) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature != subrecord) continue;
+    if (sub.data.size() != 4) return std::nullopt;
+    std::uint32_t value = 0;
+    std::memcpy(&value, sub.data.data(), sizeof(value));
+    const RawFormId raw{value};
+    if (raw.is_null()) return std::nullopt;
+    return resolved_or_empty(raw, context);
+  }
+  return std::nullopt;
+}
+
+void add_info_topics(const Group& group, const PluginFormIdContext& context, InfoTopics& out) {
+  std::optional<FormKey> topic;
+  if (group.header.group_type == static_cast<std::int32_t>(GroupType::topic_children)) {
+    topic = resolved_or_empty(RawFormId{group.header.label_as_u32()}, context);
+  }
+  for (const auto& child : group.children) {
+    if (const auto* record = std::get_if<Record>(&child)) {
+      if (record->header.signature == k_sig_info) out.try_emplace(record->form_key, topic);
+    } else {
+      add_info_topics(std::get<Group>(child), context, out);
+    }
+  }
+}
+
+InfoTopics info_topics(const Plugin& plugin) {
+  const auto context = plugin_form_id_context(plugin);
+  InfoTopics out;
+  for (const auto& group : plugin.groups) add_info_topics(group, context, out);
+  return out;
+}
+
+InfoTopics winning_info_topics(std::span<const Plugin* const> load_order) {
+  InfoTopics winners;
+  for (const auto* plugin : load_order) {
+    if (plugin == nullptr) continue;
+    for (const auto& [key, topic] : info_topics(*plugin)) winners.insert_or_assign(key, topic);
+  }
+  return winners;
+}
+
+void check_dialogue_links(const Plugin& plugin,
+                          const std::map<FormKey, WinnerInfo>& winners,
+                          const InfoTopics& winning_topics,
+                          FindingSink& sink) {
+  const auto context = plugin_form_id_context(plugin);
+  const auto topics = info_topics(plugin);
+  const auto is_loaded = [&](const FormKey& key, Signature signature) {
+    const auto found = winners.find(key);
+    return found != winners.end() && found->second.signature == signature;
+  };
+  const auto add = [&](const Record& record, CheckCode code, Signature subrecord,
+                       const FormKey& target, std::string message) {
+    CheckFinding finding;
+    finding.code = code;
+    finding.severity = CheckSeverity::error;
+    finding.plugin = plugin.key;
+    finding.record = record.form_key;
+    finding.subrecord = subrecord;
+    finding.target = target;
+    finding.message = std::move(message);
+    sink.add(std::move(finding));
+  };
+
+  for (const auto* record : collect_first_records(plugin)) {
+    if (record->header.signature == k_sig_dlbr) {
+      const auto start = stored_form_link(*record, k_sig_snam, context);
+      if (start && !is_loaded(*start, k_sig_dial)) {
+        add(*record, CheckCode::branch_starting_topic_not_dial, k_sig_snam, *start,
+            "SNAM target " + start->to_string() + " is not a loaded DIAL");
+      }
+      continue;
+    }
+    if (record->header.signature != k_sig_info) continue;
+    const auto topic = topics.find(record->form_key);
+    if (topic == topics.end()) continue;
+    if (topic->second && !is_loaded(*topic->second, k_sig_dial)) {
+      add(*record, CheckCode::topic_children_not_dial, Signature{}, *topic->second,
+          "INFO topic children label " + topic->second->to_string() + " is not a loaded DIAL");
+    }
+    const auto previous = stored_form_link(*record, k_sig_pnam, context);
+    if (!previous || !is_loaded(*previous, k_sig_info)) continue;
+    const auto target = winning_topics.find(*previous);
+    if (target == winning_topics.end() || target->second == topic->second) continue;
+    add(*record, CheckCode::previous_info_other_topic, k_sig_pnam, *previous,
+        "PNAM target " + previous->to_string() + " is in another DIAL topic");
+  }
+}
+
 }  // namespace
 
 std::string_view check_code_name(CheckCode code) noexcept {
@@ -179,6 +284,9 @@ std::string_view check_code_name(CheckCode code) noexcept {
     case CheckCode::deleted_target: return "deleted_target";
     case CheckCode::circular_leveled_list: return "circular_leveled_list";
     case CheckCode::schema_preflight: return "schema_preflight";
+    case CheckCode::previous_info_other_topic: return "previous_info_other_topic";
+    case CheckCode::branch_starting_topic_not_dial: return "branch_starting_topic_not_dial";
+    case CheckCode::topic_children_not_dial: return "topic_children_not_dial";
   }
   return "unknown";
 }
@@ -251,6 +359,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
   };
 
   const auto winners = winning_records(load_order);
+  const auto winning_topics = winning_info_topics(load_order);
   FindingSink sink{options.limit, {}};
   const auto game_master = PluginKey::from_filename(k_game_master);
 
@@ -261,6 +370,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
       records.try_emplace(record->form_key, record);
     }
     check_links(*plugin, records, winners, game_master, sink);
+    check_dialogue_links(*plugin, winners, winning_topics, sink);
     check_preflight(*plugin, sink);
   }
 
