@@ -701,7 +701,7 @@ export default function RecordView(
         </div>
         {drawerOpen && (
           <div className="rv-drawer-body">
-            <ProblemsList problems={problems} error={scanErrors.problems} />
+            <ProblemsList key={matrix.FormKey} problems={problems} error={scanErrors.problems} />
           </div>
         )}
       </div>

@@ -558,6 +558,10 @@ Whole-load-order "Check for Errors" (#359, xEdit parity). Findings come only fro
 - `wrong_target_type`: only when `slot_targets` matches a generated field (record + subrecord + offset) or a non-nested list (per-subrecord at offset 0, packed arrays at 4-byte steps, as `formlink_lists.cpp:packed_element_count`). Wildcard lists and nested lists are skipped. `CheckFinding::offset` is `FormLinkHit::offset` (`fo4/schema/form_links.hpp`), the byte offset inside the subrecord.
 - `CheckOptions::plugins` limits which plugins' records are checked; the winner index still covers the whole load order.
 
+## Radicle/src/graph/check_errors.cpp:check_preflight
+
+Each `schema::preflight_plugin` issue becomes a `schema_preflight` finding. The message is `path: message` with no code suffix. The issue's `code` string (for example `duplicate_scalar_subrecord`, `scalar_value_out_of_range`) goes in `CheckFinding::detail`, so both problem paths expose the same shape. The C ABI `radicle_env_check_errors` (`src/c_api_check.cpp`) appends ` (<detail>)` to the message when `detail` is set, so its row text is unchanged. PET's Check for Errors (`PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp`) and GetProblems (`PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp`) emit it as `Detail`.
+
 ## src/graph/check_errors.cpp:slot_targets
 
 Resolves the allowed target signatures for a `(record, subrecord, ordinal, offset)` slot. Generated FormLink fields are tried first through `src/schema/formlink_slots.cpp:formlink_field_at`. An unguarded field matches by its static offset (or stride), as before. A guarded field (variant, `FieldAddress::when`) matches only when `src/schema/field_address.cpp:resolve_field_slots` reports a valid slot at that offset, so the selector byte decides which variant is in force. When the selected variant is not a FormLink, or the selector is absent, no field matches and the slot stays unproven (`unresolved_link` is then only a warning). Generated FormLink lists are tried after fields, unchanged.

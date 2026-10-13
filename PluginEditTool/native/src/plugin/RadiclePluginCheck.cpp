@@ -48,6 +48,7 @@ Result<nlohmann::json> RadiclePluginBackend::checkForErrors(const nlohmann::json
         for (const auto& finding : fo4::check_load_order(loadOrder, options)) {
             rows.push_back({
                 {"Code", std::string(fo4::check_code_name(finding.code))},
+                {"Detail", finding.detail},
                 {"Severity", std::string(fo4::check_severity_name(finding.severity))},
                 {"Plugin", std::string(finding.plugin.filename())},
                 {"FormKey", finding.record.to_string()},

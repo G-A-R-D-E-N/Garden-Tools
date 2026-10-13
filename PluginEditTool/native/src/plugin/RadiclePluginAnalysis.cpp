@@ -191,6 +191,7 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
         if (!seen.emplace(signature, target).second) continue;
         rows.push_back({
             {"Code", std::string(fo4::check_code_name(fo4::CheckCode::unresolved_link))},
+            {"Detail", ""},
             {"Severity", "critical"},
             {"Description", "Missing " + signature + " FormLink target " + target}
         });
@@ -202,6 +203,7 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
         for (const auto& issue : fo4::schema::preflight_record(*record, loaded->plugin.header.tes4_flags.is_localized())) {
             rows.push_back({
                 {"Code", std::string(fo4::check_code_name(fo4::CheckCode::schema_preflight))},
+                {"Detail", std::string(issue.code)},
                 {"Severity", issue.severity == fo4::schema::PreflightSeverity::error
                                      ? "critical"
                                      : "warning"},

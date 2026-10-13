@@ -36,6 +36,7 @@ struct CheckFinding {
   std::size_t offset{0};
   FormKey target;
   std::string message;
+  std::string detail;
 };
 
 struct CheckOptions {

@@ -21,9 +21,10 @@ export default function ProblemsList({ problems, error }: { problems: RecordProb
         </label>
       </div>
       {problems.filter(p => active === 'all' || p.Code === active).map((p, i) => (
-        <div key={i} className="rv-prob-row">
+        <div key={i} className={`rv-prob-row rv-prob-${p.Severity}`}>
           <AlertTriangle size={12} className="rv-prob-icon" />
           <span className="rv-mono">{p.Code}</span>
+          {p.Detail && <span className="rv-mono">{p.Detail}</span>}
           <span>{p.Description}</span>
         </div>
       ))}

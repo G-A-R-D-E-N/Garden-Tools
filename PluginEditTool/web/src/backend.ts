@@ -159,8 +159,7 @@ export interface ConflictFieldRow {
 }
 
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }
-export type RecordProblemCode = 'unresolved_link' | 'schema_preflight';
-export interface RecordProblem { Code: RecordProblemCode; Severity: string; Description: string; }
+export interface RecordProblem { Code: string; Detail: string; Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
 
 export interface ElementActions {
