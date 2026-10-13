@@ -3,6 +3,8 @@
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/signature.hpp"
 
+#include <array>
+#include <cstdint>
 #include <set>
 #include <string_view>
 #include <vector>
@@ -13,6 +15,8 @@ struct RecordLocation {
   const Record* record{nullptr};
   std::vector<const Group*> path;
 };
+
+std::array<std::byte, 4> u32_label(std::uint32_t value);
 
 RecordLocation locate_record(const Plugin& plugin, const FormKey& key);
 
@@ -25,6 +29,17 @@ bool same_group_identity(const GroupHeader& left, const GroupHeader& right);
 Group* unique_top_group(Plugin& plugin, const GroupHeader& wanted);
 
 Group* unique_child_group(Group& parent, const GroupHeader& wanted);
+
+Group* ensure_cell_children_group(Group& parent,
+                                  const GroupHeader& source_header,
+                                  const FormKey& cell,
+                                  const PluginFormIdContext& source_context,
+                                  const PluginFormIdContext& destination_context);
+
+Group* ensure_reference_bucket(Group& cell_children,
+                               const GroupHeader& source_header,
+                               const PluginFormIdContext& source_context,
+                               const PluginFormIdContext& destination_context);
 
 PluginKind owner_kind(const Plugin& source, const PluginKey& owner);
 

@@ -89,19 +89,6 @@ Record* find_top_level_record(Plugin& plugin, const FormKey& record_key) {
   return nullptr;
 }
 
-Group* find_or_create_top_group(Plugin& plugin, Signature signature) {
-  for (auto& group : plugin.groups) {
-    if (group.header.group_type == 0 && group.header.top_label() == signature) {
-      return &group;
-    }
-  }
-
-  Group group;
-  group.header = new_top_group_header(signature);
-  plugin.groups.push_back(std::move(group));
-  return &plugin.groups.back();
-}
-
 bool erase_record(Group& group, const FormKey& record_key, std::set<FormKey>& removed) {
   for (std::size_t i = 0; i < group.children.size(); ++i) {
     if (auto* sub = std::get_if<Group>(&group.children[i])) {
@@ -139,6 +126,19 @@ std::set<FormKey> erase_subtree(Plugin& plugin, const FormKey& record_key) {
 }
 
 }  // namespace
+
+Group* find_or_create_top_group(Plugin& plugin, Signature signature) {
+  for (auto& group : plugin.groups) {
+    if (group.header.group_type == 0 && group.header.top_label() == signature) {
+      return &group;
+    }
+  }
+
+  Group group;
+  group.header = new_top_group_header(signature);
+  plugin.groups.push_back(std::move(group));
+  return &plugin.groups.back();
+}
 
 void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
   Subrecord* hedr = nullptr;
