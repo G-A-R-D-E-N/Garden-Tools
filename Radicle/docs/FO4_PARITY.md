@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 74, L1 16, L2 16, L3 1, L4 40.
 
 ### Per-signature coverage
 
@@ -109,8 +109,8 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | INNR | 12337 | - | - | - | - | - | - | - | - | - | - | L0 |
-| IPCT | 7978 | - | - | - | - | - | - | - | - | - | - | L0 |
-| IPDS | 8014 | - | - | - | - | - | - | - | - | - | 1 | L0 |
+| IPCT | 7978 | 8 | - | 6 | - | - | yes | - | - | - | 1 | L4 |
+| IPDS | 8014 | - | - | - | - | - | yes | - | - | - | 2 | L4 |
 | KEYM | 9823 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | KSSM | 12387 | - | - | - | - | - | - | - | - | - | - | L0 |
 | KYWD | 6947 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -118,7 +118,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | LAYR | 12400 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
 | LCRT | 6962 | - | - | - | - | - | - | - | - | - | - | L0 |
 | LCTN | 8039 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| LENS | 12405 | - | - | - | - | - | - | - | - | - | - | L0 |
+| LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LGTM | 8629 | - | - | - | - | - | - | - | environment/world | - | - | L2 |
 | LIGH | 9871 | - | - | - | - | - | - | yes | environment/base_records | - | 1 | L2 |
 | LSCR | 9946 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -126,8 +126,8 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | - | 1 | L4 |
 | LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | - | 1 | L4 |
 | LVSP | 10033 | - | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
-| MATO | 9375 | - | - | - | - | - | - | - | - | - | - | L0 |
-| MATT | 7958 | - | - | - | - | - | - | - | - | - | 1 | L0 |
+| MATO | 9375 | 7 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | - | - | - | - | - | - | - | - | - | - | L0 |
 | MGEF | 10052 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | MISC | 10212 | - | - | - | - | - | - | yes | forms/components | - | 1 | L2 |
@@ -163,7 +163,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | REGN | 11870 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RELA | 8848 | - | - | - | - | - | - | - | - | - | - | L0 |
 | REVB | 9593 | - | - | - | - | - | - | - | - | - | - | L0 |
-| RFCT | 6163 | - | - | - | - | - | - | - | - | - | - | L0 |
+| RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | RFGP | 12582 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SCCO | 12593 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
@@ -215,10 +215,15 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
+| IPCT | 4 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| IPDS | - | - | - | - | - | - | - | - | - | - |
+| LENS | 1 | - | - | - | - | f32 | - | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
 | LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVSP | - | - | - | - | - | - | - | - | - | - |
+| MATO | 7 | - | - | - | - | f32 | - | - | - | existing_only |
+| MATT | 4 | - | - | 1 | 2 | f32, u32 | - | - | - | existing_only |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
@@ -228,6 +233,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
 | REFR | 1 | 1 | - | - | - | f32, u32 | - | - | - | existing_only |
+| RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |

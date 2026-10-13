@@ -1167,6 +1167,87 @@
         "FULL"
       ]
     },
+    {
+      "signature": "MATO",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 65535}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00000000cdcccc3e00000044000000440000000000000000000000000000803f00000000000000000000000000000000"}]},
+      "fields": [
+        {"path": "MATO\\FalloffScale", "label": "Falloff scale", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATO\\FalloffBias", "label": "Falloff bias", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATO\\NoiseUVScale", "label": "Noise UV scale", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATO\\MaterialUVScale", "label": "Material UV scale", "kind": "scalar", "subrecord": "DATA", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATO\\ProjectionVectorX", "label": "Projection vector X", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATO\\ProjectionVectorY", "label": "Projection vector Y", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATO\\ProjectionVectorZ", "label": "Projection vector Z", "kind": "scalar", "subrecord": "DATA", "offset": 24, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "MATT",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "PNAM", "minimum": 0, "maximum": 1}, {"signature": "MNAM", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 1, "maximum": 1, "default": "000000000000000000000000"}, {"signature": "BNAM", "minimum": 1, "maximum": 1, "default": "0000803f"}, {"signature": "FNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "HNAM", "minimum": 0, "maximum": 1}, {"signature": "ANAM", "minimum": 0, "maximum": 1}, {"signature": "MODT", "minimum": 0, "maximum": 1}]},
+      "fields": [
+        {"path": "MATT\\HavokColorRed", "label": "Havok display color red", "kind": "scalar", "subrecord": "CNAM", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATT\\HavokColorGreen", "label": "Havok display color green", "kind": "scalar", "subrecord": "CNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATT\\HavokColorBlue", "label": "Havok display color blue", "kind": "scalar", "subrecord": "CNAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATT\\Buoyancy", "label": "Buoyancy", "kind": "scalar", "subrecord": "BNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "FNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Stair Material"}, {"bit": 1, "name": "Arrows Stick"}, {"bit": 2, "name": "Can Tunnel"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "MATT\\MaterialName", "label": "Material name", "kind": "string", "subrecord": "MNAM", "insertion": "existing_only"},
+        {"path": "MATT\\BreakableFX", "label": "Breakable FX", "kind": "string", "subrecord": "ANAM", "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "MATT\\MaterialParent", "label": "Material parent", "subrecord": "PNAM", "offset": 0, "targets": ["MATT"], "nullable": true, "insertion": "existing_only"},
+        {"path": "MATT\\HavokImpactDataSet", "label": "Havok impact data set", "subrecord": "HNAM", "offset": 0, "targets": ["IPDS"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "IPCT",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "0000803e0200000000007041000080410100000000000000"}, {"signature": "DODT", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "ENAM", "minimum": 0, "maximum": 1}, {"signature": "SNAM", "minimum": 0, "maximum": 1}, {"signature": "NAM1", "minimum": 0, "maximum": 1}, {"signature": "NAM3", "minimum": 0, "maximum": 1}, {"signature": "NAM2", "minimum": 0, "maximum": 1}, {"signature": "FNAM", "minimum": 0, "maximum": 1}]},
+      "fields": [
+        {"path": "IPCT\\EffectDuration", "label": "Effect duration", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\EffectOrientation", "label": "Effect orientation", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Surface Normal"}, {"value": 1, "name": "Projectile Vector"}, {"value": 2, "name": "Projectile Reflection"}], "minimum": 0, "maximum": 2, "insertion": "existing_only"},
+        {"path": "IPCT\\AngleThreshold", "label": "Angle threshold", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\PlacementRadius", "label": "Placement radius", "kind": "scalar", "subrecord": "DATA", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\SoundLevel", "label": "Sound level", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Loud"}, {"value": 1, "name": "Normal"}, {"value": 2, "name": "Silent"}, {"value": 3, "name": "Very Loud"}, {"value": 4, "name": "Quiet"}], "minimum": 0, "maximum": 4, "insertion": "existing_only"},
+        {"path": "IPCT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "No Decal Data"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "IPCT\\ImpactResult", "label": "Impact result", "kind": "scalar", "subrecord": "DATA", "offset": 21, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "Default"}, {"value": 1, "name": "Destroy"}, {"value": 2, "name": "Bounce"}, {"value": 3, "name": "Impale"}, {"value": 4, "name": "Stick"}], "minimum": 0, "maximum": 4, "insertion": "existing_only"},
+        {"path": "IPCT\\FootstepParticleMaxDistance", "label": "Footstep particle max distance", "kind": "scalar", "subrecord": "FNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "IPCT\\TextureSet", "label": "Texture set", "subrecord": "DNAM", "offset": 0, "targets": ["TXST"], "nullable": false, "insertion": "existing_only"},
+        {"path": "IPCT\\SecondaryTextureSet", "label": "Secondary texture set", "subrecord": "ENAM", "offset": 0, "targets": ["TXST"], "nullable": false, "insertion": "existing_only"},
+        {"path": "IPCT\\Sound1", "label": "Sound 1", "subrecord": "SNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "IPCT\\Sound2", "label": "Sound 2", "subrecord": "NAM1", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "IPCT\\FootstepExplosion", "label": "Footstep explosion", "subrecord": "NAM3", "offset": 0, "targets": ["EXPL"], "nullable": false, "insertion": "existing_only"},
+        {"path": "IPCT\\Hazard", "label": "Hazard", "subrecord": "NAM2", "offset": 0, "targets": ["HAZD"], "nullable": false, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "IPDS",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "PNAM", "minimum": 0, "maximum": 65535}]},
+      "fields": [],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "LENS",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 65535}]},
+      "fields": [
+        {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "RFCT",
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "000000000000000000000000"}]},
+      "fields": [
+        {"path": "RFCT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Rotate to Face Target"}, {"bit": 1, "name": "Attach to Camera"}, {"bit": 2, "name": "Inherit Rotation"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "RFCT\\EffectArt", "label": "Effect art", "subrecord": "DATA", "offset": 0, "targets": ["ARTO"], "nullable": true, "insertion": "existing_only"},
+        {"path": "RFCT\\Shader", "label": "Shader", "subrecord": "DATA", "offset": 4, "targets": ["EFSH"], "nullable": true, "insertion": "existing_only"}
+      ],
+      "localized_subrecords": []
+    },
       {
         "signature": "LVLI",
         "authoring": {

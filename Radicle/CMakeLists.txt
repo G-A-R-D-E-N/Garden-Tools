@@ -430,6 +430,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_faction.cpp
     tests/test_faction_real.cpp
     tests/test_faction_creation.cpp
+    tests/test_material_impact_records.cpp
+    tests/test_material_impact_records_real.cpp
     tests/test_weapon.cpp
     tests/test_weapon_real.cpp
     tests/test_onam.cpp
