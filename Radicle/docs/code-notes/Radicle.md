@@ -1469,3 +1469,42 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
+
+## Radicle/schema/fallout4/fields.json:R4 placed reference variants
+
+Batch R4 (#287 C4) adds schema rows and authoring for the placed-reference variants PARW, PBAR, PBEA, PCON, PFLA, PGRE, PHZD and PMIS, plus PLYR and the base record ADDN. Layouts are from xEdit at pin 01a11729 (`build/xedit/wbDefinitionsFO4.pas`). The eight variants use the `ReferenceRecord` helper (`wbDefinitionsFO4.pas:3200`, applied at `wbDefinitionsFO4.pas:5944-5951`), which is the same helper family as REFR (`wbDefinitionsFO4.pas:11347`) and ACHR (`wbDefinitionsFO4.pas:4483`). The variants therefore mirror REFR's two existing rows (HealthPercent from XHLT, Scale from XSCL) and add NAME, DATA, XESP and XOWN rows. The shared helper's Enable Parent is `wbXESP` (`wbDefinitionsFO4.pas:4330`), ownership is `wbOwnership` (`wbDefinitionsCommon.pas:9093`), and the reference target set is `sigReferences` (`wbDefinitionsFO4.pas:67-70`, which includes NULL, so EnableParent is nullable).
+
+Rows per variant: 10 scalar (XHLT percent, XSCL, DATA position X/Y/Z and rotation X/Y/Z as f32 at offsets 0..20 of a 24-byte payload, XESP flags as u8 at offset 4 of an 8-byte payload, XOWN No Crime as u8 at offset 8 of a 12-byte payload) and 3 FormLink (NAME Base targets PROJ and HAZD per `wbDefinitionsFO4.pas:3213`, not nullable; XESP EnableParent, nullable; XOWN Owner targets FACT and NPC_ per `wbDefinitionsCommon.pas:9099`, not nullable). ADDN has 3 scalar rows (DATA Index u32, DNAM cap u16 at 0, DNAM Flags u16 enum at 2 with the four names from `wbDefinitionsFO4.pas:7808-7812`) and 2 FormLink rows (SNAM Sound SNDR, LNAM Light LIGH). PLYR has no rows (see Not covered).
+
+Vanilla counts from a read-only survey of the seven official masters (zero counts are tolerated by the real test):
+- ADDN 369 (Fallout4.esm 255, DLCRobot 10, DLCworkshop01 29, DLCCoast 25, DLCworkshop02 16, DLCworkshop03 2, DLCNukaWorld 32). DATA is 4 bytes on 369 of 369, DNAM 4 bytes on 369 of 369.
+- PGRE 522 (Fallout4.esm 395, DLCCoast 77, DLCNukaWorld 50). DATA 24 bytes and NAME 4 bytes on 522 of 522. Its NAME resolves to PROJ for the 395 Fallout4.esm records.
+- PHZD 2404 (Fallout4.esm 981, DLCCoast 1249, DLCNukaWorld 100, DLCRobot 12, DLCworkshop03 60, DLCworkshop01 1, DLCworkshop02 1). DATA on 2403 of 2404. The one without DATA is a deleted record, so the DATA authoring minimum for PHZD is 0. Its NAME resolves to HAZD for the 981 Fallout4.esm records.
+- PMIS 2 (Fallout4.esm 1, DLCCoast 1). DATA and NAME on 2 of 2; NAME resolves to PROJ for the Fallout4.esm record.
+- PARW, PBAR, PBEA, PCON, PFLA and PLYR have zero records in all seven masters. Their rows and authoring come from xEdit alone. DATA is minimum 1 there because the shared helper marks it SetRequired (`wbDefinitionsFO4.pas:3263`) and every vanilla record of that signature has it, vacuously.
+
+Authoring minimums and defaults: variants list EDID, VMAD, NAME, XESP, XHLT, XSCL and DATA (min 1 with 24 zero bytes, except PHZD min 0), max 1 each. ADDN lists EDID, OBND, MODL (coupled), MODT, DATA (min 1, SetRequired at `wbDefinitionsFO4.pas:7802`, default `1c010000` = the Index 284 set at `wbDefinitionsFO4.pas:7801`), SNAM, LNAM and DNAM (min 1, SetRequired at `wbDefinitionsFO4.pas:7813`). Checked against every vanilla record of these signatures with the same order and count rules as `preflight_authoring_record`: zero violations.
+
+Authoring order: XOWN is left out of the variant authoring list. Four vanilla PGRE records (three in Fallout4.esm) store XOWN before XESP, while the list order follows xEdit and puts XESP first, so an authoring row for XOWN would reject real records. XOWN keeps its field rows.
+
+Placement: `cell_children` in `preflight_authoring_record` (`src/schema/preflight.cpp:preflight_authoring_record`) requires the temporary children group. Vanilla has 64 PHZD records in persistent children (group type 8), which that rule would flag. The real test does not call preflight placement, so it does not see that issue. PLYR and ADDN are `wbRecord` (`wbDefinitionsFO4.pas:12129`, `wbDefinitionsFO4.pas:7796`), not cell helpers, so they use `top_level`.
+
+PLYR: xEdit defines the PLYR subrecord as `wbFormID(PLYR, 'Player', cpNormal, True)` (`wbDefinitionsFO4.pas:12131`) with no target list, so no FormLink row is added. Not covered: PLYR's PLYR subrecord, and the variant subrecords XEZN, XLKR, XPWR, XAPD, XAPR, XASP, XATP, XLYR, XMSP, XRFG, XRGD, XEMI, XMBR, XLRT, XLRL, XLOD, XCVR, XRNK and MNAM, which are arrays, unions, or payloads that have no typed row in this batch. XOWN's rank and global union (`wbOwnership`) is not modelled.
+
+## Radicle/include/fo4/forms/placed_reference.hpp:PlacedReferenceKind
+
+`PlacedReferenceKind::variant` marks the eight ReferenceRecord variants so consumers can tell them apart from REFR (`object`) and ACHR (`npc`). The enum is set by `decode_placed_reference` and read by `PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:placedReferencesJson`.
+
+## Radicle/src/forms/placed_reference.cpp:decode_placed_reference
+
+The decoder used to accept only REFR and ACHR. It now accepts every signature that `is_placed_reference_signature` (`src/schema/form_link_mixed.cpp:is_placed_reference_signature`) already names, and sets the kind from the signature. REFR and ACHR decode exactly as before. The variants read NAME, DATA, XSCL, EDID and the deleted flag the same way; xEdit gives them one layout. The `DATA` requirement is unchanged: a non-deleted variant without DATA throws `PlacedReferenceError`. Deleted records without DATA throw too, which matches REFR today (548 deleted REFR records in vanilla have no DATA). One deleted PHZD in DLC has no DATA, so cell listing for that cell now throws in the same way.
+
+Consumer effect: `placed_references_for_cell` now returns variants. `PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:placedReferencesJson` maps every kind other than object to `"PlacedNpc"`, so variant rows show as PlacedNpc in the editor until that mapping is changed. This batch does not change PluginEditTool.
+
+## Radicle/tests/test_placed_variants.cpp:PlacedVariants
+
+Synthetic fixture: one ADDN in a top-level group, and one REFR in persistent children and the eight variants in temporary children of one CELL. Covers the variant kind and base, transform and scale of each variant (`CellListingDecodesEveryVariantAsVariant`); ADDN is not a placed reference (`DecodeSkipsAddonNodeBecauseItIsNotAReference`); every scalar and FormLink row reads its subrecord (`EveryScalarAndFormLinkRowReadsItsSubrecord`); one scalar and one link per record edit through `set_record_scalar` and `set_record_formlink_field`, then write and re-read (`EditsOneScalarAndOneLinkPerRecordAndRoundTrips`, `EditsAddonIndexAndSoundLinkAndRoundTrips`).
+
+## Radicle/tests/test_placed_variants_real.cpp:PlacedVariantsReal
+
+For each official master and each tracked signature (variants, PLYR, ADDN): every scalar row decodes, every non-deleted variant decodes as variant through `decode_placed_reference`, and each record meets the authoring minimum, maximum and order rules (`check_authoring`). Placement is not asserted (see the placement note above). Counts go to `RecordProperty`. Signatures with zero records pass without assertions. Fallout4.esm must contain ADDN, PGRE and PHZD. Runs only with FO4_DATA_DIR set.

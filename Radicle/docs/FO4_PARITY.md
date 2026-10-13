@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 70, L1 16, L2 16, L3 1, L4 44.
 
 ### Per-signature coverage
 
@@ -48,7 +48,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | AACT | 6970 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
 | ACTI | 5611 | - | - | - | - | - | - | yes | environment/base_records | - | - | L2 |
-| ADDN | 7796 | - | - | - | - | - | - | - | - | - | - | L0 |
+| ADDN | 7796 | 3 | - | 2 | - | - | yes | - | - | - | - | L4 |
 | AECH | 12206 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ALCH | 5691 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | AMDL | 12246 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -145,17 +145,17 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | OTFT | 9357 | - | - | - | - | - | - | - | - | - | - | L0 |
 | OVIS | 12546 | - | - | - | - | - | - | - | - | - | - | L0 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
-| PARW | 5944 | - | - | - | - | - | - | - | - | yes | - | L0 |
-| PBAR | 5945 | - | - | - | - | - | - | - | - | yes | - | L0 |
-| PBEA | 5946 | - | - | - | - | - | - | - | - | yes | - | L0 |
-| PCON | 5947 | - | - | - | - | - | - | - | - | yes | - | L0 |
+| PARW | 5944 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PBAR | 5945 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PBEA | 5946 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PCON | 5947 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
 | PERK | 7582 | - | - | - | - | - | - | - | - | yes | 1 | L0 |
-| PFLA | 5948 | - | - | - | - | - | - | - | - | yes | - | L0 |
-| PGRE | 5949 | - | - | - | - | - | - | - | - | yes | - | L0 |
-| PHZD | 5950 | - | - | - | - | - | - | - | - | yes | - | L0 |
+| PFLA | 5948 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PGRE | 5949 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
+| PHZD | 5950 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
 | PKIN | 12571 | - | - | - | - | - | - | - | - | - | - | L0 |
-| PLYR | 12129 | - | - | - | - | - | - | - | - | - | - | L0 |
-| PMIS | 5951 | - | - | - | - | - | - | - | - | yes | - | L0 |
+| PLYR | 12129 | - | - | - | - | - | yes | - | - | - | - | L4 |
+| PMIS | 5951 | 10 | - | 3 | - | - | yes | - | - | yes | - | L4 |
 | PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 2 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | - | 4 | - | 8 | 2 | yes | yes | forms/race, forms/race_body | - | 2 | L4 |
@@ -199,6 +199,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| ADDN | 2 | - | 1 | - | - | u16, u32 | - | - | - | existing_only |
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
@@ -224,6 +225,15 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
+| PARW | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PBAR | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PBEA | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PCON | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PFLA | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PGRE | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PHZD | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| PLYR | - | - | - | - | - | - | - | - | - | - |
+| PMIS | 7 | 1 | 1 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
 | PROJ | 16 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |

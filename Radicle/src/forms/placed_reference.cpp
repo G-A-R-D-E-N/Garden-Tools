@@ -173,14 +173,10 @@ std::optional<PlacedReferenceView> decode_placed_reference(
     const Plugin& plugin,
     const Record& record,
     bool persistent) {
-  PlacedReferenceKind kind;
-  if (record.header.signature == k_refr) {
-    kind = PlacedReferenceKind::object;
-  } else if (record.header.signature == k_achr) {
-    kind = PlacedReferenceKind::npc;
-  } else {
-    return std::nullopt;
-  }
+  if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
+  const auto kind = record.header.signature == k_refr ? PlacedReferenceKind::object
+                    : record.header.signature == k_achr ? PlacedReferenceKind::npc
+                                                        : PlacedReferenceKind::variant;
 
   const auto* data = unique_subrecord(record, k_data);
   if (data == nullptr) {

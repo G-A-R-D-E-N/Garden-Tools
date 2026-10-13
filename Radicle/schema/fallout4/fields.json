@@ -2024,6 +2024,2158 @@
       "localized_subrecords": []
     },
     {
+      "signature": "PARW",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PARW\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PARW\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PBAR",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PBAR\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PBAR\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PBEA",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PBEA\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PBEA\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PCON",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PCON\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PCON\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PFLA",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PFLA\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PFLA\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PGRE",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PGRE\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PGRE\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PHZD",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PHZD\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PHZD\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PMIS",
+      "authoring": {
+        "placement": "cell_children",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAME",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XESP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XHLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XSCL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "PMIS\\HealthPercent",
+          "label": "Health %",
+          "kind": "scalar",
+          "subrecord": "XHLT",
+          "storage": "u32",
+          "presentation": "percent_0_100",
+          "minimum": 0,
+          "maximum": 100,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "XSCL",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 10,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 24,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\EnableParentFlags",
+          "label": "Enable Parent Flags",
+          "kind": "scalar",
+          "subrecord": "XESP",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Set Enable State to Opposite of Parent"
+            },
+            {
+              "bit": 1,
+              "name": "Pop In"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\OwnerNoCrime",
+          "label": "No Crime",
+          "kind": "scalar",
+          "subrecord": "XOWN",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "False"
+            },
+            {
+              "value": 1,
+              "name": "True"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "PMIS\\Base",
+          "label": "Base",
+          "subrecord": "NAME",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "PROJ",
+            "HAZD"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\EnableParent",
+          "label": "Enable Parent",
+          "subrecord": "XESP",
+          "offset": 0,
+          "payload_sizes": [
+            8
+          ],
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\Owner",
+          "label": "Owner",
+          "subrecord": "XOWN",
+          "offset": 0,
+          "payload_sizes": [
+            12
+          ],
+          "targets": [
+            "FACT",
+            "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "PLYR",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PLYR",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [],
+      "formlink_fields": [],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "ADDN",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "1c010000"
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "LNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "ADDN\\Index",
+          "label": "Index",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ADDN\\MasterParticleSystemCap",
+          "label": "Master Particle System Cap",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ADDN\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "No Master Particle System"
+            },
+            {
+              "value": 1,
+              "name": "Master Particle System"
+            },
+            {
+              "value": 2,
+              "name": "Always Loaded"
+            },
+            {
+              "value": 3,
+              "name": "Master Particle System and Always Loaded"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "ADDN\\Sound",
+          "label": "Sound",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ADDN\\Light",
+          "label": "Light",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
       "signature": "TREE",
       "fields": [
         {
