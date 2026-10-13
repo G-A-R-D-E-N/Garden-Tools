@@ -377,6 +377,24 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
     }
 }
 
+std::optional<Error> RadiclePluginBackend::requireReferenceCoverage(
+    const fo4::FormKey& key,
+    std::string_view operation) const {
+    for (const auto& candidate : plugins_) {
+        auto coverageProbe = candidate.plugin;
+        try {
+            fo4::rekey_form_links(coverageProbe, key, key);
+        } catch (const std::exception& error) {
+            return Error{
+                "ReferenceCoverageIncomplete",
+                "Cannot prove " + std::string(operation) + " safety while scanning " +
+                    candidate.name + ": " + error.what()
+            };
+        }
+    }
+    return std::nullopt;
+}
+
 Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& arguments) {
     const auto pluginName = lifecycleStringArgument(arguments, 0);
     const auto formKeyText = lifecycleStringArgument(arguments, 1);
@@ -411,16 +429,8 @@ Result<nlohmann::json> RadiclePluginBackend::deleteRecord(const nlohmann::json& 
         // The graph is only as complete as the schema scanner. Strictly walk
         // every loaded plugin first so unsupported VMAD or malformed NAVM/NAVI
         // cannot hide an inbound reference to the record being deleted.
-        for (const auto& candidate : plugins_) {
-            auto coverageProbe = candidate.plugin;
-            try {
-                fo4::rekey_form_links(coverageProbe, key, key);
-            } catch (const std::exception& error) {
-                return std::unexpected(Error{
-                    "ReferenceCoverageIncomplete",
-                    "Cannot prove delete safety while scanning " + candidate.name + ": " + error.what()
-                });
-            }
+        if (const auto error = requireReferenceCoverage(key, "delete")) {
+            return std::unexpected(*error);
         }
 
         for (const auto& version : graph_.versions(key)) {
@@ -521,16 +531,8 @@ Result<nlohmann::json> RadiclePluginBackend::renumberRecord(const nlohmann::json
     }
 
     try {
-        for (const auto& candidate : plugins_) {
-            auto coverageProbe = candidate.plugin;
-            try {
-                fo4::rekey_form_links(coverageProbe, oldKey, oldKey);
-            } catch (const std::exception& error) {
-                return std::unexpected(Error{
-                    "ReferenceCoverageIncomplete",
-                    "Cannot prove renumber safety while scanning " + candidate.name + ": " + error.what()
-                });
-            }
+        if (const auto error = requireReferenceCoverage(oldKey, "renumber")) {
+            return std::unexpected(*error);
         }
 
         for (const auto& version : graph_.versions(oldKey)) {

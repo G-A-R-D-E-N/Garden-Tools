@@ -1,7 +1,9 @@
 #include "fo4/loadorder/load_order_files.hpp"
 
 #include "fo4/io/path_text.hpp"
+#include "fo4/plugin_key.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <set>
@@ -13,6 +15,10 @@ namespace fo4::loadorder {
 namespace {
 
 constexpr std::string_view k_utf8_bom = "\xEF\xBB\xBF";
+
+bool has_control_character(std::string_view name) {
+  return std::any_of(name.begin(), name.end(), [](char ch) { return static_cast<unsigned char>(ch) < 0x20; });
+}
 
 std::string_view strip_bom(std::string_view text) {
   if (text.starts_with(k_utf8_bom)) text.remove_prefix(k_utf8_bom.size());
@@ -42,14 +48,19 @@ std::string read_text(const std::filesystem::path& path) {
 
 PluginList parse_plugin_list(std::string_view text) {
   PluginList list;
-  std::set<std::string> seen;
+  std::set<PluginKey> seen;
   const auto lines = split_lines(strip_bom(text));
   for (std::size_t index = 0; index < lines.size(); ++index) {
     const auto line = lines[index];
     if (line.starts_with('#') || line.size() < 2) continue;
     const bool active = line.starts_with('*');
-    PluginListEntry entry{std::string{active ? line.substr(1) : line}, active, index + 1};
-    if (!seen.insert(entry.name).second) {
+    const auto name = active ? line.substr(1) : line;
+    if (has_control_character(name)) {
+      list.invalid_lines.push_back(index + 1);
+      continue;
+    }
+    PluginListEntry entry{std::string{name}, active, index + 1};
+    if (!seen.insert(PluginKey::from_filename(entry.name)).second) {
       list.duplicates.push_back(std::move(entry));
       continue;
     }

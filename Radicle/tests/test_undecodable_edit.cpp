@@ -1,9 +1,13 @@
 #include "fo4/forms/placed_reference.hpp"
+#include "fo4/forms/quest.hpp"
 #include "fo4/forms/weather.hpp"
 #include "fo4/plugin/maintenance.hpp"
+#include "fo4/plugin/master_usage.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/ctda.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "fo4/signature.hpp"
 #include "plugin_bytes.hpp"
 
@@ -147,6 +151,101 @@ std::vector<std::byte> interior_cell_plugin(bool undecodable_reference) {
   fo4::test::ByteWriter out;
   begin_tes4(out);
   add_interior_cell_reference(out, undecodable_reference);
+  return out.bytes;
+}
+
+constexpr std::string_view k_reference_label{"\x01\x08\0\0", 4};
+
+void begin_master_header(fo4::test::ByteWriter& out) {
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Base.esm\0", 9});
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, tes4);
+}
+
+std::vector<std::byte> undecodable_master_bytes() {
+  fo4::test::ByteWriter out;
+  begin_tes4(out);
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  add_compressed(out, "MISC", k_cell_id, 32, not_zlib());
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+std::vector<std::byte> target_with_cell(bool undecodable_cell) {
+  fo4::test::ByteWriter out;
+  begin_master_header(out);
+  const auto top = fo4::test::begin_group(out, "CELL", 0);
+  const auto block = fo4::test::begin_group(
+      out, k_zero_label, static_cast<std::int32_t>(fo4::GroupType::interior_cell_block));
+  const auto subblock = fo4::test::begin_group(
+      out, k_zero_label, static_cast<std::int32_t>(fo4::GroupType::interior_cell_subblock));
+  if (undecodable_cell) {
+    add_compressed(out, "CELL", k_cell_id, 32, not_zlib());
+  } else {
+    const auto cell = fo4::test::begin_record(out, "CELL", 0, k_cell_id);
+    fo4::test::write_subrecord(out, "DATA", std::string_view{"\x01\0", 2});
+    fo4::test::end_record(out, cell);
+  }
+  fo4::test::end_group(out, subblock);
+  fo4::test::end_group(out, block);
+  fo4::test::end_group(out, top);
+  return out.bytes;
+}
+
+void add_dial(fo4::test::ByteWriter& out, bool undecodable) {
+  if (undecodable) {
+    add_compressed(out, "DIAL", k_reference_id, 32, not_zlib());
+    return;
+  }
+  const auto dial = fo4::test::begin_record(out, "DIAL", 0, k_reference_id);
+  fo4::test::ByteWriter qnam;
+  qnam.u32(k_cell_id);
+  fo4::test::write_subrecord(out, "QNAM", qnam.bytes);
+  fo4::test::end_record(out, dial);
+}
+
+std::vector<std::byte> info_source_bytes(bool undecodable_info) {
+  fo4::test::ByteWriter out;
+  begin_tes4(out);
+  const auto quest_top = fo4::test::begin_group(out, "QUST", 0);
+  add_plain(out, "QUST", k_cell_id);
+  const auto quest_children = fo4::test::begin_group(
+      out, k_cell_label, static_cast<std::int32_t>(fo4::GroupType::cell_visible_distant_children));
+  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
+  add_dial(out, false);
+  const auto topic = fo4::test::begin_group(
+      out, k_reference_label, static_cast<std::int32_t>(fo4::GroupType::topic_children));
+  if (undecodable_info) {
+    add_compressed(out, "INFO", k_undecodable_id, 32, not_zlib());
+  } else {
+    add_plain(out, "INFO", k_undecodable_id);
+  }
+  fo4::test::end_group(out, topic);
+  fo4::test::end_group(out, dial_top);
+  fo4::test::end_group(out, quest_children);
+  fo4::test::end_group(out, quest_top);
+  return out.bytes;
+}
+
+std::vector<std::byte> info_target_bytes(bool undecodable_dial) {
+  fo4::test::ByteWriter out;
+  begin_master_header(out);
+  const auto quest_top = fo4::test::begin_group(out, "QUST", 0);
+  add_plain(out, "QUST", k_cell_id);
+  const auto quest_children = fo4::test::begin_group(
+      out, k_cell_label, static_cast<std::int32_t>(fo4::GroupType::cell_visible_distant_children));
+  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
+  add_dial(out, undecodable_dial);
+  const auto topic = fo4::test::begin_group(
+      out, k_reference_label, static_cast<std::int32_t>(fo4::GroupType::topic_children));
+  fo4::test::end_group(out, topic);
+  fo4::test::end_group(out, dial_top);
+  fo4::test::end_group(out, quest_children);
+  fo4::test::end_group(out, quest_top);
   return out.bytes;
 }
 
@@ -305,5 +404,112 @@ TEST(UndecodableEdit, PlacedReferenceOverwriteRefusesUndecodableTarget) {
                    target, source, fo4::FormKey::parse("000801:Shared.esp"), true)),
                std::invalid_argument);
   expect_undecodable_intact(target, k_reference_id);
+  expect_plugin_bytes_unchanged(target, target_bytes);
+}
+
+TEST(UndecodableEdit, RemapRecordFormLinksRefusesUndecodableRecord) {
+  const auto bytes = undecodable_plugin("MISC");
+  const auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto* found = fo4::find_record(plugin, fo4::FormKey::parse("000802:Edit.esp"));
+  ASSERT_NE(found, nullptr);
+  auto record = *found;
+  const auto context = fo4::plugin_form_id_context(plugin);
+  EXPECT_THROW(fo4::remap_record_form_links(record, context, context), std::invalid_argument);
+  EXPECT_TRUE(record.undecodable);
+  EXPECT_TRUE(record.subrecords.empty());
+}
+
+TEST(UndecodableEdit, SyncQuestVmadRefusesUndecodableRecord) {
+  const auto bytes = undecodable_plugin("QUST");
+  const auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto* found = fo4::find_record(plugin, fo4::FormKey::parse("000802:Edit.esp"));
+  ASSERT_NE(found, nullptr);
+  auto record = *found;
+  const fo4::forms::QuestStages stages{};
+  const fo4::forms::QuestAliases aliases{};
+  EXPECT_THROW(fo4::forms::sync_quest_vmad_stages(record, stages, stages), std::invalid_argument);
+  EXPECT_THROW(fo4::forms::sync_quest_vmad_aliases(
+                   record, aliases, std::span<const fo4::forms::QuestAliasCreation>{}),
+               std::invalid_argument);
+}
+
+TEST(UndecodableEdit, WriteCtdaConditionsRefusesUndecodableRecord) {
+  const auto bytes = undecodable_plugin("MISC");
+  const auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto* found = fo4::find_record(plugin, fo4::FormKey::parse("000802:Edit.esp"));
+  ASSERT_NE(found, nullptr);
+  auto record = *found;
+  EXPECT_THROW(static_cast<void>(fo4::write_ctda_conditions(
+                   record, std::span<const fo4::CtdaCondition>{})),
+               std::invalid_argument);
+  EXPECT_TRUE(record.undecodable);
+}
+
+TEST(UndecodableEdit, MasterUsageIsIncompleteWhileRecordIsUndecodable) {
+  const auto valid_bytes = base_patch(false);
+  const auto valid = fo4::read_plugin(valid_bytes, "Patch.esp");
+  EXPECT_TRUE(fo4::scan_master_usage(valid).complete());
+
+  const auto undecodable_bytes = base_patch(true);
+  const auto undecodable = fo4::read_plugin(undecodable_bytes, "Patch.esp");
+  EXPECT_FALSE(fo4::scan_master_usage(undecodable).complete());
+}
+
+TEST(UndecodableEdit, FindIdenticalToMasterSkipsWhenMasterRecordIsUndecodable) {
+  const auto base_bytes = empty_compressed_base();
+  const auto undecodable_base_bytes = undecodable_master_bytes();
+  const auto patch_bytes = base_patch(false);
+  const auto base = fo4::read_plugin(base_bytes, "Base.esm");
+  const auto undecodable_base = fo4::read_plugin(undecodable_base_bytes, "Base.esm");
+  const auto patch = fo4::read_plugin(patch_bytes, "Patch.esp");
+
+  const std::vector<const fo4::Plugin*> control_order{&base, &patch};
+  ASSERT_EQ(fo4::find_identical_to_master(control_order, 1).size(), 1u);
+
+  const std::vector<const fo4::Plugin*> order{&undecodable_base, &patch};
+  EXPECT_TRUE(fo4::find_identical_to_master(order, 1).empty());
+}
+
+TEST(UndecodableEdit, CopyPlacedReferenceAsNewRefusesUndecodableSource) {
+  const auto source_bytes = interior_cell_plugin(true);
+  const auto target_bytes = target_with_cell(false);
+  const auto source = fo4::read_plugin(source_bytes, "Base.esm");
+  auto target = fo4::read_plugin(target_bytes, "Patch.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::copy_placed_reference_as_new(
+                   target, source, fo4::FormKey::parse("000801:Base.esm"))),
+               std::invalid_argument);
+  expect_plugin_bytes_unchanged(target, target_bytes);
+}
+
+TEST(UndecodableEdit, CopyPlacedReferenceAsNewRefusesUndecodableParentCell) {
+  const auto source_bytes = interior_cell_plugin(false);
+  const auto target_bytes = target_with_cell(true);
+  const auto source = fo4::read_plugin(source_bytes, "Base.esm");
+  auto target = fo4::read_plugin(target_bytes, "Patch.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::copy_placed_reference_as_new(
+                   target, source, fo4::FormKey::parse("000801:Base.esm"))),
+               std::invalid_argument);
+  expect_plugin_bytes_unchanged(target, target_bytes);
+}
+
+TEST(UndecodableEdit, CopyInfoAsNewRefusesUndecodableSource) {
+  const auto source_bytes = info_source_bytes(true);
+  const auto target_bytes = info_target_bytes(false);
+  const auto source = fo4::read_plugin(source_bytes, "Base.esm");
+  auto target = fo4::read_plugin(target_bytes, "Patch.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::copy_info_as_new(
+                   target, source, fo4::FormKey::parse("000802:Base.esm"))),
+               std::invalid_argument);
+  expect_plugin_bytes_unchanged(target, target_bytes);
+}
+
+TEST(UndecodableEdit, CopyInfoAsNewRefusesUndecodableDestinationDial) {
+  const auto source_bytes = info_source_bytes(false);
+  const auto target_bytes = info_target_bytes(true);
+  const auto source = fo4::read_plugin(source_bytes, "Base.esm");
+  auto target = fo4::read_plugin(target_bytes, "Patch.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::copy_info_as_new(
+                   target, source, fo4::FormKey::parse("000802:Base.esm"))),
+               std::invalid_argument);
   expect_plugin_bytes_unchanged(target, target_bytes);
 }

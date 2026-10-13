@@ -123,17 +123,17 @@ void walk_object(Slice& slice, std::int16_t object_format,
 }
 
 void walk_property(Slice& slice, std::int16_t object_format,
-                   std::vector<std::size_t>& offsets);
+                   std::vector<std::size_t>& offsets, bool nested);
 
 void walk_properties(Slice& slice, std::int16_t object_format, std::uint32_t count,
-                     std::vector<std::size_t>& offsets) {
+                     std::vector<std::size_t>& offsets, bool nested = false) {
   for (std::uint32_t i = 0; i < count; ++i) {
-    walk_property(slice, object_format, offsets);
+    walk_property(slice, object_format, offsets, nested);
   }
 }
 
 void walk_property(Slice& slice, std::int16_t object_format,
-                   std::vector<std::size_t>& offsets) {
+                   std::vector<std::size_t>& offsets, bool nested) {
   slice.skip_wstring();
   const auto type = slice.u8();
   slice.u8();  // flags
@@ -159,7 +159,8 @@ void walk_property(Slice& slice, std::int16_t object_format,
       slice.u8();
       break;
     case k_type_struct:
-      walk_properties(slice, object_format, slice.u32(), offsets);
+      if (nested) throw parse_error(slice.position(), "nested VMAD struct");
+      walk_properties(slice, object_format, slice.u32(), offsets, true);
       break;
     case k_type_object_array: {
       const auto n = slice.u32();
@@ -189,9 +190,10 @@ void walk_property(Slice& slice, std::int16_t object_format,
       break;
     }
     case k_type_struct_array: {
+      if (nested) throw parse_error(slice.position(), "nested VMAD struct");
       const auto n = slice.u32();
       for (std::uint32_t i = 0; i < n; ++i) {
-        walk_properties(slice, object_format, slice.u32(), offsets);
+        walk_properties(slice, object_format, slice.u32(), offsets, true);
       }
       break;
     }

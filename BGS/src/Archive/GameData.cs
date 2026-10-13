@@ -362,7 +362,8 @@ public sealed class GameData : IDisposable
     private IEnumerable<Ba2.Entry> Entries(string archivePath)
     {
         try { return Open(archivePath).Entries; }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException &&
+                                  !(e.InnerException is { } inner && Ba2.IsNativeLoadFailure(inner)))
         {
             // a texture (DX10) archive or an unreadable file simply holds no animations
             return Array.Empty<Ba2.Entry>();
@@ -478,7 +479,8 @@ public sealed class GameData : IDisposable
             var archive = Open(archivePath);
             foreach (var entry in archive.Entries) names.Add(Normalize(entry.Name));
         }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException &&
+                                  !(e.InnerException is { } inner && Ba2.IsNativeLoadFailure(inner)))
         {
             // a texture (DX10) archive or an unreadable file simply holds no animations
         }

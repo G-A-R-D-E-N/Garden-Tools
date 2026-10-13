@@ -16,6 +16,8 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -257,4 +259,53 @@ TEST(ScalarEmbedded, SignatureOnlyLookupSkipsEmbeddedFields) {
   // Whole-payload fields still resolve.
   EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
   EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("VNAM")).has_value());
+}
+
+TEST(ScalarEmbedded, ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbsent) {
+  std::vector<std::byte> dnam(132, std::byte{0});
+  const auto put = [&dnam](std::size_t offset, std::uint32_t value, std::size_t width) {
+    for (std::size_t i = 0; i < width; ++i) {
+      dnam[offset + i] = std::byte{static_cast<std::uint8_t>(value >> (8 * i))};
+    }
+  };
+  put(4, std::bit_cast<std::uint32_t>(1000.0F), 4);
+  put(36, 2, 4);
+  put(52, 30, 2);
+  put(54, 7, 1);
+  put(124, 3, 4);
+
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto group = fo4::test::begin_group(out, "WEAP", 0);
+  const auto weap = fo4::test::begin_record(out, "WEAP", 0, 0x800);
+  fo4::test::write_subrecord(out, "DNAM", dnam);
+  fo4::test::end_record(out, weap);
+  fo4::test::end_group(out, group);
+
+  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey{fo4::PluginKey::from_filename("Patch.esp"), fo4::LocalFormId{0x800}};
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto* sub = find_subrecord(*record, "DNAM");
+  ASSERT_NE(sub, nullptr);
+
+  const auto read = [&](std::string_view path) {
+    const auto descriptor = field(path);
+    return fo4::schema::decode_scalar(
+        fo4::schema::scalar_field_bytes(sub->data, descriptor.scalar), descriptor.scalar);
+  };
+  EXPECT_EQ(read("WEAP\\Speed"), "1000");
+  EXPECT_EQ(read("WEAP\\OnHit"), "2");
+  EXPECT_EQ(read("WEAP\\Capacity"), "30");
+  EXPECT_EQ(read("WEAP\\AnimationType"), "7");
+  EXPECT_EQ(read("WEAP\\Stagger"), "3");
+
+  const std::vector<std::byte> short_dnam(60, std::byte{0});
+  EXPECT_TRUE(fo4::schema::scalar_field_bytes(short_dnam, field("WEAP\\Stagger").scalar).empty());
 }

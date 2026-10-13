@@ -137,6 +137,10 @@ Result<nlohmann::json> RadiclePluginBackend::changeReferencingRecords(
         }
     }
 
+    if (const auto error = requireReferenceCoverage(fromKey, "reference remap")) {
+        return std::unexpected(*error);
+    }
+
     struct ReferenceWork {
         fo4::FormKey key;
         const LoadedPlugin* source{nullptr};

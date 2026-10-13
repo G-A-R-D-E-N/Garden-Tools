@@ -241,3 +241,31 @@ TEST_CASE("MO2 profile refuses a load order when a checked master is missing its
     CHECK(snapshot.error().type == "Mo2LoadOrderInvalid");
     CHECK(snapshot.error().message.find("Mid.esm: master Absent.esm is not in Data") != std::string::npos);
 }
+
+TEST_CASE("MO2 profile keeps the higher-priority winner when names differ only by non-ASCII case") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+    const auto high = root / "mods" / "High";
+    const auto low = root / "mods" / "Low";
+    const std::filesystem::path upper(std::u16string{u"Ä.esp"});
+    const std::filesystem::path lower(std::u16string{u"ä.esp"});
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*\xC3\x84.esp\n");
+    writeFile(profile / "modlist.txt", "+High\n+Low\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(high / upper, minimalPlugin(0, "high"));
+    writeFile(low / lower, minimalPlugin(0, "low"));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    REQUIRE(snapshot->plugins.size() == 2);
+    CHECK(snapshot->plugins[1].path == high / upper);
+    CHECK(snapshot->plugins[1].source == "High");
+    CHECK(snapshot->missingPlugins.empty());
+}

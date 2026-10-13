@@ -302,6 +302,9 @@ const Record* find_exterior_cell(const Plugin& plugin,
         record->header.flags.is_persistent()) {
       continue;
     }
+    if (record->undecodable) {
+      throw CellError("undecodable CELL inside an exterior sub-block");
+    }
     const auto grid = cell_grid(*record);
     if (!grid.has_value()) {
       throw CellError("CELL inside an exterior sub-block is missing XCLC");

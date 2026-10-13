@@ -375,7 +375,7 @@ Remap: `remap_plugin_masters` refuses the whole operation with `std::invalid_arg
 
 D6: a stream that inflates to fewer bytes than declared is still accepted. That matches the game evidence in `docs/COMPRESSION_EVIDENCE.md`, but a plausible prefix can then display; this is a follow-up for GT's display. Edit refusal beyond the writer check is GT-205 PR2; see `src/plugin/record_edit.hpp:require_plugin_decodable` and the PR2 section below for what is and is not yet guarded.
 
-xEdit comparison: `TwbMainRecord.DecompressIfNeeded` (source:xEdit Core/wbImplementation.pas:10273-10306 @93cc0bc5) logs `<Error decompressing ...>`, sets both data pointers to nil and keeps the record with no data. Radicle loads it the same way but is stricter on save: it keeps the raw bytes, where xEdit's save path (`wbImplementation.pas:14826-14838`) re-serializes the record from its now-empty subrecords.
+xEdit comparison: `TwbMainRecord.DecompressIfNeeded` (source:xEdit Core/wbImplementation.pas:10273-10306 @93cc0bc5) logs `<Error decompressing ...>`, sets its decompressed data pointers (`dcDataBasePtr`, `dcDataEndPtr`) to nil and keeps the record with no data. xEdit re-serializes from those empty subrecords only when the record was modified: the `esModified in eStates` branch (source:xEdit Core/wbImplementation.pas:14806), whose compressed write is at 14826-14838. An untouched record is written from its raw stored bytes (`dcBasePtr` to `dcEndPtr`, source:xEdit Core/wbImplementation.pas:14857-14869, write at 14865), so an untouched undecodable record is byte-identical on save in both tools; Radicle matches xEdit there and is not stricter. For a modified record xEdit would write the emptied record, while Radicle refuses the write (`src/plugin/writer.cpp:write_record`, throw at lines 106-110).
 
 Tests: `tests/test_undecodable_record.cpp` (load, sibling decode, dirty write-back, writer net, remap refusal, C API `INVALID_ARGUMENT`, strict TES4, expansion-bound size). Flipped from strict: `tests/test_compression.cpp:Compression.RawDeflateAndGzipFramingLoadsUndecodable`, `BadZlibChecksumLoadsUndecodable`, `CorruptCompressedPayloadLoadsUndecodable`, `OversizedDeclaredSizeLoadsUndecodable`; `tests/test_reader_limits.cpp:ReaderLimits.CompressedUncompressedSizeBeyondZlibBoundLoadsUndecodable`.
 
@@ -512,6 +512,10 @@ Record-aware classification precedes generic signature-only handling for the cur
 ## src/schema/form_links.cpp:visit_coed_formids
 
 Owner and union dwords are read before `fn(0)` because `remap_raw` rewrites offset 0 into the destination encoding; typing must use the pre-remap bytes with the old context.
+
+## Radicle/src/schema/vmad.cpp:walk_property
+
+The offset walker takes a `nested` flag. A struct (type 7) or struct array (type 17) reached while walking struct members throws `parse_error` ("nested VMAD struct"), so `scan_vmad` reports the record as failed and returns no offsets, the same fail-closed path as other malformed data. Recursion is therefore bounded at two struct levels on the scan path. The typed reader, `read_property`, still walks its own struct members with the default `nested` false, because the existing `test_vmad_array_elements.cpp:StructWithNonScalarMemberStaysDisengagedAndInSync` pins that a nested struct leaves the typed value disengaged and the stream in sync. Test: `Radicle/tests/test_vmad.cpp:NestedStructPropertyFailsClosedInTheWalker`.
 
 ## src/schema/vmad.cpp:inspect_quest_vmad
 
@@ -883,6 +887,10 @@ The sound file-list exports `radicle_sound_resolve_files` and `radicle_sound_fil
 
 The `populated_*` properties count WATR records by `fo4::env::decode_water` output. `populated_DNAM` counts records whose `WaterData::visual` is present, `populated_NAM0` and `populated_NAM1` count a non-zero component in `linear_velocity` or `angular_velocity`, and `populated_NAM2` to `populated_NAM4` count a non-empty `noise_textures` entry. There is no `populated_ANAM` because `WaterData` does not expose ANAM, and FNAM is decoded as `flags` and is not counted. The counts are recorded only and carry no EXPECT.
 
+## Radicle/src/environment/sound.cpp:collect_descriptor
+
+Every call counts one visit against `k_max_sound_visits` (4096) and the emitted file list is checked against `k_max_sound_files` (4096) after each call, so a fan-out whose paths multiply cannot run unbounded. Both limits throw `WorldDecodeError` through `Reader::fail`, the same refusal as the depth and cycle checks, and the C ABI returns a non-OK status with a null list. Shipped data peaks at depth 2 and fan-out 10. Test: `Radicle/tests/test_sound.cpp:WideFanOutChainsStopAtTheVisitLimit`.
+
 ## Radicle/src/environment/package_procedure.cpp:decode_package_procedure
 
 Reads the subrecords after PKCU in three stages. Data inputs come first: each ANAM whose zstring is a registered input type runs to the next ANAM, UNAM or XNAM; then one bare UNAM u8 per input (an older shape with a BNAM and a 4-byte PNAM after each UNAM is also accepted); then an optional XNAM kept once per package. The tree follows, if present: a root ANAM Procedure, Sequence, Stacked, Simultaneous or Random. A container reads CITC with that many CTDA (each with optional CIS1 and CIS2), then PRCB (child count, flags), then its children, and then one optional PFO2 or PFOR. A leaf (ANAM Procedure) reads CITC and CTDA, then PNAM naming a registered procedure; the following subrecords up to ANAM, PFO2, PFOR, POBA, POEA, POCA, UNAM or XNAM are an opaque index range, and one optional PFO2 or PFOR directly after that range is consumed. After the tree, the UNAM, BNAM and PNAM triples are consumed as the template input-name table and not exposed; in shipped data they come only after the tree (RE-015, #520 comment 13144). The registered leaf list holds 30 names: the RE #407 comment 7894 names plus Wait and Say from comment 9746. A real-data walk of OG 1.10.163, AE 1.11.240 and NG 1.10.984 found every shipped leaf name inside this list, with 0 fallbacks. Any boundary that does not reconcile throws the internal Unreconciled marker, which the function catches and reports as decoded false with one opaque region from after PKCU to the first POBA, POEA or POCA. The depth limit of 64 bounds recursion on hostile records. Evidence: RE #407 comments 7894 (sections 3 and 5) and 9746, and RE-015.
@@ -897,7 +905,7 @@ Names for PLDT types 0 to 14 follow RE #407 comment 7894, with corrections from 
 
 ## Radicle/src/c_api_behavior.cpp:radicle_package_procedure_decode
 
-Flattens the tree into a node array in pre-order and an input array. Node children are pointers into per-node index arrays owned by the holder, and names are owned strings, so the pointers stay valid until radicle_package_procedure_free.
+Flattens the tree into a node array in pre-order and an input array. Node children are pointers into per-node index arrays owned by the holder, and names are owned strings, so the pointers stay valid until radicle_package_procedure_free. A non-PACK record returns `RADICLE_STATUS_PARSE_ERROR` with "expected a PACK record", the same status and text `radicle_package_decode` gives through `Reader`; it previously returned OK with `decoded` 0. Test: `Radicle/tests/test_behavior.cpp:ProcedureCAbiRefusesANonPackRecordLikePackDecode`.
 
 ## Radicle/tests/test_behavior_real.cpp:EveryOfficialPackageCombatStyleAndIdleDecodesAndMasterIsByteIdentical
 
@@ -954,7 +962,7 @@ C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_
 
 ## Radicle/tests/real_data_build.cpp:detect_game_build
 
-Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The first match wins, so the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
+Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The last match in file order wins: `scan_file_version_backward` walks from the end of the file, and the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
 
 ## Radicle/src/environment/sound.cpp:select_rate_file_index
 
@@ -1036,7 +1044,7 @@ Fallback for `FO4_DATA_DIR` when neither `FO4_PEX_CORPUS` nor `FO4_PEX_ARCHIVES`
 
 ## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
 
-The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
+The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter, as RE-013 (#403 c7887) proves for the GRAS water mode. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
 
 ## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
 
@@ -1052,7 +1060,11 @@ The data directory overload lists the directory and passes the entries to the sp
 
 ## Radicle/src/loadorder/plugin_list.cpp:parse_plugin_list
 
-Splits on LF and removes one trailing CR per line; the BOM is removed only at the start of the text. Lines starting with `#` or shorter than two characters are skipped before the leading `*` is stripped, so a lone `*` is skipped and `*a` yields the name `a`. Duplicates are compared as exact strings after the `*` is stripped. The first occurrence keeps its active flag; later ones go to `duplicates`.
+Splits on LF and removes one trailing CR per line; the BOM is removed only at the start of the text. Lines starting with `#` or shorter than two characters are skipped before the leading `*` is stripped, so a lone `*` is skipped and `*a` yields the name `a`. Duplicates are compared as `PluginKey`s after the `*` is stripped, so the assembler's case folding applies and `Mod.esp` matches `*MOD.esp`. The first occurrence keeps its active flag; later ones go to `duplicates`. A name with a byte below 0x20 is skipped and its 1-based line goes to `invalid_lines`. The C ABI plugin-list rows carry only the entries, so `assemble_load_order` reports the lines as `invalid_name`, which is the only channel for them. Tests: `Radicle/tests/test_load_order_files.cpp:MixedCaseDuplicateKeepsInactiveFirstEntry`, `Radicle/tests/test_load_order_files.cpp:MixedCaseDuplicateKeepsActiveFirstEntry`, `Radicle/tests/test_load_order_files.cpp:NamesWithControlCharactersAreSkippedAndReported`.
+
+## Radicle/bindings/csharp/Radicle.Interop/LoadOrder.cs:SplitTrailing
+
+Splits a row into a fixed number of trailing fields counted from the right, so a TAB inside the first field stays there and cannot throw. `ReadPluginList` uses it for `name\tactive\tline` and `Assemble` for `name\tchecked\tmaster\tlight`. The native plugin-list parser already refuses control characters in names, so this is a second guard. Test: `Radicle/bindings/csharp/Radicle.Interop.Tests/LoadOrderTests.cs:ReadPluginListSkipsNamesWithControlCharactersWithoutThrowing`.
 
 ## Radicle/src/loadorder/plugin_list.cpp:parse_ccc
 
@@ -1133,3 +1145,73 @@ The LVSP public API is now a thin layer over `decode_leveled_list`. A COED after
 ## Radicle/include/fo4/forms/leveled_spell.hpp:LeveledSpellError
 
 An alias of `LeveledListError`. The LVSP tests and `leveled_spell_creation.cpp` keep catching `LeveledSpellError`, so the public name is unchanged.
+
+## Radicle/schema/fallout4/fields.json:records[WEAP]
+
+WEAP is declared only in the generated tables, as `schema/fallout4/README.md` requires. The authoring rows follow xEdit's definition order in `wbDefinitionsFO4.pas` 12882-13025, with line-by-line citations in `Radicle/docs/WEAPONS.md`. FULL is left out of the authoring list: the object-template combinations also write FULL (`wbDefinitionsFO4.pas:5525`), and the authoring order cannot hold a signature twice. OBND (`wbDefinitionsCommon.pas:9089` SetRequired) and DNAM are min 1. DNAM min 1 follows the PROJ, HAZD and ARMA DNAM precedent, which xEdit does not mark. No authoring default is registered, so create and add of these subrecords are not claimed.
+
+Embedded scalars carry `payload_size` 132 (DNAM), 41 (FNAM) and 12 (CRDT), which are the sums of their xEdit member widths. xEdit has no version condition on them. A subrecord of another size makes its scalars absent to the reader, and `Radicle/tests/test_weapon_real.cpp:WeaponReal` reports that size as a failure.
+
+## Radicle/src/forms/weapon.cpp:decode_weapon_damage_types
+
+DAMA is a count-free array of 8-byte entries (`type`, `amount`). From form version 152 each entry is 12 bytes with a Curve Table FormID after them, as `wbDamageTypeArray` in `Core/wbDefinitionsCommon.pas:8454-8463` gates it with `wbFromVersion(152, ...)` at 8460. The FormLink remap already has this layout at `Radicle/src/schema/form_link_mixed.cpp:k_repeated_struct_layouts`. A payload that is not a whole number of entries throws `WeaponError`, and an absent DAMA returns an empty list. The layout is xEdit-derived; `Radicle/tests/test_weapon_real.cpp:WeaponReal` is the check against the masters.
+
+## Radicle/tests/test_scalar_embedded.cpp:ScalarEmbedded.ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbsent
+
+A synthetic WEAP DNAM is written at the offsets xEdit gives (Speed at 4, OnHit at 36, Capacity at 52, AnimationType at 54, Stagger at 124). A payload shorter than the Stagger offset reads as absent, not as an error.
+
+## Radicle/tests/test_weapon.cpp:WeaponDamageTypes
+
+Covers the 8-byte form, the 12-byte form from version 152 with the Curve Table, the fail-closed size check, an absent DAMA (empty list) and a key with no WEAP record (throws). Its layout is xEdit-derived and marked TODO-verify in the file until CI runs `WeaponReal`.
+
+## Radicle/tests/test_weapon_real.cpp:WeaponReal
+
+Skips unless `FO4_DATA_DIR` is set, and matches the RaceReal pattern. For every WEAP in each official master it decodes DAMA and every WEAP scalar. A subrecord whose size differs from the scalar's `payload_size` is a failure, because the reader would otherwise report the field as absent. Fallout4.esm must contain at least one WEAP.
+
+## .github/scripts/check_real_data_regex.py:real_data_tests
+
+Read-only guard for GT-229. It finds every gtest `TEST`, `TEST_F`, `TEST_P` and Catch `TEST_CASE` in `Radicle/tests/*.cpp` and `PluginEditTool/native/tests`, and counts a test as reading game data when its body calls `getenv("FO4_DATA_DIR")`, calls a file-local helper that does, or uses a fixture whose `SetUp` does. Each counted test's `Suite.Name` (or Catch title) must match `REAL_DATA_TEST_REGEX`, which the script reads from the `native-ci.yml` env block. The check runs in the Linux native job, so a game-data test that the real-data job would never select fails CI. Comments and string literals are blanked before brace matching, so a skip message that names `FO4_DATA_DIR` does not count as a read.
+
+## Radicle/tests/test_real_data_build.cpp:InstalledDataBuildIsKnown
+
+GT-247. Runs only when `FO4_DATA_DIR` is set and asserts `detect_game_build` does not return `Unknown`, so the real-data job fails when `Fallout4.exe` is not next to the Data folder instead of reporting green. The suite name `RealDataBuildReal` matches the `[A-Za-z0-9_]*Real\.` alternative. An exported `FO4_GAME_BUILD` overrides the exe read and satisfies the test.
+
+## Radicle/tests/test_real_data_build.cpp:MissingExeIsUnknown
+
+GT-245. Clears `FO4_GAME_BUILD` first, the same way `DetectReadsFalloutExeNextToDataFolder` does, so an exported override cannot turn the missing-exe case into a known build.
+
+## Radicle/tests/test_navmesh_authoring.cpp:UneditedPluginWithNavmeshAndNaviRecordsWritesBackByteIdentical
+
+GT-244. `write_plugin` returns the source bytes whenever `plugin_original_bytes` is non-empty, so the byte comparison could never fail. Clearing `plugin.original_range` (the pattern other round-trip tests use) forces the rebuild path before the comparison. The NAVI record in `navmesh_writer_fixture` is still a `ZZZZ` sentinel: a valid NAVI needs NVER and NVMI payloads, and the builder for those lives in an anonymous namespace in `test_navmesh.cpp`, so it was not copied here.
+
+## Radicle/tests/test_water_authoring.cpp:UnmodifiedWaterRecordsRoundTripByteIdentical
+
+GT-244. Same cause and fix as the navmesh test: the plugin's original range is cleared before `write_plugin`, so the WATR bytes are rebuilt and compared, not copied from the source.
+
+## Radicle/tests/test_sound_real.cpp:DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes
+
+GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The source bytes are taken before the clear, and the span stays valid because the copy keeps the shared `original_data` buffer.
+
+## Radicle/src/schema/form_links.cpp:remap_record_form_links — single-record refusal (GT-232)
+
+`remap_record_form_links` calls `require_decodable` on entry, so each single-record caller refuses an undecodable record before any FormLink is rewritten. Callers: `src/plugin/copy_hierarchy.cpp:clone_record`, `src/plugin/mutation.cpp:copy_record_as_override`, `src/forms/placed_reference_copy.cpp:copy_record_for_destination`, `src/plugin/maintenance.cpp:previous_normalizes_equal` (its previous record is already screened by `identical_previous`), and the PET copy path in `PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RadiclePluginBackend::invokeLegacyBackend`. `remap_form_links` still refuses the whole plugin in its pre-scan, so its behavior is unchanged. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.RemapRecordFormLinksRefusesUndecodableRecord`.
+
+## Radicle/src/forms/quest_vmad.cpp:sync_quest_vmad_aliases, Radicle/src/forms/quest_vmad.cpp:sync_quest_vmad_stages — entry refusal (GT-232)
+
+Both call `require_decodable` on the record before reading its VMAD. Their callers, `src/forms/quest_alias_edit.cpp` and `src/forms/quest_stages.cpp:write_quest_stages`, already pass a record from a decodable lookup, so the check is a guard for direct callers. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.SyncQuestVmadRefusesUndecodableRecord`.
+
+## Radicle/src/schema/ctda.cpp:write_ctda_conditions_in — entry refusal (GT-232)
+
+`write_ctda_conditions` goes through this function, so both are refused for an undecodable record before the condition list is scanned. `set_record_conditions` (`include/fo4/plugin/mutation.hpp`) and the scoped condition writer already check earlier. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.WriteCtdaConditionsRefusesUndecodableRecord`.
+
+## Radicle/src/plugin/master_usage.cpp:scan_master_usage — undecodable records (GT-233)
+
+`scan_master_usage` counts each undecodable non-TES4 record in `MasterUsage::undecodable_records`, and `MasterUsage::complete()` (`include/fo4/plugin/master_usage.hpp:MasterUsage::complete`) is false while that count is non-zero. The FormLinks of such a record are raw bytes the scan cannot see, so a master's use there is unproven. `radicle_env_unused_masters` (`src/c_api_maintenance.cpp:radicle_env_unused_masters`) therefore reports `complete` as 0, and `used_masters` keeps every master. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.MasterUsageIsIncompleteWhileRecordIsUndecodable`.
+
+## Radicle/src/forms/cell.cpp:find_exterior_cell — undecodable CELL (GT-237)
+
+A non-persistent CELL in an exterior sub-block that is undecodable throws `CellError` ("undecodable CELL inside an exterior sub-block") before its XCLC is read, so it is no longer reported as missing XCLC. The lookup still throws rather than skipping the cell, which keeps it fail-closed. Test: `tests/test_exterior_cell_creation.cpp:ExteriorCellCreation.UndecodableExistingCellFailsClosedWithDistinctMessage`.
+
+## Radicle/src/plugin/reader.cpp:read_record — GT-236 coverage
+
+Tests added in `tests/test_compression.cpp`: `Compression.ShortInflatedOutputLoadsAtProducedLength` pins the D6 behavior (a stream that inflates short loads at the produced length, not undecodable), and `Compression.PayloadUnderFourBytesFailsThePluginRead` pins the strict framing check, which throws `fo4::parse_error` outside the compressed-record `try`. Tests added in `tests/test_undecodable_edit.cpp`: `UndecodableEdit.FindIdenticalToMasterSkipsWhenMasterRecordIsUndecodable` covers the previous-record screen in `src/plugin/maintenance.cpp:identical_previous`; `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableParentCell` cover the guards in `src/forms/placed_reference_copy.cpp:copy_placed_reference_as_new`; `UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyInfoAsNewRefusesUndecodableDestinationDial` cover the guards in `src/forms/info_copy.cpp:copy_info_as_new`.

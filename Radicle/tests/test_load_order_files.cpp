@@ -72,6 +72,42 @@ TEST(LoadOrderFiles, ParsesPluginListRulesInFileOrder) {
   EXPECT_EQ(list.duplicates[0].line, 5u);
 }
 
+TEST(LoadOrderFiles, MixedCaseDuplicateKeepsInactiveFirstEntry) {
+  const auto list = fo4::loadorder::parse_plugin_list("Mod.esp\n*MOD.esp\n");
+  ASSERT_EQ(list.entries.size(), 1u);
+  EXPECT_EQ(list.entries[0].name, "Mod.esp");
+  EXPECT_FALSE(list.entries[0].active);
+  ASSERT_EQ(list.duplicates.size(), 1u);
+  EXPECT_EQ(list.duplicates[0].name, "MOD.esp");
+  EXPECT_EQ(list.duplicates[0].line, 2u);
+}
+
+TEST(LoadOrderFiles, MixedCaseDuplicateKeepsActiveFirstEntry) {
+  const auto list = fo4::loadorder::parse_plugin_list("*MOD.esp\nMod.esp\n");
+  ASSERT_EQ(list.entries.size(), 1u);
+  EXPECT_EQ(list.entries[0].name, "MOD.esp");
+  EXPECT_TRUE(list.entries[0].active);
+  ASSERT_EQ(list.duplicates.size(), 1u);
+  EXPECT_EQ(list.duplicates[0].name, "Mod.esp");
+  EXPECT_EQ(list.duplicates[0].line, 2u);
+}
+
+TEST(LoadOrderFiles, NamesWithControlCharactersAreSkippedAndReported) {
+  TempDataDir data;
+  data.write("Good.esp", make_tes4_plugin(0, 1.0f, {}), 1);
+
+  const auto list = fo4::loadorder::parse_plugin_list("*Good.esp\n*Bad\tName.esp\nBad\x01.esp\n");
+  ASSERT_EQ(list.entries.size(), 1u);
+  EXPECT_EQ(list.entries[0].name, "Good.esp");
+  EXPECT_EQ(list.invalid_lines, (std::vector<std::size_t>{2, 3}));
+
+  const auto order = fo4::loadorder::assemble_load_order(data.path(), list, {}, OfficialTable::og_ng);
+  EXPECT_EQ(names_of(order), (std::vector<std::string>{"Good.esp"}));
+  EXPECT_TRUE(has_finding_detail(order, "invalid_name", "line 2"));
+  EXPECT_TRUE(has_finding_detail(order, "invalid_name", "line 3"));
+  EXPECT_FALSE(order.failed);
+}
+
 TEST(LoadOrderFiles, ParsesPluginListWithoutBom) {
   const auto list = fo4::loadorder::parse_plugin_list("A.esm\n*B.esp");
   ASSERT_EQ(list.entries.size(), 2u);

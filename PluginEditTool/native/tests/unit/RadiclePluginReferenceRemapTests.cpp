@@ -10,6 +10,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fo4/flags.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/form_links.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -94,6 +95,19 @@ std::vector<std::byte> referencingPluginBytes() {
 std::vector<std::byte> emptyPatchBytes() {
     fo4::test::ByteWriter out;
     remapHeader(out, 0x800);
+    return out.bytes;
+}
+
+std::vector<std::byte> undecodableMiscBytes() {
+    fo4::test::ByteWriter out;
+    remapHeader(out, 0x801);
+    const auto group = fo4::test::begin_group(out, "MISC", 0);
+    const auto record = fo4::test::begin_record(
+        out, "MISC", fo4::RecordFlags::compressed, 0x00000801u, 131);
+    out.u32(32);
+    out.raw(std::string_view{"not-zlib-data-at-all"});
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
     return out.bytes;
 }
 
@@ -215,4 +229,39 @@ TEST_CASE("Native ChangeReferencingRecords previews a brand-new target without c
     CHECK(preview->get<std::string>().starts_with("DRY RUN: 1 record(s) reference"));
     CHECK(preview->get<std::string>().find("UsesFrom") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(missingPath));
+}
+
+TEST_CASE("Native ChangeReferencingRecords refuses while a loaded plugin has an undecodable record") {
+    const auto root = remapTempRoot();
+    RemapCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto otherPath = root / "Other.esm";
+    const auto modPath = root / "Mod.esp";
+    const auto hiddenPath = root / "Hidden.esp";
+    remapWriteBytes(basePath, colorPluginBytes("FromColor"));
+    remapWriteBytes(otherPath, colorPluginBytes("ToColor"));
+    remapWriteBytes(modPath, referencingPluginBytes());
+    remapWriteBytes(hiddenPath, undecodableMiscBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const auto loaded = backend.invoke(
+        "environment.LoadMo2",
+        nlohmann::json{{
+            "plugins",
+            nlohmann::json::array({
+                remapPluginEntry("Base.esm", basePath),
+                remapPluginEntry("Other.esm", otherPath),
+                remapPluginEntry("Mod.esp", modPath),
+                remapPluginEntry("Hidden.esp", hiddenPath)
+            })
+        }});
+    REQUIRE(loaded.has_value());
+
+    const auto preview = backend.changeReferencingRecords(
+        nlohmann::json::array({
+            "000800:Base.esm", "000800:Other.esm", "NewPatch.esp", false, 300
+        }));
+    REQUIRE_FALSE(preview.has_value());
+    CHECK(preview.error().type == "ReferenceCoverageIncomplete");
+    CHECK(preview.error().message.find("reference remap") != std::string::npos);
 }
