@@ -17620,6 +17620,401 @@
       }
     },
     {
+      "signature": "LSCR",
+      "fields": [
+        {
+          "path": "LSCR\\RotationMin",
+          "label": "Rotation min",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "storage": "i16",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "insertion": "existing_only",
+          "payload_size": 4
+        },
+        {
+          "path": "LSCR\\RotationMax",
+          "label": "Rotation max",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "storage": "i16",
+          "offset": 2,
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "insertion": "existing_only",
+          "payload_size": 4
+        },
+        {
+          "path": "LSCR\\ZoomMin",
+          "label": "Zoom min",
+          "kind": "scalar",
+          "subrecord": "ZNAM",
+          "storage": "f32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 8
+        },
+        {
+          "path": "LSCR\\ZoomMax",
+          "label": "Zoom max",
+          "kind": "scalar",
+          "subrecord": "ZNAM",
+          "storage": "f32",
+          "offset": 4,
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only",
+          "payload_size": 8
+        },
+        {
+          "path": "LSCR\\CameraPath",
+          "label": "Camera path",
+          "kind": "string",
+          "subrecord": "MOD2",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "LSCR\\LoadingScreenNif",
+          "label": "Loading screen NIF",
+          "subrecord": "NNAM",
+          "offset": 0,
+          "nullable": true,
+          "targets": [
+            "STAT",
+            "SCOL"
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LSCR\\Transform",
+          "label": "Transform",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "nullable": false,
+          "targets": [
+            "TRNS"
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": [
+        "DESC"
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DESC",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "TNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MOD2",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      }
+    },
+    {
+      "signature": "OVIS",
+      "fields": [],
+      "formlink_fields": [],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INDX",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        ]
+      }
+    },
+    {
+      "signature": "NOCM",
+      "fields": [],
+      "formlink_fields": [],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INDX",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        ]
+      }
+    },
+    {
+      "signature": "DEBR",
+      "fields": [],
+      "formlink_fields": [],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        ]
+      }
+    },
+    {
+      "signature": "RFGP",
+      "fields": [
+        {
+          "path": "RFGP\\Name",
+          "label": "Name",
+          "kind": "string",
+          "subrecord": "NNAM",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "RFGP\\Reference",
+          "label": "Reference",
+          "subrecord": "RNAM",
+          "offset": 0,
+          "nullable": true,
+          "targets": [
+            "PLYR",
+            "ACHR",
+            "REFR",
+            "PGRE",
+            "PHZD",
+            "PMIS",
+            "PARW",
+            "PBAR",
+            "PBEA",
+            "PCON",
+            "PFLA"
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RFGP\\PackIn",
+          "label": "Pack-In",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "nullable": false,
+          "targets": [
+            "PKIN"
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "RNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      }
+    },
+    {
+      "signature": "MESG",
+      "fields": [
+        {
+          "path": "MESG\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u32",
+          "offset": 0,
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Message Box"
+            },
+            {
+              "bit": 1,
+              "name": "Delay Initial Display"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "payload_size": 4
+        },
+        {
+          "path": "MESG\\DisplayTime",
+          "label": "Display time",
+          "kind": "scalar",
+          "subrecord": "TNAM",
+          "storage": "u32",
+          "offset": 0,
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only",
+          "payload_size": 4
+        },
+        {
+          "path": "MESG\\SWF",
+          "label": "SWF",
+          "kind": "string",
+          "subrecord": "SNAM",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "MESG\\OwnerQuest",
+          "label": "Owner quest",
+          "subrecord": "QNAM",
+          "offset": 0,
+          "nullable": false,
+          "targets": [
+            "QUST"
+          ],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": [
+        "DESC",
+        "FULL",
+        "NNAM",
+        "ITXT"
+      ],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DESC",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "QNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1
+          },
+          {
+            "signature": "TNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ITXT",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        ]
+      }
+    },
+    {
       "signature": "CSTY",
       "fields": [
         {
