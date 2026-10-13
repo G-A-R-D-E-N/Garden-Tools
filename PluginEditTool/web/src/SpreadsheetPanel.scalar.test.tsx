@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { DialogProvider } from './dialogs';
 import SpreadsheetPanel from './SpreadsheetPanel';
 
 const grid = JSON.stringify({
@@ -35,14 +36,14 @@ afterEach(() => {
 });
 
 it('shows enum and flag names in the grid cells', async () => {
-  render(<SpreadsheetPanel onClose={() => {}} />);
+  render(<DialogProvider><SpreadsheetPanel onClose={() => {}} /></DialogProvider>);
   fireEvent.click(screen.getByText('Load'));
   expect(await screen.findByDisplayValue('True')).toBeTruthy();
   expect(screen.getByText('Hidden From NPC, Special Combat').closest('details')!.getAttribute('title')).toBe('3');
 });
 
 it('writes the picked enum integer through SetField on save', async () => {
-  render(<SpreadsheetPanel onClose={() => {}} />);
+  render(<DialogProvider><SpreadsheetPanel onClose={() => {}} /></DialogProvider>);
   fireEvent.click(screen.getByText('Load'));
   fireEvent.change(await screen.findByDisplayValue('True'), { target: { value: '0' } });
   fireEvent.click(screen.getByText('Save Changes (1)').closest('button')!);
@@ -50,7 +51,7 @@ it('writes the picked enum integer through SetField on save', async () => {
 });
 
 it('writes the combined flag integer from the checkbox list', async () => {
-  render(<SpreadsheetPanel onClose={() => {}} />);
+  render(<DialogProvider><SpreadsheetPanel onClose={() => {}} /></DialogProvider>);
   fireEvent.click(screen.getByText('Load'));
   await screen.findByDisplayValue('True');
   fireEvent.click(screen.getByLabelText('Special Combat'));

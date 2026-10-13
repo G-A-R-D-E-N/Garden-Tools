@@ -30,7 +30,15 @@ const matrix: ConflictMatrix = {
 
 beforeEach(() => {
   SetField.mockClear();
-  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { SetField } } } });
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
+    SetField,
+    GetProblems: vi.fn(async () => '[]'),
+    GetReferencedBy: vi.fn(async () => '[]'),
+    GetDependencies: vi.fn(async () => '[]'),
+    GetHistory: vi.fn(async () => '[]'),
+    GetContainmentPath: vi.fn(async () => '[]'),
+    GetEditablePlugins: vi.fn(async () => '[]'),
+  } } } });
 });
 
 afterEach(() => {
