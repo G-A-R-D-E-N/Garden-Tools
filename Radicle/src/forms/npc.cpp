@@ -221,6 +221,7 @@ std::vector<Subrecord> encode_factions(const std::vector<NpcFaction>& entries,
 
 std::vector<Subrecord> encode_perks(const std::vector<NpcPerk>& entries,
                                     const PluginFormIdContext& context) {
+  if (entries.empty()) return {};
   std::vector<Subrecord> encoded;
   auto count = make_subrecord(k_prkz, 4);
   write_at(count.data, 0, static_cast<std::uint32_t>(entries.size()));
@@ -236,6 +237,7 @@ std::vector<Subrecord> encode_perks(const std::vector<NpcPerk>& entries,
 
 std::vector<Subrecord> encode_inventory(const std::vector<NpcInventoryItem>& entries,
                                         const PluginFormIdContext& context) {
+  if (entries.empty()) return {};
   std::vector<Subrecord> encoded;
   auto count = make_subrecord(k_coct, 4);
   write_at(count.data, 0, static_cast<std::uint32_t>(entries.size()));

@@ -1104,7 +1104,7 @@ The in-progress part is a plain local `StaticCollectionPartView` with an `open` 
 
 ## Radicle/src/forms/npc.cpp:replace_run
 
-source:xEdit NPC_ lists are contiguous runs in the record layout, so one edit replaces one run as a unit. A run with other subrecords between its entries is refused rather than reordered. An encoded run equal to the stored run returns false before the record is marked modified, so a no-op set leaves a parsed plugin clean.
+source:xEdit NPC_ lists are contiguous runs in the record layout, so one edit replaces one run as a unit. A run with other subrecords between its entries is refused rather than reordered. An encoded run equal to the stored run returns false before the record is marked modified, so a no-op set leaves a parsed plugin clean. An empty list drops its count subrecord (PRKZ or COCT) along with its entries.
 
 ## Radicle/src/forms/npc.cpp:insertion_index
 
@@ -1112,11 +1112,11 @@ Places a missing run after the last subrecord whose rank in `k_order` is below t
 
 ## Radicle/src/forms/npc.cpp:encode_perks
 
-source:xEdit PRKZ is a count path for PRKR (FO4:10393). The count is always written with the run, so PRKZ equals the entry count. Removing the last perk writes PRKZ 0 rather than dropping it.
+source:xEdit PRKZ is a count path for PRKR (FO4:10393). The count is written with the run, so PRKZ equals the entry count. Removing the last perk drops PRKZ with the run.
 
 ## Radicle/src/forms/npc.cpp:encode_inventory
 
-source:xEdit COCT is a count path for CNTO (FO4:3316). The count is always written with the run, so removing the last item writes COCT 0. COED is emitted only directly after its CNTO, matching its nesting at FO4:3300-3314.
+source:xEdit COCT is a count path for CNTO (FO4:3316). The count is written with the run, so removing the last item drops COCT with the run. COED is emitted only directly after its CNTO, matching its nesting at FO4:3300-3314.
 
 ## Radicle/src/forms/npc.cpp:decode_npc_inventory
 

@@ -379,6 +379,24 @@ TEST(NpcLists, InventoryEditsKeepCoctEqualAndCoedWithItsItem) {
   EXPECT_EQ(final_items[1], with_extra);
 }
 
+TEST(NpcLists, RemovingTheLastEntryDropsItsCountSubrecord) {
+  auto plugin = read_npc({
+      {"EDID", text_bytes("RadicleNpc")},
+      {"ACBS", acbs()},
+      {"PRKZ", u32_value(1)},
+      {"PRKR", prkr(0x00000456, 1)},
+      {"COCT", u32_value(1)},
+      {"CNTO", cnto(0x00000ABC, 5)},
+      {"DNAM", dnam()},
+  });
+  ASSERT_TRUE(fo4::forms::remove_npc_perk(plugin, key(), 0));
+  ASSERT_TRUE(fo4::forms::remove_npc_inventory_item(plugin, key(), 0));
+  const auto after = reread(plugin);
+  EXPECT_EQ(signatures(npc(after)), (std::vector<std::string>{"EDID", "ACBS", "DNAM"}));
+  EXPECT_TRUE(fo4::forms::decode_npc_perks(after, key()).empty());
+  EXPECT_TRUE(fo4::forms::decode_npc_inventory(after, key()).empty());
+}
+
 TEST(NpcLists, NoOpSetDoesNotDirtyAParsedPlugin) {
   auto plugin = fo4::read_plugin(build(base()), "Patch.esp");
   const auto current = fo4::forms::decode_npc_factions(plugin, key());
