@@ -374,7 +374,7 @@ Result<nlohmann::json> RadiclePluginBackend::getConflictMatrix(const nlohmann::j
         }
         const auto value = [](const auto& cell) -> const auto& { return cell.value; };
         const auto differs = matrixDiffers(cells, value);
-        rows.push_back({
+        auto row = nlohmann::json{
             {"Field", path}, {"DisplayLabel", path}, {"Level", 0},
             {"Values", std::move(values)}, {"Editable", std::move(editable)},
             {"Differs", differs}, {"Statuses", matrixStatuses(cells, value)},
@@ -384,7 +384,10 @@ Result<nlohmann::json> RadiclePluginBackend::getConflictMatrix(const nlohmann::j
             {"IsSummary", false}, {"HasChildren", false},
             {"EditKind", reference ? "Ref" : "Text"}, {"EnumOptions", nullptr},
             {"RefType", nullptr}, {"RefTypes", nullptr}
-        });
+        };
+        const auto presentation = scalarPresentationJson(winner->signature, path);
+        if (!presentation.is_null()) row["Presentation"] = presentation;
+        rows.push_back(std::move(row));
     }
     auto raw = buildRawMatrixRows(records);
     for (auto& row : raw) {
