@@ -308,6 +308,7 @@ TEST_CASE("Radicle plugin backend reports dangling FormLinks") {
         backend.invoke("backend.GetProblems",
                        nlohmann::json::array({"000801:Broken.esp"})));
     REQUIRE(problems.size() == 1);
+    CHECK(problems[0].at("Code") == "unresolved_link");
     CHECK(problems[0].at("Severity") == "critical");
     CHECK(problems[0].at("Description").get<std::string>().find("000999:Base.esp") != std::string::npos);
 }

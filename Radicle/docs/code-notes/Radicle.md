@@ -558,6 +558,10 @@ Whole-load-order "Check for Errors" (#359, xEdit parity). Findings come only fro
 - `wrong_target_type`: only when `slot_targets` matches a generated field (record + subrecord + offset) or a non-nested list (per-subrecord at offset 0, packed arrays at 4-byte steps, as `formlink_lists.cpp:packed_element_count`). Wildcard lists and nested lists are skipped. `CheckFinding::offset` is `FormLinkHit::offset` (`fo4/schema/form_links.hpp`), the byte offset inside the subrecord.
 - `CheckOptions::plugins` limits which plugins' records are checked; the winner index still covers the whole load order.
 
+## Radicle/src/graph/check_errors.cpp:check_preflight
+
+Each `schema::preflight_plugin` issue becomes a `schema_preflight` finding. The message is `path: message` with no code suffix. The issue's `code` string (for example `duplicate_scalar_subrecord`, `scalar_value_out_of_range`) goes in `CheckFinding::detail`, so both problem paths expose the same shape. The C ABI `radicle_env_check_errors` (`src/c_api_check.cpp`) appends ` (<detail>)` to the message when `detail` is set, so its row text is unchanged. PET's Check for Errors (`PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp`) and GetProblems (`PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp`) emit it as `Detail`.
+
 ## src/graph/check_errors.cpp:slot_targets
 
 Resolves the allowed target signatures for a `(record, subrecord, ordinal, offset)` slot. Generated FormLink fields are tried first through `src/schema/formlink_slots.cpp:formlink_field_at`. An unguarded field matches by its static offset (or stride), as before. A guarded field (variant, `FieldAddress::when`) matches only when `src/schema/field_address.cpp:resolve_field_slots` reports a valid slot at that offset, so the selector byte decides which variant is in force. When the selected variant is not a FormLink, or the selector is absent, no field matches and the slot stays unproven (`unresolved_link` is then only a warning). Generated FormLink lists are tried after fields, unchanged.
@@ -1433,3 +1437,17 @@ For every row of FACT, NPC_, WEAP and REFR, `names` is non-empty exactly when th
 `StringsEnvironmentTest.RejectsMalformedTablesAndLanguages` failed once on the Windows MSVC job of the nomad/dev run at `9c1b3ae6` (job 22302): `Environment::load` threw "failed to load ...\radicle_strings_<n>\Base.esm: plugin parse error at 0x0: unable to open ..." for the first plugin the fixture had just written. The same test passed in the earlier Windows jobs 22085, 22121, 22247 and 22275, and its five sibling `StringsEnvironmentTest` processes passed beside it in the same job. Nothing on that path changed recently: the open in `src/plugin/reader.cpp:read_plugin_file` and `src/environment/environment.cpp:Environment::load` date from 2026-08-20 to 2026-09-30, and the test file from 2026-09-28. Names cannot collide, since ctest runs each test in its own process and the directory name is a steady clock count in 100 ns ticks. No product or fixture defect explains the failure, so the cause is unproven; it looks like a transient file-system error on the runner, whose default TEMP sits under its reparse-point home.
 
 The fixture's `write` did not check its stream, so a failed write would have surfaced only as that "unable to open" at load. It now closes the stream and throws "cannot write <path>" on any stream failure. A recurrence then names the stage: a SetUp failure means the write failed, and the original message means the file existed but could not be opened.
+
+## Radicle/src/graph/check_errors.cpp:info_topics
+
+An INFO's DIAL topic is the label of its nearest enclosing topic-children group (GRUP type 7). Records outside such a group map to no topic. The map covers only the plugin being checked. A label that is null or uses index 0xFF maps to an empty key, which resolves to no loaded DIAL. A label whose master index is past the plugin's master table maps to no topic, so no finding is raised for it. No xEdit validation proves the group-to-DIAL mapping: `Core/wbDefinitionsFO4.pas:1017-1025` is inside `wbConditionQuestOverlay`, a display callback for a condition's quest.
+
+## Radicle/src/graph/check_errors.cpp:check_dialogue_links
+
+Dialogue stored-link checks. Each rule reads only stored subrecords. A stored form ID whose master index is past the plugin's master table is skipped, so neither rule below fires for it.
+
+- `branch_starting_topic_not_dial` (error): DLBR `SNAM` (Starting Topic) must target a loaded DIAL, including a missing target. Cites `Core/wbDefinitionsFO4.pas:8792` (`wbFormIDCk(SNAM, 'Starting Topic', [DIAL]).SetRequired`). DLBR has no entry in the generated schema, so the generic checker never sees this slot.
+- `deleted_target` (warning): a DLBR `SNAM` whose loaded winner is deleted. It reuses the generic deleted-target code and wording.
+- `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
+- No INFO merge-order rule is included; that needs engine evidence.
+- Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).

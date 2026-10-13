@@ -1,9 +1,6 @@
 #include <algorithm>
-#include <cctype>
-#include <cstdlib>
 #include <filesystem>
 #include <map>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -16,77 +13,10 @@
 #include <fo4ide/papyrus/ScriptIndex.hpp>
 #include <fo4ide/papyrus/Symbols.hpp>
 
-// Mirrors the C# corpus gates (PapyrusCorpusTests.cs / VanillaSweep.cs): the
-// real Fallout 4 base scripts are validated against the native front end, so
-// a shipped script the Creation Kit compiles must parse, yield symbols and
-// pass the duplicate declaration check. Gated on the same environment
-// variables (FO4RE_PSC_CORPUS / FO4RE_PSC_ROOTS) so the sweep skips when a
-// corpus is not configured, exactly like the C#.
+#include "../helpers/CorpusRoots.hpp"
 
-namespace {
-
-std::string trim(std::string value) {
-    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
-        value.erase(value.begin());
-    }
-    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
-        value.pop_back();
-    }
-    return value;
-}
-
-bool endsWithIgnoreCase(std::string_view value, std::string_view suffix) {
-    if (value.size() < suffix.size()) return false;
-    const auto tail = value.substr(value.size() - suffix.size());
-    for (std::size_t i = 0; i < suffix.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(tail[i])) !=
-            std::tolower(static_cast<unsigned char>(suffix[i]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-std::vector<std::filesystem::path> rootsFromEnv(const char* variable) {
-    std::vector<std::filesystem::path> roots;
-    const char* raw = std::getenv(variable);
-    if (!raw || !*raw) return roots;
-    std::istringstream stream(raw);
-    std::string part;
-    while (std::getline(stream, part, ':')) {
-        const auto cleaned = trim(part);
-        if (!cleaned.empty() && std::filesystem::is_directory(cleaned)) {
-            roots.emplace_back(cleaned);
-        }
-    }
-    return roots;
-}
-
-std::vector<std::filesystem::path> enumeratePsc(const std::filesystem::path& root) {
-    std::vector<std::filesystem::path> files;
-    std::vector<std::filesystem::path> stack{root};
-    std::error_code ec;
-    while (!stack.empty()) {
-        const auto dir = stack.back();
-        stack.pop_back();
-        for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end;
-             it.increment(ec)) {
-            std::error_code statusEc;
-            const auto& entry = *it;
-            if (entry.is_symlink(statusEc)) continue;
-            if (entry.is_directory(statusEc)) {
-                stack.push_back(entry.path());
-            } else if (entry.is_regular_file(statusEc) &&
-                       endsWithIgnoreCase(entry.path().extension().string(), ".psc")) {
-                files.push_back(entry.path());
-            }
-        }
-    }
-    std::sort(files.begin(), files.end());
-    return files;
-}
-
-}  // namespace
+using fo4ide::papyrus::test::enumerateFiles;
+using fo4ide::papyrus::test::rootsFromEnv;
 
 TEST_CASE("The whole corpus parses without crashing") {
     const auto roots = rootsFromEnv("FO4RE_PSC_CORPUS");
@@ -97,7 +27,7 @@ TEST_CASE("The whole corpus parses without crashing") {
 
     std::vector<std::filesystem::path> files;
     for (const auto& root : roots) {
-        auto found = enumeratePsc(root);
+        auto found = enumerateFiles(root, ".psc");
         files.insert(files.end(), found.begin(), found.end());
     }
 
@@ -148,7 +78,7 @@ TEST_CASE("The whole corpus yields symbols without crashing") {
 
     std::vector<std::filesystem::path> files;
     for (const auto& root : roots) {
-        auto found = enumeratePsc(root);
+        auto found = enumerateFiles(root, ".psc");
         files.insert(files.end(), found.begin(), found.end());
     }
 
@@ -188,7 +118,7 @@ TEST_CASE("The duplicate check refuses nothing that ships") {
 
     std::vector<std::filesystem::path> files;
     for (const auto& root : roots) {
-        auto found = enumeratePsc(root);
+        auto found = enumerateFiles(root, ".psc");
         files.insert(files.end(), found.begin(), found.end());
     }
 
