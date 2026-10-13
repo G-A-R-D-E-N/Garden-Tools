@@ -167,6 +167,9 @@ TEST(StoryManagerRecordsSynthetic, EveryNewRowReadsItsSubrecordOnFixtureRecords)
       EXPECT_TRUE(fo4::record_field_count(plugin, key(row.local), field).has_value()) << field.path;
     }
   }
+  EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2050, "HNAM"), scalar("SMQN\\HoursUntilReset").scalar), "0.5");
+  EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2049, "XNAM"), scalar("SMBN\\MaxConcurrentQuests").scalar), "3");
+  EXPECT_EQ(fo4::schema::decode_scalar(payload(plugin, 2050, "MNAM"), scalar("SMQN\\NumQuestsToRun").scalar), "1");
   EXPECT_TRUE(fo4::schema::scalar_fields(fo4::Signature::from_string("SCCO")).empty());
 }
 

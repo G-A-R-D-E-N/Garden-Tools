@@ -56,6 +56,16 @@ TEST_P(StoryManagerRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEve
       EXPECT_LE(count, static_cast<std::size_t>(rule.maximum))
           << record.form_key.to_string() << ' ' << rule.signature.to_string();
     }
+    std::size_t last = 0;
+    for (const auto& subrecord : record.subrecords) {
+      const auto rule = std::find_if(rules.begin(), rules.end(),
+          [&](const auto& candidate) { return candidate.signature == subrecord.signature; });
+      if (rule == rules.end()) continue;
+      const auto position = static_cast<std::size_t>(std::distance(rules.begin(), rule));
+      EXPECT_GE(position, last)
+          << record.form_key.to_string() << ' ' << subrecord.signature.to_string();
+      last = position;
+    }
     for (const auto& field : fo4::schema::scalar_fields(signature)) {
       for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != field.scalar.subrecord) continue;
@@ -65,7 +75,7 @@ TEST_P(StoryManagerRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEve
     }
     if (sampled[index]++ < k_link_sample) {
       for (const auto& field : fo4::schema::formlink_fields(signature)) {
-        static_cast<void>(fo4::record_field_count(plugin, record.form_key, field));
+        EXPECT_TRUE(fo4::record_field_count(plugin, record.form_key, field).has_value()) << field.path;
       }
     }
   });
