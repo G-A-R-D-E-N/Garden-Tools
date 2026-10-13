@@ -968,7 +968,7 @@ C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_
 
 ## Radicle/tests/real_data_build.cpp:detect_game_build
 
-Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The last match in file order wins: `scan_file_version_backward` walks from the end of the file, and the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
+Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The last match in file order wins: `scan_file_version_backward` walks from the end of the file, and the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. `scan_file_version_backward` reads the exe in 1 MiB windows (`k_version_scan_chunk`) from the end and returns at the first match, so it reads only the tail when a match is near the end and the whole file only when nothing matches. There is no cache: each call scans again.
 
 ## Radicle/src/environment/sound.cpp:select_rate_file_index
 
@@ -1050,7 +1050,7 @@ Fallback for `FO4_DATA_DIR` when neither `FO4_PEX_CORPUS` nor `FO4_PEX_ARCHIVES`
 
 ## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
 
-The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter, as RE-013 (#403 c7887) proves for the GRAS water mode. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
+The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter, as RE-013 (#403 c7887) proves for the GRAS water mode. The method is a bare predicate. Its only caller in this repo is `Radicle/tests/test_vegetation.cpp`, so no runtime path applies the filter here; the runtime consumer is not decoded (RE-013 on #520). See `Radicle/docs/VEGETATION.md`.
 
 ## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
 
@@ -1519,3 +1519,11 @@ LLKC is an uncounted array of 8-byte structs: keyword form ID u32 at 0 and a u32
 ## Radicle/src/forms/leveled_list.cpp:set_leveled_list_settings — LVLF bits
 
 LVLF flags may use only bits 0x01, 0x02 and 0x04 (mask 0x07). `set_leveled_list_settings` applies the same check as `create_leveled_list`, before any read or write, so a rejected call leaves the plugin unchanged. Test: `tests/test_leveled_list.cpp:SettingsRejectFlagBitsOutsideTheDefinedMask`.
+
+## Radicle/src/schema/form_link_mixed.cpp:k_weapon_layouts — WEAP embedded form ID slots
+
+WEAP DNAM (132 bytes), FNAM (41) and CRDT (12) are fixed-size structs with no version condition in xEdit (`Core/wbDefinitionsFO4.pas` WEAP record, lines 12877-13032; the DNAM struct is at 12911). Slots: DNAM Ammo @0, Skill @40, Resist @44, eight Sound slots @73 to @101 (lines 12912, 12922, 12923, 12978-12985); FNAM Override Projectile @29 (line 13004); CRDT Crit Effect @8 (line 13016). Sizes are exact, so a payload of another size fails closed under strict remap. The layouts are interpreted by `fixed_stride_formid_offsets`, like the FACT XNAM and NPC_ SNAM layouts.
+
+## Radicle/src/schema/form_link_mixed.cpp:faction_plvd_formid_offsets — FACT PLVD location slot
+
+xEdit `wbPLVD` (`Core/wbDefinitionsFO4.pas` lines 4200-4221) is a struct whose first field is a s32 Type that selects the union member at @4. Types 0 (Reference), 1 (Cell), 4 (Object ID) and 6 (Keyword) hold a form ID; the others (2 and 3 byte arrays, 5 Object Type, 7 unused, 8 to 14 aliases and targets) do not. Collection Index is optional from member 3 (`SetOptionalFrom(3)`), so the payload is 12 or 16 bytes. `Radicle/src/graph/reachability.cpp` checks PLVD types 0, 1 and 4 only; this remap includes type 6 as xEdit lists it. The PACK PLDT decider in `Radicle/src/schema/behavior_layout.cpp` uses the same four types as this function.

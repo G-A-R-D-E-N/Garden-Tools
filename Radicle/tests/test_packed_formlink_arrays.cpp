@@ -10,6 +10,7 @@
 #include <initializer_list>
 #include <string_view>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -80,6 +81,13 @@ std::uint32_t u32_at(const std::vector<std::byte>& data, std::size_t offset) {
   std::uint32_t value = 0;
   std::memcpy(&value, data.data() + offset, 4);
   return value;
+}
+
+std::vector<std::byte> filled_with_u32(
+    std::size_t size, std::initializer_list<std::pair<std::size_t, std::uint32_t>> fields) {
+  std::vector<std::byte> data(size, std::byte{0x11});
+  for (const auto& [offset, value] : fields) std::memcpy(data.data() + offset, &value, 4);
+  return data;
 }
 
 }
@@ -442,4 +450,101 @@ TEST(FormLink, LeveledListLlkcWrongSizeFailsClosedUnderStrictRemap) {
   const auto before = fo4::write_plugin(plugin);
   EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(FormLink, WeaponDnamFormIdSlotsRemapAndKeepOtherBytes) {
+  auto out = plugin_header(1);
+  append_record(out, "WEAP", 0x03000800, "DNAM",
+                filled_with_u32(132, {{0, 0x00000099}, {40, 0x02000044}, {44, 0x00000099},
+                                      {73, 0x00000099}}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* weap = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(weap, nullptr);
+  ASSERT_NE(find_sub(*weap, "DNAM"), nullptr);
+  EXPECT_EQ(find_sub(*weap, "DNAM")->data,
+            filled_with_u32(132, {{0, 0x01000099}, {40, 0x00000044}, {44, 0x01000099},
+                                  {73, 0x01000099}}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 4);
+  EXPECT_EQ(links[0].subrecord.to_string(), "DNAM");
+  EXPECT_EQ(links[0].offset, 0);
+  EXPECT_EQ(links[1].offset, 40);
+  EXPECT_EQ(links[2].offset, 44);
+  EXPECT_EQ(links[3].offset, 73);
+}
+
+TEST(FormLink, WeaponDnamWrongSizeFailsClosedUnderStrictRemap) {
+  auto out = plugin_header();
+  append_record(out, "WEAP", 0x03000800, "DNAM", std::vector<std::byte>(131, std::byte{0x11}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, reordered_masters()), fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(FormLink, WeaponFnamOverrideProjectileRemapsAndKeepsOtherBytes) {
+  auto out = plugin_header(1);
+  append_record(out, "WEAP", 0x03000800, "FNAM", filled_with_u32(41, {{29, 0x00000099}}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* weap = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(weap, nullptr);
+  ASSERT_NE(find_sub(*weap, "FNAM"), nullptr);
+  EXPECT_EQ(find_sub(*weap, "FNAM")->data, filled_with_u32(41, {{29, 0x01000099}}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 1);
+  EXPECT_EQ(links[0].subrecord.to_string(), "FNAM");
+  EXPECT_EQ(links[0].offset, 29);
+}
+
+TEST(FormLink, WeaponCrdtCritEffectRemapsAndKeepsMultipliers) {
+  auto out = plugin_header(1);
+  append_record(out, "WEAP", 0x03000800, "CRDT", words({0x40000000, 0x3F800000, 0x02000044}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* weap = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(weap, nullptr);
+  ASSERT_NE(find_sub(*weap, "CRDT"), nullptr);
+  EXPECT_EQ(find_sub(*weap, "CRDT")->data, words({0x40000000, 0x3F800000, 0x00000044}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 1);
+  EXPECT_EQ(links[0].subrecord.to_string(), "CRDT");
+  EXPECT_EQ(links[0].offset, 8);
+}
+
+TEST(FormLink, FactionPlvdFormIdTypeRemapsAndKeepsRadius) {
+  auto out = plugin_header(1);
+  append_record(out, "FACT", 0x03000800, "PLVD", words({4, 0x02000044, 7, 2}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* fact = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(fact, nullptr);
+  ASSERT_NE(find_sub(*fact, "PLVD"), nullptr);
+  EXPECT_EQ(find_sub(*fact, "PLVD")->data, words({4, 0x00000044, 7, 2}));
+
+  const auto links = fo4::collect_form_links(reread);
+  ASSERT_EQ(links.size(), 1);
+  EXPECT_EQ(links[0].subrecord.to_string(), "PLVD");
+  EXPECT_EQ(links[0].offset, 4);
+}
+
+TEST(FormLink, FactionPlvdNonFormIdTypeStaysUnchanged) {
+  auto out = plugin_header(1);
+  append_record(out, "FACT", 0x03000800, "PLVD", words({5, 0x02000044, 7}));
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  plugin = fo4::remap_plugin_masters(std::move(plugin), reordered_masters());
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* fact = fo4::find_record(reread, fo4::FormKey::parse("000800:Patch.esp"));
+  ASSERT_NE(fact, nullptr);
+  ASSERT_NE(find_sub(*fact, "PLVD"), nullptr);
+  EXPECT_EQ(find_sub(*fact, "PLVD")->data, words({5, 0x02000044, 7}));
+  EXPECT_TRUE(fo4::collect_form_links(reread).empty());
 }

@@ -106,9 +106,9 @@ Titles in a localized plugin must be string IDs, and inline titles are refused t
 | xEdit element | Lines | Reason |
 | --- | --- | --- |
 | VENV unknown bytes 6 and 7 | 6837 | `wbUnknown(2)`, not a named field. Bytes are kept as they are on disk. |
-| PLVD (Location) | 4200 to 4206, 6843 | A union decided by a Type value (reference, cell, or near-location). It is not a fixed layout. |
+| PLVD (Location) | 4200 to 4221, 6843 | A union decided by a Type value. No typed access. Remap of its form-ID members is `faction_plvd_formid_offsets` in `src/schema/form_link_mixed.cpp`. |
 | CITC (Condition Count) | 6844 | Derived from the condition list. Not a value to edit. |
 | CTDA conditions | 6845 | Shared condition machinery (`schema/ctda.hpp`). FACT is not wired into the condition scopes. |
 | XNAM form ID remap | 8545 | The generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) do not list a 12-byte FACT XNAM. `src/schema/form_link_mixed.cpp` (`k_faction_layouts`, `faction_formid_offsets`) remaps it on the generic FormLink path in `src/schema/form_links.cpp`. `FactionXnamRelationFormIdRemapsAndKeepsModifierAndReaction` (`tests/test_packed_formlink_arrays.cpp`) covers it, and `FactionXnamWrongSizeFailsClosedUnderStrictRemap` covers a wrong-size payload. Typed edits encode the form ID correctly. |
-| FACT creation | n/a | No create path. Relations and ranks are edited on existing records. |
+| FACT creation | n/a | `forms/faction.hpp` `create_faction` writes EDID, FULL (refused in a localized plugin), defined DATA flags and generated CRVA and VENV defaults. Relations and ranks are not set on create. Tests: `tests/test_faction_creation.cpp`. |
 | FULL | 3692 | Localized through the generic localized-field table. No typed FACT API. |

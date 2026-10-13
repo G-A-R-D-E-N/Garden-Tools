@@ -35,6 +35,7 @@ constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_epft = Signature::from_string("EPFT");
 constexpr auto k_epfd = Signature::from_string("EPFD");
 constexpr auto k_prke = Signature::from_string("PRKE");
+constexpr auto k_plvd = Signature::from_string("PLVD");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -425,10 +426,23 @@ const FixedStrideLayout k_faction_layouts[] = {
     {"XNAM", 12, {0}, true, 0},
 };
 
+std::optional<std::vector<std::size_t>> faction_plvd_formid_offsets(const Subrecord& sub,
+                                                                   bool strict_remap) {
+  const auto size = sub.data.size();
+  if (size != 12 && size != 16) {
+    if (strict_remap) throw FormIdError("cannot safely remap malformed FACT PLVD payload");
+    return std::vector<std::size_t>{};
+  }
+  const auto type = read_u32(sub.data, 0);
+  const bool form_id = type == 0 || type == 1 || type == 4 || type == 6;
+  return form_id ? std::vector<std::size_t>{4} : std::vector<std::size_t>{};
+}
+
 std::optional<std::vector<std::size_t>> faction_formid_offsets(const Record& record,
                                                               const Subrecord& sub,
                                                               bool strict_remap) {
   if (record.header.signature != Signature::from_string("FACT")) return std::nullopt;
+  if (sub.signature == k_plvd) return faction_plvd_formid_offsets(sub, strict_remap);
   return fixed_stride_formid_offsets(sub, record.header.form_version, k_faction_layouts,
                                      strict_remap);
 }
@@ -460,6 +474,20 @@ std::optional<std::vector<std::size_t>> leveled_list_formid_offsets(const Record
                                      strict_remap);
 }
 
+const FixedStrideLayout k_weapon_layouts[] = {
+    {"DNAM", 132, {0, 40, 44, 73, 77, 81, 85, 89, 93, 97, 101}, true, 0},
+    {"FNAM", 41, {29}, true, 0},
+    {"CRDT", 12, {8}, true, 0},
+};
+
+std::optional<std::vector<std::size_t>> weapon_formid_offsets(const Record& record,
+                                                             const Subrecord& sub,
+                                                             bool strict_remap) {
+  if (record.header.signature != Signature::from_string("WEAP")) return std::nullopt;
+  return fixed_stride_formid_offsets(sub, record.header.form_version, k_weapon_layouts,
+                                     strict_remap);
+}
+
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
@@ -471,6 +499,7 @@ std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& recor
     return repeated;
   }
   if (auto faction = faction_formid_offsets(record, sub, strict_remap)) return faction;
+  if (auto weapon = weapon_formid_offsets(record, sub, strict_remap)) return weapon;
   if (auto npc = npc_formid_offsets(record, sub, strict_remap)) return npc;
   if (auto leveled = leveled_list_formid_offsets(record, sub, strict_remap)) return leveled;
   return placed_reference_formid_offsets(record, sub, strict_remap);

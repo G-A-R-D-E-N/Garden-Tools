@@ -288,7 +288,8 @@ TEST_F(BehaviorRead, ProcedureCAbiRefusesANonPackRecordLikePackDecode) {
   ASSERT_EQ(radicle_env_winner(raw_env, radicle_form_key{"Behavior.esm", 0x800}, &record), RADICLE_STATUS_OK);
   const radicle_package_info* package = nullptr;
   EXPECT_EQ(radicle_package_decode(raw_env, record, &package), RADICLE_STATUS_PARSE_ERROR);
-  const radicle_package_procedure_tree* tree = nullptr;
+  radicle_package_procedure_tree sentinel{};
+  const radicle_package_procedure_tree* tree = &sentinel;
   EXPECT_EQ(radicle_package_procedure_decode(raw_env, record, &tree), RADICLE_STATUS_PARSE_ERROR);
   EXPECT_EQ(tree, nullptr);
 }
