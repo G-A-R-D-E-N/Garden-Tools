@@ -247,6 +247,10 @@ td.rv-section {
 
 .rv-prob-row { display: flex; align-items: center; gap: 8px; padding: 3px 4px; color: #c79a9a; }
 .rv-prob-icon { color: #b07a7a; flex: 0 0 auto; }
+.rv-prob-critical { color: #f85149; }
+.rv-prob-critical .rv-prob-icon { color: #f85149; }
+.rv-prob-warning { color: #d29922; }
+.rv-prob-warning .rv-prob-icon { color: #d29922; }
 
 
 .rv-context {

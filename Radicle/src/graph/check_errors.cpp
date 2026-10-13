@@ -169,7 +169,8 @@ void check_preflight(const Plugin& plugin, FindingSink& sink) {
                                                                           : CheckSeverity::warning;
     finding.plugin = plugin.key;
     finding.record = issue.record;
-    finding.message = issue.path + ": " + issue.message + " (" + issue.code + ")";
+    finding.message = issue.path + ": " + issue.message;
+    finding.detail = issue.code;
     sink.add(std::move(finding));
   }
 }

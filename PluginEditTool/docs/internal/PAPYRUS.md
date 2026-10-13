@@ -128,9 +128,11 @@ line was wrong.
 The native tests are `native/tests/unit/Papyrus*Tests.cpp` (Catch2, run by CTest) and
 `Radicle/tests/test_pex*.cpp` for the `.pex` layer; CI runs them (`.github/workflows/native-ci.yml`).
 The native corpus sweep, `PapyrusCorpusTests.cpp`, reads `FO4RE_PSC_CORPUS` and `FO4RE_PSC_ROOTS` like
-the C# one, but it always splits them on `:`, so a Windows drive path cannot be used there. Radicle's
-`.pex` round-trip gate, `Radicle/tests/test_pex_corpus.cpp`, reads `FO4_PEX_CORPUS` (and
-`FO4_PEX_ARCHIVES`) instead of `FO4RE_PEX_CORPUS`. The original C# suite, `FO4RecordEditor.Core.Tests`,
+the C# one, splitting roots on `;` on Windows and `:` elsewhere. The native compile-differential gate,
+`PapyrusDifferentialTests.cpp`, reads `FO4RE_PEX_CORPUS` (or `FO4_PEX_CORPUS`), `FO4RE_PSC_ROOTS` and
+`FO4RE_PEX_RELEASE=1`, with the same split, and skips when no `.pex` root is set. Radicle's `.pex`
+round-trip gate, `Radicle/tests/test_pex_corpus.cpp`, reads `FO4_PEX_CORPUS` (and `FO4_PEX_ARCHIVES`)
+instead of `FO4RE_PEX_CORPUS`. The original C# suite, `FO4RecordEditor.Core.Tests`,
 runs on Linux; `FO4RecordEditor.Tests` targets `net9.0-windows` through its WPF reference and its host
 does not start there.
 

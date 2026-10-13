@@ -2115,3 +2115,34 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
 
 A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:TEST_CASE — compile differential gate (#78 C12)
+
+Port of `PluginEditTool/FO4RecordEditor.Core.Tests/PapyrusDifferentialTests.cs`. Pairs come from `.pex` files under the `FO4RE_PEX_CORPUS` roots (falling back to `FO4_PEX_CORPUS`), each paired with its `.psc` by `sourceFor`, which mirrors the C# `SourceFor` (`Source/User`, then `Source`, with a leading `Compiled` directory skipped). A pair is kept only when the `.pex` header is Fallout 4 (magic, format 3.9, game id 2) and its file name is first seen, as in C# `Pairs`.
+
+The compile matches C# `PapyrusCompiler.CompileFile` through `fo4ide::papyrus::compileScript`, with `RootsFor` as the import roots plus `FO4RE_PSC_ROOTS`. `FO4RE_PEX_RELEASE=1` turns off debug-only and beta-only code, as the C# `EmitDebugOnlyCode`/`EmitBetaOnlyCode` switches do. Debug info stays on (default, as in C#).
+
+The comparison is the object-level one of C# `PexComparer.FirstDifference`: parent, states and functions, then properties. C# also compares property `Get`/`Set` handlers; the C++ adds that step in `handlerDifference`. The C# does not compare header fields (timestamps, user, computer, source name) or debug info, so this port does not either.
+
+Refusals group by the first error diagnostic code, and differences by class (`differenceClass`). The threshold is 95% identical of compiled pairs, with at least one compiled, as in C#.
+
+## PluginEditTool/native/tests/helpers/CorpusRoots.hpp:rootsFromEnv — root list separator
+
+Root lists split on `;` on Windows and `:` elsewhere, matching C# `Path.PathSeparator`. `rootListSeparator` owns that choice for both `PapyrusCorpusTests.cpp` and `PapyrusDifferentialTests.cpp`. `enumerateFiles` replaces the corpus-local `enumeratePsc` with an extension argument, so the `.pex` walk shares its symlink and sort rules.
+
+## PluginEditTool/native/tests/helpers/PexComparer.hpp:functionDifference — shared per-function comparison
+
+The per-function comparison that `firstDifference` used inline is now `functionDifference`, so the differential test can compare property handlers with the same rules. Messages from `firstDifference` are unchanged except that the `Name: ` prefix is added by the caller.
+
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getProblems — stable row codes (#31)
+
+Every per-record problem row carries a `Code`, a `Detail`, a `Severity` and a `Description`. `Detail` carries the same value as `CheckFinding::detail` (read from `PreflightIssue::code`): the preflight issue's `code` string (for example `duplicate_scalar_subrecord`) for `schema_preflight` rows, and empty for `unresolved_link` rows. The codes are Radicle's `fo4::check_code_name` names, the same strings the whole-plugin Check for Errors path emits, so one code means one thing in both views. Each row source maps to one code, so no PET-local code was needed:
+
+- `unresolved_link` (`fo4::CheckCode::unresolved_link`): a FormLink whose target has no winning record, emitted as `critical` with the `Missing <sig> FormLink target` description.
+- `schema_preflight` (`fo4::CheckCode::schema_preflight`): every `fo4::schema::preflight_record` issue, whether `critical` (error) or `warning`, with `Detail` set to the issue's `code` string.
+
+`PluginEditTool/native/tests/unit/RadiclePluginBackendTests.cpp:Radicle plugin backend reports dangling FormLinks` and `PluginEditTool/native/tests/unit/RadiclePluginPreflightTests.cpp:GetProblems reports duplicate schema scalar storage as critical` pin the two codes. The web side is `PluginEditTool/web/src/ProblemsList.tsx:ProblemsList`, which shows the code on each row and filters by it; `RecordView.tsx` renders it in the Problems drawer. `RecordProblem.Code` in `PluginEditTool/web/src/backend.ts` is an optional `string` (the legacy Mutagen backend omits it), so a new code needs no web type change.
+
+## PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile assembles an OG-style install from the official DLC masters alone
+
+Covers `Mo2Profile.cpp:readProfile` for an OG-style install: Fallout4.esm and the six official DLC masters, no Creation Club plugins, no `Fallout4.ccc`, one active user plugin. `readProfile` always passes `OfficialTable::ae`, so this checks the AE table against OG data. Radicle's `load_order_files.hpp` has `OfficialTable { og_ng, ae }` and no NG-specific table: `og_ng` is the first seven AE names (`Radicle/src/loadorder/assemble.cpp:official_names`, `DLCUltraHighResolution.esm` included), and LOAD_ORDER_FILES.md says NG shares it. So an NG case would repeat this one and is not added. `assemble.cpp:assemble_load_order` skips absent official names silently, with no finding and no failure. The AE-only `DLCDummy10thAnniversary.esm` and the absent `DLCUltraHighResolution.esm` therefore do not change the result. The AE table only differs from `og_ng` when `DLCDummy10thAnniversary.esm` is present, which an OG install does not ship. Not built or run locally (CI only). The partial-DLC case (`Mo2ProfileTests.cpp` second OG test) lists only `DLCRobot.esm` and `DLCCoast.esm` in plugins.txt with `DLCworkshop01`-`03` and no `DLCNukaWorld.esm` on disk, and expects the official masters present on disk to load in AE official order without any plugins.txt entry for them.
