@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 80, L1 9, L2 16, L3 1, L4 41.
 
 ### Per-signature coverage
 
@@ -50,19 +50,19 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | ACTI | 5611 | - | - | - | - | - | - | yes | environment/base_records | - | - | L2 |
 | ADDN | 7796 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AECH | 12206 | - | - | - | - | - | - | - | - | - | - | L0 |
-| ALCH | 5691 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| ALCH | 5691 | 11 | 3 | 7 | - | 3 | yes | yes | - | - | - | L4 |
 | AMDL | 12246 | - | - | - | - | - | - | - | - | - | - | L0 |
-| AMMO | 5741 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| AMMO | 5741 | 12 | 2 | 5 | - | 3 | yes | yes | - | - | - | L4 |
 | ANIO | 5777 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AORU | 12268 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | - | 1 | L4 |
 | ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | - | 1 | L4 |
-| ARTO | 9362 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | - | L4 |
 | ASPC | 7057 | - | - | - | - | - | - | - | - | - | - | L0 |
 | ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AVIF | 7826 | - | - | - | - | - | - | - | - | - | 1 | L0 |
 | BNDS | 12280 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
-| BOOK | 5891 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | - | - | L4 |
 | BPTD | 7693 | - | - | - | - | - | - | - | - | - | - | L0 |
 | CAMS | 7880 | - | - | - | - | - | - | - | - | - | - | L0 |
 | CELL | 5953 | - | - | - | - | - | - | - | forms/cell, environment/world | - | 1 | L2 |
@@ -103,15 +103,15 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | HAZD | 7180 | 9 | - | 4 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | HDPT | 7006 | - | - | - | - | - | - | - | - | - | - | L0 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
-| IDLM | 7098 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | - | - | L4 |
 | IMAD | 7466 | - | - | - | - | - | - | - | - | - | - | L0 |
 | IMGS | 7393 | - | - | - | - | - | - | - | - | - | 2 | L0 |
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
-| INGR | 9788 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| INGR | 9788 | 11 | 3 | 5 | - | 1 | yes | yes | - | - | - | L4 |
 | INNR | 12337 | - | - | - | - | - | - | - | - | - | - | L0 |
 | IPCT | 7978 | - | - | - | - | - | - | - | - | - | - | L0 |
 | IPDS | 8014 | - | - | - | - | - | - | - | - | - | 1 | L0 |
-| KEYM | 9823 | - | - | - | - | - | - | yes | - | - | - | L1 |
+| KEYM | 9823 | 9 | 3 | 4 | - | 1 | yes | yes | - | - | - | L4 |
 | KSSM | 12387 | - | - | - | - | - | - | - | - | - | - | L0 |
 | KYWD | 6947 | - | - | - | - | - | - | - | - | - | - | L0 |
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | - | - | L2 |
@@ -199,8 +199,12 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| ALCH | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
+| AMMO | 11 | - | - | 1 | 2 | f32, i16, u32, u8 | - | - | - | existing_only |
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
+| ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
+| BOOK | 11 | - | - | 1 | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
@@ -214,7 +218,10 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | GRAS | 10 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
 | HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
+| IDLM | 9 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
+| INGR | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
+| KEYM | 9 | - | - | - | 3 | f32, i16, i32 | - | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
 | LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |

@@ -625,6 +625,2223 @@
       ]
     },
     {
+      "signature": "ALCH",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ICON",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MICO",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "YNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ETYP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CUSD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DESC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "ENIT",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000000000000000000000000000"
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "ALCH\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "No Auto-Calc" },
+            { "bit": 1, "name": "Food Item" },
+            { "bit": 2, "name": "Unknown 3" },
+            { "bit": 3, "name": "Unknown 4" },
+            { "bit": 4, "name": "Unknown 5" },
+            { "bit": 5, "name": "Unknown 6" },
+            { "bit": 6, "name": "Unknown 7" },
+            { "bit": 7, "name": "Unknown 8" },
+            { "bit": 8, "name": "Unknown 9" },
+            { "bit": 9, "name": "Unknown 10" },
+            { "bit": 10, "name": "Unknown 11" },
+            { "bit": 11, "name": "Unknown 12" },
+            { "bit": 12, "name": "Unknown 13" },
+            { "bit": 13, "name": "Unknown 14" },
+            { "bit": 14, "name": "Unknown 15" },
+            { "bit": 15, "name": "Unknown 16" },
+            { "bit": 16, "name": "Medicine" },
+            { "bit": 17, "name": "Poison" }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\AddictionChance",
+          "label": "Addiction chance",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\ColorRemapping",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "MODC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\Icon",
+          "label": "Inventory icon",
+          "kind": "string",
+          "subrecord": "ICON",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\MessageIcon",
+          "label": "Message icon",
+          "kind": "string",
+          "subrecord": "MICO",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "ALCH\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "MODS",
+          "offset": 0,
+          "targets": ["MSWP"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\EquipmentType",
+          "label": "Equipment type",
+          "subrecord": "ETYP",
+          "offset": 0,
+          "targets": ["EQUP"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\PickUpSound",
+          "label": "Pick up sound",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\PutDownSound",
+          "label": "Put down sound",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\CraftingSound",
+          "label": "Crafting sound",
+          "subrecord": "CUSD",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\ConsumeSound",
+          "label": "Consume sound",
+          "subrecord": "ENIT",
+          "offset": 16,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "payload_sizes": [20],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ALCH\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": ["TRNS"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": ["FULL", "DESC", "DNAM"]
+    },
+    {
+      "signature": "AMMO",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "YNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DESC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000"
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000000000000000000000000000"
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM1",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "NAM2",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "AMMO\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "Ignores Normal Weapon Resistance" },
+            { "bit": 1, "name": "Non-Playable" },
+            { "bit": 2, "name": "Has Count Based 3D" }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\Damage",
+          "label": "Damage",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\Health",
+          "label": "Health",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 12,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\ColorRemapping",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "MODC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\CasingModel",
+          "label": "Casing model",
+          "kind": "string",
+          "subrecord": "NAM1",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "AMMO\\Projectile",
+          "label": "Projectile",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "targets": ["PROJ"],
+          "nullable": true,
+          "payload_sizes": [16],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "MODS",
+          "offset": 0,
+          "targets": ["MSWP"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\PickUpSound",
+          "label": "Pick up sound",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\PutDownSound",
+          "label": "Put down sound",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "AMMO\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": ["TRNS"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": ["FULL", "DESC", "ONAM"]
+    },
+    {
+      "signature": "BOOK",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ICON",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MICO",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DESC",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "YNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "FIMD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000"
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000000000000000000000"
+          },
+          {
+            "signature": "CNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "INAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "BOOK\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "Advance Actor Value" },
+            { "bit": 1, "name": "Can't be Taken" },
+            { "bit": 2, "name": "Add Spell" },
+            { "bit": 3, "name": "Unknown 3" },
+            { "bit": 4, "name": "Add Perk" }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 13,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\TextOffsetX",
+          "label": "Text offset X",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 5,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 13,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\TextOffsetY",
+          "label": "Text offset Y",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 9,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 13,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\ColorRemapping",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "MODC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\Icon",
+          "label": "Inventory icon",
+          "kind": "string",
+          "subrecord": "ICON",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\MessageIcon",
+          "label": "Message icon",
+          "kind": "string",
+          "subrecord": "MICO",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "BOOK\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "MODS",
+          "offset": 0,
+          "targets": ["MSWP"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\FeaturedItemMessage",
+          "label": "Featured item message",
+          "subrecord": "FIMD",
+          "offset": 0,
+          "targets": ["MESG"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\InventoryArt",
+          "label": "Inventory art",
+          "subrecord": "INAM",
+          "offset": 0,
+          "targets": ["STAT"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\PickUpSound",
+          "label": "Pick up sound",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\PutDownSound",
+          "label": "Put down sound",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "BOOK\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": ["TRNS"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": ["FULL", "DESC", "CNAM"]
+    },
+    {
+      "signature": "INGR",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ICON",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MICO",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ETYP",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "YNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000"
+          },
+          {
+            "signature": "ENIT",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "INGR\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\IngredientValue",
+          "label": "Ingredient value",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "ENIT",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "No auto-calculation" },
+            { "bit": 1, "name": "Food item" },
+            { "bit": 2, "name": "Unknown 3" },
+            { "bit": 3, "name": "Unknown 4" },
+            { "bit": 4, "name": "Unknown 5" },
+            { "bit": 5, "name": "Unknown 6" },
+            { "bit": 6, "name": "Unknown 7" },
+            { "bit": 7, "name": "Unknown 8" },
+            { "bit": 8, "name": "References Persist" }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\ColorRemapping",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "MODC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\Icon",
+          "label": "Inventory icon",
+          "kind": "string",
+          "subrecord": "ICON",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\MessageIcon",
+          "label": "Message icon",
+          "kind": "string",
+          "subrecord": "MICO",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "INGR\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "MODS",
+          "offset": 0,
+          "targets": ["MSWP"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\EquipmentType",
+          "label": "Equipment type",
+          "subrecord": "ETYP",
+          "offset": 0,
+          "targets": ["EQUP"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\PickUpSound",
+          "label": "Pick up sound",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\PutDownSound",
+          "label": "Put down sound",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "INGR\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": ["TRNS"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "KEYM",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VMAD",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ICON",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MICO",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "YNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ZNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "KEYM\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\ColorRemapping",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "MODC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\Icon",
+          "label": "Inventory icon",
+          "kind": "string",
+          "subrecord": "ICON",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\MessageIcon",
+          "label": "Message icon",
+          "kind": "string",
+          "subrecord": "MICO",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "KEYM\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "MODS",
+          "offset": 0,
+          "targets": ["MSWP"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\PickUpSound",
+          "label": "Pick up sound",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\PutDownSound",
+          "label": "Put down sound",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "KEYM\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": ["TRNS"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": ["FULL"]
+    },
+    {
+      "signature": "ARTO",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "ARTO\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\ArtType",
+          "label": "Art type",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            { "value": 0, "name": "Magic Casting" },
+            { "value": 1, "name": "Magic Hit Effect" },
+            { "value": 2, "name": "Enchantment Effect" }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\ColorRemapping",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "MODC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "ARTO\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "MODS",
+          "offset": 0,
+          "targets": ["MSWP"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARTO\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": ["TRNS"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "IDLM",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "KSIZ",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "KWDA",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "IDLF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "IDLC",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "IDLT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "QNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "IDLM\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "IDLF",
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "Run In Sequence" },
+            { "bit": 2, "name": "Do Once" }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\AnimationCount",
+          "label": "Animation count",
+          "kind": "scalar",
+          "subrecord": "IDLC",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\IdleTimer",
+          "label": "Idle timer setting",
+          "kind": "scalar",
+          "subrecord": "IDLT",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\ColorRemapping",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "MODC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "IDLM\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "MODS",
+          "offset": 0,
+          "targets": ["MSWP"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\AnimationArchetype",
+          "label": "Animation archetype",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "targets": ["KYWD"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IDLM\\FlavorAnimation",
+          "label": "Flavor animation",
+          "subrecord": "QNAM",
+          "offset": 0,
+          "targets": ["KYWD"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
       "signature": "FLOR",
       "fields": [
         {
