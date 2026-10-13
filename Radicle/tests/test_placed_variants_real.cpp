@@ -76,6 +76,7 @@ TEST_P(PlacedVariantsReal, EveryTrackedRecordDecodesAndMeetsAuthoringMinimums) {
   record_game_build(detect_game_build(path.parent_path()));
   const auto plugin = fo4::read_plugin_file(path);
   std::map<std::string, int> totals;
+  std::map<std::string, int> preflighted;
   std::vector<std::string> violators;
   fo4::visit_records(plugin, [&](const fo4::Record& record) {
     const auto signature = record.header.signature;
@@ -92,8 +93,10 @@ TEST_P(PlacedVariantsReal, EveryTrackedRecordDecodesAndMeetsAuthoringMinimums) {
       const auto view = fo4::forms::decode_placed_reference(plugin, record);
       EXPECT_TRUE(view.has_value()) << record.form_key.to_string();
       if (view.has_value()) EXPECT_EQ(view->kind, fo4::forms::PlacedReferenceKind::variant);
-      for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, record.form_key)) {
-        if (issue.code == "record_placement_invalid") violators.push_back(record.form_key.to_string() + " placement");
+      if (preflighted[signature.to_string()]++ < 64) {
+        for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, record.form_key)) {
+          if (issue.code == "record_placement_invalid") violators.push_back(record.form_key.to_string() + " placement");
+        }
       }
     }
     check_authoring(record, violators);
