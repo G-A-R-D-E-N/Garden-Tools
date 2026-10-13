@@ -7,6 +7,7 @@
 #include "RadiclePluginSupport.hpp"
 
 #include <fo4/forms/leveled_list.hpp>
+#include <fo4/plugin/mutation.hpp>
 
 namespace fo4ide::plugin {
 
@@ -28,8 +29,8 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
     if (!editorIdArgument.is_null() && !editorIdArgument.is_string()) {
         return std::unexpected(Error{"InvalidEditorId", "Wrapper editor ID must be a string or null"});
     }
-    std::optional<std::string_view> editorId;
-    if (editorIdArgument.is_string()) editorId = editorIdArgument.get_ref<const std::string&>();
+    std::string wrapperEditorId;
+    if (editorIdArgument.is_string()) wrapperEditorId = editorIdArgument.get<std::string>();
 
     fo4::FormKey key;
     try {
@@ -53,19 +54,7 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
             "Target plugin is not loaded yet: " + targetName
         });
     }
-    if (!isEditable(*target)) {
-        return std::unexpected(Error{
-            "PluginReadOnly",
-            "Refusing to write wrapper into protected or game-Data plugin: " + target->name
-        });
-    }
-    if (!fileUnchangedSinceLoad(*target)) {
-        return std::unexpected(Error{
-            "PluginChangedOnDisk",
-            "Target plugin was modified on disk after it was loaded; reload it before writing: " +
-                target->path.string()
-        });
-    }
+    if (const auto guard = writeGuard(*target)) return std::unexpected(*guard);
 
     const auto* sourceRecord = fo4::find_record(source->plugin, key);
     if (sourceRecord == nullptr) {
@@ -74,33 +63,69 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
             "Record is not present in " + sourceName + ": " + formKeyText
         });
     }
-    const auto listSignature =
-        fo4::forms::leveled_list_for_entry_target(sourceRecord->header.signature);
-    if (!listSignature) {
+    const auto listType = sourceRecord->header.signature.to_string();
+    if (listType != "LVLI" && listType != "LVLN" && listType != "LVSP") {
         return std::unexpected(Error{
             "WrapperUnsupportedType",
-            "Copy as wrapper does not support " + sourceRecord->header.signature.to_string() +
-                ": " + formKeyText
+            "Copy as wrapper supports only LVLI, LVLN, or LVSP, not " + listType + ": " + formKeyText
         });
+    }
+    const auto sourceEditorId = support::editorId(*sourceRecord);
+    if (!wrapperEditorId.empty() &&
+        support::asciiLower(wrapperEditorId) == support::asciiLower(sourceEditorId)) {
+        return std::unexpected(Error{
+            "WrapperEditorIdSameAsSource",
+            "Wrapped copy needs an EditorID different from " + sourceEditorId + ": " + formKeyText
+        });
+    }
+    const auto later = laterOverridesLocked(*target, key);
+    if (!later.empty()) {
+        return nlohmann::json(
+            "LOSES: " + target->name + " loads before " + support::joinNames(later) +
+            ", which also override " + formKeyText + ". The copied override will not win "
+            "until " + target->name + " loads after them.");
     }
 
     try {
         auto mutated = target->plugin;
-        ensureOwnerMaster(mutated, key.owner());
-        const auto wrapper = fo4::forms::create_leveled_list(
-            mutated, *listSignature, editorId, 0, 0, 0);
-        fo4::forms::LeveledListEntry entry;
-        entry.item = key;
-        if (!fo4::forms::insert_leveled_list_entry(mutated, wrapper, 0, entry)) {
+        const auto copiedKey = copyRecordAsNewLocked(
+            mutated, *source, key, std::optional<std::string_view>{wrapperEditorId});
+        if (!copiedKey) return std::unexpected(copiedKey.error());
+
+        const auto status = fo4::copy_record_as_override(mutated, source->plugin, key, false);
+        if (status == fo4::RecordCopyStatus::source_missing) {
+            return std::unexpected(Error{
+                "RecordNotFound",
+                "Record is not present in " + sourceName + ": " + formKeyText
+            });
+        }
+        if (status == fo4::RecordCopyStatus::source_containment_unsupported) {
+            return std::unexpected(Error{
+                "RecordContainmentUnsupported",
+                "Cannot insert this record without reproducing its nested source GRUP hierarchy: " +
+                    formKeyText
+            });
+        }
+        if (!fo4::forms::reset_leveled_list(mutated, key)) {
             return std::unexpected(Error{
                 "LeveledListCreateFailed",
-                "Wrapper entry could not be added to " + wrapper.to_string()
+                "Wrapper override is not present in " + targetName + ": " + key.to_string()
+            });
+        }
+
+        fo4::forms::LeveledListEntry entry;
+        entry.item = *copiedKey;
+        if (!fo4::forms::insert_leveled_list_entry(mutated, key, 0, entry)) {
+            return std::unexpected(Error{
+                "LeveledListCreateFailed",
+                "Wrapper entry could not be added to " + key.to_string()
             });
         }
         stagePluginMutationLocked(*target, std::move(mutated));
         return nlohmann::json(
-            "Copied " + formKeyText + " as wrapper " + wrapper.to_string() + " in " +
-            targetName + ".");
+            "Copied " + key.to_string() + " as wrapper in " + targetName +
+            "; entries moved to NEW record " + copiedKey->to_string() +
+            " ('" + wrapperEditorId + "').");
     } catch (const fo4::forms::LeveledListError& error) {
         return std::unexpected(Error{"LeveledListCreateFailed", error.what()});
     } catch (const std::exception& error) {

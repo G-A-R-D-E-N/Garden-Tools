@@ -27,9 +27,9 @@ PluginEditTool: `CopyAsDisabledOverride` is `CopyAsOverride` followed by setting
   3. Point that entry's reference at the new record from step 1, with Count 1 and Level 1, and restore the original EditorID on the override (lines 3223-3226).
 - Result: the override becomes a one-entry list that defers to a renamed copy of the original list.
 
-PluginEditTool (#362): `CopyAsWrapper` creates a new LVLI, LVLN or LVSP in the target plugin, with one entry at level 1 and count 1 that references the selected record. The list type comes from `Radicle/src/forms/leveled_list.cpp:leveled_list_for_entry_target`: NPC_ or LVLN gives LVLN, SPEL or LVSP gives LVSP, and any other LVLI-allowed base type gives LVLI. Other types are refused with `WrapperUnsupportedType`. The source owner is added as a master of the target, as copy-as-override does. The result is a new FormKey; the selected record is not changed.
+PluginEditTool (#362): `CopyAsWrapper` follows the flow above for LVLI, LVLN and LVSP only; other types are refused with `WrapperUnsupportedType`. xEdit's menu test (`xeMainForm.pas:15631-15638`) also shows the wrapper for LVLB, LVLC, LVLP and LVSC, which this port does not accept. The copy's EditorID is the caller's value, required to differ from the source EditorID case-insensitively (`WrapperEditorIdSameAsSource`); empty is allowed. The source owner is added as a master of the target, as copy-as-override does. The selected FormKey becomes the one-entry wrapper, and the copy gets a new FormKey. An existing override of the selected FormKey in the target is reused.
 
-Deviation from xEdit, recorded and not declined: xEdit keeps the selected FormKey as the wrapper override and moves the list content to a renamed copy, so existing references to the original record reach the wrapper. PluginEditTool does not do that. Matching xEdit would need the override path (copy as override, reset, move the entries). Whether to do that is a decision for the issue owner.
+Differences from xEdit: a reused override keeps its own EditorID, while xEdit writes the source EditorID back (`xeMainForm.pas:3226`); for a new override the two are the same. A `LOSES:` result is returned without writing when a plugin that loads after the target also overrides the record, as `CopyAsOverride` does.
 
 ## Inject Forms into master
 

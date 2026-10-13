@@ -6,12 +6,7 @@ import type { useRecordActions } from './recordActions';
 
 const conditionsPathOf = (field: string) => (/(^|\.)Conditions(\[|$)/.test(field) ? field : null);
 const initiallyDisabledTypes = new Set(['REFR', 'ACHR', 'NAVM', 'PARW', 'PBAR', 'PBEA', 'PCON', 'PFLA', 'PGRE', 'PHZD', 'PMIS']);
-const wrapperTypes = new Set([
-  'ACTI', 'ADDN', 'ALCH', 'AMMO', 'ARMO', 'ARTO', 'ASPC', 'BNDS', 'BOOK', 'CMPO', 'COBJ', 'CONT', 'DEBR', 'DOOR',
-  'ENCH', 'EXPL', 'FLST', 'FLOR', 'FURN', 'HAZD', 'IDLM', 'INGR', 'KEYM', 'LIGH', 'LVLI', 'LVLN', 'LVSP', 'MISC',
-  'MSTT', 'NOTE', 'NPC_', 'OMOD', 'PROJ', 'SCOL', 'SCRL', 'SOUN', 'SPEL', 'STAT', 'TACT', 'TERM', 'TREE', 'TXST',
-  'WATR', 'WEAP',
-]);
+const wrapperTypes = new Set(['LVLI', 'LVLN', 'LVSP']);
 
 export default function RecordContextMenu({
   menu, matrix, elementActions, actions, onEdit, onEditConditions, onShowTab,

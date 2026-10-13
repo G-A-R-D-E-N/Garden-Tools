@@ -55,14 +55,14 @@ struct LeveledList {
 
 LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key);
 
-std::optional<Signature> leveled_list_for_entry_target(Signature target);
-
 FormKey create_leveled_list(Plugin& plugin,
                             Signature signature,
                             std::optional<std::string_view> editor_id,
                             std::uint8_t chance_none,
                             std::uint8_t max_count,
                             std::uint8_t flags);
+
+bool reset_leveled_list(Plugin& plugin, const FormKey& key);
 
 bool replace_leveled_list_entries(Plugin& plugin,
                                   const FormKey& key,

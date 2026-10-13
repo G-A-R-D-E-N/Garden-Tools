@@ -240,18 +240,6 @@ void validate_entry_target(const Plugin& plugin, Signature list, const LeveledLi
 
 }  // namespace
 
-std::optional<Signature> leveled_list_for_entry_target(Signature target) {
-  const auto name = target.to_string();
-  for (const auto list : {k_lvln, k_lvsp, k_lvli}) {
-    const auto allowed = allowed_entry_targets(list);
-    if (std::any_of(allowed.begin(), allowed.end(),
-                    [&](std::string_view candidate) { return candidate == name; })) {
-      return list;
-    }
-  }
-  return std::nullopt;
-}
-
 LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
   const auto* record = find_record(plugin, key);
   if (record == nullptr) {
@@ -353,6 +341,28 @@ FormKey create_leveled_list(Plugin& plugin,
   }
   plugin = std::move(next);
   return key;
+}
+
+bool reset_leveled_list(Plugin& plugin, const FormKey& key) {
+  assign_record_form_keys(plugin);
+  auto* record = find_mutable_record(plugin, key);
+  if (record == nullptr) return false;
+  if (!is_leveled_list(record->header.signature)) {
+    throw LeveledListError("leveled list reset requires LVLI, LVLN, or LVSP");
+  }
+
+  std::vector<Subrecord> next;
+  for (const auto& subrecord : record->subrecords) {
+    if (subrecord.signature == sig_edid) next.push_back(subrecord);
+  }
+  next.push_back(make_subrecord(k_obnd, 12));
+  next.push_back(byte_subrecord(k_lvld, 0));
+  next.push_back(byte_subrecord(k_lvlf, 0));
+  next.push_back(count_subrecord(0));
+
+  record->subrecords = std::move(next);
+  mark_record_modified(plugin, *record);
+  return true;
 }
 
 bool replace_leveled_list_entries(Plugin& plugin,

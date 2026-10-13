@@ -58,15 +58,18 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     if (!b) return;
     const picked = await askForTarget({
       title: 'Copy as wrapper into',
-      description: `Creates a leveled list in the plugin you choose that holds ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[col]} as its single entry.`,
+      description: `Copies ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[col]} into the plugin you choose as a new record, then overrides ${matrix.FormKey} there as a leveled list whose single entry is that copy.`,
       confirmLabel: 'Create', defaultTarget: editablePlugins[0] ?? '',
     });
     if (!picked) return;
+    const sourceEditorId = matrix.EditorID.toLowerCase();
     const editorId = await askPrompt({
-      title: 'Wrapper editor ID',
-      label: 'EditorID (optional)',
+      title: 'Copy as wrapper',
+      label: 'EditorID for the wrapped copy',
       placeholder: 'Leave empty for no EditorID',
       confirmLabel: 'Create',
+      validate: v => v.trim().toLowerCase() === sourceEditorId && sourceEditorId !== ''
+        ? `The wrapped copy needs an EditorID different from ${matrix.EditorID}.` : null,
     });
     if (editorId === null) return;
     setStatus('Creating wrapper…');

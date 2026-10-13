@@ -29,6 +29,7 @@
 namespace fo4ide::plugin {
 
 using support::editorId;
+using support::joinNames;
 
 namespace {
 
@@ -49,15 +50,6 @@ bool optionalBoolArgument(const nlohmann::json& args, std::size_t index, bool& v
     if (!args[index].is_boolean()) return false;
     value = args[index].get<bool>();
     return true;
-}
-
-std::string joinNames(const std::vector<std::string>& names) {
-    std::string out;
-    for (const auto& name : names) {
-        if (!out.empty()) out += ", ";
-        out += name;
-    }
-    return out;
 }
 
 constexpr std::uint32_t kCopyInitiallyDisabled = 0x00000800u;

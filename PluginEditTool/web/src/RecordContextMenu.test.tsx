@@ -32,10 +32,10 @@ it('offers Copy as disabled override only for an Initially Disabled capable type
   expect(screen.getByText('Copy as override into...')).toBeTruthy();
 });
 
-it('offers Copy as wrapper only for a type a leveled list can reference', () => {
-  const { unmount } = renderMenuFor('NPC_');
+it('offers Copy as wrapper only for a leveled list type', () => {
+  const { unmount } = renderMenuFor('LVLI');
   expect(screen.getByText('Copy as wrapper into...')).toBeTruthy();
   unmount();
-  renderMenuFor('CELL');
+  renderMenuFor('NPC_');
   expect(screen.queryByText('Copy as wrapper into...')).toBeNull();
 });

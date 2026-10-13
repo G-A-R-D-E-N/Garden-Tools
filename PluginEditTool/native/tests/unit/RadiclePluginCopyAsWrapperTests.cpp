@@ -2,15 +2,17 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/forms/leveled_list.hpp>
-#include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/writer.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -37,6 +39,18 @@ void writeBytes(const std::filesystem::path& path, const std::vector<std::byte>&
     stream.write(reinterpret_cast<const char*>(bytes.data()),
                  static_cast<std::streamsize>(bytes.size()));
     REQUIRE(stream.good());
+}
+
+void addLeveledList(fo4::Plugin& plugin, std::string_view signature, std::string_view edid,
+                    std::initializer_list<std::string_view> items) {
+    const auto list = fo4::forms::create_leveled_list(
+        plugin, fo4::Signature::from_string(signature), edid, 0, 0, 0);
+    std::size_t index = 0;
+    for (const auto item : items) {
+        fo4::forms::LeveledListEntry entry;
+        entry.item = fo4::FormKey::parse(item);
+        REQUIRE(fo4::forms::insert_leveled_list_entry(plugin, list, index++, entry));
+    }
 }
 
 std::vector<std::byte> makeWrapperMaster() {
@@ -72,7 +86,12 @@ std::vector<std::byte> makeWrapperMaster() {
     fo4::test::write_subrecord(out, "EDID", std::string_view{"MasterCell\0", 11});
     fo4::test::end_record(out, cell);
     fo4::test::end_group(out, cellGroup);
-    return out.bytes;
+
+    auto plugin = fo4::read_plugin(out.bytes, "Master.esm");
+    addLeveledList(plugin, "LVLI", "MasterList", {"000800:Master.esm", "000801:Master.esm"});
+    addLeveledList(plugin, "LVLN", "MasterNpcList", {"000801:Master.esm"});
+    addLeveledList(plugin, "LVSP", "MasterSpellList", {"000802:Master.esm"});
+    return fo4::write_plugin(plugin);
 }
 
 std::vector<std::byte> makeWrapperTarget() {
@@ -121,94 +140,161 @@ std::string textResult(const fo4ide::Result<nlohmann::json>& result) {
     return result->get<std::string>();
 }
 
-fo4::FormKey wrapperKeyFrom(const std::string& message) {
-    const std::string marker = " as wrapper ";
-    REQUIRE(message.find(marker) != std::string::npos);
-    const auto begin = message.find(marker) + marker.size();
-    const auto end = message.find(" in ", begin);
-    REQUIRE(end != std::string::npos);
-    return fo4::FormKey::parse(message.substr(begin, end - begin));
+std::string between(const std::string& text, std::string_view begin, std::string_view end) {
+    const auto start = text.find(begin);
+    REQUIRE(start != std::string::npos);
+    const auto from = start + begin.size();
+    const auto stop = text.find(end, from);
+    REQUIRE(stop != std::string::npos);
+    return text.substr(from, stop - from);
+}
+
+fo4::FormKey overrideKeyFrom(const std::string& message) {
+    return fo4::FormKey::parse(between(message, "Copied ", " as wrapper in "));
+}
+
+fo4::FormKey copyKeyFrom(const std::string& message) {
+    return fo4::FormKey::parse(between(message, "NEW record ", " ('"));
+}
+
+std::string editorIdOf(const fo4::Record& record) {
+    for (const auto& subrecord : record.subrecords) {
+        if (subrecord.signature == fo4::sig_edid) {
+            return std::string(reinterpret_cast<const char*>(subrecord.data.data()));
+        }
+    }
+    return {};
+}
+
+void saveTarget(fo4ide::plugin::RadiclePluginBackend& backend) {
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
 }
 
 }
 
-TEST_CASE("Native CopyAsWrapper wraps a WEAP in a one-entry LVLI at level 1 and count 1") {
+TEST_CASE("Native CopyAsWrapper overrides an LVLI and keeps its FormKey and EDID") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     fo4ide::plugin::RadiclePluginBackend backend;
     loadWrapperEnvironment(backend, root);
 
     const auto message = textResult(backend.copyAsWrapper(nlohmann::json::array(
-        {"Master.esm", "000800:Master.esm", "Target.esp", "WrapWeapon"})));
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+        {"Master.esm", "000804:Master.esm", "Target.esp", "WrapList"})));
+    saveTarget(backend);
 
     const auto reloaded = fo4::read_plugin_file(root / "Target.esp");
-    const auto key = wrapperKeyFrom(message);
+    const auto key = overrideKeyFrom(message);
+    CHECK(key == fo4::FormKey::parse("000804:Master.esm"));
     const auto* wrapper = fo4::find_record(reloaded, key);
     REQUIRE(wrapper != nullptr);
     CHECK(wrapper->header.signature == fo4::Signature::from_string("LVLI"));
+    CHECK(editorIdOf(*wrapper) == "MasterList");
+
+    const auto copied = copyKeyFrom(message);
     const auto list = fo4::forms::decode_leveled_list(reloaded, key);
     REQUIRE(list.entries.size() == 1);
-    CHECK(list.entries[0].item == fo4::FormKey::parse("000800:Master.esm"));
+    CHECK(list.entries[0].item == copied);
     CHECK(list.entries[0].level == 1);
     CHECK(list.entries[0].count == 1);
 }
 
-TEST_CASE("Native CopyAsWrapper wraps an NPC_ in an LVLN") {
+TEST_CASE("Native CopyAsWrapper moves all of the original entries into the NEW copy") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     fo4ide::plugin::RadiclePluginBackend backend;
     loadWrapperEnvironment(backend, root);
 
     const auto message = textResult(backend.copyAsWrapper(nlohmann::json::array(
-        {"Master.esm", "000801:Master.esm", "Target.esp", nullptr})));
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+        {"Master.esm", "000804:Master.esm", "Target.esp", "WrapList"})));
+    saveTarget(backend);
 
     const auto reloaded = fo4::read_plugin_file(root / "Target.esp");
-    const auto key = wrapperKeyFrom(message);
-    const auto* wrapper = fo4::find_record(reloaded, key);
-    REQUIRE(wrapper != nullptr);
-    CHECK(wrapper->header.signature == fo4::Signature::from_string("LVLN"));
-    const auto list = fo4::forms::decode_leveled_list(reloaded, key);
-    REQUIRE(list.entries.size() == 1);
-    CHECK(list.entries[0].item == fo4::FormKey::parse("000801:Master.esm"));
+    const auto copied = copyKeyFrom(message);
+    const auto* copy = fo4::find_record(reloaded, copied);
+    REQUIRE(copy != nullptr);
+    CHECK(copy->header.signature == fo4::Signature::from_string("LVLI"));
+    CHECK(editorIdOf(*copy) == "WrapList");
+    const auto entries = fo4::forms::decode_leveled_list(reloaded, copied).entries;
+    REQUIRE(entries.size() == 2);
+    CHECK(entries[0].item == fo4::FormKey::parse("000800:Master.esm"));
+    CHECK(entries[1].item == fo4::FormKey::parse("000801:Master.esm"));
 }
 
-TEST_CASE("Native CopyAsWrapper wraps a SPEL in an LVSP") {
+TEST_CASE("Native CopyAsWrapper reuses an override already in the target") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     fo4ide::plugin::RadiclePluginBackend backend;
     loadWrapperEnvironment(backend, root);
 
+    textResult(backend.invoke("backend.CopyAsOverride", nlohmann::json::array(
+        {"Master.esm", "000804:Master.esm", "Target.esp", false})));
     const auto message = textResult(backend.copyAsWrapper(nlohmann::json::array(
-        {"Master.esm", "000802:Master.esm", "Target.esp", "WrapSpell"})));
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+        {"Master.esm", "000804:Master.esm", "Target.esp", "WrapList"})));
+    saveTarget(backend);
 
     const auto reloaded = fo4::read_plugin_file(root / "Target.esp");
-    const auto key = wrapperKeyFrom(message);
-    const auto* wrapper = fo4::find_record(reloaded, key);
-    REQUIRE(wrapper != nullptr);
-    CHECK(wrapper->header.signature == fo4::Signature::from_string("LVSP"));
-    const auto list = fo4::forms::decode_leveled_spell(reloaded, key);
+    const auto key = overrideKeyFrom(message);
+    CHECK(key == fo4::FormKey::parse("000804:Master.esm"));
+    const auto list = fo4::forms::decode_leveled_list(reloaded, key);
     REQUIRE(list.entries.size() == 1);
-    CHECK(list.entries[0].spell == fo4::FormKey::parse("000802:Master.esm"));
-    CHECK(list.entries[0].level == 1);
-    CHECK(list.entries[0].count == 1);
+    CHECK(list.entries[0].item == copyKeyFrom(message));
+    CHECK(fo4::forms::decode_leveled_list(reloaded, copyKeyFrom(message)).entries.size() == 2);
 }
 
-TEST_CASE("Native CopyAsWrapper refuses a CELL") {
+TEST_CASE("Native CopyAsWrapper wraps an LVLN and an LVSP once each") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadWrapperEnvironment(backend, root);
+
+    const auto npcMessage = textResult(backend.copyAsWrapper(nlohmann::json::array(
+        {"Master.esm", "000805:Master.esm", "Target.esp", "WrapNpcs"})));
+    const auto spellMessage = textResult(backend.copyAsWrapper(nlohmann::json::array(
+        {"Master.esm", "000806:Master.esm", "Target.esp", "WrapSpells"})));
+    saveTarget(backend);
+
+    const auto reloaded = fo4::read_plugin_file(root / "Target.esp");
+    const std::vector<std::pair<std::string, std::string>> wrapped{
+        {npcMessage, "LVLN"}, {spellMessage, "LVSP"}};
+    for (const auto& [message, signature] : wrapped) {
+        SCOPED_TRACE(signature);
+        const auto key = overrideKeyFrom(message);
+        const auto* wrapper = fo4::find_record(reloaded, key);
+        REQUIRE(wrapper != nullptr);
+        CHECK(wrapper->header.signature == fo4::Signature::from_string(signature));
+        const auto list = fo4::forms::decode_leveled_list(reloaded, key);
+        REQUIRE(list.entries.size() == 1);
+        CHECK(list.entries[0].item == copyKeyFrom(message));
+        CHECK(list.entries[0].level == 1);
+        CHECK(list.entries[0].count == 1);
+    }
+}
+
+TEST_CASE("Native CopyAsWrapper refuses a WEAP") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
     fo4ide::plugin::RadiclePluginBackend backend;
     loadWrapperEnvironment(backend, root);
 
     const auto rejected = backend.copyAsWrapper(nlohmann::json::array(
-        {"Master.esm", "000803:Master.esm", "Target.esp", nullptr}));
+        {"Master.esm", "000800:Master.esm", "Target.esp", "WrapWeapon"}));
     REQUIRE_FALSE(rejected.has_value());
     CHECK(rejected.error().type == "WrapperUnsupportedType");
+}
+
+TEST_CASE("Native CopyAsWrapper refuses a wrapped EDID equal to the source EDID") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadWrapperEnvironment(backend, root);
+
+    for (const auto* editorId : {"MasterList", "masterlist"}) {
+        SCOPED_TRACE(editorId);
+        const auto rejected = backend.copyAsWrapper(nlohmann::json::array(
+            {"Master.esm", "000804:Master.esm", "Target.esp", editorId}));
+        REQUIRE_FALSE(rejected.has_value());
+        CHECK(rejected.error().type == "WrapperEditorIdSameAsSource");
+    }
 }
 
 TEST_CASE("Native CopyAsWrapper adds the source owner as a master of the target") {
@@ -217,15 +303,14 @@ TEST_CASE("Native CopyAsWrapper adds the source owner as a master of the target"
     fo4ide::plugin::RadiclePluginBackend backend;
     loadWrapperEnvironment(backend, root);
 
-    const auto owner = fo4::FormKey::parse("000800:Master.esm").owner();
+    const auto owner = fo4::FormKey::parse("000804:Master.esm").owner();
     const auto before = fo4::read_plugin_file(root / "Target.esp");
     CHECK_FALSE(std::any_of(before.header.masters.begin(), before.header.masters.end(),
                             [&](const auto& master) { return master.key == owner; }));
 
     textResult(backend.copyAsWrapper(nlohmann::json::array(
-        {"Master.esm", "000800:Master.esm", "Target.esp", nullptr})));
-    REQUIRE(backend.invoke(
-        "backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
+        {"Master.esm", "000804:Master.esm", "Target.esp", nullptr})));
+    saveTarget(backend);
 
     const auto after = fo4::read_plugin_file(root / "Target.esp");
     CHECK(std::any_of(after.header.masters.begin(), after.header.masters.end(),
