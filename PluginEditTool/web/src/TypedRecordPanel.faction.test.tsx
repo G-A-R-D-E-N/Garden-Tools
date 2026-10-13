@@ -33,9 +33,26 @@ it('sets a relation at its index with the relation list and refreshes', async ()
   fireEvent.click(await screen.findByText('000A01:W0.esp'));
   fireEvent.change(screen.getByLabelText('Modifier'), { target: { value: '-20' } });
   fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[0]);
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(onChanged).toHaveBeenCalledOnce());
+  expect(read).toHaveBeenCalledOnce();
   expect(edit).toHaveBeenCalledWith('W0.esp', formKey, 'relations', 'set', 0, {
     faction: '000A01:W0.esp', modifier: -20, reaction: 'enemy',
   });
-  expect(onChanged).toHaveBeenCalledOnce();
+});
+
+it('sends the whole rank with its new number and the titles it was read with', async () => {
+  const rankFact = {
+    formKey, relations: [],
+    ranks: [{ number: 0, maleTitle: { rawId: '0A0B' }, femaleTitle: { stringId: 42 }, hasInsignia: false }],
+  };
+  const edit = vi.fn(async () => 'Updated ranks entry in ' + formKey + ' in W0.esp.');
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetFaction: vi.fn(async () => JSON.stringify(rankFact)), EditFactionEntries: edit } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  fireEvent.click(await screen.findByText('raw 0A0B'));
+  fireEvent.change(screen.getByLabelText('Rank'), { target: { value: '1' } });
+  fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[1]);
+  await waitFor(() => expect(edit).toHaveBeenCalledOnce());
+  expect(edit).toHaveBeenCalledWith('W0.esp', formKey, 'ranks', 'set', 0, {
+    number: 1, maleTitle: { rawId: '0A0B' }, femaleTitle: { stringId: 42 }, hasInsignia: false,
+  });
 });

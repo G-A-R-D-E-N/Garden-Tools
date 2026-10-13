@@ -2122,7 +2122,7 @@ RecordView shows the Typed Fields tab only for `TYPED_RECORD_TYPES` (backend.ts)
 
 ## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — read keyed by record, refresh after edit
 
-Loaded data carries the FormKey it was read for, so a different record never offers the previous record's rows as the base of an edit. A successful edit shows the native message, re-reads the record and calls `onChanged` (RecordView's reload) so the grid matches the plugin. A failed edit shows `errorText(e)` after the "... edit failed:" prefix and does not refresh.
+Reads come from the winning version (the native `Get*` reads, e.g. `GetLeveledList` in `PluginBackendTarget.cpp`), while edits go to `plugin`, the plugin the record was opened from. So when `plugin !== matrix.Winner`, `TypedRecordPanel` is read-only: the edit controls are hidden, the settings inputs are disabled, and a note names the winner. Loaded data carries the FormKey it was read for, so a different record never offers the previous record's rows as the base of an edit. A successful edit clears the error, shows the native message and calls `onChanged` (RecordView's reload). That reload replaces the matrix object, which re-runs the read effect (deps `formKey`, `matrix`, `read`), so the rows also refresh after outside writes. `busy` is true from the start of an edit until `onChanged` resolves and disables the action buttons. A failed edit shows `errorText(e)` after the "... edit failed:" prefix in a `role="alert"` error and does not refresh.
 
 ## PluginEditTool/web/src/TypedRecordPanel.tsx:ListEditor — set keeps fields the form does not show
 

@@ -34,13 +34,34 @@ it('sets an entry at its index, refreshes the list and reports the native messag
   fireEvent.click(await screen.findByText('000802:W0.esp'));
   fireEvent.change(screen.getByLabelText('Level'), { target: { value: '12' } });
   fireEvent.click(screen.getByRole('button', { name: 'Set' }));
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(onChanged).toHaveBeenCalledOnce());
+  expect(read).toHaveBeenCalledOnce();
   expect(edit).toHaveBeenCalledWith('W0.esp', formKey, 'set', 1, {
     level: 12, item: '000802:W0.esp', count: 2, chanceNone: 25,
     extra: { owner: null, globalOrRank: 0, itemCondition: 1 },
   });
-  expect(onChanged).toHaveBeenCalledOnce();
   expect(await screen.findByText('Updated leveled list entry 1 in ' + formKey + ' in W0.esp.')).toBeTruthy();
+});
+
+it('re-reads the rows when RecordView reloads the matrix', async () => {
+  const read = vi.fn(async () => JSON.stringify(list));
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: read } } } });
+  const { rerender } = render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  expect(await screen.findByText('000802:W0.esp')).toBeTruthy();
+  read.mockImplementation(async () => JSON.stringify({ ...list, entries: [{ level: 3, item: '000803:W0.esp', count: 1, chanceNone: 0, extra: null }] }));
+  rerender(<TypedRecordPanel matrix={{ ...matrix }} plugin="W0.esp" onChanged={async () => {}} />);
+  expect(await screen.findByText('000803:W0.esp')).toBeTruthy();
+  expect(read).toHaveBeenCalledTimes(2);
+});
+
+it('shows the winner read-only with no edit controls when opened from another plugin', async () => {
+  const edit = vi.fn();
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: vi.fn(async () => JSON.stringify(list)), EditLeveledListEntry: edit } } } });
+  render(<TypedRecordPanel matrix={{ ...matrix, Winner: 'B.esp', Plugins: ['A.esp', 'B.esp'] }} plugin="A.esp" onChanged={async () => {}} />);
+  expect(await screen.findByText('000802:W0.esp')).toBeTruthy();
+  expect(screen.getByText('Showing the winning version from B.esp. Open the record from B.esp to edit.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Set' })).toBeNull();
+  expect(edit).not.toHaveBeenCalled();
 });
 
 it('shows a refused leveled list edit with its error text and does not refresh', async () => {

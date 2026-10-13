@@ -34,7 +34,7 @@ it('sets a faction rank at its index with the NPC list name and refreshes', asyn
   fireEvent.click(await screen.findByText('000901:W0.esp'));
   fireEvent.change(screen.getAllByLabelText('Rank')[0], { target: { value: '3' } });
   fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[0]);
-  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(onChanged).toHaveBeenCalledOnce());
+  expect(read).toHaveBeenCalledOnce();
   expect(edit).toHaveBeenCalledWith('W0.esp', formKey, 'factions', 'set', 0, { faction: '000901:W0.esp', rank: 3 });
-  expect(onChanged).toHaveBeenCalledOnce();
 });
