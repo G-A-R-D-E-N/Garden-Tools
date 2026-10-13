@@ -5,7 +5,7 @@
 MCP (Model Context Protocol) is a standard way to hand an AI assistant a set of tools it can call.
 FO4IDE implements it: launched with `--mcp`, `FO4RecordEditor.exe` opens no window and speaks
 line-delimited JSON-RPC on stdin and stdout (protocol version 2024-11-05, server name `fo4editor`).
-It advertises **43 tools**: 15 for plugins and records, 8 for typed records, 4 for MO2 profile and host state, 5 for
+It advertises **45 tools**: 17 for plugins and records, 8 for typed records, 4 for MO2 profile and host state, 5 for
 Papyrus, 4 for NIFs, 2 for materials, 4 for audio and 1 for BA2 archives.
 
 The server is the native C++23 host that the desktop editor also runs on, and it needs no other
@@ -106,6 +106,8 @@ six hex digits, a colon and the plugin that owns the record.
 | `open_plugin` | `path` | memory | Loads one `.esp`, `.esm` or `.esl` by absolute path. Opening a plugin that is already loaded refreshes it, but is refused while it has pending edits (`PluginHasPendingChanges`); a different file with the same name is refused (`PluginAlreadyLoaded`). |
 | `create_plugin` | `plugin` | disk | Writes a new empty plugin into the active profile's overwrite folder and loads it. `plugin` is a file name, not a path. `.esp` is added when it has no plugin extension, and an `.esm` or `.esl` name sets the master or light flag. Refuses official and Creation Club names, names already loaded, files that already exist and invalid file names. |
 | `create_record` | `plugin`, `type`, `payload` | memory | Creates a record from a four-letter signature and returns its `formKey`. The payload fields are listed under "create_record payloads". |
+| `create_placed_object` | `plugin`, `cell`, `baseObject`, `x`, `y`, `z` [`rotX`, `rotY`, `rotZ`, `persistent`, `initially_disabled`] | memory | Adds a placed reference (REFR) over `baseObject` to a CELL and returns its `formKey`. `cell` and `baseObject` are FormKeys. `cell` must be a CELL this plugin owns (copy the cell as an override first if it is a master's); `baseObject` must be in this plugin or one of its masters. `rotX`, `rotY` and `rotZ` are radians and default to 0. `persistent` defaults to `true` (the cell's persistent list); `false` puts it in the temporary list. `initially_disabled` defaults to `false`. In an exterior cell `persistent` must be `false` and `x` and `y` must lie inside the cell's grid. The cell's child group is created when missing. |
+| `create_interior_cell` | `plugin`, `editor_id` | memory | Creates an interior CELL with the given editor ID and returns its `formKey`. Refused when `editor_id` is empty or matches a CELL in this plugin, ignoring ASCII case. |
 | `get_record` | `form_key` | no | Every loaded version of a record: `Winner`, `Plugins`, per-field `Rows` and an overall `Level` of `onlyone`, `override` or `conflict`. Includes pending edits. `RecordNotFound` when no loaded plugin has it. |
 | `get_record_fields` | `plugin`, `form_key` | no | Field paths and values of one plugin's version of the record (`RecordVersionNotFound` if that plugin has none). |
 | `list_record_types` | `plugin` | no | The record signatures in a plugin with counts, as strings such as `EYES (3)`. |
