@@ -27,7 +27,8 @@ fo4::schema::CountedArrayDescriptor velocities() {
 }
 
 std::vector<std::byte> make_plugin(std::uint32_t declared_count, std::size_t payload_size,
-                                   bool include_count = true, bool include_array = true) {
+                                   bool include_count = true, bool include_array = true,
+                                   std::size_t count_size = 4) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
@@ -42,6 +43,7 @@ std::vector<std::byte> make_plugin(std::uint32_t declared_count, std::size_t pay
   if (include_count) {
     fo4::test::ByteWriter count;
     count.u32(declared_count);
+    count.bytes.resize(count_size);
     fo4::test::write_subrecord(out, "XWCN", count.bytes);
   }
   if (include_array) {
@@ -217,6 +219,16 @@ TEST(CountedArray, MissingCountOrPayloadSubrecordIsRefusedWithoutMutation) {
 
 TEST(CountedArray, CountThatDisagreesWithThePayloadFailsClosed) {
   auto plugin = fo4::read_plugin(make_plugin(2, 48), "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+  EXPECT_THROW(fo4::insert_record_counted_element(plugin, record_key(), velocities(), 0),
+               fo4::schema::CountedArrayError);
+  EXPECT_THROW(fo4::remove_record_counted_element(plugin, record_key(), velocities(), 0),
+               fo4::schema::CountedArrayError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(CountedArray, CountSubrecordThatIsNotFourBytesFailsClosed) {
+  auto plugin = fo4::read_plugin(make_plugin(3, 48, true, true, 2), "Patch.esp");
   const auto original = fo4::test::original_bytes(plugin);
   EXPECT_THROW(fo4::insert_record_counted_element(plugin, record_key(), velocities(), 0),
                fo4::schema::CountedArrayError);

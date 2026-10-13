@@ -305,6 +305,10 @@ def load_schema(schema_path: Path):
                  if (other["record"], other["subrecord"]) == (array["record"], array["subrecord"])]
         if len(twins) > 1:
             raise ValueError(f"counted_array subrecord {array['subrecord']} is declared twice in {array['record']}: {array['path']!r}")
+        sharers = [other for other in arrays
+                   if (other["record"], other["count_subrecord"]) == (array["record"], array["count_subrecord"])]
+        if len(sharers) > 1:
+            raise ValueError(f"counted_array count subrecord {array['count_subrecord']} is shared by two arrays in {array['record']}: {array['path']!r}")
         counts = [row for row in fields
                   if row["record"] == array["record"] and row["subrecord"] == array["count_subrecord"]]
         if len(counts) != 1 or not whole_payload_u32(counts[0]):

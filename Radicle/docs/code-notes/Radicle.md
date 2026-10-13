@@ -1474,6 +1474,8 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 
 A counted array-of-struct kind: one payload subrecord holds `count` elements of `stride` bytes, and a whole-payload u32 sibling (`count_subrecord`) stores the count. Members are ordinary scalar rows at `FieldAddress{false, stride, 0, ...}`, so reads and writes reuse the stride addressing that already exists and no new storage is added. The array itself has no row.
 
+Not supported yet: a count stored inside another subrecord or in a non-u32 type; header-then-array payloads (no array_offset); repeating subrecord groups such as CNTO+COED or EFID+EFIT+CTDA; prefix-count arrays; members with enum or flags names, strings or links; per-record duplication for ACHR/CELL XWCU.
+
 ## Radicle/src/schema/scalar.cpp:counted_array_descriptor
 
 Looks up a counted array by record and path in the generated `k_counted_arrays` table. `is_counted_array_count_subrecord` answers whether a subrecord is the count of any array in that record.
@@ -1500,15 +1502,11 @@ Validates a `counted_array` entry. Keys are limited to `COUNTED_ARRAY_KEYS` and 
 
 ## Radicle/tools/schema_codegen.py:load_schema
 
-After the rows are expanded, requires exactly one whole-payload u32 row for each array's count subrecord, and rejects two arrays that declare the same payload subrecord in one record. The count rule is what lets `write_scalar` refuse plain writes while insert and remove remain the only count writers.
+After the rows are expanded, requires exactly one whole-payload u32 row for each array's count subrecord, and rejects two arrays that declare the same payload subrecord or the same count subrecord in one record. The count rule is what lets `write_scalar` refuse plain writes while insert and remove remain the only count writers.
 
 ## Radicle/tools/parity_matrix.py:scalar_rows
 
 Expands counted arrays with `schema_codegen.parse_counted_array`, the same function the codegen uses, so the parity counts cannot drift from the generated rows.
-
-## Radicle/src/schema/form_link_mixed.cpp:k_placed_reference_layouts
-
-The XWCU entry (stride 16, `exact` false, empty slot list) makes strict remap in `fixed_stride_formid_offsets` throw `FormIdError` for REFR XWCU payloads whose size is not a multiple of 16, the same as the other entries in this table. Non-strict remap returns no offsets for them. The stride is hand-kept here and in `Radicle/schema/fallout4/fields.json`, so both must change together.
 
 ## Radicle/src/schema/preflight.cpp:preflight_record
 
@@ -1516,7 +1514,7 @@ REFR XWCU members now run through the generic checks. A payload that is not a wh
 
 ## Radicle/src/plugin/mutation.cpp:set_record_scalar
 
-The overload that takes only a Signature selects the first scalar row for that subrecord. For the counted payload (REFR `XWCU`) that is element 0 of the X member, so counted members should be written with the descriptor and index overload.
+The overload that takes only a Signature selects the first scalar row for that subrecord. Rows sort by path, so for the counted payload (REFR `XWCU`) the first row is `REFR\WaterCurrentUnnamed` at offset 12, not X. Counted members should be written with the descriptor and index overload.
 
 ## Radicle/include/fo4/schema/generated_scalar_fields.inc:k_counted_arrays
 

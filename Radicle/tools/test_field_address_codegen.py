@@ -78,14 +78,14 @@ def member(name, offset, **overrides):
 
 def counted(members=None, **overrides):
     row = {"kind": "counted_array", "path": "TEST" + BS + "Items", "label": "Items", "subrecord": "DATA",
-           "count_subrecord": "CNT", "stride": 8, "insertion": "existing_only",
+           "count_subrecord": "CNTA", "stride": 8, "insertion": "existing_only",
            "members": members if members is not None else [member("ItemA", 0), member("ItemB", 4)]}
     row.update(overrides)
     return {k: v for k, v in row.items() if v is not None}
 
 
 def count_row(**overrides):
-    row = {"path": "TEST" + BS + "Count", "label": "Count", "subrecord": "CNT", "offset": None,
+    row = {"path": "TEST" + BS + "Count", "label": "Count", "subrecord": "CNTA", "offset": None,
            "maximum": 0xFFFFFFFF}
     row.update(overrides)
     return scalar(**row)
@@ -460,13 +460,13 @@ class SchemaCodegenTests(unittest.TestCase):
     def test_counted_array_expands_to_stride_member_rows(self):
         fields, arrays = self.load_schema(counted(), count_row())
         self.assertEqual([(array["path"], array["stride"], array["count_subrecord"]) for array in arrays],
-                         [("TEST" + BS + "Items", 8, "CNT")])
+                         [("TEST" + BS + "Items", 8, "CNTA")])
         members = [field for field in fields if field["path"].startswith("TEST" + BS + "Item")]
         self.assertEqual([(field["offset"], field["address"]["stride"]) for field in members], [(0, 8), (4, 8)])
         text = schema_codegen.render(fields, arrays)
         self.assertIn("FieldAddress{false, 8, 0, FieldDiscriminator{}}", text)
         self.assertIn('{Signature::from_string("TEST"), "TEST' + BS + BS + 'Items", "Items", '
-                      'Signature::from_string("DATA"), Signature::from_string("CNT"), 8},', text)
+                      'Signature::from_string("DATA"), Signature::from_string("CNTA"), 8},', text)
         self.assertIn("constexpr std::array<CountedArrayDescriptor, 1> k_counted_arrays{{", text)
 
     def test_no_counted_arrays_renders_an_empty_table(self):
@@ -505,6 +505,11 @@ class SchemaCodegenTests(unittest.TestCase):
         other = counted(path="TEST" + BS + "Other", label="Other",
                         members=[member("OtherA", 0), member("OtherB", 4)])
         self.rejects("declared twice", counted(), other, count_row())
+
+    def test_counted_arrays_cannot_share_one_count_subrecord(self):
+        other = counted(path="TEST" + BS + "Other", label="Other", subrecord="OTHR",
+                        members=[member("OtherA", 0), member("OtherB", 4)])
+        self.rejects("shared by two arrays", counted(), other, count_row())
 
 
 if __name__ == "__main__":
