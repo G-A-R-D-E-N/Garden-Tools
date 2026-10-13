@@ -1,17 +1,21 @@
 # Plugin Edit Tool — Master Index
 
-Reference hub for editing Fallout 4 plugins (`.esp`/`.esm`/`.esl`). Two distinct things live under
-`E:\F4SE OG\Tools\PluginEditTool\`:
+Reference hub for editing Fallout 4 plugins (`.esp`/`.esm`/`.esl`). Two distinct things are
+documented here:
 
-- **FO4RecordEditor** — a Fallout 4 plugin IDE (desktop editor + MCP server, 53 tools) built on a
-  patched Mutagen. Reads and writes real binaries; does not need xEdit. **This is the primary tool.**
-- **The Spriggit text pipeline** — convert a plugin losslessly to a folder of per-record JSON, edit or
-  generate it with scripts, compile it back. Best for diffing, git tracking, and bulk generation.
+- **FO4RecordEditor** — a Fallout 4 plugin IDE (desktop editor + MCP server, 35 tools) written in
+  native C++23 on Radicle, the C++ plugin library in this repository. Reads and writes real binaries;
+  needs no .NET, Mutagen or xEdit. **This is the primary tool.** Its tool list is in
+  [../MCP_SETUP.md](../MCP_SETUP.md).
+- **The Spriggit text pipeline** — an older, separate workflow from the outer workspace: convert a
+  plugin losslessly to a folder of per-record JSON, edit or generate it with scripts, compile it back.
+  Best for diffing, git tracking, and bulk generation. It is built on Mutagen; FO4RecordEditor no
+  longer is.
 
 ```
    binary .esp  <-->  Spriggit (CLI/UI)  <-->  folder of per-record JSON/YAML
                           built on
-                         Mutagen (C# API, validation, generation)  <-- FO4RecordEditor also uses this
+                         Mutagen (C# API, validation, generation)
 ```
 
 ---
@@ -20,8 +24,8 @@ Reference hub for editing Fallout 4 plugins (`.esp`/`.esm`/`.esl`). Two distinct
 
 | If you are… | Read |
 |---|---|
-| Using the MCP tools to edit records | [KNOWLEDGE.md](KNOWLEDGE.md) — **the one to read first**; hard rules, `run_script` rules, every gotcha that has cost a session |
-| Working on the editor's own code | [ARCHITECTURE.md](ARCHITECTURE.md) — repo facts, invariants, dead code, the 4-site tool rule |
+| Using the MCP tools to edit records | [../MCP_SETUP.md](../MCP_SETUP.md) — the 35 native tools, their arguments and the write-safety rules. [KNOWLEDGE.md](KNOWLEDGE.md) is older background from the C# server |
+| Working on the editor's own code | [ARCHITECTURE.md](ARCHITECTURE.md) — the native host, write-safety invariants, how to add an MCP tool |
 | Generating/compiling plugins as text | [PIPELINE.md](PIPELINE.md) → [SPRIGGIT.md](SPRIGGIT.md) → [JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT.md) |
 | Authoring meshes | [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) |
 
@@ -29,22 +33,22 @@ Reference hub for editing Fallout 4 plugins (`.esp`/`.esm`/`.esl`). Two distinct
 
 | File | What it covers |
 |---|---|
-| [KNOWLEDGE.md](KNOWLEDGE.md) | **The knowledge base.** MCP tool patterns, type-name rules, FormID encoding, `run_script` Rules 0–10, master-order traps, `create_cell`/`create_placed_object`, SW-keyword removal, binary TES4 surgery |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | FO4RecordEditor internals: two git roots, the WebView2/React IPC contract, rendering invariants, adding an MCP tool, orphaned WPF code |
+| [KNOWLEDGE.md](KNOWLEDGE.md) | Background from the C#/Mutagen server: tool patterns, type-name rules, form ID encoding, `run_script` Rules 0–10, master-order traps, `create_cell`/`create_placed_object`, SW-keyword removal, binary TES4 surgery. The tool names and `run_script` rules do not apply to the native server (see [../MCP_SETUP.md](../MCP_SETUP.md)); the rest has not been re-checked against it |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **Current.** The native C++ host: RPC targets, the React IPC contract, Radicle as the plugin engine, write-safety invariants, adding an MCP tool, release paths |
 | [HISTORY.md](HISTORY.md) | How the editor got here; the abandoned WPF shell; the React pivot; what was never started |
 | [UI_REDESIGN_TASKS.md](UI_REDESIGN_TASKS.md) | **Live backlog** — approved 6-phase xEdit-style UI redesign, still unbuilt (`bd f4se_og-4wp`) |
 | [CONFLICT_ENGINE.md](CONFLICT_ENGINE.md) | xEdit conflict-detection research (DisplaySortKey, conflict priority) + the plan to beat it |
 | [findings.md](findings.md) | Per-session fix log for the `feat/schematic-dedupe` branch (plugins repaired, counts, commits) |
 | [PIPELINE.md](PIPELINE.md) | Full round-trip: parse → build → merge → compile → deploy |
 | [SPRIGGIT.md](SPRIGGIT.md) | serialize/deserialize CLI, packages, the compile gotcha + bypass, ESL corruption warning |
-| [MUTAGEN.md](MUTAGEN.md) | C# generator API: load Fallout4.esm, validate FormKeys, create records |
+| [MUTAGEN.md](MUTAGEN.md) | Historical: the C# generator API (load Fallout4.esm, validate FormKeys, create records). FO4RecordEditor no longer builds against Mutagen |
 | [JSON_RECORD_FORMAT.md](JSON_RECORD_FORMAT.md) | Spriggit's per-record JSON layout, naming convention, header/RecordData |
 | [NIF_TOOLCHAIN.md](NIF_TOOLCHAIN.md) | `niftool.exe` + `nif_*` MCP tools + GUI panel with a textured 3D viewport (author/repair/verify/view FO4 NIFs, no NifSkope) |
 | [SCRIPTS.md](SCRIPTS.md) | Helper scripts in the tool folder |
 | [MO2_SETUP.md](MO2_SETUP.md) | Loading an MO2 modlist. ⚠ Contains an unresolved contradiction with the shipped README about running *through* MO2 — read the banner |
 
 **Not here:** end-user docs for the distributable ship from the repo itself —
-`Tools/PluginEditTool/FO4RecordEditor/README.md` and `docs/MCP_SETUP.md`. Keep it that way; a
+`PluginEditTool/README.md` and `PluginEditTool/docs/MCP_SETUP.md`. Keep it that way; a
 recursive copy of that `docs/` folder is what shipped internal planning notes to end users once
 already. `package.ps1` now allowlists exactly one file.
 
@@ -59,8 +63,8 @@ Related, outside this folder (outer workspace, not part of this repository):
 ### Plugin record editing
 | Tool | Path | Role |
 |---|---|---|
-| **FO4RecordEditor** | `Tools\PluginEditTool\FO4RecordEditor\` | The IDE + MCP server. GUI at `FO4RecordEditor\bin\Release\net9.0-windows\FO4RecordEditor.exe` |
-| Mutagen (patched) | `Tools\PluginEditTool\tools\Mutagen\` | C# record library. **Our fork carries patches** (`Perk.cs` EPF3 choice flags, enum serialization) — a clean upstream clone cannot write perk EPF3 data |
+| **FO4RecordEditor** | `PluginEditTool/native/` (CMake target `fo4ide`) | The IDE + MCP server: one native C++ executable, `FO4RecordEditor.exe`. `publish.bat` builds it; `package.ps1` makes the release zip |
+| Mutagen (patched) | `Tools\PluginEditTool\tools\Mutagen\` | Historical, outer workspace: C# record library for the Spriggit pipeline. **Our fork carries patches** (`Perk.cs` EPF3 choice flags, enum serialization) — a clean upstream clone cannot write perk EPF3 data |
 | Spriggit (CLI) | `Tools\PluginEditTool\tools\Spriggit\Spriggit.CLI\bin\Release\net9.0\Spriggit.CLI.exe` | serialize/deserialize plugins |
 | Spriggit (UI) | `Tools\PluginEditTool\tools\Spriggit\Spriggit.UI\bin\Release\net9.0\Spriggit.exe` | visual workflow, link manager |
 | Translation exe cache | `%LOCALAPPDATA%\Temp\Spriggit\Translations\<pkg>\<ver>\<pkg>.exe` | per-game serializer (the compile bypass) |
@@ -79,7 +83,7 @@ base script *sources* on the import path, which are not the compiler and are jus
 ## Quick start — Spriggit round-trip
 
 ```powershell
-cd "E:\F4SE OG\Tools\PluginEditTool\tools\Spriggit"
+cd "<workspace>\Tools\PluginEditTool\tools\Spriggit"
 
 # Plugin -> JSON folder ("serialize" = parse/extract)
 .\spriggit-cli.bat serialize --InputPath "Some.esp" --OutputPath "D:\SomeRepo" `

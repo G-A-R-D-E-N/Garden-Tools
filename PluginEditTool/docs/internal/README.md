@@ -17,7 +17,7 @@ The end-user documentation is `../MCP_SETUP.md`, plus `README.md`, `LICENSE` and
 
 | Doc | What it is |
 |---|---|
-| [KNOWLEDGE.md](KNOWLEDGE.md) | **The main knowledge base.** Read before any plugin or script work: tool behaviour, the `run_script` rules, FormID encoding, the traps that have cost real time. |
+| [KNOWLEDGE.md](KNOWLEDGE.md) | Background from the C#/Mutagen server: tool behavior, the `run_script` rules, form ID encoding, the traps that have cost real time. The tool names and `run_script` rules predate the native server (current tools: [../MCP_SETUP.md](../MCP_SETUP.md)); the rest has not been re-checked against it. |
 | [INDEX.md](INDEX.md) | Older index of the doc set. |
 | [memory.md](memory.md) | Condensed notes from past working sessions -- decisions made, what changed, and the gotchas found along the way. |
 | [findings.md](findings.md) | Investigation results, mostly from the crafting and schematic work. |
@@ -42,7 +42,7 @@ The end-user documentation is `../MCP_SETUP.md`, plus `README.md`, `LICENSE` and
 
 | Doc | What it is |
 |---|---|
-| [RUNNING_ON_LINUX.md](RUNNING_ON_LINUX.md) | The native Linux build: installing it, building the .deb, how the WebKitGTK host stands in for WebView2, and the gotchas. |
+| [RUNNING_ON_LINUX.md](RUNNING_ON_LINUX.md) | The native Linux build: installing the .deb, building it, how a browser tab stands in for the Windows WebView2 window (Linux has no embedded window), MCP mode, and the gotchas. |
 | [WINDOWS_CI_RUNNER.md](WINDOWS_CI_RUNNER.md) | Registering the Windows self-hosted runner that the gated `windows-tests` CI leg needs: download, labels, the `RUN_WINDOWS_TESTS` / `FO4RE_TEST_DATA` variables, and first-run expectations. |
 | [CI_RUNNERS.md](CI_RUNNERS.md) | The Linux self-hosted fleet that actually runs `branch-validation.yml`: where the runners live, the on-demand webhook wake, why only one job runs at a time, and how to diagnose CI that queues forever. |
 | [MO2_SETUP.md](MO2_SETUP.md) | Using the tool with a Mod Organizer 2 instance. |

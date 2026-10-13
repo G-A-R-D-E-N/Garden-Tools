@@ -56,8 +56,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: PRISMA User Interface Framework <noreply@users.noreply.github.com>
 Installed-Size: ${INSTALLED_KB}
-Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6, zlib1g,
-         libwebkit2gtk-4.1-0, libgtk-3-0
+Depends: libc6 (>= 2.34), libgcc-s1, libstdc++6, zlib1g
 Recommends: zenity, wine
 Homepage: https://github.com/PRISMA-USER-INTERFACE-FRAMEWORK/PluginEditTool
 Description: Fallout 4 plugin editor and conflict resolver
@@ -68,9 +67,10 @@ Description: Fallout 4 plugin editor and conflict resolver
  Plugin parsing, mutation, load-order analysis, archive handling, and Papyrus
  services run in the native Radicle/FO4IDE backend. No .NET runtime is required.
  .
- The interface is a WebKitGTK window driven by the local native process; nothing
- is sent anywhere. A few optional helper programs are Windows-only, so Wine may
- still be useful for panels that invoke those external tools.
+ The interface is served on a loopback port by the local native process and
+ opened in the default browser; nothing is sent anywhere. A few optional helper
+ programs are Windows-only, so Wine may still be useful for panels that invoke
+ those external tools.
 EOF
 
 cat > "$STAGE/DEBIAN/postinst" <<'EOF'
