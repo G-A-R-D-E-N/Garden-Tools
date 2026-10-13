@@ -2115,3 +2115,21 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
 
 A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:TEST_CASE — compile differential gate (#78 C12)
+
+Port of `PluginEditTool/FO4RecordEditor.Core.Tests/PapyrusDifferentialTests.cs`. Pairs come from `.pex` files under the `FO4RE_PEX_CORPUS` roots (falling back to `FO4_PEX_CORPUS`), each paired with its `.psc` by `sourceFor`, which mirrors the C# `SourceFor` (`Source/User`, then `Source`, with a leading `Compiled` directory skipped). A pair is kept only when the `.pex` header is Fallout 4 (magic, format 3.9, game id 2) and its file name is first seen, as in C# `Pairs`.
+
+The compile matches C# `PapyrusCompiler.CompileFile` through `fo4ide::papyrus::compileScript`, with `RootsFor` as the import roots plus `FO4RE_PSC_ROOTS`. `FO4RE_PEX_RELEASE=1` turns off debug-only and beta-only code, as the C# `EmitDebugOnlyCode`/`EmitBetaOnlyCode` switches do. Debug info stays on (default, as in C#).
+
+The comparison is the object-level one of C# `PexComparer.FirstDifference`: parent, states and functions, then properties. C# also compares property `Get`/`Set` handlers; the C++ adds that step in `handlerDifference`. The C# does not compare header fields (timestamps, user, computer, source name) or debug info, so this port does not either.
+
+Refusals group by the first error diagnostic code, and differences by class (`differenceClass`). The threshold is 95% identical of compiled pairs, with at least one compiled, as in C#.
+
+## PluginEditTool/native/tests/helpers/CorpusRoots.hpp:rootsFromEnv — root list separator
+
+Root lists split on `;` on Windows and `:` elsewhere, matching C# `Path.PathSeparator`. `rootListSeparator` owns that choice for both `PapyrusCorpusTests.cpp` and `PapyrusDifferentialTests.cpp`. `enumerateFiles` replaces the corpus-local `enumeratePsc` with an extension argument, so the `.pex` walk shares its symlink and sort rules.
+
+## PluginEditTool/native/tests/helpers/PexComparer.hpp:functionDifference — shared per-function comparison
+
+The per-function comparison that `firstDifference` used inline is now `functionDifference`, so the differential test can compare property handlers with the same rules. Messages from `firstDifference` are unchanged except that the `Name: ` prefix is added by the caller.
