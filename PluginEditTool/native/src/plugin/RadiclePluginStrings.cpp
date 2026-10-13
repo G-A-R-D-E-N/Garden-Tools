@@ -10,6 +10,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <fo4/environment/strings.hpp>
@@ -51,17 +52,43 @@ std::string displayText(std::string_view language, const std::vector<std::byte>&
 
 }
 
-std::shared_ptr<const fo4::archive::AssetResolver> RadiclePluginBackend::stringAssets() const {
-    if (dataDirectory_.empty()) return nullptr;
+std::shared_ptr<const fo4::archive::AssetResolver> RadiclePluginBackend::stringAssets(
+    const LoadedPlugin& loaded) const {
     std::vector<std::string> names;
     names.reserve(plugins_.size());
-    for (const auto& loaded : plugins_) names.push_back(loaded.name);
-    auto archives = fo4::archive::archive_load_order(dataDirectory_, {}, names);
+    for (const auto& plugin : plugins_) names.push_back(plugin.name);
+    const std::vector<std::string> own{loaded.name};
+    const auto dataArchives = fo4::archive::archive_load_order(dataDirectory_, {}, names);
+    const auto folderArchives = fo4::archive::archive_load_order(loaded.path.parent_path(), {}, own);
+    std::vector<std::filesystem::path> archives;
+    for (const auto& path : dataArchives) {
+        const auto shadowed = std::any_of(folderArchives.begin(), folderArchives.end(),
+                                          [&path](const std::filesystem::path& other) {
+                                              return other.filename() == path.filename();
+                                          });
+        if (!shadowed) archives.push_back(path);
+    }
+    archives.insert(archives.end(), folderArchives.begin(), folderArchives.end());
+
+    std::vector<StringArchiveStamp> stamps;
+    stamps.reserve(archives.size());
+    for (const auto& path : archives) {
+        std::error_code ec;
+        stamps.emplace_back(path, std::filesystem::file_size(path, ec), std::filesystem::last_write_time(path, ec));
+    }
     std::scoped_lock lock(stringAssetsMutex_);
-    if (!stringAssets_ || archives != stringArchives_) {
+    if (!stringAssets_ || stamps != stringArchives_) {
+        std::vector<std::filesystem::path> readable;
+        for (const auto& path : archives) {
+            try {
+                fo4::archive::Ba2Reader::open(path);
+                readable.push_back(path);
+            } catch (const std::exception&) {
+            }
+        }
         stringAssets_ = std::make_shared<fo4::archive::AssetResolver>(
-            fo4::archive::AssetResolver::open(dataDirectory_, archives));
-        stringArchives_ = std::move(archives);
+            fo4::archive::AssetResolver::open(dataDirectory_, readable));
+        stringArchives_ = std::move(stamps);
     }
     return stringAssets_;
 }
@@ -71,7 +98,9 @@ Result<std::vector<fo4::env::PluginStringTable>> RadiclePluginBackend::readStrin
     try {
         std::vector<std::filesystem::path> directories{loaded.path.parent_path() / "Strings"};
         if (!dataDirectory_.empty()) directories.push_back(dataDirectory_ / "Strings");
-        const auto assets = stringAssets();
+        auto tables = fo4::env::load_plugin_string_tables(directories, loaded.plugin, language);
+        if (tables.size() == 3 || !loaded.plugin.header.tes4_flags.is_localized()) return tables;
+        const auto assets = stringAssets(loaded);
         return fo4::env::load_plugin_string_tables(directories, loaded.plugin, language, assets.get());
     } catch (const std::exception& error) {
         return std::unexpected(Error{

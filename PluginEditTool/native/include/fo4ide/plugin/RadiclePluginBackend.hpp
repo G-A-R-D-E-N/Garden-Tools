@@ -10,6 +10,7 @@
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include <fo4/archive/assets.hpp>
@@ -236,7 +237,7 @@ private:
     Result<nlohmann::json> lookupString(const nlohmann::json& arguments) const;
     Result<std::vector<fo4::env::PluginStringTable>> readStringTables(const LoadedPlugin& loaded,
                                                                      std::string_view language) const;
-    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets() const;
+    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets(const LoadedPlugin& loaded) const;
 
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
@@ -263,8 +264,9 @@ private:
     std::uint64_t mutationEpoch_{0};
     fo4::ConflictGraph graph_;
     std::filesystem::path dataDirectory_;
+    using StringArchiveStamp = std::tuple<std::filesystem::path, std::uintmax_t, std::filesystem::file_time_type>;
     mutable std::mutex stringAssetsMutex_;
-    mutable std::vector<std::filesystem::path> stringArchives_;
+    mutable std::vector<StringArchiveStamp> stringArchives_;
     mutable std::shared_ptr<const fo4::archive::AssetResolver> stringAssets_;
     std::filesystem::path trustedNewPluginRoot_;
     std::vector<std::filesystem::path> trustedSaveRoots_;

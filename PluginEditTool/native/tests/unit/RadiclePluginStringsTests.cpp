@@ -199,10 +199,10 @@ TEST_CASE("LookupString returns the text for an id in each table that has it") {
 TEST_CASE("ListStringTables matches loose table names case-insensitively") {
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    std::filesystem::create_directories(root / "strings");
+    std::filesystem::create_directories(root / "Strings");
     fo4::localization::write_string_table_file(
         {StringTableKind::strings, {{7, rawBytes("Folded")}}},
-        root / "strings" / "mod_EN.strings");
+        root / "Strings" / "mod_EN.strings");
     fo4ide::plugin::RadiclePluginBackend backend;
     loadPlugin(backend, root, "mod.esp");
 
@@ -240,4 +240,42 @@ TEST_CASE("ListStringTables and GetStrings read tables packed in the data direct
 
     const auto english = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
     CHECK(english.empty());
+}
+
+TEST_CASE("ListStringTables and GetStrings read archives that sit beside the plugin") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeArchive(root / "Patch - Main.ba2", "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    REQUIRE(tables.size() == 1);
+    CHECK(tables[0]["source"] == "Patch - Main.ba2");
+
+    const auto page = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(page["rows"].size() == 1);
+    CHECK(page["rows"][0]["text"] == "Manzana");
+}
+
+TEST_CASE("ListStringTables still lists loose tables when a data directory archive is unreadable") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    const auto data = root / "Data";
+    std::filesystem::create_directories(data);
+    {
+        std::ofstream junk(data / "Patch - Junk.ba2", std::ios::binary);
+        junk << "not an archive";
+    }
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto tables = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    REQUIRE(tables.size() == 2);
+    CHECK(tables[0]["source"] == "loose");
+    CHECK(tables[1]["source"] == "loose");
 }
