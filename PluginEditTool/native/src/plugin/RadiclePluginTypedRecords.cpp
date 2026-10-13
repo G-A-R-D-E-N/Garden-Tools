@@ -378,6 +378,11 @@ Result<nlohmann::json> RadiclePluginBackend::editFactionEntries(const nlohmann::
     if (op != "remove" && (!number || !validTitle(value, "maleTitle") || !validTitle(value, "femaleTitle"))) {
         return std::unexpected(Error{"InvalidFactionEntry", k_invalid_faction_entry});
     }
+    const bool rawIdAdd = op == "add" && ((value.contains("maleTitle") && rawIdTitle(value.at("maleTitle"))) ||
+                                          (value.contains("femaleTitle") && rawIdTitle(value.at("femaleTitle"))));
+    if (rawIdAdd) {
+        return std::unexpected(Error{"InvalidFactionEntry", "A rawId title can only be kept on set, not added"});
+    }
     return commit([&](fo4::Plugin& mutated) {
         if (op == "remove") {
             fo4::forms::remove_faction_rank(mutated, *key, position);
