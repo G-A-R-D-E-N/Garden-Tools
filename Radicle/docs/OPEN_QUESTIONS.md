@@ -51,7 +51,7 @@ Speculative answers must not be hardcoded as facts.
 ## Groups
 
 11. Confirm group type integers 0-10 against CK/runtime, not only xEdit.
-12. Interior cell block grouping math (which cells share a block).
+12. Interior cell block grouping math (which cells share a block). **Answered:** block = (form ID & 0xFFFFFF) % 10 and sub-block = ((form ID & 0xFFFFFF) / 10) % 10. Measured on every interior CELL in the seven vanilla masters (Fallout4.esm and the six DLC .esm files): 1419 of 1419 match; blocks and sub-blocks ascend. xEdit `TwbMainRecord.UpdateInteriorCellGroup` (`Core/wbImplementation.pas:14625-14721`) builds the groups, and CELLs in a sub-block sort by full form ID (`Core/wbImplementation.pas:12525-12527`). See `Radicle/docs/code-notes/Radicle.md:create_interior_cell`.
 
 ## CK vs file-load table
 
