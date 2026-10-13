@@ -197,50 +197,50 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 
 Rows listed in `fields.json` only. Scalar storage and presentation come from scalar rows; addressing counts include FormLink fields.
 
-| Record | Scalar identity | Scalar percent_0_100 | String | Scalar storage | Repeated | Stride | When | Insertion |
-| --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
-| ARMA | - | - | - | - | - | - | - | - |
-| ARMO | - | - | - | - | - | - | - | - |
-| CLMT | 7 | - | 3 | i32, u8 | - | 3 | - | existing_only |
-| CSTY | 49 | - | - | f32, u32 | - | - | - | existing_only |
-| DIAL | 5 | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
-| EXPL | 15 | - | - | f32, u32 | - | - | - | existing_only |
-| EYES | - | - | - | - | - | - | - | - |
-| FACT | 18 | - | - | f32, u16, u32, u8 | 1 | - | - | existing_only |
-| FLOR | 5 | - | - | u16, u8 | - | - | - | existing_only |
-| FLST | - | - | - | - | - | - | - | - |
-| FSTP | - | - | 1 | - | - | - | - | existing_only |
-| FSTS | - | - | - | - | - | 1 | - | existing_only |
-| GRAS | 10 | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
-| HAZD | 9 | - | - | f32, u32 | - | - | - | existing_only |
-| IDLE | 5 | - | 3 | u16, u8 | - | - | - | existing_only |
-| INFO | 13 | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
-| LTEX | - | - | - | - | - | - | - | - |
-| LVLI | 3 | - | - | u8 | - | - | - | existing_only |
-| LVLN | 3 | - | - | u8 | - | - | - | existing_only |
-| LVSP | - | - | - | - | - | - | - | - |
-| MUSC | 4 | - | - | f32, u16, u32 | - | 1 | - | existing_only |
-| NAVI | 4 | - | - | f32 | 5 | - | 5 | existing_only |
-| NAVM | - | - | - | - | - | - | - | - |
-| NPC_ | 47 | - | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
-| PACK | 24 | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
-| PROJ | 16 | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
-| QUST | - | - | - | - | - | - | - | - |
-| RACE | - | - | 4 | - | 2 | - | - | existing_only |
-| REFR | 1 | 1 | - | f32, u32 | - | - | - | existing_only |
-| SCEN | 7 | - | 1 | f32, u32 | - | - | - | existing_only |
-| SNDR | 10 | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
-| SOUN | 3 | - | - | f32, u8 | - | - | - | existing_only |
-| TREE | 16 | - | - | f32, u8 | - | - | - | existing_only |
-| WATR | 71 | - | 4 | f32, u8 | - | - | - | existing_only |
-| WEAP | 45 | - | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
-| WTHR | 124 | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
+| Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| ARMA | - | - | - | - | - | - | - | - | - | - |
+| ARMO | - | - | - | - | - | - | - | - | - | - |
+| CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
+| CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
+| DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
+| EXPL | 15 | - | - | - | - | f32, u32 | - | - | - | existing_only |
+| EYES | - | - | - | - | - | - | - | - | - | - |
+| FACT | 12 | - | 5 | 1 | - | f32, u16, u32, u8 | 1 | - | - | existing_only |
+| FLOR | 5 | - | - | - | - | u16, u8 | - | - | - | existing_only |
+| FLST | - | - | - | - | - | - | - | - | - | - |
+| FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
+| FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
+| GRAS | 10 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
+| HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
+| IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
+| INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
+| LTEX | - | - | - | - | - | - | - | - | - | - |
+| LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
+| LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
+| LVSP | - | - | - | - | - | - | - | - | - | - |
+| MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
+| NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
+| NAVM | - | - | - | - | - | - | - | - | - | - |
+| NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
+| PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
+| PROJ | 16 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
+| QUST | - | - | - | - | - | - | - | - | - | - |
+| RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
+| REFR | 1 | 1 | - | - | - | f32, u32 | - | - | - | existing_only |
+| SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
+| SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
+| SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
+| WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
+| WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
 
 ### Unsupported or opaque (not attributable by the script)
 
 - Semantic letters (READ, WRITE, ADD, REMOVE, CREATE, REMAP, VALIDATE, OPAQUE) are not derived; see the hand-kept section below the table.
 - Row counts are not compared with xEdit members. The script does not enumerate xEdit members, so unlisted members, enums, flags and structs are not attributed.
-- Schema kinds are `scalar` and `string` only. Enum, flag, struct and counted-array fields have no kind and appear as raw scalars or are absent.
+- Schema kinds are `scalar` and `string`. Enum and flags fields are scalar rows with an `enum` or `flags` presentation that carries xEdit names; struct and counted-array fields have no kind and are absent.
 - Dedicated PluginEditTool routes are not derived, so the tier stops at schema, typed module and remap evidence (no L5).
 - Typed module attribution is the `TYPED_MODULES` map in this script. The script checks that each cited file names the signature, but not that it still reads the record semantically.
 - Subrecord-level remap handlers apply to any record carrying the subrecord and are not attributed to a record: OBTS (`obts_formid_offsets`, called from `src/schema/form_links.cpp`) and the behavior handlers in `src/schema/behavior_layout.cpp`.
