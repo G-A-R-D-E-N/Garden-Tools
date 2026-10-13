@@ -13,9 +13,7 @@
 namespace fo4::schema {
 namespace {
 
-constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 #include "fo4/schema/generated_scalar_fields.inc"
-};
 
 void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
   out.push_back(std::byte{static_cast<std::uint8_t>(value)});
@@ -193,6 +191,22 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
       return 0;
   }
   return 0;
+}
+
+std::optional<std::string_view> scalar_value_name(const ScalarDescriptor& descriptor,
+                                                  std::int64_t value) noexcept {
+  for (const auto& entry : descriptor.names) {
+    if (entry.value == value) return entry.name;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor,
+                                              std::string_view name) noexcept {
+  for (const auto& entry : descriptor.names) {
+    if (entry.name == name) return entry.value;
+  }
+  return std::nullopt;
 }
 
 std::string decode_scalar(std::span<const std::byte> data,

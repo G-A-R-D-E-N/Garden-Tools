@@ -710,7 +710,7 @@ Flagging a plugin light rejects owned FormIDs below the floor that `src/plugin/m
 
 ## src/schema/scalar.cpp:scalar_descriptor
 
-Record-agnostic: it resolves a subrecord signature only when exactly one row of `include/fo4/schema/generated_scalar_fields.inc` names it and that row is a whole-payload, non-repeated, non-string field. Any other count returns nullopt, because a signature that two rows share means different fields in different records and no one descriptor is right. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`, `PluginEditTool/native/tests/unit/RadiclePluginScalarTests.cpp`); production code goes through `scalar_field_descriptor(record, path)`.
+Record-agnostic: it resolves a subrecord signature only when exactly one row of `include/fo4/schema/generated_scalar_fields.inc` names it and that row is a whole-payload, non-repeated, non-string field. Any other count returns nullopt, because a signature that two rows share may mean different fields, so the lookup does not choose between them. Only tests call it (`tests/test_scalar.cpp`, `tests/test_scalar_embedded.cpp`, `tests/test_field_writer.cpp`, `PluginEditTool/native/tests/unit/RadiclePluginScalarTests.cpp`); production code goes through `scalar_field_descriptor(record, path)`.
 
 The previous rule returned the first whole-payload row and skipped only embedded rows, so a whole-payload row on a shared signature leaked out. Eight signatures were affected: ANAM, DATA, FNAM, LVLD, LVLF, LVLM, NAM4 and VNAM. DATA started leaking when `FACT\Flags` (a whole-payload u32 on DATA, deliberately so a wrong width throws, see `Radicle/schema/fallout4/fields.json:FACT`) arrived with #551 (`cc0a36daa`), which failed `tests/test_scalar_embedded.cpp:ScalarEmbedded.SignatureOnlyLookupSkipsEmbeddedFields` on Linux and Windows. VNAM had always leaked `PROJ\SoundLevel` although `SCEN` VNAM is a 16-byte struct and `WTHR\VolatilityMult` sits in a 4-byte VNAM, so the old VNAM assertion in that test encoded the leak and now expects no match. XHLT and XSCL each have a single `REFR` row and still resolve. A whole-payload registration on a shared signature is therefore safe; registering a field as embedded is no longer needed to hide it from this lookup.
 
@@ -1142,7 +1142,7 @@ source:xEdit PRKZ is checked against the PRKR count when PRKZ is present (FO4:10
 
 ## Radicle/schema/fallout4/fields.json:NPC_
 
-source:xEdit NPC_ is FO4:10286-10489. Fixed structs (ACBS 20 bytes, DNAM 8, OBND 12, MWGT 12, MRSV 20, QNAM 16) carry payload_size, so a wrong-size payload hides its fields. AIDT uses minimum_payload_size 21 for AINoSlowApproach in place of xEdit's record-version gate (FO4:6229). Level and Level Mult are one raw field because the schema has no union; ACBS Flags bit 7 selects which one xEdit shows (Common:5437-5449). PRKZ, COCT, SPCT and CS2H are left out of the scalars because a generic write would desync them from their lists. Template flag names are in docs/NPCS.md, since the schema has no flags presentation.
+source:xEdit NPC_ is FO4:10286-10489. Fixed structs (ACBS 20 bytes, DNAM 8, OBND 12, MWGT 12, MRSV 20, QNAM 16) carry payload_size, so a wrong-size payload hides its fields. AIDT uses minimum_payload_size 21 for AINoSlowApproach in place of xEdit's record-version gate (FO4:6229). Level and Level Mult are one raw field because the schema has no union; ACBS Flags bit 7 selects which one xEdit shows (Common:5437-5449). PRKZ, COCT, SPCT and CS2H are left out of the scalars because a generic write would desync them from their lists. Configuration and template flag names are the `flags` names of `NPC_\ConfigurationFlags` and `NPC_\TemplateFlags` (see the `records[NPC_] — enum and flags names` note below).
 
 ## Radicle/include/fo4/forms/npc.hpp:NpcItemExtraData
 
@@ -1337,6 +1337,85 @@ A non-persistent CELL in an exterior sub-block that is undecodable throws `CellE
 
 Tests added in `tests/test_compression.cpp`: `Compression.ShortInflatedOutputLoadsAtProducedLength` pins the D6 behavior (a stream that inflates short loads at the produced length, not undecodable), and `Compression.PayloadUnderFourBytesFailsThePluginRead` pins the strict framing check, which throws `fo4::parse_error` outside the compressed-record `try`. Tests added in `tests/test_undecodable_edit.cpp`: `UndecodableEdit.FindIdenticalToMasterSkipsWhenMasterRecordIsUndecodable` covers the previous-record screen in `src/plugin/maintenance.cpp:identical_previous`; `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableParentCell` cover the guards in `src/forms/placed_reference_copy.cpp:copy_placed_reference_as_new`; `UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource` and `UndecodableEdit.CopyInfoAsNewRefusesUndecodableDestinationDial` cover the guards in `src/forms/info_copy.cpp:copy_info_as_new`.
 
+## Radicle/tools/schema_codegen.py:parse_names
+
+A scalar row declares names through its existing `presentation` key: `"presentation": "enum"` with `"names": [{ "value": N, "name": "..." }]`, or `"presentation": "flags"` with `"names": [{ "bit": N, "name": "..." }]`. `NAME_KEYS` maps each presentation to its entry key, and `parse_names` returns `{value, name}` entries for the generator; a flags entry becomes the mask `1 << bit`, so one lookup serves both presentations. Names are a list of entries rather than a JSON object because `json.loads` drops a repeated key without complaint, and the generator has to be able to reject a repeated value. Rules, each covered in `tools/test_field_address_codegen.py:SchemaCodegenTests`: only integer storage may carry names, and flags also need unsigned storage so a mask is never negative (`test_names_need_an_integer_enum_or_flags_row`, which also refuses `names` on `identity`, `percent_0_100` and string rows); an entry has exactly its key and `name`, the key is an integer (not a bool or a float) and the name is non-empty printable ASCII (`test_names_entries_are_checked`); names are unique, and so are values or bits (`test_names_reject_duplicates`); a flag bit is below 8 times the storage width, an enum value fits the storage, and the resulting value or mask lies inside the row's `minimum` and `maximum`, so no name stands for a value the writer would reject (`test_names_reject_values_outside_the_field`). The names are display metadata. They do not narrow the write bounds, a stored value with no name stays readable, and a table need not cover every storable value (the boolean rows are 0 to 255 with two names).
+
+## Radicle/tools/schema_codegen.py:render
+
+`render` emits one `constexpr ScalarName k_scalar_names_N[]` per distinct table, numbered in first-use order over the rows sorted by record and path, and then declares `k_scalar_fields` itself. `names_key` is the sharing key, so the two `SoundLevel` rows use one array and the seven boolean rows another. Before this change the generated file held only the row initializers and `src/schema/scalar.cpp` declared the array around its `#include`. The tables must precede the array that points at them, so the declaration moved into the generated file and `scalar.cpp` includes it at namespace scope. The five CMake `--check` commands and their arguments are unchanged, and the other four generated files are byte-identical. A row without names renders as before, with the trailing `minimum_payload_size` argument only when it is non-zero. A row with names always writes `minimum_payload_size` (0 when unset) because `names` follows it positionally. `CPP_PRESENTATIONS` writes the JSON presentation `enum` as `ScalarPresentation::enumeration`, since `enum` is a C++ keyword. Tests: `tools/test_field_address_codegen.py:SchemaCodegenTests.test_flags_names_become_single_bit_masks`, `test_enum_names_keep_their_values`, `test_identical_name_tables_are_emitted_once` and `test_rows_without_names_render_as_before`.
+
+## Radicle/tools/schema_codegen.py:names_key
+
+The sharing key of a name table: the tuple of `(value, name)` pairs in row order. Two rows share one `k_scalar_names_N` array only when their pairs match exactly, order included, whatever their presentation. `render` keys a dict by it, so the array numbers follow first use. Test: `tools/test_field_address_codegen.py:SchemaCodegenTests.test_identical_name_tables_are_emitted_once`.
+
+## Radicle/tools/schema_codegen.py:NAME_KEYS
+
+`PRESENTATIONS` is the accepted set. `NAME_KEYS` maps `enum` to the entry key `value` and `flags` to the entry key `bit`; a presentation with no entry there takes no names, which is how `parse_names` refuses `names` on `identity` and `percent_0_100`. `CPP_PRESENTATIONS` maps a JSON presentation to its C++ enumerator where the spelling differs (`enum` to `enumeration`). String rows list `names` in `STRING_FORBIDDEN`, so `load_fields` rejects them there.
+
+## Radicle/src/schema/scalar.cpp:k_scalar_fields
+
+`k_scalar_fields` and the `k_scalar_names_N` tables now come from one `#include "fo4/schema/generated_scalar_fields.inc"` at namespace scope inside the anonymous namespace. The include used to sit inside a braced array initializer, which cannot hold the tables (see the `render` note above).
+
+## Radicle/include/fo4/schema/scalar.hpp:ScalarName
+
+One entry of a name table. `value` is the stored integer for an `enumeration` row and the single-bit mask for a `flags` row; `int64_t` holds every u32 mask and every i32 enum value. The tables are the generated `k_scalar_names_N` arrays in `src/schema/scalar.cpp`, which have static storage, so a copied `ScalarDescriptor` stays valid for the life of the process.
+
+## Radicle/include/fo4/schema/scalar.hpp:ScalarPresentation
+
+`enumeration` and `flags` follow `identity` and `percent_0_100`. Nothing switches on this enum: encode, decode, the range checks and the field writer read `storage`, `minimum` and `maximum` only, so an enum or flags row is read and written exactly like an `identity` row of the same storage. A caller that shows names reads `ScalarDescriptor::names`.
+
+## Radicle/include/fo4/schema/scalar.hpp:ScalarDescriptor
+
+`names` is the last member and defaults to an empty span, so the aggregate initializers that already exist keep compiling without it: generated rows without names, `tests/test_field_writer.cpp:scalar_field` and `src/plugin/scene_writer.cpp:descriptor_for`. It is empty for every `identity` and `percent_0_100` row; `tests/test_scalar.cpp:ScalarSchema.OnlyEnumAndFlagsRowsCarryNames` checks that for FACT, NPC_, WEAP and REFR.
+
+## Radicle/src/schema/scalar.cpp:scalar_value_name
+
+Linear search of `ScalarDescriptor::names` for the entry whose `value` equals the argument, `std::nullopt` when there is none or the row has no names. For a flags row the match is an exact single-bit mask, so a multi-bit raw value has no name; a caller that wants every set flag walks `names` and tests `raw & value` itself. Tests: `tests/test_scalar.cpp:ScalarSchema.EnumRowExposesItsXEditNames` and `ScalarSchema.FlagsRowExposesOneMaskPerNamedBit`.
+
+## Radicle/src/schema/scalar.cpp:scalar_name_value
+
+The reverse of `scalar_value_name`: an exact, case-sensitive name match that returns the enum value or the flag mask, `std::nullopt` otherwise. Neither lookup throws. Tests as for `scalar_value_name`.
+
+## Radicle/schema/fallout4/fields.json:records[FACT] — enum and flags names
+
+Every name and value in the enum and flags tables comes from xEdit at pin 93cc0bc5 (`Core/wbDefinitionsFO4.pas`, `Core/wbDefinitionsCommon.pas`, `Core/wbInterface.pas`). `wbFlags([...])` takes the list position as the bit (`TwbFlagsDef.Create`, Core/wbInterface.pas:14421-14422) and `wbEnum([...])` takes it as the value (`TwbEnumDef.Create`, Core/wbInterface.pas:15020-15024). An empty string is an unnamed slot and is left out of the tables. The `{0x...}` and `{n}` comments in the source agree with the list position at every entry used here. Placeholder names such as `Unknown 3` and `Unused 21` are ordinary xEdit names and are kept. The `names` do not change any row's bounds.
+
+- `FACT\Flags` (`flags`, u32, bits 0 to 16): Core/wbDefinitionsFO4.pas:6790-6808, names at 6791-6807.
+- `FACT\CrimeArrest` (FO4:6818), `FACT\CrimeAttackOnSight` (6819), `FACT\VendorBuysStolenItems` (6838), `FACT\VendorSellsEverythingNotInList` (6839) and `FACT\VendorBuysNonStolenItems` (6840): `enum` with `wbBoolEnum`, Core/wbDefinitionsCommon.pas:7240-7247 (0 `False`, 1 `True`).
+
+## Radicle/schema/fallout4/fields.json:records[NPC_] — enum and flags names
+
+Same xEdit rules as the `records[FACT]` note above.
+
+- `NPC_\ConfigurationFlags` (`flags`, u32 at ACBS +0, bits 0 to 31): Core/wbDefinitionsFO4.pas:10299-10332, names at 10300-10331.
+- `NPC_\TemplateFlags` (`flags`, u16 at ACBS +14, bits 0 to 12): FO4:10342 uses `wbTemplateFlags`, Core/wbDefinitionsCommon.pas:8155-8178 (list at 8159-8177). For FO4, `IsFO3`, `IsFO76` and `IsSF1` return their second argument (Common:6173-6178, 6285-6290 and 6320-6325), so bit 3 is `Spell List`, bits 10 to 12 are `Def Pack List`, `Attack Data` and `Keywords`, and bits 13 to 15 are empty and have no entry.
+- AIDT, all `enum` on u8: `NPC_\AIAggression` FO4:6216 with `wbAggressionEnum` Common:6973-6982; `NPC_\AIConfidence` 6217 with `wbConfidenceEnum` Common:7249-7259; `NPC_\AIMorality` 6219 with `wbMoralityEnum` Common:7691-7700; `NPC_\AIMood` 6220 with `wbMoodEnum` Common:7676-7689 (its `IsFO3` pairs resolve to the second name, `Angry` through `Disgusted`); `NPC_\AIAssistance` 6221 with `wbAssistanceEnum` Common:7023-7031; `NPC_\AIAggroRadiusBehavior` 6223 and `NPC_\AINoSlowApproach` 6229 with `wbBoolEnum` Common:7240-7247.
+- `NPC_\SoundLevel` (`enum`, u32, NAM8): FO4:10431 with `wbSoundLevelEnum`, FO4:3424-3430.
+
+## Radicle/schema/fallout4/fields.json:records[WEAP] — enum and flags names
+
+Same xEdit rules as the `records[FACT]` note above.
+
+- `WEAP\Flags` (`flags`, u32 at DNAM +48, bits 0 to 31): Core/wbDefinitionsFO4.pas:12924-12957, names at 12925-12956.
+- `WEAP\ModelFlags` (MODF, u8) and `WEAP\FirstPersonModelFlags` (MO4F, u8): `wbMODF` (FO4:4260, listed at 1038 in `wbGenericModel`, 1030-1045) and `wbMO4F` (4263, listed at 12909) both use `wbModelFlags`, FO4:4256-4259: bit 0 `Has FaceBones Model`, bit 1 `Has 1stPerson Model`.
+- `enum`: `WEAP\OnHit` (u32 at DNAM +36) FO4:12921 with `wbHitBehaviourEnum` 3677-3682; `WEAP\AnimationType` (u8 at +54) 12959-12972; `WEAP\SoundLevel` (u32 at +69) 12977 with `wbSoundLevelEnum` 3424-3430; `WEAP\Stagger` (u32 at +124) 12992 with `wbStaggerEnum` 5106-5112; `WEAP\Pattern` (u32 at FNAM +33) 13005-13010; `WEAP\MeleeSpeed` (u32, MASE) 13025-13031. The rows' existing bounds are exactly these enum ranges, so every name lies inside them.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.EnumRowExposesItsXEditNames
+
+`WEAP\Stagger` (FO4:12992, 5106-5112) exposes its five names in value order, and `scalar_value_name` and `scalar_name_value` map both ways. A value outside the table and a name in the wrong case have no match.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.FlagsRowExposesOneMaskPerNamedBit
+
+`FACT\Flags` (FO4:6790-6808) exposes 17 names whose values are the masks `1 << bit`. A single-bit mask maps to its name and back; a two-bit value and an unnamed bit have no name.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.EmbeddedFlagsRowKeepsItsRawU16Encoding
+
+`NPC_\TemplateFlags` is a flags row embedded at ACBS +14 with 13 names. `decode_scalar` and `encode_scalar` still treat it as a plain u16 (bytes `01 10` are "4097" and back), which is the check that a named row keeps the existing read and write behavior.
+
+## Radicle/tests/test_scalar.cpp:ScalarSchema.OnlyEnumAndFlagsRowsCarryNames
+
+For every row of FACT, NPC_, WEAP and REFR, `names` is non-empty exactly when the presentation is `enumeration` or `flags`.
 ## tests/test_environment_strings.cpp:StringsEnvironmentTest::write
 
 `StringsEnvironmentTest.RejectsMalformedTablesAndLanguages` failed once on the Windows MSVC job of the nomad/dev run at `9c1b3ae6` (job 22302): `Environment::load` threw "failed to load ...\radicle_strings_<n>\Base.esm: plugin parse error at 0x0: unable to open ..." for the first plugin the fixture had just written. The same test passed in the earlier Windows jobs 22085, 22121, 22247 and 22275, and its five sibling `StringsEnvironmentTest` processes passed beside it in the same job. Nothing on that path changed recently: the open in `src/plugin/reader.cpp:read_plugin_file` and `src/environment/environment.cpp:Environment::load` date from 2026-08-20 to 2026-09-30, and the test file from 2026-09-28. Names cannot collide, since ctest runs each test in its own process and the directory name is a steady clock count in 100 ns ticks. No product or fixture defect explains the failure, so the cause is unproven; it looks like a transient file-system error on the runner, whose default TEMP sits under its reparse-point home.

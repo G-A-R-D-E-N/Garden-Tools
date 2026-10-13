@@ -28,6 +28,14 @@ enum class ScalarStorage {
 enum class ScalarPresentation {
   identity,
   percent_0_100,
+  enumeration,
+  flags,
+};
+
+// Invariant: value is the stored integer for an enumeration row and the single-bit mask (1 << bit) for a flags row.
+struct ScalarName {
+  std::int64_t value{0};
+  std::string_view name;
 };
 
 struct ScalarDescriptor {
@@ -50,6 +58,7 @@ struct ScalarDescriptor {
   std::size_t payload_size{0};
   FieldAddress address{};
   std::size_t minimum_payload_size{0};
+  std::span<const ScalarName> names{};
 };
 
 struct ScalarFieldDescriptor {
@@ -64,7 +73,7 @@ public:
   using std::runtime_error::runtime_error;
 };
 
-// Resolves only a signature that exactly one whole-payload row names; else use record plus path.
+// Resolves a signature only if exactly one schema row names it and that row is whole-payload, non-repeated, non-string; else use record plus path.
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept;
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     std::string_view path) noexcept;
@@ -90,6 +99,11 @@ std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
 void patch_scalar_field(std::span<std::byte> payload,
                         const ScalarDescriptor& descriptor,
                         std::span<const std::byte> encoded);
+
+std::optional<std::string_view> scalar_value_name(const ScalarDescriptor& descriptor,
+                                                  std::int64_t value) noexcept;
+std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor,
+                                              std::string_view name) noexcept;
 
 std::string decode_scalar(std::span<const std::byte> data,
                           const ScalarDescriptor& descriptor);
