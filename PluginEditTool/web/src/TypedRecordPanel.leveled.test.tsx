@@ -43,6 +43,13 @@ it('sets an entry at its index, refreshes the list and reports the native messag
   expect(await screen.findByText('Updated leveled list entry 1 in ' + formKey + ' in W0.esp.')).toBeTruthy();
 });
 
+it('keeps the Index field on leveled list entries', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: vi.fn(async () => JSON.stringify(list)) } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  await screen.findByText('000802:W0.esp');
+  expect(screen.getByLabelText('Index')).toBeTruthy();
+});
+
 it('re-reads the rows when RecordView reloads the matrix', async () => {
   const read = vi.fn(async () => JSON.stringify(list));
   vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: read } } } });

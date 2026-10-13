@@ -165,7 +165,7 @@ public sealed class SubgraphIndex
             using var archive = Ba2.Open(archivePath);
             return archive.Read(entry);
         }
-        catch (Exception e) when (e is IOException or InvalidDataException) { return Array.Empty<byte>(); }
+        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e)) { return Array.Empty<byte>(); }
     }
 
     public static CoverageDiff CompareCoverage(GameData vanilla, GameData modded)
