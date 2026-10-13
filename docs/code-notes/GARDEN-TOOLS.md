@@ -2205,6 +2205,34 @@ Every per-record problem row carries a `Code`, a `Detail`, a `Severity` and a `D
 
 Covers `Mo2Profile.cpp:readProfile` for an OG-style install: Fallout4.esm and the six official DLC masters, no Creation Club plugins, no `Fallout4.ccc`, one active user plugin. `readProfile` always passes `OfficialTable::ae`, so this checks the AE table against OG data. Radicle's `load_order_files.hpp` has `OfficialTable { og_ng, ae }` and no NG-specific table: `og_ng` is the first seven AE names (`Radicle/src/loadorder/assemble.cpp:official_names`, `DLCUltraHighResolution.esm` included), and LOAD_ORDER_FILES.md says NG shares it. So an NG case would repeat this one and is not added. `assemble.cpp:assemble_load_order` skips absent official names silently, with no finding and no failure. The AE-only `DLCDummy10thAnniversary.esm` and the absent `DLCUltraHighResolution.esm` therefore do not change the result. The AE table only differs from `og_ng` when `DLCDummy10thAnniversary.esm` is present, which an OG install does not ship. Not built or run locally (CI only). The partial-DLC case (`Mo2ProfileTests.cpp` second OG test) lists only `DLCRobot.esm` and `DLCCoast.esm` in plugins.txt with `DLCworkshop01`-`03` and no `DLCNukaWorld.esm` on disk, and expects the official masters present on disk to load in AE official order without any plugins.txt entry for them.
 
+## PluginEditTool/native/src/plugin/RadiclePluginFields.cpp:scalarPresentationJson — enum and flag names for PET (#287)
+
+Returns `{"kind", "names"}` only for a schema field whose presentation is `enumeration` or `flags`, and `null` for every other field, so callers add the key only when a field has names. Enum names are `{"value", "name"}` as authored in fields.json. Flag names are `{"bit", "name"}`; the descriptor stores the single-bit mask, and the bit index is recovered with `std::countr_zero`. Lookup is by record signature plus path, so a path shared by two records resolves per record.
+
+## PluginEditTool/native/src/plugin/RadiclePluginReadApi.cpp:RadiclePluginBackend::getRecordsGrid — presentations map (#287)
+
+The grid JSON gains a top-level `presentations` object keyed by column path, holding the `scalarPresentationJson` value for each enum or flags column. Rows are unchanged, so cells stay the raw decimal integers that `SetField` writes back. The key is only correct for non-repeated columns, where the column path equals the schema path. No enum or flags row in fields.json is repeated today; a repeated one would need index mapping.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQueries.cpp:RadiclePluginBackend::getConflictMatrix — row Presentation key (#287)
+
+Each semantic row gets a `Presentation` key only when `scalarPresentationJson` returns one for its path. The row's `Values` stay raw so diffing, filtering and the integer write path are unchanged; names are a display and picker concern on the web side.
+
+## PluginEditTool/web/src/scalarPresentation.ts:scalarLabel — label for enum and flag cells (#287)
+
+Shows the enum name, or the comma-joined names of set flag bits. Bits no name covers, and enum values no name covers, show as hex. Non-integer raw text (for example `<opaque>` or an empty absent cell) passes through unchanged. `flagIsSet` and `setFlag` use `Math.floor` and powers of two rather than bitwise operators, so a `u32` bit 31 stays exact in JavaScript numbers.
+
+## PluginEditTool/web/src/ScalarEditor.tsx:ScalarEditor — record view enum and flag editor (#287)
+
+Enum edits use a `<select>` that commits on change, so the write is the picked integer. Flag edits use a checkbox list that keeps unknown bits: `setFlag` changes only the toggled bit, and Save commits the combined integer. Cancel discards the edit. `ScalarText` and `ScalarCell` are the display used by RecordView and by the spreadsheet cell.
+
+## PluginEditTool/web/src/SpreadsheetPanel.tsx:SpreadsheetPanel — enum and flag cells (#287)
+
+A column with a `presentations` entry renders `ScalarCell` (a `<select>` for enums, a `<details>` checkbox list for flags) instead of the plain text `<input>`. Its edits feed the same `edits` map and `SetField` call as text cells, so saves still send integers.
+
+## PluginEditTool/web/src/RecordView.tsx:RecordView — scalar display and editing (#287)
+
+Scalar rows render through `ScalarText` and open `ScalarEditor` on edit. The file sits near the 750-line cap, so the presentation logic lives in `ScalarEditor.tsx` and RecordView only wires it in.
+
 ## PluginEditTool/web/src/Shell/conflictSelection.ts:selectRow — Ctrl, Shift and plain clicks (#39)
 
 The selection is a `Record<string, boolean>` keyed by FormKey, the same map the batch copy already reads, so Ctrl and Shift only change how it is written. `plain` replaces it with the clicked row, `toggle` flips one row, and `range` replaces it with the inclusive span from the anchor. The anchor is the row of the last `plain` or `toggle` click and does not move on a `range` click, so repeated Shift clicks pivot on the same row. With no anchor, or an anchor that is no longer listed, a range click selects only the clicked row.
