@@ -158,7 +158,7 @@ TEST(CApiAuthoring, CreateRecordRefusalsLeaveThePluginUntouched) {
   EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "LVSP", "List", &key), RADICLE_STATUS_OK);
   EXPECT_EQ(key.local_id, 0x801u);
   const auto reread = plugin.snapshot();
-  EXPECT_EQ(order(reread, 0x801), (std::vector<std::string>{"EDID", "LVLD", "LVLM", "LVLF", "LLCT"}));
+  EXPECT_EQ(order(reread, 0x801), (std::vector<std::string>{"EDID", "OBND", "LVLD", "LVLM", "LVLF", "LLCT"}));
 }
 
 TEST(CApiAuthoring, CoupledSubrecordsAreRefusedWithoutChangingBytes) {

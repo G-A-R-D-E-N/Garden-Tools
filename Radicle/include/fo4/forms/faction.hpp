@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 namespace fo4::forms {
@@ -36,6 +37,11 @@ struct FactionRank {
   std::optional<schema::LocalizedString> female_title;
   std::optional<std::vector<std::byte>> insignia;
 };
+
+FormKey create_faction(Plugin& plugin,
+                       std::optional<std::string_view> editor_id,
+                       std::optional<std::string_view> full_name,
+                       std::uint32_t flags);
 
 std::vector<FactionRelation> decode_faction_relations(const Plugin& plugin, const FormKey& key);
 std::vector<FactionRank> decode_faction_ranks(const Plugin& plugin, const FormKey& key);

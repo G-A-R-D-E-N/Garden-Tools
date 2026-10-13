@@ -1,12 +1,18 @@
 #include "fo4/forms/faction.hpp"
 
+#include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/preflight.hpp"
+#include "fo4/schema/record_constraints.hpp"
 #include "../plugin/record_edit.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -26,9 +32,13 @@ constexpr auto k_venv = Signature::from_string("VENV");
 constexpr auto k_plvd = Signature::from_string("PLVD");
 constexpr auto k_citc = Signature::from_string("CITC");
 constexpr auto k_ctda = Signature::from_string("CTDA");
+constexpr auto k_full = Signature::from_string("FULL");
+constexpr auto k_crva = Signature::from_string("CRVA");
 
 constexpr std::size_t k_relation_size = 12;
 constexpr std::size_t k_rank_number_size = 4;
+
+constexpr std::uint32_t k_defined_flags = 0x0001FFFFu;
 
 std::uint32_t read_u32(const std::vector<std::byte>& data, std::size_t offset) {
   std::uint32_t value = 0;
@@ -47,6 +57,21 @@ Subrecord make_subrecord(Signature signature, std::vector<std::byte> data) {
   subrecord.signature = signature;
   subrecord.data = std::move(data);
   return subrecord;
+}
+
+std::vector<std::byte> zstring(std::string_view value) {
+  std::vector<std::byte> data;
+  data.reserve(value.size() + 1);
+  for (const char ch : value) data.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  data.push_back(std::byte{0});
+  return data;
+}
+
+std::vector<std::byte> payload_bytes(std::span<const std::uint8_t> values) {
+  std::vector<std::byte> data;
+  data.reserve(values.size());
+  for (const auto value : values) data.push_back(std::byte{value});
+  return data;
 }
 
 void require_reaction(std::uint32_t value) {
@@ -261,6 +286,44 @@ std::vector<FactionRelation> decode_faction_relations(const Plugin& plugin, cons
 
 std::vector<FactionRank> decode_faction_ranks(const Plugin& plugin, const FormKey& key) {
   return decode_ranks(plugin, faction_record(plugin, key));
+}
+
+FormKey create_faction(Plugin& plugin,
+                       std::optional<std::string_view> editor_id,
+                       std::optional<std::string_view> full_name,
+                       std::uint32_t flags) {
+  if ((flags & ~k_defined_flags) != 0) {
+    throw FactionError("FACT flags may use only defined bits 0x00000001 through 0x00010000");
+  }
+  if (full_name.has_value() && plugin.header.tes4_flags.is_localized()) {
+    throw FactionError(
+        "FACT full name creation in localized plugins is disabled until string-table authoring is implemented");
+  }
+
+  auto next = plugin;
+  assign_record_form_keys(next);
+  std::vector<Subrecord> subrecords;
+  if (editor_id.has_value()) {
+    subrecords.push_back(Subrecord{sig_edid, zstring(stored_editor_id(*editor_id)), false});
+  }
+  if (full_name.has_value()) {
+    subrecords.push_back(
+        Subrecord{k_full, zstring(stored_inline_text(*full_name, "FACT full name")), false});
+  }
+  std::vector<std::byte> flag_bytes;
+  append_u32(flag_bytes, flags);
+  subrecords.push_back(make_subrecord(k_data, std::move(flag_bytes)));
+  subrecords.push_back(make_subrecord(k_crva, payload_bytes(schema::k_generated_authoring_default_24)));
+  subrecords.push_back(make_subrecord(k_venv, payload_bytes(schema::k_generated_authoring_default_25)));
+
+  const auto key = create_local_record(next, k_fact, std::move(subrecords));
+  for (const auto& issue : schema::preflight_authoring_record(next, key)) {
+    if (issue.severity == schema::PreflightSeverity::error) {
+      throw FactionError("FACT authoring preflight failed: " + issue.message);
+    }
+  }
+  plugin = std::move(next);
+  return key;
 }
 
 void add_faction_relation(Plugin& plugin, const FormKey& key, const FactionRelation& relation) {

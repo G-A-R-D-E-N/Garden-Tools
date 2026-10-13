@@ -65,15 +65,17 @@ TEST(LeveledSpellCreation, CreatesRequiredStructureAndInitialEntries) {
 
   const auto* record = fo4::find_record(reread, key);
   ASSERT_NE(record, nullptr);
-  ASSERT_EQ(record->subrecords.size(), 5u);
-  EXPECT_EQ(record->subrecords[0].signature.to_string(), "LVLD");
-  EXPECT_EQ(record->subrecords[1].signature.to_string(), "LVLM");
-  EXPECT_EQ(record->subrecords[2].signature.to_string(), "LVLF");
-  EXPECT_EQ(record->subrecords[3].signature.to_string(), "LLCT");
-  EXPECT_EQ(record->subrecords[4].signature.to_string(), "LVLO");
-  ASSERT_EQ(record->subrecords[3].data.size(), 1u);
-  EXPECT_EQ(std::to_integer<std::uint8_t>(record->subrecords[3].data[0]), 1u);
-  EXPECT_EQ(record->subrecords[4].data.size(), 12u);
+  ASSERT_EQ(record->subrecords.size(), 6u);
+  EXPECT_EQ(record->subrecords[0].signature.to_string(), "OBND");
+  EXPECT_EQ(record->subrecords[0].data, std::vector<std::byte>(12));
+  EXPECT_EQ(record->subrecords[1].signature.to_string(), "LVLD");
+  EXPECT_EQ(record->subrecords[2].signature.to_string(), "LVLM");
+  EXPECT_EQ(record->subrecords[3].signature.to_string(), "LVLF");
+  EXPECT_EQ(record->subrecords[4].signature.to_string(), "LLCT");
+  EXPECT_EQ(record->subrecords[5].signature.to_string(), "LVLO");
+  ASSERT_EQ(record->subrecords[4].data.size(), 1u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(record->subrecords[4].data[0]), 1u);
+  EXPECT_EQ(record->subrecords[5].data.size(), 12u);
 }
 
 TEST(LeveledSpellCreation, InvalidLocalReferenceDoesNotConsumeAFormId) {

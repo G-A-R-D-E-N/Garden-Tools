@@ -421,6 +421,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_lvsp_creation.cpp
     tests/test_leveled_list.cpp
     tests/test_leveled_list_real.cpp
+    tests/test_leveled_list_creation.cpp
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
     tests/test_race_real.cpp
@@ -428,6 +429,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_npc_real.cpp
     tests/test_faction.cpp
     tests/test_faction_real.cpp
+    tests/test_faction_creation.cpp
     tests/test_weapon.cpp
     tests/test_weapon_real.cpp
     tests/test_onam.cpp

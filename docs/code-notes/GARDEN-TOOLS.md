@@ -2116,6 +2116,10 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 
 A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
 
+## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp:createRecord — LVLI, LVLN and FACT payloads
+
+`createRecord` accepts LVLI and LVLN through `fo4::forms::create_leveled_list`, with `editorId`, `chanceNone`, `maxCount` and `flags` (each 0..255). It accepts FACT through `fo4::forms::create_faction`, with `editorId`, `fullName` and a u32 `flags`. A list payload takes no entries: entries are added afterwards with the leveled list entry edit in RadiclePluginLeveled.cpp. Creator errors map to `LeveledListCreateFailed` and `FactionCreateFailed`. LVSP was already accepted through `create_leveled_spell`, so its branch is unchanged. `LeveledSpellError` is an alias of `LeveledListError`, so the catch for it now picks its code from the signature. Every other raw signature is still refused with `RecordCreationRequiresSchema`.
+
 ## PluginEditTool/web/src/TypedRecordPanel.tsx:TypedRecordPanel — one panel per family
 
 RecordView shows the Typed Fields tab only for `TYPED_RECORD_TYPES` (backend.ts). The panel dispatches on `matrix.Type`: LVLI, LVLN and LVSP get settings and an entries table; NPC_ gets factions, perks and inventory; FACT gets relations and ranks; WEAP gets damage types with no edit controls. The panel stays in one file, well under 750 lines.

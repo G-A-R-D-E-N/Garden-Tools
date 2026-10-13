@@ -11,6 +11,7 @@
 
 #include <fo4/flags.hpp>
 #include <fo4/forms/eyes.hpp>
+#include <fo4/forms/leveled_list.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/text/encoding.hpp>
@@ -354,13 +355,82 @@ TEST_CASE("Native lifecycle creates LVSP with validated initial entries") {
 
     const auto* record = fo4::find_record(disk, key);
     REQUIRE(record != nullptr);
-    REQUIRE(record->subrecords.size() == 6u);
+    REQUIRE(record->subrecords.size() == 7u);
     CHECK(record->subrecords[0].signature == fo4::sig_edid);
-    CHECK(record->subrecords[1].signature.to_string() == "LVLD");
-    CHECK(record->subrecords[2].signature.to_string() == "LVLM");
-    CHECK(record->subrecords[3].signature.to_string() == "LVLF");
-    CHECK(record->subrecords[4].signature.to_string() == "LLCT");
-    CHECK(record->subrecords[5].signature.to_string() == "LVLO");
+    CHECK(record->subrecords[1].signature.to_string() == "OBND");
+    CHECK(record->subrecords[2].signature.to_string() == "LVLD");
+    CHECK(record->subrecords[3].signature.to_string() == "LVLM");
+    CHECK(record->subrecords[4].signature.to_string() == "LVLF");
+    CHECK(record->subrecords[5].signature.to_string() == "LLCT");
+    CHECK(record->subrecords[6].signature.to_string() == "LVLO");
+}
+
+TEST_CASE("Native lifecycle creates LVLI, LVLN and FACT from typed payloads") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MagicMod" / "Patch.esp";
+    writeBytes(pluginPath, makeSpellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MagicMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto item = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLI", nlohmann::json{
+            {"editorId", "CreatedItems"}, {"chanceNone", 20}, {"maxCount", 0}, {"flags", 5}}})));
+    const auto npc = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLN", nlohmann::json{
+            {"editorId", "CreatedNpcs"}, {"chanceNone", 10}, {"maxCount", 1}, {"flags", 4}}})));
+    const auto faction = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "FACT", nlohmann::json{
+            {"editorId", "CreatedFaction"}, {"fullName", "Created Faction"}, {"flags", 0x81}}})));
+    REQUIRE(item.at("formKey") == "000900:Patch.esp");
+    REQUIRE(npc.at("formKey") == "000901:Patch.esp");
+    REQUIRE(faction.at("formKey") == "000902:Patch.esp");
+
+    const auto refused = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLI", nlohmann::json{
+            {"flags", 8}}}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "LeveledListCreateFailed");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(pluginPath);
+    CHECK(disk.header.next_form_id == 0x903u);
+
+    const auto itemKey = fo4::FormKey::parse("000900:Patch.esp");
+    const auto* itemRecord = fo4::find_record(disk, itemKey);
+    REQUIRE(itemRecord != nullptr);
+    CHECK(itemRecord->header.signature.to_string() == "LVLI");
+    const auto itemList = fo4::forms::decode_leveled_list(disk, itemKey);
+    CHECK(itemList.chance_none == 20u);
+    CHECK(itemList.max_count == 0u);
+    CHECK(itemList.flags == 5u);
+    CHECK(itemList.entries.empty());
+
+    const auto npcKey = fo4::FormKey::parse("000901:Patch.esp");
+    const auto* npcRecord = fo4::find_record(disk, npcKey);
+    REQUIRE(npcRecord != nullptr);
+    CHECK(npcRecord->header.signature.to_string() == "LVLN");
+    const auto npcList = fo4::forms::decode_leveled_list(disk, npcKey);
+    CHECK(npcList.chance_none == 10u);
+    CHECK(npcList.max_count == 1u);
+    CHECK(npcList.flags == 4u);
+
+    const auto* factionRecord = fo4::find_record(disk, fo4::FormKey::parse("000902:Patch.esp"));
+    REQUIRE(factionRecord != nullptr);
+    CHECK(factionRecord->header.signature.to_string() == "FACT");
+    REQUIRE(factionRecord->subrecords.size() == 5u);
+    CHECK(factionRecord->subrecords[0].signature == fo4::sig_edid);
+    CHECK(factionRecord->subrecords[1].signature.to_string() == "FULL");
+    CHECK(factionRecord->subrecords[2].signature == fo4::sig_data);
+    CHECK(factionRecord->subrecords[2].data == std::vector<std::byte>{
+        std::byte{0x81}, std::byte{0}, std::byte{0}, std::byte{0}});
 }
 
 TEST_CASE("Native lifecycle refuses raw creation without schema preflight") {

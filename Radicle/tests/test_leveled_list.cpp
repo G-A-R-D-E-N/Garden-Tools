@@ -32,6 +32,7 @@ constexpr std::uint32_t k_item_list = 0x02000800;
 constexpr std::uint32_t k_npc_list = 0x02000801;
 constexpr std::uint32_t k_empty_list = 0x02000802;
 constexpr std::uint32_t k_plain_record = 0x02000803;
+constexpr std::uint32_t k_npc_target = 0x02000810;
 
 std::vector<std::byte> text(std::string_view value) {
   std::vector<std::byte> out;
@@ -152,6 +153,7 @@ std::vector<std::byte> standard_plugin() {
       {"LVLI", k_item_list, item_list_subs()},
       {"LVLN", k_npc_list, npc_list_subs()},
       {"LVLI", k_empty_list, empty_list_subs()},
+      {"NPC_", k_npc_target, {{"EDID", text("RadicleNpcTarget")}}},
   });
 }
 
@@ -389,4 +391,21 @@ TEST(LeveledList, RejectsOverlongEntryReplacement) {
   EXPECT_THROW(fo4::forms::replace_leveled_list_entries(plugin, item_key(), too_many),
                fo4::forms::LeveledListError);
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(LeveledList, ChangingAnExistingEntryDoesNotRecheckItsMissingTarget) {
+  auto plugin = fo4::read_plugin(
+      item_plugin({{"EDID", text("RadicleItemList")},
+                   {"LLCT", one(1)},
+                   {"LVLO", lvlo(1, {0, 0}, 0x02000900, 1, 0, 0)}}),
+      "Patch.esp");
+  auto entry = fo4::forms::decode_leveled_list(plugin, item_key()).entries.front();
+  entry.level = 7;
+  ASSERT_TRUE(fo4::forms::set_leveled_list_entry(plugin, item_key(), 0, entry));
+  EXPECT_EQ(fo4::forms::decode_leveled_list(plugin, item_key()).entries.front().level, 7u);
+
+  fo4::forms::LeveledListEntry added;
+  added.item = fo4::FormKey::parse("000901:Patch.esp");
+  EXPECT_THROW(fo4::forms::insert_leveled_list_entry(plugin, item_key(), 1, added),
+               fo4::forms::LeveledListError);
 }

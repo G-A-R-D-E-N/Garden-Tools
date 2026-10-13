@@ -44,7 +44,7 @@ COED, when present: owner FormID (0, NULL allowed), union at 4, item condition f
 
 - LLCT is not a schema scalar. The generic field writer has no derived-field guard, so a scalar write could desync LLCT from the entry count. Entry edits keep it equal.
 - LVLO entry fields are not schema scalars or formlink fields. The schema addresses one subrecord payload, and LVLO repeats. The reference is already remapped by `structured_formids.inc`.
-- LVLO target type is not validated: xEdit `sigBaseObjects` for LVLI (10023), `NPC_` or `LVLN` for LVLN (10000).
+- LVLO target type is checked only for a local entry whose item is new to the list, on insert or set. Foreign entries and entries already present are not checked. Allowed types follow xEdit `sigBaseObjects` for LVLI (10023), `NPC_` or `LVLN` for LVLN (10000). See `validate_entry_target` in `Radicle/docs/code-notes/Radicle.md`.
 - LLKC and the LVLN model group are not decoded. The shipped byte check found LLKC payloads of 8, 16 and 24 bytes, so the 8-byte element in xEdit (`Core/wbDefinitionsFO4.pas:9979-9984`) does not describe every record.
-- No LVLI or LVLN creator.
+- LVLI and LVLN creation writes a minimal record only: EDID (optional), OBND, LVLD, LVLM, LVLF and LLCT, with no entries, LVLG, LVSG, ONAM or model group. Entries are added later through insert or set. See `create_leveled_list` in `Radicle/docs/code-notes/Radicle.md`.
 - LVLG and LVSG are read but not edited. Header settings do not change them.

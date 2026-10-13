@@ -189,8 +189,9 @@ TEST(AuthoringPreflight, NestedEyesPlacementFails) {
 }
 
 TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) {
-  auto plugin = plugin_with_top_record(authored_record(
-      "LVSP", 0x800, {"LVLD", "LVLM", "LVLF", "LLCT"}));
+  auto record = authored_record("LVSP", 0x800, {"OBND", "LVLD", "LVLM", "LVLF", "LLCT"});
+  record.subrecords.front().data.resize(12);
+  auto plugin = plugin_with_top_record(record);
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   EXPECT_TRUE(fo4::schema::preflight_authoring_record(plugin, key).empty());
 

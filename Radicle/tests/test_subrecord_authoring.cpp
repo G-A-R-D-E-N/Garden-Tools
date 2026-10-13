@@ -141,7 +141,7 @@ fo4::Plugin fixture() {
              {"ARMO", 0x804, {{"EDID", zstr("Plain")}, {"DATA", filled(12, 0)}}},
              {"MISC", 0x805, {{"EDID", zstr("Misc")}}},
              {"LVSP", 0x806,
-              {{"EDID", zstr("List")}, {"LVLD", filled(1, 0)}, {"LVLM", filled(1, 0)},
+              {{"EDID", zstr("List")}, {"OBND", filled(12, 0)}, {"LVLD", filled(1, 0)}, {"LVLM", filled(1, 0)},
                {"LVLF", filled(1, 0)}, {"LLCT", filled(1, 1)}, {"LVLO", filled(12, 5)}}}}),
       k_plugin);
   fo4::assign_record_form_keys(plugin);
@@ -434,7 +434,7 @@ TEST(SubrecordAuthoring, CreatesRecordsFromGeneratedDefaultsInAuthoringOrder) {
 
   const auto spell_list = fo4::create_record(plugin, sig("LVSP"), "NewList");
   ASSERT_EQ(spell_list.status, fo4::RecordCreateStatus::created);
-  EXPECT_EQ(order(plugin, 0x902), (std::vector<std::string>{"EDID", "LVLD", "LVLM", "LVLF", "LLCT"}));
+  EXPECT_EQ(order(plugin, 0x902), (std::vector<std::string>{"EDID", "OBND", "LVLD", "LVLM", "LVLF", "LLCT"}));
 
   for (const auto& created : {armor.key, addon.key, spell_list.key}) {
     EXPECT_TRUE(authoring_clean(plugin, created));
@@ -442,7 +442,7 @@ TEST(SubrecordAuthoring, CreatesRecordsFromGeneratedDefaultsInAuthoringOrder) {
   const auto reloaded = reload(plugin);
   EXPECT_EQ(reloaded.header.next_form_id, 0x903u);
   EXPECT_EQ(order(reloaded, 0x900), (std::vector<std::string>{"EDID", "DATA"}));
-  EXPECT_EQ(order(reloaded, 0x902), (std::vector<std::string>{"EDID", "LVLD", "LVLM", "LVLF", "LLCT"}));
+  EXPECT_EQ(order(reloaded, 0x902), (std::vector<std::string>{"EDID", "OBND", "LVLD", "LVLM", "LVLF", "LLCT"}));
   for (const auto& created : {armor.key, addon.key, spell_list.key}) {
     EXPECT_TRUE(authoring_clean(reloaded, created));
   }
