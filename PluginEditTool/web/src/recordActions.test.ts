@@ -52,8 +52,8 @@ it('refuses a wrapped EditorID equal to the source EditorID, ignoring case', asy
   await act(async () => { await result.current.copyAsWrapperInto(0); });
 
   const { validate } = dialogs.prompt.mock.calls[0][0];
-  expect(validate('testlist')).toContain('different EditorID');
-  expect(validate('  TESTLIST ')).toContain('different EditorID');
+  expect(validate('testlist')).toContain('an EditorID different from TestList');
+  expect(validate('  TESTLIST ')).toContain('an EditorID different from TestList');
   expect(validate('WrapList')).toBeNull();
   expect(validate('')).toBeNull();
   expect(CopyAsWrapper).not.toHaveBeenCalled();
