@@ -65,6 +65,14 @@ export interface Backend {
   CheckCircularLeveledLists(plugin: string): Promise<string>;
   DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean, overwrite: boolean, maxRecords?: number, allowLosing?: boolean): Promise<string>;
   ChangeReferencingRecords(from: string, to: string, patchPlugin: string, apply: boolean): Promise<string>;
+  GetLeveledList(formKey: string): Promise<string>;
+  SetLeveledListSettings(plugin: string, formKey: string, chanceNone: number, maxCount: number, flags: number): Promise<string>;
+  EditLeveledListEntry(plugin: string, formKey: string, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
+  GetNpc(formKey: string): Promise<string>;
+  EditNpcEntries(plugin: string, formKey: string, list: NpcList, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
+  GetFaction(formKey: string): Promise<string>;
+  EditFactionEntries(plugin: string, formKey: string, list: FactionList, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
+  GetWeaponDamageTypes(formKey: string): Promise<string>;
 
 
   GetActivePlugins(): Promise<string>;
@@ -112,6 +120,31 @@ export interface HistoryEntry {
 export interface LoadOrderSummary {
   TotalRecords: number; PluginCount: number; Plugins: string[];
 }
+
+export type EntryOp = 'add' | 'set' | 'remove';
+export type NpcList = 'factions' | 'perks' | 'inventory';
+export type FactionList = 'relations' | 'ranks';
+export type LeveledListExtra = { owner: string | null; globalOrRank: number; itemCondition: number };
+export type LeveledListEntry = {
+  level: number; item: string | null; count: number; chanceNone: number; extra: LeveledListExtra | null;
+};
+export type LeveledList = {
+  formKey: string; chanceNone: number; maxCount: number; flags: number;
+  useGlobal: string | null; epicLootChance: string | null; entries: LeveledListEntry[];
+};
+export type NpcFaction = { faction: string | null; rank: number };
+export type NpcPerk = { perk: string | null; rank: number };
+export type NpcInventoryExtra = { owner: string | null; globalOrRank: number; condition: number };
+export type NpcInventoryItem = { item: string | null; count: number; extra: NpcInventoryExtra | null };
+export type NpcRecord = { formKey: string; factions: NpcFaction[]; perks: NpcPerk[]; inventory: NpcInventoryItem[] };
+export type FactionReaction = 'neutral' | 'enemy' | 'ally' | 'friendly';
+export type FactionRelation = { faction: string | null; modifier: number; reaction: FactionReaction };
+export type LocalizedTitle = string | { stringId: number } | { rawId: string } | null;
+export type FactionRank = { number: number; maleTitle: LocalizedTitle; femaleTitle: LocalizedTitle; hasInsignia: boolean };
+export type FactionRecord = { formKey: string; relations: FactionRelation[]; ranks: FactionRank[] };
+export type WeaponDamageType = { type: string | null; amount: number; curveTable: string | null };
+export type WeaponDamageTypes = { formKey: string; damageTypes: WeaponDamageType[] };
+export const TYPED_RECORD_TYPES = ['LVLI', 'LVLN', 'LVSP', 'NPC_', 'FACT', 'WEAP'];
 
 
 export interface Mo2Status {

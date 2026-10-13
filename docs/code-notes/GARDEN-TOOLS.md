@@ -2115,3 +2115,27 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
 
 A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:TypedRecordPanel — one panel per family
+
+RecordView shows the Typed Fields tab only for `TYPED_RECORD_TYPES` (backend.ts). The panel dispatches on `matrix.Type`: LVLI, LVLN and LVSP get settings and an entries table; NPC_ gets factions, perks and inventory; FACT gets relations and ranks; WEAP gets damage types with no edit controls. The panel stays in one file, well under 750 lines.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — read keyed by record, refresh after edit
+
+Loaded data carries the FormKey it was read for, so a different record never offers the previous record's rows as the base of an edit. A successful edit shows the native message, re-reads the record and calls `onChanged` (RecordView's reload) so the grid matches the plugin. A failed edit shows `errorText(e)` after the "... edit failed:" prefix and does not refresh.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:ListEditor — set keeps fields the form does not show
+
+Set sends `{...rows[index], ...typed fields}`. Fields the form does not show (LVLI `extra`, NPC inventory `extra`, FACT rank titles and `hasInsignia`) therefore round-trip from the read. A FACT rank `{rawId}` title is passed back unchanged, which the native `rawIdTitle` rule keeps on set. Add sends only the typed fields. A blank numeric field becomes NaN, which JSON turns into null, so the native integer check refuses it instead of writing 0.
+
+## PluginEditTool/web/src/backend.ts:EditLeveledListEntry — value is an object, not a JSON string
+
+`value` is passed as a JS object. The native handlers read `support::argumentAt(arguments, n)` as JSON (`leveledEntryFromJson`, `npcFactionFromJson` and the other typed-record parsers), the same way `CreateRecord` takes `payload`. The index is required for every LVLI op because `editLeveledListEntry` rejects a missing index first. For NPC and FACT, `editNpcEntries` and `editFactionEntries` only require it for set and remove.
+
+## PluginEditTool/web/src/backend.ts:TYPED_RECORD_TYPES — read types are type aliases
+
+The typed-record read shapes are `type` aliases, not interfaces, so `ListEditor` rows typed `Record<string, unknown>[]` accept them without an index signature. The Edit methods return the native success message as a string, as the other Backend methods do.
+
+## PluginEditTool/web/src/RecordView.tsx:RecordView — Typed Fields tab
+
+The tab is added only for typed record types. The multi-line `backend` type import was joined onto one line to keep RecordView.tsx at 750 lines.
