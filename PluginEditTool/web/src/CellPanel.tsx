@@ -355,13 +355,11 @@ export default function CellPanel({ onClose }: { onClose: () => void }) {
   const failedModelCount = Object.values(geometry).filter(g => 'error' in g).length;
   const banner = statusBanner(status, busy);
 
-
-
-
   const typeGroups = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of references) {
-      const kind = cellLayerOf(r, r.modelPath ? geometry[r.modelPath] : undefined);
+      const geo = r.modelPath ? geometry[r.modelPath] : (r.scolParts ?? []).map(p => geometry[p.modelPath]).find(g => g && 'shapes' in g);
+      const kind = cellLayerOf(r, geo);
       m.set(kind, (m.get(kind) ?? 0) + 1);
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
