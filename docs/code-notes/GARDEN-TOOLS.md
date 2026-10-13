@@ -2268,3 +2268,7 @@ Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifie
 ## PluginEditTool/web/src/MainShellBridge.test.tsx:sidebar record multi-select — MainShell harness (#39)
 
 The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).
+
+## .github/workflows/native-ci.yml:native-windows-tests — MSVC setup and pinned zlib in .github/scripts
+
+GT-253 moved the MSVC/Ninja/ccache setup and the pinned zlib fetch out of `native-ci.yml` to keep the workflow under the 750-line limit. `native-windows-tests` and `native-windows-real-data` both call `.github/scripts/setup-msvc-ccache.ps1` and `.github/scripts/pinned-zlib-windows.ps1` through `powershell -File`, so each script runs in its own process and `exit` codes still fail the step. The setup script starts with `$ErrorActionPreference = 'stop'`, the line the runner prepends to inline PowerShell. `-ExecutionPolicy Bypass` keeps the file call working on hosts whose default policy is Restricted. The `GITHUB_ENV` and `GITHUB_PATH` writes reach later steps as before.
