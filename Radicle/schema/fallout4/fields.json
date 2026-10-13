@@ -6046,6 +6046,820 @@
       "localized_subrecords": []
     },
     {
+      "signature": "SMBN",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CITC",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "SMBN\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Random"
+            },
+            {
+              "bit": 1,
+              "name": "Warn if no child quest started"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMBN\\MaxConcurrentQuests",
+          "label": "Max concurrent quests",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SMBN\\ParentNode",
+          "label": "Parent node",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "targets": [
+            "SMQN",
+            "SMBN",
+            "SMEN"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMBN\\PreviousNode",
+          "label": "Previous node",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "SMQN",
+            "SMBN",
+            "SMEN"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "SMEN",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CITC",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ENAM",
+            "minimum": 0,
+            "maximum": 1
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "SMEN\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Random"
+            },
+            {
+              "bit": 1,
+              "name": "Warn if no child quest started"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMEN\\MaxConcurrentQuests",
+          "label": "Max concurrent quests",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMEN\\Type",
+          "label": "Type",
+          "kind": "scalar",
+          "subrecord": "ENAM",
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 1380140097,
+              "name": "Crime Gold Event"
+            },
+            {
+              "value": 1095320641,
+              "name": "Actor Dialogue Event"
+            },
+            {
+              "value": 1447118401,
+              "name": "Player Activate Actor"
+            },
+            {
+              "value": 1279608897,
+              "name": "Actor Hello Event"
+            },
+            {
+              "value": 1280330049,
+              "name": "Player Add Item"
+            },
+            {
+              "value": 1245859649,
+              "name": "Attraction Object Event"
+            },
+            {
+              "value": 1414681153,
+              "name": "Arrest Event"
+            },
+            {
+              "value": 1431524161,
+              "name": "Assault Actor Event"
+            },
+            {
+              "value": 1112101442,
+              "name": "Bribe"
+            },
+            {
+              "value": 1414742339,
+              "name": "Cast Magic Event"
+            },
+            {
+              "value": 1381124163,
+              "name": "Change Relationship Rank"
+            },
+            {
+              "value": 1129270339,
+              "name": "Change Location Event"
+            },
+            {
+              "value": 1280461891,
+              "name": "Clear Location Event"
+            },
+            {
+              "value": 1413894723,
+              "name": "Craft Item"
+            },
+            {
+              "value": 1163023683,
+              "name": "Player Cured"
+            },
+            {
+              "value": 1145128260,
+              "name": "Dead Body"
+            },
+            {
+              "value": 1095390021,
+              "name": "Escape Jail"
+            },
+            {
+              "value": 1413565510,
+              "name": "Flatter"
+            },
+            {
+              "value": 1262698824,
+              "name": "Hack Computer"
+            },
+            {
+              "value": 1128681033,
+              "name": "Player Infected"
+            },
+            {
+              "value": 1297370697,
+              "name": "Intimidate"
+            },
+            {
+              "value": 1313821257,
+              "name": "Iron Sights"
+            },
+            {
+              "value": 1279869258,
+              "name": "Jail Event"
+            },
+            {
+              "value": 1280067915,
+              "name": "Kill Actor Event"
+            },
+            {
+              "value": 1145848652,
+              "name": "Location Loaded"
+            },
+            {
+              "value": 1280722252,
+              "name": "Increase Level"
+            },
+            {
+              "value": 1262702412,
+              "name": "Lock Pick"
+            },
+            {
+              "value": 1162892878,
+              "name": "New Voice Power"
+            },
+            {
+              "value": 1413562703,
+              "name": "On Actor Attach"
+            },
+            {
+              "value": 1313424976,
+              "name": "Pay Fine Event"
+            },
+            {
+              "value": 1262700880,
+              "name": "Pickpocket"
+            },
+            {
+              "value": 1447449168,
+              "name": "Player Recieves Favor"
+            },
+            {
+              "value": 1381258065,
+              "name": "Quest Start"
+            },
+            {
+              "value": 1347241298,
+              "name": "Player Remove Item"
+            },
+            {
+              "value": 1414546259,
+              "name": "Script Event"
+            },
+            {
+              "value": 1246319699,
+              "name": "Served Time"
+            },
+            {
+              "value": 1162169684,
+              "name": "Trigger Mine Explosion Event"
+            },
+            {
+              "value": 1397051988,
+              "name": "Trespass Actor Event"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SMEN\\ParentNode",
+          "label": "Parent node",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "targets": [
+            "SMQN",
+            "SMBN",
+            "SMEN"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMEN\\PreviousNode",
+          "label": "Previous node",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "SMQN",
+            "SMBN",
+            "SMEN"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "SMQN",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "PNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CITC",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "DNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "XNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "HNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "QNAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00000000"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "SMQN\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "storage": "u32",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Random"
+            },
+            {
+              "bit": 1,
+              "name": "Warn if no child quest started"
+            },
+            {
+              "bit": 16,
+              "name": "Do all before repeating"
+            },
+            {
+              "bit": 17,
+              "name": "Shares event"
+            },
+            {
+              "bit": 18,
+              "name": "Num quests to run"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMQN\\MaxConcurrentQuests",
+          "label": "Max concurrent quests",
+          "kind": "scalar",
+          "subrecord": "XNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMQN\\NumQuestsToRun",
+          "label": "Num quests to run",
+          "kind": "scalar",
+          "subrecord": "MNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMQN\\HoursUntilReset",
+          "label": "Hours until reset",
+          "kind": "scalar",
+          "subrecord": "HNAM",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SMQN\\ParentNode",
+          "label": "Parent node",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "targets": [
+            "SMQN",
+            "SMBN",
+            "SMEN"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SMQN\\PreviousNode",
+          "label": "Previous node",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "SMQN",
+            "SMBN",
+            "SMEN"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "SCCO",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "QNAM",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 2,
+            "maximum": 2
+          }
+        ]
+      },
+      "fields": [],
+      "formlink_fields": [
+        {
+          "path": "SCCO\\Quest",
+          "label": "Quest",
+          "subrecord": "QNAM",
+          "offset": 0,
+          "targets": [
+            "QUST"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "TRNS",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000000000000000000000000000000000000000803f000080bf0000803f"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "TRNS\\PositionX",
+          "label": "Position X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\PositionY",
+          "label": "Position Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\PositionZ",
+          "label": "Position Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\RotationX",
+          "label": "Rotation X",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\RotationY",
+          "label": "Rotation Y",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\RotationZ",
+          "label": "Rotation Z",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\Scale",
+          "label": "Scale",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 24,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\ZoomMin",
+          "label": "Zoom min",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 28,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 32,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "TRNS\\ZoomMax",
+          "label": "Zoom max",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 32,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 36,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [],
+      "localized_subrecords": []
+    },
+    {
+      "signature": "CPTH",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "ANAM",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "0000000000000000"
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "00"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "CPTH\\Flags",
+          "label": "Flags",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Disable"
+            },
+            {
+              "bit": 1,
+              "name": "Shot List"
+            },
+            {
+              "bit": 2,
+              "name": "Dynamic Camera Times"
+            },
+            {
+              "bit": 3,
+              "name": "Unknown 3"
+            },
+            {
+              "bit": 4,
+              "name": "Unknown 4"
+            },
+            {
+              "bit": 5,
+              "name": "Unknown 5"
+            },
+            {
+              "bit": 6,
+              "name": "Randomize Paths"
+            },
+            {
+              "bit": 7,
+              "name": "Not Must Have Camera Shots"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "CPTH\\Parent",
+          "label": "Parent",
+          "subrecord": "ANAM",
+          "offset": 0,
+          "targets": [
+            "CPTH"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CPTH\\Previous",
+          "label": "Previous",
+          "subrecord": "ANAM",
+          "offset": 4,
+          "targets": [
+            "CPTH"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
       "signature": "NAVM",
       "fields": [],
       "localized_subrecords": [],

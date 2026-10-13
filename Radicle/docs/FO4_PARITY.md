@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
+Tier counts: L0 74, L1 16, L2 16, L3 1, L4 40.
 
 ### Per-signature coverage
 
@@ -73,7 +73,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | COBJ | 10266 | - | - | - | - | - | - | - | forms/components | - | - | L2 |
 | COLL | 9547 | - | - | - | - | - | - | - | - | - | 1 | L0 |
 | CONT | 6176 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| CPTH | 7930 | - | - | - | - | - | - | - | - | - | - | L0 |
+| CPTH | 7930 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | DEBR | 7388 | - | - | - | - | - | - | - | - | - | - | L0 |
 | DFOB | 12304 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -165,13 +165,13 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | REVB | 9593 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RFCT | 6163 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RFGP | 12582 | - | - | - | - | - | - | - | - | - | - | L0 |
-| SCCO | 12593 | - | - | - | - | - | - | - | - | - | - | L0 |
+| SCCO | 12593 | - | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | - | - | - | - | - | - | - | forms/static_collection | - | - | L2 |
 | SCSN | 12650 | - | - | - | - | - | - | - | - | - | - | L0 |
-| SMBN | 8720 | - | - | - | - | - | - | - | - | - | - | L0 |
-| SMEN | 8762 | - | - | - | - | - | - | - | - | - | - | L0 |
-| SMQN | 8735 | - | - | - | - | - | - | - | - | - | - | L0 |
+| SMBN | 8720 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
+| SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
+| SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SNDR | 9406 | 10 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
 | SOPM | 9489 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -184,7 +184,7 @@ Tier counts: L0 80, L1 16, L2 16, L3 1, L4 34.
 | TERM | 12671 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | - | 7 | L0 |
 | TREE | 12134 | 16 | - | 2 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
-| TRNS | 12774 | - | - | - | - | - | - | - | - | - | - | L0 |
+| TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | TXST | 6984 | - | - | - | - | - | - | - | environment/terrain | - | 1 | L2 |
 | VTYP | 7950 | - | - | - | - | - | - | - | - | - | - | L0 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
@@ -202,6 +202,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
+| CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DIAL | 5 | - | - | - | 1 | f32, u16, u32, u8 | - | - | - | existing_only |
 | EXPL | 15 | - | - | - | - | f32, u32 | - | - | - | existing_only |
@@ -228,10 +229,15 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
 | REFR | 1 | 1 | - | - | - | f32, u32 | - | - | - | existing_only |
+| SCCO | - | - | - | - | - | - | - | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
+| SMBN | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
+| SMEN | 1 | - | 1 | 1 | - | u32 | - | - | - | existing_only |
+| SMQN | 3 | - | - | 1 | - | f32, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| TRNS | 9 | - | - | - | - | f32 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
