@@ -1135,6 +1135,7 @@
           "kind": "subrecord_group",
           "count_subrecord": "COCT",
           "insertion": "existing_only",
+          "successors": ["DEST", "DAMC", "DSTD", "DSTA", "DMDL", "DMDC", "DMDT", "DMDS", "DSTF", "DATA", "KSIZ", "KWDA", "FTYP", "NTRM", "PRPS", "SNAM", "QNAM", "TNAM", "ONAM"],
           "members": [
             {
               "subrecord": "CNTO",
@@ -1159,7 +1160,7 @@
                   "path": "CONT\\ItemObject",
                   "label": "Item",
                   "offset": 0,
-                  "nullable": false,
+                  "nullable": true,
                   "insertion": "existing_only",
                   "target_union": "sigBaseObjects"
                 }
@@ -10590,7 +10591,7 @@
         "LVLI", "LVLN", "LVSP", "MISC", "MSTT", "NOTE",
         "NPC_", "OMOD", "PROJ", "SCOL", "SCRL", "SOUN",
         "SPEL", "STAT", "TACT", "TERM", "TREE", "TXST",
-        "WATR", "WEAP"
+        "WATR", "WEAP", "ENCH"
       ]
     }
   ],

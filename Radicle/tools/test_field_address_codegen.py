@@ -559,8 +559,34 @@ class SchemaCodegenTests(unittest.TestCase):
         self.assertIn('{Signature::from_string("COED"), false, false, 12},', text)
         self.assertIn('{Signature::from_string("TEST"), "TEST' + BS + BS + 'Items", "Items", '
                       'Signature::from_string("COCT"), '
-                      'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0)},', text)
+                      'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
+                      'std::span<const Signature>{}},', text)
         self.assertIn("constexpr std::array<SubrecordGroupDescriptor, 1> k_subrecord_groups{{", text)
+
+    def test_subrecord_group_successors_render_as_a_signature_table(self):
+        fields, arrays, groups = self.load_schema(group(successors=["DATA", "KSIZ"]), count_row(subrecord="COCT"))
+        self.assertEqual(groups[0]["successors"], ["DATA", "KSIZ"])
+        text = schema_codegen.render(fields, arrays, groups)
+        self.assertIn('constexpr Signature k_subrecord_group_successors_0[] = '
+                      '{Signature::from_string("DATA"), Signature::from_string("KSIZ")};', text)
+        self.assertIn('std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
+                      'std::span<const Signature>(k_subrecord_group_successors_0)},', text)
+
+    def test_subrecord_group_successors_are_distinct_and_not_members(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("successors must be distinct four-character signatures", group(successors=["DATA", "DATA"]), count)
+        self.rejects("successors must be distinct four-character signatures", group(successors="DATA"), count)
+        self.rejects("successors must be distinct four-character signatures", group(successors=["DA"]), count)
+        self.rejects("successors cannot be members or the count subrecord", group(successors=["CNTO"]), count)
+        self.rejects("successors cannot be members or the count subrecord", group(successors=["COCT"]), count)
+
+    def test_subrecord_group_shares_no_subrecord_with_a_counted_array(self):
+        array = counted(subrecord="CNTO", path="TEST" + BS + "Array", label="Array", members=[member("ArrayA", 0)])
+        self.rejects("shares a subrecord with counted_array", group(), array, count_row(subrecord="COCT"),
+                     count_row(path="TEST" + BS + "ArrayCount", label="ArrayCount", subrecord="CNTA"))
+        array = counted(subrecord="DATA", count_subrecord="COCT", path="TEST" + BS + "Array", label="Array",
+                        members=[member("ArrayA", 0)])
+        self.rejects("shares a subrecord with counted_array", group(), array, count_row(subrecord="COCT"))
 
     def test_no_subrecord_groups_renders_an_empty_table(self):
         self.assertIn("constexpr std::array<SubrecordGroupDescriptor, 0> k_subrecord_groups{};",
@@ -614,6 +640,9 @@ class SchemaCodegenTests(unittest.TestCase):
                      count)
         self.rejects("subrecord_group member link keys must be a subset",
                      group(members=[group_member("CNTO", links=[group_link("ItemObject", 0, names=[])])]), count)
+        self.rejects("subrecord_group member link keys must be a subset",
+                     group(members=[group_member("CNTO", links=[group_link("ItemObject", 0, payload_sizes=[12])])]),
+                     count)
 
     def test_subrecord_group_defaults_must_match_the_member_payload(self):
         count = count_row(subrecord="COCT")
@@ -649,14 +678,9 @@ class SchemaCodegenTests(unittest.TestCase):
             with self.subTest(count=count):
                 self.rejects("needs exactly one whole-payload u32 row", group(), count)
 
-    def test_subrecord_group_count_subrecord_is_optional(self):
-        other = group(path="TEST" + BS + "Other", label="Other", count_subrecord=None,
-                      members=[group_member("XTRA", fields=[group_row("OtherItem", 0)])])
-        fields, arrays, groups = self.load_schema(group(count_subrecord=None), other)
-        self.assertEqual([item["count_subrecord"] for item in groups], ["", ""])
-        self.assertEqual(schema_codegen.render(fields, arrays, groups).count(
-            "Signature{}, std::span<const SubrecordGroupMemberDescriptor>("), 2)
-        self.rejects("count_subrecord must be four printable ASCII", group(count_subrecord=5))
+    def test_subrecord_group_count_subrecord_is_required(self):
+        self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=None))
+        self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=5))
 
     def test_subrecord_group_members_and_counts_cannot_be_shared(self):
         twin = group(path="TEST" + BS + "Other", label="Other", count_subrecord="OTHR",

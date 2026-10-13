@@ -605,10 +605,11 @@ constexpr std::array<CountedArrayDescriptor, 1> k_counted_arrays{{
 {Signature::from_string("REFR"), "REFR\\WaterCurrentVelocities", "Velocities", Signature::from_string("XWCU"), Signature::from_string("XWCN"), 16},
 }};
 constexpr std::uint8_t k_subrecord_group_default_0[] = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+constexpr Signature k_subrecord_group_successors_0[] = {Signature::from_string("DEST"), Signature::from_string("DAMC"), Signature::from_string("DSTD"), Signature::from_string("DSTA"), Signature::from_string("DMDL"), Signature::from_string("DMDC"), Signature::from_string("DMDT"), Signature::from_string("DMDS"), Signature::from_string("DSTF"), Signature::from_string("DATA"), Signature::from_string("KSIZ"), Signature::from_string("KWDA"), Signature::from_string("FTYP"), Signature::from_string("NTRM"), Signature::from_string("PRPS"), Signature::from_string("SNAM"), Signature::from_string("QNAM"), Signature::from_string("TNAM"), Signature::from_string("ONAM")};
 constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_0[] = {
 {Signature::from_string("CNTO"), true, false, 8, std::span<const std::uint8_t>(k_subrecord_group_default_0)},
 {Signature::from_string("COED"), false, false, 12},
 };
 constexpr std::array<SubrecordGroupDescriptor, 1> k_subrecord_groups{{
-{Signature::from_string("CONT"), "CONT\\Items", "Items", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0)},
+{Signature::from_string("CONT"), "CONT\\Items", "Items", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), std::span<const Signature>(k_subrecord_group_successors_0)},
 }};

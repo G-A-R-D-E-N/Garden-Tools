@@ -101,6 +101,7 @@ struct SubrecordGroupDescriptor {
   std::string_view label;
   Signature count_subrecord{};
   std::span<const SubrecordGroupMemberDescriptor> members{};
+  std::span<const Signature> successors{};
 };
 
 class SubrecordGroupError : public std::runtime_error {

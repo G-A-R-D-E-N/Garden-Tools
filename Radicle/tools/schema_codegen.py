@@ -20,10 +20,10 @@ CPP_PRESENTATIONS = {"enum": "enumeration"}
 INSERTIONS = {"existing_only"}
 COUNTED_ARRAY_KEYS = {"kind", "path", "label", "subrecord", "count_subrecord", "stride", "insertion", "members"}
 MEMBER_KEYS = {"path", "label", "offset", "storage", "presentation", "minimum", "maximum"}
-SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members"}
+SUBRECORD_GROUP_KEYS = {"kind", "path", "label", "count_subrecord", "insertion", "members", "successors"}
 GROUP_MEMBER_KEYS = {"subrecord", "required", "repeatable", "payload_size", "default", "fields", "formlink_fields"}
 GROUP_ROW_FORBIDDEN = {"kind", "subrecord", "repeated", "stride", "array_offset", "when", "payload_size", "minimum_payload_size"}
-GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets", "payload_sizes"}
+GROUP_LINK_KEYS = {"path", "label", "offset", "nullable", "insertion", "target_union", "targets"}
 HEX_DIGITS = "0123456789abcdefABCDEF"
 WIDTHS = {"u8": 1, "u16": 2, "u32": 4, "i32": 4, "f32": 4, "i8": 1, "i16": 2}
 INTEGER_BOUNDS = {
@@ -162,14 +162,19 @@ def parse_subrecord_group(field, record_signature: str):
     label = field.get("label", "")
     if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
         raise ValueError(f"subrecord_group label is invalid: {label!r}")
-    count_subrecord = field.get("count_subrecord", "")
-    if count_subrecord != "" and (not isinstance(count_subrecord, str) or not valid_signature(count_subrecord)):
+    count_subrecord = field.get("count_subrecord")
+    if not isinstance(count_subrecord, str) or not valid_signature(count_subrecord):
         raise ValueError(f"subrecord_group count_subrecord must be four printable ASCII characters: {path!r}")
     if field.get("insertion") not in INSERTIONS:
         raise ValueError(f"unsupported insertion policy until record ordering exists: {field.get('insertion')!r}")
     members = field.get("members")
     if not isinstance(members, list) or not members:
         raise ValueError(f"subrecord_group members must be a non-empty array: {path!r}")
+    successors = field.get("successors", [])
+    if (not isinstance(successors, list)
+            or not all(isinstance(entry, str) and valid_signature(entry) for entry in successors)
+            or len(set(successors)) != len(successors)):
+        raise ValueError(f"subrecord_group successors must be distinct four-character signatures: {path!r}")
 
     parsed = []
     rows = []
@@ -222,8 +227,10 @@ def parse_subrecord_group(field, record_signature: str):
             links.append(dict(row, subrecord=signature, repeated=True))
     if not parsed[0]["required"] or parsed[0]["repeatable"]:
         raise ValueError(f"subrecord_group leader must be required and non-repeatable: {path!r}")
+    if set(successors) & (signatures | {count_subrecord}):
+        raise ValueError(f"subrecord_group successors cannot be members or the count subrecord: {path!r}")
     group = {"record": record_signature, "path": path, "label": label,
-             "count_subrecord": count_subrecord, "members": parsed}
+             "count_subrecord": count_subrecord, "members": parsed, "successors": successors}
     return group, rows, links
 
 
@@ -412,11 +419,14 @@ def load_schema(schema_path: Path):
             raise ValueError(f"counted_array {array['path']!r} needs exactly one whole-payload u32 row for {array['count_subrecord']}")
 
     for group in groups:
-        if group["count_subrecord"]:
-            counts = [row for row in fields
-                      if row["record"] == group["record"] and row["subrecord"] == group["count_subrecord"]]
-            if len(counts) != 1 or not whole_payload_u32(counts[0]):
-                raise ValueError(f"subrecord_group {group['path']!r} needs exactly one whole-payload u32 row for {group['count_subrecord']}")
+        counts = [row for row in fields
+                  if row["record"] == group["record"] and row["subrecord"] == group["count_subrecord"]]
+        if len(counts) != 1 or not whole_payload_u32(counts[0]):
+            raise ValueError(f"subrecord_group {group['path']!r} needs exactly one whole-payload u32 row for {group['count_subrecord']}")
+        group_signatures = {member["subrecord"] for member in group["members"]} | {group["count_subrecord"]}
+        for array in arrays:
+            if array["record"] == group["record"] and group_signatures & {array["subrecord"], array["count_subrecord"]}:
+                raise ValueError(f"subrecord_group {group['path']!r} shares a subrecord with counted_array {array['path']!r} in {group['record']}")
         for other in groups:
             if other is group or other["record"] != group["record"]:
                 continue
@@ -458,6 +468,12 @@ def render_subrecord_groups(groups):
                 lines.append(f"constexpr std::uint8_t {name}[] = {{{body}}};")
                 spec += f", std::span<const std::uint8_t>({name})"
             members.append("{" + spec + "},")
+        if group["successors"]:
+            body = ", ".join(f"Signature::from_string({cpp_string(signature)})" for signature in group["successors"])
+            lines.append(f"constexpr Signature k_subrecord_group_successors_{index}[] = {{{body}}};")
+            successors = f"std::span<const Signature>(k_subrecord_group_successors_{index})"
+        else:
+            successors = "std::span<const Signature>{}"
         lines.append(f"constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_{index}[] = {{")
         lines.extend(members)
         lines.append("};")
@@ -466,8 +482,9 @@ def render_subrecord_groups(groups):
             f"Signature::from_string({cpp_string(group['record'])}), " +
             f"{cpp_string(group['path'])}, " +
             f"{cpp_string(group['label'])}, " +
-            (f"Signature::from_string({cpp_string(group['count_subrecord'])}), " if group["count_subrecord"] else "Signature{}, ") +
-            f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_{index})" +
+            f"Signature::from_string({cpp_string(group['count_subrecord'])}), " +
+            f"std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_{index}), " +
+            successors +
             "},")
     if groups:
         lines.append(f"constexpr std::array<SubrecordGroupDescriptor, {len(groups)}> k_subrecord_groups{{{{")

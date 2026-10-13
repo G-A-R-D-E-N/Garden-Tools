@@ -45,17 +45,12 @@ fo4::schema::SubrecordGroupDescriptor items_group() {
 }
 
 fo4::schema::SubrecordGroupDescriptor custom_group() {
-  return {k_cont, "CONT\\Custom", "Custom", k_coct,
-          std::span<const fo4::schema::SubrecordGroupMemberDescriptor>(k_custom_members)};
-}
-
-constexpr std::array<fo4::schema::SubrecordGroupMemberDescriptor, 1> k_bare_members{{
-    {k_cnto, true, false, 8, {}},
-}};
-
-fo4::schema::SubrecordGroupDescriptor bare_group() {
-  return {k_cont, "CONT\\Bare", "Bare", fo4::Signature{},
-          std::span<const fo4::schema::SubrecordGroupMemberDescriptor>(k_bare_members)};
+  return {.record = k_cont,
+          .path = "CONT\\Custom",
+          .label = "Custom",
+          .count_subrecord = k_coct,
+          .members = std::span<const fo4::schema::SubrecordGroupMemberDescriptor>(k_custom_members),
+          .successors = {}};
 }
 
 std::vector<std::byte> zeros(std::size_t size) { return std::vector<std::byte>(size); }
@@ -398,14 +393,84 @@ TEST(SubrecordGroup, OutOfRangeMissingRecordAndMissingCountRefuseWithoutMutation
   EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, fo4::FormKey::parse("000999:Patch.esp"), items_group(), 0),
             fo4::SubrecordGroupMutationStatus::record_missing);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
 
-  auto no_count = fo4::read_plugin(make_plugin({{"CNTO", cnto_bytes(0x900, 5)}, {"DATA", zeros(4)}}), "Patch.esp");
-  const auto no_count_before = fo4::write_plugin(no_count);
-  EXPECT_EQ(fo4::insert_record_subrecord_group(no_count, record_key(), items_group(), 0),
+TEST(SubrecordGroup, MissingCountWithRunsIsRefusedWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_plugin({{"CNTO", cnto_bytes(0x900, 5)}, {"DATA", zeros(4)}}), "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 0),
             fo4::SubrecordGroupMutationStatus::subrecord_missing);
-  EXPECT_EQ(fo4::remove_record_subrecord_group(no_count, record_key(), items_group(), 0),
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record_key(), items_group(), 0),
             fo4::SubrecordGroupMutationStatus::subrecord_missing);
-  EXPECT_EQ(fo4::write_plugin(no_count), no_count_before);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(SubrecordGroup, InsertsIntoAnItemlessContainerWithANewCountBeforeItsFirstSuccessor) {
+  auto plugin = fo4::read_plugin(make_plugin({{"EDID", zeros(4)}, {"DATA", zeros(4)}}), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"EDID", "COCT", "CNTO", "DATA"}));
+  EXPECT_EQ(stored_count(after), 1u);
+  EXPECT_EQ(read_member(after, "CONT\\ItemCount", 0), "1");
+  EXPECT_EQ(cnto_item(after, 0), 0u);
+}
+
+TEST(SubrecordGroup, ItemlessContainerWithNoSuccessorGetsItsNewCountAndRunAtTheEnd) {
+  auto plugin = fo4::read_plugin(make_plugin({{"EDID", zeros(4)}}), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"EDID", "COCT", "CNTO"}));
+  EXPECT_EQ(stored_count(after), 1u);
+}
+
+TEST(SubrecordGroup, TwoCountSubrecordsFailClosedWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_plugin({{"COCT", u32_bytes(1)},
+                                              {"COCT", u32_bytes(1)},
+                                              {"CNTO", cnto_bytes(0x900, 5)},
+                                              {"DATA", zeros(4)}}),
+                                 "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(fo4::remove_record_subrecord_group(plugin, record_key(), items_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(SubrecordGroup, CountWithTheWrongSizeFailsClosedWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_plugin({{"COCT", zeros(2)}, {"CNTO", cnto_bytes(0x900, 5)}, {"DATA", zeros(4)}}),
+                                 "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(fo4::remove_record_subrecord_group(plugin, record_key(), items_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(SubrecordGroup, DuplicateCoedInOneRunFailsClosedWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_plugin({{"COCT", u32_bytes(1)},
+                                              {"CNTO", cnto_bytes(0x900, 5)},
+                                              {"COED", zeros(12)},
+                                              {"COED", zeros(12)},
+                                              {"DATA", zeros(4)}}),
+                                 "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(SubrecordGroup, FormLinkWriteOnABrokenRunFailsClosedWithoutMutation) {
+  auto plugin = fo4::read_plugin(make_plugin({{"COCT", u32_bytes(1)}, {"CNTO", zeros(4)}, {"DATA", zeros(4)}}),
+                                 "Patch.esp");
+  const auto before = fo4::write_plugin(plugin);
+  const auto item = fo4::schema::formlink_field_descriptor("CONT\\ItemObject").value();
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, record_key(), item, 0, misc_key()),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(SubrecordGroup, OptionalCoedIsNotCreatedByInsert) {
@@ -417,18 +482,6 @@ TEST(SubrecordGroup, OptionalCoedIsNotCreatedByInsert) {
   EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), items_group(), 1),
             fo4::SubrecordGroupMutationStatus::updated);
   EXPECT_EQ(signatures(reparse(plugin)), (std::vector<std::string>{"COCT", "CNTO", "CNTO", "DATA"}));
-}
-
-TEST(SubrecordGroup, GroupWithoutACountEnumeratesButRefusesInsertAndRemove) {
-  auto plugin = fo4::read_plugin(make_plugin(base_items()), "Patch.esp");
-  const auto before = fo4::write_plugin(plugin);
-  const auto spans = fo4::subrecord_group_spans(plugin, record_key(), bare_group()).value();
-  ASSERT_EQ(spans.size(), 2u);
-  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), bare_group(), 0),
-            fo4::SubrecordGroupMutationStatus::subrecord_missing);
-  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record_key(), bare_group(), 0),
-            fo4::SubrecordGroupMutationStatus::subrecord_missing);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(SubrecordGroup, CustomDescriptorEnforcesLeaderRequiredOrderRepeatAndPayloadRules) {
@@ -465,4 +518,12 @@ TEST(SubrecordGroup, TwoCntoLinksAreRemappedOncePerItem) {
   EXPECT_EQ(stored_count(after), 2u);
   EXPECT_EQ(read_member(after, "CONT\\ItemCount", 0), "5");
   EXPECT_EQ(read_member(after, "CONT\\ItemCount", 1), "1");
+}
+
+TEST(SubrecordGroup, ItemLinkAcceptsNull) {
+  auto plugin = fo4::read_plugin(make_plugin(base_items()), "Patch.esp");
+  const auto item = fo4::schema::formlink_field_descriptor("CONT\ItemObject").value();
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), item, 1, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(cnto_item(reparse(plugin), 1), 0u);
 }
