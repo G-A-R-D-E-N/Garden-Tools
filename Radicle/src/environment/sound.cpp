@@ -27,6 +27,8 @@ void links(const Reader& reader, const Subrecord& sub, std::vector<FormKey>& out
 }
 
 constexpr std::size_t k_max_sound_depth = 8;
+constexpr std::size_t k_max_sound_visits = 4096;
+constexpr std::size_t k_max_sound_files = 4096;
 
 const RecordRef& linked(const Environment& env, const Record& owner, Signature link,
                         const std::optional<FormKey>& key) {
@@ -36,9 +38,10 @@ const RecordRef& linked(const Environment& env, const Record& owner, Signature l
 }
 
 void collect_descriptor(const Environment& env, const RecordRef& ref, std::size_t depth,
-                        std::vector<FormKey>& path, std::vector<std::string_view>& out) {
+                        std::vector<FormKey>& path, std::vector<std::string_view>& out, std::size_t& visits) {
   const auto& record = *ref.record;
   if (depth >= k_max_sound_depth) Reader::fail(record, sig("SNDR"), "exceeds the sound descriptor depth limit");
+  if (++visits > k_max_sound_visits) Reader::fail(record, sig("SNDR"), "exceeds the sound descriptor visit limit");
   if (std::find(path.begin(), path.end(), record.form_key) != path.end()) {
     Reader::fail(record, sig("SNDR"), "links back to an ancestor descriptor");
   }
@@ -48,12 +51,13 @@ void collect_descriptor(const Environment& env, const RecordRef& ref, std::size_
     out.insert(out.end(), data.files.begin(), data.files.end());
   } else if (*data.kind == 0x54651A43u) {
     for (const auto& child : data.descriptors) {
-      collect_descriptor(env, linked(env, record, sig("DNAM"), child), depth + 1, path, out);
+      collect_descriptor(env, linked(env, record, sig("DNAM"), child), depth + 1, path, out, visits);
     }
   } else {
-    collect_descriptor(env, linked(env, record, sig("BNAM"), data.base_descriptor), depth + 1, path, out);
+    collect_descriptor(env, linked(env, record, sig("BNAM"), data.base_descriptor), depth + 1, path, out, visits);
     for (const auto& rate : data.rate_files) out.push_back(rate.file);
   }
+  if (out.size() > k_max_sound_files) Reader::fail(record, sig("SNDR"), "exceeds the sound file limit");
   path.pop_back();
 }
 
@@ -192,11 +196,12 @@ FootstepSetData decode_footstep_set(const Environment& env, const RecordRef& ref
 std::vector<std::string_view> resolve_sound_files(const Environment& env, const RecordRef& ref) {
   std::vector<std::string_view> out;
   std::vector<FormKey> path;
+  std::size_t visits = 0;
   if (ref.record->header.signature == sig("SOUN")) {
     const auto marker = decode_sound_marker(env, ref);
-    collect_descriptor(env, linked(env, *ref.record, sig("SDSC"), marker.descriptor), 0, path, out);
+    collect_descriptor(env, linked(env, *ref.record, sig("SDSC"), marker.descriptor), 0, path, out, visits);
   } else {
-    collect_descriptor(env, ref, 0, path, out);
+    collect_descriptor(env, ref, 0, path, out, visits);
   }
   return out;
 }
