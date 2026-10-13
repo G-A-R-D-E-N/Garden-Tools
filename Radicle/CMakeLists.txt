@@ -117,11 +117,13 @@ add_library(fo4
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
+  src/forms/cell_create.cpp
   src/forms/components.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
   src/forms/placed_reference_edit.cpp
+  src/forms/placed_reference_create.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather.cpp
@@ -357,10 +359,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_exterior_cell_grid.cpp
     tests/test_exterior_cell_grid_real.cpp
     tests/test_exterior_cell_creation.cpp
+    tests/test_interior_cell_create.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
+    tests/test_placed_reference_create.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp

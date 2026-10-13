@@ -68,6 +68,10 @@ bool label_is_form_id(GroupType type) {
   throw PlacedReferenceError("unknown GRUP type in placed-reference containment");
 }
 
+}  // namespace
+
+namespace detail {
+
 std::array<std::byte, 4> u32_label(std::uint32_t value) {
   return {
       std::byte{static_cast<std::uint8_t>(value)},
@@ -76,10 +80,6 @@ std::array<std::byte, 4> u32_label(std::uint32_t value) {
       std::byte{static_cast<std::uint8_t>(value >> 24)},
   };
 }
-
-}  // namespace
-
-namespace detail {
 
 RecordLocation locate_record(const Plugin& plugin, const FormKey& key) {
   RecordLocation found;
@@ -134,6 +134,56 @@ Group* unique_child_group(Group& parent, const GroupHeader& wanted) {
     found = group;
   }
   return found;
+}
+
+Group* ensure_cell_children_group(Group& parent,
+                                  const GroupHeader& source_header,
+                                  const FormKey& cell,
+                                  const PluginFormIdContext& source_context,
+                                  const PluginFormIdContext& destination_context) {
+  const auto header = remap_group_header(
+      source_header, source_context, destination_context);
+  if (header.group_type != static_cast<std::int32_t>(GroupType::cell_children)) {
+    throw PlacedReferenceError("placed reference is not beneath a CELL children GRUP");
+  }
+  if (auto* existing = unique_child_group(parent, header); existing != nullptr) {
+    return existing;
+  }
+
+  Group created;
+  created.header = header;
+  for (auto it = parent.children.begin(); it != parent.children.end(); ++it) {
+    const auto* record = std::get_if<Record>(&*it);
+    if (record == nullptr || record->form_key != cell) continue;
+    return &std::get<Group>(*parent.children.insert(std::next(it), std::move(created)));
+  }
+  throw PlacedReferenceError(
+      "destination CELL record disappeared before its child GRUP was created");
+}
+
+Group* ensure_reference_bucket(Group& cell_children,
+                               const GroupHeader& source_header,
+                               const PluginFormIdContext& source_context,
+                               const PluginFormIdContext& destination_context) {
+  const auto header = remap_group_header(
+      source_header, source_context, destination_context);
+  const auto type = static_cast<GroupType>(header.group_type);
+  if (type != GroupType::cell_persistent_children &&
+      type != GroupType::cell_temporary_children) {
+    throw PlacedReferenceError(
+        "placed reference is not in a persistent or temporary CELL bucket");
+  }
+  if (auto* existing = unique_child_group(cell_children, header); existing != nullptr) {
+    return existing;
+  }
+  Group created;
+  created.header = header;
+  const auto later = std::find_if(
+      cell_children.children.begin(), cell_children.children.end(), [&](const GroupChild& child) {
+        const auto* group = std::get_if<Group>(&child);
+        return group != nullptr && group->header.group_type > header.group_type;
+      });
+  return &std::get<Group>(*cell_children.children.insert(later, std::move(created)));
 }
 
 PluginKind owner_kind(const Plugin& source, const PluginKey& owner) {
@@ -246,52 +296,6 @@ Group* ensure_group_path(Plugin& plugin,
     current = child;
   }
   return current;
-}
-
-Group* ensure_cell_children_group(Group& parent,
-                                  const GroupHeader& source_header,
-                                  const FormKey& cell,
-                                  const PluginFormIdContext& source_context,
-                                  const PluginFormIdContext& destination_context) {
-  const auto header = remap_group_header(
-      source_header, source_context, destination_context);
-  if (header.group_type != static_cast<std::int32_t>(GroupType::cell_children)) {
-    throw PlacedReferenceError("placed reference is not beneath a CELL children GRUP");
-  }
-  if (auto* existing = unique_child_group(parent, header); existing != nullptr) {
-    return existing;
-  }
-
-  Group created;
-  created.header = header;
-  for (auto it = parent.children.begin(); it != parent.children.end(); ++it) {
-    const auto* record = std::get_if<Record>(&*it);
-    if (record == nullptr || record->form_key != cell) continue;
-    return &std::get<Group>(*parent.children.insert(std::next(it), std::move(created)));
-  }
-  throw PlacedReferenceError(
-      "destination CELL record disappeared before its child GRUP was created");
-}
-
-Group* ensure_reference_bucket(Group& cell_children,
-                               const GroupHeader& source_header,
-                               const PluginFormIdContext& source_context,
-                               const PluginFormIdContext& destination_context) {
-  const auto header = remap_group_header(
-      source_header, source_context, destination_context);
-  const auto type = static_cast<GroupType>(header.group_type);
-  if (type != GroupType::cell_persistent_children &&
-      type != GroupType::cell_temporary_children) {
-    throw PlacedReferenceError(
-        "placed reference is not in a persistent or temporary CELL bucket");
-  }
-  if (auto* existing = unique_child_group(cell_children, header); existing != nullptr) {
-    return existing;
-  }
-  Group created;
-  created.header = header;
-  cell_children.children.emplace_back(std::move(created));
-  return &std::get<Group>(cell_children.children.back());
 }
 
 bool replace_record(Plugin& plugin, const FormKey& key, Record replacement) {
