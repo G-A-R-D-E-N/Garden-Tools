@@ -51,7 +51,7 @@ import type { RecordTab } from './RecordView';
 import { errorMessage } from './errors';
 import ExplorerTree from './Shell/ExplorerTree';
 
-const hitKey = (h: SearchHit) => `${h.Plugin}:${h.FormKey}`;
+const hitKey = (h: SearchHit) => h.FormKey;
 
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
@@ -280,15 +280,18 @@ export default function MainShell() {
   const [recHits, setRecHits] = useState<Record<string, SearchHit>>({});
   const { comparing: recComparing, compare: compareRecords } = useCompareSelected();
   const visibleHits = searchResults ?? [];
-  const recPicked = Object.keys(recSel).filter(k => recSel[k]).map(k => recHits[k]);
-  const recHidden = recPicked.filter(h => !visibleHits.some(v => hitKey(v) === hitKey(h))).length;
+  const visibleKeys = new Set(visibleHits.map(hitKey));
+  const loadedSet = loadOrderSummary?.Plugins ? new Set(loadOrderSummary.Plugins) : null;
+  const recPicked = Object.keys(recSel).filter(k => recSel[k]).map(k => recHits[k])
+    .filter(h => !loadedSet || loadedSet.has(h.Plugin));
+  const recHidden = recPicked.filter(h => !visibleKeys.has(hitKey(h))).length;
   const selectHit = (h: SearchHit, mode: SelectMode) => {
     const next = selectRow(visibleHits.map(hitKey), recSel, recAnchor, hitKey(h), mode);
     setRecSel(next.sel);
     setRecAnchor(next.anchor);
     setRecHits(prev => ({ ...prev, ...Object.fromEntries(visibleHits.map(v => [hitKey(v), v])) }));
   };
-  const clearRecSel = () => { setRecSel({}); setRecAnchor(null); };
+  const clearRecSel = () => { setRecSel({}); setRecAnchor(null); setRecHits({}); };
   const copyRecs = async () => {
     if (await copyMany(recPicked.map(h => ({ formKey: h.FormKey, source: h.Plugin, editorId: h.EditorID })))) clearRecSel();
   };
@@ -475,7 +478,7 @@ export default function MainShell() {
 
               { }
               {(search.trim().length >= 2 || recPicked.length > 0) && (
-                <div className="sidebar-results" tabIndex={0} onKeyDown={e => { if (e.key === 'Escape') clearRecSel(); }}>
+                <div className="sidebar-results" aria-label="Records" tabIndex={0} onKeyDown={e => { if (e.key === 'Escape') clearRecSel(); }}>
                   {recPicked.length > 0 && (
                     <div className="conflicts-actions">
                       <button className="sidebar-action-btn" disabled={conflictBusy} onClick={copyRecs}>
@@ -510,6 +513,7 @@ export default function MainShell() {
                             onClick={e => { const mode = modeOf(e); selectHit(h, mode); if (mode === 'plain') void openHit(h); }}
                             title={`${h.FormKey} · ${h.Plugin}`}
                           >
+                            <input type="checkbox" aria-label={h.EditorID || h.FormKey} checked={!!recSel[hitKey(h)]} onClick={e => e.stopPropagation()} onChange={() => selectHit(h, 'toggle')} />
                             <FileBox size={13} color="#569CD6" />
                             <span className="sr-id">{h.EditorID || h.FormKey}</span>
                             <span className="sr-type">{h.Type}</span>

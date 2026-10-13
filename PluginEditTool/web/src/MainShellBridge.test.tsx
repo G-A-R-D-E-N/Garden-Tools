@@ -14,6 +14,7 @@ const loadEnvironment = vi.fn<(discard?: boolean) => Promise<string>>();
 const copyMany = vi.fn<() => Promise<string>>();
 const searchRecords = vi.fn<(q: string) => Promise<string>>();
 const getMatrix = vi.fn<(key: string) => Promise<string>>();
+const getLoadOrder = vi.fn<() => Promise<string>>();
 
 const pluginRow = { Key: 'PluginA.esp', Name: 'PluginA.esp', Kind: 'plugin', FilePath: '', HasChildren: false, IsRecordNode: false };
 const weaponHit = { Plugin: 'Master.esm', FormKey: '000800:Master.esm', EditorID: 'WeaponOne', Type: 'WEAP' };
@@ -35,7 +36,7 @@ function stubBridge() {
         appInterop: { GetPlugins: getPlugins, GetMo2Status: vi.fn(async () => JSON.stringify({})), LoadEnvironment: loadEnvironment },
         backend: {
           GetRecordTypeIndex: vi.fn(async () => '[]'),
-          GetLoadOrderSummary: vi.fn(async () => JSON.stringify({ Plugins: [] })),
+          GetLoadOrderSummary: getLoadOrder,
           GetConflicts: vi.fn(async () => JSON.stringify([conflictRow])),
           CopyAsOverrideMany: copyMany,
           SearchRecords: searchRecords,
@@ -66,6 +67,7 @@ beforeEach(() => {
   loadEnvironment.mockResolvedValue('ok');
   copyMany.mockResolvedValue(JSON.stringify({ total: 0, ok: 0, failed: 0 }));
   searchRecords.mockResolvedValue('[]');
+  getLoadOrder.mockResolvedValue(JSON.stringify({ Plugins: ['Master.esm'] }));
   getMatrix.mockReset().mockImplementation(async key => JSON.stringify({
     FormKey: key, EditorID: 'Rec', Type: 'WEAP', Winner: 'Master.esm', Plugins: ['Master.esm'], Rows: [], Level: 'conflict',
   }));
@@ -283,6 +285,25 @@ describe('sidebar record multi-select', () => {
     fireEvent.click(button(/Compare selected/));
     await waitFor(() => expect(getMatrix).toHaveBeenCalledWith(bowHit.FormKey));
     expect(getMatrix.mock.calls.map(([key]) => key)).toEqual([weaponHit.FormKey, bowHit.FormKey]);
+  });
+
+  it('selects rows with their checkboxes without opening them', async () => {
+    await openRecordSearch('weapon');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'WeaponOne' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'BowOne' }));
+    expect(isSelected('WeaponOne') && isSelected('BowOne')).toBe(true);
+    expect(screen.getByText('2 selected (0 hidden)')).toBeTruthy();
+    expect(getMatrix).not.toHaveBeenCalled();
+  });
+
+  it('leaves out picks from plugins that are no longer loaded', async () => {
+    getLoadOrder.mockResolvedValue(JSON.stringify({ Plugins: ['Other.esp'] }));
+    await openRecordSearch('weapon');
+    fireEvent.click(hitRow('WeaponOne'), { ctrlKey: true });
+    fireEvent.click(hitRow('BowOne'), { ctrlKey: true });
+    expect(screen.queryByText(/selected \(/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Copy selected/ })).toBeNull();
+    expect(copyMany).not.toHaveBeenCalled();
   });
 
   it('Escape and Clear empty the record selection', async () => {
