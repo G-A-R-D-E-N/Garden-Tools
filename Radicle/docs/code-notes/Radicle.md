@@ -1052,7 +1052,11 @@ The data directory overload lists the directory and passes the entries to the sp
 
 ## Radicle/src/loadorder/plugin_list.cpp:parse_plugin_list
 
-Splits on LF and removes one trailing CR per line; the BOM is removed only at the start of the text. Lines starting with `#` or shorter than two characters are skipped before the leading `*` is stripped, so a lone `*` is skipped and `*a` yields the name `a`. Duplicates are compared as exact strings after the `*` is stripped. The first occurrence keeps its active flag; later ones go to `duplicates`.
+Splits on LF and removes one trailing CR per line; the BOM is removed only at the start of the text. Lines starting with `#` or shorter than two characters are skipped before the leading `*` is stripped, so a lone `*` is skipped and `*a` yields the name `a`. Duplicates are compared as `PluginKey`s after the `*` is stripped, so the assembler's case folding applies and `Mod.esp` matches `*MOD.esp`. The first occurrence keeps its active flag; later ones go to `duplicates`. A name with a byte below 0x20 is skipped and its 1-based line goes to `invalid_lines`. The C ABI plugin-list rows carry only the entries, so `assemble_load_order` reports the lines as `invalid_name`, which is the only channel for them. Tests: `Radicle/tests/test_load_order_files.cpp:MixedCaseDuplicateKeepsInactiveFirstEntry`, `Radicle/tests/test_load_order_files.cpp:MixedCaseDuplicateKeepsActiveFirstEntry`, `Radicle/tests/test_load_order_files.cpp:NamesWithControlCharactersAreSkippedAndReported`.
+
+## Radicle/bindings/csharp/Radicle.Interop/LoadOrder.cs:SplitTrailing
+
+Splits a row into a fixed number of trailing fields counted from the right, so a TAB inside the first field stays there and cannot throw. `ReadPluginList` uses it for `name\tactive\tline` and `Assemble` for `name\tchecked\tmaster\tlight`. The native plugin-list parser already refuses control characters in names, so this is a second guard. Test: `Radicle/bindings/csharp/Radicle.Interop.Tests/LoadOrderTests.cs:ReadPluginListSkipsNamesWithControlCharactersWithoutThrowing`.
 
 ## Radicle/src/loadorder/plugin_list.cpp:parse_ccc
 
