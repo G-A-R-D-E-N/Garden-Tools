@@ -79,6 +79,13 @@ TEST_P(MaterialImpactRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesE
     for (const auto& field : fo4::schema::scalar_fields(signature)) {
       for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != field.scalar.subrecord) continue;
+        const auto& scalar = field.scalar;
+        if (scalar.payload_size != 0 &&
+            (scalar.minimum_payload_size != 0 ? subrecord.data.size() < scalar.minimum_payload_size
+                                              : subrecord.data.size() != scalar.payload_size)) {
+          ADD_FAILURE() << record.form_key.to_string() << ' ' << field.path << ": "
+                        << subrecord.signature.to_string() << " is " << subrecord.data.size() << " bytes";
+        }
         const auto bytes = fo4::schema::scalar_field_bytes(subrecord.data, field.scalar);
         if (!bytes.empty()) static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
       }

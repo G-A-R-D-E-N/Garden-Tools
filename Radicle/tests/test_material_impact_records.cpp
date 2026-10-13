@@ -1,7 +1,6 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
-#include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -223,7 +222,6 @@ TEST(MaterialImpactSynthetic, EditsOneRowPerRecordAndRereads) {
   }
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  const auto hits = fo4::collect_form_links(reread);
   for (const auto& item : k_items) {
     const auto signature = fo4::Signature::from_string(item.signature);
     const auto record_key = fo4::FormKey::parse(item.key);
@@ -249,11 +247,13 @@ TEST(MaterialImpactSynthetic, EditsOneRowPerRecordAndRereads) {
     if (!item.link_path.empty()) {
       const auto link = fo4::schema::formlink_field_descriptor(signature, item.link_path);
       ASSERT_TRUE(link.has_value());
-      const auto target = fo4::FormKey::parse(item.link_target);
-      const bool found = std::any_of(hits.begin(), hits.end(), [&](const fo4::FormLinkHit& hit) {
-        return hit.record == record_key && hit.subrecord == link->subrecord && hit.key == target;
-      });
-      EXPECT_TRUE(found) << item.link_path;
+      const auto* link_sub = find_subrecord(*record, link->subrecord);
+      ASSERT_NE(link_sub, nullptr);
+      ASSERT_GE(link_sub->data.size(), link->offset + sizeof(std::uint32_t));
+      const auto* first = link_sub->data.data() + link->offset;
+      const Bytes stored(first, first + sizeof(std::uint32_t));
+      const auto expected = raw_id(fo4::FormKey::parse(item.link_target).local().value());
+      EXPECT_EQ(stored, u32_bytes(expected)) << item.link_path;
     }
   }
 }
