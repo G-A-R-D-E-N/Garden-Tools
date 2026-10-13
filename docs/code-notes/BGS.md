@@ -344,4 +344,4 @@ A stale radicle.dll or a RADICLE_NATIVE_PATH pointing at another build throws Ra
 
 ## BGS/src/Archive/GameData.cs:Names
 
-A missing native library reaches Names as an InvalidDataException wrapping the native error. The catch used to treat that as a DX10 or unreadable archive and returned no names silently. Native-load failures now propagate with their "could not be loaded" message, so the caller sees the cause.
+A missing native library reaches Names as an InvalidDataException wrapping the native error. The catch used to treat that as a DX10 or unreadable archive and returned no names silently. Native-load failures now propagate with their "could not be loaded" message, so the caller sees the cause. `GameData.Entries` uses the same filter.
