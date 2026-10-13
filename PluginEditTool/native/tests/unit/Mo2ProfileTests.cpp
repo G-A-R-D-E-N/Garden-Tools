@@ -140,12 +140,9 @@ TEST_CASE("MO2 profile assembles an OG-style install from the official DLC maste
     const auto profile = root / "profiles" / "Test";
 
     writeFile(root / "ModOrganizer.ini",
-        "selected_profile=Test
-"
-        "gamePath=" + game.string() + "
-");
-    writeFile(profile / "plugins.txt", "*Example.esp
-");
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*Example.esp\n");
     writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
     writeFile(gameData / "DLCRobot.esm", minimalPlugin(0x1, "robot", {"Fallout4.esm"}));
     writeFile(gameData / "DLCworkshop01.esm", minimalPlugin(0x1, "workshop01", {"Fallout4.esm"}));
@@ -159,6 +156,33 @@ TEST_CASE("MO2 profile assembles an OG-style install from the official DLC maste
     REQUIRE(snapshot.has_value());
     const std::vector<std::string> expected{"Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
         "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm", "Example.esp"};
+    CHECK(snapshot->loadOrder == expected);
+    CHECK(snapshot->missingPlugins.empty());
+}
+
+TEST_CASE("MO2 profile assembles an OG-style install with a partial DLC set listed in plugins.txt") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*DLCRobot.esm\n*DLCCoast.esm\n*Example.esp\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(gameData / "DLCRobot.esm", minimalPlugin(0x1, "robot", {"Fallout4.esm"}));
+    writeFile(gameData / "DLCworkshop01.esm", minimalPlugin(0x1, "workshop01", {"Fallout4.esm"}));
+    writeFile(gameData / "DLCCoast.esm", minimalPlugin(0x1, "coast", {"Fallout4.esm"}));
+    writeFile(gameData / "DLCworkshop02.esm", minimalPlugin(0x1, "workshop02", {"Fallout4.esm"}));
+    writeFile(gameData / "DLCworkshop03.esm", minimalPlugin(0x1, "workshop03", {"Fallout4.esm"}));
+    writeFile(gameData / "Example.esp", minimalPlugin(0, "example", {"Fallout4.esm"}));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    const std::vector<std::string> expected{"Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm",
+        "DLCworkshop02.esm", "DLCworkshop03.esm", "Example.esp"};
     CHECK(snapshot->loadOrder == expected);
     CHECK(snapshot->missingPlugins.empty());
 }
