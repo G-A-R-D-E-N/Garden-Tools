@@ -343,8 +343,8 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | LIGH | P | I | I | I | U | U | P | G | environment / plugin headers |
 | LSCR | U | U | U | U | U | U | U | G | field audit pending |
 | LTEX | P | U | U | U | U | U | P | G | environment / plugin headers; PR #404 |
-| LVLI | P | P | P | P | P | U | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; tests/test_leveled_list_creation.cpp; docs/LEVELED_LISTS.md |
-| LVLN | P | P | P | P | P | U | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; tests/test_leveled_list_creation.cpp; docs/LEVELED_LISTS.md |
+| LVLI | P | P | P | P | P | P | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; tests/test_leveled_list_creation.cpp; docs/LEVELED_LISTS.md |
+| LVLN | P | P | P | P | P | P | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; tests/test_leveled_list_creation.cpp; docs/LEVELED_LISTS.md |
 | LVSP | P | P | P | P | P | P | P | G | forms/leveled_spell.hpp |
 | MATO | U | U | U | U | U | U | U | G | field audit pending |
 | MATT | U | U | U | U | U | U | U | G | field audit pending |
@@ -360,7 +360,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | NAVM | U | U | U | U | U | P | U | G | field audit pending; PR #402 |
 | NOCM | U | U | U | U | U | U | U | G | field audit pending |
 | NOTE | U | U | U | U | U | U | U | G | field audit pending |
-| NPC_ | P | P | P | P | U | U | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit pending for unlisted fields |
+| NPC_ | P | P | P | P | U | P | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit pending for unlisted fields |
 | OMOD | U | U | U | U | U | P | U | G | field audit pending |
 | OTFT | U | U | U | U | U | U | U | G | field audit pending |
 | OVIS | U | U | U | U | U | U | U | G | field audit pending |
@@ -408,7 +408,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | TXST | P | U | U | U | U | U | P | G | environment / plugin headers |
 | VTYP | U | U | U | U | U | U | U | G | field audit pending |
 | WATR | P | U | U | U | U | U | P | G | environment / plugin headers; PR #396 |
-| WEAP | P | I | I | I | U | U | P | G | schema/fallout4/fields.json scalars and FormLinks (docs/WEAPONS.md); DAMA typed read (xEdit-derived; WeaponReal runs in the real-data CI job, no pass recorded here); keyword lists I; WRITE not claimed without save/reparse proof (docs/WEAPONS.md Parity) |
+| WEAP | P | I | I | I | U | P | P | G | schema/fallout4/fields.json scalars and FormLinks (docs/WEAPONS.md); DAMA typed read (xEdit-derived; WeaponReal runs in the real-data CI job, no pass recorded here); keyword lists I; WRITE not claimed without save/reparse proof (docs/WEAPONS.md Parity) |
 | WRLD | P | U | U | U | U | P | P | G | environment / plugin headers |
 | WTHR | P | P | U | U | U | P | P | G | forms/weather_concept.hpp; PR #398 |
 | ZOOM | U | U | U | U | U | U | U | G | field audit pending |
