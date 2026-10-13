@@ -496,6 +496,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_sound_subrecords.cpp
     tests/test_sound_writer_c_api.cpp
     tests/test_sound_writer_real.cpp
+    tests/test_audio_records.cpp
+    tests/test_audio_records_real.cpp
     tests/test_sky_parameters.cpp
     tests/test_sky_real.cpp
     tests/test_environment_material_swap.cpp
