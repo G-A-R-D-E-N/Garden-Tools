@@ -186,6 +186,7 @@
   font-size: 12px;
 }
 .sidebar-result:hover { background: var(--bg-hover); }
+.sidebar-result.selected { background: #094771; }
 .sidebar-result .sr-id {
   color: var(--text-primary);
   flex: 1;
