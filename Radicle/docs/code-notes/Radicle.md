@@ -1101,3 +1101,62 @@ Creates a directory named with the process id and a process-wide atomic counter,
 ## Radicle/src/forms/static_collection.cpp:decode_static_collection_parts
 
 The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
+
+## Radicle/include/fo4/forms/faction.hpp:FactionCombatReaction
+
+xEdit FO4 `wbFactionRelations` (`Core/wbDefinitionsCommon.pas` lines 8540-8557) gives the
+Group Combat Reaction enum as 0 Neutral, 1 Enemy, 2 Ally, 3 Friend (lines 8549-8553). The
+Radicle names are `neutral`, `enemy`, `ally` and `friendly`. A value above 3 is malformed
+and decode throws `FactionError`. xEdit's `IsTES4` branch (line 8547) omits this member
+for TES4 only, so FO4 always carries it.
+
+## Radicle/include/fo4/forms/faction.hpp:FactionRelation
+
+XNAM is a 12-byte relation: form ID at 0, Modifier as int32 at 4, and reaction as u32 at 8
+(xEdit lines 8544-8553). The form ID is allowed to be a FACT or a RACE (line 8545). Radicle
+treats a null form ID as malformed. The schema's `FACT\RelationFaction` formlink row uses
+the same two targets, so `check` validates them as well.
+
+## Radicle/include/fo4/forms/faction.hpp:FactionRank
+
+RNAM is a u32 rank number (`Core/wbDefinitionsFO4.pas` line 6773). MNAM and FNAM are
+localized strings (lines 6774-6775, `cpTranslate`), so they go through
+`schema::read_localized_string`. INAM (line 6776) is an unused string. Radicle keeps its raw
+bytes so an edit does not drop them. A rank is an RNAM-started group (`wbRStructSK([0], ...)`,
+line 6772) with members in the order RNAM, MNAM, FNAM, INAM. A member that is out of order,
+or is not preceded by an RNAM in the same group, is malformed.
+
+## Radicle/src/forms/faction.cpp:rank_member_stage
+
+The stage order RNAM, MNAM, FNAM, INAM is the xEdit member order at
+`Core/wbDefinitionsFO4.pas` lines 6772-6776. A member is accepted only when its stage is
+higher than the previous member of the same rank group. Any other record subrecord closes the
+group, so a later MNAM cannot attach to an earlier rank.
+
+## Radicle/src/forms/faction.cpp:add_faction_relation
+
+Relations are inserted after the last XNAM. With none, the new XNAM goes before the first
+DATA, which is where xEdit places the Relations array (line 6788, before the DATA struct
+at line 6789). Ranks are inserted after the last rank group. With none, they go before the
+first VEND, VENC, VENV, PLVD, CITC or CTDA, which follow the CRVA struct and the Ranks
+array in xEdit (lines 6830-6845).
+
+## Radicle/src/forms/faction.cpp:add_faction_rank
+
+Edits build the next plugin state on a copy and replace the caller's plugin only after every
+check passes, so a rejected write leaves the plugin unchanged. Title strings must match the
+plugin's localized flag: a localized plugin takes string IDs, an inline plugin takes text.
+Text containing a NUL is refused.
+
+## Radicle/schema/fallout4/fields.json:FACT
+
+CRVA is gated by minimum payload sizes 16, 18 and 20 on the Steal Multiplier, Escape and
+Werewolf fields (xEdit `wbStruct(CRVA, ...).SetOptionalFrom(7)`, `wbDefinitionsFO4.pas`
+line 6828). The first seven members are required, so their offset plus width is the gate.
+VENV has no optional tail (`SetRequired`, line 6842), so each VENV field carries
+`payload_size` 12, which hides every VENV field in a payload of any other size. Flags is a
+whole-payload u32 (DATA, lines 6789-6810), so a wrong width throws `ScalarError`.
+The formlink rows for JAIL, WAIT, STOL, PLCN, CRGR, JOUT, VEND and VENC are not nullable
+because xEdit lists no NULL among their targets (lines 6811-6816 and 6831-6832). The
+XNAM relation row is repeated with payload size 12 and targets FACT and RACE (line 8545).
+Localized subrecords are FULL, MNAM and FNAM (lines 3692, 6774, 6775).

@@ -80,7 +80,7 @@ The P entries refer to the bounded surfaces below, not every xEdit member. Keywo
 | EQUP | U | U | U | U | U | P | U | G | field audit pending; xEdit L8835 |
 | EXPL | P | P | U | U | P | P | P | G | forms/proj_expl_hazd.hpp; xEdit L7334 |
 | EYES | P | P | P | U | P | P | P | G | forms/eyes.hpp; xEdit L6752 |
-| FACT | U | U | U | U | U | U | U | G | field audit pending; xEdit L6785 |
+| FACT | P | P | P | P | U | U | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp; docs/FACTIONS.md; xEdit L6785 |
 | FLOR | I | I | I | I | U | U | I | G | field audit pending; PR #404; xEdit L12167 |
 | FLST | P | P | P | P | U | P | P | G | environment / plugin headers; xEdit L7574 |
 | FSTP | U | U | U | U | U | U | U | G | field audit pending; PR #400; xEdit L8686 |
@@ -193,6 +193,7 @@ The P entries refer to the bounded surfaces below, not every xEdit member. Keywo
 | PROJ / EXPL / HAZD fixed values | forms/proj_expl_hazd.hpp; tests/test_scalar_embedded.cpp | Complete per-field edited round-trips, C ABI/C# mutation exposure |
 | QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection_authoring.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
 | RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
+| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM form ID remap on copy or merge; no creation; see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
 | CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | Other record members and whole-record creation |

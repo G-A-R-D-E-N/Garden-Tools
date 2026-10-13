@@ -129,6 +129,7 @@ add_library(fo4
   src/forms/quest_vmad.cpp
   src/forms/race.cpp
   src/forms/race_body.cpp
+  src/forms/faction.cpp
   src/io/atomic_write.cpp
   src/localization/strings.cpp
   src/plugin/tes4.cpp
@@ -410,6 +411,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
     tests/test_race_real.cpp
+    tests/test_faction.cpp
+    tests/test_faction_real.cpp
     tests/test_onam.cpp
     tests/test_vmad_writer.cpp
     tests/test_vmad_writer_real.cpp
