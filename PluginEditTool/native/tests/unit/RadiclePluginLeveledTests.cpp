@@ -97,7 +97,7 @@ std::vector<std::byte> settledLeveledBytes(std::uint16_t unused = 0, std::uint8_
     fo4::test::end_record(out, tes4);
 
     const auto group = fo4::test::begin_group(out, "LVLI", 0);
-    const auto list =fo4::test::begin_record(out, "LVLI", 0, 0x00000800u, 131);
+    const auto list = fo4::test::begin_record(out, "LVLI", 0, 0x00000800u, 131);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"ListC\0", 6});
     leveledWriteByte(out, "LVLD", 10);
     leveledWriteByte(out, "LVLM", 2);

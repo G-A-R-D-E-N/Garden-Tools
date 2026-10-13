@@ -405,7 +405,7 @@ TEST(LeveledList, ChangingAnExistingEntryDoesNotRecheckItsMissingTarget) {
   EXPECT_EQ(fo4::forms::decode_leveled_list(plugin, item_key()).entries.front().level, 7u);
 
   fo4::forms::LeveledListEntry added;
-  added.item = fo4::FormKey::parse("000900:Patch.esp");
+  added.item = fo4::FormKey::parse("000901:Patch.esp");
   EXPECT_THROW(fo4::forms::insert_leveled_list_entry(plugin, item_key(), 1, added),
                fo4::forms::LeveledListError);
 }
