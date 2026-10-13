@@ -502,7 +502,7 @@ Result<nlohmann::json> RadiclePluginBackend::createInteriorCell(const nlohmann::
     if (pluginName.empty() || editorId.empty()) {
         return std::unexpected(Error{
             "InteriorCellArgumentsMissing",
-            "CreateInteriorCell requires plugin and editorId"
+            "CreateInteriorCell requires plugin and editor_id"
         });
     }
 

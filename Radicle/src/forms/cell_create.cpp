@@ -78,12 +78,13 @@ Group* ensure_sorted_group(std::vector<GroupChild>& children, GroupType type, st
   return &std::get<Group>(*children.insert(position, std::move(created)));
 }
 
-void insert_cell(Group& subblock, Record record, std::uint32_t object_id) {
+void insert_cell(Group& subblock, Record record) {
+  const auto form_id = record.header.form_id.value();
   auto position = subblock.children.begin();
   for (; position != subblock.children.end(); ++position) {
     const auto* existing = std::get_if<Record>(&*position);
     if (existing != nullptr && existing->header.signature == k_cell &&
-        (existing->header.form_id.value() & k_object_id_mask) > object_id) {
+        existing->header.form_id.value() > form_id) {
       break;
     }
   }
@@ -125,7 +126,7 @@ FormKey create_interior_cell(Plugin& plugin, std::string_view editor_id) {
   auto* block = ensure_sorted_group(top->children, GroupType::interior_cell_block, object_id % 10u);
   auto* subblock = ensure_sorted_group(
       block->children, GroupType::interior_cell_subblock, (object_id / 10u) % 10u);
-  insert_cell(*subblock, std::move(record), object_id);
+  insert_cell(*subblock, std::move(record));
 
   next.original_range.clear();
   plugin = std::move(next);

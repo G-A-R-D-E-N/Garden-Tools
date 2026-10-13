@@ -1,4 +1,5 @@
 #include "fo4/forms/cell.hpp"
+#include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
@@ -148,4 +149,69 @@ TEST(InteriorCellCreate, RoundTripKeepsEditorIdAndInteriorFlag) {
   EXPECT_EQ(record->subrecords[1].signature, fo4::Signature::from_string("DATA"));
   ASSERT_EQ(record->subrecords[1].data.size(), 2u);
   EXPECT_EQ(std::to_integer<std::uint8_t>(record->subrecords[1].data[0]), 1u);
+}
+
+TEST(InteriorCellCreate, NewLocalCellSortsAfterMasterOverrideWithSameLabels) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x3F1);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::write_subrecord(out, "DATA", std::string_view{"\0\0\0\0\0\0\0\0", 8});
+  fo4::test::end_record(out, tes4);
+
+  const auto top_group = fo4::test::begin_group(out, "CELL", 0);
+  const auto block_group = fo4::test::begin_group(out, std::string_view{"\x09\0\0\0", 4}, 2);
+  const auto subblock_group = fo4::test::begin_group(out, std::string_view{"\0\0\0\0", 4}, 3);
+  const auto override_record = fo4::test::begin_record(out, "CELL", 0, 0x0001F3A5, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Override\0", 9});
+  fo4::test::write_subrecord(out, "DATA", std::string_view{"\x01\0", 2});
+  fo4::test::end_record(out, override_record);
+  fo4::test::end_group(out, subblock_group);
+  fo4::test::end_group(out, block_group);
+  fo4::test::end_group(out, top_group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Cells.esp");
+  const auto cell = fo4::forms::create_interior_cell(plugin, "Kitchen");
+  EXPECT_EQ(cell, fo4::FormKey::parse("0003F1:Cells.esp"));
+
+  const auto* top = top_cell_group(plugin);
+  ASSERT_NE(top, nullptr);
+  const auto* block = nested_group(*top, fo4::GroupType::interior_cell_block, 9u);
+  ASSERT_NE(block, nullptr);
+  const auto* subblock = nested_group(*block, fo4::GroupType::interior_cell_subblock, 0u);
+  ASSERT_NE(subblock, nullptr);
+  EXPECT_EQ(cell_keys(*subblock),
+            (std::vector<fo4::FormKey>{fo4::FormKey::parse("01F3A5:Fallout4.esm"), cell}));
+}
+
+TEST(InteriorCellCreate, CellInsertedBeforeLaterCellKeepsEarlierChildrenGroupAfterItsCell) {
+  auto plugin = fo4::read_plugin(empty_plugin(0x900), "Cells.esp");
+  const auto first = fo4::forms::create_interior_cell(plugin, "First");
+  const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
+  static_cast<void>(fo4::forms::create_placed_reference(plugin, {.cell = first, .base = base}));
+  fo4::set_hedr_next_form_id(plugin, 0x9C8);
+  const auto last = fo4::forms::create_interior_cell(plugin, "Last");
+  fo4::set_hedr_next_form_id(plugin, 0x964);
+  const auto middle = fo4::forms::create_interior_cell(plugin, "Middle");
+
+  const auto* top = top_cell_group(plugin);
+  ASSERT_NE(top, nullptr);
+  const auto* block = nested_group(*top, fo4::GroupType::interior_cell_block, 4u);
+  ASSERT_NE(block, nullptr);
+  const auto* subblock = nested_group(*block, fo4::GroupType::interior_cell_subblock, 0u);
+  ASSERT_NE(subblock, nullptr);
+  ASSERT_EQ(subblock->children.size(), 4u);
+
+  const auto* first_record = std::get_if<fo4::Record>(&subblock->children[0]);
+  ASSERT_NE(first_record, nullptr);
+  EXPECT_EQ(first_record->form_key, first);
+  const auto* children = std::get_if<fo4::Group>(&subblock->children[1]);
+  ASSERT_NE(children, nullptr);
+  EXPECT_EQ(children->header.group_type, static_cast<std::int32_t>(fo4::GroupType::cell_children));
+  EXPECT_EQ(children->header.label_as_u32(), 0x900u);
+  EXPECT_EQ(cell_keys(*subblock), (std::vector<fo4::FormKey>{first, middle, last}));
 }

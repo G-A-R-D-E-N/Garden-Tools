@@ -31,14 +31,13 @@ GroupHeader group_header(GroupType type, std::uint32_t label) {
 
 struct CellSlot {
   Group* parent{nullptr};
-  std::size_t index{0};
 };
 
 CellSlot find_cell_slot(Group& group, const FormKey& cell) {
   for (std::size_t index = 0; index < group.children.size(); ++index) {
     auto& child = group.children[index];
     if (auto* record = std::get_if<Record>(&child)) {
-      if (record->form_key == cell && record->header.signature == k_cell) return {&group, index};
+      if (record->form_key == cell && record->header.signature == k_cell) return {&group};
     } else if (auto* nested = std::get_if<Group>(&child)) {
       const auto found = find_cell_slot(*nested, cell);
       if (found.parent != nullptr) return found;
