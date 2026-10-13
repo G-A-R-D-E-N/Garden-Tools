@@ -344,7 +344,7 @@
         {"path": "KSSM\\VATSDescriptor", "label": "VATS descriptor", "subrecord": "VNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"}
       ],
       "formlink_lists": [
-        {"path": "KSSM\\Keywords", "label": "Keywords", "subrecord": "KNAM", "targets": ["KYWD"], "nullable": false, "mutation": "appendable"}
+        {"path": "KSSM\\Keywords", "label": "Keywords", "subrecord": "KNAM", "targets": ["KYWD"], "nullable": false, "mutation": "existing_neighbors"}
       ],
       "localized_subrecords": []
     },
@@ -402,7 +402,7 @@
     },
     {
       "signature": "OTFT",
-      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "INAM", "minimum": 0, "maximum": 65535}]},
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "INAM", "minimum": 0, "maximum": 1}]},
       "fields": [],
       "localized_subrecords": []
     },
@@ -421,7 +421,7 @@
     },
     {
       "signature": "DLBR",
-      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "QNAM", "minimum": 0, "maximum": 1}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "SNAM", "minimum": 0, "maximum": 1}]},
+      "authoring": {"placement": "quest_children", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "QNAM", "minimum": 1, "maximum": 1}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "SNAM", "minimum": 1, "maximum": 1}]},
       "fields": [
         {"path": "DLBR\\Category", "label": "Category", "kind": "scalar", "subrecord": "TNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Player"}, {"value": 1, "name": "Command"}], "minimum": 0, "maximum": 1, "insertion": "existing_only"},
         {"path": "DLBR\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DNAM", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Top-Level"}, {"bit": 1, "name": "Blocking"}, {"bit": 2, "name": "Exclusive"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}

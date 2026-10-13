@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <iterator>
 #include <string_view>
+#include <utility>
 
 namespace {
 
@@ -67,6 +68,18 @@ TEST_P(ConfigRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow)
     }
     for (const auto& field : fo4::schema::formlink_fields(signature)) {
       static_cast<void>(fo4::record_field_count(plugin, record.form_key, field));
+    }
+    if (signature == fo4::Signature::from_string("GMST")) {
+      const auto edid = std::find_if(record.subrecords.begin(), record.subrecords.end(), [](const auto& subrecord) {
+        return subrecord.signature == fo4::Signature::from_string("EDID");
+      });
+      const char initial = edid == record.subrecords.end() || edid->data.empty() ? '\0' : static_cast<char>(edid->data.front());
+      const std::pair<std::string_view, char> gates[] = {
+          {"GMST\\FloatValue", 'f'}, {"GMST\\IntegerValue", 'i'}, {"GMST\\BooleanValue", 'b'}};
+      for (const auto& [path, gate] : gates) {
+        EXPECT_EQ(fo4::record_field_count(plugin, record.form_key, path), initial == gate ? 1u : 0u)
+            << record.form_key.to_string() << ' ' << path;
+      }
     }
   });
   if (std::string_view(GetParam()) == "Fallout4.esm") {
