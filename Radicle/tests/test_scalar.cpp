@@ -101,6 +101,34 @@ TEST(ScalarSchema, ExistingOutOfRangeValuesRemainReadable) {
   EXPECT_EQ(fo4::schema::decode_scalar(raw_scale, *scale), "12");
 }
 
+TEST(ScalarSchema, WeaponDnamFieldsUseTheirPayloadAndEnumBounds) {
+  const auto speed = fo4::schema::scalar_field_descriptor("WEAP\\Speed");
+  ASSERT_TRUE(speed.has_value());
+  EXPECT_EQ(speed->scalar.subrecord, fo4::Signature::from_string("DNAM"));
+  EXPECT_EQ(speed->scalar.offset, 4u);
+  EXPECT_EQ(speed->scalar.payload_size, 132u);
+  EXPECT_EQ(speed->scalar.storage, fo4::schema::ScalarStorage::f32);
+
+  const auto on_hit = fo4::schema::scalar_field_descriptor("WEAP\\OnHit");
+  ASSERT_TRUE(on_hit.has_value());
+  EXPECT_EQ(on_hit->scalar.offset, 36u);
+  EXPECT_EQ(on_hit->scalar.maximum, 3.0);
+
+  const auto stagger = fo4::schema::scalar_field_descriptor("WEAP\\Stagger");
+  ASSERT_TRUE(stagger.has_value());
+  EXPECT_EQ(stagger->scalar.offset, 124u);
+  EXPECT_EQ(stagger->scalar.maximum, 4.0);
+
+  const auto melee = fo4::schema::scalar_field_descriptor("WEAP\\MeleeSpeed");
+  ASSERT_TRUE(melee.has_value());
+  EXPECT_FALSE(melee->scalar.embedded);
+  EXPECT_EQ(melee->scalar.subrecord, fo4::Signature::from_string("MASE"));
+  EXPECT_EQ(melee->scalar.maximum, 4.0);
+
+  const auto fields = fo4::schema::scalar_fields(fo4::Signature::from_string("WEAP"));
+  EXPECT_EQ(fields.size(), 45u);
+}
+
 TEST(ScalarSchema, WrongBinaryWidthFailsClosed) {
   const auto health = fo4::schema::scalar_descriptor(k_xhlt);
   ASSERT_TRUE(health.has_value());
