@@ -48,6 +48,7 @@ add_library(
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp
     plugin/RadiclePluginCell.cpp
+    plugin/RadiclePluginTypedRecords.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )

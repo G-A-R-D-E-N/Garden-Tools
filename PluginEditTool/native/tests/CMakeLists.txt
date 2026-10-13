@@ -136,6 +136,7 @@ add_executable(
     unit/RadiclePluginOverridePatchTests.cpp
     unit/RadiclePluginExteriorCellTests.cpp
     unit/RadiclePluginCellTests.cpp
+    unit/RadiclePluginTypedRecordsTests.cpp
     unit/RadiclePluginEyesTests.cpp
     unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp

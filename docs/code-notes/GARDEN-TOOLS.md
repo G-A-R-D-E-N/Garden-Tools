@@ -1965,6 +1965,30 @@ Top-level `CopyAsNewRecord` calls `fo4::require_decodable` on the source as the 
 
 The strict re-key probe that `deleteRecord` and `renumberRecord` ran inline is now `requireReferenceCoverage`. Both pass their operation name, and `changeReferencingRecords` (`PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp:RadiclePluginBackend::changeReferencingRecords`) calls it with "reference remap" before the graph scan. A reference hidden in an undecodable record therefore refuses the whole remap, dry run included, instead of reporting "Repointed N of N". The error is `ReferenceCoverageIncomplete` with the message "Cannot prove <operation> safety while scanning <plugin>: <error>". Test: `PluginEditTool/native/tests/unit/RadiclePluginReferenceRemapTests.cpp` (`ChangeReferencingRecords refuses while a loaded plugin has an undecodable record`).
 
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — shared typed write path (#287 P1)
+
+Used by the leveled list, NPC_ and FACT edits. It takes the write lock on the named plugin, applies `writeGuard`, and refuses a record that is not in that plugin with `RecordNotFound`, or a record whose header has the deleted flag with `RecordDeleted`, before any Radicle call. The Radicle edit runs on a copy of the plugin, and only a clean return stages it. A Radicle exception becomes `<Family>WriteFailed` with the Radicle message, so a refused edit leaves the loaded plugin and its saved bytes unchanged. Tests: `PluginEditTool/native/tests/unit/RadiclePluginTypedRecordsTests.cpp` and `PluginEditTool/native/tests/unit/RadiclePluginLeveledTests.cpp`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:winningPlugin — read versus edit target
+
+Reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) decode the winning version, the last loaded plugin that holds the FormKey. Edits change only the named plugin, which must already hold the record; an edit never creates an override in another plugin.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::editNpcEntries — list, op and index contract
+
+`list` is `factions`, `perks` or `inventory`; `op` is `add`, `set` or `remove`. `add` appends and ignores `index`; `set` and `remove` need a non-negative `index`. Radicle throws `NpcError` for an out-of-range index, which surfaces as `NpcWriteFailed`. Test: `Native NPC faction set refuses an out-of-range index and leaves the plugin bytes unchanged`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::editFactionEntries — rank set keeps titles and insignia
+
+A rank `set` starts from the existing rank, so a title omitted from the value is kept, and `null` clears it. The rank's insignia is never read into the value, only reported as `hasInsignia`, so a set cannot drop it. Titles are written by shape: a string sets inline text, `null` clears the title, and `{"stringId": n}` sets the localized string ID `n` (`titleOf`). A `{"rawId": "<hex>"}` value is the read-back form of a localized title whose payload is not four bytes; on a rank `set` it keeps the existing title, and on `add` it is refused with `InvalidFactionEntry`, so add never leaves a title empty. Radicle's `require_string_form` refuses a shape that does not match the plugin's localized flag, reported as `FactionWriteFailed`, so a mismatch is never silently changed. Test: `Native FACT rank set keeps the male title and round-trips through save and re-read`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::getWeaponDamageTypes — read-only
+
+WEAP has no edit method. `curveTable` is `null` for a DAMA entry below form version 152, the Radicle `k_weapon_damage_curve_form_version` threshold. Refusal test: `Native WEAP damage read refuses a non-WEAP record and leaves the plugin bytes unchanged`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — set replaces the whole entry
+
+`set` rewrites the LVLO and its COED together, so a value without `extra` removes the entry's COED, except the LVLO reserved bytes, which are kept. `add` inserts at `index`, and `remove` ignores `value`. Radicle throws `LeveledListError` for an out-of-range index, reported as `LeveledListWriteFailed`. Round-trip test: `Native leveled list entry edit round-trips through save and re-read`.
+
 ## PluginEditTool/web/src/recordActions.ts:f2Edit, PluginEditTool/web/src/RecordView.tsx:RecordView — F2 edits the focused cell (#41)
 
 `RecordContextMenu` printed F2 beside "Edit value" and nothing handled the key. `RecordView` owns the record grid and the editor state, so the key is wired there. `recordActions.ts:f2Edit(edit)` returns `tabIndex: -1` and an `onKeyDown` that calls `edit()` on F2. `RecordView` spreads it on the four cells that can start an edit, each with the call it already makes: the value cells in the grid and in the Conflicts matrix call `startEdit(row, col)` for their own column (the double-click and the menu item make that call), and the property-name cells call `startEdit(row, winnerCol)`, the column their context menu targets. `startEdit` keeps every guard (parent rows, backend-refused cells, `Ref` fields opening the picker), so F2 on a cell that cannot be edited does nothing, as a double-click does.
@@ -2045,3 +2069,23 @@ Requested model paths are still deduplicated case-insensitively after trimming, 
 ## PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveNif — NIF lookup not changed (#285)
 
 NIF lookup is PET's own: `ensureRootScanned` indexes every `.ba2` under a root, and `scanAndLookup` takes the first alphabetical archive through `try_emplace`. Radicle's `fo4::archive::AssetResolver::locate` (`Radicle/include/fo4/archive/assets.hpp`) uses load order instead. The two differ in which copy of a mesh wins, not in whether a mesh is found, so this was not changed for #285. Still unproven: whether a given vanilla NIF fails in `NifService::geometry` or has no renderable shapes, and the GardenEngine comparison for one exact reference. Radicle's `normalize_asset_path` also strips a leading `data` component, which PET's `norm` does not; no MODL seen here starts with it.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:editLeveledListEntry — set keeps reserved bytes
+
+A `set` decodes the entries of the plugin being mutated and copies `reserved_before_form_id` and `reserved_tail` from the entry at the same position onto the replacement before `set_leveled_list_entry` writes it. The entry JSON has no field for those bytes, so without the copy a `set` would zero them. A `set` past the end of the list gets no copy and is refused by the writer as before.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:leveledEntryFromJson — COED owner optional
+
+`extra.owner` follows the NPC path in RadiclePluginTypedRecords.cpp:npcInventoryFromJson. A missing or null owner is an empty FormKey, a present value is parsed with `formKeyArgument`, and a non-string value fails as `FormKeyMissing`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:winningPlugin — deleted winner refused
+
+`winningPlugin` walks plugins from the last load-order entry and returns the first plugin holding the key. If that record has the deleted flag it returns `RecordDeleted`, as RadiclePluginCell.cpp does for placed-reference edits. Not-found is now `RecordNotFound` from the same helper, so the typed read callers no longer repeat it.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:formKeyArgument — empty text
+
+Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyArgument uses, instead of a parse error.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
+
+A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one.

@@ -246,6 +246,16 @@ engineering. Tracked as issue #59.
 `add_leveled_entry` · `set_perk_effects` · `set_magic_effects` · `set_quest_aliases` ·
 `set_quest_stages` · `set_quest_objectives` · `set_furniture_markers` · `set_message_buttons`
 
+### Typed records (leveled lists, NPCs, factions, weapons)
+- `get_leveled_list` -- reads a leveled list (LVLI, LVLN or LVSP): chance none, max count, flags, use global and entries.
+- `set_leveled_list_settings` -- sets a leveled list's chance none, max count and flags bytes in memory.
+- `edit_leveled_list_entry` -- adds, sets or removes one leveled list entry by index in memory.
+- `get_npc` -- reads an NPC_ record's factions, perks and inventory.
+- `edit_npc_entries` -- adds, sets or removes one faction, perk or inventory entry on an NPC_ record in memory.
+- `get_faction` -- reads a FACT record's relations and ranks.
+- `edit_faction_entries` -- adds, sets or removes one relation or rank on a FACT record in memory.
+- `get_weapon_damage_types` -- reads a WEAP record's damage types (read-only).
+
 ### Papyrus (built in -- no Champollion needed)
 `compile_papyrus` (`.psc` → `.pex`) · `decompile_papyrus` (`.pex` → `.psc`, recursive)
 

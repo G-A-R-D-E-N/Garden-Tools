@@ -35,6 +35,10 @@ public:
         return {.available = true};
     }
 
+    fo4ide::Result<nlohmann::json> getLeveledList(const nlohmann::json&) const override {
+        return nlohmann::json("leveled");
+    }
+
     fo4ide::Result<nlohmann::json> invoke(
         std::string_view operation,
         const nlohmann::json&) override {
@@ -485,6 +489,15 @@ TEST_CASE("Cell GetPlugins reuses the native environment plugin list") {
     REQUIRE(plugins.size() == 1);
     CHECK(plugins[0].at("Key") == "Patch.esp");
     CHECK(backend.invokedOperation == "appInterop.GetPlugins");
+}
+
+TEST_CASE("PluginBackendTarget routes GetLeveledList to the native backend") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto result = target.invoke("GetLeveledList", nlohmann::json::array({"000800:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(*result == "leveled");
 }
 
 TEST_CASE("JSON int helpers refuse or saturate values outside int") {
