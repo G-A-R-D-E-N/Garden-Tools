@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ConflictEntry } from '../backend';
-import { errorMessage, errorText } from '../errors';
+import { errorText } from '../errors';
 import { useDialogs } from '../useDialogs';
+import { pruneSelection, selectRow, type ConflictSelection, type SelectMode } from './conflictSelection';
 
 export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }: {
   activeTab: string;
@@ -11,12 +12,25 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
 }) {
   const { pickPlugin: askForTarget, confirm: askConfirm } = useDialogs();
   const [conflicts, setConflicts] = useState<ConflictEntry[] | null>(null);
-  const [conflictSel, setConflictSel] = useState<Record<string, boolean>>({});
+  const [conflictSel, setConflictSel] = useState<ConflictSelection>({});
+  const [conflictAnchor, setConflictAnchor] = useState<string | null>(null);
   const [conflictBusy, setConflictBusy] = useState(false);
 
   const loadConflicts = () => window.chrome?.webview?.hostObjects?.backend?.GetConflicts()
-    .then(raw => setConflicts(JSON.parse(raw)))
+    .then(raw => {
+      const list: ConflictEntry[] = JSON.parse(raw);
+      setConflicts(list);
+      setConflictSel(sel => pruneSelection(sel, list.map(c => c.FormKey)));
+    })
     .catch(e => { setErrorStr(errorText(e)); setConflicts([]); });
+
+  const selectConflict = (formKey: string, mode: SelectMode) => {
+    const next = selectRow((conflicts ?? []).map(c => c.FormKey), conflictSel, conflictAnchor, formKey, mode);
+    setConflictSel(next.sel);
+    setConflictAnchor(next.anchor);
+  };
+
+  const clearConflictSelection = () => { setConflictSel({}); setConflictAnchor(null); };
 
   useEffect(() => {
     if (activeTab === 'explorer' && treeMode === 'conflicts' && conflicts === null) loadConflicts();
@@ -94,11 +108,12 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
       setStatus(`Copied ${res.ok}/${res.total} into ${patch}.${failureNote} Save ${patch} from a record's context menu, then enable it last.`);
       if (!res.failed) setConflictSel({});
     } catch (e) {
-      setStatus('Batch copy failed: ' + (errorMessage(e) ?? String(e)));
+      setStatus('Batch copy failed: ' + errorText(e));
     } finally { setConflictBusy(false); }
   };
 
   return {
-    conflicts, setConflicts, conflictSel, setConflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
+    conflicts, setConflicts, conflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
+    selectConflict, clearConflictSelection,
   };
 }
