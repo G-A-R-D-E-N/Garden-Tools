@@ -10,7 +10,6 @@ constexpr auto k_alco = Signature::from_string("ALCO");
 constexpr auto k_alfr = Signature::from_string("ALFR");
 constexpr auto k_alla = Signature::from_string("ALLA");
 constexpr auto k_anam = Signature::from_string("ANAM");
-constexpr auto k_cnam = Signature::from_string("CNAM");
 constexpr auto k_dnam = Signature::from_string("DNAM");
 constexpr auto k_fnam = Signature::from_string("FNAM");
 constexpr auto k_nam2 = Signature::from_string("NAM2");

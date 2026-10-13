@@ -1469,3 +1469,19 @@ Dialogue stored-link checks. Each rule reads only stored subrecords. A stored fo
 - `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
+
+## Radicle/src/schema/form_link_schema.cpp:schema_formlink_offsets
+
+Schema FormLink rows (`k_generated_formlink_fields`) that the global table cannot reach, such as WEAP DNAM with 132-byte payloads, are resolved here with `resolve_field_slots` and returned as byte offsets per subrecord. The global table applies only to 4-byte payloads (see the `is_listed_formid_signature` checks in `src/schema/form_links.cpp`). A slot is kept only when it is valid, its payload size matches the row's `payload_sizes` (any size when `payload_sizes[0]` is zero), and the subrecord is not deliberately non-FormID. INFO returns nothing because `visit_info_link_offsets` in `src/schema/form_links.cpp` owns that record. NAVI NVMI slots are valid only when the navmesh mixed-offset parse succeeds and NVER is 4 bytes. PACK and IDLE rows also pass the behavior payload rules inside `resolve_field_slots` in `src/schema/field_address.cpp`. Callers compute this once per record, so the row scan is not repeated for each subrecord.
+
+## Radicle/src/schema/form_link_schema.cpp:deliberate_non_formid_subrecord
+
+Excludes subrecords that are deliberately not FormIDs from the schema path: any `XXXX` subrecord, RACE `SRAF`, the QUST signatures in `qust_non_formid_signature`, and the corpus rules in `corpus_non_formid_slot` (PACK `CNAM` after `ANAM`, SCEN action scalars, and the static pair list). Without this predicate the schema path would revive links that the existing visitors reject on purpose.
+
+## Radicle/src/schema/form_link_schema.cpp:qust_non_formid_signature
+
+Signatures that QUST reuses for scalar or string data although they are FormID signatures in other record types: DNAM (General quest data), NAM2 (stage note), CNAM (stage log-entry text), FNAM (objective/alias flags), ANAM (next alias ID), NNAM (objective text or quest description), and SNAM (SWF filename). They must never reach the global signature-only FormID table. The list moved verbatim from the former comment on `qust_non_formid_signature` in `src/schema/form_links.cpp`; the xEdit basis was not re-checked in this change (TODO-verify).
+
+## Radicle/src/schema/form_links.cpp:visit_formlink_offsets
+
+Wraps `visit_link_offsets` and merges in the schema offsets for the same subrecord. The union is sorted and deduplicated before the callback runs, so a link listed by both the global table and a schema row, such as FACT VEND with a 4-byte payload, should be remapped, rekeyed or collected once (TODO-verify: asserted by `tests/test_form_link_schema_remap.cpp`, not yet run). Strict mode passes through unchanged. Sorting can reorder output from a handler that did not emit ascending offsets; the remap and rekey callbacks do not depend on order.
