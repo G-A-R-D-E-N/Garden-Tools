@@ -49,9 +49,11 @@ Subrecord minimum and maximum, as recorded in `fields.json` (`authoring`):
 
 A payload shorter than a field's gate hides that field (the existing embedded-scalar rule). A payload whose size does not match the VENV gate hides every VENV field.
 
+`CrimeArrest`, `CrimeAttackOnSight`, `VendorBuysStolenItems`, `VendorSellsEverythingNotInList` and `VendorBuysNonStolenItems` use the `enum` presentation with xEdit's `False` (0) and `True` (1) (`wbBoolEnum`, Common 7240 to 7247). Their bounds stay 0 to 255, so the names do not restrict what is written.
+
 ## Flags (DATA)
 
-The schema stores DATA as a plain u32. The bit names below are documentation only; the scalar presentation has no flags type. Source: `wbDefinitionsFO4.pas` lines 6791 to 6807.
+`FACT\Flags` stores DATA as a u32 with the `flags` presentation. The names below are the `names` table of that row in `fields.json`, so `ScalarDescriptor::names` carries one single-bit mask per name. Source: `wbDefinitionsFO4.pas` lines 6791 to 6807.
 
 | Bit | Name |
 | --- | --- |
@@ -103,7 +105,6 @@ Titles in a localized plugin must be string IDs, and inline titles are refused t
 
 | xEdit element | Lines | Reason |
 | --- | --- | --- |
-| DATA flag presentation | 6790 to 6808 | The scalar presentation is `identity` or `percent_0_100` only. Adding a flags presentation would change the shared codegen and the C++ enum. Bits are listed above instead. |
 | VENV unknown bytes 6 and 7 | 6837 | `wbUnknown(2)`, not a named field. Bytes are kept as they are on disk. |
 | PLVD (Location) | 4200 to 4206, 6843 | A union decided by a Type value (reference, cell, or near-location). It is not a fixed layout. |
 | CITC (Condition Count) | 6844 | Derived from the condition list. Not a value to edit. |
