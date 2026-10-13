@@ -5480,6 +5480,68 @@
       "localized_subrecords": []
     },
     {
+      "signature": "CONT",
+      "fields": [
+        {
+          "path": "CONT\\ItemTotal",
+          "label": "Item total",
+          "kind": "scalar",
+          "subrecord": "COCT",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "CONT\\Items",
+          "label": "Items",
+          "kind": "subrecord_group",
+          "count_subrecord": "COCT",
+          "insertion": "existing_only",
+          "successors": ["DEST", "DAMC", "DSTD", "DSTA", "DMDL", "DMDC", "DMDT", "DMDS", "DSTF", "DATA", "KSIZ", "KWDA", "FTYP", "NTRM", "PRPS", "SNAM", "QNAM", "TNAM", "ONAM"],
+          "members": [
+            {
+              "subrecord": "CNTO",
+              "required": true,
+              "repeatable": false,
+              "payload_size": 8,
+              "default": "0000000001000000",
+              "fields": [
+                {
+                  "path": "CONT\\ItemCount",
+                  "label": "Count",
+                  "offset": 4,
+                  "storage": "i32",
+                  "presentation": "identity",
+                  "minimum": -2147483648,
+                  "maximum": 2147483647,
+                  "insertion": "existing_only"
+                }
+              ],
+              "formlink_fields": [
+                {
+                  "path": "CONT\\ItemObject",
+                  "label": "Item",
+                  "offset": 0,
+                  "nullable": true,
+                  "insertion": "existing_only",
+                  "target_union": "sigBaseObjects"
+                }
+              ]
+            },
+            {
+              "subrecord": "COED",
+              "required": false,
+              "repeatable": false,
+              "payload_size": 12
+            }
+          ]
+        }
+      ],
+      "localized_subrecords": []
+    },
+    {
       "signature": "LVSP",
       "authoring": {
         "placement": "top_level",
@@ -24490,7 +24552,7 @@
         "LVLI", "LVLN", "LVSP", "MISC", "MSTT", "NOTE",
         "NPC_", "OMOD", "PROJ", "SCOL", "SCRL", "SOUN",
         "SPEL", "STAT", "TACT", "TERM", "TREE", "TXST",
-        "WATR", "WEAP"
+        "WATR", "WEAP", "ENCH"
       ]
     }
   ],

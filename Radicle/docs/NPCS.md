@@ -87,7 +87,7 @@ Decode rules:
 
 - Each list is read in subrecord order.
 - A payload of the wrong size throws `NpcError`.
-- A null FormID throws, except COED owner, which decodes to no owner. xEdit's `wbFormIDCk` for SNAM ([FACT]), PRKR ([PERK]) and CNTO (`sigBaseObjects`, NULL excluded) does not allow null; COED owner allows NULL (FO4:3291).
+- A null form ID throws, except COED owner, which decodes to no owner. xEdit's `wbFormIDCk` for SNAM ([FACT]) and PRKR ([PERK]) do not allow null. CNTO's `sigBaseObjects` includes NULL (wbDefinitionsFO4.pas:75), but Radicle's NPC_ decoder rejects a null CNTO item (src/forms/npc.cpp:247,374), so it is stricter than xEdit; COED owner allows NULL (FO4:3291).
 - PRKZ must equal the number of PRKR entries when present, or decode throws. xEdit uses it as the count path (FO4:10393). COCT is not checked: decode returns the CNTO entries present, and edits rewrite COCT to the CNTO count (xEdit 93cc0bc5 Core/wbDefinitionsFO4.pas:3315-3316, COCT cpBenign, count path of the CNTO array).
 - COED must immediately follow its CNTO. xEdit nests COED inside the CNTO group (FO4:3300-3314).
 

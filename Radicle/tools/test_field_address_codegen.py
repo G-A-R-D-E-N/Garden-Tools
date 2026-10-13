@@ -91,6 +91,37 @@ def count_row(**overrides):
     return scalar(**row)
 
 
+def group_row(name, offset, **overrides):
+    row = {"path": "TEST" + BS + name, "label": name, "offset": offset, "storage": "i32",
+           "presentation": "identity", "minimum": 0, "maximum": 100, "insertion": "existing_only"}
+    row.update(overrides)
+    return {k: v for k, v in row.items() if v is not None}
+
+
+def group_link(name, offset, **overrides):
+    row = {"path": "TEST" + BS + name, "label": name, "offset": offset, "nullable": False,
+           "insertion": "existing_only", "target_union": "sigBaseObjects"}
+    row.update(overrides)
+    return {k: v for k, v in row.items() if v is not None}
+
+
+def group_member(signature, required=True, payload_size=8, fields=None, links=None, **overrides):
+    row = {"subrecord": signature, "required": required, "repeatable": False, "payload_size": payload_size,
+           "fields": [] if fields is None else fields, "formlink_fields": [] if links is None else links}
+    row.update(overrides)
+    return {k: v for k, v in row.items() if v is not None}
+
+
+def group(members=None, **overrides):
+    row = {"kind": "subrecord_group", "path": "TEST" + BS + "Items", "label": "Items", "count_subrecord": "COCT",
+           "insertion": "existing_only",
+           "members": [group_member("CNTO", default="0000000001000000", fields=[group_row("ItemCount", 4)],
+                                    links=[group_link("ItemObject", 0)]),
+                       group_member("COED", required=False, payload_size=12)] if members is None else members}
+    row.update(overrides)
+    return {k: v for k, v in row.items() if v is not None}
+
+
 def write_schema(directory, fields=(), formlink_fields=(), formlink_lists=(),
                  nested_formlink_lists=(), keyword_records=()):
     document = {
@@ -458,7 +489,7 @@ class SchemaCodegenTests(unittest.TestCase):
             return schema_codegen.load_schema(write_schema(directory, fields))
 
     def test_counted_array_expands_to_stride_member_rows(self):
-        fields, arrays = self.load_schema(counted(), count_row())
+        fields, arrays, _groups = self.load_schema(counted(), count_row())
         self.assertEqual([(array["path"], array["stride"], array["count_subrecord"]) for array in arrays],
                          [("TEST" + BS + "Items", 8, "CNTA")])
         members = [field for field in fields if field["path"].startswith("TEST" + BS + "Item")]
@@ -510,6 +541,174 @@ class SchemaCodegenTests(unittest.TestCase):
         other = counted(path="TEST" + BS + "Other", label="Other", subrecord="OTHR",
                         members=[member("OtherA", 0), member("OtherB", 4)])
         self.rejects("shared by two arrays", counted(), other, count_row())
+
+    def test_subrecord_group_expands_member_rows_and_renders_the_table(self):
+        fields, arrays, groups = self.load_schema(group(), count_row(subrecord="COCT"))
+        self.assertEqual(arrays, [])
+        self.assertEqual([(item["path"], item["count_subrecord"], [member["subrecord"] for member in item["members"]])
+                          for item in groups],
+                         [("TEST" + BS + "Items", "COCT", ["CNTO", "COED"])])
+        rows = [(field["path"], field["subrecord"], field["offset"], field["address"]["repeated"])
+                for field in fields if field["path"].startswith("TEST" + BS + "Item")]
+        self.assertEqual(rows, [("TEST" + BS + "ItemCount", "CNTO", 4, True)])
+        text = schema_codegen.render(fields, arrays, groups)
+        self.assertIn("constexpr std::uint8_t k_subrecord_group_default_0[] = "
+                      "{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};", text)
+        self.assertIn('{Signature::from_string("CNTO"), true, false, 8, '
+                      'std::span<const std::uint8_t>(k_subrecord_group_default_0)},', text)
+        self.assertIn('{Signature::from_string("COED"), false, false, 12},', text)
+        self.assertIn('{Signature::from_string("TEST"), "TEST' + BS + BS + 'Items", "Items", '
+                      'Signature::from_string("COCT"), '
+                      'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
+                      'std::span<const Signature>{}},', text)
+        self.assertIn("constexpr std::array<SubrecordGroupDescriptor, 1> k_subrecord_groups{{", text)
+
+    def test_subrecord_group_successors_render_as_a_signature_table(self):
+        fields, arrays, groups = self.load_schema(group(successors=["DATA", "KSIZ"]), count_row(subrecord="COCT"))
+        self.assertEqual(groups[0]["successors"], ["DATA", "KSIZ"])
+        text = schema_codegen.render(fields, arrays, groups)
+        self.assertIn('constexpr Signature k_subrecord_group_successors_0[] = '
+                      '{Signature::from_string("DATA"), Signature::from_string("KSIZ")};', text)
+        self.assertIn('std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
+                      'std::span<const Signature>(k_subrecord_group_successors_0)},', text)
+
+    def test_subrecord_group_successors_are_distinct_and_not_members(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("successors must be distinct four-character signatures", group(successors=["DATA", "DATA"]), count)
+        self.rejects("successors must be distinct four-character signatures", group(successors="DATA"), count)
+        self.rejects("successors must be distinct four-character signatures", group(successors=["DA"]), count)
+        self.rejects("successors cannot be members or the count subrecord", group(successors=["CNTO"]), count)
+        self.rejects("successors cannot be members or the count subrecord", group(successors=["COCT"]), count)
+
+    def test_subrecord_group_shares_no_subrecord_with_a_counted_array(self):
+        array = counted(subrecord="CNTO", path="TEST" + BS + "Array", label="Array", members=[member("ArrayA", 0)])
+        self.rejects("shares a subrecord with counted_array", group(), array, count_row(subrecord="COCT"),
+                     count_row(path="TEST" + BS + "ArrayCount", label="ArrayCount", subrecord="CNTA"))
+        array = counted(subrecord="DATA", count_subrecord="COCT", path="TEST" + BS + "Array", label="Array",
+                        members=[member("ArrayA", 0)])
+        self.rejects("shares a subrecord with counted_array", group(), array, count_row(subrecord="COCT"))
+
+    def test_no_subrecord_groups_renders_an_empty_table(self):
+        self.assertIn("constexpr std::array<SubrecordGroupDescriptor, 0> k_subrecord_groups{};",
+                      schema_codegen.render(self.load(scalar())))
+
+    def test_subrecord_group_leader_is_first_required_and_non_repeatable(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("leader must be required and non-repeatable",
+                     group(members=[group_member("COED", required=False), group_member("CNTO")]), count)
+        self.rejects("leader must be required and non-repeatable",
+                     group(members=[group_member("CNTO", required=False)]), count)
+        self.rejects("leader must be required and non-repeatable",
+                     group(members=[group_member("CNTO", repeatable=True)]), count)
+
+    def test_subrecord_group_members_are_distinct_and_exclude_the_count(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("is repeated or is the count subrecord",
+                     group(members=[group_member("CNTO"), group_member("CNTO", required=False)]), count)
+        self.rejects("is repeated or is the count subrecord",
+                     group(members=[group_member("CNTO"), group_member("COCT", required=False)]), count)
+
+    def test_subrecord_group_rows_need_a_required_non_repeatable_member(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("need a required, non-repeatable member",
+                     group(members=[group_member("CNTO"),
+                                    group_member("COED", required=False, fields=[group_row("Extra", 0)])]), count)
+        self.rejects("need a required, non-repeatable member",
+                     group(members=[group_member("CNTO", repeatable=True, fields=[group_row("ItemCount", 4)])]), count)
+
+    def test_subrecord_group_rows_must_fit_the_member(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("subrecord_group member field exceeds member size",
+                     group(members=[group_member("CNTO", payload_size=6, fields=[group_row("ItemCount", 4)])]), count)
+        self.rejects("subrecord_group member field exceeds member size",
+                     group(members=[group_member("CNTO", fields=[group_row("ItemCount", None)])]), count)
+        self.rejects("subrecord_group member field position is invalid",
+                     group(members=[group_member("CNTO", fields=[group_row("ItemCount", -4)])]), count)
+        self.rejects("subrecord_group member link exceeds member size",
+                     group(members=[group_member("CNTO", payload_size=6, links=[group_link("ItemObject", 4)])]), count)
+        self.rejects("subrecord_group member link position is invalid",
+                     group(members=[group_member("CNTO", links=[group_link("ItemObject", None)])]), count)
+        self.load_schema(group(members=[group_member("CNTO", payload_size=4, fields=[group_row("ItemCount", None)])]),
+                         count)
+
+    def test_subrecord_group_rows_take_only_plain_scalar_and_link_keys(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("subrecord_group member field keys must not include",
+                     group(members=[group_member("CNTO", fields=[group_row("ItemCount", 4, stride=4)])]), count)
+        self.rejects("subrecord_group member field storage is unsupported",
+                     group(members=[group_member("CNTO", fields=[group_row("ItemCount", 4, storage="zstring")])]),
+                     count)
+        self.rejects("subrecord_group member link keys must be a subset",
+                     group(members=[group_member("CNTO", links=[group_link("ItemObject", 0, names=[])])]), count)
+        self.rejects("subrecord_group member link keys must be a subset",
+                     group(members=[group_member("CNTO", links=[group_link("ItemObject", 0, payload_sizes=[12])])]),
+                     count)
+
+    def test_subrecord_group_defaults_must_match_the_member_payload(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("default must be 8 bytes", group(members=[group_member("CNTO", default="00")]), count)
+        self.rejects("even-length hex string", group(members=[group_member("CNTO", default="0")]), count)
+        self.rejects("even-length hex string", group(members=[group_member("CNTO", default="zz00000000000000")]), count)
+        self.rejects("even-length hex string", group(members=[group_member("CNTO", default=7)]), count)
+
+    def test_subrecord_group_declaration_is_checked(self):
+        count = count_row(subrecord="COCT")
+        self.rejects("unknown subrecord_group keys", group(extra=1), count)
+        self.rejects("subrecord_group path must be qualified by TEST", group(path="OTHER" + BS + "Items"), count)
+        self.rejects("subrecord_group label is invalid", group(label=""), count)
+        self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord="CO"), count)
+        self.rejects("unsupported insertion policy", group(insertion="always"), count)
+        self.rejects("subrecord_group members must be a non-empty array", group(members=[]), count)
+        self.rejects("subrecord_group member keys must be a subset", group(members=[group_member("CNTO", extra=1)]),
+                     count)
+        self.rejects("subrecord_group member signature must be four printable ASCII",
+                     group(members=[group_member("CN")]), count)
+        self.rejects("required and repeatable must be booleans",
+                     group(members=[group_member("CNTO", required="yes")]), count)
+        self.rejects("payload_size must be a positive integer", group(members=[group_member("CNTO", payload_size=0)]),
+                     count)
+        self.rejects("subrecord_group member rows must be arrays", group(members=[group_member("CNTO", fields={})]),
+                     count)
+
+    def test_subrecord_group_count_row_must_be_one_whole_payload_u32(self):
+        self.rejects("needs exactly one whole-payload u32 row", group())
+        for count in (count_row(subrecord="COCT", storage="u16", maximum=0xFFFF),
+                      count_row(subrecord="COCT", storage="i32", maximum=0x7FFFFFFF),
+                      count_row(subrecord="COCT", offset=0)):
+            with self.subTest(count=count):
+                self.rejects("needs exactly one whole-payload u32 row", group(), count)
+
+    def test_subrecord_group_count_subrecord_is_required(self):
+        self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=None))
+        self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=5))
+
+    def test_subrecord_group_members_and_counts_cannot_be_shared(self):
+        twin = group(path="TEST" + BS + "Other", label="Other", count_subrecord="OTHR",
+                     members=[group_member("CNTO", fields=[group_row("TwinCount", 4)])])
+        self.rejects("are declared by two groups", group(), twin, count_row(subrecord="COCT"),
+                     count_row(path="TEST" + BS + "OtherCount", label="OtherCount", subrecord="OTHR"))
+        other = group(path="TEST" + BS + "Other", label="Other",
+                      members=[group_member("XTRA", fields=[group_row("OtherItem", 0)])])
+        self.rejects("is shared by two groups", group(), other, count_row(subrecord="COCT"))
+
+    def test_subrecord_group_count_cannot_be_another_groups_member(self):
+        other = group(path="TEST" + BS + "Other", label="Other", count_subrecord="OTHR",
+                      members=[group_member("COCT")])
+        self.rejects("is a member of another group", group(), other, count_row(subrecord="COCT"),
+                     count_row(path="TEST" + BS + "OtherCount", label="OtherCount", subrecord="OTHR"))
+
+    def test_subrecord_group_links_join_the_formlink_table(self):
+        _rows, _nested, fields, _unions = self.link_schema(fields=[group(), count_row(subrecord="COCT")])
+        self.assertEqual([(row["path"], row["subrecord"], row["offset"], row["address"]["repeated"])
+                          for row in fields],
+                         [("TEST" + BS + "ItemObject", "CNTO", 0, True)])
+
+    def test_subrecord_group_link_cannot_overlap_a_member_scalar(self):
+        overlap = group(members=[group_member("CNTO", fields=[group_row("ItemCount", 0)],
+                                              links=[group_link("ItemObject", 0)])])
+        with self.assertRaisesRegex(ValueError, "overlapping FormLink/scalar fields in TEST.CNTO"):
+            self.link_schema(fields=[overlap, count_row(subrecord="COCT")])
+        self.link_schema(fields=[group(), count_row(subrecord="COCT")])
 
 
 if __name__ == "__main__":

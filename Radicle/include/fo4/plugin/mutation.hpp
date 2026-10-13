@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace fo4 {
 
@@ -38,6 +39,18 @@ enum class CountedArrayMutationStatus {
   record_missing,
   index_out_of_range,
   subrecord_missing,
+};
+
+enum class SubrecordGroupMutationStatus {
+  updated,
+  record_missing,
+  index_out_of_range,
+  subrecord_missing,
+};
+
+struct SubrecordGroupSpan {
+  std::size_t first{0};
+  std::size_t end{0};
 };
 
 enum class ConditionMutationStatus {
@@ -173,6 +186,21 @@ CountedArrayMutationStatus remove_record_counted_element(Plugin& plugin,
                                                          const FormKey& record_key,
                                                          const schema::CountedArrayDescriptor& array,
                                                          std::size_t index);
+
+std::optional<std::vector<SubrecordGroupSpan>> subrecord_group_spans(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const schema::SubrecordGroupDescriptor& group);
+
+SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
+                                                           const FormKey& record_key,
+                                                           const schema::SubrecordGroupDescriptor& group,
+                                                           std::size_t index);
+
+SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
+                                                           const FormKey& record_key,
+                                                           const schema::SubrecordGroupDescriptor& group,
+                                                           std::size_t index);
 
 inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
                                   const FormKey& record_key,

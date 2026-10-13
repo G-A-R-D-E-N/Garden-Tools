@@ -466,7 +466,7 @@ TEST(SigBaseObjects, MatchesXeditUnionAndRejectsNonBaseRecords) {
   EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("QUST")));
   EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("KYWD")));
   EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("FACT")));
-  EXPECT_FALSE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("ENCH")));
+  EXPECT_TRUE(fo4::schema::is_sig_base_object(fo4::Signature::from_string("ENCH")));
 }
 
 TEST(KwdaFormLinkList, ReadsPackedValuesAndDistinguishesEmptyFromMissingRecord) {
