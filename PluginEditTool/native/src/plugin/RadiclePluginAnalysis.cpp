@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include <fo4/graph/check_errors.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/preflight.hpp>
 
@@ -189,6 +190,7 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
         const auto signature = hit.subrecord.to_string();
         if (!seen.emplace(signature, target).second) continue;
         rows.push_back({
+            {"Code", std::string(fo4::check_code_name(fo4::CheckCode::unresolved_link))},
             {"Severity", "critical"},
             {"Description", "Missing " + signature + " FormLink target " + target}
         });
@@ -199,6 +201,7 @@ Result<nlohmann::json> RadiclePluginBackend::getProblems(const nlohmann::json& a
     if (record != nullptr) {
         for (const auto& issue : fo4::schema::preflight_record(*record, loaded->plugin.header.tes4_flags.is_localized())) {
             rows.push_back({
+                {"Code", std::string(fo4::check_code_name(fo4::CheckCode::schema_preflight))},
                 {"Severity", issue.severity == fo4::schema::PreflightSeverity::error
                                      ? "critical"
                                      : "warning"},

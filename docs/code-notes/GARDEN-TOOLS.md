@@ -2115,3 +2115,12 @@ Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyAr
 ## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
 
 A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getProblems — stable row codes (#31)
+
+Every per-record problem row carries a `Code` before its `Severity` and `Description`. The codes are Radicle's `fo4::check_code_name` names, the same strings the whole-plugin Check for Errors path emits, so one code means one thing in both views. Each row source maps to one code, so no PET-local code was needed:
+
+- `unresolved_link` (`fo4::CheckCode::unresolved_link`): a FormLink whose target has no winning record, emitted as `critical` with the `Missing <sig> FormLink target` description.
+- `schema_preflight` (`fo4::CheckCode::schema_preflight`): every `fo4::schema::preflight_record` issue, whether `critical` (error) or `warning`. The preflight issue's own `code` string is not surfaced, so the row code stays the Radicle check family.
+
+`PluginEditTool/native/tests/unit/RadiclePluginBackendTests.cpp:Radicle plugin backend reports dangling FormLinks` and `PluginEditTool/native/tests/unit/RadiclePluginPreflightTests.cpp:GetProblems reports duplicate schema scalar storage as critical` pin the two codes. The web side is `PluginEditTool/web/src/ProblemsList.tsx:ProblemsList`, which shows the code on each row and filters by it; `RecordView.tsx` renders it in the Problems drawer. The `RecordProblemCode` union in `PluginEditTool/web/src/backend.ts` lists the two codes the web side accepts, so a new code needs that type updated too.

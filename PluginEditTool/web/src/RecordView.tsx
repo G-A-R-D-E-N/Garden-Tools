@@ -6,6 +6,7 @@ import type {
   ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry, ElementActions,
 } from './backend';
 import RecordPicker from './RecordPicker';
+import ProblemsList from './ProblemsList';
 import ConditionsEditor from './ConditionsEditor';
 import { useDialogs } from './useDialogs';
 import WorkspaceHeader from './Workspace/WorkspaceHeader';
@@ -700,16 +701,7 @@ export default function RecordView(
         </div>
         {drawerOpen && (
           <div className="rv-drawer-body">
-            {problems === null ? <div className="rv-drawer-note">Checking…</div>
-            : scanErrors.problems ? <div className="rv-drawer-note" style={{ color: '#f44747' }}>
-                Problem check failed (not "no problems"): {scanErrors.problems}</div>
-            : problems.length === 0 ? <div className="rv-drawer-note">No problems found.</div>
-            : problems.map((p, i) => (
-              <div key={i} className="rv-prob-row">
-                <AlertTriangle size={12} className="rv-prob-icon" />
-                <span>{p.Description}</span>
-              </div>
-            ))}
+            <ProblemsList problems={problems} error={scanErrors.problems} />
           </div>
         )}
       </div>

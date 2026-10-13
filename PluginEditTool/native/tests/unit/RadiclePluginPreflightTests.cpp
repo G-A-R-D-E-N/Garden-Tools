@@ -100,6 +100,7 @@ TEST_CASE("GetProblems reports duplicate schema scalar storage as critical") {
 
     const auto rows = problems(backend);
     REQUIRE(rows.size() == 1);
+    CHECK(rows[0].at("Code") == "schema_preflight");
     CHECK(rows[0].at("Severity") == "critical");
     CHECK(rows[0].at("Description").get<std::string>().find("REFR\\HealthPercent") !=
           std::string::npos);
@@ -118,6 +119,8 @@ TEST_CASE("GetProblems reports readable out-of-range schema values as warnings")
 
     const auto rows = problems(backend);
     REQUIRE(rows.size() == 2);
+    CHECK(rows[0].at("Code") == "schema_preflight");
+    CHECK(rows[1].at("Code") == "schema_preflight");
     CHECK(rows[0].at("Severity") == "warning");
     CHECK(rows[1].at("Severity") == "warning");
     const auto first = rows[0].at("Description").get<std::string>();
