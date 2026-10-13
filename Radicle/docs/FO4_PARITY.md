@@ -72,7 +72,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | CMPO | 12294 | 1 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | COBJ | 10266 | - | - | - | - | - | - | - | forms/components | - | - | L2 |
 | COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | - | 2 | L4 |
-| CONT | 6176 | 8 | 1 | 8 | - | 1 | yes | yes | - | - | 1 | L4 |
+| CONT | 6176 | 10 | 1 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
 | CPTH | 7930 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | DEBR | 7388 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -159,7 +159,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 2 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | - | 4 | - | 8 | 2 | yes | yes | forms/race, forms/race_body | - | 2 | L4 |
-| REFR | 11347 | 2 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -221,7 +221,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CMPO | 1 | - | - | - | - | u32 | - | - | - | existing_only |
 | COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
-| CONT | 7 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
+| CONT | 9 | - | - | 1 | 1 | f32, i16, i32, u32, u8 | 2 | - | - | existing_only |
 | CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | CSTY | 49 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | DEBR | - | - | - | - | - | - | - | - | - | - |
@@ -304,7 +304,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PROJ | 16 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
-| REFR | 1 | 1 | - | - | - | f32, u32 | - | - | - | existing_only |
+| REFR | 6 | 1 | - | - | - | f32, u32 | - | 4 | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |
@@ -338,7 +338,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 
 - Semantic letters (READ, WRITE, ADD, REMOVE, CREATE, REMAP, VALIDATE, OPAQUE) are not derived; see the hand-kept section below the table.
 - Row counts are not compared with xEdit members. The script does not enumerate xEdit members, so unlisted members, enums, flags and structs are not attributed.
-- Schema kinds are `scalar` and `string`. Enum and flags fields are scalar rows with an `enum` or `flags` presentation that carries xEdit names; struct and counted-array fields have no kind and are absent.
+- Schema kinds are `scalar`, `string` and `counted_array`. A counted array has no row of its own: `scalar_rows` expands it into its member scalar rows (stride addressing), and its count subrecord is a scalar row. Enum and flags fields are scalar rows with an `enum` or `flags` presentation that carries xEdit names; other struct fields have no kind and are absent.
 - Dedicated PluginEditTool routes are not derived, so the tier stops at schema, typed module and remap evidence (no L5).
 - Typed module attribution is the `TYPED_MODULES` map in this script. The script checks that each cited file names the signature, but not that it still reads the record semantically.
 - Subrecord-level remap handlers apply to any record carrying the subrecord and are not attributed to a record: OBTS (`obts_formid_offsets`, called from `src/schema/form_links.cpp`) and the behavior handlers in `src/schema/behavior_layout.cpp`.

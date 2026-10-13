@@ -226,6 +226,8 @@ constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 {Signature::from_string("CONT"), "CONT\\BoundMinY", ScalarDescriptor{Signature::from_string("OBND"), "Min Y", ScalarStorage::i16, ScalarPresentation::identity, -32768.0, 32767.0, 2, true, 12, FieldAddress{}}, false},
 {Signature::from_string("CONT"), "CONT\\BoundMinZ", ScalarDescriptor{Signature::from_string("OBND"), "Min Z", ScalarStorage::i16, ScalarPresentation::identity, -32768.0, 32767.0, 4, true, 12, FieldAddress{}}, false},
 {Signature::from_string("CONT"), "CONT\\Flags", ScalarDescriptor{Signature::from_string("DATA"), "Flags", ScalarStorage::u8, ScalarPresentation::flags, 0.0, 255.0, 0, true, 5, FieldAddress{}, 0, std::span<const ScalarName>(k_scalar_names_15)}, false},
+{Signature::from_string("CONT"), "CONT\\ItemCount", ScalarDescriptor{Signature::from_string("CNTO"), "Count", ScalarStorage::i32, ScalarPresentation::identity, -2147483648.0, 2147483647.0, 4, true, 0, FieldAddress{true, 0, 0, FieldDiscriminator{}}}, false},
+{Signature::from_string("CONT"), "CONT\\ItemTotal", ScalarDescriptor{Signature::from_string("COCT"), "Item total", ScalarStorage::u32, ScalarPresentation::identity, 0.0, 4294967295.0, 0, false, 0, FieldAddress{}}, false},
 {Signature::from_string("CONT"), "CONT\\Model", ScalarDescriptor{Signature::from_string("MODL"), "Model file name", ScalarStorage::zstring, ScalarPresentation::identity, 0.0, 0.0, 0, false, 0, FieldAddress{}}, false},
 {Signature::from_string("CONT"), "CONT\\Weight", ScalarDescriptor{Signature::from_string("DATA"), "Weight", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 1, true, 5, FieldAddress{}}, false},
 {Signature::from_string("CPTH"), "CPTH\\Flags", ScalarDescriptor{Signature::from_string("DATA"), "Flags", ScalarStorage::u8, ScalarPresentation::flags, 0.0, 255.0, 0, false, 0, FieldAddress{}, 0, std::span<const ScalarName>(k_scalar_names_16)}, false},
@@ -884,6 +886,11 @@ constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 {Signature::from_string("RACE"), "RACE\\PhonemeTargetNames", ScalarDescriptor{Signature::from_string("PHTN"), "Phoneme target name", ScalarStorage::zstring, ScalarPresentation::identity, 0.0, 0.0, 0, false, 0, FieldAddress{true, 0, 0, FieldDiscriminator{}}}, false},
 {Signature::from_string("REFR"), "REFR\\HealthPercent", ScalarDescriptor{Signature::from_string("XHLT"), "Health %", ScalarStorage::u32, ScalarPresentation::percent_0_100, 0.0, 100.0, 0, false, 0, FieldAddress{}}, false},
 {Signature::from_string("REFR"), "REFR\\Scale", ScalarDescriptor{Signature::from_string("XSCL"), "Scale", ScalarStorage::f32, ScalarPresentation::identity, 0.0, 10.0, 0, false, 0, FieldAddress{}}, false},
+{Signature::from_string("REFR"), "REFR\\WaterCurrentUnnamed", ScalarDescriptor{Signature::from_string("XWCU"), "Unnamed float", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 12, true, 0, FieldAddress{false, 16, 0, FieldDiscriminator{}}}, false},
+{Signature::from_string("REFR"), "REFR\\WaterCurrentVelocityCount", ScalarDescriptor{Signature::from_string("XWCN"), "Velocity Count", ScalarStorage::u32, ScalarPresentation::identity, 0.0, 4294967295.0, 0, false, 0, FieldAddress{}}, false},
+{Signature::from_string("REFR"), "REFR\\WaterCurrentVelocityX", ScalarDescriptor{Signature::from_string("XWCU"), "Velocity X", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 0, true, 0, FieldAddress{false, 16, 0, FieldDiscriminator{}}}, false},
+{Signature::from_string("REFR"), "REFR\\WaterCurrentVelocityY", ScalarDescriptor{Signature::from_string("XWCU"), "Velocity Y", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 4, true, 0, FieldAddress{false, 16, 0, FieldDiscriminator{}}}, false},
+{Signature::from_string("REFR"), "REFR\\WaterCurrentVelocityZ", ScalarDescriptor{Signature::from_string("XWCU"), "Velocity Z", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 8, true, 0, FieldAddress{false, 16, 0, FieldDiscriminator{}}}, false},
 {Signature::from_string("RELA"), "RELA\\Flags", ScalarDescriptor{Signature::from_string("DATA"), "Flags", ScalarStorage::u8, ScalarPresentation::flags, 0.0, 255.0, 11, true, 0, FieldAddress{}, 0, std::span<const ScalarName>(k_scalar_names_58)}, false},
 {Signature::from_string("RELA"), "RELA\\Rank", ScalarDescriptor{Signature::from_string("DATA"), "Rank", ScalarStorage::u8, ScalarPresentation::enumeration, 0.0, 8.0, 8, true, 0, FieldAddress{}, 0, std::span<const ScalarName>(k_scalar_names_59)}, false},
 {Signature::from_string("REVB"), "REVB\\DecayHFRatio", ScalarDescriptor{Signature::from_string("DATA"), "Decay HF ratio (x100)", ScalarStorage::u8, ScalarPresentation::identity, 0.0, 255.0, 8, true, 14, FieldAddress{}}, false},
@@ -1329,3 +1336,15 @@ constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 {Signature::from_string("ZOOM"), "ZOOM\\FOVMultiplier", ScalarDescriptor{Signature::from_string("GNAM"), "FOV multiplier", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 0, true, 0, FieldAddress{}}, false},
 {Signature::from_string("ZOOM"), "ZOOM\\Overlay", ScalarDescriptor{Signature::from_string("GNAM"), "Overlay", ScalarStorage::u32, ScalarPresentation::enumeration, 0.0, 4294967295.0, 4, true, 0, FieldAddress{}, 0, std::span<const ScalarName>(k_scalar_names_82)}, false},
 };
+constexpr std::array<CountedArrayDescriptor, 1> k_counted_arrays{{
+{Signature::from_string("REFR"), "REFR\\WaterCurrentVelocities", "Velocities", Signature::from_string("XWCU"), Signature::from_string("XWCN"), 16},
+}};
+constexpr std::uint8_t k_subrecord_group_default_0[] = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+constexpr Signature k_subrecord_group_successors_0[] = {Signature::from_string("DEST"), Signature::from_string("DAMC"), Signature::from_string("DSTD"), Signature::from_string("DSTA"), Signature::from_string("DMDL"), Signature::from_string("DMDC"), Signature::from_string("DMDT"), Signature::from_string("DMDS"), Signature::from_string("DSTF"), Signature::from_string("DATA"), Signature::from_string("KSIZ"), Signature::from_string("KWDA"), Signature::from_string("FTYP"), Signature::from_string("NTRM"), Signature::from_string("PRPS"), Signature::from_string("SNAM"), Signature::from_string("QNAM"), Signature::from_string("TNAM"), Signature::from_string("ONAM")};
+constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_0[] = {
+{Signature::from_string("CNTO"), true, false, 8, std::span<const std::uint8_t>(k_subrecord_group_default_0)},
+{Signature::from_string("COED"), false, false, 12},
+};
+constexpr std::array<SubrecordGroupDescriptor, 1> k_subrecord_groups{{
+{Signature::from_string("CONT"), "CONT\\Items", "Items", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), std::span<const Signature>(k_subrecord_group_successors_0)},
+}};
