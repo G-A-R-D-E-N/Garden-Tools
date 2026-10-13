@@ -49,7 +49,7 @@ Tier counts: L0 72, L1 16, L2 16, L3 1, L4 42.
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
 | ACTI | 5611 | - | - | - | - | - | - | yes | environment/base_records | - | - | L2 |
 | ADDN | 7796 | - | - | - | - | - | - | - | - | - | - | L0 |
-| AECH | 12206 | - | - | - | - | - | yes | - | - | - | - | L4 |
+| AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | AMDL | 12246 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AMMO | 5741 | - | - | - | - | - | - | yes | - | - | - | L1 |
@@ -58,7 +58,7 @@ Tier counts: L0 72, L1 16, L2 16, L3 1, L4 42.
 | ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | - | 1 | L4 |
 | ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | - | 1 | L4 |
 | ARTO | 9362 | - | - | - | - | - | - | yes | - | - | - | L1 |
-| ASPC | 7057 | 2 | - | 3 | - | - | yes | - | - | - | - | L4 |
+| ASPC | 7057 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AVIF | 7826 | - | - | - | - | - | - | - | - | - | 1 | L0 |
 | BNDS | 12280 | - | - | - | - | - | - | - | environment/base_records | - | - | L2 |
@@ -135,7 +135,7 @@ Tier counts: L0 72, L1 16, L2 16, L3 1, L4 42.
 | MSTT | 7067 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | MSWP | 12437 | - | - | - | - | - | - | - | environment/material_swap | - | - | L2 |
 | MUSC | 8665 | 4 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| MUST | 8795 | 6 | 2 | 1 | - | - | yes | - | - | - | - | L4 |
+| MUST | 8795 | 6 | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -162,23 +162,23 @@ Tier counts: L0 72, L1 16, L2 16, L3 1, L4 42.
 | REFR | 11347 | 2 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RELA | 8848 | - | - | - | - | - | - | - | - | - | - | L0 |
-| REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | - | L4 |
+| REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RFGP | 12582 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SCCO | 12593 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | - | - | - | - | - | - | - | forms/static_collection | - | - | L2 |
-| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | - | - | L4 |
+| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | SMBN | 8720 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SMEN | 8762 | - | - | - | - | - | - | - | - | - | - | L0 |
 | SMQN | 8735 | - | - | - | - | - | - | - | - | - | - | L0 |
-| SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | - | L4 |
+| SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | SNDR | 9406 | 10 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
-| SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | - | L4 |
+| SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | SOUN | 11961 | 3 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
 | SPEL | 12030 | - | - | - | - | - | - | yes | - | - | 2 | L1 |
 | SPGD | 6128 | - | - | - | - | - | - | - | - | - | - | L0 |
-| STAG | 12663 | - | - | - | - | - | yes | - | - | - | - | L4 |
+| STAG | 12663 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | STAT | 12045 | - | - | - | - | - | - | - | environment/base_records | - | 1 | L2 |
 | TACT | 5672 | - | - | - | - | - | - | yes | - | - | - | L1 |
 | TERM | 12671 | - | - | - | - | - | - | yes | - | - | - | L1 |

@@ -5398,7 +5398,7 @@
         },
         {
           "path": "SNCT\\StaticVolume",
-          "label": "Static volume multiplier (raw)",
+          "label": "Static volume multiplier (x65535)",
           "kind": "scalar",
           "subrecord": "VNAM",
           "offset": 0,
@@ -5410,7 +5410,7 @@
         },
         {
           "path": "SNCT\\DefaultMenuValue",
-          "label": "Default menu value (raw)",
+          "label": "Default menu value (x65535)",
           "kind": "scalar",
           "subrecord": "UNAM",
           "offset": 0,
@@ -5819,16 +5819,16 @@
             "default": "00000000"
           },
           {
-            "signature": "VNAM",
-            "minimum": 0,
-            "maximum": 1,
-            "default": "0000"
-          },
-          {
             "signature": "MNAM",
             "minimum": 0,
             "maximum": 1,
             "default": "00000000"
+          },
+          {
+            "signature": "VNAM",
+            "minimum": 0,
+            "maximum": 1,
+            "default": "0000"
           },
           {
             "signature": "ATTN",

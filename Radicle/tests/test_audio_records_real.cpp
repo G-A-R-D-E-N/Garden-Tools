@@ -2,7 +2,6 @@
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
-#include "fo4/schema/scalar.hpp"
 #include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
@@ -13,6 +12,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -45,17 +45,20 @@ TEST_P(AudioRecordsReal, EveryRowDecodesAndAuthoringMinimumsHold) {
     for (const auto& issue : fo4::schema::preflight_record(record, localized)) {
       EXPECT_NE(issue.severity, fo4::schema::PreflightSeverity::error) << issue.path << ' ' << issue.message;
     }
-    for (const auto& field : fo4::schema::scalar_fields(record.header.signature)) {
-      for (const auto& subrecord : record.subrecords) {
-        if (subrecord.signature != field.scalar.subrecord) continue;
-        const auto bytes = fo4::schema::scalar_field_bytes(subrecord.data, field.scalar);
-        if (!bytes.empty()) static_cast<void>(fo4::schema::decode_scalar(bytes, field.scalar));
-      }
-    }
     const auto constraint = fo4::schema::record_authoring_constraint(record.header.signature);
     EXPECT_TRUE(constraint.has_value());
     if (!constraint) return;
-    for (const auto& rule : fo4::schema::authoring_subrecords(*constraint)) {
+    const auto rules = fo4::schema::authoring_subrecords(*constraint);
+    std::optional<std::size_t> last_rule;
+    for (const auto& subrecord : record.subrecords) {
+      const auto found = std::find_if(rules.begin(), rules.end(),
+          [&](const fo4::schema::SubrecordAuthoringConstraint& rule) { return rule.signature == subrecord.signature; });
+      if (found == rules.end()) continue;
+      const auto index = static_cast<std::size_t>(found - rules.begin());
+      EXPECT_FALSE(last_rule.has_value() && index < *last_rule) << subrecord.signature.to_string() << " is out of authoring order";
+      last_rule = index;
+    }
+    for (const auto& rule : rules) {
       const auto present = static_cast<std::size_t>(std::count_if(
           record.subrecords.begin(), record.subrecords.end(),
           [&](const fo4::Subrecord& sub) { return sub.signature == rule.signature; }));

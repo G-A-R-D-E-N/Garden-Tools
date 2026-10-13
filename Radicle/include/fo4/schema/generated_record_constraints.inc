@@ -95,8 +95,8 @@ inline constexpr std::uint8_t k_generated_authoring_default_91[] = {0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_92[] = {0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_93[] = {0x00, 0x00, 0x00, 0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_94[] = {0x00, 0x00, 0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_95[] = {0x00, 0x00};
-inline constexpr std::uint8_t k_generated_authoring_default_96[] = {0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_95[] = {0x00, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t k_generated_authoring_default_96[] = {0x00, 0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_97[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x32, 0x50, 0x5F, 0x32, 0x14, 0x05, 0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_98[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 inline constexpr std::uint8_t k_generated_authoring_default_99[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -532,8 +532,8 @@ inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_co
   {Signature::from_string("ITMC"), 0, 1, nullptr, 0, false, true},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("NAM1"), 0, 1, k_generated_authoring_default_94, 4, false, false},
-  {Signature::from_string("VNAM"), 0, 1, k_generated_authoring_default_95, 2, false, false},
-  {Signature::from_string("MNAM"), 0, 1, k_generated_authoring_default_96, 4, false, false},
+  {Signature::from_string("MNAM"), 0, 1, k_generated_authoring_default_95, 4, false, false},
+  {Signature::from_string("VNAM"), 0, 1, k_generated_authoring_default_96, 2, false, false},
   {Signature::from_string("ATTN"), 0, 1, k_generated_authoring_default_97, 24, false, false},
   {Signature::from_string("ENAM"), 0, 1, nullptr, 0, false, false},
   {Signature::from_string("EDID"), 0, 1, nullptr, 0, false, false},
