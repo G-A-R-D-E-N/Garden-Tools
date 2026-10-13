@@ -1249,15 +1249,31 @@ GT-245. Clears `FO4_GAME_BUILD` first, the same way `DetectReadsFalloutExeNextTo
 
 ## Radicle/tests/test_navmesh_authoring.cpp:UneditedPluginWithNavmeshAndNaviRecordsWritesBackByteIdentical
 
-GT-244. `write_plugin` returns the source bytes whenever `plugin_original_bytes` is non-empty, so the byte comparison could never fail. Clearing `plugin.original_range` (the pattern other round-trip tests use) forces the rebuild path before the comparison. The NAVI record in `navmesh_writer_fixture` is still a `ZZZZ` sentinel: a valid NAVI needs NVER and NVMI payloads, and the builder for those lives in an anonymous namespace in `test_navmesh.cpp`, so it was not copied here.
+GT-244. `write_plugin` returns the source bytes whenever `plugin_original_bytes` is non-empty, so the byte comparison could never fail. Clearing `plugin.original_range` (the pattern other round-trip tests use) forces the rebuild path before the comparison. The NAVI record in `navmesh_writer_fixture` is still a `ZZZZ` sentinel: a valid NAVI needs NVER and NVMI payloads, and the builder for those lives in an anonymous namespace in `test_navmesh.cpp`, so it was not copied here. Once the clear forced the rebuild, the first differing byte was the stored HEDR record count (file offset 34, 4 stored, 10 canonical); the fixture is fixed in `Radicle/tests/navmesh_writer_fixture.hpp:navmesh_writer_fixture`.
 
 ## Radicle/tests/test_water_authoring.cpp:UnmodifiedWaterRecordsRoundTripByteIdentical
 
-GT-244. Same cause and fix as the navmesh test: the plugin's original range is cleared before `write_plugin`, so the WATR bytes are rebuilt and compared, not copied from the source.
+GT-244. The plugin's original range is cleared before `write_plugin`, so the WATR bytes are rebuilt and compared, not copied from the source. The rebuild rewrites TES4 HEDR bytes 4..7 (record count), so the fixture must store the canonical count; `Radicle/tests/water_record_fixture.hpp:build` now writes it. Before the fix the first differing byte was file offset 34 (0x00 in the source, 0x03 rebuilt).
+
+## Radicle/tests/water_record_fixture.hpp:build
+
+HEDR record count is the number of distinct top-level GRUPs plus the number of entries (the WATR round-trip fixture stores 1 + 2 = 3). It was 0. `write_plugin` recomputes this count whenever TES4's original range is cleared.
+
+## Radicle/tests/navmesh_writer_fixture.hpp:navmesh_writer_fixture
+
+HEDR record count is 10: five top-level GRUPs (NAVM, two REFR, MISC, NAVI) plus five major records. It was 4. Same rule as `water_record_fixture.hpp:build`.
+
+## Radicle/src/forms/placed_reference_copy.cpp:copy_placed_reference_as_new
+
+Refuses an undecodable source reference, source parent CELL, or source parent WRLD before `reserve_local_form_key` runs. The reservation rewrites the TES4 HEDR next form ID of the working copy, so before this fix an undecodable source on a target with a short HEDR surfaced as `FormIdError` instead of the refusal. `copy_record_for_destination` keeps its own check for the other copy paths. Test: `tests/test_undecodable_edit.cpp:UndecodableEdit.CopyPlacedReferenceAsNewRefusesUndecodableSource`.
+
+## Radicle/src/forms/info_copy.cpp:copy_info_as_new
+
+Refuses an undecodable source INFO and an undecodable source parent DIAL (its QNAM is read by the copy) right after containment resolves, before `reserve_local_form_key`. Same ordering cause and test as `placed_reference_copy.cpp:copy_placed_reference_as_new`: `tests/test_undecodable_edit.cpp:UndecodableEdit.CopyInfoAsNewRefusesUndecodableSource`.
 
 ## Radicle/tests/test_sound_real.cpp:DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes
 
-GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The source bytes are taken before the clear, and the span stays valid because the copy keeps the shared `original_data` buffer.
+GT-244. The test copies `env.plugin(0)` so it can clear the copy's original range; the environment's plugin stays read-only. The copy duplicates the decoded official master in memory, which matters on the real-data runner. The source bytes are taken before the clear, and the span stays valid because the copy keeps the shared `original_data` buffer. The record-range clear skips TES4: the official masters store HEDR counts that differ from the recomputed count (see `docs/HEDR_RECORD_COUNT.md`), so a TES4 rebuild would change their bytes. HEDR rebuild is covered by `tests/test_hedr_count.cpp`.
 
 ## Radicle/src/schema/form_links.cpp:remap_record_form_links — single-record refusal (GT-232)
 

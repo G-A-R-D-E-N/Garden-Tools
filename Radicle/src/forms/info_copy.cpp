@@ -313,6 +313,8 @@ InfoCopyNewResult copy_info_as_new(
 
   const auto source_context = plugin_form_id_context(source);
   const auto containment = resolve_info_containment(source, located, source_context);
+  require_decodable(*containment.info.record);
+  require_decodable(*containment.dial.record);
   const auto* source_topic = containment.info.path.back();
   const auto& source_info_record = *containment.info.record;
   const auto pnam = read_info_pnam(
