@@ -12,6 +12,8 @@
 #include <string_view>
 #include <vector>
 
+#include <fo4/archive/assets.hpp>
+#include <fo4/environment/strings.hpp>
 #include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/container.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
@@ -232,6 +234,9 @@ private:
     Result<nlohmann::json> listStringTables(const nlohmann::json& arguments) const;
     Result<nlohmann::json> getStrings(const nlohmann::json& arguments) const;
     Result<nlohmann::json> lookupString(const nlohmann::json& arguments) const;
+    Result<std::vector<fo4::env::PluginStringTable>> readStringTables(const LoadedPlugin& loaded,
+                                                                     std::string_view language) const;
+    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets() const;
 
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
@@ -258,6 +263,9 @@ private:
     std::uint64_t mutationEpoch_{0};
     fo4::ConflictGraph graph_;
     std::filesystem::path dataDirectory_;
+    mutable std::mutex stringAssetsMutex_;
+    mutable std::vector<std::filesystem::path> stringArchives_;
+    mutable std::shared_ptr<const fo4::archive::AssetResolver> stringAssets_;
     std::filesystem::path trustedNewPluginRoot_;
     std::vector<std::filesystem::path> trustedSaveRoots_;
 };
