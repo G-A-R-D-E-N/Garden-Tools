@@ -63,6 +63,25 @@ it('edits flags with a checkbox list and writes the combined integer', async () 
   await waitFor(() => expect(SetField).toHaveBeenCalledWith('W0.esp', '000800:W0.esp', 'FACT\\Flags', '195'));
 });
 
+it('keeps a toggled flag when the flag editor is double-clicked', () => {
+  const view = renderView();
+  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, 0x80'));
+  fireEvent.click(screen.getByLabelText('Track Crime'));
+  fireEvent.doubleClick(view.container.querySelector('.scalar-flags-edit') as HTMLElement);
+  expect((screen.getByLabelText('Track Crime') as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(SetField).toHaveBeenCalledWith('W0.esp', '000800:W0.esp', 'FACT\\Flags', '195');
+});
+
+it('opens no editor for an enum cell whose raw value is not an integer', () => {
+  const opaque = { ...matrix, Rows: [scalarRow('FACT\\CrimeArrest', '<opaque>', crimeArrest)] };
+  const view = render(
+    <DialogProvider><RecordView matrix={opaque} plugin="W0.esp" onReload={async () => {}} /></DialogProvider>,
+  );
+  fireEvent.doubleClick(screen.getByText('<opaque>'));
+  expect(view.container.querySelector('select.rv-edit-input')).toBeNull();
+});
+
 it('closes an open flag editor when the record changes and writes nothing', () => {
   const view = renderView();
   fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, 0x80'));

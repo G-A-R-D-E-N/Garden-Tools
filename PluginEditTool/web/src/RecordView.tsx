@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { TYPED_RECORD_TYPES, type ConflictMatrix, type ConflictFieldRow, type RefByEntry, type RecordProblem, type Dependency, type HistoryEntry, type ElementActions } from './backend';
 import { ScalarEditor, ScalarText } from './ScalarEditor';
+import { rawEditable } from './scalarPresentation';
 import RecordPicker from './RecordPicker';
 import TypedRecordPanel from './TypedRecordPanel';
 import ProblemsList from './ProblemsList';
@@ -226,6 +227,7 @@ export default function RecordView(
     setMenu(null);
     if (r.HasChildren || r.Editable?.[col] === false) return;
     if (r.EditKind === 'Ref') { setPicker({ row: r, col }); return; }
+    if (r.Presentation && !rawEditable(r.Values[col] ?? '', r.Presentation)) return;
     setEdit({ field: r.Field, col });
     setEditVal(r.Values[col] ?? '');
   };

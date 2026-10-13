@@ -39,6 +39,7 @@ nlohmann::json scalarPresentationJson(fo4::Signature record, std::string_view pa
     }
     if (scalar.presentation == fo4::schema::ScalarPresentation::flags) {
         for (const auto& entry : scalar.names) {
+            if (entry.value == 0) continue;
             names.push_back({{"bit", std::countr_zero(static_cast<std::uint64_t>(entry.value))},
                 {"name", std::string(entry.name)}});
         }

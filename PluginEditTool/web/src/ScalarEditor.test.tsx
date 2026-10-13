@@ -101,4 +101,21 @@ describe('ScalarEditor', () => {
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it('cancels a flag edit on Escape once', () => {
+    render(<ScalarEditor presentation={flags} value="3" onValue={onValue} onCommit={onCommit} onCancel={onCancel} />);
+    fireEvent.keyDown(screen.getByLabelText('Special Combat'), { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('cancels an enum edit on Escape once', () => {
+    render(<ScalarEditor presentation={crimeArrest} value="1" onValue={onValue} onCommit={onCommit} onCancel={onCancel} />);
+    fireEvent.keyDown(screen.getByDisplayValue('True'), { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('disables flag checkboxes when the raw value is not an integer', () => {
+    render(<ScalarEditor presentation={flags} value="<opaque>" onValue={onValue} onCommit={onCommit} onCancel={onCancel} />);
+    expect((screen.getByLabelText('Special Combat') as HTMLInputElement).disabled).toBe(true);
+  });
 });

@@ -11,8 +11,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/schema/scalar.hpp>
+#include <fo4/signature.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include "../../src/plugin/RadiclePluginFields.hpp"
 #include "plugin_bytes.hpp"
 
 namespace {
@@ -222,6 +224,10 @@ TEST_CASE("Schema enum and flag names reach the grid and record matrix") {
     CHECK(presentations.at("FACT\\Flags").at("names")[1] == nlohmann::json{{"bit", 1}, {"name", "Special Combat"}});
     CHECK(presentations.at("FACT\\Flags").at("names")[16] == nlohmann::json{{"bit", 16}, {"name", "Ignore Crimes: Werewolf (unused)"}});
     CHECK_FALSE(presentations.contains("FACT\\CrimeMurder"));
+
+    const auto npcFlags = scalarPresentationJson(fo4::Signature('N', 'P', 'C', '_'), "NPC_\\ConfigurationFlags");
+    REQUIRE(npcFlags.at("kind") == "flags");
+    CHECK(npcFlags.at("names").back() == nlohmann::json{{"bit", 31}, {"name", "Invulnerable"}});
 
     const auto columns = grid.at("columns");
     const auto& cells = grid.at("rows")[0].at("cells");

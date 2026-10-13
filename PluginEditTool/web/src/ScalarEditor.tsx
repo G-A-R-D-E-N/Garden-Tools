@@ -1,11 +1,9 @@
 import type { ScalarPresentation } from './backend';
-import { flagIsSet, scalarLabel, setFlag } from './scalarPresentation';
+import { flagIsSet, rawEditable, scalarLabel, setFlag } from './scalarPresentation';
 import './ScalarEditor.css';
 
 type EnumPresentation = Extract<ScalarPresentation, { kind: 'enum' }>;
 type FlagNames = Extract<ScalarPresentation, { kind: 'flags' }>['names'];
-
-const isRawInt = (value: string) => /^-?\d+$/.test(value);
 
 function enumOptions(presentation: EnumPresentation, raw: string) {
   const known = presentation.names.some(e => String(e.value) === raw);
@@ -21,13 +19,14 @@ function FlagChecks({ names, value, disabled, onChange }: {
   names: FlagNames; value: string; disabled?: boolean; onChange: (next: string) => void;
 }) {
   const raw = Number(value);
-  const off = disabled || !isRawInt(value);
+  const off = disabled || !rawEditable(value, { kind: 'flags', names });
   return (
     <div className="scalar-flags">
-      {names.map(e => (
+      {names.map((e, i) => (
         <label key={e.bit} className="scalar-flag">
           <input
             type="checkbox"
+            autoFocus={i === 0}
             checked={flagIsSet(raw, e.bit)}
             disabled={off}
             onChange={ev => onChange(String(setFlag(raw, e.bit, ev.target.checked)))}
@@ -50,8 +49,9 @@ export function ScalarEditor({ presentation, value, onValue, onCommit, onCancel 
 }) {
   if (presentation.kind === 'enum') {
     return (
-      <select className="rv-edit-input" autoFocus value={value} disabled={!isRawInt(value)}
-        onChange={e => onCommit(e.target.value)} onBlur={onCancel}>
+      <select className="rv-edit-input" autoFocus value={value}
+        onChange={e => onCommit(e.target.value)} onBlur={onCancel}
+        onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}>
         {enumOptions(presentation, value)}
       </select>
     );
