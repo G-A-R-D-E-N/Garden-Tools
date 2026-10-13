@@ -337,3 +337,11 @@ Every BGS project receives the native Radicle library as a `None` item from `Rad
 ## BGS/tools/tests/Ba2RadicleTests.cs:WriteGeneralBa2
 
 Radicle requires each GNRL record to declare a 16-byte chunk header (the count and size word is `0x00100100`) and the `0xBAADF00D` chunk sentinel. Fixtures that wrote zeros there passed only because the previous reader ignored those fields. `BGS/tools/tests/ArchivePathRegressionTests.cs:WriteBa2` and `BGS/tools/tests/AuditRegressionTests.cs:WriteBa2` use the same layout.
+
+## BGS/src/Archive/Ba2.cs:IsNativeLoadFailure
+
+A stale radicle.dll or a RADICLE_NATIVE_PATH pointing at another build throws RadicleAbiMismatchException from the RadicleLibrary check. Ba2.Open and Ba2.Read only wrap native-load failures, so the mismatch escaped and crashed the modlist scan and GameData.Discover. It is now a native-load failure, both thrown directly and as the inner exception of a TypeInitializationException.
+
+## BGS/src/Archive/GameData.cs:Names
+
+A missing native library reaches Names as an InvalidDataException wrapping the native error. The catch used to treat that as a DX10 or unreadable archive and returned no names silently. Native-load failures now propagate with their "could not be loaded" message, so the caller sees the cause.
