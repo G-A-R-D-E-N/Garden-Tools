@@ -10,11 +10,13 @@
 #include <cstdint>
 #include <span>
 #include <utility>
+#include <vector>
 
 namespace fo4::forms {
 namespace {
 
 constexpr auto k_lvsp = Signature::from_string("LVSP");
+constexpr auto k_obnd = Signature::from_string("OBND");
 constexpr auto k_spel = Signature::from_string("SPEL");
 constexpr auto k_lvld = Signature::from_string("LVLD");
 constexpr auto k_lvlm = Signature::from_string("LVLM");
@@ -76,6 +78,7 @@ FormKey create_leveled_spell(Plugin& plugin,
   // Proven FO4 LVSP order for the required list settings. Seed LLCT at zero;
   // replace_leveled_spell_entries owns the established 12-byte LVLO encoder
   // and will update this count before any non-empty entry list is committed.
+  record->subrecords.push_back(Subrecord{k_obnd, std::vector<std::byte>(12), false});
   record->subrecords.push_back(byte_subrecord(k_lvld, chance_none));
   record->subrecords.push_back(byte_subrecord(k_lvlm, max_count));
   record->subrecords.push_back(byte_subrecord(k_lvlf, flags));

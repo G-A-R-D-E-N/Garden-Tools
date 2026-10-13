@@ -3,6 +3,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/preflight.hpp"
+#include "fo4/schema/record_constraints.hpp"
 #include "../plugin/record_edit.hpp"
 
 #include <cstddef>
@@ -38,14 +39,6 @@ constexpr std::size_t k_relation_size = 12;
 constexpr std::size_t k_rank_number_size = 4;
 
 constexpr std::uint32_t k_defined_flags = 0x0001FFFFu;
-
-constexpr std::uint8_t k_crime_values[] = {
-    0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-constexpr std::uint8_t k_vendor_values[] = {
-    0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
-};
 
 std::uint32_t read_u32(const std::vector<std::byte>& data, std::size_t offset) {
   std::uint32_t value = 0;
@@ -320,8 +313,8 @@ FormKey create_faction(Plugin& plugin,
   std::vector<std::byte> flag_bytes;
   append_u32(flag_bytes, flags);
   subrecords.push_back(make_subrecord(k_data, std::move(flag_bytes)));
-  subrecords.push_back(make_subrecord(k_crva, payload_bytes(k_crime_values)));
-  subrecords.push_back(make_subrecord(k_venv, payload_bytes(k_vendor_values)));
+  subrecords.push_back(make_subrecord(k_crva, payload_bytes(schema::k_generated_authoring_default_24)));
+  subrecords.push_back(make_subrecord(k_venv, payload_bytes(schema::k_generated_authoring_default_25)));
 
   const auto key = create_local_record(next, k_fact, std::move(subrecords));
   for (const auto& issue : schema::preflight_authoring_record(next, key)) {

@@ -92,12 +92,12 @@ std::vector<std::byte> settledLeveledBytes(std::uint16_t unused = 0, std::uint8_
     fo4::test::ByteWriter hedr;
     hedr.f32(1.0f);
     hedr.u32(0);
-    hedr.u32(0x802u);
+    hedr.u32(0x803u);
     fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
     fo4::test::end_record(out, tes4);
 
     const auto group = fo4::test::begin_group(out, "LVLI", 0);
-    const auto list = fo4::test::begin_record(out, "LVLI", 0, 0x00000800u, 131);
+    const auto list =fo4::test::begin_record(out, "LVLI", 0, 0x00000800u, 131);
     fo4::test::write_subrecord(out, "EDID", std::string_view{"ListC\0", 6});
     leveledWriteByte(out, "LVLD", 10);
     leveledWriteByte(out, "LVLM", 2);
@@ -111,6 +111,12 @@ std::vector<std::byte> settledLeveledBytes(std::uint16_t unused = 0, std::uint8_
     fo4::test::write_subrecord(out, "COED", coed.bytes);
     fo4::test::end_record(out, list);
     fo4::test::end_group(out, group);
+
+    const auto misc_group = fo4::test::begin_group(out, "MISC", 0);
+    const auto misc = fo4::test::begin_record(out, "MISC", 0, 0x00000802u, 131);
+    fo4::test::write_subrecord(out, "EDID", std::string_view{"TargetD\0", 8});
+    fo4::test::end_record(out, misc);
+    fo4::test::end_group(out, misc_group);
     return out.bytes;
 }
 

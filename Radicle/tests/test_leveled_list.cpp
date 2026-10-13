@@ -392,3 +392,20 @@ TEST(LeveledList, RejectsOverlongEntryReplacement) {
                fo4::forms::LeveledListError);
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
+
+TEST(LeveledList, ChangingAnExistingEntryDoesNotRecheckItsMissingTarget) {
+  auto plugin = fo4::read_plugin(
+      item_plugin({{"EDID", text("RadicleItemList")},
+                   {"LLCT", one(1)},
+                   {"LVLO", lvlo(1, {0, 0}, 0x02000900, 1, 0, 0)}}),
+      "Patch.esp");
+  auto entry = fo4::forms::decode_leveled_list(plugin, item_key()).entries.front();
+  entry.level = 7;
+  ASSERT_TRUE(fo4::forms::set_leveled_list_entry(plugin, item_key(), 0, entry));
+  EXPECT_EQ(fo4::forms::decode_leveled_list(plugin, item_key()).entries.front().level, 7u);
+
+  fo4::forms::LeveledListEntry added;
+  added.item = fo4::FormKey::parse("000900:Patch.esp");
+  EXPECT_THROW(fo4::forms::insert_leveled_list_entry(plugin, item_key(), 1, added),
+               fo4::forms::LeveledListError);
+}

@@ -394,7 +394,7 @@ Result<nlohmann::json> RadiclePluginBackend::createRecord(const nlohmann::json& 
         return std::unexpected(Error{"CellCreateFailed", error.what()});
     } catch (const fo4::forms::EyesError& error) {
         return std::unexpected(Error{"EyesCreateFailed", error.what()});
-    } catch (const fo4::forms::LeveledSpellError& error) {
+    } catch (const fo4::forms::LeveledListError& error) {
         return std::unexpected(Error{
             signatureText == "LVSP" ? "LeveledSpellCreateFailed" : "LeveledListCreateFailed",
             error.what()});

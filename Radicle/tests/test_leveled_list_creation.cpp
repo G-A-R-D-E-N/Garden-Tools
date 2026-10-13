@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <string>
@@ -84,7 +85,8 @@ TEST(LeveledListCreation, CreatesEachLeveledTypeAndReadsItBack) {
     ASSERT_NE(record, nullptr);
     EXPECT_EQ(record->header.signature.to_string(), std::string(signature));
     EXPECT_EQ(signature_names(*record),
-              (std::vector<std::string>{"EDID", "LVLD", "LVLM", "LVLF", "LLCT"}));
+              (std::vector<std::string>{"EDID", "OBND", "LVLD", "LVLM", "LVLF", "LLCT"}));
+    EXPECT_EQ(record->subrecords[1].data, std::vector<std::byte>(12));
 
     const auto decoded = fo4::forms::decode_leveled_list(reread, key);
     EXPECT_EQ(decoded.chance_none, 5u);

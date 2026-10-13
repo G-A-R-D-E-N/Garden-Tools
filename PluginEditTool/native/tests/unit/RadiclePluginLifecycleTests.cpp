@@ -355,13 +355,14 @@ TEST_CASE("Native lifecycle creates LVSP with validated initial entries") {
 
     const auto* record = fo4::find_record(disk, key);
     REQUIRE(record != nullptr);
-    REQUIRE(record->subrecords.size() == 6u);
+    REQUIRE(record->subrecords.size() == 7u);
     CHECK(record->subrecords[0].signature == fo4::sig_edid);
-    CHECK(record->subrecords[1].signature.to_string() == "LVLD");
-    CHECK(record->subrecords[2].signature.to_string() == "LVLM");
-    CHECK(record->subrecords[3].signature.to_string() == "LVLF");
-    CHECK(record->subrecords[4].signature.to_string() == "LLCT");
-    CHECK(record->subrecords[5].signature.to_string() == "LVLO");
+    CHECK(record->subrecords[1].signature.to_string() == "OBND");
+    CHECK(record->subrecords[2].signature.to_string() == "LVLD");
+    CHECK(record->subrecords[3].signature.to_string() == "LVLM");
+    CHECK(record->subrecords[4].signature.to_string() == "LVLF");
+    CHECK(record->subrecords[5].signature.to_string() == "LLCT");
+    CHECK(record->subrecords[6].signature.to_string() == "LVLO");
 }
 
 TEST_CASE("Native lifecycle creates LVLI, LVLN and FACT from typed payloads") {

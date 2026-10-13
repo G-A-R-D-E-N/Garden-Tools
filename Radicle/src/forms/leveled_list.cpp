@@ -32,6 +32,7 @@ constexpr auto k_llct = Signature::from_string("LLCT");
 constexpr auto k_lvlo = Signature::from_string("LVLO");
 constexpr auto k_coed = Signature::from_string("COED");
 constexpr auto k_onam = Signature::from_string("ONAM");
+constexpr auto k_obnd = Signature::from_string("OBND");
 
 using fo4::detail::find_mutable_record;
 using fo4::detail::mark_record_modified;
@@ -326,6 +327,7 @@ FormKey create_leveled_list(Plugin& plugin,
   if (editor_id.has_value()) {
     subrecords.push_back(Subrecord{sig_edid, zstring(stored_editor_id(*editor_id)), false});
   }
+  subrecords.push_back(make_subrecord(k_obnd, 12));
   subrecords.push_back(byte_subrecord(k_lvld, chance_none));
   subrecords.push_back(byte_subrecord(k_lvlm, max_count));
   subrecords.push_back(byte_subrecord(k_lvlf, flags));
@@ -357,7 +359,8 @@ bool replace_leveled_list_entries(Plugin& plugin,
 
   const auto list = find_record(plugin, key)->header.signature;
   for (const auto& entry : entries) {
-    if (std::find(current.entries.begin(), current.entries.end(), entry) == current.entries.end()) {
+    if (std::none_of(current.entries.begin(), current.entries.end(),
+                     [&](const LeveledListEntry& known) { return known.item == entry.item; })) {
       validate_entry_target(plugin, list, entry);
     }
   }
