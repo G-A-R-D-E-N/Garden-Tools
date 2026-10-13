@@ -178,7 +178,7 @@ The P entries refer to the bounded surfaces below, not every xEdit member. Keywo
 | TXST | P | U | U | U | U | U | P | G | environment / plugin headers; xEdit L6984 |
 | VTYP | U | U | U | U | U | U | U | G | field audit pending; xEdit L7950 |
 | WATR | P | U | U | U | U | U | P | G | environment / plugin headers; PR #396; xEdit L12788 |
-| WEAP | I | I | I | I | U | U | I | G | field audit pending; xEdit L12877 |
+| WEAP | P | I | I | I | U | U | P | G | schema/fallout4/fields.json scalars and FormLinks (docs/WEAPONS.md); DAMA typed read (xEdit-derived, CI real-data check pending); keyword lists I; xEdit L12877 |
 | WRLD | P | U | U | U | U | P | P | G | environment / plugin headers; xEdit L13110 |
 | WTHR | P | P | U | U | U | P | P | G | forms/weather_concept.hpp; PR #398; xEdit L13034 |
 | ZOOM | U | U | U | U | U | U | U | G | field audit pending; xEdit L13180 |

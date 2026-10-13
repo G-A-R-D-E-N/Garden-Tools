@@ -1114,6 +1114,28 @@ Creates a directory named with the process id and a process-wide atomic counter,
 
 The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
 
+## Radicle/schema/fallout4/fields.json:records[WEAP]
+
+WEAP is declared only in the generated tables, as `schema/fallout4/README.md` requires. The authoring rows follow xEdit's definition order in `wbDefinitionsFO4.pas` 12882-13025, with line-by-line citations in `Radicle/docs/WEAPONS.md`. FULL is left out of the authoring list: the object-template combinations also write FULL (`wbDefinitionsFO4.pas:5525`), and the authoring order cannot hold a signature twice. OBND (`wbDefinitionsCommon.pas:9089` SetRequired) and DNAM are min 1. DNAM min 1 follows the PROJ, HAZD and ARMA DNAM precedent, which xEdit does not mark. No authoring default is registered, so create and add of these subrecords are not claimed.
+
+Embedded scalars carry `payload_size` 132 (DNAM), 41 (FNAM) and 12 (CRDT), which are the sums of their xEdit member widths. xEdit has no version condition on them. A subrecord of another size makes its scalars absent to the reader, and `Radicle/tests/test_weapon_real.cpp:WeaponReal` reports that size as a failure.
+
+## Radicle/src/forms/weapon.cpp:decode_weapon_damage_types
+
+DAMA is a count-free array of 8-byte entries (`type`, `amount`). From form version 152 each entry is 12 bytes with a Curve Table FormID after them, as `wbDamageTypeArray` in `Core/wbDefinitionsCommon.pas:8454-8463` gates it with `wbFromVersion(152, ...)` at 8460. The FormLink remap already has this layout at `Radicle/src/schema/form_link_mixed.cpp:k_repeated_struct_layouts`. A payload that is not a whole number of entries throws `WeaponError`, and an absent DAMA returns an empty list. The layout is xEdit-derived; `Radicle/tests/test_weapon_real.cpp:WeaponReal` is the check against the masters.
+
+## Radicle/tests/test_scalar_embedded.cpp:ScalarEmbedded.ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbsent
+
+A synthetic WEAP DNAM is written at the offsets xEdit gives (Speed at 4, OnHit at 36, Capacity at 52, AnimationType at 54, Stagger at 124). A payload shorter than the Stagger offset reads as absent, not as an error.
+
+## Radicle/tests/test_weapon.cpp:WeaponDamageTypes
+
+Covers the 8-byte form, the 12-byte form from version 152 with the Curve Table, the fail-closed size check, an absent DAMA (empty list) and a key with no WEAP record (throws). Its layout is xEdit-derived and marked TODO-verify in the file until CI runs `WeaponReal`.
+
+## Radicle/tests/test_weapon_real.cpp:WeaponReal
+
+Skips unless `FO4_DATA_DIR` is set, and matches the RaceReal pattern. For every WEAP in each official master it decodes DAMA and every WEAP scalar. A subrecord whose size differs from the scalar's `payload_size` is a failure, because the reader would otherwise report the field as absent. Fallout4.esm must contain at least one WEAP.
+
 ## .github/scripts/check_real_data_regex.py:real_data_tests
 
 Read-only guard for GT-229. It finds every gtest `TEST`, `TEST_F`, `TEST_P` and Catch `TEST_CASE` in `Radicle/tests/*.cpp` and `PluginEditTool/native/tests`, and counts a test as reading game data when its body calls `getenv("FO4_DATA_DIR")`, calls a file-local helper that does, or uses a fixture whose `SetUp` does. Each counted test's `Suite.Name` (or Catch title) must match `REAL_DATA_TEST_REGEX`, which the script reads from the `native-ci.yml` env block. The check runs in the Linux native job, so a game-data test that the real-data job would never select fails CI. Comments and string literals are blanked before brace matching, so a skip message that names `FO4_DATA_DIR` does not count as a read.
