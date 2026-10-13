@@ -94,12 +94,16 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
     if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, HAZD, LVLI, LVLN, LVSP, PROJ, RACE. Payload fields are validated by the native backend", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
     if (!add("create_placed_object",
-             "Create a placed reference (REFR) over a base object in a CELL this plugin owns and return its formKey. The CELL must be owned by this plugin. persistent defaults to true (persistent list), false puts it in the temporary list. Rotations are in radians and default to 0",
+             "Create a placed reference (REFR) over a base object in a CELL this plugin owns and return its formKey. The CELL must be owned by this plugin. persistent defaults to true (persistent list), false puts it in the temporary list. initially_disabled defaults to false. Rotations are in radians and default to 0",
              "backend", "CreatePlacedObject",
              {{"plugin", "string"}, {"cell", "string"}, {"baseObject", "string"},
               {"x", "number"}, {"y", "number"}, {"z", "number"},
               {"rotX", "number", true}, {"rotY", "number", true}, {"rotZ", "number", true},
-              {"persistent", "boolean", true}})) return false;
+              {"persistent", "boolean", true}, {"initially_disabled", "boolean", true}})) return false;
+    if (!add("create_interior_cell",
+             "Create an interior CELL in this plugin with the given editor ID and return its formKey. Refused when the editor ID is empty or matches a CELL in this plugin, ignoring ASCII case",
+             "backend", "CreateInteriorCell",
+             {{"plugin", "string"}, {"editor_id", "string"}})) return false;
     if (!add("get_record", "Get record fields and plugin versions by FormKey, including pending edits", "backend", "GetConflictMatrix",
              {{"form_key", "string"}})) return false;
     if (!add("get_record_fields", "Get the field paths and values for one plugin's record version", "backend", "GetRecordTree",

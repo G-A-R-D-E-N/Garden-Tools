@@ -482,6 +482,7 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
         if (method == "EditFactionEntries") return backend_.editFactionEntries(args);
         if (method == "GetWeaponDamageTypes") return backend_.getWeaponDamageTypes(args);
         if (method == "CreatePlacedObject") return backend_.createPlacedObject(args);
+        if (method == "CreateInteriorCell") return backend_.createInteriorCell(args);
         return backend_.invokeLegacyBackend(method, args);
     }
     if (targetNamespace_ == "masters" && method == "CleanUnused") return backend_.cleanUnusedMasters(args);

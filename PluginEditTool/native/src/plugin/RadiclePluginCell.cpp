@@ -447,6 +447,10 @@ Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::
     if (arguments.is_array() && arguments.size() > 9 && arguments[9].is_boolean()) {
         persistent = arguments[9].get<bool>();
     }
+    bool initiallyDisabled = false;
+    if (arguments.is_array() && arguments.size() > 10 && arguments[10].is_boolean()) {
+        initiallyDisabled = arguments[10].get<bool>();
+    }
     if (pluginName.empty() || cellText.empty() || baseText.empty() || !x || !y || !z) {
         return std::unexpected(Error{
             "PlacedObjectArgumentsMissing",
@@ -479,6 +483,7 @@ Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::
                 .base = base,
                 .transform = {.x = *x, .y = *y, .z = *z, .rx = rx, .ry = ry, .rz = rz},
                 .persistent = persistent,
+                .initially_disabled = initiallyDisabled,
             });
         stagePluginMutationLocked(*loaded, std::move(mutated));
         return nlohmann::json(nlohmann::json{
@@ -488,6 +493,37 @@ Result<nlohmann::json> RadiclePluginBackend::createPlacedObject(const nlohmann::
         }.dump());
     } catch (const std::exception& error) {
         return std::unexpected(Error{"PlacedReferenceCreateFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::createInteriorCell(const nlohmann::json& arguments) {
+    const auto pluginName = stringArgument(arguments, 0);
+    const auto editorId = stringArgument(arguments, 1);
+    if (pluginName.empty() || editorId.empty()) {
+        return std::unexpected(Error{
+            "InteriorCellArgumentsMissing",
+            "CreateInteriorCell requires plugin and editorId"
+        });
+    }
+
+    OpLock lock(*this, OpLock::Mode::Write, {pluginName});
+    auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + pluginName});
+    }
+    if (auto guard = writeGuard(*loaded); guard.has_value()) return std::unexpected(*guard);
+
+    try {
+        auto mutated = loaded->plugin;
+        const auto key = fo4::forms::create_interior_cell(mutated, editorId);
+        stagePluginMutationLocked(*loaded, std::move(mutated));
+        return nlohmann::json(nlohmann::json{
+            {"ok", true},
+            {"plugin", pluginName},
+            {"formKey", key.to_string()}
+        }.dump());
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InteriorCellCreateFailed", error.what()});
     }
 }
 

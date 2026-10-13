@@ -262,7 +262,7 @@ TEST_CASE("PluginEditTool places a REFR in a CELL the plugin owns") {
     const auto base = parseStringResult(baseResult)["formKey"].get<std::string>();
 
     const auto placed = backend.createPlacedObject(nlohmann::json::array({
-        "Patch.esp", cell, base, 10.0, 20.0, 30.0, 0.25, -0.5, 1.75, false
+        "Patch.esp", cell, base, -135068.0, 131172.0, 30.0, 0.25, -0.5, 1.75, false
     }));
     REQUIRE(placed.has_value());
     const auto placedKey = parseStringResult(placed)["formKey"].get<std::string>();
@@ -275,8 +275,8 @@ TEST_CASE("PluginEditTool places a REFR in a CELL the plugin owns") {
     CHECK(refs[0].record->form_key == fo4::FormKey::parse(placedKey));
     CHECK_FALSE(refs[0].persistent);
     CHECK(refs[0].base == fo4::FormKey::parse(base));
-    CHECK(refs[0].transform.x == 10.0f);
-    CHECK(refs[0].transform.y == 20.0f);
+    CHECK(refs[0].transform.x == -135068.0f);
+    CHECK(refs[0].transform.y == 131172.0f);
     CHECK(refs[0].transform.z == 30.0f);
     CHECK(refs[0].transform.rx == 0.25f);
     CHECK(refs[0].transform.ry == -0.5f);

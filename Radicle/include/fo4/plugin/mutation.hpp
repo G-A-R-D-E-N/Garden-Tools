@@ -83,6 +83,8 @@ FormKey create_local_record(Plugin& plugin,
                             Signature signature,
                             std::vector<Subrecord> subrecords);
 
+Group* find_or_create_top_group(Plugin& plugin, Signature signature);
+
 // Deletes the record with its owned child GRUP. Refuses deletion when any
 // schema-proven in-plugin FormLink still targets the record or a record inside
 // that GRUP from outside it. Unsupported remap surfaces fail closed before
