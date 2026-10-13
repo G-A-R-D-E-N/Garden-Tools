@@ -249,9 +249,6 @@ void check_dialogue_links(const Plugin& plugin,
       if (start && !is_loaded(*start, k_sig_dial)) {
         add(*record, CheckCode::branch_starting_topic_not_dial, CheckSeverity::error, k_sig_snam,
             *start, "SNAM target " + start->to_string() + " is not a loaded DIAL");
-      } else if (start && winners.at(*start).deleted) {
-        add(*record, CheckCode::deleted_target, CheckSeverity::warning, k_sig_snam, *start,
-            "SNAM target " + start->to_string() + " is deleted in its winning version");
       }
       continue;
     }

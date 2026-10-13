@@ -60,7 +60,9 @@ fo4::Plugin make_topic_plugin(std::uint32_t late_previous) {
 fo4::Plugin make_orphan_topic_plugin() {
   fo4::test::ByteWriter out;
   write_header(out);
+  const auto qust_top = fo4::test::begin_group(out, "QUST", 0);
   write_record(out, "QUST", 0x810);
+  fo4::test::end_group(out, qust_top);
   write_topic_children(out, 0x810, {{0x811, 0}});
   return fo4::read_plugin(out.bytes, "Orphan.esp");
 }
@@ -68,9 +70,13 @@ fo4::Plugin make_orphan_topic_plugin() {
 fo4::Plugin make_branch_plugin(std::uint32_t starting_topic, std::uint32_t dial_flags = 0) {
   fo4::test::ByteWriter out;
   write_header(out);
+  const auto dial_top = fo4::test::begin_group(out, "DIAL", 0);
   const auto dial = fo4::test::begin_record(out, "DIAL", dial_flags, 0x800);
   fo4::test::end_record(out, dial);
+  fo4::test::end_group(out, dial_top);
+  const auto qust_top = fo4::test::begin_group(out, "QUST", 0);
   write_record(out, "QUST", 0x821);
+  fo4::test::end_group(out, qust_top);
   const auto dlbr_top = fo4::test::begin_group(out, "DLBR", 0);
   write_record(out, "DLBR", 0x820, "SNAM", starting_topic);
   fo4::test::end_group(out, dlbr_top);
