@@ -173,7 +173,8 @@ std::vector<std::byte> make_plugin() {
                                      {"FLTR", zstr("Filter.txt")},
                                      {"CNAM", u32_bytes(raw_id(0x81A))},
                                      {"VNAM", u32_bytes(1)}}}});
-  write_group(out, "DOBJ", {{0x815, {{"EDID", zstr("RadicleObjects")}}}});
+  write_group(out, "DOBJ", {{0x815, {{"EDID", zstr("RadicleObjects")},
+                                     {"DNAM", zeros(8)}}}});
   write_group(out, "INNR", {{0x816, {{"EDID", zstr("RadicleNaming")},
                                      {"UNAM", u32_bytes(29)}}}});
   return out.bytes;
