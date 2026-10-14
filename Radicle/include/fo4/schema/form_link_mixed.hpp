@@ -27,5 +27,7 @@ bool is_placed_reference_signature(Signature signature) noexcept;
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap);
+std::optional<std::vector<std::size_t>> mgef_assoc_item_formid_offsets(const Record& record,
+                                                                      const Subrecord& sub);
 
 }
