@@ -151,6 +151,7 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/record_flags.cpp
   src/plugin/copy_hierarchy.cpp
   src/plugin/vmad_writer.cpp
   src/plugin/navmesh_writer.cpp
@@ -366,6 +367,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
+    tests/test_record_flags.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
