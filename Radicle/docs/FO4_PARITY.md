@@ -35,7 +35,7 @@ Opaque preservation is the generic writer contract in tests/test_writer.cpp. Rec
 
 Derived from the repository by `Radicle/tools/parity_matrix.py`; 147 signatures from `schema/fallout4/xedit_signatures.txt`. Regenerate with `python -I Radicle/tools/parity_matrix.py --write`.
 
-Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
+Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
@@ -47,7 +47,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 1 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
-| ACTI | 5611 | 7 | 1 | 8 | - | 2 | yes | yes | environment/base_records | - | 1 | L4 |
+| ACTI | 5611 | 7 | 1 | 8 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | 11 | 3 | 7 | - | 3 | yes | yes | - | yes | 1 | L4 |
@@ -63,7 +63,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | AVIF | 7826 | 3 | - | - | - | 3 | yes | - | - | - | 2 | L4 |
 | BNDS | 12280 | 8 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | yes | 1 | L4 |
-| BPTD | 7693 | - | - | - | - | - | - | - | - | - | - | L0 |
+| BPTD | 7693 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | CAMS | 7880 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | CELL | 5953 | - | - | - | - | - | - | - | forms/cell, environment/world | yes | 1 | L2 |
 | CLAS | 6102 | 1 | 1 | - | - | 2 | yes | - | - | - | 1 | L4 |
@@ -103,7 +103,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | HAZD | 7180 | 9 | - | 4 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | HDPT | 7006 | 2 | - | 3 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
-| IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | - | 1 | L4 |
+| IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
 | IMAD | 7466 | 62 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
@@ -114,10 +114,10 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | KEYM | 9823 | 9 | 3 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | yes | 1 | L4 |
 | KYWD | 6947 | 1 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
-| LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | - | - | L2 |
+| LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | yes | - | L2 |
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | LCRT | 6962 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| LCTN | 8039 | 2 | - | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
+| LCTN | 8039 | 2 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
 | LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LGTM | 8629 | 16 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
 | LIGH | 9871 | 19 | 1 | 3 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
@@ -160,7 +160,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | QUST | 10684 | - | - | - | - | 2 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | - | 4 | - | 8 | 2 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| REGN | 11870 | - | - | - | - | - | - | - | - | - | - | L0 |
+| REGN | 11870 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -178,8 +178,8 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | SOUN | 11961 | 3 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
 | SPEL | 12030 | 8 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
-| STAG | 12663 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| STAT | 12045 | 3 | 1 | 1 | - | 1 | yes | - | environment/base_records | - | 2 | L4 |
+| STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| STAT | 12045 | 3 | 1 | 1 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 8 | 2 | 2 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | - | 7 | L0 |
@@ -189,7 +189,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
 | WEAP | 12877 | 45 | - | 13 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
-| WRLD | 13110 | - | - | - | - | - | - | - | environment/world | - | 1 | L2 |
+| WRLD | 13110 | - | - | - | - | - | - | - | environment/world | yes | 1 | L2 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 
@@ -342,7 +342,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 - Dedicated PluginEditTool routes are not derived, so the tier stops at schema, typed module and remap evidence (no L5).
 - Typed module attribution is the `TYPED_MODULES` map in this script. The script checks that each cited file names the signature, but not that it still reads the record semantically.
 - Subrecord-level remap handlers apply to any record carrying the subrecord and are not attributed to a record: OBTS (`obts_formid_offsets`, called from `src/schema/form_links.cpp`) and the behavior handlers in `src/schema/behavior_layout.cpp`.
-- Mixed remap is attributed only by a record signature named in `src/schema/form_link_mixed.cpp`. Record-specific checks in `src/schema/form_links.cpp` (IPDS PNAM, DOBJ DNAM, CLMT WLST) and the generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) are not counted, so those records can be remapped correctly and still show no mixed remap.
+- Mixed remap is attributed only by a record signature named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Record-specific checks in `src/schema/form_links.cpp` (IPDS PNAM, DOBJ DNAM, CLMT WLST) and the generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) are not counted, so those records can be remapped correctly and still show no mixed remap.
 - VMAD (`src/schema/vmad.cpp`, `src/forms/quest_vmad.cpp`) has no field rows and is not attributed to any record.
 - Localized subrecords are counted by name in `localized_subrecords`; the generated localized table is not compared with them.
 - Real-data tests are counted when a registered `tests/*_real.cpp` names the signature in quotes. A test that covers a family without naming the signature is not counted. Presence is not a pass result; no CI result is read.

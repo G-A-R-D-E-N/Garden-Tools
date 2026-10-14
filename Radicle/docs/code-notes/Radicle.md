@@ -2222,3 +2222,36 @@ Form-version gates (`k_record_stride_layouts`):
 - RACE RBPC at form version 78 or later: one AVIF form ID per 4-byte entry, slot 0 (`wbDefinitionsFO4.pas:11011-11022`). Below 78 the entries are integers and not remapped. Same test.
 - EFSH DNAM (`wbFormVersionDecider(106)`, `wbDefinitionsFO4.pas:6519-6722`): at form version 106 or later the flat Data arm is 157 bytes and its Ambient Sound SNDR is at 108 (members counted from :6652-6722; the same 157-byte size is in the Radicle.md EFSH note). Below 106 the old-format arm is 395 bytes, with Addon Models DEBR at 241 (:6582) and Ambient Sound SNDR at 305 (:6598). Both sizes match the corpus counts in the EFSH note above. Test `UnionPayloadRemap.EfshAmbientSoundFollowsFormVersionLayout`.
 - Malformed size on any of the above fails closed in strict mode. Test `UnionPayloadRemap.MalformedUnionPayloadsFailClosedWithoutMutation`.
+
+## src/schema/form_link_records.cpp (struct payloads part 2, #602 WP-2)
+
+Each rule below was checked against the xEdit source at pin 93cc0bc5 before coding. Strict remap throws `FormIdError` on a malformed size; lenient remap returns no offsets. Tests are in `Radicle/tests/test_record_struct_remap.cpp` (`RecordStructRemap.*`). `record_struct_formid_offsets` is called from `form_link_mixed.cpp:mixed_formid_offsets`. Fixed-stride rows reuse `fixed_stride_formid_offsets` and `FixedStrideLayout` from `form_link_mixed.cpp`, declared in `form_link_mixed.hpp`.
+
+None of the subrecords below has a `fields.json` formlink row, so claiming them drops no schema offsets.
+
+Fixed-stride rows (`k_record_fixed_layouts`):
+- LCTN ACPR and LCPR: 12-byte {Ref, World/Cell, Grid Y, Grid X}, slots 0 and 4, `Core/wbDefinitionsFO4.pas` lines 8045-8164. Test `RecordStructRemap.LctnEntriesRemapFormIdSlotsOnly`.
+- LCTN ACUN and LCUN: 12-byte {NPC, Actor Ref, Location}, slots 0, 4 and 8. Same lines and test.
+- LCTN ACSR and LCSR: 16-byte {Loc Ref Type, Ref, World/Cell, Grid Y, Grid X}, slots 0, 4 and 8. Same lines and test.
+- LCTN ACEP and LCEP: 12-byte {Ref, Enable Parent, Flags, 3 unused}, slots 0 and 4. Same lines and test.
+- LCTN RCPR, RCUN, RCSR, ACID and LCID: one 4-byte form ID per entry, slot 0. Same lines and test.
+- BPTD BPND: exact 101 bytes (`Core/wbDefinitionsFO4.pas` lines 7703-7771, record at 7693). Slots 4 and 8 (Explodable Debris, Explosion), 16 and 20 (Severable Debris, Explosion), 52 and 56 (Severable and Explodable Impact DataSet), 67 (Actor Value, unaligned), 79, 83, 87 and 91 (On Cripple Art Object, Debris, Explosion, Impact DataSet). Test `RecordStructRemap.BodyPartNodeRemapsElevenSlots`.
+- CELL XPRI: packed 4-byte array of placed-reference form IDs, slot 0, `Core/wbDefinitionsFO4.pas` line 6087. Test `RecordStructRemap.CellPrevisAndCombinedIndexRemap`.
+- IDLM IDLA: packed 4-byte array of IDLE or NULL form IDs, slot 0, `Core/wbDefinitionsCommon.pas` lines 8651-8652 (`wbIdleAnimation`, used by IDLM at `Core/wbDefinitionsFO4.pas` line 7098). PACK IDLA stays in `behavior_layout.cpp:behavior_formid_offsets`, which returns nothing for IDLM. Test `RecordStructRemap.IdleMarkerAndLandLayersRemap`.
+- LAND BTXT and ATXT: exact 8 bytes {LTEX, quadrant u8, unused u8, layer s16}, slot 0, `Core/wbDefinitionsCommon.pas` lines 8722-8748 (`wbLandLayers`, LAND at `Core/wbDefinitionsFO4.pas` line 9846). Test `RecordStructRemap.IdleMarkerAndLandLayersRemap`.
+- RACE TTEC: 14-byte tint template colors {CLFM, float, u16, u32}, slot 0, `Core/wbDefinitionsFO4.pas` lines 3064-3128, used at lines 11279 and 11297 inside RACE. Test `RecordStructRemap.RaceDataAndTintTemplatesRemapByFormVersion`.
+- REGN RDOT: 52-byte objects, slot 0. RDGS: 8-byte grasses, slot 0. RDWT: 12-byte {Weather, Chance, Global}, slots 0 and 8. RDSA: 12-byte {Sound, Flags, Chance float}, slot 0. `Core/wbDefinitionsFO4.pas` lines 11909-11954, and `wbRegionSounds` at `Core/wbDefinitionsCommon.pas` lines 9172-9185. Test `RecordStructRemap.RegionEntriesAndStagTnamRemap`.
+
+Custom rules:
+- LCTN ACEC, LCEC and RCEC (`worldspace_cells_offsets`): World form ID at 0, then 4-byte cell coordinates to the end. The payload must be at least 4 bytes and a multiple of 4. `Core/wbDefinitionsFO4.pas` lines 8045-8164. Test `RecordStructRemap.LctnEntriesRemapFormIdSlotsOnly`.
+- CELL XCRI (`combined_reference_offsets`): u32 mesh count at 0, u32 References Count at 4, then count u32 mesh IDs at 8, then 8-byte {REFR, mesh} entries. xEdit halves the References Count (`wbCELLCombinedRefsCounter`, `Core/wbDefinitionsFO4.pas` lines 2429-2438), so the field counts u32 words. The REFR form ID sits at 8 + 4M + 8i. The size must equal 8 + 4M + 4 × count, and an odd count fails closed. `Core/wbDefinitionsFO4.pas` lines 6087-6100. Test `RecordStructRemap.CellPrevisAndCombinedIndexRemap`.
+- RACE DATA (`race_data_offsets`): offsets from summing member sizes, `Core/wbDefinitionsFO4.pas` lines 11069-11195. Weights add 24 bytes from form version 109, so Flags starts at 32 (8 below). Severable Explosion, Debris and Impact DataSet, then Explodable Explosion, Debris and Impact DataSet, start at Flags + 114 from form version 124 (+110 below). OnCripple (from 96) has Explosion, Debris and Impact DataSet at +6, +10 and +14 of its 18-byte struct. Subsegment Explosion (from 118) follows. Pitch (98) and Roll (101) are scalars. Expected sizes are 200 at version 131 and 164 at version 100. Test `RecordStructRemap.RaceDataAndTintTemplatesRemapByFormVersion`.
+- STAG TNAM (`stag_tnam_offsets`): one {SNDR, zstring} entry per subrecord, slot 0, size at least 4, `Core/wbDefinitionsFO4.pas` lines 12663-12666. The zstring is not validated. Test `RecordStructRemap.RegionEntriesAndStagTnamRemap`.
+- WRLD RNAM (`large_reference_offsets`): Y s16 at 0, X s16 at 2, u32 count at 4, then 8-byte {REFR, Y, X} entries. Slot is 8 + 8i. The size must equal 8 + 8 × count. `Core/wbDefinitionsCommon.pas` lines 9737-9760, WRLD at `Core/wbDefinitionsFO4.pas` line 13110. Test `RecordStructRemap.WorldLargeRefsAndNvnmOutsideNavmesh`.
+- NVNM on ACTI, FURN and STAT (`nvnm_outside_navm_offsets`): same struct as NAVM (`Core/wbDefinitionsFO4.pas` lines 4360-4366, `wbNVNM`). Hosts are ACTI at line 5669, FURN at 6918 and STAT at 12082. NAVM at 7220 already uses `navmesh_mixed_formid_offsets`. Same gates as NAVM: form version 128 or later, Version u32 15, and `nvnm_formid_offsets` must accept the payload. Test `RecordStructRemap.WorldLargeRefsAndNvnmOutsideNavmesh`.
+
+Skipped on purpose:
+- REGN RDAT is an 8-byte header {Type enum, Override, Priority, unused}, with no form ID (`Core/wbDefinitionsFO4.pas` lines 11880-11887).
+- RACE TETI, TTEF, TTGE and TTEB have no form ID. Template conditions stay on the CTDA path.
+- REGN RDMO and WNAM are unchanged.
+- Malformed sizes on every rule above fail closed in strict mode. Test `RecordStructRemap.MalformedSizesFailClosedWithoutMutation`.

@@ -1,5 +1,6 @@
 #include "fo4/schema/form_link_mixed.hpp"
 #include "fo4/schema/behavior_layout.hpp"
+#include "fo4/schema/form_link_records.hpp"
 
 #include "fo4/forms/proj_expl_hazd.hpp"
 #include "fo4/formid.hpp"
@@ -388,15 +389,6 @@ bool is_placed_reference_signature(Signature signature) noexcept {
   return false;
 }
 
-struct FixedStrideLayout {
-  const char* signature;
-  std::size_t stride;
-  std::initializer_list<std::size_t> slots;
-  bool exact;
-  std::size_t short_size;
-  std::uint16_t min_form_version{0};
-};
-
 std::optional<std::vector<std::size_t>> fixed_stride_formid_offsets(
     const Subrecord& sub, std::uint16_t form_version, std::span<const FixedStrideLayout> layouts,
     bool strict_remap) {
@@ -651,6 +643,7 @@ std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& recor
   if (auto weapon = weapon_formid_offsets(record, sub, strict_remap)) return weapon;
   if (auto npc = npc_formid_offsets(record, sub, strict_remap)) return npc;
   if (auto leveled = leveled_list_formid_offsets(record, sub, strict_remap)) return leveled;
+  if (auto records = record_struct_formid_offsets(record, sub, strict_remap)) return records;
   return placed_reference_formid_offsets(record, sub, strict_remap);
 }
 

@@ -168,6 +168,7 @@ add_library(fo4
   src/schema/form_links.cpp
   src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
+  src/schema/form_link_records.cpp
   src/schema/form_link_schema.cpp
   src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
@@ -480,6 +481,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_struct_payload_remap.cpp
     tests/test_generator_gap_remap.cpp
     tests/test_union_payload_remap.cpp
+    tests/test_record_struct_remap.cpp
     tests/test_remap_scalar_enum_slots.cpp
     tests/test_master_usage.cpp
     tests/test_plugin_diff.cpp
