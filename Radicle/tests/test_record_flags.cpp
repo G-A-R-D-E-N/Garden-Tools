@@ -24,6 +24,7 @@ struct CellPlugin {
   std::uint32_t cell_form{0x900};
   std::uint8_t cell_data{1};
   fo4::GroupType bucket{fo4::GroupType::cell_temporary_children};
+  std::string_view ref_signature{"REFR"};
   std::uint32_t ref_flags{0};
   std::uint32_t ref_form{0x800};
   Subrecords ref_subs{
@@ -89,7 +90,7 @@ Bytes build_plugin(const CellPlugin& layout) {
   const auto children = fo4::test::begin_group(out, label_of(layout.cell_form), 6);
   const auto bucket_group = fo4::test::begin_group(
       out, label_of(layout.cell_form), static_cast<std::int32_t>(layout.bucket));
-  put_record(out, "REFR", layout.ref_flags, layout.ref_form, layout.ref_subs);
+  put_record(out, layout.ref_signature, layout.ref_flags, layout.ref_form, layout.ref_subs);
   fo4::test::end_group(out, bucket_group);
   fo4::test::end_group(out, children);
   fo4::test::end_group(out, sub);
@@ -182,6 +183,25 @@ TEST(RecordFlags, InteriorPersistentChangeMovesReferenceBetweenBucketsAndRoundTr
   const auto* restored = fo4::find_record(back, ref);
   ASSERT_NE(restored, nullptr);
   EXPECT_FALSE(restored->header.flags.is_persistent());
+}
+
+TEST(RecordFlags, PersistentChangeOnInteriorNavmeshKeepsItsBucket) {
+  CellPlugin layout;
+  layout.ref_signature = "NAVM";
+  layout.ref_subs = {{"NVER", std::string(4, '\0')}};
+  auto plugin = load(layout);
+  const auto navm = fo4::FormKey::parse("000800:Cells.esp");
+  ASSERT_EQ(fo4::set_record_flags(plugin, navm, fo4::RecordFlags::persistent),
+            fo4::RecordFlagStatus::changed);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cells.esp");
+  const auto* bucket = parent_group(reread, navm);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type,
+            static_cast<std::int32_t>(fo4::GroupType::cell_temporary_children));
+  EXPECT_EQ(find_group(reread, fo4::GroupType::cell_persistent_children, 0x900u), nullptr);
+  const auto* record = fo4::find_record(reread, navm);
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->header.flags.is_persistent());
 }
 
 TEST(RecordFlags, ChangingDeletedBitThroughSetRecordFlagsIsRefused) {

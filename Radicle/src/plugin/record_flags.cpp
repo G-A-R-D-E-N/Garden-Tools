@@ -145,7 +145,9 @@ RecordFlagStatus set_record_flags(Plugin& plugin, const FormKey& record_key, Rec
   const bool persistent_changed = ((next ^ current) & RecordFlags::persistent) != 0;
   const auto target = (next & RecordFlags::persistent) != 0 ? GroupType::cell_persistent_children
                                                              : GroupType::cell_temporary_children;
-  const bool relocates = persistent_changed && depth >= 2 && is_cell_bucket(path.back()->header) &&
+  const bool relocates = persistent_changed && depth >= 2 &&
+                         is_placed_reference_signature(record.header.signature) &&
+                         is_cell_bucket(path.back()->header) &&
                          has_type(path[depth - 2]->header, GroupType::cell_children) &&
                          !has_type(path.back()->header, target);
   if (relocates && !cell_is_interior(plugin, path[depth - 2]->header.label_as_u32())) {
