@@ -36,6 +36,15 @@ constexpr auto k_epft = Signature::from_string("EPFT");
 constexpr auto k_epfd = Signature::from_string("EPFD");
 constexpr auto k_prke = Signature::from_string("PRKE");
 constexpr auto k_plvd = Signature::from_string("PLVD");
+constexpr auto k_otft = Signature::from_string("OTFT");
+constexpr auto k_inam = Signature::from_string("INAM");
+constexpr auto k_coll = Signature::from_string("COLL");
+constexpr auto k_cnam = Signature::from_string("CNAM");
+constexpr auto k_race = Signature::from_string("RACE");
+constexpr auto k_hclf = Signature::from_string("HCLF");
+constexpr auto k_cell = Signature::from_string("CELL");
+constexpr auto k_xclr = Signature::from_string("XCLR");
+constexpr auto k_cobj = Signature::from_string("COBJ");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -333,7 +342,10 @@ std::optional<std::vector<std::size_t>> packed_formid_array_offsets(const Record
   const auto sig = sub.signature;
   if (!((rec == k_omod && (sig == k_mnam || sig == k_fnam)) ||
         (rec == k_equp && sig == k_pnam) || (rec == k_musc && sig == k_tnam) ||
-        ((rec == k_fstp || rec == k_fsts) && sig == k_data))) {
+        ((rec == k_fstp || rec == k_fsts) && sig == k_data) ||
+        (rec == k_otft && sig == k_inam) || (rec == k_coll && sig == k_cnam) ||
+        (rec == k_race && sig == k_hclf) || (rec == k_cell && sig == k_xclr) ||
+        (rec == k_cobj && sig == k_fnam))) {
     return std::nullopt;
   }
   if (sub.data.size() % 4 != 0) {
@@ -488,6 +500,37 @@ std::optional<std::vector<std::size_t>> weapon_formid_offsets(const Record& reco
                                      strict_remap);
 }
 
+struct RecordStrideLayout {
+  const char* record;
+  FixedStrideLayout layout;
+};
+
+const RecordStrideLayout k_record_stride_layouts[] = {
+    {"KSSM", {"RNAM", 8, {4}, false, 0}},
+    {"MGEF", {"SNDD", 8, {4}, false, 0}},
+    {"SCSN", {"CNAM", 8, {0}, false, 0}},
+    {"COBJ", {"FVPA", 8, {0}, false, 0}},
+    {"MISC", {"CVPA", 8, {0}, false, 0}},
+    {"FURN", {"SNAM", 24, {16}, false, 0, 125}},
+    {"FURN", {"SNAM", 20, {16}, false, 0}},
+    {"TERM", {"SNAM", 24, {16}, false, 0, 125}},
+    {"TERM", {"SNAM", 20, {16}, false, 0}},
+    {"ALCH", {"ENIT", 20, {8, 16}, true, 0}},
+};
+
+std::optional<std::vector<std::size_t>> record_stride_form_id_offsets(const Record& record,
+                                                                    const Subrecord& sub,
+                                                                    bool strict_remap) {
+  for (const auto& entry : k_record_stride_layouts) {
+    if (record.header.signature != Signature::from_string(entry.record)) continue;
+    auto offsets = fixed_stride_formid_offsets(
+        sub, record.header.form_version,
+        std::span<const FixedStrideLayout>(&entry.layout, 1), strict_remap);
+    if (offsets) return offsets;
+  }
+  return std::nullopt;
+}
+
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
@@ -497,6 +540,9 @@ std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& recor
   if (auto repeated = fixed_stride_formid_offsets(sub, record.header.form_version,
                                                   k_repeated_struct_layouts, strict_remap)) {
     return repeated;
+  }
+  if (auto record_stride = record_stride_form_id_offsets(record, sub, strict_remap)) {
+    return record_stride;
   }
   if (auto faction = faction_formid_offsets(record, sub, strict_remap)) return faction;
   if (auto weapon = weapon_formid_offsets(record, sub, strict_remap)) return weapon;
