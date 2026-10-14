@@ -34,6 +34,7 @@ constexpr auto k_citc = Signature::from_string("CITC");
 constexpr auto k_ctda = Signature::from_string("CTDA");
 constexpr auto k_full = Signature::from_string("FULL");
 constexpr auto k_crva = Signature::from_string("CRVA");
+constexpr auto k_race = Signature::from_string("RACE");
 
 constexpr std::size_t k_relation_size = 12;
 constexpr std::size_t k_rank_number_size = 4;
@@ -60,6 +61,9 @@ Subrecord make_subrecord(Signature signature, std::vector<std::byte> data) {
 }
 
 std::vector<std::byte> zstring(std::string_view value) {
+  if (value.find('\0') != std::string_view::npos) {
+    throw FactionError("FACT editor ID and full name cannot contain an embedded NUL");
+  }
   std::vector<std::byte> data;
   data.reserve(value.size() + 1);
   for (const char ch : value) data.push_back(std::byte{static_cast<std::uint8_t>(ch)});
@@ -176,6 +180,19 @@ Record& mutable_faction(Plugin& next, const FormKey& key) {
   auto* record = detail::find_mutable_record(next, key);
   if (record == nullptr) throw FactionError("FACT record not found: " + key.to_string());
   return *record;
+}
+
+void require_relation_target(const Plugin& plugin, const FormKey& faction) {
+  if (faction.owner() != plugin.key) return;
+  const auto* target = find_record(plugin, faction);
+  if (target == nullptr) {
+    throw FactionError("FACT XNAM faction must resolve to a record in this plugin: " +
+                       faction.to_string());
+  }
+  if (target->header.signature != k_fact && target->header.signature != k_race) {
+    throw FactionError("FACT XNAM faction target " + faction.to_string() + " is " +
+                       target->header.signature.to_string() + ", not FACT or RACE");
+  }
 }
 
 FactionRelation decode_relation(const Subrecord& subrecord,
@@ -341,6 +358,7 @@ FormKey create_faction(Plugin& plugin,
 
 void add_faction_relation(Plugin& plugin, const FormKey& key, const FactionRelation& relation) {
   static_cast<void>(decode_faction_relations(plugin, key));
+  require_relation_target(plugin, relation.faction);
   auto next = plugin;
   auto& record = mutable_faction(next, key);
   const auto context = plugin_form_id_context(next);
@@ -358,6 +376,7 @@ void set_faction_relation(Plugin& plugin,
                           std::size_t index,
                           const FactionRelation& relation) {
   require_index(index, decode_faction_relations(plugin, key).size(), "FACT relation");
+  require_relation_target(plugin, relation.faction);
   auto next = plugin;
   auto& record = mutable_faction(next, key);
   const auto context = plugin_form_id_context(next);

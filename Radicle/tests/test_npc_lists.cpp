@@ -402,7 +402,7 @@ TEST(NpcLists, InventoryEditsKeepCoctEqualAndCoedWithItsItem) {
   EXPECT_EQ(final_items[1], with_extra);
 }
 
-TEST(NpcLists, RemovingTheLastEntryDropsItsCountSubrecord) {
+TEST(NpcLists, RemovingTheLastEntryKeepsItsCountSubrecordAtZero) {
   auto plugin = read_npc({
       {"EDID", text_bytes("RadicleNpc")},
       {"ACBS", acbs()},
@@ -415,9 +415,66 @@ TEST(NpcLists, RemovingTheLastEntryDropsItsCountSubrecord) {
   ASSERT_TRUE(fo4::forms::remove_npc_perk(plugin, key(), 0));
   ASSERT_TRUE(fo4::forms::remove_npc_inventory_item(plugin, key(), 0));
   const auto after = reread(plugin);
-  EXPECT_EQ(signatures(npc(after)), (std::vector<std::string>{"EDID", "ACBS", "DNAM"}));
+  EXPECT_EQ(signatures(npc(after)),
+            (std::vector<std::string>{"EDID", "ACBS", "PRKZ", "COCT", "DNAM"}));
+  EXPECT_EQ(u32_of(npc(after), "PRKZ"), 0u);
+  EXPECT_EQ(u32_of(npc(after), "COCT"), 0u);
   EXPECT_TRUE(fo4::forms::decode_npc_perks(after, key()).empty());
   EXPECT_TRUE(fo4::forms::decode_npc_inventory(after, key()).empty());
+}
+
+TEST(NpcLists, InsertedRunsStayOutsideTheDestAndAttackGroups) {
+  auto plugin = read_npc({
+      {"EDID", text_bytes("RadicleNpc")},
+      {"ACBS", acbs()},
+      {"DEST", Bytes(8, std::byte{0x01})},
+      {"DAMC", Bytes(8, std::byte{0x02})},
+      {"DSTD", Bytes(20, std::byte{0x03})},
+      {"DMDL", text_bytes("Destroyed.nif")},
+      {"DSTF", Bytes{}},
+      {"ATKD", Bytes(52, std::byte{0x04})},
+      {"ATKE", text_bytes("Attack")},
+      {"DNAM", dnam()},
+  });
+  ASSERT_TRUE(fo4::forms::add_npc_perk(plugin, key(), {fo4::FormKey::parse("000456:Fallout4.esm"), 1}));
+  ASSERT_TRUE(fo4::forms::add_npc_inventory_item(plugin, key(), {fo4::FormKey::parse("000ABC:Fallout4.esm"), 2, std::nullopt}));
+  const auto names = signatures(npc(reread(plugin)));
+  EXPECT_EQ(names, (std::vector<std::string>{"EDID", "ACBS", "DEST", "DAMC", "DSTD", "DMDL", "DSTF",
+                                             "ATKD", "ATKE", "PRKZ", "PRKR", "COCT", "CNTO", "DNAM"}));
+}
+
+TEST(NpcLists, InventoryItemsMustBeBaseObjectsAndCoedOwnersNpcOrFact) {
+  fo4::test::ByteWriter out;
+  out.bytes = build(base());
+  const auto misc_group = fo4::test::begin_group(out, "MISC", 0);
+  fo4::test::end_record(out, fo4::test::begin_record(out, "MISC", 0, 0x01000803));
+  fo4::test::end_group(out, misc_group);
+  const auto perk_group = fo4::test::begin_group(out, "PERK", 0);
+  fo4::test::end_record(out, fo4::test::begin_record(out, "PERK", 0, 0x01000801));
+  fo4::test::end_group(out, perk_group);
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+
+  const auto misc = fo4::FormKey::parse("000803:Patch.esp");
+  const auto perk = fo4::FormKey::parse("000801:Patch.esp");
+  const auto npc_owner = key();
+  const auto to_item = [](const fo4::FormKey& item) {
+    return fo4::forms::NpcInventoryItem{item, 1, std::nullopt};
+  };
+  const auto with_owner = [](const fo4::FormKey& owner) {
+    return fo4::forms::NpcInventoryItem{
+        fo4::FormKey::parse("000803:Patch.esp"), 1,
+        fo4::forms::NpcItemExtraData{owner, 0, 1.0f}};
+  };
+  EXPECT_THROW(fo4::forms::add_npc_inventory_item(plugin, key(), to_item(perk)), NpcError);
+  EXPECT_THROW(fo4::forms::set_npc_inventory_item(plugin, key(), 0, to_item(perk)), NpcError);
+  EXPECT_THROW(fo4::forms::add_npc_inventory_item(plugin, key(), with_owner(misc)), NpcError);
+  EXPECT_THROW(fo4::forms::set_npc_inventory_item(plugin, key(), 0, with_owner(perk)), NpcError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+
+  EXPECT_TRUE(fo4::forms::add_npc_inventory_item(plugin, key(), to_item(misc)));
+  EXPECT_TRUE(fo4::forms::add_npc_inventory_item(plugin, key(), with_owner(npc_owner)));
+  EXPECT_TRUE(fo4::forms::set_npc_inventory_item(plugin, key(), 0, with_owner(fo4::FormKey::parse("000800:Patch.esp"))));
 }
 
 TEST(NpcLists, NoOpSetDoesNotDirtyAParsedPlugin) {
@@ -453,6 +510,32 @@ TEST(NpcLists, FailsClosedOnMalformedSizesCountsAndNulls) {
 
   auto plugin = read_npc(short_snam);
   EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), {fo4::FormKey::parse("000777:Fallout4.esm"), 1}), NpcError);
+}
+
+TEST(NpcLists, LocalFactionAndPerkTargetsMustHaveTheirSignature) {
+  fo4::test::ByteWriter out;
+  out.bytes = build(base());
+  const auto perk_group = fo4::test::begin_group(out, "PERK", 0);
+  const auto perk = fo4::test::begin_record(out, "PERK", 0, 0x01000801);
+  fo4::test::end_record(out, perk);
+  fo4::test::end_group(out, perk_group);
+  const auto fact_group = fo4::test::begin_group(out, "FACT", 0);
+  const auto fact = fo4::test::begin_record(out, "FACT", 0, 0x01000802);
+  fo4::test::end_record(out, fact);
+  fo4::test::end_group(out, fact_group);
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+
+  const auto to_perk = fo4::FormKey::parse("000801:Patch.esp");
+  const auto to_fact = fo4::FormKey::parse("000802:Patch.esp");
+  EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), {to_perk, 1}), NpcError);
+  EXPECT_THROW(fo4::forms::set_npc_faction(plugin, key(), 0, {to_perk, 1}), NpcError);
+  EXPECT_THROW(fo4::forms::add_npc_perk(plugin, key(), {to_fact, 1}), NpcError);
+  EXPECT_THROW(fo4::forms::set_npc_perk(plugin, key(), 0, {to_fact, 1}), NpcError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+
+  EXPECT_TRUE(fo4::forms::add_npc_faction(plugin, key(), {to_fact, 1}));
+  EXPECT_TRUE(fo4::forms::add_npc_perk(plugin, key(), {to_perk, 1}));
 }
 
 TEST(NpcLists, CoctMismatchIsTolerantAndEditsRewriteTheCount) {

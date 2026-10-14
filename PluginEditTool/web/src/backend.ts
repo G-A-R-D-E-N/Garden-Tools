@@ -66,14 +66,14 @@ export interface Backend {
   CheckCircularLeveledLists(plugin: string): Promise<string>;
   DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean, overwrite: boolean, maxRecords?: number, allowLosing?: boolean): Promise<string>;
   ChangeReferencingRecords(from: string, to: string, patchPlugin: string, apply: boolean): Promise<string>;
-  GetLeveledList(formKey: string): Promise<string>;
+  GetLeveledList(formKey: string): Promise<string | object>;
   SetLeveledListSettings(plugin: string, formKey: string, chanceNone: number, maxCount: number, flags: number): Promise<string>;
   EditLeveledListEntry(plugin: string, formKey: string, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
-  GetNpc(formKey: string): Promise<string>;
+  GetNpc(formKey: string): Promise<string | object>;
   EditNpcEntries(plugin: string, formKey: string, list: NpcList, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
-  GetFaction(formKey: string): Promise<string>;
+  GetFaction(formKey: string): Promise<string | object>;
   EditFactionEntries(plugin: string, formKey: string, list: FactionList, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
-  GetWeaponDamageTypes(formKey: string): Promise<string>;
+  GetWeaponDamageTypes(formKey: string): Promise<string | object>;
 
 
   GetActivePlugins(): Promise<string>;

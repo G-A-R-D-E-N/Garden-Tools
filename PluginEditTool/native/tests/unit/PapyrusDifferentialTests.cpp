@@ -221,10 +221,7 @@ TEST_CASE("Compiled output matches the Creation Kit instruction for instruction"
 
     std::cout << "mode=" << (release ? "release" : "debug")
               << " (set FO4RE_PEX_RELEASE=1 for a vanilla corpus)\n";
-    if (pairs.empty()) {
-        std::cout << "FO4RE_PEX_CORPUS holds no (.psc, .pex) pairs; nothing to compare.\n";
-        return;
-    }
+    if (pairs.empty()) SKIP("FO4RE_PEX_CORPUS holds no .psc/.pex pairs");
 
     fp::PapyrusCompileOptions options;
     options.emitDebugOnlyCode = !release;

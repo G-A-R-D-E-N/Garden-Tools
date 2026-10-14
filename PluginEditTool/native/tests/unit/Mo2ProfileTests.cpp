@@ -311,7 +311,7 @@ TEST_CASE("MO2 profile keeps the higher-priority winner when names differ only b
     writeFile(root / "ModOrganizer.ini",
         "selected_profile=Test\n"
         "gamePath=" + game.string() + "\n");
-    writeFile(profile / "plugins.txt", "*\xC3\x84.esp\n");
+    writeFile(profile / "plugins.txt", "*\xC4.esp\n");
     writeFile(profile / "modlist.txt", "+High\n+Low\n");
     writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
     writeFile(high / upper, minimalPlugin(0, "high"));
@@ -323,4 +323,51 @@ TEST_CASE("MO2 profile keeps the higher-priority winner when names differ only b
     CHECK(snapshot->plugins[1].path == high / upper);
     CHECK(snapshot->plugins[1].source == "High");
     CHECK(snapshot->missingPlugins.empty());
+}
+
+TEST_CASE("MO2 profile checks a plugins.txt name that differs from the file only by non-ASCII case") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+    const std::filesystem::path upper(std::u16string{0x00C4, u'.', u'e', u's', u'p'});
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*\xC3\xA4.esp\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(gameData / upper, minimalPlugin(0, "upper"));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    CHECK(snapshot->missingPlugins.empty());
+    const std::vector<std::string> expected{"Fallout4.esm", "\xC3\x84.esp"};
+    CHECK(snapshot->loadOrder == expected);
+}
+
+TEST_CASE("MO2 profile surfaces a plugins.txt control-character line as a warning and keeps it unloaded") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*MyMod.esp\t\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(gameData / "MyMod.esp", minimalPlugin(0, "mymod"));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    bool reported = false;
+    for (const auto& warning : snapshot->warnings) {
+        reported = reported || warning.find("line 1 has a control character") != std::string::npos;
+    }
+    CHECK(reported);
+    const std::vector<std::string> expected{"Fallout4.esm"};
+    CHECK(snapshot->loadOrder == expected);
 }

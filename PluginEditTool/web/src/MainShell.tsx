@@ -142,9 +142,19 @@ export default function MainShell() {
   } = useEnvironment({ setErrorStr, setProgress });
 
   const {
-    conflicts, setConflicts, conflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
+    conflicts, setConflicts, conflictSel, conflictBusy, batchCopyAsOverride,
     selectConflict, clearConflictSelection, copyMany,
   } = useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr });
+
+  const loadOrderKey = loadOrderSummary ? JSON.stringify(loadOrderSummary) : '';
+  const [prevLoadOrderKey, setPrevLoadOrderKey] = useState(loadOrderKey);
+  if (prevLoadOrderKey !== loadOrderKey) {
+    setPrevLoadOrderKey(loadOrderKey);
+    if (prevLoadOrderKey) {
+      setConflicts(null);
+      clearConflictSelection();
+    }
+  }
 
   const [favourites, setFavourites] = useState(readFavourites);
   const [favouritesOpen, setFavouritesOpen] = useState(
@@ -289,7 +299,11 @@ export default function MainShell() {
     const next = selectRow(visibleHits.map(hitKey), recSel, recAnchor, hitKey(h), mode);
     setRecSel(next.sel);
     setRecAnchor(next.anchor);
-    setRecHits(prev => ({ ...prev, ...Object.fromEntries(visibleHits.map(v => [hitKey(v), v])) }));
+    setRecHits(prev => ({
+      ...Object.fromEntries(visibleHits.filter(v => next.sel[hitKey(v)] && !(hitKey(v) in prev)).map(v => [hitKey(v), v])),
+      ...prev,
+      [hitKey(h)]: h,
+    }));
   };
   const clearRecSel = () => { setRecSel({}); setRecAnchor(null); setRecHits({}); };
   const copyRecs = async () => {
@@ -533,7 +547,7 @@ export default function MainShell() {
             conflicts={conflicts}
             conflictSel={conflictSel}
             conflictBusy={conflictBusy}
-            onRescan={() => { setConflicts(null); loadConflicts(); }}
+            onRescan={() => setConflicts(null)}
             onBatchCopy={batchCopyAsOverride}
             onSelect={selectConflict}
             onClear={clearConflictSelection}

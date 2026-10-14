@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using BehaviourStudio.App;
 using Xunit;
 
@@ -22,6 +23,42 @@ public sealed class SettingsTests
         }
         finally
         {
+            Settings.SettingsPathForTest = previous;
+            try { File.Delete(path); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    [Fact]
+    public void SaveRetriesWhileTheSettingsFileIsLocked()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        string path = Path.Combine(Path.GetTempPath(), $"bgs-settings-{Guid.NewGuid():N}.cfg");
+        string? previous = Settings.SettingsPathForTest;
+        Func<string, string[]> previousReader = Settings.ReadAllLinesForTest;
+        try
+        {
+            Settings.SettingsPathForTest = path;
+            Assert.True(Settings.TrySet("first", "1", out _));
+
+            Settings.ReadAllLinesForTest = readPath =>
+            {
+                string[] lines = File.ReadAllLines(readPath);
+                var held = new FileStream(readPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                _ = Task.Delay(100).ContinueWith(_ => held.Dispose());
+                return lines;
+            };
+            bool saved = Settings.TrySet("second", "2", out string failure);
+            Settings.ReadAllLinesForTest = previousReader;
+
+            Assert.True(saved, failure);
+            Assert.Equal("2", Settings.Get("second"));
+        }
+        finally
+        {
+            Settings.ReadAllLinesForTest = previousReader;
             Settings.SettingsPathForTest = previous;
             try { File.Delete(path); }
             catch (IOException) { }

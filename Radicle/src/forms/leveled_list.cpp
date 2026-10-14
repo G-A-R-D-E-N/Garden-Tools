@@ -14,11 +14,14 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 namespace fo4::forms {
 namespace {
+
+constexpr std::uint16_t k_entry_chance_form_version = 69;
 
 constexpr auto k_lvli = Signature::from_string("LVLI");
 constexpr auto k_lvln = Signature::from_string("LVLN");
@@ -200,6 +203,9 @@ Subrecord encode_coed(const LeveledListExtraData& extra, const PluginFormIdConte
 }
 
 std::vector<std::byte> zstring(std::string_view value) {
+  if (value.find('\0') != std::string_view::npos) {
+    throw LeveledListError("leveled list editor ID cannot contain an embedded NUL");
+  }
   std::vector<std::byte> data;
   data.reserve(value.size() + 1);
   for (const char ch : value) data.push_back(std::byte{static_cast<std::uint8_t>(ch)});
@@ -238,6 +244,27 @@ void validate_entry_target(const Plugin& plugin, Signature list, const LeveledLi
   }
 }
 
+bool zeroes_chance_none(const Record& record) {
+  return record.header.form_version < k_entry_chance_form_version &&
+         (record.header.signature == k_lvli || record.header.signature == k_lvln);
+}
+
+using EntrySortKey = std::tuple<std::uint16_t, std::uint32_t, std::uint16_t>;
+
+EntrySortKey entry_sort_key(const LeveledListEntry& entry, const PluginFormIdContext& context) {
+  return {entry.level, encode_form_key(entry.item, context, "leveled list entry").value(), entry.count};
+}
+
+std::vector<LeveledListEntry> sorted_entries(std::span<const LeveledListEntry> entries,
+                                             const PluginFormIdContext& context) {
+  std::vector<LeveledListEntry> ordered(entries.begin(), entries.end());
+  std::stable_sort(ordered.begin(), ordered.end(),
+                   [&](const LeveledListEntry& left, const LeveledListEntry& right) {
+                     return entry_sort_key(left, context) < entry_sort_key(right, context);
+                   });
+  return ordered;
+}
+
 }  // namespace
 
 LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
@@ -252,6 +279,7 @@ LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
   LeveledList result;
   result.key = key;
   const auto context = plugin_form_id_context(plugin);
+  const bool chance_is_zeroed = zeroes_chance_none(*record);
   bool saw_lvld = false;
   bool saw_lvlm = false;
   bool saw_lvlf = false;
@@ -268,6 +296,7 @@ LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
     const auto signature = subrecord.signature;
     if (signature == k_lvlo) {
       result.entries.push_back(decode_lvlo(subrecord, context));
+      if (chance_is_zeroed) result.entries.back().chance_none = 0;
       after_entry = true;
     } else if (signature == k_coed) {
       if (!follows_entry || result.entries.back().extra.has_value()) {
@@ -378,6 +407,9 @@ bool replace_leveled_list_entries(Plugin& plugin,
 
   const auto list = find_record(plugin, key)->header.signature;
   for (const auto& entry : entries) {
+    if (list == k_lvsp && entry.extra.has_value()) {
+      throw LeveledListError("LVSP entries cannot carry COED extra data");
+    }
     if (std::none_of(current.entries.begin(), current.entries.end(),
                      [&](const LeveledListEntry& known) { return known.item == entry.item; })) {
       validate_entry_target(plugin, list, entry);
@@ -387,9 +419,13 @@ bool replace_leveled_list_entries(Plugin& plugin,
   auto* record = find_mutable_record(plugin, key);
   if (record == nullptr) return false;
   const auto context = plugin_form_id_context(plugin);
+  auto ordered = sorted_entries(entries, context);
+  if (zeroes_chance_none(*record)) {
+    for (auto& entry : ordered) entry.chance_none = 0;
+  }
 
   std::vector<Subrecord> encoded;
-  for (const auto& entry : entries) {
+  for (const auto& entry : ordered) {
     encoded.push_back(encode_lvlo(entry, context));
     if (entry.extra.has_value()) {
       encoded.push_back(encode_coed(*entry.extra, context));
@@ -483,6 +519,9 @@ bool set_leveled_list_settings(Plugin& plugin,
                                std::uint8_t chance_none,
                                std::uint8_t max_count,
                                std::uint8_t flags) {
+  if ((flags & ~0x07u) != 0) {
+    throw LeveledListError("leveled list flags may use only defined bits 0x01, 0x02, and 0x04");
+  }
   assign_record_form_keys(plugin);
   const auto current = decode_leveled_list(plugin, key);
   if (current.chance_none == chance_none && current.max_count == max_count &&

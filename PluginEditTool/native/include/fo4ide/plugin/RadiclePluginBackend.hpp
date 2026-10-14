@@ -251,10 +251,12 @@ private:
     bool isEditable(const LoadedPlugin& plugin) const;
     bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
-    Result<void> stageTypedRecordEdit(std::string_view pluginName,
+    Result<bool> stageTypedRecordEdit(std::string_view pluginName,
                                       const fo4::FormKey& key,
                                       std::string_view failureCode,
                                       const std::function<void(fo4::Plugin&)>& edit);
+    Result<const fo4::Plugin*> versionPlugin(std::string_view pluginName,
+                                             const fo4::FormKey& key) const;
     std::optional<Error> requireReferenceCoverage(const fo4::FormKey& key,
                                                   std::string_view operation) const;
     std::optional<std::filesystem::path> allowedSavePath(

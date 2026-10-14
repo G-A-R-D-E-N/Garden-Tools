@@ -30,7 +30,7 @@ public sealed class GameDataPluginOrderTests
     }
 
     [Fact]
-    public void PluginListWithBomAndCrlfStillOrders()
+    public void PluginListBomOnFirstLineIsNotAStar()
     {
         string root = Path.Combine(Path.GetTempPath(), "bgs-plugin-order-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -43,7 +43,7 @@ public sealed class GameDataPluginOrderTests
             using var data = GameData.Discover(root, plugins);
 
             Assert.Equal(
-                new[] { "B - Animations.ba2", "A - Animations.ba2", "C - Animations.ba2" },
+                new[] { "A - Animations.ba2", "B - Animations.ba2", "C - Animations.ba2" },
                 data.ArchivePaths.Select(path => Path.GetFileName(path)));
         }
         finally { Directory.Delete(root, recursive: true); }

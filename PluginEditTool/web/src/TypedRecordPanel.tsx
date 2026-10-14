@@ -53,7 +53,7 @@ const readNpc = (b: Backend, key: string) => b.GetNpc(key);
 const readFaction = (b: Backend, key: string) => b.GetFaction(key);
 const readWeapon = (b: Backend, key: string) => b.GetWeaponDamageTypes(key);
 
-function useTypedRecord<T>(matrix: ConflictMatrix, read: (b: Backend, key: string) => Promise<string>, onChanged: () => Promise<void>) {
+function useTypedRecord<T>(matrix: ConflictMatrix, read: (b: Backend, key: string) => Promise<string | object>, onChanged: () => Promise<void>) {
   const formKey = matrix.FormKey;
   const [loaded, setLoaded] = useState<{ key: string; data: T } | null>(null);
   const [error, setError] = useState('');
@@ -66,7 +66,8 @@ function useTypedRecord<T>(matrix: ConflictMatrix, read: (b: Backend, key: strin
       try {
         const b = getBackend();
         if (!b) throw new Error('No backend bridge.');
-        const parsed = JSON.parse(await read(b, formKey)) as T;
+        const raw: unknown = await read(b, formKey);
+        const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as T;
         if (live) { setLoaded({ key: formKey, data: parsed }); setError(''); }
       } catch (e) {
         if (live) setError('Could not read record: ' + errorText(e));
@@ -125,8 +126,8 @@ function SettingsForm({ chanceNone, maxCount, flags, readOnly, busy, onSave }: {
   );
 }
 
-function ListEditor({ title, columns, rows, readOnly, busy, onApply }: {
-  title: string; columns: Column[]; rows: Row[]; readOnly: boolean; busy: boolean;
+function ListEditor({ title, columns, rows, readOnly, busy, appendOnly, onApply }: {
+  title: string; columns: Column[]; rows: Row[]; readOnly: boolean; busy: boolean; appendOnly?: boolean;
   onApply: (op: EntryOp, index: number, value?: Row) => void;
 }) {
   const editable = columns.filter(c => c.editable !== false);
@@ -137,6 +138,8 @@ function ListEditor({ title, columns, rows, readOnly, busy, onApply }: {
     setIndex(String(i));
     setForm(Object.fromEntries(editable.map(c => [c.key, text(rows[i]?.[c.key])])));
   };
+
+  const noRowPicked = appendOnly === true && !(num(index) < rows.length);
 
   const apply = (op: EntryOp) => {
     const at = num(index);
@@ -169,10 +172,10 @@ function ListEditor({ title, columns, rows, readOnly, busy, onApply }: {
                 onChange={e => setForm(f => ({ ...f, [c.key]: e.target.value }))} />
             </label>
           ))}
-          <label>Index<input type="number" value={index} onChange={e => setIndex(e.target.value)} /></label>
+          {!appendOnly && <label>Index<input type="number" value={index} onChange={e => setIndex(e.target.value)} /></label>}
           <button className="button" disabled={busy} onClick={() => apply('add')}>Add</button>
-          <button className="button" disabled={busy} onClick={() => apply('set')}>Set</button>
-          <button className="button" disabled={busy} onClick={() => apply('remove')}>Remove</button>
+          <button className="button" disabled={busy || noRowPicked} onClick={() => apply('set')}>Set</button>
+          <button className="button" disabled={busy || noRowPicked} onClick={() => apply('remove')}>Remove</button>
         </div>
       )}
     </fieldset>
@@ -203,9 +206,9 @@ function NpcPanel({ matrix, plugin, readOnly, onChanged }: Props) {
     (op: EntryOp, index: number, value?: Row) => edit('NPC edit failed', b => b.EditNpcEntries(plugin, formKey, list, op, index, value));
   return (
     <Frame error={error} status={status}>
-      <ListEditor key={data.factions.length} title="Factions" columns={FACTION_COLUMNS} rows={data.factions} readOnly={readOnly} busy={busy} onApply={apply('factions')} />
-      <ListEditor key={data.perks.length} title="Perks" columns={PERK_COLUMNS} rows={data.perks} readOnly={readOnly} busy={busy} onApply={apply('perks')} />
-      <ListEditor key={data.inventory.length} title="Inventory" columns={INVENTORY_COLUMNS} rows={data.inventory} readOnly={readOnly} busy={busy} onApply={apply('inventory')} />
+      <ListEditor key={data.factions.length} title="Factions" columns={FACTION_COLUMNS} rows={data.factions} readOnly={readOnly} busy={busy} appendOnly onApply={apply('factions')} />
+      <ListEditor key={data.perks.length} title="Perks" columns={PERK_COLUMNS} rows={data.perks} readOnly={readOnly} busy={busy} appendOnly onApply={apply('perks')} />
+      <ListEditor key={data.inventory.length} title="Inventory" columns={INVENTORY_COLUMNS} rows={data.inventory} readOnly={readOnly} busy={busy} appendOnly onApply={apply('inventory')} />
     </Frame>
   );
 }
@@ -218,8 +221,8 @@ function FactionPanel({ matrix, plugin, readOnly, onChanged }: Props) {
     (op: EntryOp, index: number, value?: Row) => edit('Faction edit failed', b => b.EditFactionEntries(plugin, formKey, list, op, index, value));
   return (
     <Frame error={error} status={status}>
-      <ListEditor key={data.relations.length} title="Relations" columns={RELATION_COLUMNS} rows={data.relations} readOnly={readOnly} busy={busy} onApply={apply('relations')} />
-      <ListEditor key={data.ranks.length} title="Ranks" columns={RANK_COLUMNS} rows={data.ranks} readOnly={readOnly} busy={busy} onApply={apply('ranks')} />
+      <ListEditor key={data.relations.length} title="Relations" columns={RELATION_COLUMNS} rows={data.relations} readOnly={readOnly} busy={busy} appendOnly onApply={apply('relations')} />
+      <ListEditor key={data.ranks.length} title="Ranks" columns={RANK_COLUMNS} rows={data.ranks} readOnly={readOnly} busy={busy} appendOnly onApply={apply('ranks')} />
     </Frame>
   );
 }

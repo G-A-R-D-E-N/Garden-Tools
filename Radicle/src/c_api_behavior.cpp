@@ -148,13 +148,13 @@ radicle_status radicle_package_procedure_decode(const radicle_env* env, const ra
                                                 const radicle_package_procedure_tree** out_tree) {
   clear_error();
   if (!env || !record || !out_tree) return invalid();
+  *out_tree = nullptr;
   if (!belongs_to_env(env, to_ref(record))) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
   }
   if (to_ref(record)->record->header.signature != fo4::Signature::from_string("PACK")) {
     return fail(RADICLE_STATUS_PARSE_ERROR, "expected a PACK record");
   }
-  *out_tree = nullptr;
   return guarded("unknown exception while decoding PACK procedure tree", [&] {
     const auto t = fo4::env::decode_package_procedure(*to_ref(record)->record);
     auto h = std::make_unique<ProcedureTreeHolder>(); auto& v = h->view;

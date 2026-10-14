@@ -263,9 +263,9 @@ Result<nlohmann::json> RadiclePluginBackend::getLeveledList(const nlohmann::json
     if (!key) return std::unexpected(key.error());
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto winner = support::winningPlugin(plugins_, *key);
-    if (!winner) return std::unexpected(winner.error());
-    const auto* source = *winner;
+    const auto version = versionPlugin(support::stringArgument(arguments, 1), *key);
+    if (!version) return std::unexpected(version.error());
+    const auto* source = *version;
     try {
         return leveledListJson(fo4::forms::decode_leveled_list(*source, *key));
     } catch (const std::exception& error) {
@@ -292,6 +292,7 @@ Result<nlohmann::json> RadiclePluginBackend::setLeveledListSettings(const nlohma
             fo4::forms::set_leveled_list_settings(mutated, *key, *chanceNone, *maxCount, *flags);
         });
     if (!staged) return std::unexpected(staged.error());
+    if (!*staged) return nlohmann::json("No change for leveled list settings of " + key->to_string() + " in " + pluginName + ".");
     return nlohmann::json("Updated leveled list settings for " + key->to_string() + " in " + pluginName + ".");
 }
 
@@ -320,6 +321,11 @@ Result<nlohmann::json> RadiclePluginBackend::editLeveledListEntry(const nlohmann
 
     const auto staged = stageTypedRecordEdit(
         pluginName, *key, "LeveledListWriteFailed", [&](fo4::Plugin& mutated) {
+            if (op != "remove" && entry->extra.has_value() &&
+                fo4::find_record(mutated, *key)->header.signature == fo4::Signature::from_string("LVSP")) {
+                throw fo4::forms::LeveledListError(
+                    "LVSP entries take only LVLO; extra (COED) is not allowed on LVSP");
+            }
             const auto position = static_cast<std::size_t>(*index);
             if (op == "add") {
                 fo4::forms::insert_leveled_list_entry(mutated, *key, position, *entry);
@@ -336,6 +342,11 @@ Result<nlohmann::json> RadiclePluginBackend::editLeveledListEntry(const nlohmann
             }
         });
     if (!staged) return std::unexpected(staged.error());
+    if (!*staged) {
+        return nlohmann::json(
+            "No change for leveled list entry " + std::to_string(*index) + " in " + key->to_string() +
+            " in " + pluginName + ".");
+    }
     return nlohmann::json(
         "Updated leveled list entry " + std::to_string(*index) + " in " + key->to_string() +
         " in " + pluginName + ".");
