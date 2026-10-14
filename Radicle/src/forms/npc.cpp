@@ -129,6 +129,10 @@ const Record& npc_record(const Plugin& plugin, const FormKey& key) {
   return *record;
 }
 
+void require_editable(const Plugin& plugin, const FormKey& key) {
+  require_decodable(npc_record(plugin, key));
+}
+
 void require_local_target(const Plugin& plugin,
                           const FormKey& target,
                           Signature expected,
@@ -218,6 +222,7 @@ bool replace_run(Plugin& plugin,
   if (record->header.signature != k_npc) {
     throw NpcError("record is not NPC_: " + key.to_string());
   }
+  require_decodable(*record);
 
   auto& subrecords = record->subrecords;
   std::optional<std::size_t> first;
@@ -350,6 +355,7 @@ bool add_npc_faction(Plugin& plugin, const FormKey& key, const NpcFaction& value
 }
 
 bool remove_npc_faction(Plugin& plugin, const FormKey& key, std::size_t index) {
+  require_editable(plugin, key);
   auto entries = decode_npc_factions(plugin, key);
   require_index(entries, index, "SNAM");
   entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index));
@@ -357,6 +363,7 @@ bool remove_npc_faction(Plugin& plugin, const FormKey& key, std::size_t index) {
 }
 
 bool set_npc_faction(Plugin& plugin, const FormKey& key, std::size_t index, const NpcFaction& value) {
+  require_editable(plugin, key);
   require_local_target(plugin, value.faction, k_fact, "SNAM faction");
   auto entries = decode_npc_factions(plugin, key);
   require_index(entries, index, "SNAM");
@@ -394,6 +401,7 @@ bool add_npc_perk(Plugin& plugin, const FormKey& key, const NpcPerk& value) {
 }
 
 bool remove_npc_perk(Plugin& plugin, const FormKey& key, std::size_t index) {
+  require_editable(plugin, key);
   auto entries = decode_npc_perks(plugin, key);
   require_index(entries, index, "PRKR");
   entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index));
@@ -401,6 +409,7 @@ bool remove_npc_perk(Plugin& plugin, const FormKey& key, std::size_t index) {
 }
 
 bool set_npc_perk(Plugin& plugin, const FormKey& key, std::size_t index, const NpcPerk& value) {
+  require_editable(plugin, key);
   require_local_target(plugin, value.perk, k_perk, "PRKR perk");
   auto entries = decode_npc_perks(plugin, key);
   require_index(entries, index, "PRKR");
@@ -457,6 +466,7 @@ bool add_npc_inventory_item(Plugin& plugin, const FormKey& key, const NpcInvento
 }
 
 bool remove_npc_inventory_item(Plugin& plugin, const FormKey& key, std::size_t index) {
+  require_editable(plugin, key);
   auto entries = decode_npc_inventory(plugin, key);
   require_index(entries, index, "CNTO");
   entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index));
@@ -464,6 +474,7 @@ bool remove_npc_inventory_item(Plugin& plugin, const FormKey& key, std::size_t i
 }
 
 bool set_npc_inventory_item(Plugin& plugin, const FormKey& key, std::size_t index, const NpcInventoryItem& value) {
+  require_editable(plugin, key);
   require_inventory_target(plugin, value);
   auto entries = decode_npc_inventory(plugin, key);
   require_index(entries, index, "CNTO");

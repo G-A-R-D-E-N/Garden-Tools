@@ -265,6 +265,10 @@ std::vector<LeveledListEntry> sorted_entries(std::span<const LeveledListEntry> e
   return ordered;
 }
 
+void require_editable(const Plugin& plugin, const FormKey& key) {
+  if (const auto* record = find_record(plugin, key)) require_decodable(*record);
+}
+
 }  // namespace
 
 LeveledList decode_leveled_list(const Plugin& plugin, const FormKey& key) {
@@ -374,6 +378,7 @@ FormKey create_leveled_list(Plugin& plugin,
 
 bool reset_leveled_list(Plugin& plugin, const FormKey& key) {
   assign_record_form_keys(plugin);
+  require_editable(plugin, key);
   auto* record = find_mutable_record(plugin, key);
   if (record == nullptr) return false;
   if (!is_leveled_list(record->header.signature)) {
@@ -399,6 +404,7 @@ bool replace_leveled_list_entries(Plugin& plugin,
   }
 
   assign_record_form_keys(plugin);
+  require_editable(plugin, key);
   const auto current = decode_leveled_list(plugin, key);
   if (current.entries.size() == entries.size() &&
       std::equal(current.entries.begin(), current.entries.end(), entries.begin())) {
@@ -481,6 +487,7 @@ bool insert_leveled_list_entry(Plugin& plugin,
                                std::size_t index,
                                const LeveledListEntry& entry) {
   assign_record_form_keys(plugin);
+  require_editable(plugin, key);
   auto entries = decode_leveled_list(plugin, key).entries;
   if (index > entries.size()) {
     throw LeveledListError("leveled list entry index is out of range");
@@ -493,6 +500,7 @@ bool remove_leveled_list_entry(Plugin& plugin,
                                const FormKey& key,
                                std::size_t index) {
   assign_record_form_keys(plugin);
+  require_editable(plugin, key);
   auto entries = decode_leveled_list(plugin, key).entries;
   if (index >= entries.size()) {
     throw LeveledListError("leveled list entry index is out of range");
@@ -506,6 +514,7 @@ bool set_leveled_list_entry(Plugin& plugin,
                             std::size_t index,
                             const LeveledListEntry& entry) {
   assign_record_form_keys(plugin);
+  require_editable(plugin, key);
   auto entries = decode_leveled_list(plugin, key).entries;
   if (index >= entries.size()) {
     throw LeveledListError("leveled list entry index is out of range");
@@ -523,6 +532,7 @@ bool set_leveled_list_settings(Plugin& plugin,
     throw LeveledListError("leveled list flags may use only defined bits 0x01, 0x02, and 0x04");
   }
   assign_record_form_keys(plugin);
+  require_editable(plugin, key);
   const auto current = decode_leveled_list(plugin, key);
   if (current.chance_none == chance_none && current.max_count == max_count &&
       current.flags == flags) {
