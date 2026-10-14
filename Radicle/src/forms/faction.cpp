@@ -175,10 +175,15 @@ const Record& faction_record(const Plugin& plugin, const FormKey& key) {
   return *record;
 }
 
+void require_editable(const Plugin& plugin, const FormKey& key) {
+  require_decodable(faction_record(plugin, key));
+}
+
 Record& mutable_faction(Plugin& next, const FormKey& key) {
   assign_record_form_keys(next);
   auto* record = detail::find_mutable_record(next, key);
   if (record == nullptr) throw FactionError("FACT record not found: " + key.to_string());
+  require_decodable(*record);
   return *record;
 }
 
@@ -375,6 +380,7 @@ void set_faction_relation(Plugin& plugin,
                           const FormKey& key,
                           std::size_t index,
                           const FactionRelation& relation) {
+  require_editable(plugin, key);
   require_index(index, decode_faction_relations(plugin, key).size(), "FACT relation");
   require_relation_target(plugin, relation.faction);
   auto next = plugin;
@@ -386,6 +392,7 @@ void set_faction_relation(Plugin& plugin,
 }
 
 void remove_faction_relation(Plugin& plugin, const FormKey& key, std::size_t index) {
+  require_editable(plugin, key);
   require_index(index, decode_faction_relations(plugin, key).size(), "FACT relation");
   auto next = plugin;
   auto& record = mutable_faction(next, key);
@@ -410,6 +417,7 @@ void set_faction_rank(Plugin& plugin,
                       const FormKey& key,
                       std::size_t index,
                       const FactionRank& rank) {
+  require_editable(plugin, key);
   require_index(index, decode_faction_ranks(plugin, key).size(), "FACT rank");
   auto next = plugin;
   auto& record = mutable_faction(next, key);
@@ -421,6 +429,7 @@ void set_faction_rank(Plugin& plugin,
 }
 
 void remove_faction_rank(Plugin& plugin, const FormKey& key, std::size_t index) {
+  require_editable(plugin, key);
   require_index(index, decode_faction_ranks(plugin, key).size(), "FACT rank");
   auto next = plugin;
   auto& record = mutable_faction(next, key);
