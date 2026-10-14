@@ -1283,11 +1283,15 @@ Skips unless `FO4_DATA_DIR` is set, and matches the RaceReal pattern. For every 
 
 ## .github/scripts/check_real_data_regex.py:real_data_tests
 
-Read-only guard for GT-229. It finds every gtest `TEST`, `TEST_F`, `TEST_P` and Catch `TEST_CASE` in `Radicle/tests/*.cpp` and `PluginEditTool/native/tests`, and counts a test as reading game data when its body calls `getenv("FO4_DATA_DIR")`, calls a file-local helper that does, or uses a fixture whose `SetUp` does. Each counted test's `Suite.Name` (or Catch title) must match `REAL_DATA_TEST_REGEX`, which the script reads from the `native-ci.yml` env block. The check runs in the Linux native job, so a game-data test that the real-data job would never select fails CI. Comments and string literals are blanked before brace matching, so a skip message that names `FO4_DATA_DIR` does not count as a read.
+Read-only guard for GT-229. It finds every gtest `TEST`, `TEST_F`, `TEST_P` and Catch `TEST_CASE` that reads game data, and each one's `Suite.Name` (or Catch title) must match `REAL_DATA_TEST_REGEX`, which the script reads from the `native-ci.yml` env block. The check runs in the Linux native job, so a game-data test that the real-data job would never select fails CI. Comments and string literals are blanked before brace matching, so a skip message that names `FO4_DATA_DIR` does not count as a read.
+
+It scans `.cpp`, `.hpp` and `.h` under both test roots. Helpers are function heads and lambdas named by their variable (`name = [...](...) -> T {`). A constructor, or a `SetUp` or `SetUpTestSuite` inside a `class` or `struct`, marks that class as a fixture when its span reads `FO4_DATA_DIR` or calls a helper. The helper set is a fixpoint across all scanned files: chains of any depth are followed, and a helper defined in a header counts everywhere it is included. The script still fails when no game-data test is found. Known gaps: out-of-line `Name::SetUp()` definitions are not tied to their class, and functions with a trailing return type (`auto f() -> T {`) are not detected as helpers. The script's own test is `.github/scripts/test_check_real_data_regex.py`.
 
 ## Radicle/tests/test_real_data_build.cpp:InstalledDataBuildIsKnown
 
-GT-247. Runs only when `FO4_DATA_DIR` is set and asserts `detect_game_build` does not return `Unknown`, so the real-data job fails when `Fallout4.exe` is not next to the Data folder instead of reporting green. The suite name `RealDataBuildReal` matches the `[A-Za-z0-9_]*Real\.` alternative. An exported `FO4_GAME_BUILD` overrides the exe read and satisfies the test.
+GT-247. Runs only when `FO4_DATA_DIR` is set and asserts `detect_game_build` does not return `Unknown`, so the real-data job fails when `Fallout4.exe` is not next to the Data folder instead of reporting green. The suite name `RealDataBuildReal` matches the `[A-Za-z0-9_]*Real\.` alternative.
+
+GT-275. It also asserts `exact_counts_known`, which is true only for AE 1.11.240.0. A Steam update changes the file version, which skips every exact-count assert while the job stays green; this test instead fails on any other build and prints `build.file_version`, so the pinned counts get re-checked. An exported `FO4_GAME_BUILD` overrides the exe read; only `1.11.240.0` satisfies both assertions.
 
 ## Radicle/tests/test_real_data_build.cpp:MissingExeIsUnknown
 
