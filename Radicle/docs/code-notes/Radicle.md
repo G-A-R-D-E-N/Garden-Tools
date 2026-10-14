@@ -2155,3 +2155,6 @@ Fixed single slots (`structured_formids.inc`), same test set:
 - REFR and ACHR XTEL, `Core/wbDefinitionsFO4.pas` lines 11550-11560.
 
 Strict mode: `StructPayloadRemap.WrongStrideSizeFailsClosedWithoutMutation`.
+## Radicle/src/forms/placed_reference_edit.cpp:set_placed_reference_record_flags — Deleted bit kept
+
+`set_placed_reference_record_flags` keeps the record's compressed, persistent and Deleted bits and takes the other bits from the caller. Deleted is never set or cleared here, because deleting needs the content stripped (xEdit `SetDeleted` in `Core/wbImplementation.pas`). Reason: #602 D-6. Test: `Radicle/tests/test_environment_ref_fields.cpp:RecordFlagsNeverToggleDeleted`.
