@@ -44,7 +44,7 @@ struct Item {
 constexpr Item k_items[] = {
     {"NOTE", "000810:Patch.esp", "NOTE\\Value", "250", "NOTE\\Model", "NOTE\\PickUpSound", "000808:Patch.esp"},
     {"ENCH", "000811:Patch.esp", "ENCH\\Cost", "7", "", "ENCH\\BaseEnchantment", "000817:Patch.esp"},
-    {"AMDL", "000812:Patch.esp", "AMDL\\RunawayRecoilShots", "12", "", "", ""},
+    {"AMDL", "000812:Patch.esp", "AMDL\\RunawayRecoilShots", "13","", "", ""},
     {"AORU", "000813:Patch.esp", "AORU\\Radius", "700", "", "", ""},
     {"PKIN", "000814:Patch.esp", "PKIN\\Version", "2", "PKIN\\Filter", "PKIN\\Cell", "00081B:Patch.esp"},
     {"DOBJ", "000815:Patch.esp", "", "", "", "", ""},

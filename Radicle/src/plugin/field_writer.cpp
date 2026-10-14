@@ -426,11 +426,7 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
   const auto* record = find_record(plugin, record_key);
   if (record == nullptr) return std::nullopt;
   require_scalar_record(*record, field);
-  const auto resolved = scalar_slots(*record, field);
-  if (field.scalar.address.when.count == 0) return resolved.slots.size();
-  return static_cast<std::size_t>(std::count_if(
-      resolved.slots.begin(), resolved.slots.end(),
-      [](const schema::FieldSlot& slot) { return slot.valid; }));
+  return scalar_slots(*record, field).slots.size();
 }
 
 std::optional<std::size_t> record_field_count(const Plugin& plugin,
@@ -442,11 +438,7 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
     throw schema::FormLinkFieldError(std::string(field.path) + " does not apply to " +
                                      record->header.signature.to_string() + " records");
   }
-  const auto resolved = formlink_slots(*record, field);
-  if (field.address.when.count == 0) return resolved.slots.size();
-  return static_cast<std::size_t>(std::count_if(
-      resolved.slots.begin(), resolved.slots.end(),
-      [](const schema::FieldSlot& slot) { return slot.valid; }));
+  return formlink_slots(*record, field).slots.size();
 }
 
 std::optional<std::size_t> record_field_count(const Plugin& plugin,

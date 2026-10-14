@@ -539,8 +539,8 @@ TEST(SubrecordGroup, InsertsAtTheEndWhenTheCountFollowsTheRuns) {
   EXPECT_EQ(cnto_item(after, 0), 0x900u);
   EXPECT_EQ(cnto_item(after, 1), 0u);
   EXPECT_EQ(read_member(after, "CONT\\ItemCount", 0), "5");
-  EXPECT_EQ(read_member(after, "CONT\\ItemCount", 1), "0");
-  EXPECT_EQ(record_of(after).subrecords[1].data, zeros(8));
+  EXPECT_EQ(read_member(after, "CONT\\ItemCount", 1), "1");
+  EXPECT_EQ(record_of(after).subrecords[1].data, cnto_bytes(0, 1));
   EXPECT_EQ(record_of(after).subrecords[3].data, zeros(4));
 }
 

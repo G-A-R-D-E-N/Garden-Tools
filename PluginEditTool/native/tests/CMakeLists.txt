@@ -197,6 +197,7 @@ catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 600)
 add_executable(
     fo4ide_test_proj_expl_hazd
     unit/RadiclePluginProjExplHazdTests.cpp
+    unit/RadiclePluginProjExplHazdFormLinkTests.cpp
     unit/RadiclePluginProjFlagsTests.cpp
     unit/RadiclePluginProjExplHazdLimitsTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"

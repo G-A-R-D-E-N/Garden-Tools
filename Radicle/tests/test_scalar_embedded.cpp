@@ -257,9 +257,11 @@ TEST(ScalarEmbedded, SignatureOnlyLookupSkipsEmbeddedFields) {
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DNAM")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DATA")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("VNAM")).has_value());
+  // XHLT and XSCL also name placed-reference variant rows, so they are ambiguous.
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XHLT")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
   // A signature only one whole-payload row names still resolves.
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XHLT")).has_value());
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("COCT")).has_value());
 }
 
 TEST(ScalarEmbedded, ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbsent) {
