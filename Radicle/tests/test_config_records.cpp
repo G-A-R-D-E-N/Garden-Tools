@@ -153,6 +153,14 @@ Bytes payload(const fo4::Plugin& plugin, std::uint32_t local, std::string_view s
   return {};
 }
 
+bool slot_valid(const fo4::Plugin& plugin, std::uint32_t local, std::string_view path) {
+  const auto field = scalar(path);
+  const auto* record = fo4::find_record(plugin, key(local));
+  return fo4::schema::resolve_field_slots(*record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address)
+      .slots.at(0)
+      .valid;
+}
+
 }  // namespace
 
 TEST(ConfigRecordsSynthetic, GlobalAndGameSettingRowsWriteOnlyTheirOwnPayload) {
@@ -174,9 +182,13 @@ TEST(ConfigRecordsSynthetic, GlobalAndGameSettingRowsWriteOnlyTheirOwnPayload) {
   EXPECT_EQ(payload(reread, 2051, "DATA"), i32(-3));
   EXPECT_EQ(payload(reread, 2052, "DATA"), u32(0));
   EXPECT_EQ(fo4::record_field_count(reread, key(2050), "GMST\\FloatValue"), 1u);
-  EXPECT_EQ(fo4::record_field_count(reread, key(2050), "GMST\\IntegerValue"), 0u);
+  EXPECT_TRUE(slot_valid(reread, 2050, "GMST\\FloatValue"));
+  EXPECT_EQ(fo4::record_field_count(reread, key(2050), "GMST\\IntegerValue"), 1u);
+  EXPECT_FALSE(slot_valid(reread, 2050, "GMST\\IntegerValue"));
   EXPECT_EQ(fo4::record_field_count(reread, key(2051), "GMST\\IntegerValue"), 1u);
+  EXPECT_TRUE(slot_valid(reread, 2051, "GMST\\IntegerValue"));
   EXPECT_EQ(fo4::record_field_count(reread, key(2052), "GMST\\BooleanValue"), 1u);
+  EXPECT_TRUE(slot_valid(reread, 2052, "GMST\\BooleanValue"));
 }
 
 TEST(ConfigRecordsSynthetic, KeywordAndActionRowsWriteStringsEnumsAndLinks) {

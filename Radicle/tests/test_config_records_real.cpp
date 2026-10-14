@@ -77,8 +77,13 @@ TEST_P(ConfigRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow)
       const std::pair<std::string_view, char> gates[] = {
           {"GMST\\FloatValue", 'f'}, {"GMST\\IntegerValue", 'i'}, {"GMST\\BooleanValue", 'b'}};
       for (const auto& [path, gate] : gates) {
-        EXPECT_EQ(fo4::record_field_count(plugin, record.form_key, path), initial == gate ? 1u : 0u)
+        const auto field = *fo4::schema::scalar_field_descriptor(path);
+        const auto slots = fo4::schema::resolve_field_slots(
+            record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+        EXPECT_EQ(fo4::record_field_count(plugin, record.form_key, path), 1u)
             << record.form_key.to_string() << ' ' << path;
+        ASSERT_EQ(slots.slots.size(), 1u) << record.form_key.to_string() << ' ' << path;
+        EXPECT_EQ(slots.slots[0].valid, initial == gate) << record.form_key.to_string() << ' ' << path;
       }
     }
   });

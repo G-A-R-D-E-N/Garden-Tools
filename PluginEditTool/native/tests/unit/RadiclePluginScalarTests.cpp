@@ -104,11 +104,12 @@ std::string readScalar(const std::filesystem::path& path,
     const auto* record = fo4::find_record(
         plugin, fo4::FormKey::parse("000800:Patch.esp"));
     REQUIRE(record != nullptr);
+    const std::string_view fieldPath = signature == fo4::Signature::from_string("XSCL") ? "REFR\\Scale" : "REFR\\HealthPercent";
+    const auto descriptor = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("REFR"), fieldPath);
+    REQUIRE(descriptor.has_value());
     for (const auto& subrecord : record->subrecords) {
         if (subrecord.signature != signature) continue;
-        const auto descriptor = fo4::schema::scalar_descriptor(subrecord.signature);
-        REQUIRE(descriptor.has_value());
-        return fo4::schema::decode_scalar(subrecord.data, *descriptor);
+        return fo4::schema::decode_scalar(subrecord.data, descriptor->scalar);
     }
     return {};
 }

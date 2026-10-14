@@ -45,7 +45,7 @@ constexpr Item k_items[] = {
     {"AMMO", "000802:Patch.esp", "AMMO\\Damage", "2.5", "AMMO\\Model", "AMMO\\PickUpSound"},
     {"BOOK", "000803:Patch.esp", "BOOK\\TextOffsetY", "9", "BOOK\\Model", "BOOK\\PickUpSound"},
     {"INGR", "000804:Patch.esp", "INGR\\Weight", "0.5", "INGR\\Model", "INGR\\PickUpSound"},
-    {"KEYM", "000805:Patch.esp", "KEYM\\Value", "3", "KEYM\\Model", "KEYM\\PickUpSound"},
+    {"KEYM", "000805:Patch.esp", "KEYM\\Value", "4","KEYM\\Model", "KEYM\\PickUpSound"},
     {"ARTO", "000806:Patch.esp", "ARTO\\ArtType", "1", "ARTO\\Model", ""},
     {"IDLM", "000807:Patch.esp", "IDLM\\IdleTimer", "2.5", "IDLM\\Model", ""},
 };

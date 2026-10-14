@@ -543,7 +543,8 @@ TEST(FieldWriterResolver, MisalignedArrayIsFlaggedOnlyForTheExpectedPayloadSize)
 TEST(FieldWriterString, SignatureLookupSkipsRepeatedAndStringRows) {
   EXPECT_FALSE(fo4::schema::scalar_descriptor(Signature::from_string("NAME")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(Signature::from_string("HNAM")).has_value());
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(Signature::from_string("XHLT")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(Signature::from_string("XHLT")).has_value());
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(Signature::from_string("COCT")).has_value());
 }
 
 TEST(FieldWriterFormLink, StrideAndDiscriminator) {
