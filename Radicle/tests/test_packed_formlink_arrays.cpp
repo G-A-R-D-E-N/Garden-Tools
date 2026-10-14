@@ -470,12 +470,12 @@ TEST(FormLink, WeaponDnamFormIdSlotsRemapAndKeepOtherBytes) {
                                   {93, 0}, {97, 0}, {101, 0}}));
 
   const auto links = fo4::collect_form_links(reread);
-  ASSERT_EQ(links.size(), 4);
+  ASSERT_EQ(links.size(), 11);
   EXPECT_EQ(links[0].subrecord.to_string(), "DNAM");
-  EXPECT_EQ(links[0].offset, 0);
-  EXPECT_EQ(links[1].offset, 40);
-  EXPECT_EQ(links[2].offset, 44);
-  EXPECT_EQ(links[3].offset, 73);
+  constexpr std::size_t expected[] = {0, 40, 44, 73, 77, 81, 85, 89, 93, 97, 101};
+  for (std::size_t i = 0; i < links.size(); ++i) {
+    EXPECT_EQ(links[i].offset, expected[i]) << i;
+  }
 }
 
 TEST(FormLink, WeaponDnamWrongSizeFailsClosedUnderStrictRemap) {
