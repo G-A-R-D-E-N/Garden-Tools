@@ -343,6 +343,9 @@ TEST(RecordFlags, LocalRecordAndAlreadyDeletedReturnWithoutChange) {
 
 TEST(RecordFlags, UndeleteClearsDeletedDisablesAndParentsToPlayerReference) {
   auto plugin = load(CellPlugin{
+      .name = "Patch.esp",
+      .masters = {"Fallout4.esm"},
+      .cell_form = 0x01000900,
       .ref_flags = fo4::RecordFlags::deleted | fo4::RecordFlags::compressed,
       .ref_subs =
           {
@@ -353,10 +356,10 @@ TEST(RecordFlags, UndeleteClearsDeletedDisablesAndParentsToPlayerReference) {
               {"XSCL", std::string{'\0', '\0', '\x80', '\x3f'}},
           },
   });
-  const auto ref = fo4::FormKey::parse("000800:Cells.esp");
+  const auto ref = fo4::FormKey::parse("000800:Fallout4.esm");
   ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, ref), fo4::UndeleteStatus::undeleted);
 
-  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cells.esp");
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto* record = fo4::find_record(reread, ref);
   ASSERT_NE(record, nullptr);
   EXPECT_FALSE(record->header.flags.is_deleted());
