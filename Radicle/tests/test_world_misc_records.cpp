@@ -24,8 +24,6 @@ struct Sub {
   Bytes data;
 };
 
-Bytes u8(std::uint8_t value) { return Bytes{std::byte{value}}; }
-
 Bytes u32(std::uint32_t value) {
   fo4::test::ByteWriter out;
   out.u32(value);
