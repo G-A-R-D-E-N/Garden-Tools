@@ -164,6 +164,14 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("minimum_payload_size", scalar(payload_size=8, minimum_payload_size=12))
         self.rejects("string field", string(minimum_payload_size=12))
 
+    def test_min_form_version_gates_a_row_and_rejects_bad_values(self):
+        field = self.load(scalar(min_form_version=97))[0]
+        self.assertEqual(field["min_form_version"], 97)
+        self.assertIn("FieldAddress{}, 0, {}, 97}", schema_codegen.render([field]))
+        for value in (0, -1, 65536, True, "97"):
+            with self.subTest(value=value):
+                self.rejects("min_form_version", scalar(min_form_version=value))
+
     def test_signed_storages_accept_their_range_and_reject_beyond(self):
         self.assertEqual(self.load(scalar(storage="i8", minimum=-128, maximum=127))[0]["storage"], "i8")
         self.assertEqual(self.load(scalar(storage="i16", minimum=-32768, maximum=32767))[0]["storage"], "i16")
