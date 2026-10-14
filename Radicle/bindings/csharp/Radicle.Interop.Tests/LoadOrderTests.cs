@@ -32,6 +32,17 @@ public class LoadOrderTests
     }
 
     [Fact]
+    public void ReadPluginListSplitsTrailingTabFieldsFromTheRight()
+    {
+        using var temp = new TempDirectory();
+        var comments = string.Concat(Enumerable.Repeat("# note\r\n", 10));
+        var list = temp.Write("plugins.txt", Encoding.ASCII.GetBytes(comments + "*Mod With Spaces.esp\r\nLate.esp\r\n"));
+
+        Assert.Equal(new[] { new PluginListEntry("Mod With Spaces.esp", true, 11), new PluginListEntry("Late.esp", false, 12) },
+                     LoadOrderFiles.ReadPluginList(list).ToArray());
+    }
+
+    [Fact]
     public void AssemblesOfficialThenCccThenPluginListWithHoistAndChecks()
     {
         using var temp = new TempDirectory();

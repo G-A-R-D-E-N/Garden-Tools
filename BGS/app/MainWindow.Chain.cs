@@ -139,6 +139,15 @@ public partial class MainWindow : Window
 
     private void ResolveCrashHash()
     {
+        try { ResolveCrashHashFromField(); }
+        catch (Exception e) when (e is IOException or InvalidDataException)
+        {
+            _crashSummary.Text = "the game data could not be read: " + e.Message.Split('\n')[0];
+        }
+    }
+
+    private void ResolveCrashHashFromField()
+    {
         string input = (_crashField.Text ?? "").Trim();
         if (input.Length == 0) return;
 
@@ -393,6 +402,15 @@ public partial class MainWindow : Window
     private bool _crashResolved;
 
     private void BuildChain()
+    {
+        try { BuildChainCore(); }
+        catch (Exception e) when (e is IOException or InvalidDataException)
+        {
+            _dataSummary.Text = "the game data could not be read: " + e.Message.Split('\n')[0];
+        }
+    }
+
+    private void BuildChainCore()
     {
         _chain.Clear();
         _gameData?.Dispose();

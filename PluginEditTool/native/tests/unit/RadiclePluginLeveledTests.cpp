@@ -11,7 +11,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/forms/leveled_list.hpp>
+#include <fo4/forms/leveled_spell.hpp>
+#include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
+#include <fo4/plugin/writer.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
 #include "plugin_bytes.hpp"
@@ -283,4 +286,116 @@ TEST_CASE("Native leveled list set keeps the replaced entry's reserved bytes thr
     CHECK(reread.entries[0].level == 2);
     CHECK(reread.entries[0].reserved_before_form_id == original.entries[0].reserved_before_form_id);
     CHECK(reread.entries[0].reserved_tail == original.entries[0].reserved_tail);
+}
+
+TEST_CASE("Native leveled list typed read picks the winning version or the named plugin") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto patchPath = root / "Patch.esp";
+    const auto winnerPath = root / "Winner.esp";
+
+    auto patch = fo4::read_plugin(settledLeveledBytes(), "Patch.esp");
+    const auto listKey = fo4::FormKey::parse("000800:Patch.esp");
+    const auto listType = fo4::Signature::from_string("LVLI");
+    fo4::forms::create_leveled_list(patch, listType, std::string_view{"ItemB"}, 0, 0, 0);
+    fo4::forms::create_leveled_list(patch, listType, std::string_view{"ItemC"}, 0, 0, 0);
+    const auto entryFor = [](std::string_view item) {
+        fo4::forms::LeveledListEntry entry;
+        entry.item = fo4::FormKey::parse(item);
+        return entry;
+    };
+    const std::vector patchEntries{
+        entryFor("000802:Patch.esp"), entryFor("000803:Patch.esp"), entryFor("000804:Patch.esp")};
+    REQUIRE(fo4::forms::replace_leveled_list_entries(patch, listKey, patchEntries));
+
+    auto winner = fo4::make_empty_plugin("Winner.esp");
+    REQUIRE(fo4::copy_record_as_override(winner, patch, listKey, false) ==
+            fo4::RecordCopyStatus::inserted);
+    const std::vector winnerEntries{entryFor("000802:Patch.esp"), entryFor("000804:Patch.esp")};
+    REQUIRE(fo4::forms::replace_leveled_list_entries(winner, listKey, winnerEntries));
+
+    leveledWriteBytes(patchPath, fo4::write_plugin(patch));
+    leveledWriteBytes(winnerPath, fo4::write_plugin(winner));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", nlohmann::json{{
+        "plugins",
+        nlohmann::json::array({
+            {
+                {"name", "Patch.esp"},
+                {"path", patchPath.string()},
+                {"source", "LeveledTest"},
+                {"resolved", true}
+            },
+            {
+                {"name", "Winner.esp"},
+                {"path", winnerPath.string()},
+                {"source", "LeveledTest"},
+                {"resolved", true}
+            }
+        })
+    }}).has_value());
+
+    const auto winning = backend.getLeveledList(nlohmann::json::array({"000800:Patch.esp"}));
+    REQUIRE(winning.has_value());
+    REQUIRE(winning->at("entries").size() == 2);
+    CHECK(winning->at("entries")[0].at("item") == "000802:Patch.esp");
+    CHECK(winning->at("entries")[1].at("item") == "000804:Patch.esp");
+
+    const auto patchVersion = backend.getLeveledList(nlohmann::json::array({"000800:Patch.esp", "Patch.esp"}));
+    REQUIRE(patchVersion.has_value());
+    REQUIRE(patchVersion->at("entries").size() == 3);
+
+    const auto removed = backend.editLeveledListEntry(
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "remove", 1, nullptr}));
+    REQUIRE(removed.has_value());
+
+    const auto afterRemove = backend.getLeveledList(nlohmann::json::array({"000800:Patch.esp", "Patch.esp"}));
+    REQUIRE(afterRemove.has_value());
+    REQUIRE(afterRemove->at("entries").size() == 2);
+    CHECK(afterRemove->at("entries")[0].at("item") == "000802:Patch.esp");
+    CHECK(afterRemove->at("entries")[1].at("item") == "000804:Patch.esp");
+
+    const auto stillWinning = backend.getLeveledList(nlohmann::json::array({"000800:Patch.esp"}));
+    REQUIRE(stillWinning.has_value());
+    CHECK(stillWinning->at("entries").size() == 2);
+}
+
+TEST_CASE("Native leveled spell list refuses extra COED entries and leaves the plugin unstaged") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+
+    auto patch = fo4::read_plugin(settledLeveledBytes(), "Patch.esp");
+    const std::vector<fo4::forms::LeveledSpellEntry> noEntries;
+    const auto spell = fo4::forms::create_leveled_spell(patch, 0u, 0u, 0u, noEntries);
+    REQUIRE(spell == fo4::FormKey::parse("000803:Patch.esp"));
+    leveledWriteBytes(path, fo4::write_plugin(patch));
+    const auto before = leveledReadBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const nlohmann::json entry{
+        {"level", 1},
+        {"item", "000802:Patch.esp"},
+        {"count", 1},
+        {"chanceNone", 100},
+        {"extra", {{"owner", "000800:Patch.esp"}, {"globalOrRank", 0}, {"itemCondition", 1.0}}}
+    };
+    const auto added = backend.editLeveledListEntry(
+        nlohmann::json::array({"Patch.esp", "000803:Patch.esp", "add", 0, entry}));
+    REQUIRE_FALSE(added.has_value());
+    CHECK(added.error().type == "LeveledListWriteFailed");
+
+    const auto replaced = backend.editLeveledListEntry(
+        nlohmann::json::array({"Patch.esp", "000803:Patch.esp", "set", 0, entry}));
+    REQUIRE_FALSE(replaced.has_value());
+    CHECK(replaced.error().type == "LeveledListWriteFailed");
+
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    CHECK(nlohmann::json::parse(plugins->get<std::string>()).at(0).at("Pending") == false);
+    const bool unchanged = leveledReadBytes(path) == before;
+    CHECK(unchanged);
 }

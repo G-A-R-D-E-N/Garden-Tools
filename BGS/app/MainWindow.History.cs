@@ -63,9 +63,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        var findings = _xmlText.Length > 0
-            ? GraphValidator.Check(_xmlText, _projectChain)
-            : GraphValidator.Check(_reading, _projectChain, _bytes);
+        List<GraphValidator.Finding> findings;
+        try
+        {
+            findings = _xmlText.Length > 0
+                ? GraphValidator.Check(_xmlText, _projectChain)
+                : GraphValidator.Check(_reading, _projectChain, _bytes);
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException)
+        {
+            SetStatus("the game data could not be read: " + e.Message.Split('\n')[0], Ux.BadBrush);
+            return;
+        }
         var errors = findings.Where(f => f.Level == GraphValidator.Level.Error).ToList();
         var warnings = findings.Where(f => f.Level == GraphValidator.Level.Warning).ToList();
 

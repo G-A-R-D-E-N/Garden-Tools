@@ -90,7 +90,9 @@ if not defined DEPLOY (
     exit /b 1
   )
 ) else (
-  echo WARNING: deploy folder does not exist: !DEPLOY!
+  echo Deploy folder does not exist: !DEPLOY!
+  popd
+  exit /b 1
 )
 
 echo.

@@ -56,3 +56,10 @@ it('sends the whole rank with its new number and the titles it was read with', a
     number: 1, maleTitle: { rawId: '0A0B' }, femaleTitle: { stringId: 42 }, hasInsignia: false,
   });
 });
+
+it('hides the Index field on FACT relations and ranks, which always append', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetFaction: vi.fn(async () => JSON.stringify(fact)) } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  expect(await screen.findByText('000A01:W0.esp')).toBeTruthy();
+  expect(screen.queryByLabelText('Index')).toBeNull();
+});
