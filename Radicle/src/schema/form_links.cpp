@@ -274,6 +274,9 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     }
     return;
   }
+  if (const auto assoc = mgef_assoc_item_formid_offsets(record, sub)) {
+    for (const auto offset : *assoc) fn(offset);
+  }
   if (const auto mixed = mixed_formid_offsets(record, sub, strict_remap)) {
     for (const auto offset : *mixed) fn(offset);
     return;

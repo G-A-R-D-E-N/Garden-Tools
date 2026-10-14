@@ -62,7 +62,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AVIF | 7826 | 3 | - | - | - | 3 | yes | - | - | - | 2 | L4 |
 | BNDS | 12280 | 8 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
-| BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | - | 1 | L4 |
+| BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | BPTD | 7693 | - | - | - | - | - | - | - | - | - | - | L0 |
 | CAMS | 7880 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | CELL | 5953 | - | - | - | - | - | - | - | forms/cell, environment/world | yes | 1 | L2 |
@@ -80,12 +80,12 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | DIAL | 6309 | 5 | 1 | 3 | - | 1 | yes | - | environment/dialogue | - | 2 | L4 |
 | DLBR | 8778 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | DLVW | 8819 | - | - | 2 | - | - | yes | - | - | - | 1 | L4 |
-| DMGT | 12310 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
+| DMGT | 12310 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | DOBJ | 8618 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | DOOR | 6477 | 7 | 1 | 6 | - | 3 | yes | yes | - | - | 1 | L4 |
 | DUAL | 9452 | 1 | - | 5 | - | - | yes | - | - | - | 1 | L4 |
 | ECZN | 8022 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
-| EFSH | 6510 | - | 5 | - | - | - | yes | - | - | - | 1 | L4 |
+| EFSH | 6510 | - | 5 | - | - | - | yes | - | - | yes | 1 | L4 |
 | ENCH | 6726 | 7 | - | 2 | - | 1 | yes | - | - | - | 2 | L4 |
 | EQUP | 8835 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | EXPL | 7334 | 15 | - | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
