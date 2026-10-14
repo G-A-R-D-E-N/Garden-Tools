@@ -641,8 +641,8 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
         current_record_incomplete = true;
       }
       const auto ordinal = ordinals[sub.signature.packed()]++;
-      const bool claimed = visit_formlink_offsets(record, sub, schema_offsets, false, &plugin, &context,
-                             [&](std::size_t offset) {
+      const bool claimed = visit_formlink_offsets(
+          record, sub, schema_offsets, false, &plugin, &context, [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
           return;
         }
