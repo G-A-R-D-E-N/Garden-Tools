@@ -36,6 +36,7 @@ struct ProfileSnapshot {
     std::vector<ModEntry> enabledModsHighToLow;
     std::vector<PluginEntry> plugins;
     std::vector<std::string> missingPlugins;
+    std::vector<std::string> warnings;
     std::vector<std::filesystem::path> assetRootsLowToHigh;
 
     std::unordered_map<std::string, std::filesystem::path> pluginPathIndex() const;

@@ -56,6 +56,7 @@ public:
     Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json& arguments) override;
     Result<nlohmann::json> updateOnam(const nlohmann::json& arguments) override;
     Result<nlohmann::json> copyAsDisabledOverride(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> copyAsWrapper(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
@@ -187,6 +188,10 @@ private:
     // loaded plugins, mirroring WriteService.ResolveFk.
     std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;
     void ensureOwnerMaster(fo4::Plugin& plugin, const fo4::PluginKey& owner) const;
+    Result<fo4::FormKey> copyRecordAsNewLocked(fo4::Plugin& mutated,
+                                               const LoadedPlugin& source,
+                                               const fo4::FormKey& key,
+                                               std::optional<std::string_view> newEditorId) const;
     Result<fo4::FormKey> createProjectileLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createExplosionLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createHazardLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
@@ -246,10 +251,12 @@ private:
     bool isEditable(const LoadedPlugin& plugin) const;
     bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
-    Result<void> stageTypedRecordEdit(std::string_view pluginName,
+    Result<bool> stageTypedRecordEdit(std::string_view pluginName,
                                       const fo4::FormKey& key,
                                       std::string_view failureCode,
                                       const std::function<void(fo4::Plugin&)>& edit);
+    Result<const fo4::Plugin*> versionPlugin(std::string_view pluginName,
+                                             const fo4::FormKey& key) const;
     std::optional<Error> requireReferenceCoverage(const fo4::FormKey& key,
                                                   std::string_view operation) const;
     std::optional<std::filesystem::path> allowedSavePath(

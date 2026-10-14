@@ -138,3 +138,26 @@ TEST(LeveledListCreation, RefusesOtherSignaturesAndUndefinedFlags) {
   EXPECT_EQ(plugin.header.next_form_id, 0x804u);
   EXPECT_EQ(plugin.groups.size(), 4u);
 }
+
+TEST(LeveledListCreation, ResetDropsEditorIdEntriesAndSettings) {
+  auto plugin = fo4::read_plugin(fixture(), "Patch.esp");
+  const auto item = create_list(plugin, "LVLI", "CreatedItems");
+  ASSERT_TRUE(fo4::forms::insert_leveled_list_entry(plugin, item, 0, entry_for("000800:Patch.esp")));
+  ASSERT_TRUE(fo4::forms::reset_leveled_list(plugin, item));
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, item);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(signature_names(*record),
+            (std::vector<std::string>{"OBND", "LVLD", "LVLF", "LLCT"}));
+  EXPECT_EQ(record->subrecords.front().data, std::vector<std::byte>(12));
+  const auto decoded = fo4::forms::decode_leveled_list(reread, item);
+  EXPECT_TRUE(decoded.entries.empty());
+  EXPECT_EQ(decoded.chance_none, 0u);
+  EXPECT_EQ(decoded.max_count, 0u);
+  EXPECT_EQ(decoded.flags, 0u);
+
+  EXPECT_THROW(static_cast<void>(fo4::forms::reset_leveled_list(
+                   plugin, fo4::FormKey::parse("000800:Patch.esp"))),
+               fo4::forms::LeveledListError);
+}
