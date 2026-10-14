@@ -288,3 +288,32 @@ TEST(LocalizedFields, QuestStructureCallerReportsNonFourByteObjectiveTextAsMalfo
   EXPECT_EQ(objective_text.size, 3u);
   EXPECT_EQ(objective_bytes, truncated);
 }
+
+TEST(LocalizedFields, Wp10LocalizedPairsAreMembers) {
+  const std::pair<const char*, const char*> pairs[] = {
+      {"QUST", "FULL"}, {"PERK", "FULL"}, {"PERK", "DESC"}, {"PERK", "EPF2"},
+      {"SCOL", "FULL"}, {"WRLD", "FULL"}, {"REGN", "RDMP"}, {"TERM", "BTXT"},
+      {"TERM", "ITXT"}, {"TERM", "RNAM"}, {"TERM", "UNAM"}, {"RACE", "TTGP"},
+      {"RACE", "MPPN"}, {"RACE", "FMRN"}, {"NPC_", "FULL"}, {"NPC_", "SHRT"},
+      {"NPC_", "ATTX"}, {"MISC", "FULL"}, {"OMOD", "FULL"}, {"OMOD", "DESC"},
+      {"INNR", "WNAM"}, {"BPTD", "BPTN"}, {"CELL", "FULL"}, {"COBJ", "DESC"},
+      {"FLST", "FULL"}};
+  for (const auto& [record, subrecord] : pairs) {
+    EXPECT_TRUE(fo4::schema::is_localized_field(fo4::Signature::from_string(record),
+                                                fo4::Signature::from_string(subrecord)))
+        << record << " " << subrecord;
+  }
+  EXPECT_FALSE(fo4::schema::is_localized_field(fo4::Signature::from_string("TERM"),
+                                               fo4::Signature::from_string("SNAM")));
+  EXPECT_FALSE(fo4::schema::is_localized_field(k_race, fo4::Signature::from_string("DATA")));
+}
+
+TEST(LocalizedFields, Wp10NewPairRoundTripsAStringId) {
+  const auto plugin = plugin_with_flags(0x80);
+  const auto shrt = fo4::Signature::from_string("SHRT");
+  const auto value = fo4::schema::read_localized_string(plugin, k_npc, shrt, make(shrt, id(0x4321)));
+  ASSERT_TRUE(value.localized());
+  EXPECT_EQ(*value.id, 0x4321u);
+  EXPECT_FALSE(value.text.has_value());
+  EXPECT_EQ(fo4::schema::write_localized_string(value), id(0x4321));
+}
