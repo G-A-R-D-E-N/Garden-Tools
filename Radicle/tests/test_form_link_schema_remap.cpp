@@ -252,21 +252,21 @@ TEST(FormLinkSchemaRemap, RekeyChangesSchemaRowLinks) {
   }
 }
 
-TEST(FormLinkSchemaRemap, OversizedWeaponDnamBytesAreNotRemapped) {
-  const auto rows = rows_for("WEAP", "DNAM");
+TEST(FormLinkSchemaRemap, OversizedAmmoDnamBytesAreNotRemapped) {
+  const auto rows = rows_for("AMMO", "DNAM");
   ASSERT_FALSE(rows.empty());
-  auto dnam = zeroed(136);
+  auto dnam = zeroed(rows.front()->payload_sizes[0] + 4);
   for (const auto* row : rows) put_value(dnam, link_offset(*row), k_fallout_link, 4);
   const auto original = dnam;
-  auto plugin = single_record_plugin("Remap.esp", "WEAP", {{"DNAM", dnam}},
+  auto plugin = single_record_plugin("Remap.esp", "AMMO", {{"DNAM", dnam}},
                                      {"Fallout4.esm", "Other.esm"}, 0x02000802u);
   plugin = fo4::remap_plugin_masters(
       std::move(plugin), std::vector<fo4::PluginKey>{fo4::PluginKey::from_filename("Other.esm"),
                                                      fo4::PluginKey::from_filename("Fallout4.esm")});
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Remap.esp");
-  const auto* weap = fo4::find_record(reread, fo4::FormKey::parse("000802:Remap.esp"));
-  ASSERT_NE(weap, nullptr);
-  const auto* sub = find_sub(*weap, fo4::Signature::from_string("DNAM"));
+  const auto* ammo = fo4::find_record(reread, fo4::FormKey::parse("000802:Remap.esp"));
+  ASSERT_NE(ammo, nullptr);
+  const auto* sub = find_sub(*ammo, fo4::Signature::from_string("DNAM"));
   ASSERT_NE(sub, nullptr);
   EXPECT_EQ(sub->data, original);
 }
@@ -290,14 +290,14 @@ TEST(FormLinkSchemaRemap, FailedWhenGateSkipsSchemaRow) {
   }
 }
 
-TEST(FormLinkSchemaRemap, DuplicateNonRepeatedRowYieldsNoSchemaHits) {
-  const auto rows = rows_for("WEAP", "DNAM");
+TEST(FormLinkSchemaRemap, DuplicateNonRepeatedAmmoDnamYieldsNoSchemaHits) {
+  const auto rows = rows_for("AMMO", "DNAM");
   ASSERT_FALSE(rows.empty());
   const auto size = rows.front()->payload_sizes[0];
   auto dnam = zeroed(size);
   for (const auto* row : rows) put_value(dnam, link_offset(*row), k_fallout_link, 4);
   const auto hits = fo4::collect_form_links(single_record_plugin(
-      "Schema.esp", "WEAP", {{"DNAM", dnam}, {"DNAM", dnam}}, {}, k_own_record));
+      "Schema.esp", "AMMO", {{"DNAM", dnam}, {"DNAM", dnam}}, {}, k_own_record));
   for (const auto* row : rows) {
     EXPECT_EQ(hits_at(hits, "DNAM", link_offset(*row)), 0u);
   }

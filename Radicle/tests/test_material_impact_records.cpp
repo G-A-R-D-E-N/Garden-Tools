@@ -252,8 +252,8 @@ TEST(MaterialImpactSynthetic, EditsOneRowPerRecordAndRereads) {
       ASSERT_GE(link_sub->data.size(), link->offset + sizeof(std::uint32_t));
       const auto* first = link_sub->data.data() + link->offset;
       const Bytes stored(first, first + sizeof(std::uint32_t));
-      const auto expected = raw_id(fo4::FormKey::parse(item.link_target).local().value());
-      EXPECT_EQ(stored, u32_bytes(expected)) << item.link_path;
+      const auto expected_link = raw_id(fo4::FormKey::parse(item.link_target).local().value());
+      EXPECT_EQ(stored, u32_bytes(expected_link)) << item.link_path;
     }
   }
 }
