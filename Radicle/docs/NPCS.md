@@ -78,26 +78,27 @@ From `wbTemplateFlags` (Common:8155-8178), FO4 names:
 | --- | --- | --- | --- |
 | SNAM | Faction form ID + Rank | 5 bytes: form ID u32, Rank s8 | wbFaction, Common:8527-8538 (FO4 drops the 3 unused bytes: IsFO4Plus(nil, wbUnused(3))); list at FO4:10347 |
 | PRKZ | Count | u32 | FO4:10384 |
-| PRKR | Perk FormID + Rank | 5 bytes: FormID u32, Rank u8 | FO4:10385-10393 (`SetCountPath(PRKZ)`) |
+| PRKR | Perk form ID + Rank | 5 bytes: form ID u32, Rank u8 | FO4:10385-10393 (`SetCountPath(PRKZ)`) |
 | COCT | Count | u32 | FO4:10397; wbCOCT FO4:3315 |
-| CNTO | Item FormID + Count | 8 bytes: FormID u32, Count s32 | wbCNTO FO4:3300-3305 |
-| COED | Owner, global/rank, condition | 12 bytes: Owner FormID u32, u32, float | wbCOED FO4:3290-3298 |
+| CNTO | Item form ID + Count | 8 bytes: form ID u32, Count s32 | wbCNTO FO4:3300-3305 |
+| COED | Owner, global/rank, condition | 12 bytes: Owner form ID u32, u32, float | wbCOED FO4:3290-3298 |
 
 Decode rules:
 
 - Each list is read in subrecord order.
 - A payload of the wrong size throws `NpcError`.
-- A null FormID throws, except COED owner, which decodes to no owner. xEdit's `wbFormIDCk` for SNAM ([FACT]), PRKR ([PERK]) and CNTO (`sigBaseObjects`, NULL excluded) does not allow null; COED owner allows NULL (FO4:3291).
+- A null form ID throws, except COED owner, which decodes to no owner. xEdit's `wbFormIDCk` for SNAM ([FACT]), PRKR ([PERK]) and CNTO (`sigBaseObjects`, NULL excluded) does not allow null; COED owner allows NULL (FO4:3291).
 - PRKZ must equal the number of PRKR entries when present, or decode throws. xEdit uses it as the count path (FO4:10393). COCT is not checked: decode returns the CNTO entries present, and edits rewrite COCT to the CNTO count (xEdit 93cc0bc5 Core/wbDefinitionsFO4.pas:3315-3316, COCT cpBenign, count path of the CNTO array).
 - COED must immediately follow its CNTO. xEdit nests COED inside the CNTO group (FO4:3300-3314).
 
-COED's third field is `global_or_rank`, stored raw. xEdit reads it as a Global FormID or as a required rank s32 depending on the owner: `wbCOEDOwnerDecider` (Common:5451-5469) selects rank for NPC_ or FACT owners. Radicle keeps the raw `u32`.
+COED's third field is `global_or_rank`, stored raw. xEdit reads it as a Global form ID or as a required rank s32 depending on the owner: `wbCOEDOwnerDecider` (Common:5451-5469) selects rank for NPC_ or FACT owners. Radicle keeps the raw `u32`.
 
 Edit rules:
 
 - Add, remove at index, and set at index for each list. Remove and set on an out-of-range index throw. Add, remove and set return `false` when the stored bytes would not change.
 - The list's own subrecords are replaced as one run. A run with other subrecords between its entries is refused.
-- Removing the last entry drops PRKZ or COCT with the run.
+- Removing the last entry keeps PRKZ or COCT at 0. xEdit sets the count element to 0 and keeps it (`Core/wbImplementation.pas:20774-20797`, `TwbSubRecordArray.BeforeActualRemove`).
+- A local CNTO item must be a base object (`is_sig_base_object`, the xEdit `sigBaseObjects` list at `Core/wbDefinitionsFO4.pas:74`), and a local COED owner must be NPC_ or FACT (`Core/wbDefinitionsFO4.pas:3291`). Foreign keys are not checked.
 - A missing run is inserted after the last subrecord that xEdit orders before it. The order is `k_order` in `src/forms/npc.cpp`. A record with no earlier subrecord (no ACBS) is refused.
 
 ## Not covered
@@ -106,18 +107,18 @@ Edit rules:
 | --- | --- | --- |
 | FO4:10298-10346 | ACBS unused bytes (offset 18) | Padding. |
 | FO4:10347, 10377 | Attacks (ATKD and the rest of `wbAttackData`) | Repeated struct. Only the ATKD payload is in authoring; the list is not modeled. Factions (10347) are covered above. |
-| FO4:10348-10369 | INAM, VTCK, TPLT, LTPT, LTPC, TPTA | FormIDs, not scalars. TPTA is a thirteen-FormID struct. Covered by the FormLink tables where they exist. |
-| FO4:10370-10383 | RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR | FormIDs, not scalars. |
+| FO4:10348-10369 | INAM, VTCK, TPLT, LTPT, LTPC, TPTA | form IDs, not scalars. TPTA is a thirteen-form ID struct. Covered by the FormLink tables where they exist. |
+| FO4:10370-10383 | RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR | form IDs, not scalars. |
 | FO4:10371, 10372 | SPCT count, SPLO list | Count with no typed owner; a generic write would desync it from SPLO. |
-| FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | PRPS is an object property list; FTYP and NTRM are FormIDs; PKID is a repeated FormID list. |
+| FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | PRPS is an object property list; FTYP and NTRM are form IDs; PKID is a repeated form ID list. |
 | FO4:10403-10404 | KWDA/KSIZ keywords, APPR | Covered by the keyword FormLink tables. |
 | FO4:10405 | Object template OBTE/OBTF/OBTS/STOP | Combination struct; not modeled. |
-| FO4:10406-10408 | CNAM, FULL, SHRT | CNAM is a FormID. FULL and SHRT are localized strings; NPC_ is not in `localized_subrecords`, so localization is unchanged. |
+| FO4:10406-10408 | CNAM, FULL, SHRT | CNAM is a form ID. FULL and SHRT are localized strings; NPC_ is not in `localized_subrecords`, so localization is unchanged. |
 | FO4:10409 | DATA | Empty marker subrecord; authoring only. |
-| FO4:10417-10421 | PNAM head parts, HCLF, BCLF, ZNAM, GNAM | FormIDs or a repeated FormID list. |
+| FO4:10417-10421 | PNAM head parts, HCLF, BCLF, ZNAM, GNAM | form IDs or a repeated form ID list. |
 | FO4:10422 | NAM5 | Unknown bytes of no fixed width. |
 | FO4:10432-10436 | CS2H count, CS2K/CS2D sound pairs, CS2E, CS2F | Count and list members are not modeled; CS2H has no typed owner, as with SPCT. |
-| FO4:10438-10444 | CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST | FormIDs. |
+| FO4:10438-10444 | CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST | form IDs. |
 | FO4:10446-10447 | MSDK, MSDV | Morph arrays of variable length. |
 | FO4:10448-10462 | TETI, TEND face tint layers | Repeated struct list; not modeled. |
 | FO4:10471-10486 | FMRI, FMRS face morphs | Repeated struct list; not modeled. |

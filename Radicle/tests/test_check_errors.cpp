@@ -288,6 +288,30 @@ TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
   }
 }
 
+TEST(CheckErrors, MissingBranchStartingTopicIsReportedOnce) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "DLBR", 0);
+  const auto record = fo4::test::begin_record(out, "DLBR", 0, 0x000820);
+  fo4::test::ByteWriter snam;
+  snam.u32(0x000830);
+  fo4::test::write_subrecord(out, "SNAM", snam.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = fo4::check_load_order(load_order);
+  const auto snam_findings = std::count_if(findings.begin(), findings.end(),
+                                           [](const fo4::CheckFinding& finding) {
+                                             return finding.subrecord.to_string() == "SNAM";
+                                           });
+  EXPECT_EQ(snam_findings, 1);
+  const auto starting = of_code(findings, fo4::CheckCode::branch_starting_topic_not_dial);
+  ASSERT_EQ(starting.size(), 1u);
+  EXPECT_EQ(starting[0].target, fo4::FormKey::parse("000830:Mod.esp"));
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());
+}
+
 TEST(CheckErrors, NoneFormIdIsNotALink) {
   fo4::test::ByteWriter out;
   write_header(out, {});
