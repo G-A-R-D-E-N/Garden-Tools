@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
@@ -64,33 +65,46 @@ std::vector<std::byte> words(std::initializer_list<std::uint32_t> values) {
   return out.bytes;
 }
 
+struct LctnCase {
+  std::string_view signature;
+  std::size_t stride;
+  std::vector<std::size_t> slots;
+};
+
+std::vector<std::byte> lctn_words(std::size_t size, const std::vector<std::size_t>& slots,
+                                  std::uint32_t mask) {
+  std::vector<std::byte> data(size);
+  for (std::size_t offset = 0; offset < size; offset += 4) {
+    auto value = static_cast<std::uint32_t>(0x1100 + offset / 4);
+    if (std::find(slots.begin(), slots.end(), offset) != slots.end()) value |= mask;
+    std::memcpy(data.data() + offset, &value, 4);
+  }
+  return data;
+}
+
 }  // namespace
 
 TEST(RecordStructRemap, LctnEntriesRemapFormIdSlotsOnly) {
+  const std::vector<LctnCase> cases = {
+      {"ACPR", 12, {0, 4}}, {"LCPR", 12, {0, 4}}, {"RCPR", 4, {0}},
+      {"ACUN", 12, {0, 4, 8}}, {"LCUN", 12, {0, 4, 8}}, {"RCUN", 4, {0}},
+      {"ACSR", 16, {0, 4, 8}}, {"LCSR", 16, {0, 4, 8}}, {"RCSR", 4, {0}},
+      {"ACEC", 12, {0}}, {"LCEC", 12, {0}}, {"RCEC", 12, {0}},
+      {"ACID", 4, {0}}, {"LCID", 4, {0}},
+      {"ACEP", 12, {0, 4}}, {"LCEP", 12, {0, 4}},
+  };
+  std::vector<Sub> subs;
+  for (const auto& entry : cases) {
+    subs.emplace_back(entry.signature, lctn_words(entry.stride, entry.slots, 0));
+  }
   auto out = plugin_with_masters();
-  append_record(out, "LCTN", 0x02000100,
-                {{"ACPR", payload(12, {{0, 0x1100}, {4, 0x1101}, {8, 0x00030002}})},
-                 {"RCPR", payload(4, {{0, 0x1102}})},
-                 {"ACUN", payload(12, {{0, 0x1103}, {4, 0x1104}, {8, 0x1105}})},
-                 {"ACSR", payload(16, {{0, 0x1106}, {4, 0x1107}, {8, 0x1108}, {12, 0x00050004}})},
-                 {"ACEC", payload(12, {{0, 0x1109}, {4, 0x00070006}, {8, 0x00090008}})},
-                 {"ACID", payload(4, {{0, 0x110A}})},
-                 {"ACEP", payload(12, {{0, 0x110B}, {4, 0x110C}, {8, 0x00000001}})}});
+  append_record(out, "LCTN", 0x02000100, subs);
   const auto reread = reread_swapped(out);
-  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "ACPR"),
-            payload(12, {{0, 0x01001100}, {4, 0x01001101}, {8, 0x00030002}}));
-  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "RCPR"),
-            payload(4, {{0, 0x01001102}}));
-  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "ACUN"),
-            payload(12, {{0, 0x01001103}, {4, 0x01001104}, {8, 0x01001105}}));
-  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "ACSR"),
-            payload(16, {{0, 0x01001106}, {4, 0x01001107}, {8, 0x01001108}, {12, 0x00050004}}));
-  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "ACEC"),
-            payload(12, {{0, 0x01001109}, {4, 0x00070006}, {8, 0x00090008}}));
-  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "ACID"),
-            payload(4, {{0, 0x0100110A}}));
-  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "ACEP"),
-            payload(12, {{0, 0x0100110B}, {4, 0x0100110C}, {8, 0x00000001}}));
+  for (const auto& entry : cases) {
+    EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", entry.signature),
+              lctn_words(entry.stride, entry.slots, 0x01000000))
+        << entry.signature;
+  }
 }
 
 TEST(RecordStructRemap, BodyPartNodeRemapsElevenSlots) {
