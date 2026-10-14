@@ -2242,3 +2242,11 @@ Skipped on purpose:
 - RACE TETI, TTEF, TTGE and TTEB have no form ID. Template conditions stay on the CTDA path.
 - REGN RDMO and WNAM are unchanged.
 - Malformed sizes on every rule above fail closed in strict mode. Test `RecordStructRemap.MalformedSizesFailClosedWithoutMutation`.
+
+## Listed form ID signatures with other sizes (#602 R-1)
+
+- `Radicle/src/schema/form_links.cpp:visit_link_offsets` remaps a signature from the global table only when the payload is exactly 4 bytes; any other size falls through silently, in strict mode too. A survey of the seven masters (2,192,237 records, 179 listed signatures) found 1,535 (record, subrecord, size) combinations that no handler claims, in 144 (record, subrecord) pairs. 137 of those pairs hold strings, flags, scalars or float structs (for example STAT MNAM, NPC_ DNAM, the IMAD and IMGS blocks, WRLD DNAM), so the fall-through is right for them.
+- `Radicle/src/schema/form_link_records.cpp:record_fixed_layout_offsets` MUST SNAM: the Tracks array of MUST form IDs (xEdit `wbDefinitionsFO4.pas:8816`), 41 vanilla payloads of 28 to 248 bytes. Packed stride 4. Test `RecordStructRemap.MusicTrackListRemaps`.
+- `Radicle/src/schema/form_link_records.cpp:transient_type_offsets` TES4 TNAM: Transient Type, a u32 form type (78 DIAL, 126 SCEN) then an array of DIAL or SCEN form IDs (xEdit `wbDefinitionsFO4.pas:12114-12125`), 11 vanilla payloads of 8 to 14,276 bytes. The form type word is never remapped. `visit_records` reaches the TES4 header (`include/fo4/plugin/visit.hpp`). Test `RecordStructRemap.HeaderTransientTypesRemapReferencesNotFormType`.
+- AMMO DNAM (16), CPTH ANAM (8), STAT DNAM (8 and 16) and ZOOM GNAM (24) also fall through `visit_link_offsets`, but `src/schema/form_link_schema.cpp:schema_formlink_offsets` remaps their form ID slots from the generated field rows, so they are covered.
+- Not done: a strict-mode throw on the remaining fall-through. Every strict caller scans the whole plugin (`rekey_form_links` from delete and renumber, `remap_form_links` from master changes and save, `remap_record_form_links` from copies), and STAT DNAM alone occurs 23,579 times, so a throw without a (record, subrecord, size) allow-list of the 137 non-form-ID pairs would break almost every plugin. The allow-list and the choice between throwing and only reporting are open on #602.
