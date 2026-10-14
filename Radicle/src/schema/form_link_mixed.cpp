@@ -52,6 +52,8 @@ constexpr auto k_npc_ = Signature::from_string("NPC_");
 constexpr auto k_tpta = Signature::from_string("TPTA");
 constexpr auto k_ovis = Signature::from_string("OVIS");
 constexpr auto k_indx = Signature::from_string("INDX");
+constexpr auto k_book = Signature::from_string("BOOK");
+constexpr auto k_mgef = Signature::from_string("MGEF");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -339,6 +341,13 @@ std::optional<std::vector<std::size_t>> obts_formid_offsets(const Subrecord& sub
   for (std::uint32_t i = 0; i < includes; ++i) {
     offsets.push_back(include_base + std::size_t{i} * 7);
   }
+  // xEdit wbOMODDataPropertyValue1Decider, wbDefinitionsFO4.pas:2382-2406
+  const auto property_base = include_base + std::size_t{includes} * 7;
+  for (std::uint32_t i = 0; i < properties; ++i) {
+    const auto row = property_base + std::size_t{i} * 24;
+    const auto value_type = std::to_integer<std::uint8_t>(sub.data[row]);
+    if (value_type == 4 || value_type == 6) offsets.push_back(row + 12);
+  }
   return offsets;
 }
 
@@ -525,6 +534,14 @@ const RecordStrideLayout k_record_stride_layouts[] = {
     {"TERM", {"SNAM", 24, {16}, false, 0, 125}},
     {"TERM", {"SNAM", 20, {16}, false, 0}},
     {"ALCH", {"ENIT", 20, {8, 16}, true, 0}},
+    // xEdit wbDefinitionsFO4.pas:12313-12320
+    {"DMGT", {"DNAM", 8, {0, 4}, false, 0, 78}},
+    {"DMGT", {"DNAM", 4, {}, false, 0}},
+    // xEdit wbDefinitionsFO4.pas:11011-11022
+    {"RACE", {"RBPC", 4, {0}, false, 0, 78}},
+    // xEdit wbDefinitionsFO4.pas:6519-6722
+    {"EFSH", {"DNAM", 157, {108}, true, 0, 106}},
+    {"EFSH", {"DNAM", 395, {241, 305}, true, 0}},
 };
 
 std::optional<std::vector<std::size_t>> record_stride_form_id_offsets(const Record& record,
@@ -540,10 +557,87 @@ std::optional<std::vector<std::size_t>> record_stride_form_id_offsets(const Reco
   return std::nullopt;
 }
 
+std::optional<std::vector<std::size_t>> book_teaches_formid_offsets(const Record& record,
+                                                                   const Subrecord& sub,
+                                                                   bool strict_remap) {
+  if (record.header.signature != k_book || sub.signature != k_dnam) return std::nullopt;
+  if (sub.data.size() != 13) {
+    if (strict_remap) throw FormIdError("cannot safely remap malformed BOOK DNAM payload");
+    return std::vector<std::size_t>{};
+  }
+  // xEdit wbDefinitionsFO4.pas:1618-1636 (decider), :5918-5923 (Teaches union)
+  const auto flags = std::to_integer<std::uint8_t>(sub.data[0]);
+  const bool form_id = (flags & 0x15) != 0;
+  return form_id ? std::vector<std::size_t>{1} : std::vector<std::size_t>{};
+}
+
+std::optional<std::vector<std::size_t>> omod_data_layout_offsets(const Subrecord& sub) {
+  const auto& data = sub.data;
+  if (data.size() < 24) return std::nullopt;
+
+  const auto includes = read_u32(data, 0);
+  const auto properties = read_u32(data, 4);
+  std::vector<std::size_t> offsets{16};
+  std::size_t cursor = 20;
+  if (!consume_counted_fixed(data, cursor, 4, [&](std::size_t base) {
+        offsets.push_back(base);
+      })) {
+    return std::nullopt;
+  }
+  if (!consume_counted_fixed(data, cursor, 8, [](std::size_t) {})) return std::nullopt;
+  if (cursor > data.size() || (data.size() - cursor) / 7 < includes) return std::nullopt;
+  for (std::size_t include = 0; include < includes; ++include) {
+    offsets.push_back(cursor + include * 7);
+  }
+  cursor += std::size_t{includes} * 7;
+  if (cursor > data.size() || data.size() - cursor != std::size_t{properties} * 24) {
+    return std::nullopt;
+  }
+  // xEdit wbOMODDataPropertyValue1Decider, wbDefinitionsFO4.pas:2382-2406
+  for (std::size_t row = cursor; row < data.size(); row += 24) {
+    const auto value_type = std::to_integer<std::uint8_t>(data[row]);
+    if (value_type == 4 || value_type == 6) offsets.push_back(row + 12);
+  }
+  return offsets;
+}
+
+std::optional<std::vector<std::size_t>> omod_data_formid_offsets(const Record& record,
+                                                                const Subrecord& sub,
+                                                                bool strict_remap) {
+  if (record.header.signature != k_omod || sub.signature != k_data) return std::nullopt;
+  // xEdit wbDefinitionsFO4.pas:12510-12537
+  if (auto offsets = omod_data_layout_offsets(sub)) return offsets;
+  if (strict_remap) throw FormIdError("cannot safely remap malformed OMOD DATA payload");
+  return std::vector<std::size_t>{};
+}
+
+bool mgef_assoc_item_is_formid(std::uint32_t archetype) {
+  switch (archetype) {
+    case 12: case 17: case 18: case 25: case 34: case 35:
+    case 36: case 39: case 40: case 45: case 46:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Must not own MGEF DATA: owning drops the schema formlink rows (form_link_schema.cpp).
+std::optional<std::vector<std::size_t>> mgef_assoc_item_formid_offsets(const Record& record,
+                                                                      const Subrecord& sub) {
+  if (record.header.signature != k_mgef || sub.signature != k_data || sub.data.size() != 152) {
+    return std::nullopt;
+  }
+  // xEdit wbDefinitionsFO4.pas:1367-1389 (decider), :10096-10110 (Assoc. Item), :10124 (Archetype)
+  if (!mgef_assoc_item_is_formid(read_u32(sub.data, 64))) return std::vector<std::size_t>{};
+  return std::vector<std::size_t>{8};
+}
+
 std::optional<std::vector<std::size_t>> mixed_formid_offsets(const Record& record,
                                                             const Subrecord& sub,
                                                             bool strict_remap) {
   if (auto behavior = behavior_formid_offsets(record, sub, strict_remap)) return behavior;
+  if (auto book = book_teaches_formid_offsets(record, sub, strict_remap)) return book;
+  if (auto omod = omod_data_formid_offsets(record, sub, strict_remap)) return omod;
   if (auto perk = perk_formid_offsets(record, sub)) return perk;
   if (auto packed = packed_formid_array_offsets(record, sub, strict_remap)) return packed;
   if (auto repeated = fixed_stride_formid_offsets(sub, record.header.form_version,
