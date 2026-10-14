@@ -61,6 +61,12 @@ public:
             "Native copy as disabled override is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> copyAsWrapper(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "CopyAsWrapperUnavailable",
+            "Native copy as wrapper is unavailable for this backend"
+        });
+    }
     virtual Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json&) {
         return std::unexpected(Error{
             "CleanMastersUnavailable",
