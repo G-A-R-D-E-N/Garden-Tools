@@ -6393,7 +6393,53 @@
       "fields": [],
       "localized_subrecords": [
         "CNAM",
-        "NNAM"
+        "NNAM",
+        "FULL"
+      ]
+    },
+    {
+      "signature": "PERK",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL",
+        "DESC",
+        "EPF2"
+      ]
+    },
+    {
+      "signature": "MISC",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "OMOD",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL",
+        "DESC"
+      ]
+    },
+    {
+      "signature": "REGN",
+      "fields": [],
+      "localized_subrecords": [
+        "RDMP"
+      ]
+    },
+    {
+      "signature": "SCOL",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "WRLD",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
       ]
     },
     {
@@ -6572,7 +6618,10 @@
       ],
       "localized_subrecords": [
         "FULL",
-        "DESC"
+        "DESC",
+        "TTGP",
+        "MPPN",
+        "FMRN"
       ]
     },
     {
@@ -13564,7 +13613,7 @@
           "insertion": "existing_only"
         }
       ],
-      "localized_subrecords": []
+      "localized_subrecords": ["WNAM"]
     },
     {
       "signature": "SOUN",
@@ -22136,7 +22185,11 @@
       "localized_subrecords": [
         "NAM0",
         "WNAM",
-        "FULL"
+        "FULL",
+        "BTXT",
+        "ITXT",
+        "RNAM",
+        "UNAM"
       ]
     },
     {
@@ -24529,7 +24582,7 @@
           "insertion": "existing_only"
         }
       ],
-      "localized_subrecords": []
+      "localized_subrecords": ["FULL", "SHRT", "ATTX"]
     }
   ],
   "keyword_records": [

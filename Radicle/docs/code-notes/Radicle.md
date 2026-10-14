@@ -2191,3 +2191,25 @@ Structured slot (`structured_formids.inc`, any record, payload at least 12 bytes
 - ATKD attack spell at offset 8: `wbAttackData` (`wbDefinitionsFO4.pas:4073-4119`), two floats, then the Attack Spell form ID, then attack flags. The struct is 44 bytes by its member sizes. Used by NPC_ (:10377) and RACE (:11211). ATKD is defined only in `wbDefinitionsFO4.pas`.
 
 Schema formlink rows (`schema/fallout4/fields.json`) hold none of these signatures as remap fields; they appear there only as authoring rows. `visit_formlink_offsets` also dedupes any overlap, so no offset is visited twice.
+
+## Localized subrecord gaps (#602 WP-10)
+
+Anchors: `Radicle/schema/fallout4/fields.json` (per-record `localized_subrecords`) and `Radicle/src/schema/localized_fields.cpp:is_localized_field`. The lists feed `Radicle/tools/lstring_schema_codegen.py`, which writes `Radicle/include/fo4/schema/generated_lstring_fields.inc`. `is_localized_field` reads that table, keyed by (record, subrecord).
+
+Each pair was checked in xEdit at pin 93cc0bc5 (`Core/wbDefinitionsFO4.pas`). The subrecord is declared as `wbLString` or `wbLStringKC`, directly or through the `wbFULL`, `wbFULLReq`, `wbDESC`, `wbDESCReq` (:3692-3695) and `wbATTX` (:5277) macros. Every other use of that signature inside the same record is also a localized string.
+
+Added:
+- QUST FULL: `wbFULL` (:10690).
+- PERK FULL and DESC: `wbFULL` and `wbDESCReq` (:7588-7589). EPF2: `wbLString(EPF2, 'Button Label')` (:7662), the only EPF2 definition. It is always a localized string in xEdit, whatever EPFT holds, so the table keys it unconditionally.
+- SCOL FULL (:12645), WRLD FULL (:13118), MISC FULL (:10221), REGN RDMP (:11904).
+- TERM BTXT (:12717), ITXT (:12729), RNAM (:12730) and UNAM (:12751), all `wbLStringKC`. TERM NAM0 and WNAM were already listed.
+- RACE TTGP (:3102, `wbTintTemplateGroups`), MPPN (:3140, `wbMorphGroups`) and FMRN (:3176, `wbFaceMorphs`). Only RACE calls these helpers (:11279-11299), so no other record gets the pairs.
+- NPC_ FULL (:10407), SHRT (:10408, `wbLStringKC`) and ATTX (:10488, `wbATTX`).
+- OMOD FULL and DESC (:12507-12508).
+- INNR WNAM (:12352, `wbLStringKC`).
+
+No candidate was rejected.
+
+PERK, SCOL, WRLD, REGN, MISC and OMOD had no `fields.json` entry. Each got a minimal entry (`fields: []`), as QUST already had. The other codegen scripts accept an empty `fields` list, and `Radicle/tools/parity_matrix.py --write` refreshed `Radicle/docs/FO4_PARITY.md` for the new localized counts.
+
+Effect: in a localized plugin these subrecords now read as string IDs through `read_localized_string`. `Radicle/src/plugin/field_writer.cpp` refuses inline text for them, `Radicle/src/plugin/subrecord_authoring.cpp:default_usable` drops their defaults, and `Radicle/src/schema/preflight.cpp` skips the size-4 zstring check. No top-level scalar row in `fields.json` uses these pairs, and no shipped reader calls `read_localized_string` for them yet. Tests: `Radicle/tests/test_localized_fields.cpp:Wp10LocalizedPairsAreMembers` and `Wp10NewPairRoundTripsAStringId`.
