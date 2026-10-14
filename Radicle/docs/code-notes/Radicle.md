@@ -2160,3 +2160,29 @@ Strict mode: `StructPayloadRemap.WrongStrideSizeFailsClosedWithoutMutation`.
 ## Radicle/src/forms/placed_reference_edit.cpp:set_placed_reference_record_flags — Deleted bit kept
 
 `set_placed_reference_record_flags` keeps the record's compressed, persistent and Deleted bits and takes the other bits from the caller. Deleted is never set or cleared here, because deleting needs the content stripped (xEdit `SetDeleted` in `Core/wbImplementation.pas`). Reason: #602 D-6. Test: `Radicle/tests/test_environment_ref_fields.cpp:RecordFlagsNeverToggleDeleted`.
+
+## src/schema/form_links.cpp:is_listed_formid_signature (generator gaps, #602 WP-3)
+
+Each row below was read in xEdit at pin 93cc0bc5 (`Core/wbDefinitionsFO4.pas` and `Core/wbDefinitionsCommon.pas`) before coding, and every definition of the signature in both files was checked. Tests are in `Radicle/tests/test_generator_gap_remap.cpp` (`GeneratorGapRemap.*`). The static deny pass (`non_formid_slots.py --check-static`) reports no scalar pair for any added signature, so `XEDIT_DENIED` is unchanged.
+
+Global signatures (`formid_subrecords.inc`, 4-byte payload, any record):
+- EITM: the only definition is `wbEnchantment` (`wbDefinitionsCommon.pas:8486-8489`, form ID when not TES4). Used by ARMO (`wbDefinitionsFO4.pas:5798`), EXPL (:7339) and WEAP (:12891).
+- CS2K and CS2D: NPC_ sound pairs in `wbActorSounds` (`wbDefinitionsCommon.pas:8399-8405`), used at `wbDefinitionsFO4.pas:10434`.
+- PLYR: the PLYR record's own subrecord, `wbFormID(PLYR, 'Player')` (`wbDefinitionsFO4.pas:12131`).
+- HEAD: `wbHeadPart` (`wbDefinitionsCommon.pas:8583`), used only for RACE head parts (`wbDefinitionsFO4.pas:11274` and :11292). No other record defines HEAD.
+- MDOB: `wbMDOB` (`wbDefinitionsCommon.pas:8877`), used only by MGEF (`wbDefinitionsFO4.pas:10056`).
+
+Keyword array (`is_formid_array_signature`):
+- APPR: `wbArrayS(APPR, ..., wbFormIDCk('Keyword', [KYWD]))` (`wbDefinitionsFO4.pas:5275`), used by ARMO (:5841), FURN (:6916), NPC_ (:10404), RACE (:11068) and WEAP (:12901). Every element is a keyword form ID.
+
+Record-qualified (`packed_formid_array_offsets`, not global, because MODL and INDX are not form IDs in other records):
+- ARMO MODL: the Armor Addon form ID inside the Models struct (`wbDefinitionsFO4.pas:5823-5825`, after INDX).
+- ARMA MODL: one RACE form ID per repeated subrecord (`wbDefinitionsFO4.pas:5885`).
+- MODL is a model path string through `wbGenericModel` (`wbDefinitionsFO4.pas:1034`). ARMO and ARMA do not use that helper: its users between lines 5786 and 5890 are none, and ANIO (:5782) and BOOK (:5897) sit outside that range.
+- NPC_ TPTA: 13 form IDs, 52 bytes (`wbDefinitionsFO4.pas:10353-10366`, entries from `wbNPCTemplateActorEntry`, `wbDefinitionsCommon.pas:8274-8277`).
+- OVIS INDX: `wbFormIDCk(INDX, 'Object', [STAT])` (`wbDefinitionsFO4.pas:12550`). INDX is an integer in NOCM (:12462) and in other records.
+
+Structured slot (`structured_formids.inc`, any record, payload at least 12 bytes):
+- ATKD attack spell at offset 8: `wbAttackData` (`wbDefinitionsFO4.pas:4073-4119`), two floats, then the Attack Spell form ID, then attack flags. The struct is 44 bytes by its member sizes. Used by NPC_ (:10377) and RACE (:11211). ATKD is defined only in `wbDefinitionsFO4.pas`.
+
+Schema formlink rows (`schema/fallout4/fields.json`) hold none of these signatures as remap fields; they appear there only as authoring rows. `visit_formlink_offsets` also dedupes any overlap, so no offset is visited twice.
