@@ -309,6 +309,16 @@ TEST_F(RefFieldsTest, EditsEveryWritebackFieldAndReloads) {
   EXPECT_EQ(find_sub(*fo4::find_record(patch_, achr), "XRNK"), nullptr);
 }
 
+TEST_F(RefFieldsTest, RecordFlagsNeverToggleDeleted) {
+  namespace f = fo4::forms;
+  const auto refr = key("Master.esm", 0x821);
+  ASSERT_TRUE(f::set_placed_reference_record_flags(patch_, refr, 0x800 | fo4::RecordFlags::deleted));
+  const auto* r = fo4::find_record(patch_, refr);
+  ASSERT_NE(r, nullptr);
+  EXPECT_FALSE(r->header.flags.is_deleted());
+  EXPECT_NE(r->header.flags.value() & 0x800u, 0u);
+}
+
 TEST_F(RefFieldsTest, RejectsBadInputWithoutChangingThePlugin) {
   namespace f = fo4::forms;
   const auto refr = key("Master.esm", 0x821);

@@ -1170,7 +1170,7 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 - **`XPRM`:** stored (undoubled) bounds and the type at offset 28. It is written only when present; colors and the unknown float are kept.
 - **`XAPR`:** delay at offset 4 of the n-th entry. Written only when that entry exists.
 - **EditorID and comments:** empty or `nullopt` removes the subrecord, as Mutagen writes nothing for a null string. Embedded NUL is rejected.
-- **Record flags:** the compression and persistent bits are kept. Persistence decides whether the ref sits in the CELL's persistent or temporary child group, and a flag edit must not leave it in the wrong one.
+- **Record flags:** the compression, persistent and Deleted bits are kept (Deleted too because deleting needs the content stripped, #602 D-6). Persistence decides whether the ref sits in the CELL's persistent or temporary child group, and a flag edit must not leave it in the wrong one.
 
 **Masters.** A FormKey whose owner is neither the plugin nor one of its masters throws in C++. The C ABI resolves such owners through the environment:
 - It adds each one as a master with that plugin's full/light kind.
@@ -1187,16 +1187,16 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 **C++ contract (`Radicle/include/fo4/forms/placed_reference.hpp`).** Every `set_placed_reference_*` edit returns false (or `PresentFieldEdit::record_missing`) when the record is absent. It throws `PlacedReferenceError` for a non-placed record, a malformed existing field, or a FormKey whose owner is neither the plugin nor one of its masters; otherwise it leaves every other subrecord untouched.
 - `set_placed_reference_scale`: sets `XSCL`, or removes it for `nullopt`.
 - `set_placed_reference_editor_id`: sets `EDID`, or removes it for an empty id.
-- `set_placed_reference_record_flags`: replaces the header flags; the compression and persistent bits stay as stored.
+- `set_placed_reference_record_flags`: replaces the header flags; the compression, persistent and Deleted bits stay as stored.
 - `set_placed_reference_comments` / `set_placed_reference_location_reference`: set `MNAM` / `XLRL`, or remove them for `nullopt`.
 - `set_placed_reference_ownership`: sets `XOWN` (existing unknown bytes kept) and `XRNK`; a `nullopt` owner removes both and a `nullopt` rank removes `XRNK`.
 - `set_placed_reference_enable_parent`: sets `XESP` {parent, flags} (existing unknown bytes kept), or removes it for `nullopt`.
 - `set_placed_reference_linked_references`: replaces every `XLKR` with the given links in order; a `LinkedReferenceEdit::keyword` of `nullopt` writes a null form ID.
 - `set_placed_reference_teleport`, `set_placed_reference_primitive` and `set_placed_reference_activate_parent_delay` only change a field that already exists, as GardenEngine's writeback does, and return `field_absent` otherwise. Primitive bounds are the stored (undoubled) `XPRM` values that `decode_placed_reference` returns.
-- `Radicle/src/forms/placed_reference_edit.cpp:edit_placed` runs the edit on a copy and commits only when it returns true. `insertion_point` places a new subrecord before the first existing one that xEdit orders after it (`field_rank` uses xEdit FO4 order at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `wbRefRecord(REFR`, `wbRefRecord(ACHR` and `ReferenceRecord` for placed projectiles and hazards; signatures missing from the list are never anchors), and `single` treats a repeated field as malformed. `set_placed_reference_record_flags` keeps persistence (it decides the CELL child group) and compression (how the payload is stored). `set_placed_reference_ownership` follows Mutagen `Ownership.xml` (Owner, Int32 Unknown, NoCrime as a 4-byte bool); xEdit reads the flag from the low byte.
+- `Radicle/src/forms/placed_reference_edit.cpp:edit_placed` runs the edit on a copy and commits only when it returns true. `insertion_point` places a new subrecord before the first existing one that xEdit orders after it (`field_rank` uses xEdit FO4 order at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `wbRefRecord(REFR`, `wbRefRecord(ACHR` and `ReferenceRecord` for placed projectiles and hazards; signatures missing from the list are never anchors), and `single` treats a repeated field as malformed. `set_placed_reference_record_flags` keeps persistence (it decides the CELL child group) and compression (how the payload is stored) and Deleted (deleting needs the content stripped, #602 D-6). `set_placed_reference_ownership` follows Mutagen `Ownership.xml` (Owner, Int32 Unknown, NoCrime as a 4-byte bool); xEdit reads the flag from the low byte.
 
 **C ABI contract (`Radicle/include/fo4/c_api_env.h:radicle_plugin_set_placed_*`).** Each returns `NOT_FOUND` when the plugin lacks the record and `INVALID_ARGUMENT` for a non-placed record or a malformed field. Edits that take a FormKey add any owner `env` loads as a master and keep masters in `env` load order; an owner `env` does not load is `INVALID_ARGUMENT`. A key whose `plugin` is NULL means "clear"; any other key must be a valid FormKey.
-- `radicle_plugin_set_placed_record_flags` keeps the compression and persistent bits as stored.
+- `radicle_plugin_set_placed_record_flags` keeps the compression, persistent and Deleted bits as stored.
 - `radicle_plugin_set_placed_comments` with `comments == NULL` removes `MNAM`.
 - `radicle_plugin_set_placed_ownership`: a cleared owner removes `XOWN` and `XRNK`; `has_rank == 0` removes `XRNK`.
 - `radicle_plugin_set_placed_linked_refs` replaces all `XLKR` in order; a cleared keyword writes a null form ID.
@@ -1329,7 +1329,7 @@ CTest runs them with `-DRADICLE_CSHARP_TESTS=ON`. The option is off by default s
   - `Write` is atomic: the file at the path is untouched on failure.
   - `CopyPlacedOverride` (Mutagen's `GetOrAddAsOverride`) copies a record version with its CELL/WRLD containment and masters.
   - Null removes `XSCL`; null or empty removes `EDID`.
-  - Record flags keep the compression and persistent bits as stored; a null owner removes ownership and faction rank.
+  - Record flags keep the compression, persistent and Deleted bits as stored; a null owner removes ownership and faction rank.
   - Teleport returns false when the reference or its existing `XTEL` is absent. Primitive takes the stored `XPRM` bounds and returns false when the reference or its existing `XPRM` is absent. The activate-parent delay returns false when the reference or that activate parent is absent.
 - `Radicle.Interop.Tests/AbiLayoutTests.cs` reads `RADICLE_ABI_PROBE`, the built `abi_layout_probe` binary that prints C `sizeof`/`offsetof` lines. `Radicle.Interop.Tests/Fixtures.cs` is a minimal FO4 plugin writer (records and groups laid out as the engine reads them) and builds a GNRL v1 BA2 with stored chunks and a name table. The `EnvironmentTests.cs` fixture `Master.esm` holds STAT 000810 (model), WRLD 000800 with top cell 000801 and exterior cell 000802 (REFR 000803, ACHR 000804, LAND 000805), and interior CELL 000820 with REFR 000821; `Patch.esp` moves REFR 000803.
 - `tools/generate_interop.py`: arrays of pointers become numbered fields, fixed buffers take only primitives, and a handle or C string is already one pointer level. The generated files' headers say edits must go through the generator.
