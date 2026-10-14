@@ -63,14 +63,14 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | AVIF | 7826 | 3 | - | - | - | 3 | yes | - | - | - | 2 | L4 |
 | BNDS | 12280 | 8 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | - | 1 | L4 |
-| BPTD | 7693 | - | - | - | - | - | - | - | - | - | - | L0 |
+| BPTD | 7693 | - | - | - | - | 1 | - | - | - | - | - | L0 |
 | CAMS | 7880 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | - | - | - | - | - | - | - | forms/cell, environment/world | yes | 1 | L2 |
+| CELL | 5953 | - | - | - | - | 1 | - | - | forms/cell, environment/world | yes | 1 | L2 |
 | CLAS | 6102 | 1 | 1 | - | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
 | CMPO | 12294 | 1 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| COBJ | 10266 | - | - | - | - | - | - | - | forms/components | yes | - | L2 |
+| COBJ | 10266 | - | - | - | - | 1 | - | - | forms/components | yes | - | L2 |
 | COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
 | CONT | 6176 | 10 | 1 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
 | CPTH | 7930 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -92,7 +92,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |
 | FLOR | 12167 | 5 | - | 2 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
-| FLST | 7574 | - | - | - | 1 | - | - | - | - | - | - | L3 |
+| FLST | 7574 | - | - | - | 1 | 1 | - | - | - | - | - | L3 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FURN | 6848 | 9 | 2 | 6 | - | 2 | yes | yes | - | yes | 1 | L4 |
@@ -215,11 +215,14 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | AVIF | 1 | - | 1 | 1 | - | f32, u32 | - | - | - | existing_only |
 | BNDS | 7 | - | 1 | - | - | f32, u16 | - | - | - | existing_only |
 | BOOK | 11 | - | - | 1 | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
+| BPTD | - | - | - | - | - | - | - | - | - | - |
 | CAMS | 12 | - | 3 | 1 | - | f32, u32 | - | - | - | existing_only |
+| CELL | - | - | - | - | - | - | - | - | - | - |
 | CLAS | 1 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | CLFM | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CMPO | 1 | - | - | - | - | u32 | - | - | - | existing_only |
+| COBJ | - | - | - | - | - | - | - | - | - | - |
 | COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | CONT | 9 | - | - | 1 | 1 | f32, i16, i32, u32, u8 | 2 | - | - | existing_only |
 | CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |

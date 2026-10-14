@@ -16014,6 +16014,27 @@
       "localized_subrecords": ["FULL"]
     },
     {
+      "signature": "BPTD",
+      "fields": [],
+      "localized_subrecords": [
+        "BPTN"
+      ]
+    },
+    {
+      "signature": "CELL",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "COBJ",
+      "fields": [],
+      "localized_subrecords": [
+        "DESC"
+      ]
+    },
+    {
       "signature": "FLST",
       "formlink_lists": [
         {
@@ -16027,7 +16048,9 @@
         }
       ],
       "fields": [],
-      "localized_subrecords": []
+      "localized_subrecords": [
+        "FULL"
+      ]
     },
     {
       "signature": "SMBN",

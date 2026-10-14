@@ -289,7 +289,6 @@ TEST(LocalizedFields, QuestStructureCallerReportsNonFourByteObjectiveTextAsMalfo
   EXPECT_EQ(objective_bytes, truncated);
 }
 
-// #602 WP-10: lstring pairs added to the localized-field table.
 TEST(LocalizedFields, Wp10LocalizedPairsAreMembers) {
   const std::pair<const char*, const char*> pairs[] = {
       {"QUST", "FULL"}, {"PERK", "FULL"}, {"PERK", "DESC"}, {"PERK", "EPF2"},
@@ -297,7 +296,8 @@ TEST(LocalizedFields, Wp10LocalizedPairsAreMembers) {
       {"TERM", "ITXT"}, {"TERM", "RNAM"}, {"TERM", "UNAM"}, {"RACE", "TTGP"},
       {"RACE", "MPPN"}, {"RACE", "FMRN"}, {"NPC_", "FULL"}, {"NPC_", "SHRT"},
       {"NPC_", "ATTX"}, {"MISC", "FULL"}, {"OMOD", "FULL"}, {"OMOD", "DESC"},
-      {"INNR", "WNAM"}};
+      {"INNR", "WNAM"}, {"BPTD", "BPTN"}, {"CELL", "FULL"}, {"COBJ", "DESC"},
+      {"FLST", "FULL"}};
   for (const auto& [record, subrecord] : pairs) {
     EXPECT_TRUE(fo4::schema::is_localized_field(fo4::Signature::from_string(record),
                                                 fo4::Signature::from_string(subrecord)))

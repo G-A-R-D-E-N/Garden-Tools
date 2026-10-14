@@ -2207,9 +2207,10 @@ Added:
 - NPC_ FULL (:10407), SHRT (:10408, `wbLStringKC`) and ATTX (:10488, `wbATTX`).
 - OMOD FULL and DESC (:12507-12508).
 - INNR WNAM (:12352, `wbLStringKC`).
+- BPTD BPTN (:7698), CELL FULL (:5965), COBJ DESC (:10271) and FLST FULL (:7576). A master scan found all four always 4 bytes, in every localized master.
 
 No candidate was rejected.
 
-PERK, SCOL, WRLD, REGN, MISC and OMOD had no `fields.json` entry. Each got a minimal entry (`fields: []`), as QUST already had. The other codegen scripts accept an empty `fields` list, and `Radicle/tools/parity_matrix.py --write` refreshed `Radicle/docs/FO4_PARITY.md` for the new localized counts.
+PERK, SCOL, WRLD, REGN, MISC, OMOD, BPTD, CELL and COBJ had no `fields.json` entry. Each got a minimal entry (`fields: []`), as QUST already had. The other codegen scripts accept an empty `fields` list, and `Radicle/tools/parity_matrix.py --write` refreshed `Radicle/docs/FO4_PARITY.md` for the new localized counts.
 
 Effect: in a localized plugin these subrecords now read as string IDs through `read_localized_string`. `Radicle/src/plugin/field_writer.cpp` refuses inline text for them, `Radicle/src/plugin/subrecord_authoring.cpp:default_usable` drops their defaults, and `Radicle/src/schema/preflight.cpp` skips the size-4 zstring check. No top-level scalar row in `fields.json` uses these pairs, and no shipped reader calls `read_localized_string` for them yet. Tests: `Radicle/tests/test_localized_fields.cpp:Wp10LocalizedPairsAreMembers` and `Wp10NewPairRoundTripsAStringId`.
