@@ -118,6 +118,7 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
   shape.subrecord = descriptor.subrecord;
   shape.payload_size = descriptor.payload_size;
   shape.minimum_payload_size = descriptor.minimum_payload_size;
+  shape.min_form_version = descriptor.min_form_version;
   shape.whole_payload = !descriptor.embedded;
   shape.offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
   shape.width = scalar_storage_size(descriptor.storage);

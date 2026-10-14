@@ -80,7 +80,8 @@ FieldSlots resolve_field_slots(const Record& record,
 
   for (const auto index : candidates) {
     const auto& data = record.subrecords[index].data;
-    bool sized = data.size() >= shape.minimum_payload_size &&
+    bool sized = record.header.form_version >= shape.min_form_version &&
+                 data.size() >= shape.minimum_payload_size &&
                  (shape.payload_size == 0 || data.size() == shape.payload_size) &&
                  behavior_field_payload_valid(record, record.subrecords[index]);
     if (record.header.signature == Signature::from_string("NAVI") &&
