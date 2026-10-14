@@ -148,6 +148,9 @@ jobs:
           python3 -I -B -m unittest discover -s .github/scripts -p 'test_check_real_data_regex.py'
           python3 -I .github/scripts/check_real_data_regex.py
 
+      - name: Check static xEdit scalar deny pass
+        run: python3 -I -B -m unittest discover -s Radicle/tools/corpus -p 'test_non_formid_slots.py'
+
       - name: Test
         env:
           FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_LINUX }}
