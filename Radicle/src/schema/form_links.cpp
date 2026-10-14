@@ -126,7 +126,7 @@ bool is_listed_formid_signature(Signature signature) {
 
 bool is_formid_array_signature(Signature signature) {
   return signature == sig_kwda || signature == Signature::from_string("SPLO") ||
-         signature == sig_xlkr;
+         signature == sig_xlkr || signature == Signature::from_string("APPR");
 }
 
 bool record_specific_formid_array(const Record& record, const Subrecord& sub) {

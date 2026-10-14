@@ -2166,3 +2166,28 @@ Strict mode: `StructPayloadRemap.WrongStrideSizeFailsClosedWithoutMutation`.
 A scalar row may carry `min_form_version`. Its gate is enforced once, in `src/schema/field_address.cpp:resolve_field_slots`, which every scalar reader and writer goes through: `src/plugin/field_writer.cpp:scalar_slots` (write, `set_record_scalar` and `record_field_count`) and `src/schema/preflight.cpp:preflight_record` (read). `scalar_field_shape` copies the value into `FieldShape::min_form_version`, and `resolve_field_slots` treats a record below it as `sized == false`, the same as a payload shorter than `minimum_payload_size`. So the row is not valid and not misfit, nothing is read, and a write returns `subrecord_missing` with the bytes unchanged. `scalar_field_bytes` and `patch_scalar_field` take only a payload, so they carry no version; no src caller uses them, only tests. Reason: xEdit `EXPL DATA` (`Core/wbDefinitionsFO4.pas:7350`, `wbFromVersion(97, wbFloat('Inner Radius'))`) sits mid-struct, so below 97 every later member is 4 bytes earlier than the rows. The 13 rows from `EXPL\InnerRadius` (offset 32) to `EXPL\ProjectileCount` (80) carry `"min_form_version": 97` in `schema/fallout4/fields.json`. Those rows are hidden below 97 even though their bytes exist there at 4 bytes earlier; a versioned row would expose them but the brief forbids duplicate rows. The `Spawn` rows at 64-80 could use 112 to match xEdit exactly, since v97-111 has no Spawn struct; left at 97. Test: `Radicle/tests/test_scalar_embedded.cpp:InnerRadiusIsGatedByFormVersion97` (84-byte DATA at 96 and 97). Codegen test: `tools/test_field_address_codegen.py:test_min_form_version_gates_a_row_and_rejects_bad_values`.
 
 Scan of the 24 xEdit `wbFromVersion` uses in `Core/wbDefinitionsFO4.pas` for a gated member followed by ungated members: only `EXPL DATA` (fixed above). `RACE DATA` has two (`Male Default Weight` and `Female Default Weight` at 109, `Beard Biped Object` at 124, lines 11072-11128) with ungated members after them, but `fields.json` has no RACE scalar rows in DATA, so nothing is affected. The rest are trailing: `wbSNAMMarkerParams` (5321-5331), `wbAIDT` (6229-6230), EXPL after Inner Radius (7369-7377), IMAD (7523-7525), NAM5/NAM6 (7543-7544, separate subrecords), MATO DATA (9387-9389), QUST QSTA Keyword (10787), RACE OnCripple and its successors (11182-11192) and WTHR Wind Turbulance (13086). Trailing gated members need no gate because short payloads already hide them.
+## src/schema/form_links.cpp:is_listed_formid_signature (generator gaps, #602 WP-3)
+
+Each row below was read in xEdit at pin 93cc0bc5 (`Core/wbDefinitionsFO4.pas` and `Core/wbDefinitionsCommon.pas`) before coding, and every definition of the signature in both files was checked. Tests are in `Radicle/tests/test_generator_gap_remap.cpp` (`GeneratorGapRemap.*`). The static deny pass (`non_formid_slots.py --check-static`) reports no scalar pair for any added signature, so `XEDIT_DENIED` is unchanged.
+
+Global signatures (`formid_subrecords.inc`, 4-byte payload, any record):
+- EITM: the only definition is `wbEnchantment` (`wbDefinitionsCommon.pas:8486-8489`, form ID when not TES4). Used by ARMO (`wbDefinitionsFO4.pas:5798`), EXPL (:7339) and WEAP (:12891).
+- CS2K and CS2D: NPC_ sound pairs in `wbActorSounds` (`wbDefinitionsCommon.pas:8399-8405`), used at `wbDefinitionsFO4.pas:10434`.
+- PLYR: the PLYR record's own subrecord, `wbFormID(PLYR, 'Player')` (`wbDefinitionsFO4.pas:12131`).
+- HEAD: `wbHeadPart` (`wbDefinitionsCommon.pas:8583`), used only for RACE head parts (`wbDefinitionsFO4.pas:11274` and :11292). No other record defines HEAD.
+- MDOB: `wbMDOB` (`wbDefinitionsCommon.pas:8877`), used only by MGEF (`wbDefinitionsFO4.pas:10056`).
+
+Keyword array (`is_formid_array_signature`):
+- APPR: `wbArrayS(APPR, ..., wbFormIDCk('Keyword', [KYWD]))` (`wbDefinitionsFO4.pas:5275`), used by ARMO (:5841), FURN (:6916), NPC_ (:10404), RACE (:11068) and WEAP (:12901). Every element is a keyword form ID.
+
+Record-qualified (`packed_formid_array_offsets`, not global, because MODL and INDX are not form IDs in other records):
+- ARMO MODL: the Armor Addon form ID inside the Models struct (`wbDefinitionsFO4.pas:5823-5825`, after INDX).
+- ARMA MODL: one RACE form ID per repeated subrecord (`wbDefinitionsFO4.pas:5885`).
+- MODL is a model path string through `wbGenericModel` (`wbDefinitionsFO4.pas:1034`). ARMO and ARMA do not use that helper: its users between lines 5786 and 5890 are none, and ANIO (:5782) and BOOK (:5897) sit outside that range.
+- NPC_ TPTA: 13 form IDs, 52 bytes (`wbDefinitionsFO4.pas:10353-10366`, entries from `wbNPCTemplateActorEntry`, `wbDefinitionsCommon.pas:8274-8277`).
+- OVIS INDX: `wbFormIDCk(INDX, 'Object', [STAT])` (`wbDefinitionsFO4.pas:12550`). INDX is an integer in NOCM (:12462) and in other records.
+
+Structured slot (`structured_formids.inc`, any record, payload at least 12 bytes):
+- ATKD attack spell at offset 8: `wbAttackData` (`wbDefinitionsFO4.pas:4073-4119`), two floats, then the Attack Spell form ID, then attack flags. The struct is 44 bytes by its member sizes. Used by NPC_ (:10377) and RACE (:11211). ATKD is defined only in `wbDefinitionsFO4.pas`.
+
+Schema formlink rows (`schema/fallout4/fields.json`) hold none of these signatures as remap fields; they appear there only as authoring rows. `visit_formlink_offsets` also dedupes any overlap, so no offset is visited twice.

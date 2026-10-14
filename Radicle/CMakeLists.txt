@@ -476,6 +476,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_check_dialogue.cpp
     tests/test_remap_non_formid_slots.cpp
     tests/test_struct_payload_remap.cpp
+    tests/test_generator_gap_remap.cpp
     tests/test_remap_scalar_enum_slots.cpp
     tests/test_master_usage.cpp
     tests/test_plugin_diff.cpp

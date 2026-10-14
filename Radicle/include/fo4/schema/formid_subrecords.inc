@@ -1,6 +1,6 @@
-// Generated from xEdit FO4 wbFormIDCk signatures.
+// xEdit FO4 wbFormIDCk signatures plus hand-added signatures from wbDefinitionsCommon.pas helpers and plain form ID members.
 // Remap only when the subrecord payload is exactly 4 bytes (or listed as an array).
-// 173 signatures.
+// 179 signatures.
 0x46434841u,  // AHCF
 0x4D434841u,  // AHCM
 0x49444C41u,  // ALDI
@@ -24,6 +24,8 @@
 0x4D414E43u,  // CNAM
 0x52475243u,  // CRGR
 0x46495243u,  // CRIF
+0x44325343u,  // CS2D
+0x4B325343u,  // CS2K
 0x52435343u,  // CSCR
 0x44535543u,  // CUSD
 0x434C4144u,  // DALC
@@ -35,6 +37,7 @@
 0x544C5044u,  // DPLT
 0x524F4345u,  // ECOR
 0x44494645u,  // EFID
+0x4D544945u,  // EITM
 0x4D414E45u,  // ENAM
 0x45435345u,  // ESCE
 0x50595445u,  // ETYP
@@ -50,6 +53,7 @@
 0x4D414E47u,  // GNAM
 0x524F5747u,  // GWOR
 0x464C4348u,  // HCLF
+0x44414548u,  // HEAD
 0x4D414E48u,  // HNAM
 0x44495448u,  // HTID
 0x4D414E49u,  // INAM
@@ -65,6 +69,7 @@
 0x5450544Cu,  // LTPT
 0x474C564Cu,  // LVLG
 0x4753564Cu,  // LVSG
+0x424F444Du,  // MDOB
 0x4D414E4Du,  // MNAM
 0x53324F4Du,  // MO2S
 0x53334F4Du,  // MO3S
@@ -102,6 +107,7 @@
 0x44494B50u,  // PKID
 0x4E434C50u,  // PLCN
 0x44564C50u,  // PLVD
+0x52594C50u,  // PLYR
 0x4D414E50u,  // PNAM
 0x504F5450u,  // PTOP
 0x4E525450u,  // PTRN

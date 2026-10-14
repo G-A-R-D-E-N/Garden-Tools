@@ -55,8 +55,8 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | AMMO | 5741 | 12 | 2 | 5 | - | 3 | yes | yes | - | - | 1 | L4 |
 | ANIO | 5777 | - | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | - | 1 | L4 |
-| ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | - | 1 | L4 |
+| ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
@@ -143,7 +143,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | NPC_ | 10286 | 47 | - | - | - | - | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| OVIS | 12546 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
+| OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
 | PARW | 5944 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PBAR | 5945 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
