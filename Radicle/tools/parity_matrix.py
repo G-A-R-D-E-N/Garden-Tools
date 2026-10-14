@@ -6,6 +6,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import schema_codegen  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 SIGNATURES = ROOT / "schema" / "fallout4" / "xedit_signatures.txt"
 FIELDS = ROOT / "schema" / "fallout4" / "fields.json"
@@ -53,7 +56,7 @@ TYPED_MODULES = {
 OPAQUE_NOTES = [
     "Semantic letters (READ, WRITE, ADD, REMOVE, CREATE, REMAP, VALIDATE, OPAQUE) are not derived; see the hand-kept section below the table.",
     "Row counts are not compared with xEdit members. The script does not enumerate xEdit members, so unlisted members, enums, flags and structs are not attributed.",
-    "Schema kinds are `scalar` and `string`. Enum and flags fields are scalar rows with an `enum` or `flags` presentation that carries xEdit names; struct and counted-array fields have no kind and are absent.",
+    "Schema kinds are `scalar`, `string` and `counted_array`. A counted array has no row of its own: `scalar_rows` expands it into its member scalar rows (stride addressing), and its count subrecord is a scalar row. Enum and flags fields are scalar rows with an `enum` or `flags` presentation that carries xEdit names; other struct fields have no kind and are absent.",
     "Dedicated PluginEditTool routes are not derived, so the tier stops at schema, typed module and remap evidence (no L5).",
     "Typed module attribution is the `TYPED_MODULES` map in this script. The script checks that each cited file names the signature, but not that it still reads the record semantically.",
     "Subrecord-level remap handlers apply to any record carrying the subrecord and are not attributed to a record: OBTS (`obts_formid_offsets`, called from `src/schema/form_links.cpp`) and the behavior handlers in `src/schema/behavior_layout.cpp`.",
@@ -127,6 +130,26 @@ def tier_of(scalar, string, formlink, authoring, modules, lists, keyword):
     return "L0"
 
 
+def scalar_rows(record_signature, rows):
+    expanded = []
+    for row in rows:
+        if row.get("kind") == "counted_array":
+            expanded.extend(schema_codegen.parse_counted_array(row, record_signature)[1])
+        elif row.get("kind") == "subrecord_group":
+            expanded.extend(schema_codegen.parse_subrecord_group(row, record_signature)[1])
+        else:
+            expanded.append(row)
+    return expanded
+
+
+def formlink_rows(record_signature, record):
+    rows = list(record.get("formlink_fields", []))
+    for row in record.get("fields", []):
+        if row.get("kind") == "subrecord_group":
+            rows.extend(schema_codegen.parse_subrecord_group(row, record_signature)[2])
+    return rows
+
+
 def render():
     sigs = load_signatures()
     data = json.loads(FIELDS.read_text(encoding="utf-8"))
@@ -143,10 +166,10 @@ def render():
     tiers = {}
     for sig in sorted(sigs):
         record = records.get(sig, {})
-        rows = record.get("fields", [])
+        rows = scalar_rows(sig, record.get("fields", []))
         scalar = sum(row["kind"] == "scalar" for row in rows)
         string = sum(row["kind"] == "string" for row in rows)
-        formlink = len(record.get("formlink_fields", []))
+        formlink = len(formlink_rows(sig, record))
         lists = len(record.get("formlink_lists", [])) + len(record.get("nested_formlink_lists", []))
         localized = len(record.get("localized_subrecords", []))
         authoring = "authoring" in record
@@ -163,8 +186,8 @@ def render():
 
     kind_rows = []
     for sig in sorted(records):
-        rows = records[sig]["fields"]
-        addressed = rows + records[sig].get("formlink_fields", [])
+        rows = scalar_rows(sig, records[sig]["fields"])
+        addressed = rows + formlink_rows(sig, records[sig])
         identity = sum(row["kind"] == "scalar" and row.get("presentation") == "identity" for row in rows)
         percent = sum(row.get("presentation") == "percent_0_100" for row in rows)
         enum = sum(row["kind"] == "scalar" and row.get("presentation") == "enum" for row in rows)

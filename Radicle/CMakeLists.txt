@@ -167,6 +167,7 @@ add_library(fo4
   src/schema/form_links.cpp
   src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
+  src/schema/form_link_schema.cpp
   src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
   src/schema/formlink_lists.cpp
@@ -333,6 +334,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_copy_containment.cpp
     tests/test_copy_cell_children.cpp
     tests/test_scalar_mutation.cpp
+    tests/test_counted_array.cpp
+    tests/test_subrecord_group.cpp
     tests/test_writer.cpp
     tests/test_atomic_write.cpp
     tests/test_hedr_count.cpp
@@ -345,6 +348,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
+    tests/test_form_link_schema_remap.cpp
     tests/test_formlink_lists.cpp
     tests/test_flst_formlink_lists.cpp
     tests/test_kwda_formlink_lists.cpp
@@ -358,6 +362,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_interior_cell_create.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
+    tests/test_placed_variants.cpp
+    tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
@@ -419,6 +425,12 @@ if(RADICLE_BUILD_TESTS)
     tests/test_armor_edit.cpp
     tests/test_eyes.cpp
     tests/test_eyes_creation.cpp
+    tests/test_base_items.cpp
+    tests/test_base_items_real.cpp
+    tests/test_magic_location_records.cpp
+    tests/test_magic_location_records_real.cpp
+    tests/test_object_base_records.cpp
+    tests/test_object_base_records_real.cpp
     tests/test_weather_concept.cpp
     tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp
@@ -434,6 +446,22 @@ if(RADICLE_BUILD_TESTS)
     tests/test_faction.cpp
     tests/test_faction_real.cpp
     tests/test_faction_creation.cpp
+    tests/test_static_light_records.cpp
+    tests/test_static_light_records_real.cpp
+    tests/test_config_records.cpp
+    tests/test_config_records_real.cpp
+    tests/test_image_fx_records.cpp
+    tests/test_image_fx_records_real.cpp
+    tests/test_material_impact_records.cpp
+    tests/test_material_impact_records_real.cpp
+    tests/test_actor_support_records.cpp
+    tests/test_actor_support_records_real.cpp
+    tests/test_item_mod_records.cpp
+    tests/test_item_mod_records_real.cpp
+    tests/test_story_manager_records.cpp
+    tests/test_story_manager_records_real.cpp
+    tests/test_world_misc_records.cpp
+    tests/test_world_misc_records_real.cpp
     tests/test_weapon.cpp
     tests/test_weapon_real.cpp
     tests/test_onam.cpp

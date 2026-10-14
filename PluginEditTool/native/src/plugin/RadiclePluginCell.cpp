@@ -246,8 +246,9 @@ nlohmann::json placedReferencesJson(const Plugins& plugins, const fo4::FormKey& 
         references.push_back({
             {"formKey", key.to_string()},
             {"editorId", ref.editorId},
-            {"recordType", ref.kind == fo4::forms::PlacedReferenceKind::object
-                               ? "PlacedObject" : "PlacedNpc"},
+            {"recordType", ref.kind == fo4::forms::PlacedReferenceKind::object ? "PlacedObject"
+                           : ref.kind == fo4::forms::PlacedReferenceKind::variant ? "PlacedTrap"
+                                                                                 : "PlacedNpc"},
             {"baseType", baseType},
             {"baseFormKey", ref.base.has_value() ? ref.base->to_string() : std::string{}},
             {"baseEditorId", baseEditorId},

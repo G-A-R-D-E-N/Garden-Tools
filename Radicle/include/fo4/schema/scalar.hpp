@@ -73,6 +73,42 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+struct CountedArrayDescriptor {
+  Signature record{};
+  std::string_view path;
+  std::string_view label;
+  Signature subrecord{};
+  Signature count_subrecord{};
+  std::size_t stride{0};
+};
+
+class CountedArrayError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+struct SubrecordGroupMemberDescriptor {
+  Signature subrecord{};
+  bool required{false};
+  bool repeatable{false};
+  std::size_t payload_size{0};
+  std::span<const std::uint8_t> default_payload{};
+};
+
+struct SubrecordGroupDescriptor {
+  Signature record{};
+  std::string_view path;
+  std::string_view label;
+  Signature count_subrecord{};
+  std::span<const SubrecordGroupMemberDescriptor> members{};
+  std::span<const Signature> successors{};
+};
+
+class SubrecordGroupError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
 // Resolves a signature only if exactly one schema row names it and that row is whole-payload, non-repeated, non-string; else use record plus path.
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept;
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
@@ -81,6 +117,14 @@ std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     Signature record, std::string_view path) noexcept;
 std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept;
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
+std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
+                                                               std::string_view path) noexcept;
+bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept;
+std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature record,
+                                                                   std::string_view path) noexcept;
+std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
+                                                                   Signature subrecord) noexcept;
+bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept;
 
 // The bytes of one field within a subrecord payload. Empty when an embedded
 // field lies past the end of a legitimately shorter payload -- absent, not

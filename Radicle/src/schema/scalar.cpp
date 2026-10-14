@@ -1,5 +1,6 @@
 #include "fo4/schema/scalar.hpp"
 
+#include <array>
 #include <charconv>
 #include <algorithm>
 #include <cmath>
@@ -173,6 +174,47 @@ std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept 
     ++last;
   }
   return {k_scalar_fields + first, last - first};
+}
+
+std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
+                                                               std::string_view path) noexcept {
+  for (const auto& array : k_counted_arrays) {
+    if (array.record == record && array.path == path) return array;
+  }
+  return std::nullopt;
+}
+
+bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept {
+  for (const auto& array : k_counted_arrays) {
+    if (array.record == record && array.count_subrecord == subrecord) return true;
+  }
+  return false;
+}
+
+std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature record,
+                                                                   std::string_view path) noexcept {
+  for (const auto& group : k_subrecord_groups) {
+    if (group.record == record && group.path == path) return group;
+  }
+  return std::nullopt;
+}
+
+std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
+                                                                   Signature subrecord) noexcept {
+  for (const auto& group : k_subrecord_groups) {
+    if (group.record != record) continue;
+    for (const auto& member : group.members) {
+      if (member.subrecord == subrecord) return group;
+    }
+  }
+  return std::nullopt;
+}
+
+bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept {
+  for (const auto& group : k_subrecord_groups) {
+    if (group.record == record && group.count_subrecord == subrecord) return true;
+  }
+  return false;
 }
 
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept {

@@ -274,7 +274,7 @@ TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
   const auto record = fo4::test::begin_record(out, "RFGP", 0, 0x000802);
   fo4::test::ByteWriter wnam;
   wnam.u32(0x000900);
-  fo4::test::write_subrecord(out, "RNAM", wnam.bytes);
+  fo4::test::write_subrecord(out, "WNAM", wnam.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");

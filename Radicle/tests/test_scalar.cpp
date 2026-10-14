@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,6 +16,12 @@ constexpr auto k_refr = fo4::Signature::from_string("REFR");
 constexpr auto k_misc = fo4::Signature::from_string("MISC");
 constexpr auto k_xhlt = fo4::Signature::from_string("XHLT");
 constexpr auto k_xscl = fo4::Signature::from_string("XSCL");
+
+std::optional<fo4::schema::ScalarDescriptor> record_scalar(std::string_view path) {
+  const auto field = fo4::schema::scalar_field_descriptor(path);
+  if (!field) return std::nullopt;
+  return field->scalar;
+}
 
 }
 
@@ -40,13 +47,13 @@ TEST(ScalarSchema, GeneratedRefrFieldsAreRecordQualified) {
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_misc, "REFR\\Scale").has_value());
 
   const auto fields = fo4::schema::scalar_fields(k_refr);
-  ASSERT_EQ(fields.size(), 2u);
+  ASSERT_EQ(fields.size(), 7u);
   EXPECT_EQ(fields[0].path, "REFR\\HealthPercent");
   EXPECT_EQ(fields[1].path, "REFR\\Scale");
 }
 
 TEST(ScalarSchema, XhltIsU32HumanPercent) {
-  const auto descriptor = fo4::schema::scalar_descriptor(k_xhlt);
+  const auto descriptor = record_scalar("REFR\\HealthPercent");
   ASSERT_TRUE(descriptor.has_value());
   EXPECT_EQ(descriptor->storage, fo4::schema::ScalarStorage::u32);
   EXPECT_EQ(descriptor->presentation, fo4::schema::ScalarPresentation::percent_0_100);
@@ -55,7 +62,7 @@ TEST(ScalarSchema, XhltIsU32HumanPercent) {
 }
 
 TEST(ScalarSchema, XhltWritesPercentagePointsDirectlyAsLittleEndianU32) {
-  const auto descriptor = fo4::schema::scalar_descriptor(k_xhlt);
+  const auto descriptor = record_scalar("REFR\\HealthPercent");
   ASSERT_TRUE(descriptor.has_value());
 
   EXPECT_EQ(fo4::schema::encode_scalar("0", *descriptor),
@@ -67,7 +74,7 @@ TEST(ScalarSchema, XhltWritesPercentagePointsDirectlyAsLittleEndianU32) {
 }
 
 TEST(ScalarSchema, XhltRejectsFractionsNegativesAndOverOneHundred) {
-  const auto descriptor = fo4::schema::scalar_descriptor(k_xhlt);
+  const auto descriptor = record_scalar("REFR\\HealthPercent");
   ASSERT_TRUE(descriptor.has_value());
 
   EXPECT_THROW(fo4::schema::encode_scalar("50.5", *descriptor), fo4::schema::ScalarError);
@@ -76,7 +83,7 @@ TEST(ScalarSchema, XhltRejectsFractionsNegativesAndOverOneHundred) {
 }
 
 TEST(ScalarSchema, XsclIsF32ScaleLimitedToZeroThroughTenOnWrite) {
-  const auto descriptor = fo4::schema::scalar_descriptor(k_xscl);
+  const auto descriptor = record_scalar("REFR\\Scale");
   ASSERT_TRUE(descriptor.has_value());
   EXPECT_EQ(descriptor->storage, fo4::schema::ScalarStorage::f32);
   EXPECT_EQ(descriptor->presentation, fo4::schema::ScalarPresentation::identity);
@@ -91,13 +98,13 @@ TEST(ScalarSchema, XsclIsF32ScaleLimitedToZeroThroughTenOnWrite) {
 }
 
 TEST(ScalarSchema, ExistingOutOfRangeValuesRemainReadable) {
-  const auto health = fo4::schema::scalar_descriptor(k_xhlt);
+  const auto health = record_scalar("REFR\\HealthPercent");
   ASSERT_TRUE(health.has_value());
   const std::array<std::byte, 4> raw_health{
       std::byte{0x96}, std::byte{0}, std::byte{0}, std::byte{0}};
   EXPECT_EQ(fo4::schema::decode_scalar(raw_health, *health), "150");
 
-  const auto scale = fo4::schema::scalar_descriptor(k_xscl);
+  const auto scale = record_scalar("REFR\\Scale");
   ASSERT_TRUE(scale.has_value());
   const std::array<std::byte, 4> raw_scale{
       std::byte{0x00}, std::byte{0x00}, std::byte{0x40}, std::byte{0x41}};
@@ -206,12 +213,12 @@ TEST(ScalarSchema, OnlyEnumAndFlagsRowsCarryNames) {
 }
 
 TEST(ScalarSchema, WrongBinaryWidthFailsClosed) {
-  const auto health = fo4::schema::scalar_descriptor(k_xhlt);
+  const auto health = record_scalar("REFR\\HealthPercent");
   ASSERT_TRUE(health.has_value());
   const std::array<std::byte, 2> raw{std::byte{50}, std::byte{0}};
   EXPECT_THROW(fo4::schema::decode_scalar(raw, *health), fo4::schema::ScalarError);
 
-  const auto scale = fo4::schema::scalar_descriptor(k_xscl);
+  const auto scale = record_scalar("REFR\\Scale");
   ASSERT_TRUE(scale.has_value());
   EXPECT_THROW(fo4::schema::decode_scalar(raw, *scale), fo4::schema::ScalarError);
 }
