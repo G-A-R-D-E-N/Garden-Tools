@@ -13,6 +13,7 @@ public static class Settings
 {
     public readonly record struct LayoutPoint(double X, double Y);
     internal const int MaxRememberedGraphLayouts = 256;
+    private const int WriteAttempts = 5;
     private const string GraphLayoutPrefix = "graph-layout.";
 
     internal static Func<string, string[]> ReadAllLinesForTest = File.ReadAllLines;
@@ -159,12 +160,23 @@ public static class Settings
     {
         try
         {
-            using (var writer = new StreamWriter(tempPath, false))
+            for (int attempt = 1; ; attempt++)
             {
-                foreach (var (key, value) in all.Ordered()) writer.WriteLine($"{key}={value}");
-                writer.Flush();
+                try
+                {
+                    using (var writer = new StreamWriter(tempPath, false))
+                    {
+                        foreach (var (key, value) in all.Ordered()) writer.WriteLine($"{key}={value}");
+                        writer.Flush();
+                    }
+                    File.Move(tempPath, finalPath, overwrite: true);
+                    return;
+                }
+                catch (Exception e) when (attempt < WriteAttempts && IsTransientWriteLock(e))
+                {
+                    Thread.Sleep(50 * attempt);
+                }
             }
-            File.Move(tempPath, finalPath, overwrite: true);
         }
         finally
         {
@@ -172,6 +184,10 @@ public static class Settings
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException) { }
         }
     }
+
+    private static bool IsTransientWriteLock(Exception e) =>
+        e is UnauthorizedAccessException
+        || (OperatingSystem.IsWindows() && e is IOException && (e.HResult & 0xFFFF) is 32 or 33);
 
     private static bool TryRead(out StoredSettings all, out string failure)
     {
