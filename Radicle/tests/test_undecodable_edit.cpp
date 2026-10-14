@@ -1,3 +1,6 @@
+#include "fo4/forms/faction.hpp"
+#include "fo4/forms/leveled_list.hpp"
+#include "fo4/forms/npc.hpp"
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/forms/quest.hpp"
 #include "fo4/forms/weather.hpp"
@@ -512,4 +515,71 @@ TEST(UndecodableEdit, CopyInfoAsNewRefusesUndecodableDestinationDial) {
                    target, source, fo4::FormKey::parse("000802:Base.esm"))),
                std::invalid_argument);
   expect_plugin_bytes_unchanged(target, target_bytes);
+}
+
+TEST(UndecodableEdit, FactionIndexedEditsRefuseUndecodableRecord) {
+  const auto bytes = undecodable_plugin("FACT");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(fo4::forms::set_faction_relation(plugin, key, 0, fo4::forms::FactionRelation{}),
+               std::invalid_argument);
+  EXPECT_THROW(fo4::forms::remove_faction_relation(plugin, key, 0), std::invalid_argument);
+  EXPECT_THROW(fo4::forms::set_faction_rank(plugin, key, 0, fo4::forms::FactionRank{}),
+               std::invalid_argument);
+  EXPECT_THROW(fo4::forms::remove_faction_rank(plugin, key, 0), std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, NpcIndexedEditsRefuseUndecodableRecord) {
+  const auto bytes = undecodable_plugin("NPC_");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(static_cast<void>(
+                   fo4::forms::set_npc_faction(plugin, key, 0, fo4::forms::NpcFaction{})),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::remove_npc_faction(plugin, key, 0)),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_npc_perk(plugin, key, 0, fo4::forms::NpcPerk{})),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::remove_npc_perk(plugin, key, 0)),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_npc_inventory_item(
+                   plugin, key, 0, fo4::forms::NpcInventoryItem{})),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::remove_npc_inventory_item(plugin, key, 0)),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, LeveledListIndexedEditsRefuseUndecodableRecord) {
+  const auto bytes = undecodable_plugin("LVLI");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::insert_leveled_list_entry(
+                   plugin, key, 0, fo4::forms::LeveledListEntry{})),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::remove_leveled_list_entry(plugin, key, 0)),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_leveled_list_entry(
+                   plugin, key, 0, fo4::forms::LeveledListEntry{})),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, LeveledListWholeEditsRefuseUndecodableRecord) {
+  const auto bytes = undecodable_plugin("LVLN");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::replace_leveled_list_entries(
+                   plugin, key, std::span<const fo4::forms::LeveledListEntry>{})),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_leveled_list_settings(plugin, key, 1, 1, 0)),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::reset_leveled_list(plugin, key)),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
 }

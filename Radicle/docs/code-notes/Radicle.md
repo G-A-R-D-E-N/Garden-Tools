@@ -2116,3 +2116,9 @@ A local COED owner must be NPC_ or FACT, as xEdit's `wbCOED` owner (`Core/wbDefi
 ## Radicle/src/forms/faction.cpp:add_faction_relation — FACT XNAM append order
 
 `add_faction_relation` inserts after the last XNAM and does not sort. The reason is the same shipped-corpus evidence as `replace_run`: a byte scan of the shipped Fallout4.esm found 127 unsorted XNAM lists in Fallout4.esm.
+
+## Radicle/src/forms/faction.cpp:require_editable — undecodable refusal before index checks (GT-276)
+
+The index-based FACT, NPC_ and LVLI/LVLN edits (`set_faction_relation`, `remove_faction_rank`, `set_npc_perk`, `remove_leveled_list_entry` and the other set/remove entry points) call `require_editable` before any index check or decode. `Radicle/src/forms/faction.cpp:require_editable`, `Radicle/src/forms/npc.cpp:require_editable` and `Radicle/src/forms/leveled_list.cpp:require_editable` call `require_decodable` on the target record. The reason: an undecodable record has empty `subrecords`, so the decoders return empty lists and the old check reported "index is out of range" instead of the undecodable refusal.
+
+The whole-record write points also refuse, so add, replace and settings edits do not write into an undecodable record: `Radicle/src/forms/faction.cpp:mutable_faction`, `Radicle/src/forms/npc.cpp:replace_run`, and `Radicle/src/forms/leveled_list.cpp:replace_leveled_list_entries`, `set_leveled_list_settings` and `reset_leveled_list`. Before this change an empty `replace_leveled_list_entries` on an undecodable LVLN returned true without touching the record, because both sides decoded to no entries. The `decode_*` readers are unchanged, so reads of an undecodable record behave as before. Tests: `Radicle/tests/test_undecodable_edit.cpp:FactionIndexedEditsRefuseUndecodableRecord`, `NpcIndexedEditsRefuseUndecodableRecord`, `LeveledListIndexedEditsRefuseUndecodableRecord` and `LeveledListWholeEditsRefuseUndecodableRecord`.
