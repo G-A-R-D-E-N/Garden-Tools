@@ -123,8 +123,8 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | LIGH | 9871 | 19 | 1 | 3 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
-| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | - | 1 | L4 |
-| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | - | 1 | L4 |
+| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVSP | 10033 | - | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
 | MATO | 9375 | 7 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
@@ -140,7 +140,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 3 | 3 | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 47 | - | - | - | - | yes | yes | forms/npc | - | 1 | L4 |
+| NPC_ | 10286 | 47 | - | - | - | - | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | - | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -188,7 +188,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | TXST | 6984 | 13 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 45 | - | 13 | - | 2 | yes | yes | forms/weapon | - | 2 | L4 |
+| WEAP | 12877 | 45 | - | 13 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
 | WRLD | 13110 | - | - | - | - | - | - | - | environment/world | - | 1 | L2 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
@@ -400,7 +400,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | EQUP | U | U | U | U | U | P | U | G | field audit pending |
 | EXPL | P | P | U | U | P | P | P | G | forms/proj_expl_hazd.hpp |
 | EYES | P | P | P | U | P | P | P | G | forms/eyes.hpp |
-| FACT | P | P | P | P | U | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, tests/test_packed_formlink_arrays.cpp (XNAM remap); docs/FACTIONS.md |
+| FACT | P | P | P | P | P | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, test_faction_creation.cpp, tests/test_packed_formlink_arrays.cpp (XNAM and PLVD remap); docs/FACTIONS.md |
 | FLOR | I | I | I | I | U | U | I | G | field audit pending; PR #404 |
 | FLST | P | P | P | P | U | P | P | G | environment / plugin headers |
 | FSTP | U | U | U | U | U | U | U | G | field audit pending; PR #400 |
@@ -433,8 +433,8 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | LIGH | P | I | I | I | U | U | P | G | environment / plugin headers |
 | LSCR | U | U | U | U | U | U | U | G | field audit pending |
 | LTEX | P | U | U | U | U | U | P | G | environment / plugin headers; PR #404 |
-| LVLI | P | P | P | P | U | U | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; docs/LEVELED_LISTS.md |
-| LVLN | P | P | P | P | U | U | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; docs/LEVELED_LISTS.md |
+| LVLI | P | P | P | P | P | P | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; tests/test_leveled_list_creation.cpp; docs/LEVELED_LISTS.md |
+| LVLN | P | P | P | P | P | P | U | G | forms/leveled_list.hpp; tests/test_leveled_list.cpp; tests/test_leveled_list_creation.cpp; docs/LEVELED_LISTS.md |
 | LVSP | P | P | P | P | P | P | P | G | forms/leveled_spell.hpp |
 | MATO | U | U | U | U | U | U | U | G | field audit pending |
 | MATT | U | U | U | U | U | U | U | G | field audit pending |
@@ -450,7 +450,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | NAVM | U | U | U | U | U | P | U | G | field audit pending; PR #402 |
 | NOCM | U | U | U | U | U | U | U | G | field audit pending |
 | NOTE | U | U | U | U | U | U | U | G | field audit pending |
-| NPC_ | P | P | P | P | U | U | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit pending for unlisted fields |
+| NPC_ | P | P | P | P | U | P | I | G | forms/npc.hpp (SNAM, PRKR, CNTO/COED lists) and schema/fallout4/fields.json NPC_ scalars; docs/NPCS.md; field audit pending for unlisted fields |
 | OMOD | U | U | U | U | U | P | U | G | field audit pending |
 | OTFT | U | U | U | U | U | U | U | G | field audit pending |
 | OVIS | U | U | U | U | U | U | U | G | field audit pending |
@@ -498,7 +498,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | TXST | P | U | U | U | U | U | P | G | environment / plugin headers |
 | VTYP | U | U | U | U | U | U | U | G | field audit pending |
 | WATR | P | U | U | U | U | U | P | G | environment / plugin headers; PR #396 |
-| WEAP | P | I | I | I | U | U | P | G | schema/fallout4/fields.json scalars and FormLinks (docs/WEAPONS.md); DAMA typed read (xEdit-derived; WeaponReal runs in the real-data CI job, no pass recorded here); keyword lists I; WRITE not claimed without save/reparse proof (docs/WEAPONS.md Parity) |
+| WEAP | P | I | I | I | U | P | P | G | schema/fallout4/fields.json scalars and FormLinks (docs/WEAPONS.md); DAMA typed read (xEdit-derived; WeaponReal runs in the real-data CI job, no pass recorded here); keyword lists I; WRITE not claimed without save/reparse proof (docs/WEAPONS.md Parity) |
 | WRLD | P | U | U | U | U | P | P | G | environment / plugin headers |
 | WTHR | P | P | U | U | U | P | P | G | forms/weather_concept.hpp; PR #398 |
 | ZOOM | U | U | U | U | U | U | U | G | field audit pending |
@@ -513,7 +513,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | PROJ / EXPL / HAZD fixed values | forms/proj_expl_hazd.hpp; tests/test_scalar_embedded.cpp | Complete per-field edited round-trips, C ABI/C# mutation exposure |
 | QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection_authoring.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
 | RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
-| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; no creation; see docs/FACTIONS.md |
+| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
 | CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | Other record members and whole-record creation |

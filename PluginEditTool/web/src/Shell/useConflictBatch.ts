@@ -36,7 +36,7 @@ export function useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr }
 
   useEffect(() => {
     if (activeTab === 'explorer' && treeMode === 'conflicts' && conflicts === null) loadConflicts();
-  }, [activeTab, treeMode]);
+  }, [activeTab, treeMode, conflicts]);
 
   const copyMany = async (picked: CopyPick[]): Promise<boolean> => {
     const b = window.chrome?.webview?.hostObjects?.backend;

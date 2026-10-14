@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Backend, ConflictEntry, ConflictMatrix } from '../backend';
 import { DialogProvider } from '../dialogs';
@@ -145,5 +145,30 @@ describe('conflict list selection', () => {
     expect(await screen.findByText('RecA', { selector: '.editor-tab-label' })).toBeTruthy();
     expect(await screen.findByText('RecC', { selector: '.editor-tab-label' })).toBeTruthy();
     expect(screen.queryByText('RecD', { selector: '.editor-tab-label' })).toBeNull();
+  });
+
+  it('drops the conflict list and its selection when the load order reloads', async () => {
+    const summaries: Array<(raw: string) => void> = [];
+    const summary = (plugins: string[]) => JSON.stringify({ TotalRecords: plugins.length, PluginCount: plugins.length, Plugins: plugins });
+    vi.stubGlobal('chrome', { webview: { addEventListener: vi.fn(), removeEventListener: vi.fn(), hostObjects: {
+      backend: {
+        GetConflicts: getConflicts,
+        GetRecordTypeIndex: vi.fn(async () => '[]'),
+        GetLoadOrderSummary: vi.fn(() => new Promise<string>(resolve => { summaries.push(resolve); })),
+      },
+      appInterop: { GetPlugins: vi.fn(async () => '[]'), LoadEnvironment: vi.fn(async () => {}) },
+    } } });
+    await openConflicts();
+    await waitFor(() => expect(summaries).toHaveLength(1));
+    await act(async () => { summaries[0](summary(['Master.esm', 'Later.esp'])); });
+    fireEvent.click(row('RecA'));
+    expect(selected('RecA')).toBe(true);
+    getConflicts.mockResolvedValueOnce(JSON.stringify([all[1]]));
+    fireEvent.click(button(/Load Env/));
+    await waitFor(() => expect(summaries).toHaveLength(2));
+    await act(async () => { summaries[1](summary(['Master.esm'])); });
+    expect(await screen.findByRole('checkbox', { name: 'RecB' })).toBeTruthy();
+    expect(screen.queryByRole('checkbox', { name: 'RecA' })).toBeNull();
+    expect(screen.getByText('0 selected')).toBeTruthy();
   });
 });

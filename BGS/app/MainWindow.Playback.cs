@@ -328,7 +328,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var packed = _gameData?.ReadAnimation(root, animation);
+        GameData.AnimationRead? packed;
+        try { packed = _gameData?.ReadAnimation(root, animation); }
+        catch (Exception e) when (e is IOException or InvalidDataException)
+        {
+            SetPlaybackSummary($"'{animation}' could not be read: {e.Message.Split('\n')[0]}", Ux.BadBrush);
+            return;
+        }
         if (packed == null)
         {
             if (announce)

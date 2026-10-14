@@ -129,6 +129,10 @@ void check_links(const Plugin& plugin,
       continue;
     }
     if (target == winners.end()) {
+      if (hit.subrecord == k_sig_snam && owner != records.end() &&
+          owner->second->header.signature == k_sig_dlbr) {
+        continue;
+      }
       finding.code = CheckCode::unresolved_link;
       finding.severity = slot ? CheckSeverity::error : CheckSeverity::warning;
       finding.message = hit.subrecord.to_string() + " target " + hit.key.to_string() +

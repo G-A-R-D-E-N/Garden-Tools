@@ -161,6 +161,26 @@ TEST_CASE("Native CleanPlugin leaves an undecodable deleted record untouched") {
         "CleanPlugin", nlohmann::json::array({"Patch.esp"}));
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
-    CHECK(result->get<std::string>().find("undeleted + disabled 0 record") != std::string::npos);
+    CHECK(result->get<std::string>() ==
+          "Cleaned Patch.esp: undeleted + disabled 0 record(s), skipped 1 undecodable.");
     undecodableExpectNothingPending(backend);
+}
+
+TEST_CASE("Native CleanUnusedMasters names the undecodable record that blocks it") {
+    const auto root = undecodableTempRoot();
+    UndecodableCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    undecodableWriteBytes(path, undecodableRaceSourceBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    undecodableLoad(backend, nlohmann::json::array({undecodablePluginEntry("Patch.esp", path)}));
+    const auto before = undecodableReadBytes(path);
+
+    const auto refused = backend.cleanUnusedMasters(nlohmann::json::array({"Patch.esp"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "MasterUsageIncomplete");
+    CHECK(refused.error().message.find("RACE 000801:Patch.esp") != std::string::npos);
+    CHECK(refused.error().message.find("VMAD") == std::string::npos);
+    undecodableExpectNothingPending(backend);
+    CHECK(undecodableReadBytes(path) == before);
 }

@@ -1,6 +1,7 @@
 #include "fo4/forms/npc.hpp"
 
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "../plugin/record_edit.hpp"
 
 #include <algorithm>
@@ -27,6 +28,8 @@ constexpr auto k_prkr = Signature::from_string("PRKR");
 constexpr auto k_coct = Signature::from_string("COCT");
 constexpr auto k_cnto = Signature::from_string("CNTO");
 constexpr auto k_coed = Signature::from_string("COED");
+constexpr auto k_fact = Signature::from_string("FACT");
+constexpr auto k_perk = Signature::from_string("PERK");
 
 constexpr std::array k_faction_run{k_snam};
 constexpr std::array k_perk_run{k_prkz, k_prkr};
@@ -37,10 +40,17 @@ constexpr std::array k_order{
     Signature::from_string("INAM"), Signature::from_string("VTCK"),
     Signature::from_string("TPLT"), Signature::from_string("LTPT"),
     Signature::from_string("LTPC"), Signature::from_string("TPTA"),
-    Signature::from_string("RNAM"), Signature::from_string("SPLO"),
-    Signature::from_string("DEST"), Signature::from_string("WNAM"),
-    Signature::from_string("ANAM"), Signature::from_string("ATKR"),
-    Signature::from_string("ATKD"), Signature::from_string("SPOR"),
+    Signature::from_string("RNAM"), Signature::from_string("SPCT"),
+    Signature::from_string("SPLO"), Signature::from_string("DEST"),
+    Signature::from_string("DAMC"), Signature::from_string("DSTD"),
+    Signature::from_string("DSTA"), Signature::from_string("DMDL"),
+    Signature::from_string("DMDT"), Signature::from_string("DMDC"),
+    Signature::from_string("DMDS"), Signature::from_string("DSTF"),
+    Signature::from_string("WNAM"), Signature::from_string("ANAM"),
+    Signature::from_string("ATKR"), Signature::from_string("ATKD"),
+    Signature::from_string("ATKE"), Signature::from_string("ATKW"),
+    Signature::from_string("ATKS"), Signature::from_string("ATKT"),
+    Signature::from_string("SPOR"),
     Signature::from_string("OCOR"), Signature::from_string("GWOR"),
     Signature::from_string("ECOR"), Signature::from_string("FCPL"),
     Signature::from_string("RCLR"), k_prkz,
@@ -117,6 +127,47 @@ const Record& npc_record(const Plugin& plugin, const FormKey& key) {
     throw NpcError("record is not NPC_: " + key.to_string());
   }
   return *record;
+}
+
+void require_local_target(const Plugin& plugin,
+                          const FormKey& target,
+                          Signature expected,
+                          std::string_view label) {
+  if (target.owner() != plugin.key) return;
+  const auto* record = find_record(plugin, target);
+  if (record == nullptr) {
+    throw NpcError(std::string(label) + " must resolve to a record in this plugin: " +
+                   target.to_string());
+  }
+  if (record->header.signature != expected) {
+    throw NpcError(std::string(label) + " target " + target.to_string() + " is " +
+                   record->header.signature.to_string() + ", not " + expected.to_string());
+  }
+}
+
+void require_local_base_object(const Plugin& plugin, const FormKey& item) {
+  if (item.owner() != plugin.key) return;
+  const auto* record = find_record(plugin, item);
+  if (record == nullptr) {
+    throw NpcError("CNTO item must resolve to a record in this plugin: " + item.to_string());
+  }
+  if (!schema::is_sig_base_object(record->header.signature)) {
+    throw NpcError("CNTO item target " + item.to_string() + " is " +
+                   record->header.signature.to_string() + ", which is not a base object");
+  }
+}
+
+void require_local_coed_owner(const Plugin& plugin, const FormKey& owner) {
+  if (owner.owner() != plugin.key) return;
+  const auto* record = find_record(plugin, owner);
+  if (record == nullptr) {
+    throw NpcError("COED owner must resolve to a record in this plugin: " + owner.to_string());
+  }
+  const auto signature = record->header.signature;
+  if (signature != k_npc && signature != k_fact) {
+    throw NpcError("COED owner target " + owner.to_string() + " is " + signature.to_string() +
+                   ", not NPC_ or FACT");
+  }
 }
 
 void check_declared_count(const std::optional<std::uint32_t>& declared,
@@ -221,7 +272,6 @@ std::vector<Subrecord> encode_factions(const std::vector<NpcFaction>& entries,
 
 std::vector<Subrecord> encode_perks(const std::vector<NpcPerk>& entries,
                                     const PluginFormIdContext& context) {
-  if (entries.empty()) return {};
   std::vector<Subrecord> encoded;
   auto count = make_subrecord(k_prkz, 4);
   write_at(count.data, 0, static_cast<std::uint32_t>(entries.size()));
@@ -237,7 +287,6 @@ std::vector<Subrecord> encode_perks(const std::vector<NpcPerk>& entries,
 
 std::vector<Subrecord> encode_inventory(const std::vector<NpcInventoryItem>& entries,
                                         const PluginFormIdContext& context) {
-  if (entries.empty()) return {};
   std::vector<Subrecord> encoded;
   auto count = make_subrecord(k_coct, 4);
   write_at(count.data, 0, static_cast<std::uint32_t>(entries.size()));
@@ -294,6 +343,7 @@ std::vector<NpcFaction> decode_npc_factions(const Plugin& plugin, const FormKey&
 }
 
 bool add_npc_faction(Plugin& plugin, const FormKey& key, const NpcFaction& value) {
+  require_local_target(plugin, value.faction, k_fact, "SNAM faction");
   auto entries = decode_npc_factions(plugin, key);
   entries.push_back(value);
   return write_factions(plugin, key, entries);
@@ -307,6 +357,7 @@ bool remove_npc_faction(Plugin& plugin, const FormKey& key, std::size_t index) {
 }
 
 bool set_npc_faction(Plugin& plugin, const FormKey& key, std::size_t index, const NpcFaction& value) {
+  require_local_target(plugin, value.faction, k_fact, "SNAM faction");
   auto entries = decode_npc_factions(plugin, key);
   require_index(entries, index, "SNAM");
   entries[index] = value;
@@ -336,6 +387,7 @@ std::vector<NpcPerk> decode_npc_perks(const Plugin& plugin, const FormKey& key) 
 }
 
 bool add_npc_perk(Plugin& plugin, const FormKey& key, const NpcPerk& value) {
+  require_local_target(plugin, value.perk, k_perk, "PRKR perk");
   auto entries = decode_npc_perks(plugin, key);
   entries.push_back(value);
   return write_perks(plugin, key, entries);
@@ -349,6 +401,7 @@ bool remove_npc_perk(Plugin& plugin, const FormKey& key, std::size_t index) {
 }
 
 bool set_npc_perk(Plugin& plugin, const FormKey& key, std::size_t index, const NpcPerk& value) {
+  require_local_target(plugin, value.perk, k_perk, "PRKR perk");
   auto entries = decode_npc_perks(plugin, key);
   require_index(entries, index, "PRKR");
   entries[index] = value;
@@ -389,7 +442,15 @@ std::vector<NpcInventoryItem> decode_npc_inventory(const Plugin& plugin, const F
   return result;
 }
 
+void require_inventory_target(const Plugin& plugin, const NpcInventoryItem& value) {
+  require_local_base_object(plugin, value.item);
+  if (value.extra_data.has_value() && value.extra_data->owner.has_value()) {
+    require_local_coed_owner(plugin, *value.extra_data->owner);
+  }
+}
+
 bool add_npc_inventory_item(Plugin& plugin, const FormKey& key, const NpcInventoryItem& value) {
+  require_inventory_target(plugin, value);
   auto entries = decode_npc_inventory(plugin, key);
   entries.push_back(value);
   return write_inventory(plugin, key, entries);
@@ -403,6 +464,7 @@ bool remove_npc_inventory_item(Plugin& plugin, const FormKey& key, std::size_t i
 }
 
 bool set_npc_inventory_item(Plugin& plugin, const FormKey& key, std::size_t index, const NpcInventoryItem& value) {
+  require_inventory_target(plugin, value);
   auto entries = decode_npc_inventory(plugin, key);
   require_index(entries, index, "CNTO");
   entries[index] = value;

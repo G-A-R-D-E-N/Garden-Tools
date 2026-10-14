@@ -43,6 +43,13 @@ it('sets an entry at its index, refreshes the list and reports the native messag
   expect(await screen.findByText('Updated leveled list entry 1 in ' + formKey + ' in W0.esp.')).toBeTruthy();
 });
 
+it('keeps the Index field on leveled list entries', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: vi.fn(async () => JSON.stringify(list)) } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  await screen.findByText('000802:W0.esp');
+  expect(screen.getByLabelText('Index')).toBeTruthy();
+});
+
 it('re-reads the rows when RecordView reloads the matrix', async () => {
   const read = vi.fn(async () => JSON.stringify(list));
   vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: read } } } });
@@ -62,6 +69,14 @@ it('shows the winner read-only with no edit controls when opened from another pl
   expect(screen.getByText('Showing the winning version from B.esp. Open the record from B.esp to edit.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Set' })).toBeNull();
   expect(edit).not.toHaveBeenCalled();
+});
+
+it('renders the record when the bridge hands back the parsed object instead of a JSON string', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetLeveledList: vi.fn(async () => list) } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  expect(await screen.findByText('000802:W0.esp')).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByDisplayValue('5')).toBeTruthy();
 });
 
 it('shows a refused leveled list edit with its error text and does not refresh', async () => {

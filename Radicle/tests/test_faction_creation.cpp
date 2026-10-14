@@ -92,3 +92,15 @@ TEST(FactionCreation, RefusesUndefinedFlagsAndLocalizedFullName) {
   EXPECT_NO_THROW(static_cast<void>(
       fo4::forms::create_faction(localized, std::nullopt, std::nullopt, 0u)));
 }
+
+TEST(FactionCreation, RefusesEmbeddedNulInEditorIdOrFullName) {
+  auto plugin = fo4::read_plugin(make_plugin(0), "Patch.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_faction(
+                   plugin, std::string_view{"A\0B", 3}, std::nullopt, 0u)),
+               fo4::forms::FactionError);
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_faction(
+                   plugin, std::nullopt, std::string_view{"A\0B", 3}, 0u)),
+               fo4::forms::FactionError);
+  EXPECT_EQ(plugin.header.next_form_id, 0x800u);
+  EXPECT_TRUE(plugin.groups.empty());
+}

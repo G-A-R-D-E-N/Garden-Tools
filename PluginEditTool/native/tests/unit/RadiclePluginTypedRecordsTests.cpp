@@ -506,3 +506,80 @@ TEST_CASE("Native NPC reads and edits refuse a deleted record") {
     REQUIRE_FALSE(edited.has_value());
     CHECK(edited.error().type == "RecordDeleted");
 }
+
+TEST_CASE("Native NPC set with unchanged values reports no change and stages nothing") {
+    const auto root = typedTempRoot();
+    TypedCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    typedWriteBytes(basePath, basePlugin());
+    typedWriteBytes(patchPath, npcPatchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBaseAndPatch(backend, basePath, patchPath);
+
+    const auto unchanged = backend.editNpcEntries(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "factions", "set", 0,
+        nlohmann::json{{"faction", "000900:Base.esm"}, {"rank", 3}}
+    }));
+    REQUIRE(unchanged.has_value());
+    CHECK(unchanged->get<std::string>() == "No change for factions entry in 000800:Patch.esp in Patch.esp.");
+    CHECK_FALSE(pendingPlugin(backend, 1));
+}
+
+TEST_CASE("Native typed NPC edit is refused on a protected plugin and leaves it unchanged") {
+    const auto root = typedTempRoot();
+    TypedCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    typedWriteBytes(basePath, basePlugin());
+    typedWriteBytes(patchPath, npcPatchPlugin());
+    const auto before = typedReadBytes(patchPath);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Base.esm", basePath),
+            nlohmann::json{
+                {"name", "Patch.esp"},
+                {"path", patchPath.string()},
+                {"source", "data"},
+                {"resolved", true}
+            }
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto refused = backend.editNpcEntries(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "factions", "add", nullptr,
+        nlohmann::json{{"faction", "000901:Base.esm"}, {"rank", -1}}
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "PluginReadOnly");
+    CHECK_FALSE(pendingPlugin(backend, 1));
+    CHECK(typedReadBytes(patchPath) == before);
+}
+
+TEST_CASE("Native typed NPC edit is refused when the plugin changed on disk after load") {
+    const auto root = typedTempRoot();
+    TypedCleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    const auto patchPath = root / "Patch.esp";
+    typedWriteBytes(basePath, basePlugin());
+    typedWriteBytes(patchPath, npcPatchPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadBaseAndPatch(backend, basePath, patchPath);
+    const auto loadedTime = std::filesystem::last_write_time(patchPath);
+
+    typedWriteBytes(patchPath, basePlugin());
+    std::filesystem::last_write_time(patchPath, loadedTime + std::chrono::seconds(2));
+
+    const auto refused = backend.editNpcEntries(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "factions", "add", nullptr,
+        nlohmann::json{{"faction", "000901:Base.esm"}, {"rank", -1}}
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "PluginChangedOnDisk");
+    CHECK_FALSE(pendingPlugin(backend, 1));
+}

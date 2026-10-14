@@ -10,15 +10,15 @@ namespace Radicle.Interop.Tests;
 public class LoadOrderTests
 {
     [Fact]
-    public void ReadsPluginListAndCccWithBomCrlfCommentsAndDuplicates()
+    public void ReadsPluginListAndCccWithBomKeptCrlfCommentsAndDuplicates()
     {
         using var temp = new TempDirectory();
-        var list = temp.Write("plugins.txt", Encoding.UTF8.GetBytes("\uFEFF# comment\r\n*Base.esm\r\nx\r\nMod.esp\r\n*Base.esm\r\n"));
+        var list = temp.Write("plugins.txt", Encoding.UTF8.GetBytes("\uFEFF*Base.esm\r\n# comment\r\nx\r\nMod.esp\r\n*mod.esp\r\n"));
         var ccc = temp.Write("Fallout4.ccc", Encoding.UTF8.GetBytes("\uFEFFcc_b.esl \r\n\r\ncc_a.esl\n"));
 
-        Assert.Equal(new[] { new PluginListEntry("Base.esm", true, 2), new PluginListEntry("Mod.esp", false, 4) },
+        Assert.Equal(new[] { new PluginListEntry("ï»¿*Base.esm", false, 1), new PluginListEntry("x", false, 3), new PluginListEntry("Mod.esp", true, 4) },
                      LoadOrderFiles.ReadPluginList(list).ToArray());
-        Assert.Equal(new[] { "cc_b.esl", "cc_a.esl" }, LoadOrderFiles.ReadCcc(ccc).ToArray());
+        Assert.Equal(new[] { "ï»¿cc_b.esl ", "cc_a.esl" }, LoadOrderFiles.ReadCcc(ccc).ToArray());
     }
 
     [Fact]
@@ -28,6 +28,17 @@ public class LoadOrderTests
         var list = temp.Write("plugins.txt", Encoding.ASCII.GetBytes("*Good.esp\r\n*Bad\tName.esp\r\nLast.esp\r\n"));
 
         Assert.Equal(new[] { new PluginListEntry("Good.esp", true, 1), new PluginListEntry("Last.esp", false, 3) },
+                     LoadOrderFiles.ReadPluginList(list).ToArray());
+    }
+
+    [Fact]
+    public void ReadPluginListSplitsTrailingTabFieldsFromTheRight()
+    {
+        using var temp = new TempDirectory();
+        var comments = string.Concat(Enumerable.Repeat("# note\r\n", 10));
+        var list = temp.Write("plugins.txt", Encoding.ASCII.GetBytes(comments + "*Mod With Spaces.esp\r\nLate.esp\r\n"));
+
+        Assert.Equal(new[] { new PluginListEntry("Mod With Spaces.esp", true, 11), new PluginListEntry("Late.esp", false, 12) },
                      LoadOrderFiles.ReadPluginList(list).ToArray());
     }
 

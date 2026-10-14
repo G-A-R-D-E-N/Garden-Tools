@@ -192,6 +192,29 @@ TEST(FactionSynthetic, AddsSetsAndRemovesRelationsByIndex) {
   expect_relation_eq(relations[1], added);
 }
 
+TEST(FactionSynthetic, RelationTargetOfThisPluginMustBeFactOrRace) {
+  fo4::test::ByteWriter out;
+  out.bytes = make_plugin();
+  const auto group = fo4::test::begin_group(out, "NPC_", 0);
+  const auto npc = fo4::test::begin_record(out, "NPC_", 0, 0x02000900);
+  fo4::test::end_record(out, npc);
+  fo4::test::end_group(out, group);
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto original = fo4::test::original_bytes(plugin);
+
+  fo4::forms::FactionRelation to_npc;
+  to_npc.faction = fo4::FormKey::parse("000900:Patch.esp");
+  to_npc.reaction = fo4::forms::FactionCombatReaction::friendly;
+  EXPECT_THROW(fo4::forms::add_faction_relation(plugin, key(), to_npc), fo4::forms::FactionError);
+  EXPECT_THROW(fo4::forms::set_faction_relation(plugin, key(), 0, to_npc), fo4::forms::FactionError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+
+  fo4::forms::FactionRelation to_self = to_npc;
+  to_self.faction = key();
+  fo4::forms::add_faction_relation(plugin, key(), to_self);
+  EXPECT_EQ(fo4::forms::decode_faction_relations(plugin, key()).size(), 3u);
+}
+
 TEST(FactionSynthetic, AddsSetsAndRemovesRanksByIndex) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   fo4::forms::add_faction_rank(plugin, key(), make_rank(9, "Captain"));

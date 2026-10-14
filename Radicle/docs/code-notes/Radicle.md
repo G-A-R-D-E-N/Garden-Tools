@@ -968,7 +968,7 @@ C ABI wrappers for `ClimateTiming::moon_phase`, `ClimateTiming::volatility_hold_
 
 ## Radicle/tests/real_data_build.cpp:detect_game_build
 
-Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The last match in file order wins: `scan_file_version_backward` walks from the end of the file, and the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. Each call reads the whole exe, once per real-data test.
+Reads `<data_dir>/../Fallout4.exe` and scans its bytes for the VS_FIXEDFILEINFO signature 0xFEEF04BD followed by struct version 0x00010000. The version is the high and low file-version words, printed as major.minor.build.revision. The last match in file order wins: `scan_file_version_backward` walks from the end of the file, and the struct-version check is what rejects stray constants. A non-empty `FO4_GAME_BUILD` takes precedence and skips the file read. `game_build_from_version` maps 1.10.163 to OG, 1.10.980 and 1.10.984 to NG, and 1.11.x to AE. `exact_counts_known` is true only for 1.11.240.0, the build the pinned counts were measured on. `scan_file_version_backward` reads the exe in 1 MiB windows (`k_version_scan_chunk`) from the end and returns at the first match, so it reads only the tail when a match is near the end and the whole file only when nothing matches. There is no cache: each call scans again.
 
 ## Radicle/src/environment/sound.cpp:select_rate_file_index
 
@@ -1034,7 +1034,7 @@ The RACE form version 131 gate stays exact, and `src/forms/race.cpp:create_race`
 
 ## Radicle/tests/real_data_plugins.hpp:installed_master_and_cc_plugins
 
-Returns the seven official masters present in the Data folder (Fallout4.esm, DLCRobot, DLCworkshop01-03, DLCCoast, DLCNukaWorld) followed by every `cc*.esl` and `cc*.esm` file, matched case-insensitively. When `Fallout4.ccc` exists in the game root (`dir / ".." / "Fallout4.ccc"`), only cc files whose lowercased name is listed there are returned, so user copies such as `ccOTMFO4001-Remnants - Copy.esl` are skipped; when the file is missing or lists no names, the prefix rule applies alone. Listed names are trimmed and lowercased; both readers ignore a UTF-8 BOM. Missing masters are skipped rather than reported, so the corpus tests keep their skip behavior on partial installs. `archive_load_order` then pairs each name with its `<plugin> - *.ba2` archives, so a `cc` archive is opened only when its plugin is present in Data. Shared by `test_nif_corpus.cpp`, `test_ba2_real.cpp` and `test_pex_corpus.cpp`.
+Returns the seven official masters present in the Data folder (Fallout4.esm, DLCRobot, DLCworkshop01-03, DLCCoast, DLCNukaWorld) followed by every `cc*.esl` and `cc*.esm` file, matched case-insensitively. When `Fallout4.ccc` exists in the game root (`dir / ".." / "Fallout4.ccc"`), only cc files whose lowercased name is listed there are returned, so user copies such as `ccOTMFO4001-Remnants - Copy.esl` are skipped; when the file is missing or lists no names, the prefix rule applies alone. Listed names are trimmed and lowercased, and the helper strips a UTF-8 BOM. The Radicle readers do not strip it or trim (RE-020, `Radicle/src/loadorder/plugin_list.cpp:parse_ccc`), so the helper is looser than the engine. Missing masters are skipped rather than reported, so the corpus tests keep their skip behavior on partial installs. `archive_load_order` then pairs each name with its `<plugin> - *.ba2` archives, so a `cc` archive is opened only when its plugin is present in Data. Shared by `test_nif_corpus.cpp`, `test_ba2_real.cpp` and `test_pex_corpus.cpp`.
 
 ## Radicle/tests/test_nif_corpus.cpp:ReadsEveryVanillaNifAndHandlesGeometryTypes
 
@@ -1050,7 +1050,7 @@ Fallback for `FO4_DATA_DIR` when neither `FO4_PEX_CORPUS` nor `FO4_PEX_ARCHIVES`
 
 ## Radicle/include/fo4/environment/vegetation.hpp:GrassData::water_filter_active
 
-The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter, as RE-013 (#403 c7887) proves for the GRAS water mode. The runtime consumer of the filter is not decoded (RE-013 on #520); see `Radicle/docs/VEGETATION.md`.
+The stored water discriminator is a raw u32. Modes 0 through 5 mean a water filter applies; any larger value, including 6, 7 and 0xFFFFFFFF, means no filter, as RE-013 (#403 c7887) proves for the GRAS water mode. The method is a bare predicate. Its only caller in this repo is `Radicle/tests/test_vegetation.cpp`, so no runtime path applies the filter here; the runtime consumer is not decoded (RE-013 on #520). See `Radicle/docs/VEGETATION.md`.
 
 ## Radicle/src/environment/vegetation.cpp:landscape_grasses_runtime_view
 
@@ -1066,7 +1066,7 @@ The data directory overload lists the directory and passes the entries to the sp
 
 ## Radicle/src/loadorder/plugin_list.cpp:parse_plugin_list
 
-Splits on LF and removes one trailing CR per line; the BOM is removed only at the start of the text. Lines starting with `#` or shorter than two characters are skipped before the leading `*` is stripped, so a lone `*` is skipped and `*a` yields the name `a`. Duplicates are compared as `PluginKey`s after the `*` is stripped, so the assembler's case folding applies and `Mod.esp` matches `*MOD.esp`. The first occurrence keeps its active flag; later ones go to `duplicates`. A name with a byte below 0x20 is skipped and its 1-based line goes to `invalid_lines`. The C ABI plugin-list rows carry only the entries, so `assemble_load_order` reports the lines as `invalid_name`, which is the only channel for them. Tests: `Radicle/tests/test_load_order_files.cpp:MixedCaseDuplicateKeepsInactiveFirstEntry`, `Radicle/tests/test_load_order_files.cpp:MixedCaseDuplicateKeepsActiveFirstEntry`, `Radicle/tests/test_load_order_files.cpp:NamesWithControlCharactersAreSkippedAndReported`.
+Engine rules from RE-020 (#520 c14028). The text is first cut at the first 0x1A byte (Ctrl+Z; text mode ends the read there, PARTIAL: measured on the CRT), then put through text-mode translation (CRLF to LF, a lone CR kept), then split into `fgets` chunks of at most 511 bytes, each ending at its LF; a chunk of one byte or less is skipped, so `A` plus LF is the name `A` and a final unterminated `B` is skipped. The UTF-8 BOM is not stripped: it stays on line 1 and blocks the `*` and `#` tests there. `#` and `*` count only at byte 0, `*` after the `#` test, so `*#x` is the active name `#x`. Nothing is trimmed. Names are decoded from Windows-1252 by `Radicle/src/text/encoding.cpp:windows1252_to_utf8`, so undefined bytes map to C1 code points; other ANSI code pages are not modeled. A name with a byte below 0x20 goes to `invalid_lines` before decoding; an embedded NUL makes the engine stop the name at the NUL, while Radicle reports the whole line there. The engine never matches those names; Radicle reports them through `invalid_lines`, which `assemble_load_order` turns into `invalid_name`. Duplicates use the `PluginKey` map: the first line keeps its position and becomes active if a later duplicate is starred, and each duplicate goes to `duplicates`. `PluginKey` folds Unicode; the engine folds ASCII only (RE-020, INFERRED), which differs only for non-ASCII names. Tests: `Radicle/tests/test_load_order_files.cpp:StarredDuplicateActivatesFirstEntryAndIsRecorded`, `Radicle/tests/test_load_order_files.cpp:MixedCaseDuplicateKeepsActiveFirstEntry`, `Radicle/tests/test_load_order_files.cpp:NamesWithControlCharactersAreSkippedAndReported`, `Radicle/tests/test_load_order_files.cpp:Utf8BomStaysOnLineOneAndBlocksStarAndComment`, `Radicle/tests/test_load_order_files.cpp:TrailingSpaceIsKeptAndTabMakesAnInvalidLine`, `Radicle/tests/test_load_order_files.cpp:HashAndStarCountOnlyAtByteZero`, `Radicle/tests/test_load_order_files.cpp:OneByteChunksAreSkippedUnlessTheyEndInLf`, `Radicle/tests/test_load_order_files.cpp:LongLineIsReadInFgetsChunks`, `Radicle/tests/test_load_order_files.cpp:Windows1252HighByteDecodesToUtf8`, `Radicle/tests/test_load_order_files.cpp:UndefinedWindows1252ByteDecodesToC1Code`, `Radicle/tests/test_load_order_files.cpp:LoneCrInsideALineMakesAnInvalidLine`, `Radicle/tests/test_load_order_files.cpp:CtrlZEndsThePluginListText`, `Radicle/tests/test_load_order_files.cpp:FullChunkWithLfGivesOneName`, `Radicle/tests/test_load_order_files.cpp:OverlongChunkThenOneByteNameWithLf`, `Radicle/tests/test_load_order_files.cpp:BomOnlyFileIsOneUnstarredEntry`.
 
 ## Radicle/bindings/csharp/Radicle.Interop/LoadOrder.cs:SplitTrailing
 
@@ -1074,7 +1074,7 @@ Splits a row into a fixed number of trailing fields counted from the right, so a
 
 ## Radicle/src/loadorder/plugin_list.cpp:parse_ccc
 
-Trims spaces, tabs and CRs around each name and drops blank lines. Names keep their case. The assembly matches names case-insensitively, so the engine's lower-casing does not change the result.
+Engine rule from RE-020 (#520 c14028): the engine reads the stream and `strtok_s`-splits on CR and LF, so empty tokens are skipped and there is no comment, star, BOM or trim handling. This parser splits the same way, keeps spaces and tabs, and decodes each token with `Radicle/src/text/encoding.cpp:windows1252_to_utf8`; a token with a control character below 0x20 (such as a TAB) is dropped, because the engine can never match it, it would break the TAB-joined C API rows, and `parse_ccc` has no line report. Names keep their case. The assembly matches names case-insensitively, so the engine's lower-casing does not change the result. Tests: `Radicle/tests/test_load_order_files.cpp:CccKeepsSpacesAndSkipsEmptyTokens`, `Radicle/tests/test_load_order_files.cpp:CccDropsTokensWithAControlCharacter`, `Radicle/tests/test_load_order_files.cpp:CccSplitsOnCarriageReturn`, `Radicle/tests/test_load_order_files.cpp:CccBomStaysOnFirstNameAndUndefinedByteDecodesToC1`.
 
 ## Radicle/src/loadorder/assemble.cpp:read_tes4_header
 
@@ -1464,9 +1464,10 @@ An INFO's DIAL topic is the label of its nearest enclosing topic-children group 
 
 Dialogue stored-link checks. Each rule reads only stored subrecords. A stored form ID whose master index is past the plugin's master table is skipped, so neither rule below fires for it.
 
-- `branch_starting_topic_not_dial` (error): DLBR `SNAM` (Starting Topic) must target a loaded DIAL, including a missing target. Cites `Core/wbDefinitionsFO4.pas:8792` (`wbFormIDCk(SNAM, 'Starting Topic', [DIAL]).SetRequired`). DLBR has no entry in the generated schema, so the generic checker never sees this slot.
+- `branch_starting_topic_not_dial` (error): DLBR `SNAM` (Starting Topic) must target a loaded DIAL, including a missing target. Cites `Core/wbDefinitionsFO4.pas:8792` (`wbFormIDCk(SNAM, 'Starting Topic', [DIAL]).SetRequired`). DLBR has no record row in the generated schema, so the slot is unproven. The generic `check_links` pass does see the `SNAM`, because `formid_subrecords.inc` lists it and a 4-byte payload is remapped as a form ID. For a missing target that pass is skipped (see `check_links` below), so this rule is the only finding.
 - `deleted_target` (warning): a DLBR `SNAM` whose loaded winner is deleted. This comes only from the generic `check_links` `deleted_target` check, which already covers the DLBR SNAM link; `check_dialogue_links` adds no second warning for it.
-- `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
+- `topic_children_not_dial` (warning): the label of an INFO's topic-children group must be a loaded DIAL. This is a structural warning without xEdit enforcement: `Core/wbDefinitionsFO4.pas:1017-1025` is `wbConditionQuestOverlay`, a display callback that does nothing when ChildrenOf is not a DIAL, so it is not a validation.
+- Not added: DIAL `BNAM` (Branch, `wbDefinitionsFO4.pas:6318`) and DIAL `QNAM` (Quest, `:6319`) must target DLBR and QUST. The generated schema already proves both (`generated_formlink_lists.inc` `DIAL\Branch` and `DIAL\Quest`), so `wrong_target_type` covers them. DLBR `QNAM` (Quest, `:8780`) is also unproven, and it is not covered here.
 - No INFO merge-order rule is included; that needs engine evidence.
 - Only FO4_DATA_DIR vanilla (`VanillaMasterHasNoErrorFindings`) can show whether vanilla holds these invariants. Unit tests here use synthetic fixtures only (`tests/test_check_dialogue.cpp`).
 
@@ -2037,3 +2038,81 @@ LVSP LLCT (minimum 1) and SMBN, SMEN and SMQN CITC (minimum 1) are not coupled. 
 ## Radicle/schema/fallout4/fields.json:NPC_ — NAM7 minimum 0
 
 NPC_ NAM7 has minimum 0 (it was 1). xEdit marks it required (`Core/wbDefinitionsFO4.pas:10424`, `wbFloat(NAM7, 'Unused', cpNormal, True)`), but the audit count found it on none of the 3015 vanilla NPC_ records, so the minimum follows the corpus. This is a deliberate deviation from the xEdit flag.
+
+## Radicle/src/graph/check_errors.cpp:check_links — DLBR SNAM with a missing target
+
+`check_links` skips a DLBR `SNAM` whose target is in no loaded plugin. Before this, that link also got an `unresolved_link` finding, a warning because the DLBR `SNAM` slot has no schema proof, next to the `branch_starting_topic_not_dial` error from `check_dialogue_links`. The dialogue rule is kept because it names the requirement (a loaded DIAL). Deleted targets still come from `check_links`. Test: `tests/test_check_errors.cpp:MissingBranchStartingTopicIsReportedOnce`.
+
+## Radicle/src/schema/form_link_mixed.cpp:npc_formid_offsets — NPC_ SNAM and PRKR
+
+NPC_ `SNAM` (faction) is 5 bytes: form ID u32 at 0, rank s8 at 4. NPC_ `PRKR` (perk) is also 5 bytes: form ID u32 at 0, rank u8 at 4. Both layouts are exact, so any other size throws under strict remap and is skipped otherwise. The sizes match `encode_factions` and `encode_perks` in `src/forms/npc.cpp`, which write 5 bytes, and `decode_npc_factions` and `decode_npc_perks`, which require 5. xEdit defines the perk struct at `Core/wbDefinitionsFO4.pas:10386-10388`. Before this layout, the generic `SNAM` entry in `formid_subrecords.inc` remapped only 4-byte payloads, and `PRKR` was in no remap table, so the perk form ID was never remapped. Tests: `tests/test_packed_formlink_arrays.cpp:NpcFactionSnamRemapsFormIdAndKeepsRank` and `NpcPerkPrkrRemapsFormIdAndKeepsRank`.
+
+## Radicle/src/schema/form_link_mixed.cpp:leveled_list_formid_offsets — LVLI and LVLN LLKC
+
+LLKC is an uncounted array of 8-byte structs: keyword form ID u32 at 0 and a u32 chance at 4 (`Core/wbDefinitionsFO4.pas:9979-9984`, `wbArrayS` with `wbStructSK([0], ...)`). The layout is non-exact, `size % 8 == 0`, like `XPOD` in `k_placed_reference_layouts`. Reason: the shipped byte check found 8, 16 and 24 byte payloads, and xEdit accepts any element count. The chance is not remapped. Tests: `tests/test_packed_formlink_arrays.cpp:LeveledListLlkcKeywordsRemapAndKeepChances` and `LeveledListLlkcWrongSizeFailsClosedUnderStrictRemap`.
+
+## Radicle/src/forms/npc.cpp:require_local_target — typed NPC_ targets
+
+`add_npc_faction` and `set_npc_faction` require a local SNAM target to be FACT. `add_npc_perk` and `set_npc_perk` require a local PRKR target to be PERK. A local key that does not resolve throws `NpcError`. Foreign keys are not resolved here and are not checked, the same rule as `validate_local_entry_targets` in `src/forms/leveled_spell_creation.cpp` and `validate_entry_target` in `src/forms/leveled_list.cpp`. xEdit uses `wbFormIDCk('Faction', [FACT])` for SNAM and `wbFormIDCk('Perk', [PERK])` for PRKR (`Core/wbDefinitionsFO4.pas:10387`). Test: `tests/test_npc_lists.cpp:LocalFactionAndPerkTargetsMustHaveTheirSignature`.
+
+## Radicle/src/forms/faction.cpp:require_relation_target — FACT XNAM targets
+
+`add_faction_relation` and `set_faction_relation` require a local XNAM faction to be FACT or RACE, before the plugin is copied. A local key that does not resolve throws `FactionError`. Foreign keys are not checked, as in `require_local_target` (`src/forms/npc.cpp`). xEdit defines the relation struct with `wbFormIDCkNoReach('Faction', [FACT, RACE])` (`Core/wbDefinitionsCommon.pas:8818-8819`). Test: `tests/test_faction.cpp:RelationTargetOfThisPluginMustBeFactOrRace`.
+
+## Radicle/src/forms/leveled_list.cpp:set_leveled_list_settings — LVLF bits
+
+LVLF flags may use only bits 0x01, 0x02 and 0x04 (mask 0x07). `set_leveled_list_settings` applies the same check as `create_leveled_list`, before any read or write, so a rejected call leaves the plugin unchanged. Test: `tests/test_leveled_list.cpp:SettingsRejectFlagBitsOutsideTheDefinedMask`.
+
+## Radicle/src/schema/form_link_mixed.cpp:k_weapon_layouts — WEAP embedded form ID slots
+
+WEAP DNAM (132 bytes), FNAM (41) and CRDT (12) are fixed-size structs with no version condition in xEdit (`Core/wbDefinitionsFO4.pas` WEAP record, lines 12877-13032; the DNAM struct is at 12911). Slots: DNAM Ammo @0, Skill @40, Resist @44, eight Sound slots @73 to @101 (lines 12912, 12922, 12923, 12978-12985); FNAM Override Projectile @29 (line 13004); CRDT Crit Effect @8 (line 13016). Sizes are exact, so a payload of another size fails closed under strict remap. The layouts are interpreted by `fixed_stride_formid_offsets`, like the FACT XNAM and NPC_ SNAM layouts.
+
+## Radicle/src/schema/form_link_mixed.cpp:faction_plvd_formid_offsets — FACT PLVD location slot
+
+xEdit `wbPLVD` (`Core/wbDefinitionsFO4.pas` lines 4200-4221) is a struct whose first field is a s32 Type that selects the union member at @4. Types 0 (Reference), 1 (Cell), 4 (Object ID) and 6 (Keyword) hold a form ID; the others (2 and 3 byte arrays, 5 Object Type, 7 unused, 8 to 14 aliases and targets) do not. Collection Index is optional from member 3 (`SetOptionalFrom(3)`), so the payload is 12 or 16 bytes. `Radicle/src/graph/reachability.cpp` checks PLVD types 0, 1 and 4 only; this remap includes type 6 as xEdit lists it. The PACK PLDT decider in `Radicle/src/schema/behavior_layout.cpp` uses the same four types as this function.
+
+## Radicle/src/forms/leveled_list.cpp:zeroes_chance_none — LVLO chance on form versions below 69
+
+`decode_leveled_list` reports entry chance none as 0 and `replace_leveled_list_entries` writes 0 for LVLI and LVLN records whose `header.form_version` is below 69. xEdit's `wbLLEAfterLoad` zeroes the entries' Chance None under the same condition (`Core/wbDefinitionsFO4.pas:2215-2250`), attached to LVLN (10007) and LVLI (10031) only. LVSP has no after-load (10044-10049), so LVSP chance is decoded as stored. Unedited records are not rewritten. Tests: `tests/test_leveled_list.cpp:LegacyFormVersionReportsZeroChanceNoneForLvliAndLvln`, `LegacyFormVersionEditsWriteZeroChanceNoneAndNoOpStaysIdentical`.
+
+## Radicle/src/forms/leveled_list.cpp:sorted_entries — LVLO order for typed writes
+
+Typed writes store LVLO entries in xEdit's order. The entry struct's sort key is Level, then the reference, then Count (`Core/wbDefinitionsCommon.pas:8788-8802`, the extended key from `wbStructExSK([0, 2], [3])`). The reference is compared as the raw form ID in this plugin's context, which matches load order for the plugin's masters. Keys are compared as fixed-width hex strings, so the order is numeric. `Core/wbImplementation.pas:2151-2175` (`CompareSortKeys`) and `:20916` (`TwbSubRecordArray.DoInit`) sort the array. `std::stable_sort` keeps the caller's order for equal keys. The sort runs in `replace_leveled_list_entries`, so insert, set and remove all write sorted lists. A list that is already sorted is still a no-op when the caller's entries equal the decoded entries.
+
+Index meaning: `insert_leveled_list_entry` and `set_leveled_list_entry` take an index into the list as decoded before the call. The new entry lands at that index first, and then the list is sorted, so its final index is set by its key. Among equal keys, the index decides the order. Tests: `tests/test_leveled_list.cpp:EntriesSortByLevelThenReferenceAfterTypedEdits`, `EqualSortKeysKeepTheirOrderAndSetResortsTheEdit`.
+
+## Radicle/src/forms/leveled_list.cpp:replace_leveled_list_entries — LVSP COED refusal
+
+An LVSP entry with `extra` is refused before any write. xEdit's LVSP entry is LVLO only (`Core/wbDefinitionsFO4.pas:10044-10049`). A COED-carrying LVSP entry from a file is still decoded, and any write that carries it is refused. Test: `tests/test_leveled_list.cpp:SpellListEntriesRefuseExtraData`.
+
+## Radicle/src/forms/leveled_list.cpp:zstring — editor ID NUL
+
+`create_leveled_list` refuses an editor ID with an embedded NUL before the plugin is copied. A NUL would write an early terminator into the zstring. The same local check is in `Radicle/src/forms/cell.cpp:zstring`. The LVSP creator takes no editor ID, so it has no check to match. Test: `tests/test_leveled_list_creation.cpp:RefusesEmbeddedNulInEditorId`.
+
+## Radicle/src/forms/faction.cpp:zstring — FACT editor ID and full name NUL
+
+`create_faction` refuses an editor ID or full name with an embedded NUL. The local check matches the one in `Radicle/src/forms/leveled_list.cpp:zstring`. Test: `tests/test_faction_creation.cpp:RefusesEmbeddedNulInEditorIdOrFullName`.
+
+## Radicle/src/forms/npc.cpp:k_order — NPC_ run boundaries
+
+`insertion_index` places a missing run after the last known subrecord that orders before the anchor. An unknown subrecord between two known ones can therefore be split off. The order table lists each group's members in xEdit's `NPC_` definition order: `wbDEST` (`Core/wbDefinitionsFO4.pas:4275-4300`: DEST, DAMC, DSTD, DSTA, DMDL, DMDT, DMDC, DMDS, DSTF), `wbAttackData` (`:4073-4121`: ATKD, ATKE, ATKW, ATKS, ATKT), and the SPCT count before SPLO (`:3283-3285`). Without the full groups, a new PRKZ or COCT run landed between DEST and DSTD, or between ATKD and ATKE. Test: `tests/test_npc_lists.cpp:InsertedRunsStayOutsideTheDestAndAttackGroups`.
+
+## Radicle/src/forms/npc.cpp:require_local_base_object — CNTO item targets
+
+`add_npc_inventory_item` and `set_npc_inventory_item` require a local CNTO item to be a base object, using `schema::is_sig_base_object` (the generated xEdit `sigBaseObjects` list, `Core/wbDefinitionsFO4.pas:74`). Foreign keys are not checked, as in `require_local_target`. Test: `tests/test_npc_lists.cpp:InventoryItemsMustBeBaseObjectsAndCoedOwnersNpcOrFact`.
+
+## Radicle/src/forms/npc.cpp:require_local_coed_owner — COED owner targets
+
+A local COED owner must be NPC_ or FACT, as xEdit's `wbCOED` owner (`Core/wbDefinitionsFO4.pas:3291`, `[NPC_, FACT, NULL]`). A null owner is allowed. Foreign keys are not checked. Test: `tests/test_npc_lists.cpp:InventoryItemsMustBeBaseObjectsAndCoedOwnersNpcOrFact`.
+
+## Radicle/src/forms/npc.cpp:encode_perks — count kept at zero
+
+`encode_perks` and `encode_inventory` always write PRKZ or COCT, including 0 when the last entry is removed. xEdit's `TwbSubRecordArray.BeforeActualRemove` sets the count element to 0 and keeps it (`Core/wbImplementation.pas:20774-20797`). Test: `tests/test_npc_lists.cpp:RemovingTheLastEntryKeepsItsCountSubrecordAtZero`.
+
+## Radicle/src/forms/npc.cpp:replace_run — NPC_ SNAM, PRKR and CNTO keep append order
+
+`replace_run` writes the caller's order and does not sort. This deviates from xEdit, which declares the CNTO array with `wbRArrayS` (`Core/wbDefinitionsFO4.pas:3316`). The reason is shipped-corpus evidence: vanilla Fallout4.esm stores 1,011 SNAM, 1,468 CNTO and 127 XNAM lists unsorted, so a sorted write would reorder records that Bethesda stored in another order. LVLO is sorted (see `sorted_entries`).
+
+## Radicle/src/forms/faction.cpp:add_faction_relation — FACT XNAM append order
+
+`add_faction_relation` inserts after the last XNAM and does not sort. The reason is the same shipped-corpus evidence as `replace_run`: a byte scan of the shipped Fallout4.esm found 127 unsorted XNAM lists in Fallout4.esm.

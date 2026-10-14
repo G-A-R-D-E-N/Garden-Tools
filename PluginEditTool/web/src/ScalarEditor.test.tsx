@@ -24,14 +24,20 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('scalarLabel', () => {
-  it('shows the enum name and hex for an unknown value', () => {
+  it('shows the enum name, or <Unknown: N> for an unnamed value', () => {
     expect(scalarLabel('1', crimeArrest)).toBe('True');
-    expect(scalarLabel('7', crimeArrest)).toBe('0x7');
+    expect(scalarLabel('7', crimeArrest)).toBe('<Unknown: 7 $7>');
+    expect(scalarLabel('-1', crimeArrest)).toBe('<Unknown: -1 $FFFFFFFFFFFFFFFF>');
+    expect(scalarLabel('0', { kind: 'enum', names: [] })).toBe('<Unknown: 0>');
+    expect(scalarLabel('1380273732', crimeArrest)).toBe('<Unknown: 1380273732 $52454E44 DNER>');
+    expect(scalarLabel('1073741921', crimeArrest)).toBe('<Unknown: 1073741921 $40000061>');
   });
 
-  it('joins the set flag names and shows unknown bits as hex', () => {
+  it('joins the set flag names and gives each unknown bit its own <Unknown: bit>', () => {
     expect(scalarLabel('3', flags)).toBe('Hidden From NPC, Special Combat');
-    expect(scalarLabel('131', flags)).toBe('Hidden From NPC, Special Combat, 0x80');
+    expect(scalarLabel('131', flags)).toBe('Hidden From NPC, Special Combat, <Unknown: 7 $7>');
+    expect(scalarLabel('168', flags)).toBe('<Unknown: 3 $3>, <Unknown: 5 $5>, <Unknown: 7 $7>');
+    expect(scalarLabel('1', { kind: 'flags', names: [] })).toBe('<Unknown: 0>');
     expect(scalarLabel('0', flags)).toBe('none');
   });
 

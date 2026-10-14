@@ -1110,7 +1110,7 @@ PluginEditTool's strings are UTF-8 (they come from and go back to JSON), but on 
 
 There are about 270 such conversions across 43 files; the manifest makes all of them UTF-8 instead of patching each. Windows applies `activeCodePage` from Windows 10 version 1903; older Windows ignores it and keeps the previous behaviour. `RadiclePluginBackend.cpp:utf8Path` and `RadiclePluginSeq.cpp:seqUtf8Path` still convert explicitly, which stays correct either way.
 
-A plugin name written to `plugins.txt` in a legacy code page (non-ASCII, not UTF-8) still does not work: before, it matched the file and then failed in `utf8Path` or when returned in JSON (nlohmann `dump()` is strict); now `PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile` reports it in `missingPlugins`. The manifest does not change the console code page or child processes, so output from child tools such as the Papyrus compiler is still in their own code page. `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders` also checks `GetACP() == CP_UTF8` on Windows, so it fails if the test executables stop receiving the manifest. Nothing checks other executables: one added below the `fo4ide_use_utf8_code_page()` call in its directory would miss it, so keep the call last.
+Radicle reads `plugins.txt` names as Windows-1252 (RE-020, #520 c14028; `Radicle/src/loadorder/plugin_list.cpp:parse_plugin_list`), so a Windows-1252 name (for example `Café.esp` with 0xE9) matches its file. A `plugins.txt` written as UTF-8 with non-ASCII names decodes to mojibake, so those plugins land in `missingPlugins` (`PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile`), which is what the engine does. The manifest does not change the console code page or child processes, so output from child tools such as the Papyrus compiler is still in their own code page. `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders` also checks `GetACP() == CP_UTF8` on Windows, so it fails if the test executables stop receiving the manifest. Nothing checks other executables: one added below the `fo4ide_use_utf8_code_page()` call in its directory would miss it, so keep the call last.
 
 Tests: `Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders`, `RadicleArchiveBackendTests.cpp:Radicle archive backend extracts into a non-ANSI output folder`, `RadiclePluginSeqTests.cpp:Native CreateSeqFile reports a plugin folder with non-ANSI characters`. All three failed before the manifest on ANSI code page 1252.
 
@@ -1949,7 +1949,7 @@ Anchored to `README.md` (tool table) and `.github/workflows/native-ci.yml:on.pus
 
 ## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile
 
-MO2 winners are resolved as before: Data, then enabled mods low to high, then the overwrite folder, each overwriting the earlier name. `indexFolder` also records every indexed path in `candidates`, low to high. `winners` is built from `candidates` highest priority first, keeping only the path `resolved` holds for each ASCII-lowercased name. Radicle keeps the first path it sees for each Unicode-folded name, so when two folders ship names that differ only by non-ASCII case (`Ä.esp` and `ä.esp`), the MO2 winner is the one Radicle keeps. Test: `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile keeps the higher-priority winner when names differ only by non-ASCII case`. That test builds both names from code points: no build file passes `/utf-8` and the source has no BOM, so MSVC reads it in the ANSI code page, and raw `Ä` and `ä` in `u"..."` literals became two mis-decoded characters each on the Windows runner. The files then did not match the UTF-8 `plugins.txt` entry, `readProfile` found no `Ä.esp`, and the snapshot held one plugin instead of two (Windows job 22302 of the nomad/dev run at 9c1b3ae6; product behavior was correct). Write non-ASCII test names as code points, as `MO2 profile resolves plugins in non-ANSI mod folders` does. `readProfile` then passes the winner paths to the resolved-files overload of `fo4::loadorder::assemble_load_order` (Radicle `src/loadorder/assemble.cpp`), with `plugins.txt` read by `fo4::loadorder::read_plugin_list` and `Fallout4.ccc` read from the parent of the game Data folder when that file exists. The table is `OfficialTable::ae`. Master-flag files therefore precede non-masters as the engine orders them. Official and ccc names that are not in the winners are skipped by the assembler.
+MO2 winners are resolved as before: Data, then enabled mods low to high, then the overwrite folder, each overwriting the earlier name. `indexFolder` also records every indexed path in `candidates`, low to high. `winners` is built from `candidates` highest priority first, keeping only the path `resolved` holds for each ASCII-lowercased name. Radicle keeps the first path it sees for each Unicode-folded name, so when two folders ship names that differ only by non-ASCII case (`Ä.esp` and `ä.esp`), the MO2 winner is the one Radicle keeps. Test: `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile keeps the higher-priority winner when names differ only by non-ASCII case`. That test builds both names from code points: no build file passes `/utf-8` and the source has no BOM, so MSVC reads it in the ANSI code page, and raw `Ä` and `ä` in `u"..."` literals became two mis-decoded characters each on the Windows runner. The files then did not match the UTF-8 `plugins.txt` entry, `readProfile` found no `Ä.esp`, and the snapshot held one plugin instead of two (Windows job 22302 of the nomad/dev run at 9c1b3ae6; product behavior was correct). The engine reads `plugins.txt` as code-page bytes (RE-020 (#520 c14028)), and Radicle decodes them as Windows-1252, so the test now writes `Ä` as the byte 0xC4 in `plugins.txt`; UTF-8 bytes would decode to other characters and no longer match. Write non-ASCII test names as code points, as `MO2 profile resolves plugins in non-ANSI mod folders` does. `readProfile` then passes the winner paths to the resolved-files overload of `fo4::loadorder::assemble_load_order` (Radicle `src/loadorder/assemble.cpp`), with `plugins.txt` read by `fo4::loadorder::read_plugin_list` and `Fallout4.ccc` read from the parent of the game Data folder when that file exists. The table is `OfficialTable::ae`. Master-flag files therefore precede non-masters as the engine orders them. Official and ccc names that are not in the winners are skipped by the assembler.
 
 Ceiling: the AE table is the seven OG/NG names plus `DLCDummy10thAnniversary.esm`. On an OG/NG install without that file the result equals the OG/NG result. If the file is present, it is ordered as an official name, which the OG/NG table would not do.
 
@@ -2305,6 +2305,65 @@ Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifie
 
 The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).
 
+## BGS/app/Settings.cs:Settings.WriteAll — retry on transient Windows file locks
+
+The CI job "BGS build and test (win-x64)" failed intermittently in the uismoke step. `SettingsRetentionSmoke.Run` saves the settings file many times in a row, and `File.Move(tempPath, finalPath, overwrite: true)` threw "Access to the path is denied." while another process (antivirus or the indexer) held the file. `Settings.WriteAll` now retries the temp write and the move up to five attempts, sleeping 50 ms times the attempt number between tries. It retries only an `UnauthorizedAccessException` or a Windows sharing or lock violation (the HRESULT low word is 32 or 33). Other `IOException`s, such as a missing directory, are not retried. The final failure still propagates to `Settings.TryMutate`, which reports it as before. Real users with antivirus can hit the same lock. Covered by `SettingsTests.SaveRetriesWhileTheSettingsFileIsLocked`, which holds the target with `FileShare.None` for 100 ms (Windows only). Not run locally (CI only).
+## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — object or JSON-string reads (#504 audit F1)
+
+The native typed-record reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) return JSON objects. The RPC path does not stringify them: `PluginEditTool/native/src/rpc/RpcDispatcher.cpp:Response::toJson` puts `value` through as is, `PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke` calls the backend methods directly, and `PluginEditTool/web/src/hostbridge.ts:call` returns `body.value`. The hook now parses only when the bridge hands back a string, so both shapes work. The edit callbacks are unchanged because the native edit methods return plain message strings. `TypedRecordPanel.leveled.test.tsx` covers the object shape.
+
+## PluginEditTool/web/src/MainShell.tsx:selectHit — RECORDS cached source per FormKey (#504 audit F2)
+
+`recHits` is keyed by FormKey only. Every selection used to re-cache all visible hits, so a later search that showed the same FormKey from another plugin replaced the source that Copy and Compare read. Now only newly selected visible hits are added, existing entries win, and the clicked row replaces its own key. Covered by `PluginEditTool/web/src/MainShell.recordSources.test.tsx`.
+
+## PluginEditTool/web/src/MainShell.tsx:MainShell — conflict list reset on load-order change (#504 audit F3)
+
+The Conflicts list and its selection are reset during render when the load-order summary content changes from a previous value, the same summary `loadedSet` uses. The first summary after startup does not reset, so a list loaded before the summary arrives is kept. The render-phase form follows `prevOpenKey` in this file. A reset inside a `useEffect` would call setState synchronously, which the react-hooks rules reject. Rescan now only clears the list.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch — reload when the list is cleared (#504 audit F3)
+
+The load effect depends on `conflicts` as well as the tab and tree mode. A cleared list in the Conflicts tab therefore reloads on its own, which is why Rescan no longer calls `loadConflicts` directly and does not double-fetch. Covered by the load-order reload test in `PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:invokeLegacyBackend — CleanPlugin skipped count (#504 audit F4)
+
+Deleted records that cannot be decoded are still left untouched, now counted. The status appends ", skipped N undecodable" only when N is above zero. The C# `CleanPluginCore` in `PluginEditTool/FO4RecordEditor.Core/Services/WriteService.cs` has its own wording and was not changed. The existing test in `PluginEditTool/native/tests/unit/RadiclePluginUndecodableMaintenanceTests.cpp` asserts the full message.
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:Compiled output matches the Creation Kit instruction for instruction — empty corpus is a SKIP (#504 audit F5)
+
+The compile-differential gate is local only. CI does not set `FO4RE_PEX_CORPUS`, so the test reports SKIP there. A variable pointing at a folder with no `.psc`/`.pex` pairs now also reports SKIP instead of passing silently. `PluginEditTool/docs/internal/PAPYRUS.md` describes the same gate.
+
+## BGS/src/Archive/GameData.cs:GameData.IsSkippableArchiveFailure — archive listing catch filter (#504 audit F6)
+
+`Entries` and `Names` share one predicate. An `IOException`, `InvalidDataException` or `UnauthorizedAccessException` whose inner exception is a Radicle ABI mismatch, or another native load failure, propagates instead of being read as an empty archive. Driving `GameData` itself needs the native Radicle library to open a real archive, and no seam injects the failure, so `BGS/tools/tests/Ba2RadicleTests.cs` calls the predicate directly.
+
 ## .github/workflows/native-ci.yml:native-windows-tests — MSVC setup and pinned zlib in .github/scripts
 
 GT-253 moved the MSVC/Ninja/ccache setup and the pinned zlib fetch out of `native-ci.yml` to keep the workflow under the 750-line limit. `native-windows-tests` and `native-windows-real-data` both call `.github/scripts/setup-msvc-ccache.ps1` and `.github/scripts/pinned-zlib-windows.ps1` through `powershell -File`, so each script runs in its own process and `exit` codes still fail the step. The setup script starts with `$ErrorActionPreference = 'stop'`, the line the runner prepends to inline PowerShell. `-ExecutionPolicy Bypass` keeps the file call working on hosts whose default policy is Restricted. The `GITHUB_ENV` and `GITHUB_PATH` writes reach later steps as before.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::versionPlugin — typed reads by plugin (#504 audit2 GT-256)
+
+`getNpc`, `getFaction` and `getLeveledList` take an optional plugin name at argument index 1. With no name they read the winning version, as before, so the web bridge calls are unchanged. With a name they read that plugin's version. `editNpcEntries`, `editFactionEntries` and `editLeveledListEntry` already edit the named plugin's version, so the index a caller reads from a named version is the index the edit applies to. The MCP `get_npc`, `get_faction` and `get_leveled_list` entries expose the optional `plugin` argument. A named plugin that lacks the record, or has it deleted, returns the same codes as the edit path (`RecordNotFound`, `RecordDeleted`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — no-change edits stage nothing (#504 audit2 GT-277)
+
+The function returns `true` when it staged a mutation and `false` when the subrecords of the edited record are unchanged. The FACT setters return `void`, so the NPC and leveled setters' `bool` results alone would not cover FACT. The comparison covers all three families the same way: an edit that rewrites identical bytes is reported as "No change" and does not mark the plugin Pending or rebuild the graph.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — LVSP entries take no extra (#504 audit2 GT-264)
+
+In xEdit an LVSP entry is the LVLO struct only (`Core/wbDefinitionsFO4.pas:10033-10050`, `Core/wbDefinitionsCommon.pas:8788-8810`). COED is defined on LVLN and LVLI only (`Core/wbDefinitionsFO4.pas:10001`). The Radicle entry writer accepts `extra` (COED) for every leveled list type, so this path refuses `extra` on an LVSP record inside the staged edit, before the mutation is kept. The refusal is raised as a `LeveledListError` and surfaces as `LeveledListWriteFailed`. Radicle is being fixed separately.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp:incompleteUsageReason — CleanUnusedMasters refusal names the blocking records (#504 audit2 GT-272)
+
+`fo4::MasterUsage` carries counts only. The refusal lists the undecodable records by signature and FormKey, and reports the VMAD count only when that count is non-zero, so a refusal caused by an undecodable record no longer reads "0 record(s) carry VMAD data".
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — plugins.txt names compare with the Radicle fold (#504 audit2 GT-268)
+
+`isChecked` compares `fo4::PluginKey` values, which fold Unicode the same way the load-order assembler does. ASCII-only folding made `*ä.esp` unchecked when the file on disk is `Ä.esp`. The other name lookups in this function (`resolved`, `pluginPathIndex`) still fold ASCII only and are not changed here.
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — assembly findings reach the status (#504 audit2 GT-266)
+
+Findings were read only when assembly failed. A successful assembly now copies every finding into `ProfileSnapshot::warnings`, and `AppInteropTarget::getMo2Status` returns them as `warnings`, which the reload result also returns. A plugins.txt line with a control character, such as a TAB, is still not loaded, because the game does not trim names, and the status now names its line.
+
+## PluginEditTool/publish.bat — missing deploy folder is a failure (#504 audit2 GT-280)
+
+A deploy folder that does not exist now exits with code 1 and prints no success message. Running without any deploy folder still builds and skips the copy.
