@@ -354,6 +354,28 @@ TEST(SubrecordAuthoring, CoupledEntriesAreNeverAddedOrRemoved) {
             fo4::RecordCreateStatus::not_authorable);
 }
 
+TEST(SubrecordAuthoring, CountSubrecordsStayCoupledToTheirEntries) {
+  auto plugin = fo4::read_plugin(
+      build({{"NPC_", 0x800, {{"EDID", zstr("Npc")}, {"KSIZ", filled(4, 1)}, {"KWDA", filled(4, 2)}}},
+             {"LVLI", 0x801, {{"EDID", zstr("List")}, {"LLCT", filled(1, 1)}, {"LVLO", filled(12, 0)}}}}),
+      k_plugin);
+  fo4::assign_record_form_keys(plugin);
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("KSIZ"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x801), sig("LLCT"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  const auto npc = fo4::schema::record_authoring_constraint(sig("NPC_"));
+  ASSERT_TRUE(npc.has_value());
+  const auto rules = fo4::schema::authoring_subrecords(*npc);
+  const auto nam7 = std::find_if(rules.begin(), rules.end(),
+                                 [](const auto& rule) { return rule.signature == sig("NAM7"); });
+  ASSERT_NE(nam7, rules.end());
+  EXPECT_EQ(nam7->minimum, 0);
+}
+
 TEST(SubrecordAuthoring, GeneratedSchemaMarksSiblingOwnersCoupled) {
   const std::pair<const char*, std::vector<std::string>> expected[] = {
       {"ARMA", {"MOD2", "MOD3", "MOD4", "MOD5"}},

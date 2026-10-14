@@ -125,6 +125,6 @@ Edit rules:
 
 ## Authoring constraints
 
-`authoring.subrecords` lists every top-level subrecord in xEdit order. `minimum` 1 mirrors the required flag on the xEdit member (for example OBND, ACBS, AIDT, RNAM, CNAM, DATA, NAM5, NAM6, NAM7, NAM8). Defaults are given for the three fixed structs with a required flag: OBND (12 bytes), ACBS (20 bytes) and AIDT (24 bytes), all zero.
+`authoring.subrecords` lists every top-level subrecord in xEdit order. `minimum` 1 mirrors the required flag on the xEdit member (for example OBND, ACBS, AIDT, RNAM, CNAM, DATA, NAM5, NAM6, NAM8). NAM7 is the exception: it has minimum 0, because no vanilla NPC_ record carries it. Defaults are given for the three fixed structs with a required flag: OBND (12 bytes), ACBS (20 bytes) and AIDT (24 bytes), all zero.
 
 Repeated subrecords (SNAM, PRKR, CNTO, COED, SPLO, FULL, and others) have a maximum of 65535 and are not `uncounted`. The generic add and remove path refuses them, so the typed list API owns them.

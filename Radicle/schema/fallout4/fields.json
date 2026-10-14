@@ -5655,6 +5655,7 @@
               "signature": "LLCT",
               "minimum": 0,
               "maximum": 1,
+              "coupled": true,
               "default": "00"
             },
             {
@@ -5792,6 +5793,7 @@
               "signature": "LLCT",
               "minimum": 0,
               "maximum": 1,
+              "coupled": true,
               "default": "00"
             },
             {
@@ -9538,8 +9540,8 @@
           { "signature": "MODC", "minimum": 0, "maximum": 1 },
           { "signature": "MODS", "minimum": 0, "maximum": 1 },
           { "signature": "MODF", "minimum": 0, "maximum": 1 },
-          { "signature": "KSIZ", "minimum": 0, "maximum": 1 },
-          { "signature": "KWDA", "minimum": 0, "maximum": 1 },
+          { "signature": "KSIZ", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "KWDA", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "PRPS", "minimum": 0, "maximum": 1 },
           { "signature": "FULL", "minimum": 0, "maximum": 1 },
           { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "000000000000000000000000000000000000803f0000b44200002041000000000000000000000000000000000000000000000000000000000000000000000000" },
@@ -22389,7 +22391,8 @@
           {
             "signature": "CITC",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "CTDA",
@@ -23475,7 +23478,8 @@
           {
             "signature": "SPCT",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "SPLO",
@@ -23485,7 +23489,8 @@
           {
             "signature": "DEST",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "WNAM",
@@ -23540,7 +23545,8 @@
           {
             "signature": "PRKZ",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "PRKR",
@@ -23565,7 +23571,8 @@
           {
             "signature": "COCT",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "CNTO",
@@ -23591,12 +23598,14 @@
           {
             "signature": "KSIZ",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "KWDA",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "APPR",
@@ -23606,7 +23615,8 @@
           {
             "signature": "OBTE",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "OBTF",
@@ -23685,7 +23695,7 @@
           },
           {
             "signature": "NAM7",
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 1
           },
           {
@@ -23706,7 +23716,8 @@
           {
             "signature": "CS2H",
             "minimum": 0,
-            "maximum": 1
+            "maximum": 1,
+            "coupled": true
           },
           {
             "signature": "CS2K",
