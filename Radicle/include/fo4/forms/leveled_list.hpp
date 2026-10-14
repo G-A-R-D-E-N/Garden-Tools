@@ -62,6 +62,8 @@ FormKey create_leveled_list(Plugin& plugin,
                             std::uint8_t max_count,
                             std::uint8_t flags);
 
+bool reset_leveled_list(Plugin& plugin, const FormKey& key);
+
 bool replace_leveled_list_entries(Plugin& plugin,
                                   const FormKey& key,
                                   std::span<const LeveledListEntry> entries);

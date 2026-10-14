@@ -38,3 +38,20 @@ it('sets a faction rank at its index with the NPC list name and refreshes', asyn
   expect(read).toHaveBeenCalledOnce();
   expect(edit).toHaveBeenCalledWith('W0.esp', formKey, 'factions', 'set', 0, { faction: '000901:W0.esp', rank: 3 });
 });
+
+it('keeps Set and Remove disabled on NPC_ lists until a row is picked', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetNpc: vi.fn(async () => JSON.stringify(npc)) } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  fireEvent.click(await screen.findByText('000901:W0.esp'));
+  expect((screen.getAllByRole('button', { name: 'Set' })[0] as HTMLButtonElement).disabled).toBe(false);
+  expect((screen.getAllByRole('button', { name: 'Remove' })[0] as HTMLButtonElement).disabled).toBe(false);
+  expect((screen.getAllByRole('button', { name: 'Set' })[1] as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getAllByRole('button', { name: 'Remove' })[2] as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('hides the Index field on NPC_ lists, which always append', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: { GetNpc: vi.fn(async () => JSON.stringify(npc)) } } } });
+  render(<TypedRecordPanel matrix={matrix} plugin="W0.esp" onChanged={async () => {}} />);
+  expect(await screen.findByText('000901:W0.esp')).toBeTruthy();
+  expect(screen.queryByLabelText('Index')).toBeNull();
+});

@@ -19,6 +19,14 @@ public sealed class Ba2RadicleTests
     }
 
     [Fact]
+    public void GameDataArchiveFilterPropagatesWrappedRadicleAbiMismatch()
+    {
+        var wrapped = new InvalidDataException("wrapped", new RadicleAbiMismatchException("stale radicle.dll"));
+        Assert.False(GameData.IsSkippableArchiveFailure(wrapped));
+        Assert.True(GameData.IsSkippableArchiveFailure(new InvalidDataException("unreadable archive")));
+    }
+
+    [Fact]
     public void Ba2WrapperReadsGeneralArchivesThroughRadicleAndRefusesTextureArchives()
     {
         string root = Path.Combine(Path.GetTempPath(), "bgs-ba2-radicle-" + Guid.NewGuid().ToString("N"));

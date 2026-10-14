@@ -53,7 +53,7 @@ const renderView = () => render(
 it('shows enum and flag names with the raw number in the tooltip', () => {
   renderView();
   expect(screen.getByText('True').getAttribute('title')).toBe('1');
-  expect(screen.getByText('Hidden From NPC, Special Combat, 0x80').getAttribute('title')).toBe('131');
+  expect(screen.getByText('Hidden From NPC, Special Combat, <Unknown: 7 $7>').getAttribute('title')).toBe('131');
 });
 
 it('writes the picked enum integer through SetField', async () => {
@@ -65,7 +65,7 @@ it('writes the picked enum integer through SetField', async () => {
 
 it('edits flags with a checkbox list and writes the combined integer', async () => {
   renderView();
-  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, 0x80'));
+  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, <Unknown: 7 $7>'));
   fireEvent.click(screen.getByLabelText('Track Crime'));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(SetField).toHaveBeenCalledWith('W0.esp', '000800:W0.esp', 'FACT\\Flags', '195'));
@@ -73,7 +73,7 @@ it('edits flags with a checkbox list and writes the combined integer', async () 
 
 it('keeps a toggled flag when the flag editor is double-clicked', () => {
   const view = renderView();
-  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, 0x80'));
+  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, <Unknown: 7 $7>'));
   fireEvent.click(screen.getByLabelText('Track Crime'));
   fireEvent.doubleClick(view.container.querySelector('.scalar-flags-edit') as HTMLElement);
   expect((screen.getByLabelText('Track Crime') as HTMLInputElement).checked).toBe(true);
@@ -92,7 +92,7 @@ it('opens no editor for an enum cell whose raw value is not an integer', () => {
 
 it('closes an open flag editor when the record changes and writes nothing', () => {
   const view = renderView();
-  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, 0x80'));
+  fireEvent.doubleClick(screen.getByText('Hidden From NPC, Special Combat, <Unknown: 7 $7>'));
   expect(view.container.querySelector('.scalar-flags-edit')).not.toBeNull();
   view.rerender(
     <DialogProvider><RecordView matrix={{ ...matrix, FormKey: '000801:W0.esp' }} plugin="W0.esp" onReload={async () => {}} /></DialogProvider>,

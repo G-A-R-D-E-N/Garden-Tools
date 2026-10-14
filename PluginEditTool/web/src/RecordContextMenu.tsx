@@ -6,6 +6,7 @@ import type { useRecordActions } from './recordActions';
 
 const conditionsPathOf = (field: string) => (/(^|\.)Conditions(\[|$)/.test(field) ? field : null);
 const initiallyDisabledTypes = new Set(['REFR', 'ACHR', 'NAVM', 'PARW', 'PBAR', 'PBEA', 'PCON', 'PFLA', 'PGRE', 'PHZD', 'PMIS']);
+const wrapperTypes = new Set(['LVLI', 'LVLN', 'LVSP']);
 
 export default function RecordContextMenu({
   menu, matrix, elementActions, actions, onEdit, onEditConditions, onShowTab,
@@ -21,7 +22,7 @@ export default function RecordContextMenu({
   const {
     copyAsOverrideInto, savePlugin, deleteRecord, renumberFormId, compactEsl, cleanMasters, cleanPlugin, copyAsNewRecord,
     deepCopyAsOverride, changeReferencingRecords, removeItm, addMasters, renumberPlugin, createSeq, createSchemaRecord,
-    checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyText, elementAction, askImpact,
+    checkCircularLeveled, checkForErrors, findUnreachable, lootReport, updateOnam, compareTo, copyAsDisabledOverrideInto, copyAsWrapperInto, copyText, elementAction, askImpact,
   } = actions;
   return (
     <div className="rv-context" style={{ left: menu.x, top: menu.y }} onClick={e => e.stopPropagation()}>
@@ -78,6 +79,9 @@ export default function RecordContextMenu({
       <button onClick={() => copyAsOverrideInto(menu.col)}><Copy size={13} /> Copy as override into...</button>
       {initiallyDisabledTypes.has(matrix.Type) && (
         <button onClick={() => copyAsDisabledOverrideInto(menu.col)}><Copy size={13} /> Copy as disabled override into...</button>
+      )}
+      {wrapperTypes.has(matrix.Type) && (
+        <button onClick={() => copyAsWrapperInto(menu.col)}><Copy size={13} /> Copy as wrapper into...</button>
       )}
       <button onClick={() => copyAsNewRecord(menu.col)}><FilePlus2 size={13} /> Copy as new record into...</button>
       <button onClick={() => deepCopyAsOverride(menu.col)}><FilePlus2 size={13} /> Deep copy as override into...</button>

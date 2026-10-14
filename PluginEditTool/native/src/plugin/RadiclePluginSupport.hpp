@@ -135,6 +135,15 @@ inline std::string asciiLower(std::string_view value) {
     return out;
 }
 
+inline std::string joinNames(const std::vector<std::string>& names) {
+    std::string out;
+    for (const auto& name : names) {
+        if (!out.empty()) out += ", ";
+        out += name;
+    }
+    return out;
+}
+
 inline EslSlots eslSlots(const fo4::Plugin& plugin) {
     fo4::Plugin targetPolicy;
     targetPolicy.header = plugin.header;

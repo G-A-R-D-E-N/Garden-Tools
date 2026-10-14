@@ -1,5 +1,6 @@
 #include "RadiclePluginSupport.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -150,9 +151,17 @@ Result<fo4::forms::FactionRelation> factionRelationFromJson(const nlohmann::json
     return fo4::forms::FactionRelation{*faction, *modifier, *reaction};
 }
 
+bool sameSubrecords(const std::vector<fo4::Subrecord>& before, const std::vector<fo4::Subrecord>& after) {
+    return std::equal(before.begin(), before.end(), after.begin(), after.end(),
+                      [](const fo4::Subrecord& a, const fo4::Subrecord& b) {
+                          return a.signature == b.signature && a.extended_size == b.extended_size &&
+                                 a.data == b.data;
+                      });
+}
+
 }  // namespace
 
-Result<void> RadiclePluginBackend::stageTypedRecordEdit(
+Result<bool> RadiclePluginBackend::stageTypedRecordEdit(
     std::string_view pluginName,
     const fo4::FormKey& key,
     std::string_view failureCode,
@@ -182,13 +191,39 @@ Result<void> RadiclePluginBackend::stageTypedRecordEdit(
             "The record is deleted in " + std::string(pluginName) + ": " + key.to_string()
         });
     }
+    const auto before = record->subrecords;
     try {
         edit(mutated);
     } catch (const std::exception& error) {
         return std::unexpected(Error{std::string(failureCode), error.what()});
     }
+    const auto* after = fo4::find_record(mutated, key);
+    if (after != nullptr && sameSubrecords(before, after->subrecords)) return false;
     stagePluginMutationLocked(*loaded, std::move(mutated));
-    return {};
+    return true;
+}
+
+Result<const fo4::Plugin*> RadiclePluginBackend::versionPlugin(std::string_view pluginName,
+                                                               const fo4::FormKey& key) const {
+    if (pluginName.empty()) return support::winningPlugin(plugins_, key);
+    const auto* loaded = findPlugin(pluginName);
+    if (loaded == nullptr) {
+        return std::unexpected(Error{"PluginNotLoaded", "Plugin is not loaded: " + std::string(pluginName)});
+    }
+    const auto* record = fo4::find_record(loaded->plugin, key);
+    if (record == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record is not present in " + std::string(pluginName) + ": " + key.to_string()
+        });
+    }
+    if (record->header.flags.is_deleted()) {
+        return std::unexpected(Error{
+            "RecordDeleted",
+            "The record is deleted in " + std::string(pluginName) + ": " + key.to_string()
+        });
+    }
+    return &loaded->plugin;
 }
 
 Result<nlohmann::json> RadiclePluginBackend::getNpc(const nlohmann::json& arguments) const {
@@ -196,9 +231,9 @@ Result<nlohmann::json> RadiclePluginBackend::getNpc(const nlohmann::json& argume
     if (!key) return std::unexpected(key.error());
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto winner = support::winningPlugin(plugins_, *key);
-    if (!winner) return std::unexpected(winner.error());
-    const auto* source = *winner;
+    const auto version = versionPlugin(support::stringArgument(arguments, 1), *key);
+    if (!version) return std::unexpected(version.error());
+    const auto* source = *version;
     try {
         nlohmann::json factions = nlohmann::json::array();
         for (const auto& entry : fo4::forms::decode_npc_factions(*source, *key)) {
@@ -243,6 +278,7 @@ Result<nlohmann::json> RadiclePluginBackend::editNpcEntries(const nlohmann::json
     const auto commit = [&](const std::function<void(fo4::Plugin&)>& edit) -> Result<nlohmann::json> {
         const auto staged = stageTypedRecordEdit(pluginName, *key, "NpcWriteFailed", edit);
         if (!staged) return std::unexpected(staged.error());
+        if (!*staged) return nlohmann::json("No change for " + list + " entry in " + key->to_string() + " in " + pluginName + ".");
         return nlohmann::json("Updated " + list + " entry in " + key->to_string() + " in " + pluginName + ".");
     };
 
@@ -302,9 +338,9 @@ Result<nlohmann::json> RadiclePluginBackend::getFaction(const nlohmann::json& ar
     if (!key) return std::unexpected(key.error());
 
     OpLock lock(*this, OpLock::Mode::Read);
-    const auto winner = support::winningPlugin(plugins_, *key);
-    if (!winner) return std::unexpected(winner.error());
-    const auto* source = *winner;
+    const auto version = versionPlugin(support::stringArgument(arguments, 1), *key);
+    if (!version) return std::unexpected(version.error());
+    const auto* source = *version;
     try {
         nlohmann::json relations = nlohmann::json::array();
         for (const auto& relation : fo4::forms::decode_faction_relations(*source, *key)) {
@@ -353,6 +389,7 @@ Result<nlohmann::json> RadiclePluginBackend::editFactionEntries(const nlohmann::
     const auto commit = [&](const std::function<void(fo4::Plugin&)>& edit) -> Result<nlohmann::json> {
         const auto staged = stageTypedRecordEdit(pluginName, *key, "FactionWriteFailed", edit);
         if (!staged) return std::unexpected(staged.error());
+        if (!*staged) return nlohmann::json("No change for " + list + " entry in " + key->to_string() + " in " + pluginName + ".");
         return nlohmann::json("Updated " + list + " entry in " + key->to_string() + " in " + pluginName + ".");
     };
 

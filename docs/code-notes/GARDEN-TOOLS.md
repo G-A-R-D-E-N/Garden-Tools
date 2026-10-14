@@ -2205,6 +2205,26 @@ Every per-record problem row carries a `Code`, a `Detail`, a `Severity` and a `D
 
 Covers `Mo2Profile.cpp:readProfile` for an OG-style install: Fallout4.esm and the six official DLC masters, no Creation Club plugins, no `Fallout4.ccc`, one active user plugin. `readProfile` always passes `OfficialTable::ae`, so this checks the AE table against OG data. Radicle's `load_order_files.hpp` has `OfficialTable { og_ng, ae }` and no NG-specific table: `og_ng` is the first seven AE names (`Radicle/src/loadorder/assemble.cpp:official_names`, `DLCUltraHighResolution.esm` included), and LOAD_ORDER_FILES.md says NG shares it. So an NG case would repeat this one and is not added. `assemble.cpp:assemble_load_order` skips absent official names silently, with no finding and no failure. The AE-only `DLCDummy10thAnniversary.esm` and the absent `DLCUltraHighResolution.esm` therefore do not change the result. The AE table only differs from `og_ng` when `DLCDummy10thAnniversary.esm` is present, which an OG install does not ship. Not built or run locally (CI only). The partial-DLC case (`Mo2ProfileTests.cpp` second OG test) lists only `DLCRobot.esm` and `DLCCoast.esm` in plugins.txt with `DLCworkshop01`-`03` and no `DLCNukaWorld.esm` on disk, and expects the official masters present on disk to load in AE official order without any plugins.txt entry for them.
 
+## PluginEditTool/native/src/plugin/RadiclePluginCopyAsWrapper.cpp:RadiclePluginBackend::copyAsWrapper — xEdit wrapper flow (#362)
+
+Arguments are `[sourcePlugin, formKey, targetPlugin, editorId|null]`. The source plugin is needed to find the record, as in CopyAsOverride. Only LVLI, LVLN and LVSP are accepted (`WrapperUnsupportedType`). xEdit's menu test at `xeMainForm.pas:14660-14669` also lists LVLB, LVLC, LVLP and LVSC; this port keeps the three types in the brief. The EDID is compared with `support::asciiLower`, as xEdit's `SameText` at `xeMainForm.pas:2612` does, and empty is accepted (`xeMainForm.pas:2610-2611`). The op takes one write lock and `writeGuard` on the target, as the other writers do. The copy goes through `RadiclePluginBackend::copyRecordAsNewLocked` with the EDID set exactly as given, with no DUP fallback (`xeMainForm.pas:2745-2750`). `fo4::copy_record_as_override` runs with overwrite off (`xeMainForm.pas:2753`), and `already_exists` is reused (`wbImplementation.pas:17030-17047`). The `LOSES:` check from copy as override runs before any write. `fo4::forms::reset_leveled_list` then keeps only the header and writes OBND, LVLD 0, LVLF 0 and LLCT 0; this follows the required-member reset at `wbImplementation.pas:9404-9407`. One entry at level 1 and count 1 points at the copy (`xeMainForm.pas:2757-2768`). The override then takes the picked source record's EDID, or none if the source has none (`xeMainForm.pas:2769`). The success text starts with `Copied ` so `finishAutoCreatedTarget` keeps an auto-created target. The flow is described in `PluginEditTool/docs/xedit-copy-workflows.md`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RadiclePluginBackend::copyRecordAsNewLocked — shared plain-record copy (#362)
+
+The plain-record branch of `CopyAsNewRecord` moved here so `copyAsWrapper` uses the same copy. It checks decodability, adds the masters that the source's form links need, allocates a local record, copies the record and remaps its form links. The EDID is set only when the caller passes a value. `CopyAsNewRecord` passes nothing when there is no EDID to write, so its output is unchanged. `copyAsWrapper` always passes its EDID, so an empty one writes a 1-byte EDID (a lone NUL) on the copy rather than omitting it.
+
+## PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke — CopyAsWrapper dispatch (#362)
+
+`CopyAsWrapper` takes the same target handling as `CopyAsNewRecord`: `ensureWriteTarget` creates a missing target, then `finishAutoCreatedTarget` rolls it back if the op fails. It calls `copyAsWrapper` directly, as `CopyAsDisabledOverride` does.
+
+## PluginEditTool/web/src/RecordContextMenu.tsx:wrapperTypes — Copy as wrapper menu gate (#362)
+
+The set is LVLI, LVLN and LVSP, the three types the native `copyAsWrapper` accepts (`WrapperUnsupportedType` is still the authority). xEdit's menu test (`xeMainForm.pas:14660-14669`) also lists LVLB, LVLC, LVLP and LVSC; this port does not offer them.
+
+## PluginEditTool/web/src/recordActions.ts:useRecordActions — copyAsWrapperInto (#362)
+
+Two steps: the target chooser (`askForTarget`), then the EDID prompt (`askPrompt`, label "EditorID for the wrapped copy"). The prompt's `validate` refuses an EDID equal to the source EDID, compared case-insensitively, so the dialog cannot confirm it (`xeMainForm.pas:2612-2616`). Empty input is sent as `null`, and canceling the prompt stops the copy. The chooser's `extraField` is not used because it requires a non-empty value. Errors go through `errorText`.
+
 ## PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:RadiclePluginBackend::createPlacedObject — create_placed_object (#182)
 
 Argument order is `[plugin, cell, baseObject, x, y, z, rotX, rotY, rotZ, persistent, initially_disabled]`, which is the order the MCP tool sends (`McpTools.cpp` `create_placed_object`, `RpcTool` fills missing optional arguments with null). Rotations are radians and default to 0. `persistent` defaults to true, matching the managed tool's default, and a non-boolean value falls back to true. `cell` must be owned by this plugin; the managed editor's `GetOrAddAsOverride` path from the load order is not ported, so a master cell fails with `PlacedReferenceCreateFailed`. `initially_disabled` (index 10, default false) sets the `0x800` record flag, as `Radicle/src/forms/placed_reference_create.cpp:create_placed_reference` does. The map-marker arguments of the managed tool are not ported. Tests: `tests/unit/RadiclePluginExteriorCellTests.cpp` TEST_CASE "PluginEditTool places a REFR in a CELL the plugin owns". Not built or run locally (CI only).
@@ -2281,6 +2301,62 @@ Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifie
 
 The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).
 
+## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — object or JSON-string reads (#504 audit F1)
+
+The native typed-record reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) return JSON objects. The RPC path does not stringify them: `PluginEditTool/native/src/rpc/RpcDispatcher.cpp:Response::toJson` puts `value` through as is, `PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke` calls the backend methods directly, and `PluginEditTool/web/src/hostbridge.ts:call` returns `body.value`. The hook now parses only when the bridge hands back a string, so both shapes work. The edit callbacks are unchanged because the native edit methods return plain message strings. `TypedRecordPanel.leveled.test.tsx` covers the object shape.
+
+## PluginEditTool/web/src/MainShell.tsx:selectHit — RECORDS cached source per FormKey (#504 audit F2)
+
+`recHits` is keyed by FormKey only. Every selection used to re-cache all visible hits, so a later search that showed the same FormKey from another plugin replaced the source that Copy and Compare read. Now only newly selected visible hits are added, existing entries win, and the clicked row replaces its own key. Covered by `PluginEditTool/web/src/MainShell.recordSources.test.tsx`.
+
+## PluginEditTool/web/src/MainShell.tsx:MainShell — conflict list reset on load-order change (#504 audit F3)
+
+The Conflicts list and its selection are reset during render when the load-order summary content changes from a previous value, the same summary `loadedSet` uses. The first summary after startup does not reset, so a list loaded before the summary arrives is kept. The render-phase form follows `prevOpenKey` in this file. A reset inside a `useEffect` would call setState synchronously, which the react-hooks rules reject. Rescan now only clears the list.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch — reload when the list is cleared (#504 audit F3)
+
+The load effect depends on `conflicts` as well as the tab and tree mode. A cleared list in the Conflicts tab therefore reloads on its own, which is why Rescan no longer calls `loadConflicts` directly and does not double-fetch. Covered by the load-order reload test in `PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:invokeLegacyBackend — CleanPlugin skipped count (#504 audit F4)
+
+Deleted records that cannot be decoded are still left untouched, now counted. The status appends ", skipped N undecodable" only when N is above zero. The C# `CleanPluginCore` in `PluginEditTool/FO4RecordEditor.Core/Services/WriteService.cs` has its own wording and was not changed. The existing test in `PluginEditTool/native/tests/unit/RadiclePluginUndecodableMaintenanceTests.cpp` asserts the full message.
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:Compiled output matches the Creation Kit instruction for instruction — empty corpus is a SKIP (#504 audit F5)
+
+The compile-differential gate is local only. CI does not set `FO4RE_PEX_CORPUS`, so the test reports SKIP there. A variable pointing at a folder with no `.psc`/`.pex` pairs now also reports SKIP instead of passing silently. `PluginEditTool/docs/internal/PAPYRUS.md` describes the same gate.
+
+## BGS/src/Archive/GameData.cs:GameData.IsSkippableArchiveFailure — archive listing catch filter (#504 audit F6)
+
+`Entries` and `Names` share one predicate. An `IOException`, `InvalidDataException` or `UnauthorizedAccessException` whose inner exception is a Radicle ABI mismatch, or another native load failure, propagates instead of being read as an empty archive. Driving `GameData` itself needs the native Radicle library to open a real archive, and no seam injects the failure, so `BGS/tools/tests/Ba2RadicleTests.cs` calls the predicate directly.
+
 ## .github/workflows/native-ci.yml:native-windows-tests — MSVC setup and pinned zlib in .github/scripts
 
 GT-253 moved the MSVC/Ninja/ccache setup and the pinned zlib fetch out of `native-ci.yml` to keep the workflow under the 750-line limit. `native-windows-tests` and `native-windows-real-data` both call `.github/scripts/setup-msvc-ccache.ps1` and `.github/scripts/pinned-zlib-windows.ps1` through `powershell -File`, so each script runs in its own process and `exit` codes still fail the step. The setup script starts with `$ErrorActionPreference = 'stop'`, the line the runner prepends to inline PowerShell. `-ExecutionPolicy Bypass` keeps the file call working on hosts whose default policy is Restricted. The `GITHUB_ENV` and `GITHUB_PATH` writes reach later steps as before.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::versionPlugin — typed reads by plugin (#504 audit2 GT-256)
+
+`getNpc`, `getFaction` and `getLeveledList` take an optional plugin name at argument index 1. With no name they read the winning version, as before, so the web bridge calls are unchanged. With a name they read that plugin's version. `editNpcEntries`, `editFactionEntries` and `editLeveledListEntry` already edit the named plugin's version, so the index a caller reads from a named version is the index the edit applies to. The MCP `get_npc`, `get_faction` and `get_leveled_list` entries expose the optional `plugin` argument. A named plugin that lacks the record, or has it deleted, returns the same codes as the edit path (`RecordNotFound`, `RecordDeleted`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — no-change edits stage nothing (#504 audit2 GT-277)
+
+The function returns `true` when it staged a mutation and `false` when the subrecords of the edited record are unchanged. The FACT setters return `void`, so the NPC and leveled setters' `bool` results alone would not cover FACT. The comparison covers all three families the same way: an edit that rewrites identical bytes is reported as "No change" and does not mark the plugin Pending or rebuild the graph.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — LVSP entries take no extra (#504 audit2 GT-264)
+
+In xEdit an LVSP entry is the LVLO struct only (`Core/wbDefinitionsFO4.pas:10033-10050`, `Core/wbDefinitionsCommon.pas:8788-8810`). COED is defined on LVLN and LVLI only (`Core/wbDefinitionsFO4.pas:10001`). The Radicle entry writer accepts `extra` (COED) for every leveled list type, so this path refuses `extra` on an LVSP record inside the staged edit, before the mutation is kept. The refusal is raised as a `LeveledListError` and surfaces as `LeveledListWriteFailed`. Radicle is being fixed separately.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp:incompleteUsageReason — CleanUnusedMasters refusal names the blocking records (#504 audit2 GT-272)
+
+`fo4::MasterUsage` carries counts only. The refusal lists the undecodable records by signature and FormKey, and reports the VMAD count only when that count is non-zero, so a refusal caused by an undecodable record no longer reads "0 record(s) carry VMAD data".
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — plugins.txt names compare with the Radicle fold (#504 audit2 GT-268)
+
+`isChecked` compares `fo4::PluginKey` values, which fold Unicode the same way the load-order assembler does. ASCII-only folding made `*ä.esp` unchecked when the file on disk is `Ä.esp`. The other name lookups in this function (`resolved`, `pluginPathIndex`) still fold ASCII only and are not changed here.
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — assembly findings reach the status (#504 audit2 GT-266)
+
+Findings were read only when assembly failed. A successful assembly now copies every finding into `ProfileSnapshot::warnings`, and `AppInteropTarget::getMo2Status` returns them as `warnings`, which the reload result also returns. A plugins.txt line with a control character, such as a TAB, is still not loaded, because the game does not trim names, and the status now names its line.
+
+## PluginEditTool/publish.bat — missing deploy folder is a failure (#504 audit2 GT-280)
+
+A deploy folder that does not exist now exits with code 1 and prints no success message. Running without any deploy folder still builds and skips the copy.

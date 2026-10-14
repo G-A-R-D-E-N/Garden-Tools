@@ -13,6 +13,7 @@
 #include <fo4/plugin/onam.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
+#include <fo4/signature.hpp>
 
 namespace fo4ide::plugin {
 namespace {
@@ -33,6 +34,30 @@ std::unexpected<Error> readOnlyError(std::string_view name) {
         "PluginReadOnly",
         "Refusing to modify protected or game-Data plugin: " + std::string(name)
     });
+}
+
+std::string incompleteUsageReason(const fo4::Plugin& plugin, const fo4::MasterUsage& usage) {
+    std::vector<std::string> reasons;
+    if (usage.records_with_incomplete_vmad != 0) {
+        reasons.push_back(std::to_string(usage.records_with_incomplete_vmad) +
+                          " record(s) carry VMAD data Radicle cannot fully scan");
+    }
+    if (usage.undecodable_records != 0) {
+        std::string names;
+        for (const auto* record : fo4::collect_records(plugin)) {
+            if (!record->undecodable || record->header.signature == fo4::sig_tes4) continue;
+            if (!names.empty()) names += ", ";
+            names += record->header.signature.to_string() + " " + record->form_key.to_string();
+        }
+        reasons.push_back(std::to_string(usage.undecodable_records) +
+                          " undecodable record(s) cannot be scanned: " + names);
+    }
+    std::string reason;
+    for (const auto& part : reasons) {
+        if (!reason.empty()) reason += "; ";
+        reason += part;
+    }
+    return reason + "; no masters were removed";
 }
 
 }
@@ -132,11 +157,7 @@ Result<nlohmann::json> RadiclePluginBackend::cleanUnusedMasters(const nlohmann::
     try {
         const auto usage = fo4::scan_master_usage(loaded->plugin);
         if (!usage.complete()) {
-            return std::unexpected(Error{
-                "MasterUsageIncomplete",
-                std::to_string(usage.records_with_incomplete_vmad) +
-                    " record(s) carry VMAD data Radicle cannot fully scan; no masters were removed"
-            });
+            return std::unexpected(Error{"MasterUsageIncomplete", incompleteUsageReason(loaded->plugin, usage)});
         }
         auto kept = fo4::used_masters(loaded->plugin, usage);
         std::vector<std::string> removed;
