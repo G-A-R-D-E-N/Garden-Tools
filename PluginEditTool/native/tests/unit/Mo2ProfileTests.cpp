@@ -336,7 +336,7 @@ TEST_CASE("MO2 profile checks a plugins.txt name that differs from the file only
     writeFile(root / "ModOrganizer.ini",
         "selected_profile=Test\n"
         "gamePath=" + game.string() + "\n");
-    writeFile(profile / "plugins.txt", "*\xC3\xA4.esp\n");
+    writeFile(profile / "plugins.txt", "*\xE4.esp\n");
     writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
     writeFile(gameData / upper, minimalPlugin(0, "upper"));
 
