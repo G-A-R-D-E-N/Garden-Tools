@@ -48,6 +48,47 @@ fo4::schema::ScalarFieldDescriptor field(std::string_view path) {
   return *descriptor;
 }
 
+std::vector<std::byte> expl_plugin_at(std::uint16_t form_version) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x801);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "EXPL", 0);
+  const auto record = fo4::test::begin_record(out, "EXPL", 0, 0x00000800, form_version);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
+  fo4::test::ByteWriter data;
+  for (int i = 0; i < 6; ++i) data.u32(0);
+  data.f32(500.0F);
+  data.f32(10.0F);
+  data.f32(300.0F);
+  data.f32(1024.0F);
+  data.f32(0.0F);
+  data.f32(0.3F);
+  data.u32(1);
+  data.u32(3);
+  data.f32(0.0F);
+  data.u32(2);
+  for (int i = 0; i < 5; ++i) data.u32(0);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+bool exposed(const fo4::Plugin& plugin, const fo4::FormKey& key,
+             const fo4::schema::ScalarFieldDescriptor& descriptor) {
+  const auto* record = fo4::find_record(plugin, key);
+  if (record == nullptr) return false;
+  const auto slots = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(descriptor.scalar), descriptor.scalar.address);
+  return slots.slots.size() == 1 && slots.slots[0].valid;
+}
+
 }  // namespace
 
 TEST(ScalarEmbedded, ReadsEveryPayloadFieldAtItsMeasuredOffset) {
@@ -311,4 +352,31 @@ TEST(ScalarEmbedded, ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbs
 
   const std::vector<std::byte> short_dnam(60, std::byte{0});
   EXPECT_TRUE(fo4::schema::scalar_field_bytes(short_dnam, field("WEAP\\Stagger").scalar).empty());
+}
+
+TEST(ScalarEmbedded, InnerRadiusIsGatedByFormVersion97) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  const auto inner = field("EXPL\\InnerRadius");
+  EXPECT_EQ(inner.scalar.min_form_version, 97);
+
+  auto old_plugin = fo4::read_plugin(expl_plugin_at(96), "Legacy.esp");
+  const auto* old_record = fo4::find_record(old_plugin, key);
+  ASSERT_NE(old_record, nullptr);
+  const auto before = find_subrecord(*old_record, "DATA")->data;
+  EXPECT_FALSE(exposed(old_plugin, key, inner));
+  EXPECT_EQ(fo4::set_record_scalar(old_plugin, key, inner, "400"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  const auto* old_after = fo4::find_record(old_plugin, key);
+  ASSERT_NE(old_after, nullptr);
+  EXPECT_EQ(find_subrecord(*old_after, "DATA")->data, before);
+
+  auto new_plugin = fo4::read_plugin(expl_plugin_at(97), "Legacy.esp");
+  EXPECT_TRUE(exposed(new_plugin, key, inner));
+  ASSERT_EQ(fo4::set_record_scalar(new_plugin, key, inner, "400"),
+            fo4::ScalarMutationStatus::updated);
+  const auto* new_record = fo4::find_record(new_plugin, key);
+  ASSERT_NE(new_record, nullptr);
+  const auto& data = find_subrecord(*new_record, "DATA")->data;
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(data, inner.scalar), inner.scalar),
+            "400");
 }
