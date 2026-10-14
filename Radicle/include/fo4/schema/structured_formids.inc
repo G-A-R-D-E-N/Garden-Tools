@@ -31,3 +31,4 @@
 // already covered by formid_subrecords.inc when their payload is four bytes.
 {0x4B435456u, 0, 8},   // VTCK male voice
 {0x4B435456u, 4, 8},   // VTCK female voice
+{0x444B5441u, 8, 12},  // ATKD attack spell

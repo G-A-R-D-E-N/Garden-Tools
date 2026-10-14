@@ -45,6 +45,13 @@ constexpr auto k_hclf = Signature::from_string("HCLF");
 constexpr auto k_cell = Signature::from_string("CELL");
 constexpr auto k_xclr = Signature::from_string("XCLR");
 constexpr auto k_cobj = Signature::from_string("COBJ");
+constexpr auto k_arma = Signature::from_string("ARMA");
+constexpr auto k_armo = Signature::from_string("ARMO");
+constexpr auto k_modl = Signature::from_string("MODL");
+constexpr auto k_npc_ = Signature::from_string("NPC_");
+constexpr auto k_tpta = Signature::from_string("TPTA");
+constexpr auto k_ovis = Signature::from_string("OVIS");
+constexpr auto k_indx = Signature::from_string("INDX");
 
 std::uint16_t read_u16(std::span<const std::byte> data, std::size_t offset) {
   std::uint16_t value = 0;
@@ -345,7 +352,9 @@ std::optional<std::vector<std::size_t>> packed_formid_array_offsets(const Record
         ((rec == k_fstp || rec == k_fsts) && sig == k_data) ||
         (rec == k_otft && sig == k_inam) || (rec == k_coll && sig == k_cnam) ||
         (rec == k_race && sig == k_hclf) || (rec == k_cell && sig == k_xclr) ||
-        (rec == k_cobj && sig == k_fnam))) {
+        (rec == k_cobj && sig == k_fnam) || (rec == k_armo && sig == k_modl) ||
+        (rec == k_arma && sig == k_modl) || (rec == k_npc_ && sig == k_tpta) ||
+        (rec == k_ovis && sig == k_indx))) {
     return std::nullopt;
   }
   if (sub.data.size() % 4 != 0) {
