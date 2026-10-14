@@ -2126,3 +2126,32 @@ A local COED owner must be NPC_ or FACT, as xEdit's `wbCOED` owner (`Core/wbDefi
 The index-based FACT, NPC_ and LVLI/LVLN edits (`set_faction_relation`, `remove_faction_rank`, `set_npc_perk`, `remove_leveled_list_entry` and the other set/remove entry points) call `require_editable` before any index check or decode. `Radicle/src/forms/faction.cpp:require_editable`, `Radicle/src/forms/npc.cpp:require_editable` and `Radicle/src/forms/leveled_list.cpp:require_editable` call `require_decodable` on the target record. The reason: an undecodable record has empty `subrecords`, so the decoders return empty lists and the old check reported "index is out of range" instead of the undecodable refusal.
 
 The whole-record write points also refuse, so add, replace and settings edits do not write into an undecodable record: `Radicle/src/forms/faction.cpp:mutable_faction`, `Radicle/src/forms/npc.cpp:replace_run`, and `Radicle/src/forms/leveled_list.cpp:replace_leveled_list_entries`, `set_leveled_list_settings` and `reset_leveled_list`. Before this change an empty `replace_leveled_list_entries` on an undecodable LVLN returned true without touching the record, because both sides decoded to no entries. The `decode_*` readers are unchanged, so reads of an undecodable record behave as before. Tests: `Radicle/tests/test_undecodable_edit.cpp:FactionIndexedEditsRefuseUndecodableRecord`, `NpcIndexedEditsRefuseUndecodableRecord`, `LeveledListIndexedEditsRefuseUndecodableRecord` and `LeveledListWholeEditsRefuseUndecodableRecord`.
+
+## src/schema/form_link_mixed.cpp:mixed_formid_offsets (struct payloads, #602 WP-2)
+
+Each rule below was checked against the xEdit source at pin 93cc0bc5 before coding. Strict remap throws `FormIdError` on a malformed size; lenient remap returns no offsets. Tests are in `Radicle/tests/test_struct_payload_remap.cpp`.
+
+Status: TODO-verify. The xEdit line numbers below were read from the pin 93cc0bc5 source during #602 WP-2 and have not been re-checked by a second reader. Rules are listed by table and function, not by offset.
+
+Packed form ID arrays (`packed_formid_array_offsets`), test `StructPayloadRemap.PackedArraysRemapAndKeepNeighbors`:
+- OTFT INAM, `Core/wbDefinitionsFO4.pas` line 9359.
+- COLL CNAM, `Core/wbDefinitionsFO4.pas` line 9559.
+- RACE HCLF, `Core/wbDefinitionsFO4.pas` line 11205.
+- CELL XCLR, `Core/wbDefinitionsFO4.pas` line 6046.
+- COBJ FNAM, `Core/wbDefinitionsFO4.pas` line 10279.
+
+Fixed-stride rows (`k_record_stride_layouts`), tests in the same file:
+- KSSM RNAM, `Core/wbDefinitionsFO4.pas` lines 12394-12397. Test `StructPayloadRemap.SoundAndCategoryStructsRemapAndKeepScalars`.
+- MGEF SNDD, `Core/wbDefinitionsCommon.pas` lines 8896-8912, used by MGEF at `Core/wbDefinitionsFO4.pas` line 10207. Same test.
+- SCSN CNAM, `Core/wbDefinitionsFO4.pas` lines 12653-12654. Same test.
+- COBJ FVPA, `Core/wbDefinitionsFO4.pas` lines 10251-10264. Test `StructPayloadRemap.ComponentPairsRemapAndKeepCounts`.
+- MISC CVPA, `Core/wbDefinitionsFO4.pas` lines 10235-10238. Same test.
+- FURN and TERM SNAM, `Core/wbDefinitionsFO4.pas` lines 5314-5330, used at lines 6915 (FURN) and 12713 (TERM). Test `StructPayloadRemap.MarkerParamsKeywordRemapByFormVersion`.
+- ALCH ENIT, `Core/wbDefinitionsFO4.pas` line 5733. Test `StructPayloadRemap.SingleSlotsAndAlchEnitRemapAndKeepScalars`. Offset 16 is already a `fields.json` row, and `form_link_schema.cpp:schema_formlink_offsets` drops schema rows for an owned subrecord, so the rule lists both. ENCH ENIT (line 6730) and INGR ENIT (line 9806) are not in this rule.
+
+Fixed single slots (`structured_formids.inc`), same test set:
+- ACTI RADR, `Core/wbDefinitionsFO4.pas` lines 5660-5666.
+- CELL XILW, `Core/wbDefinitionsFO4.pas` line 6071.
+- REFR and ACHR XTEL, `Core/wbDefinitionsFO4.pas` lines 11550-11560.
+
+Strict mode: `StructPayloadRemap.WrongStrideSizeFailsClosedWithoutMutation`.

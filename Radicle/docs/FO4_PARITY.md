@@ -50,7 +50,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | ACTI | 5611 | 7 | 1 | 8 | - | 2 | yes | yes | environment/base_records | - | 1 | L4 |
 | ADDN | 7796 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ALCH | 5691 | 11 | 3 | 7 | - | 3 | yes | yes | - | - | 1 | L4 |
+| ALCH | 5691 | 11 | 3 | 7 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | AMDL | 12246 | 16 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | AMMO | 5741 | 12 | 2 | 5 | - | 3 | yes | yes | - | - | 1 | L4 |
 | ANIO | 5777 | - | 1 | - | - | - | yes | - | - | - | 1 | L4 |
@@ -65,13 +65,13 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | - | 1 | L4 |
 | BPTD | 7693 | - | - | - | - | - | - | - | - | - | - | L0 |
 | CAMS | 7880 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | - | - | - | - | - | - | - | forms/cell, environment/world | - | 1 | L2 |
+| CELL | 5953 | - | - | - | - | - | - | - | forms/cell, environment/world | yes | 1 | L2 |
 | CLAS | 6102 | 1 | 1 | - | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
 | CMPO | 12294 | 1 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| COBJ | 10266 | - | - | - | - | - | - | - | forms/components | - | - | L2 |
-| COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | - | 2 | L4 |
+| COBJ | 10266 | - | - | - | - | - | - | - | forms/components | yes | - | L2 |
+| COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
 | CONT | 6176 | 10 | 1 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
 | CPTH | 7930 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
@@ -95,7 +95,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | FLST | 7574 | - | - | - | 1 | - | - | - | - | - | - | L3 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FURN | 6848 | 9 | 2 | 6 | - | 2 | yes | yes | - | - | 1 | L4 |
+| FURN | 6848 | 9 | 2 | 6 | - | 2 | yes | yes | - | yes | 1 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GMST | 6936 | 3 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -112,7 +112,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | IPCT | 7978 | 8 | - | 6 | - | - | yes | - | - | - | 1 | L4 |
 | IPDS | 8014 | - | - | - | - | - | yes | - | - | - | 2 | L4 |
 | KEYM | 9823 | 9 | 3 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
-| KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | - | 1 | L4 |
+| KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | yes | 1 | L4 |
 | KYWD | 6947 | 1 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | - | - | L2 |
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
@@ -129,8 +129,8 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | MATO | 9375 | 7 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
-| MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | - | 1 | L4 |
-| MISC | 10212 | - | - | - | - | - | - | yes | forms/components | - | 1 | L2 |
+| MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
+| MISC | 10212 | - | - | - | - | - | - | yes | forms/components | yes | 1 | L2 |
 | MOVT | 9393 | 5 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | MSTT | 7067 | 7 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
 | MSWP | 12437 | - | - | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
@@ -142,7 +142,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | NOTE | 12470 | 3 | 3 | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 47 | - | - | - | - | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | - | - | - | - | yes | - | L0 |
-| OTFT | 9357 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
+| OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
 | PARW | 5944 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
@@ -158,7 +158,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 2 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
-| RACE | 11054 | - | 4 | - | 8 | 2 | yes | yes | forms/race, forms/race_body | - | 2 | L4 |
+| RACE | 11054 | - | 4 | - | 8 | 2 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | - | - | - | - | - | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -168,7 +168,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | SCCO | 12593 | - | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | - | - | - | - | - | - | - | forms/static_collection | - | - | L2 |
-| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | SMBN | 8720 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -181,7 +181,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | STAG | 12663 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | STAT | 12045 | 3 | 1 | 1 | - | 1 | yes | - | environment/base_records | - | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
-| TERM | 12671 | 8 | 2 | 2 | - | 3 | yes | yes | - | - | 1 | L4 |
+| TERM | 12671 | 8 | 2 | 2 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | - | 7 | L0 |
 | TREE | 12134 | 16 | - | 2 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
