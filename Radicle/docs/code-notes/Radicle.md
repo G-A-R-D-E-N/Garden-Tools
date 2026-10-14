@@ -2131,7 +2131,7 @@ The whole-record write points also refuse, so add, replace and settings edits do
 
 Each rule below was checked against the xEdit source at pin 93cc0bc5 before coding. Strict remap throws `FormIdError` on a malformed size; lenient remap returns no offsets. Tests are in `Radicle/tests/test_struct_payload_remap.cpp`.
 
-Status: TODO-verify. The xEdit line numbers below were read from the pin 93cc0bc5 source during #602 WP-2 and have not been re-checked by a second reader. Rules are listed by table and function, not by offset.
+The xEdit lines were re-checked by a second reader, and a scan of the seven official masters found no payload these rules reject, with every non-null form ID at the new slots resolving to the type xEdit expects. Rules are listed by table and function, not by offset.
 
 Packed form ID arrays (`packed_formid_array_offsets`), test `StructPayloadRemap.PackedArraysRemapAndKeepNeighbors`:
 - OTFT INAM, `Core/wbDefinitionsFO4.pas` line 9359.
@@ -2143,16 +2143,16 @@ Packed form ID arrays (`packed_formid_array_offsets`), test `StructPayloadRemap.
 Fixed-stride rows (`k_record_stride_layouts`), tests in the same file:
 - KSSM RNAM, `Core/wbDefinitionsFO4.pas` lines 12394-12397. Test `StructPayloadRemap.SoundAndCategoryStructsRemapAndKeepScalars`.
 - MGEF SNDD, `Core/wbDefinitionsCommon.pas` lines 8896-8912, used by MGEF at `Core/wbDefinitionsFO4.pas` line 10207. Same test.
-- SCSN CNAM, `Core/wbDefinitionsFO4.pas` lines 12653-12654. Same test.
+- SCSN CNAM, `Core/wbDefinitionsFO4.pas` lines 12653-12656. Same test.
 - COBJ FVPA, `Core/wbDefinitionsFO4.pas` lines 10251-10264. Test `StructPayloadRemap.ComponentPairsRemapAndKeepCounts`.
 - MISC CVPA, `Core/wbDefinitionsFO4.pas` lines 10235-10238. Same test.
-- FURN and TERM SNAM, `Core/wbDefinitionsFO4.pas` lines 5314-5330, used at lines 6915 (FURN) and 12713 (TERM). Test `StructPayloadRemap.MarkerParamsKeywordRemapByFormVersion`.
-- ALCH ENIT, `Core/wbDefinitionsFO4.pas` line 5733. Test `StructPayloadRemap.SingleSlotsAndAlchEnitRemapAndKeepScalars`. Offset 16 is already a `fields.json` row, and `form_link_schema.cpp:schema_formlink_offsets` drops schema rows for an owned subrecord, so the rule lists both. ENCH ENIT (line 6730) and INGR ENIT (line 9806) are not in this rule.
+- FURN and TERM SNAM, `Core/wbDefinitionsFO4.pas` lines 5314-5332, used at lines 6915 (FURN) and 12713 (TERM). Test `StructPayloadRemap.MarkerParamsKeywordRemapsByFormVersion`. xEdit marks the marker keyword optional (`SetOptionalFrom(4)`), no vanilla payload omits it, and a mod payload whose last element lacks it is not a multiple of the stride, so strict remap refuses it.
+- ALCH ENIT, `Core/wbDefinitionsFO4.pas`: Addiction is line 5733 and Consume Sound line 5735. Test `StructPayloadRemap.SingleSlotsAndAlchEnitRemapAndKeepScalars`. Offset 16 is already a `fields.json` row, and `form_link_schema.cpp:schema_formlink_offsets` drops schema rows for an owned subrecord, so the rule lists both. ENCH ENIT (line 6730) and INGR ENIT (line 9806) are not in this rule.
 
 Fixed single slots (`structured_formids.inc`), same test set:
 - ACTI RADR, `Core/wbDefinitionsFO4.pas` lines 5660-5666.
 - CELL XILW, `Core/wbDefinitionsFO4.pas` line 6071.
-- REFR and ACHR XTEL, `Core/wbDefinitionsFO4.pas` lines 11550-11560.
+- REFR and ACHR XTEL, `Core/wbDefinitionsFO4.pas` lines 11550-11561.
 
 Strict mode: `StructPayloadRemap.WrongStrideSizeFailsClosedWithoutMutation`.
 ## Radicle/src/forms/placed_reference_edit.cpp:set_placed_reference_record_flags — Deleted bit kept

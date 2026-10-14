@@ -75,7 +75,7 @@ TEST(StructPayloadRemap, PackedArraysRemapAndKeepNeighbors) {
   append_record(out, "CELL", 0x02000103,
                 {{"XCLW", words({0x41200000})}, {"XCLR", words({0x1238, 0x1239})}});
   append_record(out, "COBJ", 0x02000104,
-                {{"INTV", words({0x00070001})}, {"FNAM", words({0x1240})}});
+                {{"INTV", words({0x00070001})}, {"FNAM", words({0x1240, 0x1241})}});
   const auto reread = reread_swapped(out);
   EXPECT_EQ(remapped_words(reread, "000100:Patch.esp", "INAM"),
             (std::vector<std::uint32_t>{0x01001234, 0x01001235}));
@@ -92,7 +92,7 @@ TEST(StructPayloadRemap, PackedArraysRemapAndKeepNeighbors) {
   EXPECT_EQ(remapped_words(reread, "000103:Patch.esp", "XCLW"),
             (std::vector<std::uint32_t>{0x41200000}));
   EXPECT_EQ(remapped_words(reread, "000104:Patch.esp", "FNAM"),
-            (std::vector<std::uint32_t>{0x01001240}));
+            (std::vector<std::uint32_t>{0x01001240, 0x01001241}));
   EXPECT_EQ(remapped_words(reread, "000104:Patch.esp", "INTV"),
             (std::vector<std::uint32_t>{0x00070001}));
 }
@@ -135,6 +135,10 @@ TEST(StructPayloadRemap, MarkerParamsKeywordRemapsByFormVersion) {
                 {{"SNAM", words({0x11111111, 0x22222222, 0x33333333, 0x44444444, 0x1351,
                                  0x55555555, 0x66666666, 0x77777777, 0x88888888, 0x1352})}},
                 124);
+  append_record(out, "TERM", 0x02000312,
+                {{"SNAM", words({0x11111111, 0x22222222, 0x33333333, 0x44444444, 0x1354,
+                                 0x55555555})}},
+                125);
   const auto reread = reread_swapped(out);
   EXPECT_EQ(remapped_words(reread, "000310:Patch.esp", "SNAM"),
             (std::vector<std::uint32_t>{0x11111111, 0x22222222, 0x33333333, 0x44444444,
@@ -144,6 +148,9 @@ TEST(StructPayloadRemap, MarkerParamsKeywordRemapsByFormVersion) {
             (std::vector<std::uint32_t>{0x11111111, 0x22222222, 0x33333333, 0x44444444,
                                         0x01001351, 0x55555555, 0x66666666, 0x77777777,
                                         0x88888888, 0x01001352}));
+  EXPECT_EQ(remapped_words(reread, "000312:Patch.esp", "SNAM"),
+            (std::vector<std::uint32_t>{0x11111111, 0x22222222, 0x33333333, 0x44444444,
+                                        0x01001354, 0x55555555}));
 }
 
 TEST(StructPayloadRemap, SingleSlotsAndAlchEnitRemapAndKeepScalars) {
