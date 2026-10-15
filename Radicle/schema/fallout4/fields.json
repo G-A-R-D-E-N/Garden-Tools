@@ -324,6 +324,10 @@
       "signature": "KYWD",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "NNAM", "minimum": 0, "maximum": 1}]},
       "fields": [
+        {"path": "KYWD\\ColorRed", "label": "Color red", "kind": "scalar", "subrecord": "CNAM", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "KYWD\\ColorGreen", "label": "Color green", "kind": "scalar", "subrecord": "CNAM", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "KYWD\\ColorBlue", "label": "Color blue", "kind": "scalar", "subrecord": "CNAM", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "KYWD\\ColorAlpha", "label": "Color alpha", "kind": "scalar", "subrecord": "CNAM", "offset": 3, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "KYWD\\Notes", "label": "Notes", "kind": "string", "subrecord": "DNAM", "insertion": "existing_only"},
         {"path": "KYWD\\Type", "label": "Type", "kind": "scalar", "subrecord": "TNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "None"}, {"value": 1, "name": "Component Tech Level"}, {"value": 2, "name": "Attach Point"}, {"value": 3, "name": "Component Property"}, {"value": 4, "name": "Instantiation Filter"}, {"value": 5, "name": "Mod Association"}, {"value": 6, "name": "Sound"}, {"value": 7, "name": "Anim Archetype"}, {"value": 8, "name": "Function Call"}, {"value": 9, "name": "Recipe Filter"}, {"value": 10, "name": "Attraction Type"}, {"value": 11, "name": "Dialogue Subtype"}, {"value": 12, "name": "Quest Target"}, {"value": 13, "name": "Anim Flavor"}, {"value": 14, "name": "Anim Gender"}, {"value": 15, "name": "Anim Face"}, {"value": 16, "name": "Quest Group"}, {"value": 17, "name": "Anim Injured"}, {"value": 18, "name": "Dispel Effect"}], "minimum": 0, "maximum": 18, "insertion": "existing_only"},
         {"path": "KYWD\\LegacyDisplayName", "label": "Display name (legacy)", "kind": "string", "subrecord": "NNAM", "insertion": "existing_only"}
@@ -362,6 +366,10 @@
       "signature": "LCRT",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "TNAM", "minimum": 0, "maximum": 1}]},
       "fields": [
+        {"path": "LCRT\\ColorRed", "label": "Color red", "kind": "scalar", "subrecord": "CNAM", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LCRT\\ColorGreen", "label": "Color green", "kind": "scalar", "subrecord": "CNAM", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LCRT\\ColorBlue", "label": "Color blue", "kind": "scalar", "subrecord": "CNAM", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LCRT\\ColorAlpha", "label": "Color alpha", "kind": "scalar", "subrecord": "CNAM", "offset": 3, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "LCRT\\Type", "label": "Type", "kind": "scalar", "subrecord": "TNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "None"}, {"value": 1, "name": "Component Tech Level"}, {"value": 2, "name": "Attach Point"}, {"value": 3, "name": "Component Property"}, {"value": 4, "name": "Instantiation Filter"}, {"value": 5, "name": "Mod Association"}, {"value": 6, "name": "Sound"}, {"value": 7, "name": "Anim Archetype"}, {"value": 8, "name": "Function Call"}, {"value": 9, "name": "Recipe Filter"}, {"value": 10, "name": "Attraction Type"}, {"value": 11, "name": "Dialogue Subtype"}, {"value": 12, "name": "Quest Target"}, {"value": 13, "name": "Anim Flavor"}, {"value": 14, "name": "Anim Gender"}, {"value": 15, "name": "Anim Face"}, {"value": 16, "name": "Quest Group"}, {"value": 17, "name": "Anim Injured"}, {"value": 18, "name": "Dispel Effect"}], "minimum": 0, "maximum": 18, "insertion": "existing_only"}
       ],
       "localized_subrecords": []
@@ -5777,7 +5785,12 @@
         {"path": "MATO\\MaterialUVScale", "label": "Material UV scale", "kind": "scalar", "subrecord": "DATA", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "MATO\\ProjectionVectorX", "label": "Projection vector X", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "MATO\\ProjectionVectorY", "label": "Projection vector Y", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
-        {"path": "MATO\\ProjectionVectorZ", "label": "Projection vector Z", "kind": "scalar", "subrecord": "DATA", "offset": 24, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+        {"path": "MATO\\ProjectionVectorZ", "label": "Projection vector Z", "kind": "scalar", "subrecord": "DATA", "offset": 24, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "MATO\\NormalDampener", "label": "Normal dampener", "kind": "scalar", "subrecord": "DATA", "offset": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 32, "insertion": "existing_only"},
+        {"path": "MATO\\SinglePassColorRed", "label": "Single pass color red", "kind": "scalar", "subrecord": "DATA", "offset": 32, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 36, "insertion": "existing_only"},
+        {"path": "MATO\\SinglePassColorGreen", "label": "Single pass color green", "kind": "scalar", "subrecord": "DATA", "offset": 36, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "MATO\\SinglePassColorBlue", "label": "Single pass color blue", "kind": "scalar", "subrecord": "DATA", "offset": 40, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 44, "insertion": "existing_only"},
+        {"path": "MATO\\SinglePass", "label": "Single pass", "kind": "scalar", "subrecord": "DATA", "offset": 44, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "minimum_payload_size": 48, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "MATO\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
@@ -5814,6 +5827,18 @@
         {"path": "IPCT\\SoundLevel", "label": "Sound level", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Loud"}, {"value": 1, "name": "Normal"}, {"value": 2, "name": "Silent"}, {"value": 3, "name": "Very Loud"}, {"value": 4, "name": "Quiet"}], "minimum": 0, "maximum": 4, "insertion": "existing_only"},
         {"path": "IPCT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "No Decal Data"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "IPCT\\ImpactResult", "label": "Impact result", "kind": "scalar", "subrecord": "DATA", "offset": 21, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "Default"}, {"value": 1, "name": "Destroy"}, {"value": 2, "name": "Bounce"}, {"value": 3, "name": "Impale"}, {"value": 4, "name": "Stick"}], "minimum": 0, "maximum": 4, "insertion": "existing_only"},
+        {"path": "IPCT\\MinWidth", "label": "Min width", "kind": "scalar", "subrecord": "DODT", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\MaxWidth", "label": "Max width", "kind": "scalar", "subrecord": "DODT", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\MinHeight", "label": "Min height", "kind": "scalar", "subrecord": "DODT", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\MaxHeight", "label": "Max height", "kind": "scalar", "subrecord": "DODT", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\Depth", "label": "Depth", "kind": "scalar", "subrecord": "DODT", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\Shininess", "label": "Shininess", "kind": "scalar", "subrecord": "DODT", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\ParallaxScale", "label": "Parallax scale", "kind": "scalar", "subrecord": "DODT", "offset": 24, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "IPCT\\ParallaxPasses", "label": "Parallax passes", "kind": "scalar", "subrecord": "DODT", "offset": 28, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "IPCT\\DecalFlags", "label": "Decal flags", "kind": "scalar", "subrecord": "DODT", "offset": 29, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "POM Shadows"}, {"bit": 1, "name": "Alpha - Blending"}, {"bit": 2, "name": "Alpha - Testing"}, {"bit": 3, "name": "No Subtextures"}, {"bit": 4, "name": "Multiplicative Blending"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "IPCT\\DecalColorRed", "label": "Decal color red", "kind": "scalar", "subrecord": "DODT", "offset": 32, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "IPCT\\DecalColorGreen", "label": "Decal color green", "kind": "scalar", "subrecord": "DODT", "offset": 33, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "IPCT\\DecalColorBlue", "label": "Decal color blue", "kind": "scalar", "subrecord": "DODT", "offset": 34, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "IPCT\\FootstepParticleMaxDistance", "label": "Footstep particle max distance", "kind": "scalar", "subrecord": "FNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
       ],
       "formlink_fields": [
@@ -9873,6 +9898,8 @@
           "payload_size": 4,
           "insertion": "existing_only"
         },
+        {"path": "LIGH\\Icon", "label": "Inventory icon", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
+        {"path": "LIGH\\MessageIcon", "label": "Message icon", "kind": "string", "subrecord": "MICO", "insertion": "existing_only"},
         {
           "path": "LIGH\\Time",
           "label": "Time",
@@ -10119,6 +10146,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "LIGH\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {"path": "LIGH\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "LIGH\\Sound",
@@ -10167,6 +10195,8 @@
           { "signature": "KWDA", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "PRPS", "minimum": 0, "maximum": 1 },
           { "signature": "FULL", "minimum": 0, "maximum": 1 },
+          { "signature": "ICON", "minimum": 0, "maximum": 1 },
+          { "signature": "MICO", "minimum": 0, "maximum": 1 },
           { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "000000000000000000000000000000000000803f0000b44200002041000000000000000000000000000000000000000000000000000000000000000000000000" },
           { "signature": "FNAM", "minimum": 1, "maximum": 1, "default": "0000803f" },
           { "signature": "NAM0", "minimum": 0, "maximum": 1 },
@@ -13489,7 +13519,10 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "NOTE\\SoundTarget", "label": "Sound target", "subrecord": "SNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "payload_sizes": [4], "when": {"subrecord": "DNAM", "offset": 0, "storage": "u8", "equals": [0]}, "insertion": "existing_only"},
+        {"path": "NOTE\\VoiceTarget", "label": "Scene target", "subrecord": "SNAM", "offset": 0, "targets": ["SCEN"], "nullable": false, "payload_sizes": [4], "when": {"subrecord": "DNAM", "offset": 0, "storage": "u8", "equals": [1]}, "insertion": "existing_only"},
+        {"path": "NOTE\\TerminalTarget", "label": "Terminal target", "subrecord": "SNAM", "offset": 0, "targets": ["TERM"], "nullable": false, "payload_sizes": [4], "when": {"subrecord": "DNAM", "offset": 0, "storage": "u8", "equals": [3]}, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL"
@@ -24329,7 +24362,11 @@
       },
       "fields": [
         {"path": "LCTN\\WorldLocationRadius", "label": "World Location Radius", "kind": "scalar", "subrecord": "RNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
-        {"path": "LCTN\\ActorFadeMult", "label": "Actor Fade Mult", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+        {"path": "LCTN\\ActorFadeMult", "label": "Actor Fade Mult", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "LCTN\\ColorRed", "label": "Color red", "kind": "scalar", "subrecord": "CNAM", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LCTN\\ColorGreen", "label": "Color green", "kind": "scalar", "subrecord": "CNAM", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LCTN\\ColorBlue", "label": "Color blue", "kind": "scalar", "subrecord": "CNAM", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LCTN\\ColorAlpha", "label": "Color alpha", "kind": "scalar", "subrecord": "CNAM", "offset": 3, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "LCTN\\ParentLocation", "label": "Parent Location", "subrecord": "PNAM", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": true, "insertion": "existing_only"},
