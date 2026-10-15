@@ -410,6 +410,12 @@
       "signature": "CMPO",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "OBND", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "CUSD", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 0, "maximum": 1}, {"signature": "MNAM", "minimum": 0, "maximum": 1}, {"signature": "GNAM", "minimum": 0, "maximum": 1}]},
       "fields": [
+        {"path": "CMPO\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "CMPO\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "CMPO\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "CMPO\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "CMPO\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "CMPO\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {"path": "CMPO\\AutoCalcValue", "label": "Auto calc value", "kind": "scalar", "subrecord": "DATA", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
       ],
       "formlink_fields": [
@@ -445,6 +451,13 @@
     {
       "signature": "EXPL",
       "fields": [
+        {"path": "EXPL\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "EXPL\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "EXPL\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "EXPL\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "EXPL\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "EXPL\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "EXPL\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "EXPL\\Force",
           "label": "Force",
@@ -640,6 +653,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "EXPL\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "EXPL\\Light",
           "label": "Light",
@@ -3005,6 +3019,13 @@
     {
       "signature": "FLOR",
       "fields": [
+        {"path": "FLOR\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "FLOR\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "FLOR\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "FLOR\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "FLOR\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "FLOR\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "FLOR\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "FLOR\\Flags",
           "label": "Flags",
@@ -3072,6 +3093,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "FLOR\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "FLOR\\Ingredient",
           "label": "Ingredient",
@@ -3136,6 +3158,13 @@
     {
       "signature": "GRAS",
       "fields": [
+        {"path": "GRAS\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "GRAS\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "GRAS\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "GRAS\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "GRAS\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "GRAS\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "GRAS\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "GRAS\\Density",
           "label": "Density",
@@ -3257,6 +3286,9 @@
           "insertion": "existing_only"
         }
       ],
+      "formlink_fields": [
+        {"path": "GRAS\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
@@ -3275,6 +3307,7 @@
     {
       "signature": "EFSH",
       "fields": [
+        {"path": "EFSH\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "EFSH\\FillTexture",
           "label": "Fill texture",
@@ -3310,6 +3343,9 @@
           "subrecord": "NAM9",
           "insertion": "existing_only"
         }
+      ],
+      "formlink_fields": [
+        {"path": "EFSH\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "authoring": {
         "placement": "top_level",
@@ -4702,6 +4738,7 @@
     {
       "signature": "CAMS",
       "fields": [
+        {"path": "CAMS\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "CAMS\\Action",
           "label": "Action",
@@ -4905,6 +4942,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "CAMS\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "CAMS\\ImageSpaceModifier",
           "label": "Image space modifier",
@@ -5300,6 +5338,13 @@
     {
       "signature": "HAZD",
       "fields": [
+        {"path": "HAZD\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "HAZD\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "HAZD\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "HAZD\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "HAZD\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "HAZD\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "HAZD\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "HAZD\\Limit",
           "label": "Limit",
@@ -5410,6 +5455,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "HAZD\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "HAZD\\Spell",
           "label": "Spell",
@@ -5579,7 +5625,14 @@
           }
         ]
       },
-      "fields": [],
+      "fields": [
+        {"path": "LVSP\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LVSP\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LVSP\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LVSP\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LVSP\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LVSP\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"}
+      ],
       "localized_subrecords": [
         "FULL"
       ]
@@ -5588,6 +5641,7 @@
       "signature": "MATO",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 65535}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00000000cdcccc3e00000044000000440000000000000000000000000000803f00000000000000000000000000000000"}]},
       "fields": [
+        {"path": "MATO\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {"path": "MATO\\FalloffScale", "label": "Falloff scale", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "MATO\\FalloffBias", "label": "Falloff bias", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "MATO\\NoiseUVScale", "label": "Noise UV scale", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
@@ -5595,6 +5649,9 @@
         {"path": "MATO\\ProjectionVectorX", "label": "Projection vector X", "kind": "scalar", "subrecord": "DATA", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "MATO\\ProjectionVectorY", "label": "Projection vector Y", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "MATO\\ProjectionVectorZ", "label": "Projection vector Z", "kind": "scalar", "subrecord": "DATA", "offset": 24, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "MATO\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "localized_subrecords": []
     },
@@ -5620,6 +5677,7 @@
       "signature": "IPCT",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "0000803e0200000000007041000080410100000000000000"}, {"signature": "DODT", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 1}, {"signature": "ENAM", "minimum": 0, "maximum": 1}, {"signature": "SNAM", "minimum": 0, "maximum": 1}, {"signature": "NAM1", "minimum": 0, "maximum": 1}, {"signature": "NAM3", "minimum": 0, "maximum": 1}, {"signature": "NAM2", "minimum": 0, "maximum": 1}, {"signature": "FNAM", "minimum": 0, "maximum": 1}]},
       "fields": [
+        {"path": "IPCT\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {"path": "IPCT\\EffectDuration", "label": "Effect duration", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "IPCT\\EffectOrientation", "label": "Effect orientation", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Surface Normal"}, {"value": 1, "name": "Projectile Vector"}, {"value": 2, "name": "Projectile Reflection"}], "minimum": 0, "maximum": 2, "insertion": "existing_only"},
         {"path": "IPCT\\AngleThreshold", "label": "Angle threshold", "kind": "scalar", "subrecord": "DATA", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
@@ -5630,6 +5688,7 @@
         {"path": "IPCT\\FootstepParticleMaxDistance", "label": "Footstep particle max distance", "kind": "scalar", "subrecord": "FNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "IPCT\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {"path": "IPCT\\TextureSet", "label": "Texture set", "subrecord": "DNAM", "offset": 0, "targets": ["TXST"], "nullable": false, "insertion": "existing_only"},
         {"path": "IPCT\\SecondaryTextureSet", "label": "Secondary texture set", "subrecord": "ENAM", "offset": 0, "targets": ["TXST"], "nullable": false, "insertion": "existing_only"},
         {"path": "IPCT\\Sound1", "label": "Sound 1", "subrecord": "SNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "insertion": "existing_only"},
@@ -5943,6 +6002,13 @@
     {
       "signature": "PROJ",
       "fields": [
+        {"path": "PROJ\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PROJ\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PROJ\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PROJ\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PROJ\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PROJ\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PROJ\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "PROJ\\Flags",
           "label": "Flags",
@@ -6136,6 +6202,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PROJ\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "PROJ\\Light",
           "label": "Light",
@@ -6345,10 +6412,12 @@
       "signature": "HDPT",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00"}, {"signature": "PNAM", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "HNAM", "minimum": 0, "maximum": 65535}, {"signature": "NAM0", "minimum": 0, "maximum": 65535}, {"signature": "NAM1", "minimum": 0, "maximum": 65535}, {"signature": "TNAM", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "RNAM", "minimum": 0, "maximum": 1}, {"signature": "CTDA", "minimum": 0, "maximum": 65535}]},
       "fields": [
+        {"path": "HDPT\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {"path": "HDPT\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Playable"}, {"bit": 1, "name": "Male"}, {"bit": 2, "name": "Female"}, {"bit": 3, "name": "Is Extra Part"}, {"bit": 4, "name": "Use Solid Tint"}, {"bit": 5, "name": "Uses Body Texture"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "HDPT\\Type", "label": "Type", "kind": "scalar", "subrecord": "PNAM", "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "Misc"}, {"value": 1, "name": "Face"}, {"value": 2, "name": "Eyes"}, {"value": 3, "name": "Hair"}, {"value": 4, "name": "Facial Hair"}, {"value": 5, "name": "Scar"}, {"value": 6, "name": "Eyebrows"}, {"value": 7, "name": "Meatcaps"}, {"value": 8, "name": "Teeth"}, {"value": 9, "name": "Head Rear"}], "minimum": 0, "maximum": 9, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "HDPT\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {"path": "HDPT\\TextureSet", "label": "Texture set", "subrecord": "TNAM", "offset": 0, "targets": ["TXST"], "nullable": false, "insertion": "existing_only"},
         {"path": "HDPT\\Color", "label": "Color", "subrecord": "CNAM", "offset": 0, "targets": ["CLFM"], "nullable": false, "insertion": "existing_only"},
         {"path": "HDPT\\ValidRaces", "label": "Valid races", "subrecord": "RNAM", "offset": 0, "targets": ["FLST"], "nullable": false, "insertion": "existing_only"}
@@ -6409,6 +6478,12 @@
       "signature": "DUAL",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "OBND", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 0, "maximum": 1}]},
       "fields": [
+        {"path": "DUAL\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "DUAL\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "DUAL\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "DUAL\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "DUAL\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "DUAL\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {"path": "DUAL\\InheritScale", "label": "Inherit scale", "kind": "scalar", "subrecord": "DATA", "offset": 20, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Hit Effect Art"}, {"bit": 1, "name": "Projectile"}, {"bit": 2, "name": "Explosion"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
       ],
       "formlink_fields": [
@@ -6424,7 +6499,11 @@
       "signature": "ANIO",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "MODL", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "MODT", "minimum": 0, "maximum": 1}, {"signature": "MODC", "minimum": 0, "maximum": 1}, {"signature": "MODS", "minimum": 0, "maximum": 1}, {"signature": "MODF", "minimum": 0, "maximum": 1}, {"signature": "BNAM", "minimum": 0, "maximum": 1}]},
       "fields": [
+        {"path": "ANIO\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {"path": "ANIO\\UnloadEvent", "label": "Unload event", "kind": "string", "subrecord": "BNAM", "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "ANIO\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "localized_subrecords": []
     },
@@ -9114,6 +9193,13 @@
         ]
       },
       "fields": [
+        {"path": "ADDN\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ADDN\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ADDN\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ADDN\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ADDN\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ADDN\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ADDN\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "ADDN\\Index",
           "label": "Index",
@@ -9173,6 +9259,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "ADDN\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "ADDN\\Sound",
           "label": "Sound",
@@ -9207,6 +9294,13 @@
     {
       "signature": "TREE",
       "fields": [
+        {"path": "TREE\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TREE\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TREE\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TREE\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TREE\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TREE\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TREE\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "TREE\\TrunkFlexibility",
           "label": "Trunk flexibility",
@@ -9417,6 +9511,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "TREE\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "TREE\\Ingredient",
           "label": "Ingredient",
@@ -9463,6 +9558,12 @@
     {
       "signature": "STAT",
       "fields": [
+        {"path": "STAT\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "STAT\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "STAT\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "STAT\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "STAT\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "STAT\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "STAT\\Model",
           "label": "Model file name",
@@ -9546,6 +9647,13 @@
     {
       "signature": "LIGH",
       "fields": [
+        {"path": "LIGH\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LIGH\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LIGH\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LIGH\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LIGH\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LIGH\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LIGH\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {
           "path": "LIGH\\Gobo",
           "label": "Gobo",
@@ -9812,6 +9920,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "LIGH\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "LIGH\\Sound",
           "label": "Sound",
@@ -9872,6 +9981,12 @@
     {
       "signature": "BNDS",
       "fields": [
+        {"path": "BNDS\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "BNDS\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "BNDS\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "BNDS\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "BNDS\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "BNDS\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "BNDS\\DefaultTiles",
           "label": "Default tiles",
@@ -10260,6 +10375,12 @@
     {
       "signature": "TXST",
       "fields": [
+        {"path": "TXST\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TXST\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TXST\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TXST\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TXST\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "TXST\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "TXST\\Diffuse",
           "label": "Diffuse",
@@ -13043,6 +13164,12 @@
         ]
       },
       "fields": [
+        {"path": "NOTE\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "NOTE\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "NOTE\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "NOTE\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "NOTE\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "NOTE\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "NOTE\\Type",
           "label": "Type",
@@ -13121,6 +13248,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "NOTE\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "NOTE\\PreviewTransform",
           "label": "Preview transform",
@@ -13198,6 +13326,12 @@
         ]
       },
       "fields": [
+        {"path": "ENCH\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ENCH\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ENCH\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ENCH\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ENCH\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ENCH\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "ENCH\\Cost",
           "label": "Enchantment cost",
@@ -13758,6 +13892,12 @@
         ]
       },
       "fields": [
+        {"path": "PKIN\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PKIN\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PKIN\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PKIN\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PKIN\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "PKIN\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "PKIN\\Filter",
           "label": "Filter",
@@ -13873,6 +14013,12 @@
     {
       "signature": "SOUN",
       "fields": [
+        {"path": "SOUN\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SOUN\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SOUN\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SOUN\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SOUN\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SOUN\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "SOUN\\RepeatMinTime",
           "label": "Repeat min time",
@@ -14160,6 +14306,12 @@
     {
       "signature": "ASPC",
       "fields": [
+        {"path": "ASPC\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ASPC\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ASPC\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ASPC\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ASPC\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "ASPC\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {
           "path": "ASPC\\IsInterior",
           "label": "Is interior",
@@ -23204,6 +23356,7 @@
         ]
       },
       "fields": [
+        {"path": "WEAP\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
         {"path": "WEAP\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {"path": "WEAP\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {"path": "WEAP\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
@@ -23340,6 +23493,7 @@
           ], "minimum": 0, "maximum": 255, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "WEAP\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {"path": "WEAP\\Ammo", "label": "Ammo", "subrecord": "DNAM", "offset": 0, "payload_sizes": [132], "targets": ["AMMO"], "nullable": true, "insertion": "existing_only"},
         {"path": "WEAP\\Skill", "label": "Skill", "subrecord": "DNAM", "offset": 40, "payload_sizes": [132], "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
         {"path": "WEAP\\Resist", "label": "Resist", "subrecord": "DNAM", "offset": 44, "payload_sizes": [132], "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
@@ -23743,6 +23897,12 @@
         ]
       },
       "fields": [
+        {"path": "SPEL\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SPEL\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SPEL\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SPEL\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SPEL\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "SPEL\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {"path": "SPEL\\BaseCost", "label": "Base Cost", "kind": "scalar", "subrecord": "SPIT", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 36, "insertion": "existing_only"},
         {
           "path": "SPEL\\Flags",

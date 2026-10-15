@@ -213,9 +213,9 @@ TEST_CASE("Generated PROJ EXPL HAZD FormLink descriptors match the audited slots
         Expected{"HAZD", "HAZD\\ImageSpaceModifier", "MNAM", 0, {"IMAD", {}}, 1},
     };
 
-    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("PROJ")).size() == 9);
-    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("EXPL")).size() == 6);
-    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("HAZD")).size() == 5);
+    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("PROJ")).size() == 10);
+    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("EXPL")).size() == 7);
+    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("HAZD")).size() == 6);
     for (const auto& item : expected) {
         const auto descriptor = fo4::schema::formlink_field_descriptor(item.path);
         REQUIRE(descriptor.has_value());
