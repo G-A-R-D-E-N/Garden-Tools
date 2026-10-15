@@ -15,6 +15,19 @@ public static class LifecycleSmoke
 {
     public static int Main(string[] args)
     {
+        string temp = Directory.CreateTempSubdirectory("bgs-uismoke-").FullName;
+        foreach (string name in new[] { "TMPDIR", "TMP", "TEMP" })
+            Environment.SetEnvironmentVariable(name, temp);
+        try { return Run(args); }
+        finally
+        {
+            try { Directory.Delete(temp, true); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private static int Run(string[] args)
+    {
         if (args.Contains("--rig-authoring"))
         {
             bool render = args.Contains("--render-rig");
