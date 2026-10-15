@@ -508,6 +508,12 @@ std::optional<IndexedFormLinkListPath> indexed_formlink_list_path(
   return std::nullopt;
 }
 
+std::optional<FormLinkListDescriptor> packed_formlink_list_path(
+    std::string_view path) noexcept {
+  const auto list = formlink_list_descriptor(Signature::from_string(path.substr(0, 4)), path);
+  return list && list->storage == FormLinkListStorage::packed_array ? list : std::nullopt;
+}
+
 std::span<const Signature> formlink_list_targets(
     const FormLinkListDescriptor& descriptor) noexcept {
   return {k_generated_formlink_list_targets + descriptor.first_target,

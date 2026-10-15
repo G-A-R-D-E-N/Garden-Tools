@@ -134,8 +134,8 @@ Tier counts: L0 5, L1 0, L2 6, L3 0, L4 136.
 | MOVT | 9393 | 5 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | MSTT | 7067 | 8 | 1 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | MSWP | 12437 | - | - | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
-| MUSC | 8665 | 4 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| MUST | 8795 | 6 | 2 | 1 | - | - | yes | - | - | yes | 1 | L4 |
+| MUSC | 8665 | 4 | - | - | 1 | - | yes | - | environment/sound | yes | 2 | L4 |
+| MUST | 8795 | 6 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -286,8 +286,8 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MOVT | 5 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MSTT | 7 | - | 1 | - | 1 | f32, i16, u8 | - | 2 | - | existing_only |
 | MSWP | - | - | - | - | - | - | - | - | - | - |
-| MUSC | 4 | - | - | - | - | f32, u16, u32 | - | 1 | - | existing_only |
-| MUST | 5 | - | 1 | - | 2 | f32, u32 | - | 1 | - | existing_only |
+| MUSC | 4 | - | - | - | - | f32, u16, u32 | - | - | - | existing_only |
+| MUST | 5 | - | 1 | - | 2 | f32, u32 | - | - | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |

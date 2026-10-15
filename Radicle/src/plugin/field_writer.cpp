@@ -451,6 +451,9 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
   if (const auto link = schema::formlink_field_descriptor(path)) {
     return record_field_count(plugin, record_key, *link);
   }
+  if (const auto list = schema::packed_formlink_list_path(path)) {
+    return schema::record_formlink_list_size(plugin, record_key, *list);
+  }
   throw schema::ScalarError("unknown field path: " + std::string(path));
 }
 
