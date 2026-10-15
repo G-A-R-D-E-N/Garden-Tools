@@ -24345,11 +24345,6 @@
             "coupled": true
           },
           {
-            "signature": "CTDA",
-            "minimum": 0,
-            "maximum": 65535
-          },
-          {
             "signature": "NNAM",
             "minimum": 0,
             "maximum": 1,
