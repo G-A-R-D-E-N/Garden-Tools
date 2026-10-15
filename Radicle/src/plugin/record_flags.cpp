@@ -1,9 +1,11 @@
 #include "fo4/plugin/record_flags.hpp"
 
+#include "fo4/forms/cell.hpp"
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 #include "record_edit.hpp"
+#include "../forms/placed_reference_copy_internal.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -17,6 +19,7 @@ namespace {
 constexpr auto k_cell = Signature::from_string("CELL");
 constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_name = Signature::from_string("NAME");
+constexpr auto k_wrld = Signature::from_string("WRLD");
 constexpr auto k_xesp = Signature::from_string("XESP");
 constexpr auto k_xtel = Signature::from_string("XTEL");
 constexpr RecordFlags::value_type k_kept_bits = RecordFlags::compressed | RecordFlags::partial_form;
@@ -53,25 +56,7 @@ bool cell_is_interior(const Plugin& plugin, std::uint32_t label) {
   return detail::is_interior_cell(*cell);
 }
 
-Group& ensure_bucket(Group& cell_children, const GroupHeader& wanted) {
-  for (auto& child : cell_children.children) {
-    auto* group = std::get_if<Group>(&child);
-    if (group != nullptr && group->header.group_type == wanted.group_type &&
-        group->header.label == wanted.label) {
-      return *group;
-    }
-  }
-  Group created;
-  created.header = wanted;
-  const auto later = std::find_if(
-      cell_children.children.begin(), cell_children.children.end(), [&wanted](const GroupChild& child) {
-        const auto* group = std::get_if<Group>(&child);
-        return group != nullptr && group->header.group_type > wanted.group_type;
-      });
-  return std::get<Group>(*cell_children.children.insert(later, std::move(created)));
-}
-
-void move_to_bucket(MutableLocation& located, GroupType bucket_type) {
+void move_to_bucket(MutableLocation& located, GroupType bucket_type, const PluginFormIdContext& context) {
   auto& old_bucket = *located.path.back();
   auto& cell_children = *located.path[located.path.size() - 2];
   const auto old_header = old_bucket.header;
@@ -80,9 +65,102 @@ void move_to_bucket(MutableLocation& located, GroupType bucket_type) {
 
   GroupHeader wanted = old_header;
   wanted.group_type = static_cast<std::int32_t>(bucket_type);
-  wanted.group_size = 0;
-  ensure_bucket(cell_children, wanted).children.emplace_back(std::move(moved));
+  forms::detail::ensure_reference_bucket(cell_children, wanted, context, context)
+      ->children.emplace_back(std::move(moved));
   erase_if_empty(cell_children, old_header);
+}
+
+RecordFlagStatus relocate_reference(Plugin& plugin,
+                                    const FormKey& record_key,
+                                    RecordFlags::value_type flags,
+                                    GroupType target,
+                                    bool interior) {
+  Plugin next = plugin;
+  auto located = find_mutable_location(next, record_key);
+  if (!located || located->path.size() < 3) {
+    throw forms::PlacedReferenceError("placed reference is not beneath a CELL child GRUP");
+  }
+  const auto depth = located->path.size();
+  const auto context = plugin_form_id_context(next);
+  Group& bucket = *located->path.back();
+  Group& cell_children = *located->path[depth - 2];
+  Group& owner = *located->path[depth - 3];
+  FormKey source = resolve_plugin_form_id(RawFormId{cell_children.header.label_as_u32()}, context);
+  FormKey destination = source;
+  const auto commit_flags_only = [&]() {
+    detail::mark_record_modified(next, located->record());
+    located->record().header.flags = RecordFlags{flags};
+    plugin = std::move(next);
+    return RecordFlagStatus::changed;
+  };
+  if (!interior) {
+    const auto owner_type = static_cast<GroupType>(owner.header.group_type);
+    const auto* cell = forms::detail::preceding_record(owner, cell_children);
+    if (cell == nullptr || cell->header.signature != k_cell) {
+      throw forms::PlacedReferenceError("placed reference CELL record is missing from its group");
+    }
+    require_decodable(*cell);
+    const auto* data = find_subrecord(*cell, k_data);
+    if (data == nullptr || data->data.empty()) return commit_flags_only();
+    if (owner_type != GroupType::world_children && owner_type != GroupType::exterior_cell_subblock) {
+      throw forms::PlacedReferenceError("exterior placed reference CELL is not inside a worldspace");
+    }
+    const auto* worldspace = forms::detail::worldspace_record(located->path, depth - 3);
+    if (worldspace == nullptr || worldspace->header.signature != k_wrld) {
+      throw forms::PlacedReferenceError("exterior placed reference CELL has no WRLD record");
+    }
+    const auto worldspace_key = worldspace->form_key;
+    source = cell->form_key;
+    destination = source;
+    if (target == GroupType::cell_persistent_children) {
+      if (owner_type != GroupType::world_children) {
+        const auto* persistent = forms::find_persistent_exterior_cell(next, worldspace_key);
+        if (persistent == nullptr) return RecordFlagStatus::target_cell_missing;
+        destination = persistent->form_key;
+      }
+    } else {
+      const auto position = forms::decode_placed_reference(next, located->record())->transform;
+      if (!forms::detail::exterior_grid_in_range(position.x) ||
+          !forms::detail::exterior_grid_in_range(position.y)) {
+        return RecordFlagStatus::target_cell_missing;
+      }
+      const auto* grid = forms::find_exterior_cell(next, worldspace_key,
+                                                   forms::detail::grid_coordinate(position.x),
+                                                   forms::detail::grid_coordinate(position.y));
+      if (grid == nullptr) return RecordFlagStatus::target_cell_missing;
+      destination = grid->form_key;
+    }
+  }
+
+  Record& record = located->record();
+  detail::mark_record_modified(next, record);
+  record.header.flags = RecordFlags{flags};
+  if (destination == source) {
+    if (!has_type(bucket.header, target)) move_to_bucket(*located, target, context);
+    plugin = std::move(next);
+    return RecordFlagStatus::changed;
+  }
+
+  const auto bucket_header = bucket.header;
+  const auto children_header = cell_children.header;
+  Record moved = std::move(std::get<Record>(bucket.children[located->index]));
+  bucket.children.erase(bucket.children.begin() + static_cast<std::ptrdiff_t>(located->index));
+  if (bucket.children.empty()) erase_if_empty(cell_children, bucket_header);
+  if (cell_children.children.empty()) erase_if_empty(owner, children_header);
+
+  auto destination_location = find_mutable_location(next, destination);
+  if (!destination_location) {
+    throw forms::PlacedReferenceError("placed reference target CELL disappeared during relocation");
+  }
+  const auto label = encode_plugin_form_id(destination, context).value();
+  auto* destination_children = forms::detail::ensure_cell_children_group(
+      *destination_location->path.back(), forms::detail::group_header(GroupType::cell_children, label),
+      destination, context, context);
+  forms::detail::ensure_reference_bucket(*destination_children,
+                                         forms::detail::group_header(target, label), context, context)
+      ->children.emplace_back(std::move(moved));
+  plugin = std::move(next);
+  return RecordFlagStatus::changed;
 }
 
 }  // namespace
@@ -108,19 +186,19 @@ RecordFlagStatus set_record_flags(Plugin& plugin, const FormKey& record_key, Rec
   const bool persistent_changed = ((next ^ current) & RecordFlags::persistent) != 0;
   const auto target = (next & RecordFlags::persistent) != 0 ? GroupType::cell_persistent_children
                                                              : GroupType::cell_temporary_children;
-  const bool relocates = persistent_changed && depth >= 2 &&
-                         is_placed_reference_signature(record.header.signature) &&
-                         is_cell_bucket(path.back()->header) &&
-                         has_type(path[depth - 2]->header, GroupType::cell_children) &&
-                         !has_type(path.back()->header, target);
-  if (relocates && !cell_is_interior(plugin, path[depth - 2]->header.label_as_u32())) {
-    return RecordFlagStatus::exterior_relocation_unsupported;
+  const bool in_cell_bucket = persistent_changed && depth >= 2 &&
+                              is_placed_reference_signature(record.header.signature) &&
+                              is_cell_bucket(path.back()->header) &&
+                              has_type(path[depth - 2]->header, GroupType::cell_children);
+  const bool interior = in_cell_bucket && cell_is_interior(plugin, path[depth - 2]->header.label_as_u32());
+  const bool keeps_bucket = in_cell_bucket && has_type(path.back()->header, target) &&
+                            (interior || target == GroupType::cell_persistent_children);
+  if (!in_cell_bucket || keeps_bucket) {
+    detail::mark_record_modified(plugin, record);
+    record.header.flags = RecordFlags{next};
+    return RecordFlagStatus::changed;
   }
-
-  detail::mark_record_modified(plugin, record);
-  record.header.flags = RecordFlags{next};
-  if (relocates) move_to_bucket(*located, target);
-  return RecordFlagStatus::changed;
+  return relocate_reference(plugin, record_key, next, target, interior);
 }
 
 MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_key) {

@@ -5,7 +5,6 @@
 #include "../plugin/record_edit.hpp"
 #include "placed_reference_copy_internal.hpp"
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -20,30 +19,6 @@ constexpr auto k_wrld = Signature::from_string("WRLD");
 using fo4::detail::erase_if_empty;
 using fo4::detail::find_mutable_location;
 using fo4::detail::is_interior_cell;
-
-const Record* preceding_record(const Group& parent, const Group& child) {
-  for (std::size_t index = 1; index < parent.children.size(); ++index) {
-    if (std::get_if<Group>(&parent.children[index]) == &child) {
-      return std::get_if<Record>(&parent.children[index - 1]);
-    }
-  }
-  return nullptr;
-}
-
-const Record* worldspace_record(const std::vector<Group*>& path, std::size_t owner_index) {
-  for (std::size_t depth = owner_index + 1; depth-- > 1;) {
-    if (path[depth]->header.group_type == static_cast<std::int32_t>(GroupType::world_children)) {
-      return preceding_record(*path[depth - 1], *path[depth]);
-    }
-  }
-  return nullptr;
-}
-
-bool exterior_grid_in_range(float world) {
-  const auto cells = std::floor(world / detail::k_exterior_cell_span);
-  return cells >= static_cast<float>(k_exterior_cell_min_coordinate) &&
-         cells <= static_cast<float>(k_exterior_cell_max_coordinate);
-}
 
 }  // namespace
 
@@ -81,7 +56,7 @@ PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
   }
   Group& cell_children = *located->path[depth - 2];
   const auto owner_index = depth - 3;
-  const auto* cell = preceding_record(*located->path[owner_index], cell_children);
+  const auto* cell = detail::preceding_record(*located->path[owner_index], cell_children);
   if (cell == nullptr || cell->header.signature != k_cell) {
     throw PlacedReferenceError("placed reference CELL record is missing from its group");
   }
@@ -92,12 +67,13 @@ PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
   if (owner_type != GroupType::world_children && owner_type != GroupType::exterior_cell_subblock) {
     throw PlacedReferenceError("exterior placed reference CELL is not inside a worldspace");
   }
-  const auto* worldspace = worldspace_record(located->path, owner_index);
+  const auto* worldspace = detail::worldspace_record(located->path, owner_index);
   if (worldspace == nullptr || worldspace->header.signature != k_wrld) {
     throw PlacedReferenceError("exterior placed reference CELL has no WRLD record");
   }
 
-  if (!exterior_grid_in_range(transform.x) || !exterior_grid_in_range(transform.y)) {
+  if (!detail::exterior_grid_in_range(transform.x) ||
+      !detail::exterior_grid_in_range(transform.y)) {
     return PlacedReferenceMoveStatus::target_cell_missing;
   }
   const auto grid_x = detail::grid_coordinate(transform.x);
