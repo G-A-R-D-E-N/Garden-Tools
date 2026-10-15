@@ -102,11 +102,11 @@ std::vector<std::byte> make_impact_plugin() {
   return out.bytes;
 }
 
-std::vector<std::byte> make_movt_plugin(const Bytes& sped) {
+std::vector<std::byte> make_movt_plugin(const Bytes& sped, std::uint16_t form_version = 131) {
   ByteWriter out;
   write_header(out);
   const auto group = fo4::test::begin_group(out, "MOVT", 0);
-  const auto record = fo4::test::begin_record(out, "MOVT", 0, raw_id(0x0C02));
+  const auto record = fo4::test::begin_record(out, "MOVT", 0, raw_id(0x0C02), form_version);
   fo4::test::write_subrecord(out, "EDID", zstr("RadicleMovement"));
   fo4::test::write_subrecord(out, "SPED", sped);
   fo4::test::end_record(out, record);
@@ -243,6 +243,11 @@ TEST(MOVTRows, ShorterSpedPayloadsHideTheSpeedRows) {
       EXPECT_TRUE(scalar_bytes(plugin, key, row.path).empty());
     }
   }
+}
+
+TEST(MOVTRows, SpedBelowFormVersion104StaysHidden) {
+  const auto plugin = fo4::read_plugin(make_movt_plugin(ramp(28), 100), "Patch.esp");
+  EXPECT_TRUE(scalar_bytes(plugin, "000C02:Patch.esp", "MOVT\\LeftStanding").empty());
 }
 
 TEST(MOVTRows, WritesSpeedRowAndRereads) {
