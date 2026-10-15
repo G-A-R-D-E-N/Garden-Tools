@@ -63,7 +63,217 @@
           }
         ]
       },
-      "fields": [],
+      "fields": [
+        {
+          "path": "ARMA\\MalePriority",
+          "label": "Male priority",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FemalePriority",
+          "label": "Female priority",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\WeightSliderMale",
+          "label": "Weight slider - male",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Unknown 0"
+            },
+            {
+              "bit": 1,
+              "name": "Enabled"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\WeightSliderFemale",
+          "label": "Weight slider - female",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Unknown 0"
+            },
+            {
+              "bit": 1,
+              "name": "Enabled"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\DetectionSoundValue",
+          "label": "Detection sound value",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 6,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\WeaponAdjust",
+          "label": "Weapon adjust",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FirstPersonFlags",
+          "label": "First person flags",
+          "kind": "scalar",
+          "subrecord": "BOD2",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "ARMA\\Race",
+          "label": "Race",
+          "subrecord": "RNAM",
+          "offset": 0,
+          "targets": [
+            "RACE"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\MaleSkinTexture",
+          "label": "Male skin texture",
+          "subrecord": "NAM0",
+          "offset": 0,
+          "targets": [
+            "TXST"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FemaleSkinTexture",
+          "label": "Female skin texture",
+          "subrecord": "NAM1",
+          "offset": 0,
+          "targets": [
+            "TXST"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\MaleSkinTextureSwapList",
+          "label": "Male skin texture swap list",
+          "subrecord": "NAM2",
+          "offset": 0,
+          "targets": [
+            "FLST"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FemaleSkinTextureSwapList",
+          "label": "Female skin texture swap list",
+          "subrecord": "NAM3",
+          "offset": 0,
+          "targets": [
+            "FLST"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FootstepSound",
+          "label": "Footstep sound",
+          "subrecord": "SNDD",
+          "offset": 0,
+          "targets": [
+            "FSTS"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\ArtObject",
+          "label": "Art object",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "targets": [
+            "ARTO"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": []
     },
     {
@@ -135,7 +345,366 @@
           }
         ]
       },
-      "fields": [],
+      "fields": [
+        {
+          "path": "ARMO\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\Value",
+          "label": "Value",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 0,
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\Weight",
+          "label": "Weight",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\Health",
+          "label": "Health",
+          "kind": "scalar",
+          "subrecord": "DATA",
+          "offset": 8,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\ArmorRating",
+          "label": "Armor rating",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\BaseAddonIndex",
+          "label": "Base addon index",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\StaggerRating",
+          "label": "Stagger rating",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "None"
+            },
+            {
+              "value": 1,
+              "name": "Small"
+            },
+            {
+              "value": 2,
+              "name": "Medium"
+            },
+            {
+              "value": 3,
+              "name": "Large"
+            },
+            {
+              "value": 4,
+              "name": "Extra Large"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 4,
+          "payload_size": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\ResistanceAmount",
+          "label": "Resistance amount",
+          "kind": "scalar",
+          "subrecord": "DAMA",
+          "offset": 4,
+          "stride": 8,
+          "max_form_version": 152,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\FirstPersonFlags",
+          "label": "First person flags",
+          "kind": "scalar",
+          "subrecord": "BOD2",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "ARMO\\TemplateArmor",
+          "label": "Template armor",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "targets": [
+            "ARMO"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\Race",
+          "label": "Race",
+          "subrecord": "RNAM",
+          "offset": 0,
+          "targets": [
+            "RACE"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\BlockBashImpactDataSet",
+          "label": "Block bash impact data set",
+          "subrecord": "BIDS",
+          "offset": 0,
+          "targets": [
+            "IPDS"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\AlternateBlockMaterial",
+          "label": "Alternate block material",
+          "subrecord": "BAMT",
+          "offset": 0,
+          "targets": [
+            "MATT"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\Enchantment",
+          "label": "Enchantment",
+          "subrecord": "EITM",
+          "offset": 0,
+          "targets": [
+            "ENCH"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\EquipmentType",
+          "label": "Equipment type",
+          "subrecord": "ETYP",
+          "offset": 0,
+          "targets": [
+            "EQUP"
+          ],
+          "nullable": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\PickUpSound",
+          "label": "Sound - pick up",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\PutDownSound",
+          "label": "Sound - put down",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": [
+            "SNDR"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\InstanceNaming",
+          "label": "Instance naming",
+          "subrecord": "INRD",
+          "offset": 0,
+          "targets": [
+            "INNR"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": [
+            "TRNS"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\ResistanceType",
+          "label": "Resistance type",
+          "subrecord": "DAMA",
+          "offset": 0,
+          "stride": 8,
+          "max_form_version": 152,
+          "targets": [
+            "DMGT"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": [
         "FULL",
         "DESC"
