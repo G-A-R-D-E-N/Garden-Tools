@@ -15574,17 +15574,8 @@
           "insertion": "existing_only"
         }
       ],
-      "formlink_fields": [
-        {
-          "path": "MUSC\\Tracks",
-          "label": "Music track",
-          "subrecord": "TNAM",
-          "offset": 0,
-          "targets": ["MUST"],
-          "nullable": true,
-          "stride": 4,
-          "insertion": "existing_only"
-        }
+      "formlink_lists": [
+        {"path": "MUSC\\Tracks", "label": "Music track", "subrecord": "TNAM", "targets": ["MUST"], "nullable": true, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["WNAM", "PNAM", "FNAM", "EDID"]}
       ],
       "authoring": {
         "placement": "top_level",
@@ -16732,19 +16723,8 @@
           "insertion": "existing_only"
         }
       ],
-      "formlink_fields": [
-        {
-          "path": "MUST\\Tracks",
-          "label": "Track",
-          "subrecord": "SNAM",
-          "offset": 0,
-          "targets": [
-            "MUST"
-          ],
-          "nullable": true,
-          "stride": 4,
-          "insertion": "existing_only"
-        }
+      "formlink_lists": [
+        {"path": "MUST\\Tracks", "label": "Track", "subrecord": "SNAM", "targets": ["MUST"], "nullable": true, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["CIS2", "CIS1", "CTDA", "CITC", "FNAM", "LNAM", "BNAM", "ANAM", "DNAM", "FLTV", "CNAM", "EDID"]}
       ],
       "authoring": {
         "placement": "top_level",

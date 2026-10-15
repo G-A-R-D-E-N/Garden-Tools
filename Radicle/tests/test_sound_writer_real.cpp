@@ -248,6 +248,9 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
   const auto changed = [](fo4::FormLinkFieldMutationStatus status) {
     return status == fo4::FormLinkFieldMutationStatus::updated || status == fo4::FormLinkFieldMutationStatus::unchanged;
   };
+  const auto list_changed = [](fo4::schema::FormLinkListMutationStatus status) {
+    return status == fo4::schema::FormLinkListMutationStatus::updated || status == fo4::schema::FormLinkListMutationStatus::unchanged;
+  };
   int edits = 0, added = 0, removed = 0;
   std::set<fo4::FormKey> touched;
   for (const auto& [type, record] : targets) {
@@ -290,7 +293,7 @@ TEST_P(SoundWriterReal, LinksAndOptionalSubrecordsEditOfficialRecordsAndKeepEver
       ++edits;
     } else if (type == "MUSC") {
       if (has("TNAM")) {
-        EXPECT_TRUE(changed(fo4::set_record_formlink_field(plugin, record, field("MUSC\\Tracks"), 0, fo4::FormKey{})));
+        EXPECT_TRUE(list_changed(fo4::schema::set_record_formlink_list_element(plugin, record, *fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("MUSC"), "MUSC\\Tracks"), 0, fo4::FormKey{})));
         ++edits;
       } else {
         ASSERT_EQ(fo4::add_record_subrecord(plugin, record, sig("TNAM")), fo4::SubrecordAddStatus::added);

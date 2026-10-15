@@ -140,7 +140,7 @@ decoders but not writable per field.
 | SOUN REPT | `Repeat` | `RepeatMinTime`, `RepeatMaxTime`, `RepeatStackable` (0..1, nine-byte REPT only) | yes, nine zero bytes | yes | optional | none |
 | SOUN records | n/a | n/a | n/a | n/a | refused (`no_default`) | n/a |
 | MUSC FNAM, PNAM, WNAM | `Flags`, `Priority`, `DuckingHundredths`, `FadeDuration` | `MUSC\Flags`, `Priority`, `Ducking`, `FadeDuration` | required | refused (required) | 0 / priority 50, ducking 0 / 0.0 | none |
-| MUSC TNAM tracks | `Tracks` | `MUSC\Tracks` (MUST, nullable) by element; single-track insert/remove OPAQUE | yes, one NULL track | yes | optional | yes |
+| MUSC TNAM tracks | `Tracks` | `MUSC\Tracks` (MUST, nullable) by element; insert/remove by index via `radicle_plugin_formlink_list_insert` and `radicle_plugin_formlink_list_remove` (appendable, anchored after WNAM) | yes, one NULL track | yes | optional | yes |
 | MUSC records | n/a | n/a | n/a | n/a | EDID, FNAM, PNAM, WNAM | n/a |
 | FSTP DATA, ANAM | `ImpactSet`, `Tag` | `FSTP\ImpactDataSet` (IPDS, nullable), `FSTP\Tag` | required | refused (required) | NULL / empty string | yes |
 | FSTP records | n/a | n/a | n/a | n/a | EDID, DATA, ANAM | n/a |
