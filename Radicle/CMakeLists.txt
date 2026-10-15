@@ -367,6 +367,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_dobj_formlinks.cpp
     tests/test_wp9_link_rows.cpp
     tests/test_wp9_bounds_model_rows.cpp
+    tests/test_wp9_list_rows.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp

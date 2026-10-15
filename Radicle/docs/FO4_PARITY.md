@@ -73,7 +73,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | COBJ | 10266 | - | - | - | - | 1 | - | - | forms/components | yes | - | L2 |
 | COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
 | CONT | 6176 | 10 | 1 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
-| CPTH | 7930 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
+| CPTH | 7930 | 1 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
 | CSTY | 6233 | 49 | - | - | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | DEBR | 7388 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | DFOB | 12304 | - | - | - | 1 | - | yes | - | - | - | 1 | L4 |
@@ -82,12 +82,12 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | DLVW | 8819 | - | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | DMGT | 12310 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | DOBJ | 8618 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| DOOR | 6477 | 7 | 1 | 6 | - | 3 | yes | yes | - | - | 1 | L4 |
+| DOOR | 6477 | 7 | 1 | 6 | 1 | 3 | yes | yes | - | - | 1 | L4 |
 | DUAL | 9452 | 7 | - | 5 | - | - | yes | - | - | - | 1 | L4 |
 | ECZN | 8022 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | EFSH | 6510 | - | 6 | 1 | - | - | yes | - | - | yes | 1 | L4 |
 | ENCH | 6726 | 13 | - | 2 | - | 1 | yes | - | - | - | 2 | L4 |
-| EQUP | 8835 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
+| EQUP | 8835 | 1 | - | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | EXPL | 7334 | 21 | 1 | 7 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |
@@ -125,7 +125,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
 | LVLI | 10009 | 9 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVLN | 9986 | 9 | 1 | 2 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVSP | 10033 | 6 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
+| LVSP | 10033 | 9 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
 | MATO | 9375 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
@@ -276,7 +276,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LTEX | - | - | - | - | - | - | - | - | - | - |
 | LVLI | 9 | - | - | - | - | i16, u8 | - | - | - | existing_only |
 | LVLN | 9 | - | - | - | 1 | i16, u8 | - | - | - | existing_only |
-| LVSP | 6 | - | - | - | - | i16 | - | - | - | existing_only |
+| LVSP | 9 | - | - | - | - | i16, u8 | - | - | - | existing_only |
 | MATO | 7 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MATT | 4 | - | - | 1 | 2 | f32, u32 | - | - | - | existing_only |
 | MESG | 1 | - | - | 1 | 1 | u32 | - | - | - | existing_only |

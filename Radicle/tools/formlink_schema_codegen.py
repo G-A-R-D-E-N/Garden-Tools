@@ -119,6 +119,9 @@ def load_lists(schema_path: Path):
                 raise ValueError(f"FormLink list nullable must be boolean: {path!r}")
             if mutation not in MUTATIONS:
                 raise ValueError(f"unsupported FormLink list mutation policy: {mutation!r}")
+            storage = row.get("storage", "per_subrecord")
+            if storage not in ("per_subrecord", "packed_array"):
+                raise ValueError(f"unsupported FormLink list storage: {storage!r}")
 
             lists.append({
                 "record": record_signature,
@@ -126,7 +129,7 @@ def load_lists(schema_path: Path):
                 "label": label,
                 "field_alias": field_alias,
                 "subrecord": subrecord,
-                "storage": "per_subrecord",
+                "storage": storage,
                 "counter": "",
                 "targets": parsed_targets,
                 "nullable": nullable,
