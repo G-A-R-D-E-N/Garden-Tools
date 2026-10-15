@@ -368,6 +368,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_link_rows.cpp
     tests/test_wp9_bounds_model_rows.cpp
     tests/test_wp9_ltex_llkc_rows.cpp
+    tests/test_wp9_union_rows.cpp
     tests/test_wp9_misc_rows_a.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp

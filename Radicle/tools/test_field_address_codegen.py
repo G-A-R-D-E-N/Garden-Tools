@@ -208,6 +208,13 @@ class SchemaCodegenTests(unittest.TestCase):
         self.rejects("non-empty array", scalar(when=dict(when, equals=[])))
         self.rejects("at most 8", scalar(when=dict(when, equals=list(range(9)))))
         self.rejects("duplicate", scalar(when=dict(when, equals=[1, 1])))
+        self.rejects("exactly one", scalar(when=dict(when, not_equals=[1])))
+        negated = self.load(scalar(when={"subrecord": "CNAM", "offset": 0, "storage": "u8", "not_equals": [1, 2]}))
+        self.assertEqual(negated[0]["address"]["when"]["equals"], [1, 2])
+        self.assertTrue(negated[0]["address"]["when"]["negated"])
+        self.assertIn("FieldDiscriminator{Signature::from_string(\"CNAM\"), 0, DiscriminatorStorage::u8, 2, {{1, 2}}, false, true}",
+                      schema_codegen.render(negated))
+        self.rejects("when.not_equals must be", scalar(when={"offset": 0, "storage": "u8", "not_equals": []}))
         self.rejects("exceeds u8", scalar(when=dict(when, equals=[256])))
         self.rejects("exceeds u8", scalar(when=dict(when, equals=[-1])))
         self.rejects("integers", scalar(when=dict(when, equals=[True])))
@@ -314,12 +321,12 @@ class SchemaCodegenTests(unittest.TestCase):
     def test_rendering_includes_the_address(self):
         fields = self.load(scalar(stride=8, array_offset=4, when={"offset": 0, "storage": "u8", "equals": [1, 3]}))
         text = schema_codegen.render(fields)
-        self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{Signature{}, 0, DiscriminatorStorage::u8, 2, {{1, 3}}, false}}", text)
+        self.assertIn("FieldAddress{false, 8, 4, FieldDiscriminator{Signature{}, 0, DiscriminatorStorage::u8, 2, {{1, 3}}, false, false}}", text)
         plain = schema_codegen.render(self.load(scalar()))
         self.assertIn("FieldAddress{}", plain)
         absent = schema_codegen.render(self.load(scalar(when={"subrecord": "CNAM", "offset": 0, "storage": "u32",
                                                               "equals": [7], "match_absent": True})))
-        self.assertIn("DiscriminatorStorage::u32, 1, {{7}}, true}", absent)
+        self.assertIn("DiscriminatorStorage::u32, 1, {{7}}, true, false}", absent)
 
     def test_guarded_and_unguarded_overlap_is_rejected(self):
         self.rejects("overlapping scalar fields in TEST.DATA",
@@ -345,6 +352,19 @@ class SchemaCodegenTests(unittest.TestCase):
                              scalar(when={"offset": 0, "storage": "u8", "equals": [1]}),
                              scalar(path="TEST" + BS + "Other",
                                     when={"offset": 0, "storage": "u8", "equals": [2], **changes}))
+
+    def test_not_equals_guards_are_exclusive_only_inside_their_complement(self):
+        plain = {"offset": 0, "storage": "u8", "equals": [1]}
+        self.assertEqual(len(self.load(scalar(when=plain),
+                                       scalar(path="TEST" + BS + "Other",
+                                              when={"offset": 0, "storage": "u8", "not_equals": [1, 2]}))), 2)
+        self.rejects("overlapping scalar fields in TEST.DATA", scalar(when=plain),
+                     scalar(path="TEST" + BS + "Other",
+                            when={"offset": 0, "storage": "u8", "not_equals": [3, 4]}))
+        self.rejects("overlapping scalar fields in TEST.DATA",
+                     scalar(when={"offset": 0, "storage": "u8", "not_equals": [1]}),
+                     scalar(path="TEST" + BS + "Other",
+                            when={"offset": 0, "storage": "u8", "not_equals": [2]}))
 
     def test_different_layouts_are_rejected(self):
         for first, second in (({}, {"stride": 8}), ({}, {"repeated": True}),

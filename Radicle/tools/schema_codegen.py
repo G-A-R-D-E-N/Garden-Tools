@@ -313,6 +313,10 @@ def load_schema(schema_path: Path):
             if not isinstance(label, str) or not label or any(ord(ch) < 0x20 for ch in label):
                 raise ValueError(f"schema field label is invalid: {label!r}")
 
+            localized = field.get("localized", False)
+            if type(localized) is not bool or (localized and not is_string):
+                raise ValueError(f"localized must be a boolean on string rows only: {path!r}")
+
             subrecord = field.get("subrecord", "")
             if not isinstance(subrecord, str) or not valid_signature(subrecord):
                 raise ValueError(f"subrecord signature must be four printable ASCII characters: {subrecord!r}")
@@ -407,6 +411,7 @@ def load_schema(schema_path: Path):
                 "minimum_payload_size": minimum_payload_size,
                 "min_form_version": min_form_version,
                 "address": address,
+                "localized": localized,
                 "can_insert": False,
             })
 
@@ -526,6 +531,10 @@ def render(fields, arrays=(), groups=()) -> str:
             trailing = f", {field['minimum_payload_size']}"
         if field["min_form_version"]:
             trailing += f", {field['min_form_version']}"
+        if field["localized"]:
+            names = (f"std::span<const ScalarName>(k_scalar_names_{tables[names_key(field)]})"
+                     if field["names"] else "{}")
+            trailing = f", {field['minimum_payload_size']}, {names}, {field['min_form_version']}, true"
         presentation = CPP_PRESENTATIONS.get(field["presentation"], field["presentation"])
         lines.append(
             "{" +

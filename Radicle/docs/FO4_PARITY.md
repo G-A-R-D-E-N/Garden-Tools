@@ -45,7 +45,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 
 | Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
-| AACT | 6970 | 1 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
+| AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
 | ACTI | 5611 | 10 | 1 | 9 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 9 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -98,10 +98,10 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | FURN | 6848 | 9 | 2 | 6 | - | 2 | yes | yes | - | yes | 1 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| GMST | 6936 | 3 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| GMST | 6936 | 3 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | GRAS | 9612 | 16 | 1 | 1 | - | - | yes | - | environment/vegetation | - | 1 | L4 |
 | HAZD | 7180 | 15 | 1 | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
-| HDPT | 7006 | 2 | 1 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
+| HDPT | 7006 | 3 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
 | IMAD | 7466 | 64 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -199,7 +199,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
-| AACT | - | - | 1 | - | 1 | u32 | - | - | - | existing_only |
+| AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
 | ACTI | 9 | - | - | 1 | 1 | i16, u16, u8 | - | - | - | existing_only |
 | ADDN | 8 | - | 1 | - | 1 | i16, u16, u32 | - | - | - | existing_only |
 | AECH | - | - | - | - | - | - | - | - | - | - |
@@ -250,10 +250,10 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FURN | 6 | - | 1 | 2 | 2 | i16, u16, u32, u8 | - | - | - | existing_only |
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |
-| GMST | 2 | - | 1 | - | - | f32, i32, u32 | - | - | 3 | existing_only |
+| GMST | 2 | - | 1 | - | 1 | f32, i32, u32 | - | - | 4 | existing_only |
 | GRAS | 16 | - | - | - | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | HAZD | 15 | - | - | - | 1 | f32, i16, u32 | - | - | - | existing_only |
-| HDPT | - | - | 1 | 1 | 1 | u32, u8 | - | - | - | existing_only |
+| HDPT | - | - | 2 | 1 | 2 | u32, u8 | 2 | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | IDLM | 9 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
 | IMAD | 60 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
