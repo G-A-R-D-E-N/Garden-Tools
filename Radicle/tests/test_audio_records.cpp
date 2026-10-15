@@ -97,7 +97,9 @@ Bytes fixture() {
   out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {});
   add_record(out, "AECH", 0x807, {{"EDID", zstr("RadicleChain")}});
   add_record(out, "ASPC", 0x800,
-             {{"EDID", zstr("RadicleAcoustic")}, {"XTRI", le(1, 1)}, {"WNAM", le(150, 2)},
+             {{"EDID", zstr("RadicleAcoustic")},
+              {"OBND", cat({le(0, 2), le(0, 2), le(0, 2), le(0, 2), le(0, 2), le(0, 2)})},
+              {"XTRI", le(1, 1)}, {"WNAM", le(150, 2)},
               {"SNAM", le(0x809, 4)}, {"RDAT", le(0x80a, 4)}, {"BNAM", le(0x80c, 4)}});
   add_record(out, "REVB", 0x801,
              {{"EDID", zstr("RadicleReverb")},

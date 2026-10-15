@@ -170,6 +170,7 @@ std::vector<std::byte> make_plugin() {
   write_group(out, "AORU", {{0x813, {{"EDID", zstr("RadicleAttraction")},
                                      {"AOR2", aor2()}}}});
   write_group(out, "PKIN", {{0x814, {{"EDID", zstr("RadiclePackIn")},
+                                     {"OBND", zeros(12)},
                                      {"FLTR", zstr("Filter.txt")},
                                      {"CNAM", u32_bytes(raw_id(0x81A))},
                                      {"VNAM", u32_bytes(1)}}}});
