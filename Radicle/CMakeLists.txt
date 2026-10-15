@@ -78,6 +78,7 @@ add_custom_target(radicle_condition_function_schema_check ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/tools/condition_function_codegen.py"
     --schema "${CMAKE_CURRENT_SOURCE_DIR}/schema/fallout4/condition_functions.json"
     --output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/generated_condition_functions.inc"
+    --ctda-output "${CMAKE_CURRENT_SOURCE_DIR}/include/fo4/schema/ctda_functions.inc"
     --check
   COMMENT "Checking generated Fallout 4 condition function table"
   VERBATIM

@@ -18,8 +18,6 @@ constexpr CtdaFunctionRow k_ctda_rows[] = {
 #include "fo4/schema/ctda_functions.inc"
 };
 
-constexpr std::uint16_t k_worldspace_disagreement_index = 310;
-
 struct Lookup {
   std::uint16_t index;
   std::string_view name;
@@ -109,14 +107,7 @@ TEST(ConditionFunctionsTest, CtdaFlagsAgreeWithTable) {
     if (function == nullptr) {
       continue;
     }
-    const std::uint8_t expected = expected_flags(*function);
-    const std::uint8_t actual = ctda_flags(function->index);
-    if (function->index == k_worldspace_disagreement_index) {
-      EXPECT_EQ(actual, 0) << function->name;
-      EXPECT_EQ(expected, 1) << function->name;
-    } else {
-      EXPECT_EQ(actual, expected) << function->name;
-    }
+    EXPECT_EQ(ctda_flags(function->index), expected_flags(*function)) << function->name;
   }
 }
 
