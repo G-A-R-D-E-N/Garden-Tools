@@ -71,4 +71,16 @@ public class WritebackTests : IClassFixture<WorldFixture>
         using var reread = PluginFile.Read(output);
         Assert.Equal(File.ReadAllBytes(output), reread.ToBytes());
     }
+
+    [Fact]
+    public void MovesAPlacedReferenceWithinItsCellAndRefusesAMissingTargetCell()
+    {
+        using var env = RadicleEnvironment.Load(new[] { _world.Master });
+        using var plugin = PluginFile.Create("Moves.esp");
+        Assert.Equal(PlacedCopyStatus.Inserted, plugin.CopyPlacedOverride(env, env.Winner(M(0x803))!.Value));
+
+        Assert.Equal(PlacedMoveStatus.Moved, plugin.MoveTransform(M(0x803), new Vector3(5000, 9000, 30), new Vector3(0, 0, 0)));
+        var error = Assert.Throws<RadicleException>(() => plugin.MoveTransform(M(0x803), new Vector3(0, 0, 0), new Vector3(0, 0, 0)));
+        Assert.Equal(Status.NotFound, error.Status);
+    }
 }

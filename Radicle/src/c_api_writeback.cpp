@@ -127,6 +127,38 @@ radicle_status radicle_plugin_set_placed_transform(radicle_plugin* plugin,
   });
 }
 
+radicle_status radicle_plugin_move_placed_ref(radicle_plugin* plugin,
+                                              radicle_form_key reference,
+                                              const float position[3],
+                                              const float rotation[3],
+                                              radicle_placed_move_status* out_status) {
+  clear_error();
+  return guarded("unknown exception while moving placed reference", [&] {
+    const auto key = to_form_key(reference);
+    if (plugin == nullptr || !key || position == nullptr || rotation == nullptr) {
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid reference, position and rotation are required");
+    }
+    try {
+      const fo4::forms::PositionRotation transform{position[0], position[1], position[2],
+                                                   rotation[0], rotation[1], rotation[2]};
+      const auto status = fo4::forms::move_placed_reference(plugin->value, *key, transform);
+      if (status == fo4::forms::PlacedReferenceMoveStatus::reference_missing) {
+        return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+      }
+      if (status == fo4::forms::PlacedReferenceMoveStatus::target_cell_missing) {
+        return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no exterior CELL at the new position; create it first");
+      }
+      if (out_status != nullptr) {
+        *out_status = status == fo4::forms::PlacedReferenceMoveStatus::moved ? RADICLE_PLACED_MOVE_MOVED
+                                                                             : RADICLE_PLACED_MOVE_RELOCATED;
+      }
+      return RADICLE_STATUS_OK;
+    } catch (const fo4::forms::PlacedReferenceError& error) {
+      return placed_error(error);
+    }
+  });
+}
+
 radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugin,
                                                radicle_form_key reference,
                                                int32_t has_scale,
