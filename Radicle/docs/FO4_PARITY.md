@@ -109,24 +109,24 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 11 | 3 | 5 | - | 1 | yes | yes | - | - | 1 | L4 |
 | INNR | 12337 | 1 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
-| IPCT | 7978 | 8 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
+| IPCT | 7978 | 20 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
 | IPDS | 8014 | - | - | - | - | - | yes | - | - | - | 2 | L4 |
 | KEYM | 9823 | 9 | 3 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | yes | 1 | L4 |
-| KYWD | 6947 | 1 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
+| KYWD | 6947 | 5 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | LAND | 9846 | - | - | - | - | - | - | - | environment/terrain | yes | - | L2 |
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
-| LCRT | 6962 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| LCTN | 8039 | 2 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
+| LCRT | 6962 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| LCTN | 8039 | 6 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
 | LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LGTM | 8629 | 16 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
-| LIGH | 9871 | 25 | 2 | 4 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
+| LIGH | 9871 | 25 | 4 | 5 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
 | LVLI | 10009 | 10 | - | 3 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVLN | 9986 | 10 | 1 | 3 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVSP | 10033 | 9 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
-| MATO | 9375 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
+| MATO | 9375 | 12 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
 | MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
@@ -139,7 +139,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| NOTE | 12470 | 9 | 3 | 4 | - | 1 | yes | - | - | - | 1 | L4 |
+| NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 47 | - | 27 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -261,23 +261,23 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
 | INGR | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
 | INNR | - | - | 1 | - | - | u32 | - | - | - | existing_only |
-| IPCT | 4 | - | 3 | 1 | 1 | f32, u32, u8 | - | - | - | existing_only |
+| IPCT | 15 | - | 3 | 2 | 1 | f32, u32, u8 | - | - | - | existing_only |
 | IPDS | - | - | - | - | - | - | - | - | - | - |
 | KEYM | 9 | - | - | - | 3 | f32, i16, i32 | - | - | - | existing_only |
 | KSSM | 1 | - | - | - | - | f32 | - | - | - | existing_only |
-| KYWD | - | - | 1 | - | 2 | u32 | - | - | - | existing_only |
+| KYWD | 4 | - | 1 | - | 2 | u32, u8 | - | - | - | existing_only |
 | LAYR | - | - | - | - | - | - | - | - | - | existing_only |
-| LCRT | - | - | 1 | - | - | u32 | - | - | - | existing_only |
-| LCTN | 2 | - | - | - | - | f32 | - | - | - | existing_only |
+| LCRT | 4 | - | 1 | - | - | u32, u8 | - | - | - | existing_only |
+| LCTN | 6 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | LENS | 1 | - | - | - | - | f32 | - | - | - | existing_only |
 | LGTM | 16 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
-| LIGH | 24 | - | - | 1 | 2 | f32, i16, i32, u32, u8 | - | - | - | existing_only |
+| LIGH | 24 | - | - | 1 | 4 | f32, i16, i32, u32, u8 | - | - | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
 | LTEX | 3 | - | - | - | - | u8 | - | - | - | existing_only |
 | LVLI | 10 | - | - | - | - | i16, u32, u8 | - | 2 | - | existing_only |
 | LVLN | 10 | - | - | - | 1 | i16, u32, u8 | - | 2 | - | existing_only |
 | LVSP | 9 | - | - | - | - | i16, u8 | - | - | - | existing_only |
-| MATO | 7 | - | - | - | 1 | f32 | - | - | - | existing_only |
+| MATO | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
 | MATT | 4 | - | - | 1 | 2 | f32, u32 | - | - | - | existing_only |
 | MESG | 1 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | MGEF | 12 | - | 4 | 1 | - | f32, u32 | - | - | - | existing_only |
@@ -290,7 +290,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |
-| NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
+| NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
 | NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | OMOD | - | - | - | - | - | - | - | - | - | - |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
