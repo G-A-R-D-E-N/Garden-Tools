@@ -262,6 +262,35 @@ TEST(WP9Scol, AddPartRefusesWrongAndUnresolvedTargets) {
   EXPECT_EQ(parts_of(plugin, "000E01:Patch.esp").size(), 2u);
 }
 
+TEST(WP9Scol, AddPartEncodesMasterOwnedStaticThroughMasterIndex) {
+  auto plugin = fixture();
+  const auto key = fo4::FormKey::parse("000E01:Patch.esp");
+  std::vector<StaticPlacementView> one;
+  one.push_back(placement(15.0f));
+  EXPECT_TRUE(fo4::forms::add_static_collection_part(plugin, key, fo4::FormKey::parse("000E30:Fallout4.esm"), one));
+
+  const auto after = reread(plugin);
+  const auto parts = parts_of(after, "000E01:Patch.esp");
+  ASSERT_EQ(parts.size(), 3u);
+  EXPECT_EQ(parts[2].static_record.to_string(), "000E30:Fallout4.esm");
+  const auto* record = fo4::find_record(after, key);
+  ASSERT_NE(record, nullptr);
+  ASSERT_GE(record->subrecords.size(), 2u);
+  EXPECT_EQ(record->subrecords[record->subrecords.size() - 2].data, u32_bytes(0x00000E30u));
+}
+
+TEST(WP9Scol, AddPartRefusesStaticOwnedByNonMasterPlugin) {
+  auto plugin = fixture();
+  const auto key = fo4::FormKey::parse("000E01:Patch.esp");
+  const auto before = signatures_of(plugin, "000E01:Patch.esp");
+  std::vector<StaticPlacementView> one;
+  one.push_back(placement(15.0f));
+  EXPECT_THROW(fo4::forms::add_static_collection_part(plugin, key, fo4::FormKey::parse("000E30:Unrelated.esp"), one),
+               StaticCollectionError);
+  EXPECT_EQ(signatures_of(plugin, "000E01:Patch.esp"), before);
+  EXPECT_EQ(parts_of(plugin, "000E01:Patch.esp").size(), 2u);
+}
+
 TEST(WP9Scol, SetPlacementsInsertsReplacesAndRemovesDataInPlace) {
   auto plugin = fixture();
   const auto key = fo4::FormKey::parse("000E03:Patch.esp");
@@ -311,6 +340,22 @@ TEST(WP9Scol, RemovePartKeepsOthersAndRefusesTheLastPart) {
                StaticCollectionError);
   EXPECT_FALSE(fo4::forms::remove_static_collection_part(plugin, fo4::FormKey::parse("000EEE:Patch.esp"), 0));
   EXPECT_EQ(parts_of(plugin, "000E02:Patch.esp").size(), 1u);
+}
+
+TEST(WP9Scol, RemovePartWithoutDataDropsOnlyItsOnam) {
+  auto plugin = fixture();
+  const auto key = fo4::FormKey::parse("000E03:Patch.esp");
+  const std::vector<std::string> before = {"EDID", "OBND", "ONAM", "ONAM", "DATA"};
+  ASSERT_EQ(signatures_of(plugin, "000E03:Patch.esp"), before);
+  EXPECT_TRUE(fo4::forms::remove_static_collection_part(plugin, key, 0));
+
+  const auto after = reread(plugin);
+  const std::vector<std::string> expected = {"EDID", "OBND", "ONAM", "DATA"};
+  EXPECT_EQ(signatures_of(after, "000E03:Patch.esp"), expected);
+  EXPECT_EQ(subrecord_data(after, "000E03:Patch.esp", "ONAM"), u32_bytes(0x02000E10u));
+  const auto data = placement_bytes({40.0f});
+  EXPECT_EQ(subrecord_data(after, "000E03:Patch.esp", "DATA"), data);
+  EXPECT_EQ(parts_of(after, "000E03:Patch.esp").size(), 1u);
 }
 
 TEST(WP9Scol, GenericAuthoringRefusesPartSubrecordsAndCreate) {
