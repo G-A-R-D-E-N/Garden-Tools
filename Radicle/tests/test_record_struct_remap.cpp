@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -80,6 +81,25 @@ std::vector<std::byte> lctn_words(std::size_t size, const std::vector<std::size_
     std::memcpy(data.data() + offset, &value, 4);
   }
   return data;
+}
+
+fo4::test::ByteWriter header_with_tnam(const std::vector<std::byte>& tnam) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  for (const std::string_view master : {"Fallout4.esm", "DLC01.esm"}) {
+    std::string name{master};
+    name.push_back('\0');
+    fo4::test::write_subrecord(out, "MAST", name);
+    fo4::test::write_subrecord(out, "DATA", words({0, 0}));
+  }
+  fo4::test::write_subrecord(out, "TNAM", tnam);
+  fo4::test::end_record(out, tes4);
+  return out;
 }
 
 }  // namespace
@@ -281,6 +301,29 @@ TEST(RecordStructRemap, WorldLargeRefsAndNvnmOutsideNavmesh) {
   EXPECT_EQ(subrecord_data(reread, "000703:Patch.esp", "NVNM"), expected_nvnm);
 }
 
+TEST(RecordStructRemap, MusicTrackListRemaps) {
+  auto out = plugin_with_masters();
+  append_record(out, "MUST", 0x02000100, {{"SNAM", words({0x00000200, 0x01000300})}});
+  const auto reread = reread_swapped(out);
+  EXPECT_EQ(subrecord_data(reread, "000100:Patch.esp", "SNAM"),
+            words({0x01000200, 0x00000300}));
+}
+
+TEST(RecordStructRemap, HeaderTransientTypesRemapReferencesNotFormType) {
+  const auto out = header_with_tnam(words({78, 0x00001234, 0x01005678}));
+  const auto reread = reread_swapped(out);
+  std::vector<std::byte> tnam;
+  for (const auto& sub : reread.tes4.subrecords) {
+    if (sub.signature.to_string() == "TNAM") tnam = sub.data;
+  }
+  EXPECT_EQ(tnam, words({78, 0x01001234, 0x00005678}));
+
+  const auto malformed = header_with_tnam(payload(6, {{0, 78}}));
+  auto plugin = fo4::read_plugin(malformed.bytes, "Patch.esp");
+  EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, swapped_masters()), fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), malformed.bytes);
+}
+
 TEST(RecordStructRemap, MalformedSizesFailClosedWithoutMutation) {
   struct Case {
     std::string_view record;
@@ -297,6 +340,7 @@ TEST(RecordStructRemap, MalformedSizesFailClosedWithoutMutation) {
       {"WRLD", "RNAM", payload(16, {{4, 2}})},
       {"CELL", "XCRI", words({1, 3, 0x55, 0x1800, 0x56})},
       {"STAG", "TNAM", payload(3, {})},
+      {"MUST", "SNAM", payload(6, {})},
       {"STAT", "NVNM", payload(16, {{0, 14}})},
   };
   for (const auto& test_case : cases) {
