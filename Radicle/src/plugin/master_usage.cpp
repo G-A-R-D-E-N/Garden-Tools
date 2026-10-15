@@ -20,6 +20,7 @@ MasterUsage scan_master_usage(const Plugin& plugin) {
 
   const auto links = collect_form_links_detailed(plugin);
   usage.records_with_incomplete_vmad = links.records_with_incomplete_vmad;
+  usage.unclaimed_link_payloads = links.unclaimed_link_payloads.size();
   for (const auto& hit : links.links) {
     const auto index = hit.raw.index_byte();
     if (!hit.raw.is_null() && index < masters.size()) ++usage.references[index];

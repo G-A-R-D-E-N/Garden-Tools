@@ -1,5 +1,6 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
@@ -322,6 +323,21 @@ TEST(RecordStructRemap, HeaderTransientTypesRemapReferencesNotFormType) {
   auto plugin = fo4::read_plugin(malformed.bytes, "Patch.esp");
   EXPECT_THROW((void)fo4::remap_plugin_masters(plugin, swapped_masters()), fo4::FormIdError);
   EXPECT_EQ(fo4::write_plugin(plugin), malformed.bytes);
+}
+
+TEST(RecordStructRemap, CollectReportsUnclaimedListedPayloadsOutsideTheAllowList) {
+  auto out = plugin_with_masters();
+  append_record(out, "ZZZZ", 0x02000100,
+                {{"NAME", payload(6, {})}, {"NAME", payload(4, {{0, 0x01000200}})}});
+  append_record(out, "ACTI", 0x02000101, {{"FNAM", payload(2, {})}});
+  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto collection = fo4::collect_form_links_detailed(plugin);
+  ASSERT_EQ(collection.unclaimed_link_payloads.size(), 1u);
+  const auto& unclaimed = collection.unclaimed_link_payloads.front();
+  EXPECT_EQ(unclaimed.record, fo4::FormKey::parse("000100:Patch.esp"));
+  EXPECT_EQ(unclaimed.subrecord.to_string(), "NAME");
+  EXPECT_EQ(unclaimed.subrecord_ordinal, 0u);
+  EXPECT_EQ(unclaimed.size, 6u);
 }
 
 TEST(RecordStructRemap, MalformedSizesFailClosedWithoutMutation) {
