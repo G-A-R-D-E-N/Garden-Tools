@@ -13,11 +13,14 @@ public sealed unsafe partial class RadicleEnvironment
     public IReadOnlyList<RadicleCondition> Conditions(Record record, string? scopePath = null)
     {
         using var use = Use(record);
-        Native.Condition* rows;
-        nuint count;
-        Call.Check(RadicleNative.RecordConditions(use.Pointer, record.Handle, scopePath, &rows, &count));
-        return Call.Copy<Native.Condition>((IntPtr)rows, count).Select(c => new RadicleCondition(c.FlagsByte,
-            c.ComparisonRaw, c.Function, c.Unknown2, c.Param1, c.Param2, c.RunOn, c.Reference, c.Unknown3,
-            Utf8.Read(c.Parameter1String), Utf8.Read(c.Parameter2String))).ToArray();
+        Native.ConditionList* list;
+        Call.Check(RadicleNative.RecordConditions(use.Pointer, record.Handle, scopePath, &list));
+        try
+        {
+            return Call.Copy<Native.Condition>(list->Rows, list->Count).Select(c => new RadicleCondition(c.FlagsByte,
+                c.ComparisonRaw, c.Function, c.Unknown2, c.Param1, c.Param2, c.RunOn, c.Reference, c.Unknown3,
+                Utf8.Read(c.Parameter1String), Utf8.Read(c.Parameter2String))).ToArray();
+        }
+        finally { RadicleNative.ConditionListFree(list); }
     }
 }

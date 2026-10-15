@@ -1136,5 +1136,9 @@ int main() {
   printf("Condition.Unknown3 %zu\n", offsetof(radicle_condition, unknown3));
   printf("Condition.Parameter1String %zu\n", offsetof(radicle_condition, parameter1_string));
   printf("Condition.Parameter2String %zu\n", offsetof(radicle_condition, parameter2_string));
+  printf("ConditionList %zu\n", sizeof(radicle_condition_list));
+  printf("ConditionList.Rows %zu\n", offsetof(radicle_condition_list, rows));
+  printf("ConditionList.Count %zu\n", offsetof(radicle_condition_list, count));
+  printf("ConditionList.Internal %zu\n", offsetof(radicle_condition_list, internal));
   return 0;
 }

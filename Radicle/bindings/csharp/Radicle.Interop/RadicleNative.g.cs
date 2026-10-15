@@ -1719,6 +1719,14 @@ public unsafe struct Condition
     public IntPtr Parameter2String;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ConditionList
+{
+    public IntPtr Rows;
+    public nuint Count;
+    public IntPtr Internal;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
@@ -2400,7 +2408,10 @@ public static unsafe partial class RadicleNative
     public static extern Status LoadOrderAssemble([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin_list_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? ccc_path, OfficialTable table, IntPtr** out_rows, nuint* out_row_count, IntPtr** out_findings, nuint* out_finding_count, int* out_failed);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_conditions")]
-    public static extern Status RecordConditions(IntPtr env, IntPtr record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, Condition** out_rows, nuint* out_count);
+    public static extern Status RecordConditions(IntPtr env, IntPtr record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, ConditionList** out_list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_condition_list_free")]
+    public static extern void ConditionListFree(ConditionList* list);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_conditions")]
     public static extern Status PluginSetConditions(IntPtr plugin, FormKey record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, Condition* rows, nuint count, ConditionWriteStatus* out_status);

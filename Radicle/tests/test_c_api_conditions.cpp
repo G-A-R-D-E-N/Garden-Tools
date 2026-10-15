@@ -22,6 +22,7 @@ constexpr const char* kPlugin = "Conditions.esp";
 
 using EnvPtr = std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)>;
 using PluginPtr = std::unique_ptr<radicle_plugin, decltype(&radicle_plugin_destroy)>;
+using ListPtr = std::unique_ptr<const radicle_condition_list, decltype(&radicle_condition_list_free)>;
 
 fo4::CtdaCondition first_condition() {
   fo4::CtdaCondition c;
@@ -73,6 +74,20 @@ std::vector<std::byte> fixture() {
   fo4::test::write_subrecord(out, "EDID", std::string_view("Perk\0", 5));
   write_run(out, {first_condition(), second_condition()});
   fo4::test::end_record(out, perk);
+
+  const auto tabbed = fo4::test::begin_record(out, "PERK", 0, 0x804);
+  fo4::test::write_subrecord(out, "EDID", std::string_view("Tabbed\0", 7));
+  write_run(out, {first_condition()});
+  fo4::test::write_subrecord(out, "PRKC", std::string_view("\0", 1));
+  write_run(out, {second_condition()});
+  fo4::test::write_subrecord(out, "DATA", std::string_view("\0\0\0\0", 4));
+  write_run(out, {third_condition()});
+  fo4::test::end_record(out, tabbed);
+
+  const auto broken = fo4::test::begin_record(out, "PERK", 0x00040000, 0x805);
+  out.u32(16);
+  for (int i = 0; i < 4; ++i) out.u8(0xFF);
+  fo4::test::end_record(out, broken);
   fo4::test::end_group(out, perks);
 
   const std::string effect_data(12, '\0');
@@ -116,16 +131,24 @@ const radicle_record* winner(const radicle_env* env, std::uint32_t local) {
   return record;
 }
 
+ListPtr conditions_of(const radicle_env* env, const radicle_record* record, const char* scope_path) {
+  const radicle_condition_list* list = nullptr;
+  EXPECT_EQ(radicle_record_conditions(env, record, scope_path, &list), RADICLE_STATUS_OK);
+  return ListPtr(list, radicle_condition_list_free);
+}
+
 class ConditionsCApi : public ::testing::Test {
 protected:
   void SetUp() override {
     root_ = std::filesystem::temp_directory_path() /
-            ("radicle_c_conditions_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            ("radicle_c_conditions_" +
+             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(root_ / "out");
     input_ = root_ / kPlugin;
     const auto bytes = fixture();
     std::ofstream stream(input_, std::ios::binary);
-    stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    stream.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
   }
 
   void TearDown() override {
@@ -146,11 +169,9 @@ protected:
 
 TEST_F(ConditionsCApi, RootReadRoundTripsEveryField) {
   const auto env = open_env(input_);
-  const radicle_condition* rows = nullptr;
-  size_t count = 0;
-  ASSERT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x800), nullptr, &rows, &count),
-            RADICLE_STATUS_OK);
-  ASSERT_EQ(count, 2u);
+  const auto list = conditions_of(env.get(), winner(env.get(), 0x800), nullptr);
+  ASSERT_EQ(list->count, 2u);
+  const auto* rows = list->rows;
   EXPECT_EQ(rows[0].flags_byte, 0x20);
   EXPECT_EQ(rows[0].comparison_raw, 0x3F800000u);
   EXPECT_EQ(rows[0].function, 1);
@@ -192,16 +213,13 @@ TEST_F(ConditionsCApi, SetReplacesTheRootListAndRereadsIt) {
   EXPECT_EQ(status, RADICLE_CONDITION_UNCHANGED);
 
   const auto env = open_env(save(plugin.get()));
-  const radicle_condition* read_rows = nullptr;
-  size_t count = 0;
-  ASSERT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x800), nullptr, &read_rows, &count),
-            RADICLE_STATUS_OK);
-  ASSERT_EQ(count, 2u);
-  EXPECT_EQ(read_rows[0].function, 0x10);
-  EXPECT_EQ(read_rows[0].param2, 3);
-  EXPECT_EQ(read_rows[1].function, 1);
-  ASSERT_NE(read_rows[1].parameter1_string, nullptr);
-  EXPECT_STREQ(read_rows[1].parameter1_string, "Hello");
+  const auto list = conditions_of(env.get(), winner(env.get(), 0x800), nullptr);
+  ASSERT_EQ(list->count, 2u);
+  EXPECT_EQ(list->rows[0].function, 0x10);
+  EXPECT_EQ(list->rows[0].param2, 3);
+  EXPECT_EQ(list->rows[1].function, 1);
+  ASSERT_NE(list->rows[1].parameter1_string, nullptr);
+  EXPECT_STREQ(list->rows[1].parameter1_string, "Hello");
 }
 
 TEST_F(ConditionsCApi, ScopedReadAndWriteOnSpellEffects) {
@@ -210,30 +228,27 @@ TEST_F(ConditionsCApi, ScopedReadAndWriteOnSpellEffects) {
   const radicle_form_key empty_effect{kPlugin, 0x802};
   radicle_condition_write_status status{};
   const auto fourth = radicle_condition{0x04, 0u, 0x30, 0, 9, 0, 0, 0, -1, nullptr, nullptr};
-  ASSERT_EQ(radicle_plugin_set_conditions(plugin.get(), with_list, "Effects[0].Conditions", &fourth, 1, &status),
+  ASSERT_EQ(radicle_plugin_set_conditions(plugin.get(), with_list, "Effects[0].Conditions",
+                                          &fourth, 1, &status),
             RADICLE_STATUS_OK);
   EXPECT_EQ(status, RADICLE_CONDITION_UPDATED);
   const auto third = radicle_condition{0x00, 2u, 0x20, 0, 7, 0, 0, 0x804, -1, nullptr, nullptr};
-  ASSERT_EQ(radicle_plugin_set_conditions(plugin.get(), empty_effect, "Effects[0].Conditions", &third, 1, &status),
+  ASSERT_EQ(radicle_plugin_set_conditions(plugin.get(), empty_effect, "Effects[0].Conditions",
+                                          &third, 1, &status),
             RADICLE_STATUS_OK);
   EXPECT_EQ(status, RADICLE_CONDITION_UPDATED);
 
   const auto env = open_env(save(plugin.get()));
-  const radicle_condition* rows = nullptr;
-  size_t count = 0;
-  ASSERT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x801), "Effects[0].Conditions", &rows, &count),
-            RADICLE_STATUS_OK);
-  ASSERT_EQ(count, 1u);
-  EXPECT_EQ(rows[0].function, 0x30);
-  EXPECT_EQ(rows[0].param1, 9);
-  ASSERT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x802), "Effects[0].Conditions", &rows, &count),
-            RADICLE_STATUS_OK);
-  ASSERT_EQ(count, 1u);
-  EXPECT_EQ(rows[0].function, 0x20);
-  EXPECT_EQ(rows[0].reference, 0x804u);
-  ASSERT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x801), nullptr, &rows, &count),
-            RADICLE_STATUS_OK);
-  EXPECT_EQ(count, 0u);
+  const auto scoped = conditions_of(env.get(), winner(env.get(), 0x801), "Effects[0].Conditions");
+  ASSERT_EQ(scoped->count, 1u);
+  EXPECT_EQ(scoped->rows[0].function, 0x30);
+  EXPECT_EQ(scoped->rows[0].param1, 9);
+  const auto inserted = conditions_of(env.get(), winner(env.get(), 0x802), "Effects[0].Conditions");
+  ASSERT_EQ(inserted->count, 1u);
+  EXPECT_EQ(inserted->rows[0].function, 0x20);
+  EXPECT_EQ(inserted->rows[0].reference, 0x804u);
+  const auto root = conditions_of(env.get(), winner(env.get(), 0x801), nullptr);
+  EXPECT_EQ(root->count, 0u);
 }
 
 TEST_F(ConditionsCApi, IdenticalRowsReportUnchanged) {
@@ -258,16 +273,14 @@ TEST_F(ConditionsCApi, RecordWithoutAListReportsNoList) {
   auto plugin = read_plugin(input_);
   const auto row = radicle_condition{0x00, 0u, 0x20, 0, 7, 0, 0, 0, -1, nullptr, nullptr};
   radicle_condition_write_status status{};
-  ASSERT_EQ(radicle_plugin_set_conditions(plugin.get(), radicle_form_key{kPlugin, 0x803}, nullptr, &row, 1, &status),
+  ASSERT_EQ(radicle_plugin_set_conditions(plugin.get(), radicle_form_key{kPlugin, 0x803}, nullptr,
+                                          &row, 1, &status),
             RADICLE_STATUS_OK);
   EXPECT_EQ(status, RADICLE_CONDITION_NO_LIST);
 
   const auto env = open_env(input_);
-  const radicle_condition* rows = nullptr;
-  size_t count = 1;
-  ASSERT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x803), nullptr, &rows, &count),
-            RADICLE_STATUS_OK);
-  EXPECT_EQ(count, 0u);
+  const auto list = conditions_of(env.get(), winner(env.get(), 0x803), nullptr);
+  EXPECT_EQ(list->count, 0u);
 }
 
 TEST_F(ConditionsCApi, ScopeIndexOutOfRangeIsAStatusAndAReadError) {
@@ -280,10 +293,11 @@ TEST_F(ConditionsCApi, ScopeIndexOutOfRangeIsAStatusAndAReadError) {
   EXPECT_EQ(status, RADICLE_CONDITION_SCOPE_INDEX_OUT_OF_RANGE);
 
   const auto env = open_env(input_);
-  const radicle_condition* rows = nullptr;
-  size_t count = 0;
-  EXPECT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x801), "Effects[1].Conditions", &rows, &count),
+  const radicle_condition_list* list = nullptr;
+  EXPECT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x801), "Effects[1].Conditions",
+                                      &list),
             RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(list, nullptr);
 }
 
 TEST_F(ConditionsCApi, UnknownScopePathIsInvalidArgument) {
@@ -298,10 +312,11 @@ TEST_F(ConditionsCApi, UnknownScopePathIsInvalidArgument) {
             RADICLE_STATUS_INVALID_ARGUMENT);
 
   const auto env = open_env(input_);
-  const radicle_condition* rows = nullptr;
-  size_t count = 0;
-  EXPECT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x801), "Effects[0].Bogus", &rows, &count),
+  const radicle_condition_list* list = nullptr;
+  EXPECT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x801), "Effects[0].Bogus",
+                                      &list),
             RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(list, nullptr);
 }
 
 TEST_F(ConditionsCApi, MissingRecordIsNotFound) {
@@ -318,7 +333,8 @@ TEST_F(ConditionsCApi, MissingRecordIsNotFound) {
 
 TEST_F(ConditionsCApi, NonWindows1252TextAndNullRowsAreInvalidArgument) {
   auto plugin = read_plugin(input_);
-  const auto unrepresentable = radicle_condition{0x00, 0u, 0x20, 0, 7, 0, 0, 0, -1, "\xE4\xB8\xAD", nullptr};
+  const auto unrepresentable =
+      radicle_condition{0x00, 0u, 0x20, 0, 7, 0, 0, 0, -1, "\xE4\xB8\xAD", nullptr};
   radicle_condition_write_status status{};
   EXPECT_EQ(radicle_plugin_set_conditions(plugin.get(), radicle_form_key{kPlugin, 0x800}, nullptr,
                                           &unrepresentable, 1, &status),
@@ -326,6 +342,39 @@ TEST_F(ConditionsCApi, NonWindows1252TextAndNullRowsAreInvalidArgument) {
   EXPECT_EQ(radicle_plugin_set_conditions(plugin.get(), radicle_form_key{kPlugin, 0x800}, nullptr,
                                           nullptr, 1, &status),
             RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(ConditionsCApi, UndecodableRecordRefusesEveryWrite) {
+  auto plugin = read_plugin(input_);
+  const auto row = radicle_condition{0x00, 0u, 0x20, 0, 7, 0, 0, 0, -1, nullptr, nullptr};
+  radicle_condition_write_status status{};
+  EXPECT_EQ(radicle_plugin_set_conditions(plugin.get(), radicle_form_key{kPlugin, 0x805}, nullptr,
+                                          &row, 1, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_conditions(plugin.get(), radicle_form_key{kPlugin, 0x805}, nullptr,
+                                          nullptr, 0, &status),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(ConditionsCApi, RecordFromAnotherEnvironmentIsInvalidArgument) {
+  const auto env = open_env(input_);
+  const auto other = open_env(input_);
+  const radicle_condition_list* list = nullptr;
+  EXPECT_EQ(radicle_record_conditions(env.get(), winner(other.get(), 0x800), nullptr, &list),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(list, nullptr);
+}
+
+TEST_F(ConditionsCApi, RootReadWithMultipleListsIsAnErrorStatus) {
+  const auto env = open_env(input_);
+  const radicle_condition_list* list = nullptr;
+  EXPECT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x804), nullptr, &list),
+            RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(list, nullptr);
+}
+
+TEST_F(ConditionsCApi, ListFreeAcceptsNull) {
+  radicle_condition_list_free(nullptr);
 }
 
 }  // namespace

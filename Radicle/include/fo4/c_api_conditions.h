@@ -20,6 +20,12 @@ typedef struct radicle_condition {
   const char* parameter2_string;
 } radicle_condition;
 
+typedef struct radicle_condition_list {
+  const radicle_condition* rows;
+  size_t count;
+  void* internal;
+} radicle_condition_list;
+
 typedef enum radicle_condition_write_status {
   RADICLE_CONDITION_UPDATED = 0,
   RADICLE_CONDITION_UNCHANGED = 1,
@@ -34,14 +40,11 @@ typedef enum radicle_condition_write_status {
 RADICLE_API radicle_status radicle_record_conditions(const radicle_env* env,
                                                      const radicle_record* record,
                                                      const char* scope_path,
-                                                     const radicle_condition** out_rows,
-                                                     size_t* out_count);
-RADICLE_API radicle_status radicle_plugin_set_conditions(radicle_plugin* plugin,
-                                                         radicle_form_key record,
-                                                         const char* scope_path,
-                                                         const radicle_condition* rows,
-                                                         size_t count,
-                                                         radicle_condition_write_status* out_status);
+                                                     const radicle_condition_list** out_list);
+RADICLE_API void radicle_condition_list_free(const radicle_condition_list* list);
+RADICLE_API radicle_status radicle_plugin_set_conditions(
+    radicle_plugin* plugin, radicle_form_key record, const char* scope_path,
+    const radicle_condition* rows, size_t count, radicle_condition_write_status* out_status);
 
 #ifdef __cplusplus
 }

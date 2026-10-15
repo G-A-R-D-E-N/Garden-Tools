@@ -5,8 +5,11 @@
 #include "fo4/schema/condition_scopes.hpp"
 #include "fo4/text/encoding.hpp"
 
+#include <deque>
+#include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -15,6 +18,17 @@ namespace {
 
 using namespace radicle_c_detail;
 using namespace radicle_c_env_detail;
+
+struct ConditionListHolder {
+  radicle_condition_list view{};
+  std::deque<std::string> text;
+  std::vector<radicle_condition> rows;
+};
+
+radicle_status unknown_scope() {
+  return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+              "scope path does not name a condition list of this record type");
+}
 
 radicle_status read_failure(fo4::schema::ScopedConditionStatus status) {
   switch (status) {
@@ -29,6 +43,12 @@ radicle_status read_failure(fo4::schema::ScopedConditionStatus status) {
     default:
       return fail(RADICLE_STATUS_PARSE_ERROR, "condition scope structure is invalid");
   }
+}
+
+const char* utf8_text(std::deque<std::string>& text, const std::optional<std::string>& value) {
+  if (!value) return nullptr;
+  text.push_back(fo4::text::windows1252_to_utf8(*value));
+  return text.back().c_str();
 }
 
 bool convert_text(const char* utf8, std::optional<std::string>& out) {
@@ -75,9 +95,12 @@ radicle_status set_root(fo4::Plugin& plugin, const fo4::FormKey& key,
                         radicle_condition_write_status& status) {
   fo4::assign_record_form_keys(plugin);
   const auto* found = fo4::find_record(plugin, key);
-  if (found != nullptr && matches_current(fo4::schema::read_root_conditions(*found), conditions)) {
-    status = RADICLE_CONDITION_UNCHANGED;
-    return RADICLE_STATUS_OK;
+  if (found != nullptr) {
+    fo4::require_decodable(*found);
+    if (matches_current(fo4::schema::read_root_conditions(*found), conditions)) {
+      status = RADICLE_CONDITION_UNCHANGED;
+      return RADICLE_STATUS_OK;
+    }
   }
   switch (fo4::set_record_conditions(plugin, key, conditions)) {
     case fo4::ConditionMutationStatus::updated:
@@ -102,17 +125,17 @@ radicle_status set_root(fo4::Plugin& plugin, const fo4::FormKey& key,
 }
 
 radicle_status set_scoped(fo4::Plugin& plugin, const fo4::FormKey& key, const char* scope_path,
-                           std::span<const fo4::CtdaCondition> conditions,
-                           radicle_condition_write_status& status) {
+                          std::span<const fo4::CtdaCondition> conditions,
+                          radicle_condition_write_status& status) {
   fo4::assign_record_form_keys(plugin);
   const auto* found = fo4::find_record(plugin, key);
   if (found == nullptr) return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+  fo4::require_decodable(*found);
   const auto path = fo4::schema::scoped_condition_path(found->header.signature, scope_path);
-  if (!path) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scope path does not name a condition list of this record type");
-  }
-  if (matches_current(fo4::schema::read_scoped_conditions(*found, path->descriptor, path->container_index),
-                      conditions)) {
+  if (!path) return unknown_scope();
+  const auto current =
+      fo4::schema::read_scoped_conditions(*found, path->descriptor, path->container_index);
+  if (matches_current(current, conditions)) {
     status = RADICLE_CONDITION_UNCHANGED;
     return RADICLE_STATUS_OK;
   }
@@ -127,7 +150,8 @@ radicle_status set_scoped(fo4::Plugin& plugin, const fo4::FormKey& key, const ch
     case fo4::schema::ScopedConditionStatus::record_missing:
       return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
     case fo4::schema::ScopedConditionStatus::record_mismatch:
-      return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record type does not match the condition scope");
+      return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                  "record type does not match the condition scope");
     case fo4::schema::ScopedConditionStatus::container_index_out_of_range:
       status = RADICLE_CONDITION_SCOPE_INDEX_OUT_OF_RANGE;
       return RADICLE_STATUS_OK;
@@ -154,17 +178,15 @@ extern "C" {
 radicle_status radicle_record_conditions(const radicle_env* env,
                                          const radicle_record* record,
                                          const char* scope_path,
-                                         const radicle_condition** out_rows,
-                                         size_t* out_count) {
+                                         const radicle_condition_list** out_list) {
   clear_error();
-  if (env == nullptr || record == nullptr || out_rows == nullptr || out_count == nullptr) {
-    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record, out_rows and out_count are required");
+  if (env == nullptr || record == nullptr || out_list == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and out_list are required");
   }
   if (!belongs_to_env(env, to_ref(record))) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
   }
-  *out_rows = nullptr;
-  *out_count = 0;
+  *out_list = nullptr;
   const auto& source = *to_ref(record)->record;
   return guarded("unknown exception while reading conditions", [&] {
     fo4::schema::ScopedConditionsRead result;
@@ -172,31 +194,30 @@ radicle_status radicle_record_conditions(const radicle_env* env,
       result = fo4::schema::read_root_conditions(source);
     } else {
       const auto path = fo4::schema::scoped_condition_path(source.header.signature, scope_path);
-      if (!path) {
-        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scope path does not name a condition list of this record type");
-      }
-      result = fo4::schema::read_scoped_conditions(source, path->descriptor, path->container_index);
+      if (!path) return unknown_scope();
+      result = fo4::schema::read_scoped_conditions(source, path->descriptor,
+                                                   path->container_index);
     }
     if (!result.ok) return read_failure(result.error);
 
-    const std::lock_guard lock(env->text_mutex);
-    const auto text = [env](const std::optional<std::string>& value) -> const char* {
-      if (!value) return nullptr;
-      env->condition_text.push_back(fo4::text::windows1252_to_utf8(*value));
-      return env->condition_text.back().c_str();
-    };
-    std::vector<radicle_condition> rows;
-    rows.reserve(result.conditions.size());
+    auto holder = std::make_unique<ConditionListHolder>();
+    holder->rows.reserve(result.conditions.size());
     for (const auto& c : result.conditions) {
-      rows.push_back({c.flags_byte, c.comparison_raw, c.function, c.unknown2, c.param1, c.param2,
-                      c.run_on, c.reference, c.unknown3, text(c.parameter1_string),
-                      text(c.parameter2_string)});
+      holder->rows.push_back({c.flags_byte, c.comparison_raw, c.function, c.unknown2, c.param1,
+                              c.param2, c.run_on, c.reference, c.unknown3,
+                              utf8_text(holder->text, c.parameter1_string),
+                              utf8_text(holder->text, c.parameter2_string)});
     }
-    env->condition_rows.push_back(std::move(rows));
-    *out_rows = env->condition_rows.back().data();
-    *out_count = env->condition_rows.back().size();
+    holder->view.rows = holder->rows.data();
+    holder->view.count = holder->rows.size();
+    holder->view.internal = holder.get();
+    *out_list = &holder.release()->view;
     return RADICLE_STATUS_OK;
   });
+}
+
+void radicle_condition_list_free(const radicle_condition_list* list) {
+  if (list != nullptr) delete static_cast<ConditionListHolder*>(list->internal);
 }
 
 radicle_status radicle_plugin_set_conditions(radicle_plugin* plugin,
@@ -212,17 +233,22 @@ radicle_status radicle_plugin_set_conditions(radicle_plugin* plugin,
   const auto key = to_form_key(record);
   if (!key) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "a valid record form ID is required");
   return guarded("unknown exception while setting conditions", [&] {
-    std::vector<fo4::CtdaCondition> conditions(count);
-    for (size_t i = 0; i < count; ++i) {
-      if (!to_ctda(rows[i], conditions[i])) {
-        return fail(RADICLE_STATUS_INVALID_ARGUMENT, "condition text is not representable in Windows-1252");
+    try {
+      std::vector<fo4::CtdaCondition> conditions(count);
+      for (size_t i = 0; i < count; ++i) {
+        if (!to_ctda(rows[i], conditions[i])) {
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                      "condition text is not representable in Windows-1252");
+        }
       }
+      const std::span<const fo4::CtdaCondition> view(conditions);
+      if (scope_path == nullptr || *scope_path == '\0') {
+        return set_root(plugin->value, *key, view, *out_status);
+      }
+      return set_scoped(plugin->value, *key, scope_path, view, *out_status);
+    } catch (const std::invalid_argument& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
-    const std::span<const fo4::CtdaCondition> view(conditions);
-    if (scope_path == nullptr || *scope_path == '\0') {
-      return set_root(plugin->value, *key, view, *out_status);
-    }
-    return set_scoped(plugin->value, *key, scope_path, view, *out_status);
   });
 }
 

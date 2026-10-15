@@ -1,7 +1,6 @@
 #pragma once
 
 #include "c_api_internal.hpp"
-#include "fo4/c_api_conditions.h"
 #include "fo4/c_api_env.h"
 #include "fo4/archive/assets.hpp"
 #include "fo4/environment/environment.hpp"
@@ -11,7 +10,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
-#include <deque>
 #include <exception>
 #include <mutex>
 #include <new>
@@ -26,8 +24,6 @@ struct radicle_env {
   std::vector<std::string> paths;
   mutable std::mutex text_mutex;
   mutable std::unordered_map<const char*, std::string> text;
-  mutable std::deque<std::string> condition_text;
-  mutable std::deque<std::vector<radicle_condition>> condition_rows;
 };
 
 namespace radicle_c_env_detail {
