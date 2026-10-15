@@ -188,7 +188,9 @@ std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
 
 bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept {
   for (const auto& array : k_counted_arrays) {
-    if (array.record == record && array.count_subrecord == subrecord) return true;
+    if (array.record == record && array.count_subrecord != Signature{} && array.count_subrecord == subrecord) {
+      return true;
+    }
   }
   return false;
 }

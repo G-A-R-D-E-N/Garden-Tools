@@ -1638,8 +1638,22 @@ constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 {Signature::from_string("ZOOM"), "ZOOM\\FOVMultiplier", ScalarDescriptor{Signature::from_string("GNAM"), "FOV multiplier", ScalarStorage::f32, ScalarPresentation::identity, -340282346638528859811704183484516925440.0, 340282346638528859811704183484516925440.0, 0, true, 0, FieldAddress{}}, false},
 {Signature::from_string("ZOOM"), "ZOOM\\Overlay", ScalarDescriptor{Signature::from_string("GNAM"), "Overlay", ScalarStorage::u32, ScalarPresentation::enumeration, 0.0, 4294967295.0, 4, true, 0, FieldAddress{}, 0, std::span<const ScalarName>(k_scalar_names_86)}, false},
 };
-constexpr std::array<CountedArrayDescriptor, 1> k_counted_arrays{{
+constexpr std::array<CountedArrayDescriptor, 15> k_counted_arrays{{
+{Signature::from_string("ACTI"), "ACTI\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("CLAS"), "CLAS\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("CLMT"), "CLMT\\WeatherTypes", "Weather types", Signature::from_string("WLST"), Signature{}, 12},
+{Signature::from_string("CONT"), "CONT\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("FLOR"), "FLOR\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("FURN"), "FURN\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("LIGH"), "LIGH\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("LVLI"), "LVLI\\FilterKeywordChances", "Filter keyword chances", Signature::from_string("LLKC"), Signature{}, 8},
+{Signature::from_string("LVLN"), "LVLN\\FilterKeywordChances", "Filter keyword chances", Signature::from_string("LLKC"), Signature{}, 8},
+{Signature::from_string("MSTT"), "MSTT\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("NPC_"), "NPC_\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("RACE"), "RACE\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
 {Signature::from_string("REFR"), "REFR\\WaterCurrentVelocities", "Velocities", Signature::from_string("XWCU"), Signature::from_string("XWCN"), 16},
+{Signature::from_string("STAT"), "STAT\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
+{Signature::from_string("TERM"), "TERM\\Properties", "Properties", Signature::from_string("PRPS"), Signature{}, 8},
 }};
 constexpr std::uint8_t k_subrecord_group_default_0[] = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
 constexpr Signature k_subrecord_group_successors_0[] = {Signature::from_string("DEST"), Signature::from_string("DAMC"), Signature::from_string("DSTD"), Signature::from_string("DSTA"), Signature::from_string("DMDL"), Signature::from_string("DMDC"), Signature::from_string("DMDT"), Signature::from_string("DMDS"), Signature::from_string("DSTF"), Signature::from_string("DATA"), Signature::from_string("KSIZ"), Signature::from_string("KWDA"), Signature::from_string("FTYP"), Signature::from_string("NTRM"), Signature::from_string("PRPS"), Signature::from_string("SNAM"), Signature::from_string("QNAM"), Signature::from_string("TNAM"), Signature::from_string("ONAM")};
