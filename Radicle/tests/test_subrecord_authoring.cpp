@@ -568,6 +568,27 @@ TEST(SubrecordAuthoring, LocalizedDescriptionsStillRefuseCreateDefaults) {
   EXPECT_EQ(plugin.header.next_form_id, 0x900u);
 }
 
+TEST(SubrecordAuthoring, RemoveRefusesDebrDataWhoseModelTextureHasNoRule) {
+  auto plugin = fo4::read_plugin(
+      build({{"DEBR", 0x800,
+              {{"EDID", zstr("Gen")}, {"DATA", filled(3, 0)}, {"MODT", filled(4, 1)}, {"DATA", filled(3, 0)},
+               {"MODT", filled(4, 2)}}},
+             {"DEBR", 0x801, {{"EDID", zstr("Two")}, {"DATA", filled(3, 0)}, {"DATA", filled(3, 0)}}}}),
+      k_plugin);
+  fo4::assign_record_form_keys(plugin);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("DATA"), 1),
+            fo4::SubrecordRemoveStatus::unknown_order);
+  EXPECT_EQ(order(plugin, 0x800), (std::vector<std::string>{"EDID", "DATA", "MODT", "DATA", "MODT"}));
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x801), sig("DATA"), 1), fo4::SubrecordRemoveStatus::removed);
+  EXPECT_EQ(order(plugin, 0x801), (std::vector<std::string>{"EDID", "DATA"}));
+}
+
+TEST(SubrecordAuthoring, HazdCreateStaysNotAuthorableWhileModelIsCoupled) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+  EXPECT_EQ(fo4::create_record(plugin, sig("HAZD"), "Gen").status, fo4::RecordCreateStatus::not_authorable);
+  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}
+
 TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
