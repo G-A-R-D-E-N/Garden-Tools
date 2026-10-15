@@ -375,6 +375,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_misc_rows_c.cpp
     tests/test_wp9_small_records.cpp
     tests/test_wp9_prps_rows.cpp
+    tests/test_wp9_cobj_rows.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
     tests/test_rekey_formlinks.cpp
