@@ -598,6 +598,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order_files.cpp
     tests/test_load_order_real.cpp
     tests/test_c_api_loadorder.cpp
+    tests/test_c_api_referenced_by.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp

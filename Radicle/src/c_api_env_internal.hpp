@@ -5,6 +5,7 @@
 #include "fo4/archive/assets.hpp"
 #include "fo4/environment/environment.hpp"
 #include "fo4/environment/world.hpp"
+#include "fo4/graph/conflict_graph.hpp"
 #include "fo4/text/encoding.hpp"
 
 #include <cstdlib>
@@ -24,6 +25,8 @@ struct radicle_env {
   std::vector<std::string> paths;
   mutable std::mutex text_mutex;
   mutable std::unordered_map<const char*, std::string> text;
+  mutable std::once_flag graph_once;
+  mutable std::optional<fo4::ConflictGraph> graph;
 };
 
 namespace radicle_c_env_detail {
