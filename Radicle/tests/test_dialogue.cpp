@@ -8,6 +8,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <string_view>
 
 namespace {
 
@@ -26,6 +27,14 @@ std::vector<std::byte> response(std::uint8_t number) {
 std::vector<std::byte> condition(std::uint16_t function) {
   fo4::CtdaCondition c; c.function = function; c.flags_byte = 0xE1; c.comparison_raw = 0x80000000;
   c.param1 = -7; c.param2 = 99; return fo4::serialize_ctda_condition(c);
+}
+
+template <class Call>
+void expect_decode_error(Call&& call, std::string_view part) {
+  try { call(); ADD_FAILURE() << "no WorldDecodeError, wanted: " << part; }
+  catch (const fo4::env::WorldDecodeError& error) {
+    EXPECT_NE(std::string_view(error.what()).find(part), std::string_view::npos) << error.what();
+  }
 }
 
 class DialogueRead : public testing::Test {
@@ -134,6 +143,129 @@ TEST_F(DialogueRead, MalformedKnownFieldsAndUnpairedGroupsFailClosed) {
   for (const auto id : {0x802u, 0x803u, 0x804u, 0x805u}) {
     EXPECT_THROW(fo4::env::decode_scene(env, record(env, id)), fo4::env::WorldDecodeError);
   }
+}
+
+TEST_F(DialogueRead, InfoResponseDataOfAnotherSizeFailsClosed) {
+  write({{"INFO", 0x800, {{"TRDA", std::vector<std::byte>(19)}, {"NAM1", text("a")}}},
+    {"INFO", 0x801, {{"TRDA", std::vector<std::byte>(21)}, {"NAM1", text("a")}}}});
+  const auto env = load();
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(env, record(env, 0x800)); },
+                      "response data must be twenty bytes");
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(env, record(env, 0x801)); },
+                      "response data must be twenty bytes");
+}
+
+TEST_F(DialogueRead, LocalizedInfoTextIdsOfAnotherSizeFailClosed) {
+  write({{"INFO", 0x800, {{"TRDA", response(1)}, {"NAM1", std::vector<std::byte>(3)}}},
+    {"INFO", 0x801, {{"RNAM", std::vector<std::byte>(5)}}}}, 0x81);
+  const auto localized = load();
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(localized, record(localized, 0x800)); },
+                      "string ID must be four bytes");
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(localized, record(localized, 0x801)); },
+                      "string ID must be four bytes");
+
+  write({{"INFO", 0x802, {{"TRDA", response(1)}, {"NAM1", std::vector<std::byte>{std::byte{'a'}, std::byte{'b'}}}}},
+    {"INFO", 0x803, {{"RNAM", std::vector<std::byte>{std::byte{'a'}, std::byte{0}, std::byte{'b'}, std::byte{0}}}}});
+  const auto inline_env = load();
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(inline_env, record(inline_env, 0x802)); },
+                      "invalid inline text");
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(inline_env, record(inline_env, 0x803)); },
+                      "invalid inline text");
+}
+
+TEST_F(DialogueRead, ResponseScopeRefusesDuplicateAndWrongSizedFields) {
+  write({{"INFO", 0x800, {{"TRDA", response(1)}, {"NAM1", text("a")}, {"NAM1", text("b")}}},
+    {"INFO", 0x801, {{"TRDA", response(1)}, {"NAM1", text("a")}, {"SNAM", words({1, 2})}}},
+    {"INFO", 0x802, {{"TRDA", response(1)}, {"NAM1", text("a")}, {"LNAM", half(1)}}}});
+  const auto env = load();
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(env, record(env, 0x800)); }, "duplicate scoped field");
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(env, record(env, 0x801)); },
+                      "invalid scoped field size");
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(env, record(env, 0x802)); },
+                      "invalid scoped field size");
+}
+
+TEST_F(DialogueRead, ConditionScopeErrorsBecomeDecodeErrors) {
+  write({{"INFO", 0x800, {{"CTDA", condition(14)}, {"RNAM", text("p")}, {"CTDA", condition(15)}}},
+    {"INFO", 0x801, {{"CTDA", std::vector<std::byte>(3)}}},
+    {"SCEN", 0x802, {{"HNAM", {}}, {"CTDA", condition(14)}, {"NAM0", text("n")}, {"CTDA", condition(15)},
+      {"NEXT", {}}, {"NEXT", {}}, {"HNAM", {}}}}});
+  const auto env = load();
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(env, record(env, 0x800)); }, "more than one list");
+  expect_decode_error([&] { fo4::env::decode_dialogue_info(env, record(env, 0x801)); }, "CTDA");
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x802)); }, "CTDA");
+}
+
+TEST_F(DialogueRead, SceneLayoutRefusesEachStructuralDefect) {
+  write({{"SCEN", 0x800, {{"HNAM", words({1})}}},
+    {"SCEN", 0x801, {{"NEXT", {}}}},
+    {"SCEN", 0x802, {{"HNAM", {}}, {"ANAM", half(2)}, {"NEXT", {}}, {"NEXT", {}}, {"HNAM", {}}}},
+    {"SCEN", 0x803, {{"HNAM", {}}, {"NEXT", {}}, {"NEXT", {}}, {"NEXT", {}}, {"HNAM", {}}}},
+    {"SCEN", 0x804, {{"HNAM", {}}, {"NEXT", {}}, {"NEXT", {}}}},
+    {"SCEN", 0x805, {{"HNAM", {}}, {"NEXT", {}}, {"NEXT", {}}, {"HNAM", words({1})}}},
+    {"SCEN", 0x806, {{"HNAM", {}}, {"NEXT", words({1})}, {"NEXT", {}}, {"HNAM", {}}}},
+    {"SCEN", 0x807, {{"ANAM", words({2})}, {"ANAM", {}}}},
+    {"SCEN", 0x808, {{"ANAM", half(2)}, {"ANAM", half(2)}}},
+    {"SCEN", 0x809, {{"ANAM", half(2)}}},
+    {"SCEN", 0x80A, {{"ALID", words({1})}, {"LNAM", half(2)}, {"DNAM", words({4})}}}});
+  const auto env = load();
+  const std::pair<std::uint32_t, std::string_view> expected[] = {
+      {0x800, "marker must be empty"},
+      {0x801, "NEXT outside a phase"},
+      {0x802, "phase crosses a later group"},
+      {0x803, "phase requires two NEXT separators"},
+      {0x804, "phase requires two NEXT separators"},
+      {0x805, "marker must be empty"},
+      {0x806, "marker must be empty"},
+      {0x807, "action opener must be two bytes"},
+      {0x808, "marker must be empty"},
+      {0x809, "action requires an empty ANAM close"},
+      {0x80A, "actor requires"}};
+  for (const auto& [id, message] : expected) {
+    expect_decode_error([&] { fo4::env::decode_scene(env, record(env, id)); }, message);
+  }
+}
+
+TEST_F(DialogueRead, SceneScopedFieldsRefuseDuplicatesAndBadSizes) {
+  write({{"SCEN", 0x800, {{"HNAM", {}}, {"NAM0", text("a")}, {"NAM0", text("b")}, {"NEXT", {}}, {"NEXT", {}},
+      {"HNAM", {}}}},
+    {"SCEN", 0x801, {{"HNAM", {}}, {"WNAM", half(1)}, {"NEXT", {}}, {"NEXT", {}}, {"HNAM", {}}}},
+    {"SCEN", 0x802, {{"HNAM", {}}, {"NEXT", {}}, {"NEXT", {}}, {"SCQS", half(1)}, {"HNAM", {}}}},
+    {"SCEN", 0x803, {{"ANAM", half(2)}, {"ALID", half(1)}, {"ANAM", {}}}},
+    {"SCEN", 0x804, {{"FNAM", half(1)}}},
+    {"SCEN", 0x805, {{"PNAM", half(1)}}},
+    {"SCEN", 0x806, {{"HNAM", {}}, {"NAM0", std::vector<std::byte>{std::byte{'a'}, std::byte{'b'}}}, {"NEXT", {}},
+      {"NEXT", {}}, {"HNAM", {}}}}});
+  const auto env = load();
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x800)); }, "duplicate scoped field");
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x801)); }, "invalid scoped field size");
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x802)); }, "invalid scoped field size");
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x803)); }, "invalid scoped field size");
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x804)); }, "invalid scoped field size");
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x805)); }, "invalid scoped field size");
+  expect_decode_error([&] { fo4::env::decode_scene(env, record(env, 0x806)); }, "invalid stored string");
+}
+
+TEST_F(DialogueRead, ConditionStringsReachTheAbiAsUtf8) {
+  write({{"INFO", 0x800, {{"CTDA", condition(14)}, {"CIS1", text("caf\xE9")}, {"CIS2", text("\x80")}}}});
+  const auto env = load();
+  const auto info = fo4::env::decode_dialogue_info(env, record(env));
+  ASSERT_EQ(info.conditions.size(), 1u);
+  EXPECT_EQ(info.conditions[0].parameter1_string, "caf\xE9");
+  const auto file = path.string();
+  const char* paths[] = {file.c_str()};
+  radicle_env* abi = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &abi), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Dialogue.esm", 0x800}, &handle), RADICLE_STATUS_OK);
+  ASSERT_NE(handle, nullptr);
+  const radicle_dialogue_info* abi_info = nullptr;
+  ASSERT_EQ(radicle_dialogue_info_decode(abi, handle, &abi_info), RADICLE_STATUS_OK);
+  ASSERT_NE(abi_info, nullptr);
+  ASSERT_EQ(abi_info->condition_count, 1u);
+  EXPECT_STREQ(abi_info->conditions[0].parameter1_string, "caf\xC3\xA9");
+  EXPECT_STREQ(abi_info->conditions[0].parameter2_string, "\xE2\x82\xAC");
+  radicle_dialogue_info_free(abi_info); radicle_env_destroy(abi);
 }
 
 TEST_F(DialogueRead, InfoResetDerivesHoursFromTheRawDayFractionAndExposesItThroughTheAbi) {

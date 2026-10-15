@@ -215,3 +215,12 @@ TEST(InteriorCellCreate, CellInsertedBeforeLaterCellKeepsEarlierChildrenGroupAft
   EXPECT_EQ(children->header.label_as_u32(), 0x900u);
   EXPECT_EQ(cell_keys(*subblock), (std::vector<fo4::FormKey>{first, middle, last}));
 }
+
+TEST(InteriorCellCreate, RefusesEmbeddedNulInEditorIdWithoutMutation) {
+  auto plugin = fo4::read_plugin(empty_plugin(0x900), "Cells.esp");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_interior_cell(plugin, std::string_view{"Ki\0tchen", 8})),
+               fo4::forms::CellError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}

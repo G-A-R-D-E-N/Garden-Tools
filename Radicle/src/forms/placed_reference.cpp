@@ -6,6 +6,7 @@
 #include "fo4/signature.hpp"
 
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -233,6 +234,10 @@ bool set_placed_reference_transform(
     throw PlacedReferenceError("transform mutation requires a placed-reference record");
   }
   require_decodable(*target);
+  if (!std::isfinite(transform.x) || !std::isfinite(transform.y) || !std::isfinite(transform.z) ||
+      !std::isfinite(transform.rx) || !std::isfinite(transform.ry) || !std::isfinite(transform.rz)) {
+    throw PlacedReferenceError("placed-reference values must be finite");
+  }
 
   auto* data = unique_subrecord(*target, k_data);
   if (data == nullptr) {

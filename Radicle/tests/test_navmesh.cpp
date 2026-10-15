@@ -76,7 +76,7 @@ protected:
   }
   void TearDown() override { std::error_code error; std::filesystem::remove_all(root, error); }
   void write(const ByteWriter& nvnm, const ByteWriter& nvmi, bool duplicate = false, std::uint16_t form_version = 131,
-             const ByteWriter* nvpp = nullptr) {
+             const ByteWriter* nvpp = nullptr, std::uint32_t navi_version = 15) {
     ByteWriter out;
     auto r = fo4::test::begin_record(out, "TES4", 1, 0);
     ByteWriter h; h.f32(1); h.u32(2); h.u32(0x900);
@@ -86,7 +86,7 @@ protected:
     if (duplicate) fo4::test::write_subrecord(out, "NVNM", nvnm.bytes);
     fo4::test::end_record(out, r); fo4::test::end_group(out, g);
     g = fo4::test::begin_group(out, "NAVI", 0); r = fo4::test::begin_record(out, "NAVI", 0, 0x801);
-    ByteWriter v; v.u32(15); fo4::test::write_subrecord(out, "NVER", v.bytes);
+    ByteWriter v; v.u32(navi_version); fo4::test::write_subrecord(out, "NVER", v.bytes);
     fo4::test::write_subrecord(out, "NVMI", nvmi.bytes);
     if (nvpp) fo4::test::write_subrecord(out, "NVPP", nvpp->bytes);
     fo4::test::end_record(out, r); fo4::test::end_group(out, g);
@@ -251,6 +251,42 @@ TEST_F(NavmeshRead, PathPayloadDecodesListsAndAnchorsAndFailsClosed) {
     write(geometry(false), info(false), false, 131, bad); const auto bad_env = load();
     EXPECT_THROW(fo4::env::decode_navmesh_paths(bad_env, record(bad_env, 0x801)), fo4::env::WorldDecodeError);
   }
+}
+
+TEST_F(NavmeshRead, PathListAbiRefusesForeignEnvironmentNullArgumentsAndNonNaviRecords) {
+  const auto good = navi_paths();
+  write(geometry(false), info(false), false, 131, &good);
+  const auto name = path.string(); const char* paths[] = {name.c_str()};
+  radicle_env* env_a = nullptr; radicle_env* env_b = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env_a), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_load(paths, 1, &env_b), RADICLE_STATUS_OK);
+  const radicle_record* navm = nullptr; const radicle_record* navi = nullptr;
+  ASSERT_EQ(radicle_env_winner(env_a, radicle_form_key{"Navigation.esm", 0x800}, &navm), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_winner(env_a, radicle_form_key{"Navigation.esm", 0x801}, &navi), RADICLE_STATUS_OK);
+  const radicle_navi_path_list* list = nullptr;
+  EXPECT_EQ(radicle_navi_path_list_decode(env_b, navi, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  EXPECT_EQ(list, nullptr);
+  EXPECT_EQ(radicle_navi_path_list_decode(nullptr, navi, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_navi_path_list_decode(env_a, nullptr, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_navi_path_list_decode(env_a, navi, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_navi_path_list_decode(env_a, navm, &list), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(list, nullptr);
+  radicle_navi_path_list_free(nullptr);
+  radicle_env_destroy(env_b); radicle_env_destroy(env_a);
+}
+
+TEST_F(NavmeshRead, PathPayloadRequiresNaviVersionFifteen) {
+  const auto good = navi_paths();
+  write(geometry(false), info(false), false, 131, &good, 14);
+  const auto env = load();
+  try {
+    fo4::env::decode_navmesh_paths(env, record(env, 0x801));
+    ADD_FAILURE() << "path payload decoded at NVER 14";
+  } catch (const fo4::env::WorldDecodeError& error) {
+    EXPECT_NE(std::string(error.what()).find("version 15 is required"), std::string::npos);
+  }
+  EXPECT_THROW(fo4::env::decode_navmesh_info(env, record(env, 0x801)), fo4::env::WorldDecodeError);
 }
 
 TEST_F(NavmeshRead, LegacyFormVersionIsRejectedWithoutChangingBytes) {

@@ -77,6 +77,30 @@ std::vector<std::byte> coupled_fixture() {
   return out.bytes;
 }
 
+std::vector<std::byte> debr_fixture() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const std::pair<std::uint32_t, std::vector<std::pair<const char*, std::vector<std::byte>>>> records[] = {
+      {0x800, {{"EDID", zstr("Gen")}, {"DATA", std::vector<std::byte>(3)},
+               {"MODT", std::vector<std::byte>(4, std::byte{1})}, {"DATA", std::vector<std::byte>(3)},
+               {"MODT", std::vector<std::byte>(4, std::byte{2})}}},
+      {0x801, {{"EDID", zstr("Two")}, {"DATA", std::vector<std::byte>(3)}, {"DATA", std::vector<std::byte>(3)}}}};
+  for (const auto& [form_id, subs] : records) {
+    const auto group = fo4::test::begin_group(out, "DEBR", 0);
+    const auto record = fo4::test::begin_record(out, "DEBR", 0, form_id);
+    for (const auto& [name, data] : subs) fo4::test::write_subrecord(out, name, data);
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, group);
+  }
+  return out.bytes;
+}
+
 std::vector<std::byte> written(radicle_plugin* handle) {
   std::uint8_t* bytes = nullptr;
   std::size_t size = 0;
@@ -190,6 +214,37 @@ TEST(CApiAuthoring, CoupledSubrecordsAreRefusedWithoutChangingBytes) {
   EXPECT_EQ(radicle_plugin_remove_subrecord(handle, armor, "DESC", 0), RADICLE_STATUS_OK);
   EXPECT_EQ(order(fo4::read_plugin(written(handle), "Authoring.esp"), 0x800),
             (std::vector<std::string>{"EDID", "MOD2", "DATA"}));
+
+  radicle_plugin_destroy(handle);
+  std::error_code error;
+  std::filesystem::remove_all(root, error);
+}
+
+TEST(CApiAuthoring, UnknownOrderRemovalIsRefusedAsInvalidArgumentWithoutChangingBytes) {
+  const auto root = std::filesystem::temp_directory_path() /
+                    ("radicle_c_authoring_debr_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  const auto path = root / "Authoring.esp";
+  {
+    const auto bytes = debr_fixture();
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  }
+  radicle_plugin* handle = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &handle), RADICLE_STATUS_OK) << radicle_last_error();
+  const auto before = written(handle);
+
+  const radicle_form_key generic{"Authoring.esp", 0x800};
+  EXPECT_EQ(radicle_plugin_remove_subrecord(handle, generic, "DATA", 1), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("cannot be proven safe"), std::string::npos);
+  EXPECT_EQ(written(handle), before);
+  EXPECT_EQ(order(fo4::read_plugin(written(handle), "Authoring.esp"), 0x800),
+            (std::vector<std::string>{"EDID", "DATA", "MODT", "DATA", "MODT"}));
+
+  const radicle_form_key two{"Authoring.esp", 0x801};
+  EXPECT_EQ(radicle_plugin_remove_subrecord(handle, two, "DATA", 1), RADICLE_STATUS_OK);
+  EXPECT_EQ(order(fo4::read_plugin(written(handle), "Authoring.esp"), 0x801),
+            (std::vector<std::string>{"EDID", "DATA"}));
 
   radicle_plugin_destroy(handle);
   std::error_code error;

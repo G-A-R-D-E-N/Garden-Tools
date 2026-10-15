@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -52,6 +53,14 @@ void write_conditions(fo4::test::ByteWriter& out, std::span<const fo4::CtdaCondi
   for (const auto& subrecord : fo4::serialize_ctda_run(conditions)) {
     fo4::test::write_subrecord(out, subrecord.signature.to_string(), subrecord.data);
   }
+}
+
+void write_sized_subrecord(fo4::test::ByteWriter& out,
+                           std::string_view signature,
+                           std::size_t size) {
+  fo4::test::ByteWriter data;
+  for (std::size_t i = 0; i < size; ++i) data.u8(1);
+  fo4::test::write_subrecord(out, signature, data.bytes);
 }
 
 std::vector<std::byte> effects_plugin() {
@@ -101,6 +110,24 @@ std::vector<std::byte> effects_plugin() {
   fo4::test::write_subrecord(out, "EDID", std::string_view("Weapon"));
   fo4::test::end_record(out, weapon);
   fo4::test::end_group(out, weap_group);
+  return out.bytes;
+}
+
+std::vector<std::byte> spell_plugin(const std::function<void(fo4::test::ByteWriter&)>& body) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0, 131);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0xB00);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto spel_group = fo4::test::begin_group(out, "SPEL", 0);
+  auto spell = fo4::test::begin_record(out, "SPEL", 0, 0x00000800, 131);
+  body(out);
+  fo4::test::end_record(out, spell);
+  fo4::test::end_group(out, spel_group);
   return out.bytes;
 }
 
@@ -213,4 +240,92 @@ TEST(MagicEffects, EffectFromUnlistedPluginIsRefusedWithoutMutation) {
                fo4::forms::MagicEffectError);
   EXPECT_EQ(subrecords_of(plugin, "000800:Fx.esp"), spell_before);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(MagicEffects, EmptyListRemovesTheWholeBlockAndKeepsEarlierSubrecords) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+  const auto edid = subrecords_of(plugin, "000800:Fx.esp").front();
+  EXPECT_EQ(fo4::forms::set_magic_effects(plugin, key,
+                                          std::span<const fo4::forms::MagicEffectEntry>{}),
+            fo4::forms::EffectListWrite::written);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Fx.esp");
+  const auto* spell = fo4::find_record(reread, key);
+  ASSERT_NE(spell, nullptr);
+  EXPECT_EQ(subrecords_of(reread, "000800:Fx.esp"), (std::vector{edid}));
+  EXPECT_TRUE(fo4::forms::read_magic_effects(reread, *spell).empty());
+}
+
+TEST(MagicEffects, ReadRefusesRecordsThatCarryNoEffects) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto* weapon = fo4::find_record(plugin, fo4::FormKey::parse("000830:Fx.esp"));
+  ASSERT_NE(weapon, nullptr);
+  EXPECT_THROW(static_cast<void>(fo4::forms::read_magic_effects(plugin, *weapon)),
+               fo4::forms::MagicEffectError);
+  const auto* enchantment = fo4::find_record(plugin, fo4::FormKey::parse("000820:Fx.esp"));
+  ASSERT_NE(enchantment, nullptr);
+  EXPECT_TRUE(fo4::forms::read_magic_effects(plugin, *enchantment).empty());
+}
+
+TEST(MagicEffects, ReadFailsClosedOnMalformedEffectBlocks) {
+  const std::vector<std::pair<std::string, std::function<void(fo4::test::ByteWriter&)>>> cases{
+      {"lone EFID without EFIT",
+       [](fo4::test::ByteWriter& out) { write_sized_subrecord(out, "EFID", 4); }},
+      {"EFID of five bytes",
+       [](fo4::test::ByteWriter& out) {
+         write_sized_subrecord(out, "EFID", 5);
+         write_sized_subrecord(out, "EFIT", 12);
+       }},
+      {"EFIT of eleven bytes",
+       [](fo4::test::ByteWriter& out) {
+         write_sized_subrecord(out, "EFID", 4);
+         write_sized_subrecord(out, "EFIT", 11);
+       }},
+      {"second EFIT with no conditions between",
+       [](fo4::test::ByteWriter& out) {
+         write_sized_subrecord(out, "EFID", 4);
+         write_sized_subrecord(out, "EFIT", 12);
+         write_sized_subrecord(out, "EFIT", 12);
+       }},
+      {"second EFIT after a CTDA",
+       [](fo4::test::ByteWriter& out) {
+         write_sized_subrecord(out, "EFID", 4);
+         write_sized_subrecord(out, "EFIT", 12);
+         write_sized_subrecord(out, "CTDA", 4);
+         write_sized_subrecord(out, "EFIT", 12);
+       }},
+      {"conditions starting with CIS1",
+       [](fo4::test::ByteWriter& out) {
+         write_sized_subrecord(out, "EFID", 4);
+         write_sized_subrecord(out, "EFIT", 12);
+         fo4::test::write_subrecord(out, "CIS1", std::string_view("Param"));
+       }},
+      {"DESC inside the effect block",
+       [](fo4::test::ByteWriter& out) {
+         write_effect(out, 0x00000801, 1.0f, 0, 0);
+         fo4::test::write_subrecord(out, "DESC", std::string_view("text"));
+         write_effect(out, 0x00000802, 2.0f, 0, 0);
+       }},
+  };
+  for (const auto& [label, body] : cases) {
+    SCOPED_TRACE(label);
+    auto plugin = fo4::read_plugin(spell_plugin(body), "Fx.esp");
+    const auto* spell = fo4::find_record(plugin, fo4::FormKey::parse("000800:Fx.esp"));
+    ASSERT_NE(spell, nullptr);
+    EXPECT_THROW(static_cast<void>(fo4::forms::read_magic_effects(plugin, *spell)),
+                 fo4::forms::MagicEffectError);
+  }
+}
+
+TEST(MagicEffects, ReplaceWithTheSameEntriesKeepsConditionSubrecordsIdentical) {
+  auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
+  const auto key = fo4::FormKey::parse("000800:Fx.esp");
+  const auto* spell = fo4::find_record(plugin, key);
+  ASSERT_NE(spell, nullptr);
+  const auto entries = fo4::forms::read_magic_effects(plugin, *spell);
+  const auto before = subrecords_of(plugin, "000800:Fx.esp");
+  EXPECT_EQ(fo4::forms::set_magic_effects(plugin, key, entries),
+            fo4::forms::EffectListWrite::written);
+  EXPECT_EQ(subrecords_of(plugin, "000800:Fx.esp"), before);
 }

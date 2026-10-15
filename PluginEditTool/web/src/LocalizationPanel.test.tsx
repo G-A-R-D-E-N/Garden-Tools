@@ -117,4 +117,46 @@ describe('LocalizationPanel', () => {
     expect(await screen.findByText('No string tables for this plugin and language.')).toBeTruthy();
     expect(screen.queryByText('Loading…')).toBeNull();
   });
+
+  it('keeps the chosen table and stores the language when the language changes', async () => {
+    const host = installHost();
+    render(<LocalizationPanel onClose={() => {}} />);
+    await pickPlugin();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'String table' }), { target: { value: 'DLSTRINGS' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), { target: { value: 'fr' } });
+
+    await vi.waitFor(() =>
+      expect(host.GetStrings).toHaveBeenLastCalledWith('Mod.esp', 'fr', 'DLSTRINGS', '', 0, 200));
+    expect(localStorage.getItem('localization.language')).toBe('fr');
+  });
+
+  it('disables Prev on the first page and Next on the last, and Prev steps back one page', async () => {
+    const host = installHost();
+    vi.mocked(host.GetStrings).mockImplementation(async (_p, _l, _t, _f, offset) => pageJson({
+      total: 450,
+      offset,
+      rows: [{ id: 10 + offset, text: `row ${offset}` }],
+    }));
+    render(<LocalizationPanel onClose={() => {}} />);
+    await pickPlugin('row 0');
+    const prev = () => screen.getByRole('button', { name: /Prev/ }) as HTMLButtonElement;
+    const next = () => screen.getByRole('button', { name: /Next/ }) as HTMLButtonElement;
+
+    await vi.waitFor(() => expect(next().disabled).toBe(false));
+    expect(prev().disabled).toBe(true);
+
+    fireEvent.click(next());
+    await screen.findByText('row 200');
+    await vi.waitFor(() => expect(next().disabled).toBe(false));
+    fireEvent.click(next());
+    await screen.findByText('row 400');
+    await vi.waitFor(() => expect(prev().disabled).toBe(false));
+    expect(next().disabled).toBe(true);
+
+    fireEvent.click(prev());
+    await screen.findByText('201-201 of 450');
+    await vi.waitFor(() =>
+      expect(host.GetStrings).toHaveBeenLastCalledWith('Mod.esp', 'en', 'STRINGS', '', 200, 200));
+  });
 });

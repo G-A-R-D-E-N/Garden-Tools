@@ -2,6 +2,7 @@
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/signature.hpp"
 #include "plugin_bytes.hpp"
@@ -11,6 +12,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -83,6 +85,15 @@ std::string placed_reference_refusal(fo4::Plugin& plugin,
     return error.what();
   }
   return {};
+}
+
+void erase_cell_subrecords(fo4::Plugin& plugin, const fo4::FormKey& cell, std::string_view signature) {
+  const auto sig = fo4::Signature::from_string(signature);
+  fo4::visit_records(plugin, [&](fo4::Record& record) {
+    if (record.form_key != cell) return;
+    std::erase_if(record.subrecords,
+                  [&](const fo4::Subrecord& subrecord) { return subrecord.signature == sig; });
+  });
 }
 
 }  // namespace
@@ -330,5 +341,72 @@ TEST(PlacedReferenceCreate, RefusesLocalBaseThatIsNotInThisPlugin) {
       fo4::forms::PlacedReferenceCreation{
           .cell = cell, .base = fo4::FormKey::parse("000905:Cells.esp")});
   EXPECT_NE(refusal.find("is not a record in this plugin"), std::string::npos);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(PlacedReferenceCreate, RefusesCellWithoutDataWithoutMutation) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  const auto world = fo4::FormKey::parse("000800:Cells.esp");
+  const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
+  const auto cell = fo4::forms::create_exterior_cell(
+      plugin,
+      fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 1,
+          .y = 2,
+          .editor_id = std::nullopt});
+  erase_cell_subrecords(plugin, cell, "DATA");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_placed_reference(
+                   plugin,
+                   fo4::forms::PlacedReferenceCreation{.cell = cell, .base = base})),
+               fo4::forms::PlacedReferenceError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(PlacedReferenceCreate, RefusesExteriorCellWithoutXclc) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  const auto world = fo4::FormKey::parse("000800:Cells.esp");
+  const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
+  const auto cell = fo4::forms::create_exterior_cell(
+      plugin,
+      fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 1,
+          .y = 2,
+          .editor_id = std::nullopt});
+  erase_cell_subrecords(plugin, cell, "XCLC");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_placed_reference(
+                   plugin,
+                   fo4::forms::PlacedReferenceCreation{.cell = cell, .base = base})),
+               fo4::forms::PlacedReferenceError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(PlacedReferenceCreate, RefusesNonFiniteTransform) {
+  auto plugin = fo4::read_plugin(plugin_with_worldspace(), "Cells.esp");
+  const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
+  const auto cell = fo4::forms::create_interior_cell(plugin, "Interior");
+  const auto before = fo4::write_plugin(plugin);
+
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_placed_reference(
+                   plugin,
+                   fo4::forms::PlacedReferenceCreation{
+                       .cell = cell,
+                       .base = base,
+                       .transform = {.x = std::numeric_limits<float>::quiet_NaN()},
+                   })),
+               fo4::forms::PlacedReferenceError);
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_placed_reference(
+                   plugin,
+                   fo4::forms::PlacedReferenceCreation{
+                       .cell = cell,
+                       .base = base,
+                       .transform = {.z = std::numeric_limits<float>::infinity()},
+                   })),
+               fo4::forms::PlacedReferenceError);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

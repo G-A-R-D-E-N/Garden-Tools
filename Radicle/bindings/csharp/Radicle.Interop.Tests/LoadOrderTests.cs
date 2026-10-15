@@ -102,4 +102,34 @@ public class LoadOrderTests
         Assert.True(cycle.Failed);
         Assert.Contains(cycle.Findings, finding => finding.Code == "hoist_cycle");
     }
+
+    [Fact]
+    public void ReadPluginListAndCccOfAMissingFileThrowIoError()
+    {
+        using var temp = new TempDirectory();
+        var missing = Path.Combine(temp.Path, "none.txt");
+
+        Assert.Equal(Status.IoError, Assert.Throws<RadicleException>(() => LoadOrderFiles.ReadPluginList(missing)).Status);
+        Assert.Equal(Status.IoError, Assert.Throws<RadicleException>(() => LoadOrderFiles.ReadCcc(missing)).Status);
+    }
+
+    [Fact]
+    public void AssembleRefusesANonDirectoryAndAnUnknownTable()
+    {
+        using var temp = new TempDirectory();
+        var file = temp.Write("plain.txt", Encoding.ASCII.GetBytes("not a directory"));
+
+        Assert.Equal(Status.IoError, Assert.Throws<RadicleException>(() => LoadOrderFiles.Assemble(file, null, null, OfficialTable.OgNg)).Status);
+        Assert.Equal(Status.InvalidArgument, Assert.Throws<RadicleException>(() => LoadOrderFiles.Assemble(temp.Path, null, null, (OfficialTable)7)).Status);
+    }
+
+    [Fact]
+    public void AssembleWithAMissingPluginListOrCccPathThrowsIoError()
+    {
+        using var temp = new TempDirectory();
+        var missing = Path.Combine(temp.Path, "missing.txt");
+
+        Assert.Equal(Status.IoError, Assert.Throws<RadicleException>(() => LoadOrderFiles.Assemble(temp.Path, missing, null, OfficialTable.Ae)).Status);
+        Assert.Equal(Status.IoError, Assert.Throws<RadicleException>(() => LoadOrderFiles.Assemble(temp.Path, null, missing, OfficialTable.OgNg)).Status);
+    }
 }

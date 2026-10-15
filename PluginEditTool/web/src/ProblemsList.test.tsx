@@ -53,4 +53,28 @@ describe('ProblemsList', () => {
     render(<ProblemsList problems={[preflight]} />);
     expect(screen.getByText('scalar_value_out_of_range')).toBeTruthy();
   });
+
+  it('shows Checking while the problems are not loaded', () => {
+    render(<ProblemsList problems={null} />);
+    expect(screen.getByText('Checking…')).toBeTruthy();
+  });
+
+  it('says no problems were found for an empty list', () => {
+    render(<ProblemsList problems={[]} />);
+    expect(screen.getByText('No problems found.')).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('lists codes sorted with All codes first and treats a missing code as empty', () => {
+    const noCode: RecordProblem = { Severity: 'warning', Description: 'd1' };
+    const bCode: RecordProblem = { Code: 'b_code', Severity: 'critical', Description: 'd2' };
+    const aCode: RecordProblem = { Code: 'a_code', Severity: 'critical', Description: 'd3' };
+    render(<ProblemsList problems={[noCode, bCode, aCode]} />);
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(Array.from(select.options).map(o => o.textContent)).toEqual(['All codes', '', 'a_code', 'b_code']);
+    fireEvent.change(select, { target: { value: '' } });
+    expect(screen.getByText('d1')).toBeTruthy();
+    expect(screen.queryByText('d2')).toBeNull();
+    expect(screen.queryByText('d3')).toBeNull();
+  });
 });

@@ -1,8 +1,14 @@
+#include "fo4/environment/base_records.hpp"
+#include "fo4/forms/armor.hpp"
+#include "fo4/forms/components.hpp"
+#include "fo4/forms/effects.hpp"
+#include "fo4/forms/eyes.hpp"
 #include "fo4/forms/faction.hpp"
 #include "fo4/forms/leveled_list.hpp"
 #include "fo4/forms/npc.hpp"
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/forms/quest.hpp"
+#include "fo4/forms/race.hpp"
 #include "fo4/forms/weather.hpp"
 #include "fo4/plugin/maintenance.hpp"
 #include "fo4/plugin/master_usage.hpp"
@@ -579,6 +585,145 @@ TEST(UndecodableEdit, LeveledListWholeEditsRefuseUndecodableRecord) {
   EXPECT_THROW(static_cast<void>(fo4::forms::set_leveled_list_settings(plugin, key, 1, 1, 0)),
                std::invalid_argument);
   EXPECT_THROW(static_cast<void>(fo4::forms::reset_leveled_list(plugin, key)),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, SetMagicEffectsRefusesUndecodableRecord) {
+  const auto bytes = undecodable_plugin("SPEL");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_magic_effects(
+                   plugin, fo4::FormKey::parse("000802:Edit.esp"),
+                   std::span<const fo4::forms::MagicEffectEntry>{})),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, ArmorModelEditsRefuseUndecodableRecord) {
+  const auto armo_bytes = undecodable_plugin("ARMO");
+  auto armo = fo4::read_plugin(armo_bytes, "Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_armor_model_fields(
+                   armo, fo4::FormKey::parse("000802:Edit.esp"), std::nullopt, std::nullopt,
+                   std::nullopt, std::nullopt, std::nullopt, std::nullopt)),
+               std::invalid_argument);
+  expect_undecodable_intact(armo, k_undecodable_id);
+  expect_plugin_bytes_unchanged(armo, armo_bytes);
+
+  const auto arma_bytes = undecodable_plugin("ARMA");
+  auto arma = fo4::read_plugin(arma_bytes, "Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_armor_addon_model_fields(
+                   arma, fo4::FormKey::parse("000802:Edit.esp"), std::nullopt, std::nullopt,
+                   std::nullopt, std::nullopt)),
+               std::invalid_argument);
+  expect_undecodable_intact(arma, k_undecodable_id);
+  expect_plugin_bytes_unchanged(arma, arma_bytes);
+}
+
+TEST(UndecodableEdit, ComponentEditRefusesUndecodableRecord) {
+  const auto bytes = undecodable_plugin("MISC");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_record_components(
+                   plugin, fo4::FormKey::parse("000802:Edit.esp"),
+                   std::span<const fo4::forms::ComponentEntry>{})),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, EyesAndRaceBodyEditsRefuseUndecodableRecord) {
+  const auto eyes_bytes = undecodable_plugin("EYES");
+  auto eyes = fo4::read_plugin(eyes_bytes, "Edit.esp");
+  const auto eyes_key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_eyes_data_flags(eyes, eyes_key, 1)),
+               fo4::forms::EyesError);
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_eyes_text_fields(
+                   eyes, eyes_key, std::nullopt, std::string_view{"x"}, std::nullopt)),
+               fo4::forms::EyesError);
+  expect_undecodable_intact(eyes, k_undecodable_id);
+  expect_plugin_bytes_unchanged(eyes, eyes_bytes);
+
+  const auto race_bytes = undecodable_plugin("RACE");
+  auto race = fo4::read_plugin(race_bytes, "Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_race_body_data(
+                   race, fo4::FormKey::parse("000802:Edit.esp"), {}, {})),
+               std::invalid_argument);
+  expect_undecodable_intact(race, k_undecodable_id);
+  expect_plugin_bytes_unchanged(race, race_bytes);
+}
+
+TEST(UndecodableEdit, QuestStagesAndObjectivesWritesRefuseUndecodableQuest) {
+  const auto bytes = undecodable_plugin("QUST");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(fo4::forms::write_quest_stages(plugin, key, fo4::forms::QuestStages{}),
+               std::invalid_argument);
+  EXPECT_THROW(fo4::forms::write_quest_objectives(plugin, key, fo4::forms::QuestObjectives{}),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, PlacedReferenceTransformScaleAndMoveRefuseUndecodableReference) {
+  const auto bytes = interior_cell_plugin(true);
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  const auto reference = fo4::FormKey::parse("000801:Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_placed_reference_transform(
+                   plugin, reference, fo4::forms::PositionRotation{})),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::set_placed_reference_scale(plugin, reference, 1.0f)),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::move_placed_reference(
+                   plugin, reference, fo4::forms::PositionRotation{})),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_reference_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, CreatePlacedReferenceRefusesUndecodableCell) {
+  const auto bytes = undecodable_plugin("CELL");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::create_placed_reference(
+                   plugin, fo4::forms::PlacedReferenceCreation{
+                               .cell = fo4::FormKey::parse("000802:Edit.esp"),
+                               .base = fo4::FormKey::parse("000803:Edit.esp")})),
+               std::invalid_argument);
+  expect_undecodable_intact(plugin, k_undecodable_id);
+  expect_plugin_bytes_unchanged(plugin, bytes);
+}
+
+TEST(UndecodableEdit, FactionAndNpcAddsRefuseUndecodableRecord) {
+  const auto faction_bytes = undecodable_plugin("FACT");
+  auto faction = fo4::read_plugin(faction_bytes, "Edit.esp");
+  const auto faction_key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(fo4::forms::add_faction_relation(
+                   faction, faction_key,
+                   fo4::forms::FactionRelation{fo4::FormKey::parse("000123:Fallout4.esm"), 0, {}}),
+               std::invalid_argument);
+  EXPECT_THROW(fo4::forms::add_faction_rank(faction, faction_key, fo4::forms::FactionRank{}),
+               std::invalid_argument);
+  expect_plugin_bytes_unchanged(faction, faction_bytes);
+
+  const auto npc_bytes = undecodable_plugin("NPC_");
+  auto npc = fo4::read_plugin(npc_bytes, "Edit.esp");
+  const auto npc_key = fo4::FormKey::parse("000802:Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::forms::add_npc_faction(
+                   npc, npc_key,
+                   fo4::forms::NpcFaction{fo4::FormKey::parse("000123:Fallout4.esm"), 1})),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(fo4::forms::add_npc_perk(
+                   npc, npc_key,
+                   fo4::forms::NpcPerk{fo4::FormKey::parse("000456:Fallout4.esm"), 1})),
+               std::invalid_argument);
+  expect_plugin_bytes_unchanged(npc, npc_bytes);
+}
+
+TEST(UndecodableEdit, SetClimateTimingRefusesUndecodableClimate) {
+  const auto bytes = undecodable_plugin("CLMT");
+  auto plugin = fo4::read_plugin(bytes, "Edit.esp");
+  EXPECT_THROW(static_cast<void>(fo4::env::set_climate_timing(
+                   plugin, fo4::FormKey::parse("000802:Edit.esp"), fo4::env::ClimateTiming{})),
                std::invalid_argument);
   expect_undecodable_intact(plugin, k_undecodable_id);
   expect_plugin_bytes_unchanged(plugin, bytes);

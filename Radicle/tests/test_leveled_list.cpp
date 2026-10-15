@@ -540,3 +540,36 @@ TEST(LeveledList, SettingsNoOpLeavesTheRecordUnchanged) {
   EXPECT_TRUE(fo4::forms::set_leveled_list_settings(plugin, item_key(), 25, 0, 5));
   EXPECT_EQ(fo4::test::original_bytes(plugin), original);
 }
+
+TEST(LeveledList, ReplaceAcceptsExactly255EntriesAndRoundTrips) {
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  std::vector<fo4::forms::LeveledListEntry> entries(255);
+  for (auto& entry : entries) {
+    entry.item = fo4::FormKey::parse("000810:Patch.esp");
+  }
+  ASSERT_TRUE(fo4::forms::replace_leveled_list_entries(plugin, item_key(), entries));
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(fo4::forms::decode_leveled_list(reread, item_key()).entries.size(), 255u);
+  const auto* record = fo4::find_record(reread, item_key());
+  ASSERT_NE(record, nullptr);
+  const auto* count = find_subrecord(*record, "LLCT");
+  ASSERT_NE(count, nullptr);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(count->data[0]), 0xFFu);
+}
+
+TEST(LeveledList, InsertIntoA255EntryListIsRefusedWithoutMutation) {
+  auto plugin = fo4::read_plugin(standard_plugin(), "Patch.esp");
+  std::vector<fo4::forms::LeveledListEntry> entries(255);
+  for (auto& entry : entries) {
+    entry.item = fo4::FormKey::parse("000810:Patch.esp");
+  }
+  ASSERT_TRUE(fo4::forms::replace_leveled_list_entries(plugin, item_key(), entries));
+  const auto original = fo4::test::original_bytes(plugin);
+
+  EXPECT_THROW(fo4::forms::insert_leveled_list_entry(
+                   plugin, item_key(), 255, make_entry(1, "000810:Patch.esp")),
+               fo4::forms::LeveledListError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+  EXPECT_EQ(fo4::forms::decode_leveled_list(plugin, item_key()).entries.size(), 255u);
+}

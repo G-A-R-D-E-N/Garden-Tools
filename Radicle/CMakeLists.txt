@@ -368,6 +368,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_interior_cell_create.cpp
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
+    tests/test_info_copy_new.cpp
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
@@ -585,6 +586,7 @@ if(RADICLE_BUILD_TESTS)
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME radicle_field_address_codegen
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_field_address_codegen.py)
+  add_test(NAME radicle_parity_matrix_unit COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_parity_matrix.py)
   if(RADICLE_BUILD_TOOLS)
     add_test(NAME radicle_papyrus_dump
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/parity/tests/test_papyrus_dump.py
