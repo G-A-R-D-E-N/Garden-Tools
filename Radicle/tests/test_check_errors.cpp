@@ -22,9 +22,11 @@
 namespace {
 
 constexpr std::uint32_t k_deleted_flag = 0x20;
+constexpr std::uint32_t k_partial_form_flag = 0x4000;
+constexpr std::uint32_t k_small_file_flag = 0x200;
 
-void write_header(fo4::test::ByteWriter& out, std::string_view master) {
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+void write_header(fo4::test::ByteWriter& out, std::string_view master, std::uint32_t flags = 0) {
+  const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(1);
@@ -47,6 +49,20 @@ void write_empty_record(fo4::test::ByteWriter& out, std::string_view signature,
                         std::uint32_t form_id, std::uint32_t flags = 0) {
   const auto group = fo4::test::begin_group(out, signature, 0);
   const auto record = fo4::test::begin_record(out, signature, flags, form_id);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+}
+
+void write_record_with_subrecords(fo4::test::ByteWriter& out, std::string_view signature,
+                                  std::uint32_t flags, std::uint32_t form_id,
+                                  std::initializer_list<std::string_view> subrecords) {
+  const auto group = fo4::test::begin_group(out, signature, 0);
+  const auto record = fo4::test::begin_record(out, signature, flags, form_id);
+  for (const auto subrecord : subrecords) {
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    fo4::test::write_subrecord(out, subrecord, data.bytes);
+  }
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
 }
@@ -459,4 +475,68 @@ TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
   const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
   ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000014:CustomMaster.esm"));
+}
+
+TEST(CheckErrors, DeletedRecordContentIsFlaggedExceptReferenceBaseRecord) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_record_with_subrecords(out, "REFR", k_deleted_flag, 0x000800, {"NAME", "DATA"});
+  write_record_with_subrecords(out, "REFR", k_deleted_flag, 0x000801, {"NAME"});
+  write_record_with_subrecords(out, "KYWD", k_deleted_flag, 0x000802, {"DATA"});
+  const auto plugin = fo4::read_plugin(out.bytes, "Deleted.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::deleted_record_content);
+  ASSERT_EQ(findings.size(), 2u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000800:Deleted.esp"));
+  EXPECT_EQ(findings[0].message, "Record marked as deleted, but contains: DATA");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+  EXPECT_EQ(findings[1].record, fo4::FormKey::parse("000802:Deleted.esp"));
+}
+
+TEST(CheckErrors, PartialFormContentOtherThanEditorIdIsFlagged) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_record_with_subrecords(out, "QUST", k_partial_form_flag, 0x000800, {"EDID", "SCRI"});
+  write_record_with_subrecords(out, "QUST", k_partial_form_flag, 0x000801, {"EDID"});
+  const auto plugin = fo4::read_plugin(out.bytes, "Partial.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::partial_form_content);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000800:Partial.esp"));
+  EXPECT_EQ(findings[0].message, "Record is Partial Form, but contains: SCRI");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrors, LightPluginObjectIdAboveTwelveBitsIsInvalid) {
+  fo4::test::ByteWriter out;
+  write_header(out, "Base.esm", k_small_file_flag);
+  write_empty_record(out, "KYWD", 0x01000FFF);
+  write_empty_record(out, "KYWD", 0x01001000);
+  const auto plugin = fo4::read_plugin(out.bytes, "Light.esl");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::light_object_id_overflow);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("001000:Light.esl"));
+  EXPECT_EQ(findings[0].message, "ObjectID 001000 is invalid for a light module");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrors, MasterIndexPastMasterTableIsInternalMismatch) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x01000800);
+  write_empty_record(out, "KYWD", 0x00000801);
+  const auto plugin = fo4::read_plugin(out.bytes, "Stray.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::internal_form_id_mismatch);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000800:Stray.esp"));
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
+}
+
+TEST(CheckErrors, RecordLevelCodeNamesAreStable) {
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::deleted_record_content), "deleted_record_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::partial_form_content), "partial_form_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::light_object_id_overflow), "light_object_id_overflow");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::internal_form_id_mismatch), "internal_form_id_mismatch");
 }
