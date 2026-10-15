@@ -87,6 +87,12 @@ RecordFlagStatus relocate_reference(Plugin& plugin,
   Group& owner = *located->path[depth - 3];
   FormKey source = resolve_plugin_form_id(RawFormId{cell_children.header.label_as_u32()}, context);
   FormKey destination = source;
+  const auto commit_flags_only = [&]() {
+    detail::mark_record_modified(next, located->record());
+    located->record().header.flags = RecordFlags{flags};
+    plugin = std::move(next);
+    return RecordFlagStatus::changed;
+  };
   if (!interior) {
     const auto owner_type = static_cast<GroupType>(owner.header.group_type);
     const auto* cell = forms::detail::preceding_record(owner, cell_children);
@@ -95,9 +101,7 @@ RecordFlagStatus relocate_reference(Plugin& plugin,
     }
     require_decodable(*cell);
     const auto* data = find_subrecord(*cell, k_data);
-    if (data == nullptr || data->data.empty()) {
-      throw forms::PlacedReferenceError("exterior placed reference CELL is missing DATA");
-    }
+    if (data == nullptr || data->data.empty()) return commit_flags_only();
     if (owner_type != GroupType::world_children && owner_type != GroupType::exterior_cell_subblock) {
       throw forms::PlacedReferenceError("exterior placed reference CELL is not inside a worldspace");
     }
@@ -182,12 +186,14 @@ RecordFlagStatus set_record_flags(Plugin& plugin, const FormKey& record_key, Rec
   const bool persistent_changed = ((next ^ current) & RecordFlags::persistent) != 0;
   const auto target = (next & RecordFlags::persistent) != 0 ? GroupType::cell_persistent_children
                                                              : GroupType::cell_temporary_children;
-  const bool relocates = persistent_changed && depth >= 2 &&
-                         is_placed_reference_signature(record.header.signature) &&
-                         is_cell_bucket(path.back()->header) &&
-                         has_type(path[depth - 2]->header, GroupType::cell_children);
-  const bool interior = relocates && cell_is_interior(plugin, path[depth - 2]->header.label_as_u32());
-  if (!relocates || (interior && has_type(path.back()->header, target))) {
+  const bool in_cell_bucket = persistent_changed && depth >= 2 &&
+                              is_placed_reference_signature(record.header.signature) &&
+                              is_cell_bucket(path.back()->header) &&
+                              has_type(path[depth - 2]->header, GroupType::cell_children);
+  const bool interior = in_cell_bucket && cell_is_interior(plugin, path[depth - 2]->header.label_as_u32());
+  const bool keeps_bucket = in_cell_bucket && has_type(path.back()->header, target) &&
+                            (interior || target == GroupType::cell_persistent_children);
+  if (!in_cell_bucket || keeps_bucket) {
     detail::mark_record_modified(plugin, record);
     record.header.flags = RecordFlags{next};
     return RecordFlagStatus::changed;

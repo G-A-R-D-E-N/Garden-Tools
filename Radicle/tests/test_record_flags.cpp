@@ -493,13 +493,39 @@ TEST(RecordFlags, ExteriorPersistentSetMovesOnlyEditedReferenceAndKeepsSourceBuc
   EXPECT_TRUE(persistent_refs[0].persistent);
 }
 
-TEST(RecordFlags, ExteriorReferenceInCellWithoutDataThrowsWithoutChange) {
+TEST(RecordFlags, ExteriorReferenceInCellWithoutDataSetsFlagsWithoutMove) {
   auto plugin = load_exterior({.origin_data = false});
   const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
-  const auto before = fo4::write_plugin(plugin);
-  EXPECT_THROW(fo4::set_record_flags(plugin, ref, fo4::RecordFlags::persistent),
-               fo4::forms::PlacedReferenceError);
-  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  ASSERT_EQ(fo4::set_record_flags(plugin, ref, fo4::RecordFlags::persistent),
+            fo4::RecordFlagStatus::changed);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Exterior.esp");
+  const auto* record = fo4::find_record(reread, ref);
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->header.flags.is_persistent());
+  const auto* bucket = parent_group(reread, ref);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type, static_cast<std::int32_t>(fo4::GroupType::cell_temporary_children));
+  EXPECT_NE(find_group(reread, fo4::GroupType::cell_children, 0x00000902u), nullptr);
+}
+
+TEST(RecordFlags, ExteriorPersistentSetInTypeEightBucketOfGridCellStaysPut) {
+  auto plugin = load_exterior({.bucket = fo4::GroupType::cell_persistent_children});
+  const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
+  ASSERT_EQ(fo4::set_record_flags(plugin, ref, fo4::RecordFlags::persistent),
+            fo4::RecordFlagStatus::changed);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Exterior.esp");
+  const auto* record = fo4::find_record(reread, ref);
+  ASSERT_NE(record, nullptr);
+  EXPECT_TRUE(record->header.flags.is_persistent());
+  const auto* bucket = parent_group(reread, ref);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type, static_cast<std::int32_t>(fo4::GroupType::cell_persistent_children));
+  const auto refs = fo4::forms::placed_references_for_cell(reread, fo4::FormKey::parse("000902:Exterior.esp"));
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_TRUE(refs[0].persistent);
+  EXPECT_TRUE(fo4::forms::placed_references_for_cell(reread, fo4::FormKey::parse("000901:Exterior.esp")).empty());
 }
 
 TEST(RecordFlags, InteriorRelocationThatFailsLeavesPluginUnchanged) {
