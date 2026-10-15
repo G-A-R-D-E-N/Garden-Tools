@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 6, L1 0, L2 7, L3 1, L4 133.
+Tier counts: L0 5, L1 0, L2 7, L3 0, L4 135.
 
 ### Per-signature coverage
 
@@ -59,7 +59,7 @@ Tier counts: L0 6, L1 0, L2 7, L3 1, L4 133.
 | ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
-| ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
+| ASTP | 9135 | 1 | 4 | - | - | - | yes | - | - | - | - | L4 |
 | AVIF | 7826 | 3 | - | - | - | 3 | yes | - | - | - | 2 | L4 |
 | BNDS | 12280 | 14 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | yes | 1 | L4 |
@@ -92,7 +92,7 @@ Tier counts: L0 6, L1 0, L2 7, L3 1, L4 133.
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |
 | FLOR | 12167 | 14 | 1 | 4 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
-| FLST | 7574 | - | - | - | 1 | 1 | - | - | - | - | - | L3 |
+| FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FURN | 6848 | 9 | 2 | 6 | - | 2 | yes | yes | - | yes | 1 | L4 |
@@ -119,7 +119,7 @@ Tier counts: L0 6, L1 0, L2 7, L3 1, L4 133.
 | LCRT | 6962 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LCTN | 8039 | 6 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
 | LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| LGTM | 8629 | 16 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
+| LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
 | LIGH | 9871 | 25 | 4 | 5 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
@@ -212,6 +212,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | ARMO | - | - | - | - | - | - | - | - | - | - |
 | ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
 | ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
+| ASTP | - | - | - | 1 | 4 | u32 | - | - | - | existing_only |
 | AVIF | 1 | - | 1 | 1 | - | f32, u32 | - | - | - | existing_only |
 | BNDS | 13 | - | 1 | - | - | f32, i16, u16 | - | - | - | existing_only |
 | BOOK | 11 | - | - | 1 | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
@@ -270,7 +271,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LCRT | 4 | - | 1 | - | - | u32, u8 | - | - | - | existing_only |
 | LCTN | 6 | - | - | - | - | f32, u8 | - | - | - | existing_only |
 | LENS | 1 | - | - | - | - | f32 | - | - | - | existing_only |
-| LGTM | 16 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
+| LGTM | 81 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
 | LIGH | 24 | - | - | 1 | 4 | f32, i16, i32, u32, u8 | - | - | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
 | LTEX | 3 | - | - | - | - | u8 | - | - | - | existing_only |
