@@ -1,6 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/form_link_schema.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "plugin_bytes.hpp"
@@ -82,6 +83,27 @@ std::uint32_t link_raw(const fo4::Plugin& plugin, std::string_view key,
   return 0;
 }
 
+Bytes subrecord_data(const fo4::Plugin& plugin, std::string_view key, std::string_view subrecord) {
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) {
+    ADD_FAILURE() << key;
+    return {};
+  }
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature.to_string() == subrecord) return sub.data;
+  }
+  ADD_FAILURE() << subrecord;
+  return {};
+}
+
+std::size_t link_index(const fo4::Record& record, std::string_view subrecord) {
+  for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+    if (record.subrecords[i].signature.to_string() == subrecord) return i;
+  }
+  ADD_FAILURE() << subrecord;
+  return 0;
+}
+
 }  // namespace
 
 TEST(WP9LinkRows, NewRowsReadAndRetargetThroughFieldApi) {
@@ -110,6 +132,14 @@ TEST(WP9LinkRows, NewRowsReadAndRetargetThroughFieldApi) {
 TEST(WP9LinkRows, NewRowsFollowMasterReorder) {
   const auto out = make_plugin();
   auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  for (const auto& item : k_items) {
+    SCOPED_TRACE(item.path);
+    const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(item.key));
+    ASSERT_NE(record, nullptr);
+    const auto offsets = fo4::schema::schema_formlink_offsets(*record);
+    ASSERT_EQ(offsets.size(), record->subrecords.size());
+    EXPECT_EQ(offsets[link_index(*record, item.subrecord)], std::vector<std::size_t>{0});
+  }
   const std::vector<fo4::PluginKey> masters{fo4::PluginKey::from_filename("Objects.esp"),
                                             fo4::PluginKey::from_filename("Fallout4.esm")};
   plugin = fo4::remap_plugin_masters(std::move(plugin), masters);
@@ -118,4 +148,28 @@ TEST(WP9LinkRows, NewRowsFollowMasterReorder) {
     SCOPED_TRACE(item.path);
     EXPECT_EQ(link_raw(reread, item.key, item.subrecord), item.remapped_raw);
   }
+}
+
+TEST(WP9LinkRows, NullTargetFollowsXEditNullability) {
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto required =
+      fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("NPC_"), "NPC_\\Race");
+  ASSERT_TRUE(required.has_value());
+  EXPECT_FALSE(required->nullable);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, fo4::FormKey::parse("000A01:Patch.esp"),
+                                              *required, fo4::FormKey{}),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(subrecord_data(plugin, "000A01:Patch.esp", "RNAM"), u32_bytes(0x00000A10));
+
+  const auto optional = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("HAZD"),
+                                                               "HAZD\\ImageSpaceModifier");
+  ASSERT_TRUE(optional.has_value());
+  EXPECT_TRUE(optional->nullable);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, fo4::FormKey::parse("000D01:Patch.esp"),
+                                           *optional, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(subrecord_data(reread, "000D01:Patch.esp", "MNAM"), u32_bytes(0));
+  EXPECT_EQ(subrecord_data(reread, "000A01:Patch.esp", "RNAM"), u32_bytes(0x00000A10));
 }

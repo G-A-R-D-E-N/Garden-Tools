@@ -6673,7 +6673,7 @@
           "subrecord": "ATKR",
           "offset": 0,
           "targets": ["RACE"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6683,7 +6683,7 @@
           "subrecord": "GNAM",
           "offset": 0,
           "targets": ["BPTD"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6693,7 +6693,7 @@
           "subrecord": "NAM4",
           "offset": 0,
           "targets": ["MATT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6703,7 +6703,7 @@
           "subrecord": "NAM5",
           "offset": 0,
           "targets": ["IPDS"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6713,7 +6713,7 @@
           "subrecord": "NAM7",
           "offset": 0,
           "targets": ["ARTO"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6723,7 +6723,7 @@
           "subrecord": "CNAM",
           "offset": 0,
           "targets": ["TXST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6733,7 +6733,7 @@
           "subrecord": "ONAM",
           "offset": 0,
           "targets": ["SNDR"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6743,7 +6743,7 @@
           "subrecord": "LNAM",
           "offset": 0,
           "targets": ["SNDR"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6753,7 +6753,7 @@
           "subrecord": "UNWP",
           "offset": 0,
           "targets": ["WEAP"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6763,7 +6763,7 @@
           "subrecord": "WKMV",
           "offset": 0,
           "targets": ["MOVT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6773,7 +6773,7 @@
           "subrecord": "SWMV",
           "offset": 0,
           "targets": ["MOVT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6783,7 +6783,7 @@
           "subrecord": "FLMV",
           "offset": 0,
           "targets": ["MOVT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6793,7 +6793,7 @@
           "subrecord": "SNMV",
           "offset": 0,
           "targets": ["MOVT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6803,7 +6803,7 @@
           "subrecord": "DFTM",
           "offset": 0,
           "targets": ["TXST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6813,7 +6813,7 @@
           "subrecord": "DFTF",
           "offset": 0,
           "targets": ["TXST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6823,7 +6823,7 @@
           "subrecord": "NAM8",
           "offset": 0,
           "targets": ["RACE"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6833,7 +6833,7 @@
           "subrecord": "RNAM",
           "offset": 0,
           "targets": ["RACE"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6843,7 +6843,7 @@
           "subrecord": "SRAC",
           "offset": 0,
           "targets": ["RACE"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6853,7 +6853,7 @@
           "subrecord": "SADD",
           "offset": 0,
           "targets": ["RACE"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -6863,7 +6863,7 @@
           "subrecord": "QSTI",
           "offset": 0,
           "targets": ["QUST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         }
@@ -23359,7 +23359,7 @@
           "subrecord": "STCP",
           "offset": 0,
           "targets": ["STAG"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23389,7 +23389,7 @@
           "subrecord": "YNAM",
           "offset": 0,
           "targets": ["SNDR"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23399,7 +23399,7 @@
           "subrecord": "ZNAM",
           "offset": 0,
           "targets": ["SNDR"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23409,7 +23409,7 @@
           "subrecord": "INRD",
           "offset": 0,
           "targets": ["INNR"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23419,7 +23419,7 @@
           "subrecord": "NNAM",
           "offset": 0,
           "targets": ["OMOD"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23429,7 +23429,7 @@
           "subrecord": "INAM",
           "offset": 0,
           "targets": ["IPDS"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23439,7 +23439,7 @@
           "subrecord": "LNAM",
           "offset": 0,
           "targets": ["LVLI"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23449,7 +23449,7 @@
           "subrecord": "WAMD",
           "offset": 0,
           "targets": ["AMDL"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23459,7 +23459,7 @@
           "subrecord": "WZMD",
           "offset": 0,
           "targets": ["ZOOM"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23469,7 +23469,7 @@
           "subrecord": "CNAM",
           "offset": 0,
           "targets": ["WEAP"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -23489,7 +23489,17 @@
           "subrecord": "EITM",
           "offset": 0,
           "targets": ["ENCH"],
-          "nullable": true,
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": ["TRNS"],
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         }
@@ -25018,7 +25028,7 @@
           "subrecord": "INAM",
           "offset": 0,
           "targets": ["LVLI"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25028,7 +25038,7 @@
           "subrecord": "VTCK",
           "offset": 0,
           "targets": ["VTYP"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25038,7 +25048,7 @@
           "subrecord": "TPLT",
           "offset": 0,
           "targets": ["LVLN", "NPC_"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25048,7 +25058,7 @@
           "subrecord": "LTPT",
           "offset": 0,
           "targets": ["LVLN", "NPC_"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25058,7 +25068,7 @@
           "subrecord": "LTPC",
           "offset": 0,
           "targets": ["GLOB"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25078,7 +25088,7 @@
           "subrecord": "WNAM",
           "offset": 0,
           "targets": ["ARMO"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25088,7 +25098,7 @@
           "subrecord": "ANAM",
           "offset": 0,
           "targets": ["ARMO"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25098,7 +25108,7 @@
           "subrecord": "ATKR",
           "offset": 0,
           "targets": ["RACE"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25108,7 +25118,7 @@
           "subrecord": "SPOR",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25118,7 +25128,7 @@
           "subrecord": "OCOR",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25128,7 +25138,7 @@
           "subrecord": "GWOR",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25138,7 +25148,7 @@
           "subrecord": "ECOR",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25148,7 +25158,7 @@
           "subrecord": "FCPL",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25158,7 +25168,7 @@
           "subrecord": "RCLR",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25178,7 +25188,7 @@
           "subrecord": "HCLF",
           "offset": 0,
           "targets": ["CLFM"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25188,7 +25198,7 @@
           "subrecord": "BCLF",
           "offset": 0,
           "targets": ["CLFM"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25198,7 +25208,7 @@
           "subrecord": "ZNAM",
           "offset": 0,
           "targets": ["CSTY"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25208,7 +25218,7 @@
           "subrecord": "GNAM",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25218,7 +25228,7 @@
           "subrecord": "CSCR",
           "offset": 0,
           "targets": ["NPC_"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25228,7 +25238,7 @@
           "subrecord": "PFRN",
           "offset": 0,
           "targets": ["FURN"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25238,7 +25248,7 @@
           "subrecord": "DOFT",
           "offset": 0,
           "targets": ["OTFT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25248,7 +25258,7 @@
           "subrecord": "SOFT",
           "offset": 0,
           "targets": ["OTFT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25258,7 +25268,7 @@
           "subrecord": "DPLT",
           "offset": 0,
           "targets": ["FLST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25268,7 +25278,7 @@
           "subrecord": "CRIF",
           "offset": 0,
           "targets": ["FACT"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
@@ -25278,7 +25288,7 @@
           "subrecord": "FTST",
           "offset": 0,
           "targets": ["TXST"],
-          "nullable": true,
+          "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
         }

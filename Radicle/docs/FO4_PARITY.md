@@ -188,7 +188,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | TXST | 6984 | 13 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 45 | - | 27 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
+| WEAP | 12877 | 45 | - | 28 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
 | WRLD | 13110 | - | - | - | - | 1 | - | - | environment/world | yes | 1 | L2 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
