@@ -30,6 +30,10 @@ bool isNullFormLink(std::string_view value) {
            std::tolower(static_cast<unsigned char>(value[3])) == 'l';
 }
 
+bool isTypedLvspSetting(std::string_view path) {
+    return path == "LVSP\\ChanceNone" || path == "LVSP\\MaxCount" || path == "LVSP\\Flags";
+}
+
 }
 
 Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
@@ -49,7 +53,7 @@ Result<nlohmann::json> RadiclePluginBackend::setFieldValue(
     }
 
     const auto field = fo4::schema::scalar_field_descriptor(address ? address->path : fieldPath);
-    if (!field.has_value()) {
+    if (!field.has_value() || isTypedLvspSetting(fieldPath)) {
         return setField(arguments);
     }
 
