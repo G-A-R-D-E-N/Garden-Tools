@@ -144,7 +144,11 @@ std::vector<std::byte> cell_target() {
   fo4::test::ByteWriter out;
   write_header(out, {"Base.esm"}, 0x900);
   const auto top = fo4::test::begin_group(out, "CELL", 0);
+  const auto block = begin_group_raw(out, 0, fo4::GroupType::interior_cell_block);
+  const auto subblock = begin_group_raw(out, 0, fo4::GroupType::interior_cell_subblock);
   write_cell(out, 0x00000800u);
+  end_group_raw(out, subblock);
+  end_group_raw(out, block);
   fo4::test::end_group(out, top);
   return out.bytes;
 }
@@ -334,7 +338,7 @@ TEST(CopyAsNewRecordCApi, CopiesThroughTheHandlesAndWritesTheResult) {
 
   ASSERT_EQ(radicle_plugin_write_file(target, out_path.string().c_str()), RADICLE_STATUS_OK);
   const auto patch = fo4::read_plugin_file(out_path);
-  const auto* copied = fo4::find_record(patch, fo4::FormKey::parse("000800:Patch.esp"));
+  const auto* copied = fo4::find_record(patch, fo4::FormKey::parse("000800:Out.esp"));
   ASSERT_NE(copied, nullptr);
   EXPECT_EQ(edid_of(*copied), "CrateNew");
 
