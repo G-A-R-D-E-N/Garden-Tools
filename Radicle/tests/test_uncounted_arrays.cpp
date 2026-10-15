@@ -158,7 +158,7 @@ TEST(UncountedArray, InsertAtEndAppendsAndEditsTheNewMember) {
   EXPECT_EQ(u32_at(data, 20), 0u);
 }
 
-TEST(UncountedArray, RemoveDropsTheElementAndTheLastRemovalKeepsAnEmptyPayload) {
+TEST(UncountedArray, RemoveDropsTheElementAndRefusesToEmptyThePayload) {
   auto plugin = fo4::read_plugin(
       make_plugin(weather_payload({{0x00000A10u, 7, 0x00000A11u}, {0x00000A12u, 9, 0x00000A13u}}), {}),
       "Patch.esp");
@@ -172,10 +172,11 @@ TEST(UncountedArray, RemoveDropsTheElementAndTheLastRemovalKeepsAnEmptyPayload) 
   EXPECT_EQ(u32_at(remaining, 8), 0x00000A13u);
 
   EXPECT_EQ(fo4::remove_record_counted_element(plugin, climate_key(), weather_types(), 0),
-            fo4::CountedArrayMutationStatus::updated);
-  EXPECT_TRUE(payload(reread(plugin), climate_key(), k_wlst).empty());
-  EXPECT_EQ(fo4::remove_record_counted_element(plugin, climate_key(), weather_types(), 0),
-            fo4::CountedArrayMutationStatus::index_out_of_range);
+            fo4::CountedArrayMutationStatus::would_empty);
+  const auto kept = payload(reread(plugin), climate_key(), k_wlst);
+  ASSERT_EQ(kept.size(), 12u);
+  EXPECT_EQ(u32_at(kept, 0), 0x00000A12u);
+  EXPECT_EQ(u32_at(kept, 8), 0x00000A13u);
 }
 
 TEST(UncountedArray, InsertsAndEditsPropertiesOnAnActivator) {

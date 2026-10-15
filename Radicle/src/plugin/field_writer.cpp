@@ -495,6 +495,7 @@ CountedArrayMutationStatus remove_record_counted_element(Plugin& plugin,
   const auto found = counted_array_subrecords(*target, array);
   if (!found) return CountedArrayMutationStatus::subrecord_missing;
   if (index >= found->count) return CountedArrayMutationStatus::index_out_of_range;
+  if (!found->counter && found->count == 1) return CountedArrayMutationStatus::would_empty;
 
   auto& data = target->subrecords[found->payload].data;
   const auto first = data.begin() + static_cast<std::ptrdiff_t>(index * array.stride);

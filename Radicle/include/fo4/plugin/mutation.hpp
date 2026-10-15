@@ -39,6 +39,7 @@ enum class CountedArrayMutationStatus {
   record_missing,
   index_out_of_range,
   subrecord_missing,
+  would_empty,
 };
 
 enum class SubrecordGroupMutationStatus {
