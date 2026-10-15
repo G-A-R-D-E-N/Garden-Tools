@@ -206,6 +206,7 @@ void packed_write(std::vector<std::byte>& data, std::size_t element,
 
 void reconcile_counter(Record& record, const FormLinkListDescriptor& descriptor,
                        std::uint32_t count) {
+  if (descriptor.counter == Signature{}) return;
   const auto counter_index = subrecord_index(record, descriptor.counter);
   if (count == 0) {
     if (counter_index.has_value()) {
@@ -270,7 +271,9 @@ FormLinkListMutationStatus insert_packed_element(
 
   if (!array_index.has_value()) {
     std::size_t insertion = 0;
-    const auto counter_index = subrecord_index(*record, descriptor.counter);
+    const auto counter_index = descriptor.counter == Signature{}
+                                   ? std::optional<std::size_t>{}
+                                   : subrecord_index(*record, descriptor.counter);
     if (counter_index.has_value()) {
       insertion = *counter_index + 1;
     } else {
