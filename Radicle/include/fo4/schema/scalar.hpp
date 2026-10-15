@@ -60,6 +60,7 @@ struct ScalarDescriptor {
   std::size_t minimum_payload_size{0};
   std::span<const ScalarName> names{};
   std::uint16_t min_form_version{0};
+  bool localized{false};
 };
 
 struct ScalarFieldDescriptor {

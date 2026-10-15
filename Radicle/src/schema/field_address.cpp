@@ -27,10 +27,11 @@ std::optional<std::int64_t> read_discriminator(std::span<const std::byte> payloa
 }
 
 bool listed(const FieldDiscriminator& when, std::optional<std::int64_t> value) {
-  if (!value.has_value()) return false;
+  if (!value.has_value()) return when.negated && when.match_absent;
   const auto count = std::min(when.count, when.equals.size());
-  return std::find(when.equals.begin(), when.equals.begin() + static_cast<std::ptrdiff_t>(count),
-                   *value) != when.equals.begin() + static_cast<std::ptrdiff_t>(count);
+  const bool found = std::find(when.equals.begin(), when.equals.begin() + static_cast<std::ptrdiff_t>(count),
+                               *value) != when.equals.begin() + static_cast<std::ptrdiff_t>(count);
+  return found != when.negated;
 }
 
 bool record_discriminator_matches(const Record& record, const FieldDiscriminator& when) {
