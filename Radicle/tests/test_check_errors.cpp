@@ -328,6 +328,36 @@ TEST(CheckErrors, MissingBranchStartingTopicIsReportedOnce) {
   EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());
 }
 
+namespace {
+fo4::Plugin rfgp_with_reference(const char* name, std::uint32_t rnam) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "RFGP", 0);
+  const auto record = fo4::test::begin_record(out, "RFGP", 0, 0x000840);
+  fo4::test::ByteWriter value;
+  value.u32(rnam);
+  fo4::test::write_subrecord(out, "RNAM", value.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+}  // namespace
+
+TEST(CheckErrors, MissingGameMasterReferenceGroupTargetIsNotAnError) {
+  const auto plugin = rfgp_with_reference("Fallout4.esm", 0x000850);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link).empty());
+}
+
+TEST(CheckErrors, MissingModReferenceGroupTargetIsStillUnresolved) {
+  const auto plugin = rfgp_with_reference("Mod.esp", 0x000850);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000850:Mod.esp"));
+  EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
+}
+
 TEST(CheckErrors, NoneFormIdIsNotALink) {
   fo4::test::ByteWriter out;
   write_header(out, {});
