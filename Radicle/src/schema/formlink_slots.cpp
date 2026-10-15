@@ -40,6 +40,7 @@ std::optional<FormLinkFieldDescriptor> formlink_field_at(
     shape.subrecord = field.subrecord;
     shape.offset = field.offset;
     shape.width = sizeof(std::uint32_t);
+    shape.max_form_version = field.max_form_version;
     const auto index = ordinal_index(record, subrecord, ordinal);
     if (!index) continue;
     const auto resolved = resolve_field_slots(record, shape, address);

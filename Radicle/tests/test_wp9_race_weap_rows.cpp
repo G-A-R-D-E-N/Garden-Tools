@@ -168,14 +168,14 @@ TEST(WP9RaceWeapRows, NewRowsMatchXEditShape) {
   EXPECT_EQ(damage_type.offset, 0u);
   EXPECT_EQ(damage_type.address.stride, 8u);
   EXPECT_FALSE(damage_type.nullable);
-  EXPECT_EQ(damage_type.payload_sizes[0], 8u);
+  EXPECT_EQ(damage_type.max_form_version, 152u);
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(damage_type, fo4::Signature::from_string("DMGT")));
   const auto damage_amount = scalar_row("WEAP", "WEAP\\DamageAmount");
   EXPECT_EQ(damage_amount.scalar.subrecord, fo4::Signature::from_string("DAMA"));
   EXPECT_EQ(damage_amount.scalar.storage, fo4::schema::ScalarStorage::u32);
   EXPECT_EQ(damage_amount.scalar.offset, 4u);
   EXPECT_EQ(damage_amount.scalar.address.stride, 8u);
-  EXPECT_EQ(damage_amount.scalar.payload_size, 8u);
+  EXPECT_EQ(damage_amount.scalar.max_form_version, 152u);
 }
 
 TEST(WP9RaceWeapRows, RaceRowsReadAndWriteTheirSubrecords) {
@@ -259,6 +259,28 @@ TEST(WP9RaceWeapRows, DamaEntryOneValueAndLinkReadAndWrite) {
   EXPECT_EQ(after[1].amount, 9u);
 }
 
+TEST(WP9RaceWeapRows, DamaSecondEntryIsRowedAtFormVersion131) {
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000B01:Patch.esp");
+  const auto target = fo4::FormKey::parse("000A20:Objects.esp");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("WEAP", "WEAP\\DamageAmount"), 1, "77"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, formlink_row("WEAP", "WEAP\\DamageType"), 1,
+                                           target),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const Bytes expected = u32_words({0x00000C10u, 5u, k_retarget_raw, 77u});
+  EXPECT_EQ(payload(reread, "000B01:Patch.esp", "DAMA"), expected);
+
+  const auto after = fo4::forms::decode_weapon_damage_types(reread, key);
+  ASSERT_EQ(after.size(), 2u);
+  EXPECT_EQ(after[1].type, target);
+  EXPECT_EQ(after[1].amount, 77u);
+}
+
 TEST(WP9RaceWeapRows, DamaTwelveByteEntriesAreNotRowed) {
   auto out = make_plugin();
   add_record(out, "WEAP", 0xB02,
@@ -269,12 +291,26 @@ TEST(WP9RaceWeapRows, DamaTwelveByteEntriesAreNotRowed) {
   const Bytes before = payload(plugin, "000B02:Patch.esp", "DAMA");
   ASSERT_EQ(before.size(), 24u);
 
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto amount = scalar_row("WEAP", "WEAP\\DamageAmount").scalar;
+  const auto amount_slots = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(amount), amount.address);
+  const auto type = formlink_row("WEAP", "WEAP\\DamageType");
+  const fo4::schema::FieldShape type_shape{.subrecord = type.subrecord, .offset = type.offset,
+                                           .width = sizeof(std::uint32_t),
+                                           .max_form_version = type.max_form_version};
+  const auto type_slots = fo4::schema::resolve_field_slots(*record, type_shape, type.address);
+  ASSERT_EQ(amount_slots.slots.size(), 3u);
+  ASSERT_EQ(type_slots.slots.size(), 3u);
+  for (const auto& slot : amount_slots.slots) EXPECT_FALSE(slot.valid);
+  for (const auto& slot : type_slots.slots) EXPECT_FALSE(slot.valid);
+
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("WEAP", "WEAP\\DamageAmount"), 0, "42"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("WEAP", "WEAP\\DamageAmount"), 1, "42"),
             fo4::ScalarMutationStatus::subrecord_missing);
-  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(
-                   plugin, key, formlink_row("WEAP", "WEAP\\DamageType"), 0, target)),
-               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, formlink_row("WEAP", "WEAP\\DamageType"), 0, target),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
   EXPECT_EQ(payload(plugin, "000B02:Patch.esp", "DAMA"), before);
 }

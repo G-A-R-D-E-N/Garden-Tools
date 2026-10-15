@@ -23859,7 +23859,7 @@
           "minimum": 0,
           "maximum": 4294967295,
           "stride": 8,
-          "payload_size": 8,
+          "max_form_version": 152,
           "insertion": "existing_only"
         }
       ],
@@ -24034,7 +24034,7 @@
           "subrecord": "DAMA",
           "offset": 0,
           "stride": 8,
-          "payload_sizes": [8],
+          "max_form_version": 152,
           "targets": ["DMGT"],
           "nullable": false,
           "insertion": "existing_only"

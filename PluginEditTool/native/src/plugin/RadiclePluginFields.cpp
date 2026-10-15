@@ -129,7 +129,10 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
             cells.push_back(SemanticFieldCell{std::string(field.path), "<opaque>", false, true});
             continue;
         }
-        const fo4::schema::FieldShape shape{field.subrecord, field.offset, sizeof(std::uint32_t), 0, false};
+        const fo4::schema::FieldShape shape{.subrecord = field.subrecord,
+                                            .offset = field.offset,
+                                            .width = sizeof(std::uint32_t),
+                                            .max_form_version = field.max_form_version};
         const auto resolved = fo4::schema::resolve_field_slots(record, shape, field.address);
         if (resolved.misaligned) {
             return std::unexpected(Error{"FormLinkReadFailed",
