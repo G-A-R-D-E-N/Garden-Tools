@@ -11,6 +11,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -21,6 +22,15 @@ std::size_t index_of(const fo4::Record& record, std::string_view signature) {
     if (record.subrecords[i].signature == sig) return i;
   }
   return record.subrecords.size();
+}
+
+std::vector<std::pair<std::string, std::vector<std::byte>>> subrecords_of(const fo4::Plugin& plugin,
+                                                                          std::string_view key) {
+  std::vector<std::pair<std::string, std::vector<std::byte>>> out;
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) return out;
+  for (const auto& sub : record->subrecords) out.emplace_back(sub.signature.to_string(), sub.data);
+  return out;
 }
 
 void write_effect(fo4::test::ByteWriter& out,
@@ -167,6 +177,7 @@ TEST(MagicEffects, AppendsBlockAtEndWhenRecordHasNoEffects) {
 TEST(MagicEffects, UnsupportedOrMissingRecordIsRefusedWithoutMutation) {
   auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto weapon_before = subrecords_of(plugin, "000830:Fx.esp");
   const fo4::forms::MagicEffectEntry desired[] = {
       {fo4::FormKey::parse("000801:Fx.esp"), 1.0f, 0u, 0u, {}},
   };
@@ -174,27 +185,32 @@ TEST(MagicEffects, UnsupportedOrMissingRecordIsRefusedWithoutMutation) {
             fo4::forms::EffectListWrite::unsupported_record);
   EXPECT_EQ(fo4::forms::set_magic_effects(plugin, fo4::FormKey::parse("000999:Fx.esp"), desired),
             fo4::forms::EffectListWrite::record_missing);
+  EXPECT_EQ(subrecords_of(plugin, "000830:Fx.esp"), weapon_before);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(MagicEffects, UnexpectedLayoutIsRefusedWithoutMutation) {
   auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto spell_before = subrecords_of(plugin, "000840:Fx.esp");
   const fo4::forms::MagicEffectEntry desired[] = {
       {fo4::FormKey::parse("000801:Fx.esp"), 1.0f, 0u, 0u, {}},
   };
   EXPECT_EQ(fo4::forms::set_magic_effects(plugin, fo4::FormKey::parse("000840:Fx.esp"), desired),
             fo4::forms::EffectListWrite::unexpected_layout);
+  EXPECT_EQ(subrecords_of(plugin, "000840:Fx.esp"), spell_before);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
 TEST(MagicEffects, EffectFromUnlistedPluginIsRefusedWithoutMutation) {
   auto plugin = fo4::read_plugin(effects_plugin(), "Fx.esp");
   const auto before = fo4::write_plugin(plugin);
+  const auto spell_before = subrecords_of(plugin, "000800:Fx.esp");
   const fo4::forms::MagicEffectEntry foreign[] = {
       {fo4::FormKey::parse("000801:Other.esm"), 1.0f, 0u, 0u, {}},
   };
   EXPECT_THROW(fo4::forms::set_magic_effects(plugin, fo4::FormKey::parse("000800:Fx.esp"), foreign),
                fo4::forms::MagicEffectError);
+  EXPECT_EQ(subrecords_of(plugin, "000800:Fx.esp"), spell_before);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
