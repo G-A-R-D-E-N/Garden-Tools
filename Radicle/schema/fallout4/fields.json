@@ -6408,6 +6408,13 @@
           "insertion": "existing_only"
         },
         {
+          "path": "PROJ\\MuzzleFlashModel",
+          "label": "Muzzle flash model file name",
+          "kind": "string",
+          "subrecord": "NAM1",
+          "insertion": "existing_only"
+        },
+        {
           "path": "PROJ\\SoundLevel",
           "label": "Sound level",
           "kind": "scalar",
@@ -6499,6 +6506,15 @@
           "subrecord": "DNAM",
           "offset": 84,
           "targets": ["COLL"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PROJ\\VATSProjectile",
+          "label": "VATS projectile",
+          "subrecord": "DNAM",
+          "offset": 89,
+          "targets": ["PROJ"],
           "nullable": true,
           "insertion": "existing_only"
         }
@@ -9834,6 +9850,8 @@
         }
       ],
       "formlink_fields": [
+        {"path": "STAT\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "STAT\\ForcedLocRefType", "label": "Forced location reference type", "subrecord": "FTYP", "offset": 0, "targets": ["LCRT"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {"path": "STAT\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "STAT\\Material",
@@ -12979,6 +12997,19 @@
           "label": "Notes",
           "kind": "string",
           "subrecord": "NNAM",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SNDR\\DescriptorType",
+          "label": "Descriptor type",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "storage": "u32",
+          "presentation": "enum",
+          "names": [{"value": 519001098, "name": "Standard"}, {"value": 1415912003, "name": "Compound"}, {"value": 3977607907, "name": "AutoWeapon"}],
+          "minimum": 0,
+          "maximum": 4294967295,
           "insertion": "existing_only"
         },
         {
