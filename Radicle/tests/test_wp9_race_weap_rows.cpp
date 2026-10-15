@@ -37,9 +37,10 @@ Bytes u32_words(std::initializer_list<std::uint32_t> values) {
 }
 
 void add_record(ByteWriter& out, std::string_view signature, std::uint32_t local,
-                std::initializer_list<std::pair<std::string_view, Bytes>> subrecords) {
+                std::initializer_list<std::pair<std::string_view, Bytes>> subrecords,
+                std::uint16_t form_version = 131) {
   const auto group = fo4::test::begin_group(out, signature, 0);
-  const auto record = fo4::test::begin_record(out, signature, 0, 0x02000000u | local);
+  const auto record = fo4::test::begin_record(out, signature, 0, 0x02000000u | local, form_version);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Radicle\0", 8});
   for (const auto& [subrecord, data] : subrecords) {
     fo4::test::write_subrecord(out, subrecord, data);
@@ -167,12 +168,14 @@ TEST(WP9RaceWeapRows, NewRowsMatchXEditShape) {
   EXPECT_EQ(damage_type.offset, 0u);
   EXPECT_EQ(damage_type.address.stride, 8u);
   EXPECT_FALSE(damage_type.nullable);
+  EXPECT_EQ(damage_type.payload_sizes[0], 8u);
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(damage_type, fo4::Signature::from_string("DMGT")));
   const auto damage_amount = scalar_row("WEAP", "WEAP\\DamageAmount");
   EXPECT_EQ(damage_amount.scalar.subrecord, fo4::Signature::from_string("DAMA"));
   EXPECT_EQ(damage_amount.scalar.storage, fo4::schema::ScalarStorage::u32);
   EXPECT_EQ(damage_amount.scalar.offset, 4u);
   EXPECT_EQ(damage_amount.scalar.address.stride, 8u);
+  EXPECT_EQ(damage_amount.scalar.payload_size, 8u);
 }
 
 TEST(WP9RaceWeapRows, RaceRowsReadAndWriteTheirSubrecords) {
@@ -254,4 +257,24 @@ TEST(WP9RaceWeapRows, DamaEntryOneValueAndLinkReadAndWrite) {
   EXPECT_EQ(after[0].amount, 42u);
   EXPECT_EQ(after[1].type, fo4::FormKey::parse("000C11:Fallout4.esm"));
   EXPECT_EQ(after[1].amount, 9u);
+}
+
+TEST(WP9RaceWeapRows, DamaTwelveByteEntriesAreNotRowed) {
+  auto out = make_plugin();
+  add_record(out, "WEAP", 0xB02,
+             {{"DAMA", u32_words({0x00000C10u, 5u, 0x00000C12u, 0x00000C11u, 9u, 0x00000C12u})}}, 152);
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000B02:Patch.esp");
+  const auto target = fo4::FormKey::parse("000A20:Objects.esp");
+  const Bytes before = payload(plugin, "000B02:Patch.esp", "DAMA");
+  ASSERT_EQ(before.size(), 24u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("WEAP", "WEAP\\DamageAmount"), 0, "42"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("WEAP", "WEAP\\DamageAmount"), 1, "42"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(
+                   plugin, key, formlink_row("WEAP", "WEAP\\DamageType"), 0, target)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(payload(plugin, "000B02:Patch.esp", "DAMA"), before);
 }

@@ -6964,7 +6964,24 @@
           "kind": "scalar",
           "subrecord": "VNAM",
           "storage": "u32",
-          "presentation": "identity",
+          "presentation": "flags",
+          "names": [
+            { "bit": 0, "name": "Hand To Hand Melee" },
+            { "bit": 1, "name": "One Hand Sword" },
+            { "bit": 2, "name": "One Hand Dagger" },
+            { "bit": 3, "name": "One Hand Axe" },
+            { "bit": 4, "name": "One Hand Mace" },
+            { "bit": 5, "name": "Two Hand Sword" },
+            { "bit": 6, "name": "Two Hand Axe" },
+            { "bit": 7, "name": "Bow" },
+            { "bit": 8, "name": "Staff" },
+            { "bit": 9, "name": "Gun" },
+            { "bit": 10, "name": "Grenade" },
+            { "bit": 11, "name": "Mine" },
+            { "bit": 12, "name": "Spell" },
+            { "bit": 13, "name": "Shield" },
+            { "bit": 14, "name": "Torch" }
+          ],
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
@@ -23842,6 +23859,7 @@
           "minimum": 0,
           "maximum": 4294967295,
           "stride": 8,
+          "payload_size": 8,
           "insertion": "existing_only"
         }
       ],
@@ -24016,6 +24034,7 @@
           "subrecord": "DAMA",
           "offset": 0,
           "stride": 8,
+          "payload_sizes": [8],
           "targets": ["DMGT"],
           "nullable": false,
           "insertion": "existing_only"

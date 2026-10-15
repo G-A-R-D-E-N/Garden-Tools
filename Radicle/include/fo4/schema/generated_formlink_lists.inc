@@ -2049,7 +2049,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("WEAP"), "WEAP\\AnimationSound", "Animation Sound", Signature::from_string("STCP"), 0, false, 682, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("WEAP"), "WEAP\\BlockBashImpactDataSet", "Block Bash Impact Data Set", Signature::from_string("BIDS"), 0, true, 683, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("WEAP"), "WEAP\\CritEffect", "Crit effect", Signature::from_string("CRDT"), 8, true, 684, 1, FieldAddress{}, {{12}}},
-  {Signature::from_string("WEAP"), "WEAP\\DamageType", "Damage type", Signature::from_string("DAMA"), 0, false, 685, 1, FieldAddress{false, 8, 0, FieldDiscriminator{}}},
+  {Signature::from_string("WEAP"), "WEAP\\DamageType", "Damage type", Signature::from_string("DAMA"), 0, false, 685, 1, FieldAddress{false, 8, 0, FieldDiscriminator{}}, {{8}}},
   {Signature::from_string("WEAP"), "WEAP\\Effect", "Effect", Signature::from_string("EITM"), 0, false, 686, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("WEAP"), "WEAP\\EmbeddedWeaponMod", "Embedded Weapon Mod", Signature::from_string("NNAM"), 0, false, 687, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("WEAP"), "WEAP\\EquipmentType", "Equipment Type", Signature::from_string("ETYP"), 0, true, 688, 1, FieldAddress{}, {{4}}},

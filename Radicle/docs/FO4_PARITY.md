@@ -309,7 +309,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PMIS | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PROJ | 22 | - | - | - | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
-| RACE | 2 | - | - | - | 4 | u32 | 3 | - | - | existing_only |
+| RACE | 1 | - | - | 1 | 4 | u32 | 3 | - | - | existing_only |
 | REFR | 6 | 1 | - | - | - | f32, u32 | - | 4 | - | existing_only |
 | REGN | - | - | - | - | - | - | - | - | - | - |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
