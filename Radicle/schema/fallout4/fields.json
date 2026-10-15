@@ -7038,7 +7038,47 @@
     },
     {
       "signature": "WRLD",
-      "fields": [],
+      "fields": [
+        {"path": "WRLD\\BoundsMinX", "label": "Bounds min X", "kind": "scalar", "subrecord": "NAM0", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\BoundsMinY", "label": "Bounds min Y", "kind": "scalar", "subrecord": "NAM0", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\BoundsMaxX", "label": "Bounds max X", "kind": "scalar", "subrecord": "NAM9", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\BoundsMaxY", "label": "Bounds max Y", "kind": "scalar", "subrecord": "NAM9", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\DefaultLandHeight", "label": "Default land height", "kind": "scalar", "subrecord": "DNAM", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\DefaultWaterHeight", "label": "Default water height", "kind": "scalar", "subrecord": "DNAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\LodWaterHeight", "label": "LOD water height", "kind": "scalar", "subrecord": "NAM4", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\DistantLodMultiplier", "label": "Distant LOD multiplier", "kind": "scalar", "subrecord": "NAMA", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\ParentFlags", "label": "Parent use flags", "kind": "scalar", "subrecord": "PNAM", "offset": 0, "storage": "u16", "presentation": "flags", "names": [{"bit": 0, "name": "Use Land Data"}, {"bit": 1, "name": "Use LOD Data"}, {"bit": 2, "name": "Use Map Data"}, {"bit": 3, "name": "Use Water Data"}, {"bit": 4, "name": "Use Climate Data"}, {"bit": 6, "name": "Use Sky Cell"}], "minimum": 0, "maximum": 65535, "insertion": "existing_only"},
+        {"path": "WRLD\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Small World"}, {"bit": 1, "name": "Can't Fast Travel"}, {"bit": 3, "name": "No LOD Water"}, {"bit": 4, "name": "No Landscape"}, {"bit": 5, "name": "No Sky"}, {"bit": 6, "name": "Fixed Dimensions"}, {"bit": 7, "name": "No Grass"}], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "WRLD\\FixedCenterX", "label": "Fixed center X", "kind": "scalar", "subrecord": "WCTR", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "insertion": "existing_only"},
+        {"path": "WRLD\\FixedCenterY", "label": "Fixed center Y", "kind": "scalar", "subrecord": "WCTR", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "insertion": "existing_only"},
+        {"path": "WRLD\\MapUsableX", "label": "Map usable width", "kind": "scalar", "subrecord": "MNAM", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "WRLD\\MapUsableY", "label": "Map usable height", "kind": "scalar", "subrecord": "MNAM", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "WRLD\\MapNwCellX", "label": "Map NW cell X", "kind": "scalar", "subrecord": "MNAM", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "insertion": "existing_only"},
+        {"path": "WRLD\\MapNwCellY", "label": "Map NW cell Y", "kind": "scalar", "subrecord": "MNAM", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "insertion": "existing_only"},
+        {"path": "WRLD\\MapSeCellX", "label": "Map SE cell X", "kind": "scalar", "subrecord": "MNAM", "offset": 12, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "insertion": "existing_only"},
+        {"path": "WRLD\\MapSeCellY", "label": "Map SE cell Y", "kind": "scalar", "subrecord": "MNAM", "offset": 14, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "insertion": "existing_only"},
+        {"path": "WRLD\\MapCameraMinHeight", "label": "Map camera min height", "kind": "scalar", "subrecord": "MNAM", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 20, "insertion": "existing_only"},
+        {"path": "WRLD\\MapCameraMaxHeight", "label": "Map camera max height", "kind": "scalar", "subrecord": "MNAM", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 24, "insertion": "existing_only"},
+        {"path": "WRLD\\MapCameraInitialPitch", "label": "Map camera initial pitch", "kind": "scalar", "subrecord": "MNAM", "offset": 24, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 28, "insertion": "existing_only"},
+        {"path": "WRLD\\MapScale", "label": "Map world scale", "kind": "scalar", "subrecord": "ONAM", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\MapCellOffsetX", "label": "Map cell X offset", "kind": "scalar", "subrecord": "ONAM", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\MapCellOffsetY", "label": "Map cell Y offset", "kind": "scalar", "subrecord": "ONAM", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\MapCellOffsetZ", "label": "Map cell Z offset", "kind": "scalar", "subrecord": "ONAM", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "WRLD\\MapImage", "label": "Map image", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
+        {"path": "WRLD\\HdLodDiffuseTexture", "label": "HD LOD diffuse texture", "kind": "string", "subrecord": "TNAM", "insertion": "existing_only"},
+        {"path": "WRLD\\HdLodNormalTexture", "label": "HD LOD normal texture", "kind": "string", "subrecord": "UNAM", "insertion": "existing_only"},
+        {"path": "WRLD\\WaterEnvironmentMap", "label": "Water environment map", "kind": "string", "subrecord": "XWEM", "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "WRLD\\EncounterZone", "label": "Encounter zone", "subrecord": "XEZN", "offset": 0, "payload_sizes": [4], "targets": ["ECZN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "WRLD\\Location", "label": "Location", "subrecord": "XLCN", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "WRLD\\ParentWorldspace", "label": "Parent worldspace", "subrecord": "WNAM", "offset": 0, "payload_sizes": [4], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
+        {"path": "WRLD\\Climate", "label": "Climate", "subrecord": "CNAM", "offset": 0, "payload_sizes": [4], "targets": ["CLMT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "WRLD\\Water", "label": "Water", "subrecord": "NAM2", "offset": 0, "payload_sizes": [4], "targets": ["WATR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "WRLD\\LodWater", "label": "LOD water", "subrecord": "NAM3", "offset": 0, "payload_sizes": [4], "targets": ["WATR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "WRLD\\InteriorLighting", "label": "Interior lighting", "subrecord": "LTMP", "offset": 0, "payload_sizes": [4], "targets": ["LGTM"], "nullable": false, "insertion": "existing_only"},
+        {"path": "WRLD\\Music", "label": "Music", "subrecord": "ZNAM", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": false, "insertion": "existing_only"}
+      ],
       "localized_subrecords": [
         "FULL"
       ]
