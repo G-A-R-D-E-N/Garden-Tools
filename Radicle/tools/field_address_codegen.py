@@ -24,7 +24,7 @@ def valid_signature(value):
 def parse_when(when, path, own_subrecord):
     if not isinstance(when, dict):
         raise ValueError(f"when must be an object: {path!r}")
-    unknown = set(when) - {"subrecord", "offset", "storage", "equals", "match_absent"}
+    unknown = set(when) - {"subrecord", "offset", "storage", "equals", "not_equals", "match_absent"}
     if unknown:
         raise ValueError(f"unknown when keys {sorted(unknown)} for {path!r}")
     subrecord = when.get("subrecord", "")
@@ -44,20 +44,34 @@ def parse_when(when, path, own_subrecord):
     if storage not in WHEN_STORAGES:
         raise ValueError(f"unsupported when.storage {storage!r} for {path!r}")
     _width, low, high = WHEN_STORAGES[storage]
-    equals = when.get("equals")
+    if ("equals" in when) == ("not_equals" in when):
+        raise ValueError(f"when needs exactly one of equals or not_equals: {path!r}")
+    negated = "not_equals" in when
+    key = "not_equals" if negated else "equals"
+    equals = when[key]
     if not isinstance(equals, list) or not equals:
-        raise ValueError(f"when.equals must be a non-empty array: {path!r}")
+        raise ValueError(f"when.{key} must be a non-empty array: {path!r}")
     if len(equals) > MAX_WHEN_VALUES:
-        raise ValueError(f"when.equals supports at most {MAX_WHEN_VALUES} values: {path!r}")
+        raise ValueError(f"when.{key} supports at most {MAX_WHEN_VALUES} values: {path!r}")
     for value in equals:
         if type(value) is not int:
-            raise ValueError(f"when.equals values must be integers: {path!r}")
+            raise ValueError(f"when.{key} values must be integers: {path!r}")
         if value < low or value > high:
-            raise ValueError(f"when.equals value {value} exceeds {storage} storage for {path!r}")
+            raise ValueError(f"when.{key} value {value} exceeds {storage} storage for {path!r}")
     if len(set(equals)) != len(equals):
-        raise ValueError(f"when.equals contains duplicate values: {path!r}")
+        raise ValueError(f"when.{key} contains duplicate values: {path!r}")
     return {"subrecord": subrecord, "offset": offset, "storage": storage, "equals": list(equals),
-            "match_absent": match_absent}
+            "negated": negated, "match_absent": match_absent}
+
+
+def disjoint(a, b):
+    if a["negated"] and b["negated"]:
+        return False
+    if a["negated"]:
+        a, b = b, a
+    if b["negated"]:
+        return set(a["equals"]) <= set(b["equals"])
+    return set(a["equals"]).isdisjoint(b["equals"])
 
 
 def parse_address(row, path, subrecord, has_offset, width):
@@ -109,12 +123,12 @@ def reject_overlaps(entries, kind_label):
                 exclusivity = "different when discriminators are not mutually exclusive"
             elif aw["match_absent"] and bw["match_absent"]:
                 exclusivity = "both when guards match an absent discriminator"
-            elif set(aw["equals"]).isdisjoint(bw["equals"]):
+            elif disjoint(aw, bw):
                 if aw["subrecord"] or not different_layout:
                     continue
                 exclusivity = "own-element discriminators use different layouts"
             else:
-                exclusivity = "when.equals sets intersect"
+                exclusivity = "when value sets intersect"
 
             if different_layout:
                 conflict = "conflicting repeated/stride/array_offset layouts"
@@ -144,6 +158,7 @@ def render_address(address):
                      if when["subrecord"] else "Signature{}")
         rendered = (f"FieldDiscriminator{{{subrecord}, {when['offset']}, "
                     f"DiscriminatorStorage::{when['storage']}, {len(when['equals'])}, {{{{{values}}}}}"
-                    f"{', true' if when['match_absent'] else ', false'}}}")
+                    f"{', true' if when['match_absent'] else ', false'}"
+                    f"{', true' if when['negated'] else ', false'}}}")
     return (f"FieldAddress{{{'true' if address['repeated'] else 'false'}, {address['stride']}, "
             f"{address['array_offset']}, {rendered}}}")

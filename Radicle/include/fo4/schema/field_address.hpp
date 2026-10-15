@@ -26,6 +26,7 @@ struct FieldDiscriminator {
   std::size_t count{0};
   std::array<std::int64_t, k_max_discriminator_values> equals{};
   bool match_absent{false};
+  bool negated{false};
 };
 
 struct FieldAddress {
