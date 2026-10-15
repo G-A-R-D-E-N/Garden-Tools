@@ -22,8 +22,19 @@ enum class MarkDeletedStatus {
   header_record,
 };
 
+enum class UndeleteStatus {
+  undeleted,
+  not_deleted,
+  record_missing,
+  header_record,
+  not_a_reference,
+  incomplete_reference,
+};
+
 RecordFlagStatus set_record_flags(Plugin& plugin, const FormKey& record_key, RecordFlags::value_type flags);
 
 MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_key);
+
+UndeleteStatus undelete_and_disable_reference(Plugin& plugin, const FormKey& record_key);
 
 }  // namespace fo4
