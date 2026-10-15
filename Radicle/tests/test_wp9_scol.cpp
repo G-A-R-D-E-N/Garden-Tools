@@ -239,29 +239,26 @@ TEST(WP9Scol, AddPartAppendsAfterExistingParts) {
   EXPECT_EQ(names.back(), "DATA");
 }
 
-TEST(WP9Scol, AddPartWithoutPlacementsWritesOnlyOnam) {
+TEST(WP9Scol, AddPartRefusesEmptyPlacements) {
   auto plugin = fixture();
   const std::span<const StaticPlacementView> none;
-  EXPECT_TRUE(fo4::forms::add_static_collection_part(plugin, fo4::FormKey::parse("000E02:Patch.esp"),
-                                                     fo4::FormKey::parse("000E10:Patch.esp"), none));
-  const auto after = reread(plugin);
-  const std::vector<std::string> expected = {"EDID", "OBND", "ONAM", "DATA", "ONAM"};
-  EXPECT_EQ(signatures_of(after, "000E02:Patch.esp"), expected);
-  const auto parts = parts_of(after, "000E02:Patch.esp");
-  ASSERT_EQ(parts.size(), 2u);
-  EXPECT_TRUE(parts[1].placements.empty());
+  EXPECT_THROW(fo4::forms::add_static_collection_part(plugin, fo4::FormKey::parse("000E02:Patch.esp"),
+                                                      fo4::FormKey::parse("000E10:Patch.esp"), none),
+               StaticCollectionError);
+  EXPECT_EQ(parts_of(plugin, "000E02:Patch.esp").size(), 1u);
 }
 
 TEST(WP9Scol, AddPartRefusesWrongAndUnresolvedTargets) {
   auto plugin = fixture();
   const auto key = fo4::FormKey::parse("000E01:Patch.esp");
-  const std::span<const StaticPlacementView> none;
-  EXPECT_THROW(fo4::forms::add_static_collection_part(plugin, key, fo4::FormKey::parse("000E11:Patch.esp"), none),
+  std::vector<StaticPlacementView> one;
+  one.push_back(placement(10.0f));
+  EXPECT_THROW(fo4::forms::add_static_collection_part(plugin, key, fo4::FormKey::parse("000E11:Patch.esp"), one),
                StaticCollectionError);
-  EXPECT_THROW(fo4::forms::add_static_collection_part(plugin, key, fo4::FormKey::parse("000E99:Patch.esp"), none),
+  EXPECT_THROW(fo4::forms::add_static_collection_part(plugin, key, fo4::FormKey::parse("000E99:Patch.esp"), one),
                StaticCollectionError);
   EXPECT_FALSE(fo4::forms::add_static_collection_part(plugin, fo4::FormKey::parse("000EEE:Patch.esp"),
-                                                      fo4::FormKey::parse("000E10:Patch.esp"), none));
+                                                      fo4::FormKey::parse("000E10:Patch.esp"), one));
   EXPECT_EQ(parts_of(plugin, "000E01:Patch.esp").size(), 2u);
 }
 
@@ -287,13 +284,9 @@ TEST(WP9Scol, SetPlacementsInsertsReplacesAndRemovesDataInPlace) {
   EXPECT_FLOAT_EQ(parts[1].placements[1].scale, 96.0f);
 
   const std::span<const StaticPlacementView> none;
-  EXPECT_TRUE(fo4::forms::set_static_collection_part_placements(plugin, key, 1, none));
-  const auto cleared = reread(plugin);
-  const std::vector<std::string> removed = {"EDID", "OBND", "ONAM", "DATA", "ONAM"};
-  EXPECT_EQ(signatures_of(cleared, "000E03:Patch.esp"), removed);
-  const auto cleared_parts = parts_of(cleared, "000E03:Patch.esp");
-  ASSERT_EQ(cleared_parts.size(), 2u);
-  EXPECT_TRUE(cleared_parts[1].placements.empty());
+  EXPECT_THROW(fo4::forms::set_static_collection_part_placements(plugin, key, 1, none), StaticCollectionError);
+  EXPECT_EQ(signatures_of(reread(plugin), "000E03:Patch.esp"), inserted);
+  EXPECT_EQ(parts_of(reread(plugin), "000E03:Patch.esp")[1].placements.size(), 2u);
 
   EXPECT_THROW(fo4::forms::set_static_collection_part_placements(plugin, key, 2, one), StaticCollectionError);
 }

@@ -2472,7 +2472,7 @@ xEdit SCOL is `Core/wbDefinitionsFO4.pas:12620-12648`: EDID, OBND (required), PT
 
 ## Radicle/src/forms/static_collection.cpp:add_static_collection_part (#602 WP-9 C-37)
 
-Appends ONAM and, when placements are non-empty, DATA at the end of the record. xEdit sorts parts by ONAM, but the corpus is not sorted (see the fields.json:SCOL note), so append matches the vanilla files and needs no sort. The target is checked like `Radicle/src/forms/leveled_list.cpp:validate_entry_target`: when its owner is the plugin, it must resolve there and be one of the 13 xEdit targets; a foreign owner is not checked here and is left to CheckErrors. A null encoding is refused. A missing record returns false; a record that is not SCOL throws `StaticCollectionError`.
+Appends ONAM and its DATA at the end of the record. One part is ONAM plus one non-empty DATA: corpus 22713 of 22713 ONAM are followed by exactly one non-empty DATA, so an empty placements span is refused with `StaticCollectionError`. Part append order is kept: xEdit sorts parts by ONAM, but the corpus is not sorted (see the fields.json:SCOL note), so append matches the vanilla files; sorted-array behavior stays with D-25. The target is checked like `Radicle/src/forms/leveled_list.cpp:validate_entry_target`: when its owner is the plugin, it must resolve there and be one of the 13 xEdit targets; a foreign owner is not checked here and is left to CheckErrors. A null encoding is refused. A missing record returns false; a record that is not SCOL throws `StaticCollectionError`.
 
 ## Radicle/src/forms/static_collection.cpp:remove_static_collection_part (#602 WP-9 C-37)
 
@@ -2480,4 +2480,4 @@ Appends ONAM and, when placements are non-empty, DATA at the end of the record. 
 
 ## Radicle/src/forms/static_collection.cpp:set_static_collection_part_placements (#602 WP-9 C-37)
 
-Replaces the DATA after the part's ONAM, inserts one when the part has none, and removes it when the placements are empty. Placements keep caller order: xEdit's `wbArrayS` has no sort key and the corpus is unsorted (fields.json:SCOL note). The placements array is 28 bytes per element, written as seven little-endian f32 values.
+Replaces the DATA after the part's ONAM and inserts one when the part has none. Empty placements are refused, because one part is ONAM plus one non-empty DATA (corpus 22713 of 22713); the caller removes the whole part with `remove_static_collection_part` instead. Placements keep caller order: xEdit's `wbArrayS` has no sort key and the corpus is unsorted (fields.json:SCOL note). The placements array is 28 bytes per element, written as seven little-endian f32 values.

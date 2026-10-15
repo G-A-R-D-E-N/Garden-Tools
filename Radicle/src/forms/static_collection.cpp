@@ -142,6 +142,12 @@ void require_scol(const Record& record) {
   }
 }
 
+void require_placements(std::span<const StaticPlacementView> placements) {
+  if (placements.empty()) {
+    throw StaticCollectionError("static collection part needs at least one placement");
+  }
+}
+
 }  // namespace
 
 std::vector<StaticCollectionPartView> decode_static_collection_parts(
@@ -203,11 +209,12 @@ bool add_static_collection_part(Plugin& plugin,
   auto* record = find_mutable_record(plugin, scol);
   if (record == nullptr) return false;
   require_scol(*record);
+  require_placements(placements);
   validate_part_target(plugin, static_record);
   part_slots(*record);
   const auto context = plugin_form_id_context(plugin);
   record->subrecords.push_back(onam_subrecord(static_record, context));
-  if (!placements.empty()) record->subrecords.push_back(placements_subrecord(placements));
+  record->subrecords.push_back(placements_subrecord(placements));
   mark_record_modified(plugin, *record);
   return true;
 }
@@ -243,11 +250,10 @@ bool set_static_collection_part_placements(Plugin& plugin,
   if (part_index >= slots.size()) {
     throw StaticCollectionError("static collection part index is out of range");
   }
+  require_placements(placements);
   const auto& slot = slots[part_index];
   const auto data = record->subrecords.begin() + static_cast<std::ptrdiff_t>(slot.onam + 1);
-  if (placements.empty()) {
-    if (slot.has_data) record->subrecords.erase(data);
-  } else if (slot.has_data) {
+  if (slot.has_data) {
     *data = placements_subrecord(placements);
   } else {
     record->subrecords.insert(data, placements_subrecord(placements));
