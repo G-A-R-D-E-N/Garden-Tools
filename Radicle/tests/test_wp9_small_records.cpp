@@ -222,8 +222,11 @@ TEST(WP9SmallRecords, LightingTemplateCreatesWithAuthoredTailAndDalc) {
   const auto created = fo4::create_record(plugin, sig("LGTM"), "NewLight");
   ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
   EXPECT_EQ(order(plugin, created.key), (std::vector<std::string>{"EDID", "DATA", "DALC"}));
-  EXPECT_EQ(payload(plugin, created.key, "DATA"), Bytes(136));
-  EXPECT_EQ(payload(plugin, created.key, "DALC"), Bytes(32));
+  EXPECT_EQ(payload(plugin, created.key, "DATA").size(), 136u);
+  EXPECT_EQ(payload(plugin, created.key, "DALC").size(), 32u);
+  EXPECT_EQ(slice(payload(plugin, created.key, "DATA"), 28, 4), f32_bytes(1.0f));
+  EXPECT_EQ(slice(payload(plugin, created.key, "DATA"), 96, 4), f32_bytes(10000.0f));
+  EXPECT_EQ(slice(payload(plugin, created.key, "DALC"), 28, 4), f32_bytes(1.0f));
   EXPECT_TRUE(authoring_clean(plugin, created.key));
   EXPECT_EQ(fo4::set_record_scalar(plugin, created.key, scalar("LGTM", "LGTM\\FarHeightRange"), 0, "7"),
             fo4::ScalarMutationStatus::updated);
