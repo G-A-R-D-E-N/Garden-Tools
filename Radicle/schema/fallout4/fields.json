@@ -4541,6 +4541,32 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "IMAD\\VignetteRadius",
+          "label": "Vignette radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 244,
+          "min_form_version": 116,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IMAD\\VignetteStrength",
+          "label": "Vignette strength",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 248,
+          "min_form_version": 116,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
         }
       ],
       "authoring": {
@@ -12960,7 +12986,7 @@
           "presentation": "identity",
           "minimum": -2147483648,
           "maximum": 2147483647,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -12987,7 +13013,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -13018,7 +13044,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -13031,7 +13057,7 @@
           "presentation": "identity",
           "minimum": -2147483648,
           "maximum": 2147483647,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -13066,7 +13092,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -13089,7 +13115,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -13102,7 +13128,7 @@
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         }
       ],
@@ -13117,6 +13143,7 @@
           ],
           "nullable": true,
           "payload_sizes": [
+            32,
             36
           ],
           "insertion": "existing_only"
