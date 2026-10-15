@@ -15,9 +15,9 @@ def cpp_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
-def parse_default(value, record: str, signature: str, payload_sizes):
-    if not isinstance(value, str) or not value or len(value) % 2 != 0 or len(value) > 0xFFFF * 2:
-        raise ValueError(f"authoring default must be a non-empty even-length hex string for {record}.{signature}")
+def parse_default(value, record: str, signature: str, payload_sizes, minimum_payload_sizes):
+    if not isinstance(value, str) or len(value) % 2 != 0 or len(value) > 0xFFFF * 2:
+        raise ValueError(f"authoring default must be an even-length hex string for {record}.{signature}")
     if any(ch not in "0123456789abcdefABCDEF" for ch in value):
         raise ValueError(f"authoring default must be hexadecimal for {record}.{signature}")
     data = bytes.fromhex(value)
@@ -25,6 +25,10 @@ def parse_default(value, record: str, signature: str, payload_sizes):
         if size != len(data):
             raise ValueError(
                 f"authoring default for {record}.{signature} is {len(data)} bytes but a scalar field expects {size}")
+    minimum = minimum_payload_sizes.get(signature, 0)
+    if len(data) < minimum:
+        raise ValueError(
+            f"authoring default for {record}.{signature} is {len(data)} bytes but a scalar field needs at least {minimum}")
     return data
 
 
@@ -65,9 +69,13 @@ def load_constraints(schema_path: Path):
             raise ValueError(f"authoring subrecords must be an array: {signature}")
 
         payload_sizes = {}
+        minimum_payload_sizes = {}
         for field in record.get("fields", []):
             if isinstance(field, dict) and "payload_size" in field and "subrecord" in field:
                 payload_sizes.setdefault(field["subrecord"], set()).add(field["payload_size"])
+            if isinstance(field, dict) and "minimum_payload_size" in field and "subrecord" in field:
+                minimum_payload_sizes[field["subrecord"]] = max(
+                    minimum_payload_sizes.get(field["subrecord"], 0), field["minimum_payload_size"])
 
         parsed_subrecords = []
         seen_subrecords = set()
@@ -97,7 +105,8 @@ def load_constraints(schema_path: Path):
 
             default = None
             if "default" in subrecord:
-                default = parse_default(subrecord["default"], signature, sub_signature, payload_sizes)
+                default = parse_default(subrecord["default"], signature, sub_signature, payload_sizes,
+                                        minimum_payload_sizes)
 
             uncounted = subrecord.get("uncounted", False)
             if not isinstance(uncounted, bool):
@@ -141,8 +150,9 @@ def render(constraints) -> str:
                 continue
             name = f"k_generated_authoring_default_{len(default_names)}"
             default_names[(record["signature"], subrecord["signature"])] = name
-            body = ", ".join(f"0x{byte:02X}" for byte in subrecord["default"])
-            lines.append(f"inline constexpr std::uint8_t {name}[] = {{{body}}};")
+            body = ", ".join(f"0x{byte:02X}" for byte in subrecord["default"]) or "0x00"
+            bound = "" if subrecord["default"] else "1"
+            lines.append(f"inline constexpr std::uint8_t {name}[{bound}] = {{{body}}};")
     lines.append("inline constexpr SubrecordAuthoringConstraint k_generated_subrecord_authoring_constraints[] = {")
 
     first = 0

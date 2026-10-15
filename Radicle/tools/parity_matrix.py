@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SIGNATURES = ROOT / "schema" / "fallout4" / "xedit_signatures.txt"
 FIELDS = ROOT / "schema" / "fallout4" / "fields.json"
 MIXED = ROOT / "src" / "schema" / "form_link_mixed.cpp"
+MIXED_RECORDS = ROOT / "src" / "schema" / "form_link_records.cpp"
 CMAKE = ROOT / "CMakeLists.txt"
 TESTS = ROOT / "tests"
 DOC = ROOT / "docs" / "FO4_PARITY.md"
@@ -60,7 +61,7 @@ OPAQUE_NOTES = [
     "Dedicated PluginEditTool routes are not derived, so the tier stops at schema, typed module and remap evidence (no L5).",
     "Typed module attribution is the `TYPED_MODULES` map in this script. The script checks that each cited file names the signature, but not that it still reads the record semantically.",
     "Subrecord-level remap handlers apply to any record carrying the subrecord and are not attributed to a record: OBTS (`obts_formid_offsets`, called from `src/schema/form_links.cpp`) and the behavior handlers in `src/schema/behavior_layout.cpp`.",
-    "Mixed remap is attributed only by a record signature named in `src/schema/form_link_mixed.cpp`. Record-specific checks in `src/schema/form_links.cpp` (IPDS PNAM, DOBJ DNAM, CLMT WLST) and the generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) are not counted, so those records can be remapped correctly and still show no mixed remap.",
+    "Mixed remap is attributed only by a record signature named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Record-specific checks in `src/schema/form_links.cpp` (IPDS PNAM, DOBJ DNAM, CLMT WLST) and the generic remap tables (`formid_subrecords.inc`, `structured_formids.inc`) are not counted, so those records can be remapped correctly and still show no mixed remap.",
     "VMAD (`src/schema/vmad.cpp`, `src/forms/quest_vmad.cpp`) has no field rows and is not attributed to any record.",
     "Localized subrecords are counted by name in `localized_subrecords`; the generated localized table is not compared with them.",
     "Real-data tests are counted when a registered `tests/*_real.cpp` names the signature in quotes. A test that covers a family without naming the signature is not counted. Presence is not a pass result; no CI result is read.",
@@ -159,7 +160,8 @@ def render():
     if unknown:
         fail(f"fields.json names signatures outside xedit_signatures.txt: {sorted(unknown)}")
     modules = typed_modules(set(sigs))
-    mixed = mixed_record_signatures(MIXED.read_text(encoding="utf-8")) & set(sigs)
+    mixed = (mixed_record_signatures(MIXED.read_text(encoding="utf-8"))
+             | mixed_record_signatures(MIXED_RECORDS.read_text(encoding="utf-8"))) & set(sigs)
     real_texts = real_test_sources()
 
     main_rows = []
@@ -209,7 +211,7 @@ def render():
         "",
         f"Derived from the repository by `Radicle/tools/parity_matrix.py`; {len(sigs)} signatures from `schema/fallout4/xedit_signatures.txt`. Regenerate with `python -I Radicle/tools/parity_matrix.py --write`.",
         "",
-        "Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.",
+        "Columns: xEdit line is the registration line in the pinned definitions. Rows, authoring, keyword list and FormLink counts come from `schema/fallout4/fields.json`. Typed module lists the `TYPED_MODULES` files that name the signature. Mixed remap means the signature is named in `src/schema/form_link_mixed.cpp` or `src/schema/form_link_records.cpp`. Real-data tests count registered `tests/*_real.cpp` files that name it. `-` means none.",
         "",
         "Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.",
         "",

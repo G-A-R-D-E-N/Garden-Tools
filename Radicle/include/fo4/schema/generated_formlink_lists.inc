@@ -1652,7 +1652,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("DUAL"), "DUAL\\Projectile", "Projectile", Signature::from_string("DATA"), 0, true, 112, 1, FieldAddress{}},
   {Signature::from_string("ECZN"), "ECZN\\Location", "Location", Signature::from_string("DATA"), 4, true, 113, 1, FieldAddress{}},
   {Signature::from_string("ECZN"), "ECZN\\Owner", "Owner", Signature::from_string("DATA"), 0, true, 114, 2, FieldAddress{}},
-  {Signature::from_string("ENCH"), "ENCH\\BaseEnchantment", "Base enchantment", Signature::from_string("ENIT"), 28, true, 116, 1, FieldAddress{}, {{36}}},
+  {Signature::from_string("ENCH"), "ENCH\\BaseEnchantment", "Base enchantment", Signature::from_string("ENIT"), 28, true, 116, 1, FieldAddress{}, {{32, 36}}},
   {Signature::from_string("ENCH"), "ENCH\\WornRestrictions", "Worn restrictions", Signature::from_string("ENIT"), 32, true, 117, 1, FieldAddress{}, {{36}}},
   {Signature::from_string("EXPL"), "EXPL\\ImpactDataSet", "Impact data set", Signature::from_string("DATA"), 12, true, 118, 1, FieldAddress{}},
   {Signature::from_string("EXPL"), "EXPL\\ImpactPlacedObject", "Impact placed object", Signature::from_string("DATA"), 16, true, 119, 44, FieldAddress{}},

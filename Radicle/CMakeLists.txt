@@ -119,11 +119,13 @@ add_library(fo4
   src/forms/cell.cpp
   src/forms/cell_create.cpp
   src/forms/components.cpp
+  src/forms/effects.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
   src/forms/placed_reference_edit.cpp
   src/forms/placed_reference_create.cpp
+  src/forms/placed_reference_move.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather.cpp
@@ -151,6 +153,7 @@ add_library(fo4
   src/plugin/load_order.cpp
   src/plugin/flags.cpp
   src/plugin/mutation.cpp
+  src/plugin/record_flags.cpp
   src/plugin/copy_hierarchy.cpp
   src/plugin/vmad_writer.cpp
   src/plugin/navmesh_writer.cpp
@@ -167,6 +170,7 @@ add_library(fo4
   src/schema/form_links.cpp
   src/schema/form_links_ctda.cpp
   src/schema/form_link_mixed.cpp
+  src/schema/form_link_records.cpp
   src/schema/form_link_schema.cpp
   src/schema/behavior_layout.cpp
   src/schema/localized_fields.cpp
@@ -182,6 +186,7 @@ add_library(fo4
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
+  src/graph/check_errors_records.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
@@ -353,6 +358,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_flst_formlink_lists.cpp
     tests/test_kwda_formlink_lists.cpp
     tests/test_components.cpp
+    tests/test_magic_effects.cpp
     tests/test_nested_formlink_lists.cpp
     tests/test_formlink_list_management.cpp
     tests/test_sraf_formlinks.cpp
@@ -365,6 +371,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
+    tests/test_placed_reference_move.cpp
+    tests/test_record_flags.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp
     tests/test_quest_aliases.cpp
@@ -477,6 +485,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_remap_non_formid_slots.cpp
     tests/test_struct_payload_remap.cpp
     tests/test_generator_gap_remap.cpp
+    tests/test_union_payload_remap.cpp
+    tests/test_record_struct_remap.cpp
     tests/test_remap_scalar_enum_slots.cpp
     tests/test_master_usage.cpp
     tests/test_plugin_diff.cpp

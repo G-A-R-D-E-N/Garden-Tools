@@ -364,6 +364,11 @@ def load_schema(schema_path: Path):
                 if payload_size and minimum_payload_size > payload_size:
                     raise ValueError(f"minimum_payload_size exceeds payload_size: {path!r}")
 
+            min_form_version = field.get("min_form_version", 0)
+            if "min_form_version" in field:
+                if type(min_form_version) is not int or not 0 < min_form_version <= 0xFFFF:
+                    raise ValueError(f"min_form_version must be a 16-bit positive integer: {path!r}")
+
             if is_string:
                 minimum = maximum = 0.0
             else:
@@ -400,6 +405,7 @@ def load_schema(schema_path: Path):
                 "embedded": embedded,
                 "payload_size": payload_size,
                 "minimum_payload_size": minimum_payload_size,
+                "min_form_version": min_form_version,
                 "address": address,
                 "can_insert": False,
             })
@@ -514,8 +520,12 @@ def render(fields, arrays=(), groups=()) -> str:
         if field["names"]:
             trailing = (f", {field['minimum_payload_size']}, "
                         f"std::span<const ScalarName>(k_scalar_names_{tables[names_key(field)]})")
+        elif field["min_form_version"]:
+            trailing = f", {field['minimum_payload_size']}, {{}}"
         elif field["minimum_payload_size"]:
             trailing = f", {field['minimum_payload_size']}"
+        if field["min_form_version"]:
+            trailing += f", {field['min_form_version']}"
         presentation = CPP_PRESENTATIONS.get(field["presentation"], field["presentation"])
         lines.append(
             "{" +

@@ -475,6 +475,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 32,
+          "min_form_version": 97,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -487,6 +488,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 36,
+          "min_form_version": 97,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -499,6 +501,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 40,
+          "min_form_version": 97,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -511,6 +514,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 44,
+          "min_form_version": 97,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -523,6 +527,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 48,
+          "min_form_version": 97,
           "storage": "u32",
           "presentation": "identity",
           "minimum": 0,
@@ -535,6 +540,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 52,
+          "min_form_version": 97,
           "storage": "u32",
           "presentation": "identity",
           "minimum": 0,
@@ -547,6 +553,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 56,
+          "min_form_version": 97,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -559,6 +566,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 60,
+          "min_form_version": 97,
           "storage": "u32",
           "presentation": "identity",
           "minimum": 0,
@@ -571,6 +579,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 64,
+          "min_form_version": 112,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -583,6 +592,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 68,
+          "min_form_version": 112,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -595,6 +605,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 72,
+          "min_form_version": 112,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -607,6 +618,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 76,
+          "min_form_version": 112,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
@@ -619,6 +631,7 @@
           "kind": "scalar",
           "subrecord": "DATA",
           "offset": 80,
+          "min_form_version": 112,
           "storage": "u32",
           "presentation": "identity",
           "minimum": 0,
@@ -4528,17 +4541,43 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "IMAD\\VignetteRadius",
+          "label": "Vignette radius",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 244,
+          "min_form_version": 116,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "IMAD\\VignetteStrength",
+          "label": "Vignette strength",
+          "kind": "scalar",
+          "subrecord": "DNAM",
+          "offset": 248,
+          "min_form_version": 116,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
         }
       ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
           {"signature": "EDID", "minimum": 1, "maximum": 1},
-          {"signature": "DNAM", "minimum": 1, "maximum": 1},
+          {"signature": "DNAM", "minimum": 1, "maximum": 1, "default": "000000000000803f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000003f0000003f00000000000000000000000000000000000000000000000002000000000000000000000000000000"},
           {"signature": "BNAM", "minimum": 0, "maximum": 1},
           {"signature": "VNAM", "minimum": 0, "maximum": 1},
-          {"signature": "TNAM", "minimum": 1, "maximum": 1},
-          {"signature": "NAM3", "minimum": 1, "maximum": 1},
+          {"signature": "TNAM", "minimum": 1, "maximum": 1, "default": "000000000000803f0000803f0000803f000000000000803f0000803f0000803f0000803f00000000"},
+          {"signature": "NAM3", "minimum": 1, "maximum": 1, "default": "000000000000803f0000803f0000803f000000000000803f0000803f0000803f0000803f00000000"},
           {"signature": "RNAM", "minimum": 0, "maximum": 1},
           {"signature": "SNAM", "minimum": 0, "maximum": 1},
           {"signature": "UNAM", "minimum": 0, "maximum": 1},
@@ -5419,7 +5458,8 @@
           {
             "signature": "OBND",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           },
           {
             "signature": "FULL",
@@ -5430,12 +5470,14 @@
             "signature": "MODL",
             "minimum": 1,
             "maximum": 1,
+            "default": "00",
             "coupled": true
           },
           {
             "signature": "MODT",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": ""
           },
           {
             "signature": "MNAM",
@@ -5445,7 +5487,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000000000009a99993e0000000000000000000000000000000000000000000000000000000000000000"
           }
         ]
       },
@@ -6380,7 +6423,53 @@
       "fields": [],
       "localized_subrecords": [
         "CNAM",
-        "NNAM"
+        "NNAM",
+        "FULL"
+      ]
+    },
+    {
+      "signature": "PERK",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL",
+        "DESC",
+        "EPF2"
+      ]
+    },
+    {
+      "signature": "MISC",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "OMOD",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL",
+        "DESC"
+      ]
+    },
+    {
+      "signature": "REGN",
+      "fields": [],
+      "localized_subrecords": [
+        "RDMP"
+      ]
+    },
+    {
+      "signature": "SCOL",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "WRLD",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
       ]
     },
     {
@@ -6559,7 +6648,10 @@
       ],
       "localized_subrecords": [
         "FULL",
-        "DESC"
+        "DESC",
+        "TTGP",
+        "MPPN",
+        "FMRN"
       ]
     },
     {
@@ -8794,7 +8886,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           }
         ]
       },
@@ -12893,7 +12986,7 @@
           "presentation": "identity",
           "minimum": -2147483648,
           "maximum": 2147483647,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -12920,7 +13013,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -12951,7 +13044,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -12964,7 +13057,7 @@
           "presentation": "identity",
           "minimum": -2147483648,
           "maximum": 2147483647,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -12999,7 +13092,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -13022,7 +13115,7 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         },
         {
@@ -13035,7 +13128,7 @@
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "insertion": "existing_only"
         }
       ],
@@ -13050,6 +13143,7 @@
           ],
           "nullable": true,
           "payload_sizes": [
+            32,
             36
           ],
           "insertion": "existing_only"
@@ -13492,7 +13586,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "0000000000000000"
           }
         ]
       },
@@ -13551,7 +13646,7 @@
           "insertion": "existing_only"
         }
       ],
-      "localized_subrecords": []
+      "localized_subrecords": ["WNAM"]
     },
     {
       "signature": "SOUN",
@@ -15952,6 +16047,27 @@
       "localized_subrecords": ["FULL"]
     },
     {
+      "signature": "BPTD",
+      "fields": [],
+      "localized_subrecords": [
+        "BPTN"
+      ]
+    },
+    {
+      "signature": "CELL",
+      "fields": [],
+      "localized_subrecords": [
+        "FULL"
+      ]
+    },
+    {
+      "signature": "COBJ",
+      "fields": [],
+      "localized_subrecords": [
+        "DESC"
+      ]
+    },
+    {
       "signature": "FLST",
       "formlink_lists": [
         {
@@ -15965,7 +16081,9 @@
         }
       ],
       "fields": [],
-      "localized_subrecords": []
+      "localized_subrecords": [
+        "FULL"
+      ]
     },
     {
       "signature": "SMBN",
@@ -17781,7 +17899,8 @@
           {
             "signature": "DESC",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "CTDA",
@@ -17874,7 +17993,9 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 65535
+            "maximum": 65535,
+            "default": "000000",
+            "uncounted": true
           }
         ]
       }
@@ -18028,7 +18149,8 @@
           {
             "signature": "DESC",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "FULL",
@@ -18049,7 +18171,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "TNAM",
@@ -22123,7 +22246,11 @@
       "localized_subrecords": [
         "NAM0",
         "WNAM",
-        "FULL"
+        "FULL",
+        "BTXT",
+        "ITXT",
+        "RNAM",
+        "UNAM"
       ]
     },
     {
@@ -23473,7 +23600,8 @@
           {
             "signature": "RNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "SPCT",
@@ -23636,7 +23764,8 @@
           {
             "signature": "CNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "FULL",
@@ -23651,7 +23780,8 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": ""
           },
           {
             "signature": "DNAM",
@@ -23686,12 +23816,14 @@
           {
             "signature": "NAM5",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "0000"
           },
           {
             "signature": "NAM6",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "NAM7",
@@ -23711,7 +23843,8 @@
           {
             "signature": "NAM8",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "CS2H",
@@ -24516,7 +24649,7 @@
           "insertion": "existing_only"
         }
       ],
-      "localized_subrecords": []
+      "localized_subrecords": ["FULL", "SHRT", "ATTX"]
     }
   ],
   "keyword_records": [

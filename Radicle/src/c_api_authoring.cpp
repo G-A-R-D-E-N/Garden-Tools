@@ -84,6 +84,9 @@ radicle_status radicle_plugin_remove_subrecord(radicle_plugin* plugin,
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "removal would leave fewer subrecords than the schema requires");
       case Status::not_authorable:
         return fail(RADICLE_STATUS_INVALID_ARGUMENT, "subrecord is not authorable for this record type");
+      case Status::unknown_order:
+        return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                    "record layout is not fully described by the authoring order, so the removal cannot be proven safe");
     }
     return fail(RADICLE_STATUS_INTERNAL_ERROR, "unknown subrecord remove status");
   });
