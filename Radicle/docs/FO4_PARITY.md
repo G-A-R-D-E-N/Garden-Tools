@@ -122,9 +122,9 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | LGTM | 8629 | 16 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
 | LIGH | 9871 | 19 | 1 | 3 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
-| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LTEX | 9967 | 3 | - | 2 | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
+| LVLI | 10009 | 4 | - | 3 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVLN | 9986 | 4 | - | 2 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVSP | 10033 | - | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
 | MATO | 9375 | 7 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
@@ -273,9 +273,9 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LGTM | 16 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
 | LIGH | 18 | - | - | 1 | 1 | f32, i32, u32, u8 | - | - | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
-| LTEX | - | - | - | - | - | - | - | - | - | - |
-| LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
-| LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
+| LTEX | 3 | - | - | - | - | u8 | - | - | - | existing_only |
+| LVLI | 4 | - | - | - | - | u32, u8 | - | 2 | - | existing_only |
+| LVLN | 4 | - | - | - | - | u32, u8 | - | 2 | - | existing_only |
 | LVSP | - | - | - | - | - | - | - | - | - | - |
 | MATO | 7 | - | - | - | - | f32 | - | - | - | existing_only |
 | MATT | 4 | - | - | 1 | 2 | f32, u32 | - | - | - | existing_only |
