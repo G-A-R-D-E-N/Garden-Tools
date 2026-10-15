@@ -184,7 +184,12 @@ TEST(PlacedReferenceMove, SameCellMoveWritesDataAndKeepsCell) {
   const auto world = fo4::FormKey::parse("000800:Moves.esp");
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto cell = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto ref = fo4::forms::create_placed_reference(
       plugin,
       fo4::forms::PlacedReferenceCreation{
@@ -210,9 +215,19 @@ TEST(PlacedReferenceMove, CrossCellMoveRelocatesIntoTemporaryGroupAndRoundTrips)
   const auto world = fo4::FormKey::parse("000800:Moves.esp");
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto source = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto target = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 1, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 1,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto ref = fo4::forms::create_placed_reference(
       plugin,
       fo4::forms::PlacedReferenceCreation{
@@ -283,7 +298,12 @@ TEST(PlacedReferenceMove, MissingTargetCellLeavesPluginUnchanged) {
   const auto world = fo4::FormKey::parse("000800:Moves.esp");
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto source = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto ref = fo4::forms::create_placed_reference(
       plugin,
       fo4::forms::PlacedReferenceCreation{
@@ -312,9 +332,19 @@ TEST(PlacedReferenceMove, SourceCellKeepsItsOtherReferencesAndBucket) {
   const auto world = fo4::FormKey::parse("000800:Moves.esp");
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto source = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto target = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 1, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 1,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto ref = fo4::forms::create_placed_reference(
       plugin,
       fo4::forms::PlacedReferenceCreation{
@@ -351,7 +381,12 @@ TEST(PlacedReferenceMove, TemporaryBucketIsAddedAfterPersistentBucketInGridCell)
   const auto persistent = fo4::FormKey::parse("000902:Grid.esp");
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto source = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto ref = fo4::forms::create_placed_reference(
       plugin,
       fo4::forms::PlacedReferenceCreation{
@@ -388,7 +423,12 @@ TEST(PlacedReferenceMove, TemporaryReferenceInPersistentCellRelocatesToGridCell)
   const auto persistent_cell = fo4::FormKey::parse("000901:Persist.esp");
   const auto ref = fo4::FormKey::parse("000902:Persist.esp");
   const auto target = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 1, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 1,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
 
   EXPECT_EQ(fo4::forms::move_placed_reference(plugin, ref, {.x = 4106.0f, .y = 20.0f, .z = 30.0f}),
             fo4::forms::PlacedReferenceMoveStatus::relocated);
@@ -407,9 +447,19 @@ TEST(PlacedReferenceMove, YAxisOnlyMoveRelocatesIntoNorthCell) {
   const auto world = fo4::FormKey::parse("000800:Moves.esp");
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto source = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto target = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 1});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 1,
+          .editor_id = std::nullopt,
+      });
   const auto ref = fo4::forms::create_placed_reference(
       plugin,
       fo4::forms::PlacedReferenceCreation{
@@ -436,9 +486,19 @@ TEST(PlacedReferenceMove, NegativeCoordinatesUseFloorGrid) {
   const auto world = fo4::FormKey::parse("000800:Moves.esp");
   const auto base = fo4::create_local_record(plugin, fo4::Signature::from_string("MISC"));
   const auto source = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = 0, .y = 0});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = 0,
+          .y = 0,
+          .editor_id = std::nullopt,
+      });
   const auto target = fo4::forms::create_exterior_cell(
-      plugin, fo4::forms::ExteriorCellCreation{.worldspace = world, .x = -1, .y = -1});
+      plugin, fo4::forms::ExteriorCellCreation{
+          .worldspace = world,
+          .x = -1,
+          .y = -1,
+          .editor_id = std::nullopt,
+      });
   const auto ref = fo4::forms::create_placed_reference(
       plugin,
       fo4::forms::PlacedReferenceCreation{
