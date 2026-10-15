@@ -175,6 +175,69 @@ const fo4::Subrecord* subrecord_named(const fo4::Record& record, std::string_vie
   return nullptr;
 }
 
+constexpr fo4::RecordFlags::value_type k_visible_when_distant = 1u << 15;
+
+struct ExteriorLayout {
+  bool persistent_cell{false};
+  bool origin_cell{true};
+  bool east_cell{false};
+  bool reference_in_persistent{false};
+  fo4::GroupType bucket{fo4::GroupType::cell_temporary_children};
+  fo4::RecordFlags::value_type ref_flags{0};
+  float x{10.0f};
+  float y{11.0f};
+};
+
+std::string grid_data(std::int32_t x, std::int32_t y) {
+  fo4::test::ByteWriter out;
+  out.i32(x);
+  out.i32(y);
+  out.u32(0);
+  return std::string(reinterpret_cast<const char*>(out.bytes.data()), out.bytes.size());
+}
+
+void put_reference_children(fo4::test::ByteWriter& out, std::uint32_t cell_form, const ExteriorLayout& layout) {
+  const auto children = fo4::test::begin_group(out, label_of(cell_form), 6);
+  const auto bucket = fo4::test::begin_group(out, label_of(cell_form), static_cast<std::int32_t>(layout.bucket));
+  put_record(out, "REFR", layout.ref_flags, 0x910,
+             {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+              {"DATA", position_data(layout.x, layout.y, 12.0f)}});
+  fo4::test::end_group(out, bucket);
+  fo4::test::end_group(out, children);
+}
+
+Bytes exterior_world(const ExteriorLayout& layout) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto wrld_group = fo4::test::begin_group(out, "WRLD", 0);
+  const auto wrld = fo4::test::begin_record(out, "WRLD", 0, 0x800, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"TestWorld\0", 10});
+  fo4::test::end_record(out, wrld);
+  const auto world_children = fo4::test::begin_group(out, label_of(0x800), 1);
+  if (layout.persistent_cell) {
+    put_record(out, "CELL", 0x400, 0x901, {{"DATA", std::string{'\x02', '\0'}}});
+    if (layout.reference_in_persistent) put_reference_children(out, 0x901, layout);
+  }
+  const auto block = fo4::test::begin_group(out, label_of(0), 4);
+  const auto subblock = fo4::test::begin_group(out, label_of(0), 5);
+  if (layout.origin_cell) {
+    put_record(out, "CELL", 0, 0x902, {{"DATA", std::string{'\x02', '\0'}}, {"XCLC", grid_data(0, 0)}});
+    if (!layout.reference_in_persistent) put_reference_children(out, 0x902, layout);
+  }
+  if (layout.east_cell) {
+    put_record(out, "CELL", 0, 0x903, {{"DATA", std::string{'\x02', '\0'}}, {"XCLC", grid_data(1, 0)}});
+  }
+  fo4::test::end_group(out, subblock);
+  fo4::test::end_group(out, block);
+  fo4::test::end_group(out, world_children);
+  fo4::test::end_group(out, wrld_group);
+  return out.bytes;
+}
+
+fo4::Plugin load_exterior(const ExteriorLayout& layout) {
+  return fo4::read_plugin(exterior_world(layout), "Exterior.esp");
+}
+
 }  // namespace
 
 TEST(RecordFlags, InteriorPersistentChangeMovesReferenceBetweenBucketsAndRoundTrips) {
@@ -238,13 +301,94 @@ TEST(RecordFlags, ChangingDeletedBitThroughSetRecordFlagsIsRefused) {
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
 
-TEST(RecordFlags, ExteriorCellRefusesRelocationWithoutChange) {
-  auto plugin = load(CellPlugin{.cell_data = 0});
-  const auto ref = fo4::FormKey::parse("000800:Cells.esp");
+TEST(RecordFlags, ExteriorPersistentSetMovesReferenceToWorldPersistentCell) {
+  auto plugin = load_exterior({.persistent_cell = true});
+  const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
+  const auto persistent_cell = fo4::FormKey::parse("000901:Exterior.esp");
+  const auto origin = fo4::FormKey::parse("000902:Exterior.esp");
+  ASSERT_EQ(fo4::set_record_flags(plugin, ref, fo4::RecordFlags::persistent),
+            fo4::RecordFlagStatus::changed);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Exterior.esp");
+  const auto refs = fo4::forms::placed_references_for_cell(reread, persistent_cell);
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_TRUE(refs[0].persistent);
+  EXPECT_TRUE(fo4::forms::placed_references_for_cell(reread, origin).empty());
+  EXPECT_EQ(find_group(reread, fo4::GroupType::cell_children, 0x00000902u), nullptr);
+}
+
+TEST(RecordFlags, ExteriorPersistentClearMovesReferenceToGridCellByPosition) {
+  auto plugin = load_exterior({.persistent_cell = true,
+                               .east_cell = true,
+                               .reference_in_persistent = true,
+                               .bucket = fo4::GroupType::cell_persistent_children,
+                               .ref_flags = fo4::RecordFlags::persistent,
+                               .x = 4106.0f,
+                               .y = 20.0f});
+  const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
+  ASSERT_EQ(fo4::set_record_flags(plugin, ref, 0), fo4::RecordFlagStatus::changed);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Exterior.esp");
+  EXPECT_TRUE(fo4::forms::placed_references_for_cell(reread, fo4::FormKey::parse("000901:Exterior.esp")).empty());
+  EXPECT_EQ(find_group(reread, fo4::GroupType::cell_children, 0x00000901u), nullptr);
+  EXPECT_TRUE(fo4::forms::placed_references_for_cell(reread, fo4::FormKey::parse("000902:Exterior.esp")).empty());
+  const auto refs = fo4::forms::placed_references_for_cell(reread, fo4::FormKey::parse("000903:Exterior.esp"));
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_FALSE(refs[0].persistent);
+  EXPECT_FLOAT_EQ(refs[0].transform.x, 4106.0f);
+}
+
+TEST(RecordFlags, ExteriorPersistentClearWithoutGridCellRefusesWithoutChange) {
+  auto plugin = load_exterior({.persistent_cell = true,
+                               .reference_in_persistent = true,
+                               .bucket = fo4::GroupType::cell_persistent_children,
+                               .ref_flags = fo4::RecordFlags::persistent,
+                               .x = 4106.0f,
+                               .y = 20.0f});
+  const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::set_record_flags(plugin, ref, 0), fo4::RecordFlagStatus::target_cell_missing);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(RecordFlags, ExteriorPersistentSetWithoutPersistentCellRefusesWithoutChange) {
+  auto plugin = load_exterior({});
+  const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
   const auto before = fo4::write_plugin(plugin);
   EXPECT_EQ(fo4::set_record_flags(plugin, ref, fo4::RecordFlags::persistent),
-            fo4::RecordFlagStatus::exterior_relocation_unsupported);
+            fo4::RecordFlagStatus::target_cell_missing);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(RecordFlags, ExteriorPersistentClearInsideGridCellMovesBucketInPlace) {
+  auto plugin = load_exterior({.bucket = fo4::GroupType::cell_persistent_children,
+                               .ref_flags = fo4::RecordFlags::persistent});
+  const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
+  ASSERT_EQ(fo4::set_record_flags(plugin, ref, 0), fo4::RecordFlagStatus::changed);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Exterior.esp");
+  const auto refs = fo4::forms::placed_references_for_cell(reread, fo4::FormKey::parse("000902:Exterior.esp"));
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_FALSE(refs[0].persistent);
+  const auto* bucket = parent_group(reread, ref);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type, static_cast<std::int32_t>(fo4::GroupType::cell_temporary_children));
+  EXPECT_NE(find_group(reread, fo4::GroupType::cell_children, 0x00000902u), nullptr);
+}
+
+TEST(RecordFlags, ExteriorVisibleWhenDistantToggleNeverMoves) {
+  auto plugin = load_exterior({});
+  const auto ref = fo4::FormKey::parse("000910:Exterior.esp");
+  ASSERT_EQ(fo4::set_record_flags(plugin, ref, k_visible_when_distant), fo4::RecordFlagStatus::changed);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Exterior.esp");
+  const auto refs = fo4::forms::placed_references_for_cell(reread, fo4::FormKey::parse("000902:Exterior.esp"));
+  ASSERT_EQ(refs.size(), 1u);
+  EXPECT_FALSE(refs[0].persistent);
+  EXPECT_NE(refs[0].record->header.flags.value() & k_visible_when_distant, 0u);
+  const auto* bucket = parent_group(reread, ref);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type, static_cast<std::int32_t>(fo4::GroupType::cell_temporary_children));
 }
 
 TEST(RecordFlags, NonTes4RecordDropsMasterBitAndKeepsCompressed) {
