@@ -108,6 +108,15 @@ public unsafe struct RecordInfo
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct ReferenceHit
+{
+    public FormKey Record;
+    public nuint PluginIndex;
+    public fixed byte Subrecord[5];
+    public nuint Offset;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct WorldspaceInfo
 {
     public FormKey Parent;
@@ -1730,7 +1739,7 @@ public unsafe struct ConditionList
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 44u;
+    public const uint CompiledAbiVersion = 45u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1809,6 +1818,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_record_array")]
     public static extern void FreeRecordArray(IntPtr* records);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_referenced_by")]
+    public static extern Status EnvReferencedBy(IntPtr env, FormKey key, ReferenceHit** out_hits, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_references_from")]
+    public static extern Status EnvReferencesFrom(IntPtr env, FormKey key, ReferenceHit** out_hits, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_reference_hits")]
+    public static extern void FreeReferenceHits(ReferenceHit* hits);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_check_errors")]
     public static extern Status EnvCheckErrors(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin, nuint limit, IntPtr** out_strings, nuint* out_count);

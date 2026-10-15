@@ -49,6 +49,13 @@ typedef struct radicle_record_info {
   int16_t bounds_max[3];
 } radicle_record_info;
 
+typedef struct radicle_reference_hit {
+  radicle_form_key record;
+  size_t plugin_index;
+  char subrecord[5];
+  size_t offset;
+} radicle_reference_hit;
+
 /* Paths lowest priority first; any unreadable, duplicate or self-conflicting plugin fails the load. */
 RADICLE_API radicle_status radicle_env_load(const char* const* paths,
                                             size_t count,
@@ -90,6 +97,18 @@ RADICLE_API radicle_status radicle_env_winners_of(const radicle_env* env,
                                                   const radicle_record*** out_records,
                                                   size_t* out_count);
 RADICLE_API void radicle_free_record_array(const radicle_record** records);
+
+/* Referencing records in load order, `plugin_index` the version holding the link; an unknown key is OK with NULL/0. Free with radicle_free_reference_hits. */
+RADICLE_API radicle_status radicle_env_referenced_by(const radicle_env* env,
+                                                     radicle_form_key key,
+                                                     radicle_reference_hit** out_hits,
+                                                     size_t* out_count);
+/* Targets of the key's form links, one hit per link; `record` is the target. Empty results as radicle_env_referenced_by. */
+RADICLE_API radicle_status radicle_env_references_from(const radicle_env* env,
+                                                       radicle_form_key key,
+                                                       radicle_reference_hit** out_hits,
+                                                       size_t* out_count);
+RADICLE_API void radicle_free_reference_hits(radicle_reference_hit* hits);
 
 /* Requires radicle_free_string_array; one tab-separated finding per string: code, severity, plugin, record, subrecord, offset, target, message. NULL plugin checks every plugin, limit 0 is unlimited. */
 RADICLE_API radicle_status radicle_env_check_errors(const radicle_env* env,
