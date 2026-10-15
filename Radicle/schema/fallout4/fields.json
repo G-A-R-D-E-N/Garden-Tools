@@ -3142,7 +3142,8 @@
           "maximum": 255,
           "payload_size": 4,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "FLOR\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -3179,7 +3180,8 @@
           "targets": ["SNDR"],
           "nullable": false,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "FLOR\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "authoring": {
         "placement": "top_level",
@@ -6613,7 +6615,11 @@
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "FULL", "minimum": 0, "maximum": 1}, {"signature": "DESC", "minimum": 1, "maximum": 1}, {"signature": "ICON", "minimum": 0, "maximum": 1}, {"signature": "PRPS", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "0000000000000000"}]},
       "fields": [
         {"path": "CLAS\\BleedoutDefault", "label": "Bleedout default", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
-        {"path": "CLAS\\InventoryImage", "label": "Inventory image", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"}
+        {"path": "CLAS\\InventoryImage", "label": "Inventory image", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
+        {"path": "CLAS\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "CLAS\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["DESC", "FULL"]
     },
@@ -7004,7 +7010,8 @@
           "subrecord": "PHTN",
           "repeated": true,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "RACE\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -7216,7 +7223,8 @@
           "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "RACE\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL",
@@ -9879,7 +9887,8 @@
           "maximum": 3.4028234663852886e+38,
           "minimum_payload_size": 16,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "STAT\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "STAT\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -9894,7 +9903,8 @@
           "targets": ["MATO"],
           "nullable": true,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "STAT\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "authoring": {
         "placement": "top_level",
@@ -10193,7 +10203,8 @@
           "maximum": 3.4028234663852886e+38,
           "minimum_payload_size": 64,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "LIGH\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "LIGH\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -10227,7 +10238,8 @@
           "targets": ["GDRY"],
           "nullable": false,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "LIGH\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "authoring": {
         "placement": "top_level",
@@ -21499,7 +21511,8 @@
           "maximum": 255,
           "payload_size": 4,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ACTI\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -21627,7 +21640,8 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ACTI\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL",
@@ -21928,7 +21942,8 @@
               "payload_size": 12
             }
           ]
-        }
+        },
+        {"path": "CONT\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -22042,7 +22057,8 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "CONT\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL"
@@ -22837,7 +22853,8 @@
           "kind": "string",
           "subrecord": "XMRK",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "FURN\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -22927,7 +22944,8 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "FURN\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL",
@@ -23128,7 +23146,8 @@
           "minimum": 0,
           "maximum": 1,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "MSTT\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -23172,7 +23191,8 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "MSTT\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL"
@@ -23805,7 +23825,8 @@
           "kind": "string",
           "subrecord": "XMRK",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "TERM\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -23835,7 +23856,8 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "TERM\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "NAM0",
@@ -26403,7 +26425,8 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "NPC_\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -26675,7 +26698,8 @@
           "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "NPC_\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "SHRT", "ATTX"]
     }
