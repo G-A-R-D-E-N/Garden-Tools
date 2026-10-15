@@ -145,17 +145,23 @@
       "signature": "CLMT",
       "fields": [
         {
-          "path": "CLMT\\WeatherChance",
-          "label": "Weather chance",
-          "kind": "scalar",
+          "path": "CLMT\\WeatherTypes",
+          "label": "Weather types",
+          "kind": "counted_array",
           "subrecord": "WLST",
-          "offset": 4,
-          "storage": "i32",
-          "presentation": "identity",
-          "minimum": -2147483648,
-          "maximum": 2147483647,
           "stride": 12,
-          "insertion": "existing_only"
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "CLMT\\WeatherChance",
+              "label": "Weather chance",
+              "offset": 4,
+              "storage": "i32",
+              "presentation": "identity",
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            }
+          ]
         },
         {
           "path": "CLMT\\SunTexture",
@@ -3143,7 +3149,25 @@
           "payload_size": 4,
           "insertion": "existing_only"
         },
-        {"path": "FLOR\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "FLOR\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "FLOR\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -5989,17 +6013,23 @@
             "insertion": "existing_only"
           },
           {
-            "path": "LVLI\\FilterChance",
-            "label": "Filter chance",
-            "kind": "scalar",
+            "path": "LVLI\\FilterKeywordChances",
+            "label": "Filter keyword chances",
+            "kind": "counted_array",
             "subrecord": "LLKC",
-            "offset": 4,
-            "storage": "u32",
-            "presentation": "identity",
-            "minimum": 0,
-            "maximum": 4294967295,
             "stride": 8,
-            "insertion": "existing_only"
+            "insertion": "existing_only",
+            "members": [
+              {
+                "path": "LVLI\\FilterChance",
+                "label": "Filter chance",
+                "offset": 4,
+                "storage": "u32",
+                "presentation": "identity",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            ]
           }
         ],
         "formlink_fields": [
@@ -6175,17 +6205,23 @@
             "insertion": "existing_only"
           },
           {
-            "path": "LVLN\\FilterChance",
-            "label": "Filter chance",
-            "kind": "scalar",
+            "path": "LVLN\\FilterKeywordChances",
+            "label": "Filter keyword chances",
+            "kind": "counted_array",
             "subrecord": "LLKC",
-            "offset": 4,
-            "storage": "u32",
-            "presentation": "identity",
-            "minimum": 0,
-            "maximum": 4294967295,
             "stride": 8,
-            "insertion": "existing_only"
+            "insertion": "existing_only",
+            "members": [
+              {
+                "path": "LVLN\\FilterChance",
+                "label": "Filter chance",
+                "offset": 4,
+                "storage": "u32",
+                "presentation": "identity",
+                "minimum": 0,
+                "maximum": 4294967295
+              }
+            ]
           }
         ],
         "formlink_fields": [
@@ -6616,7 +6652,25 @@
       "fields": [
         {"path": "CLAS\\BleedoutDefault", "label": "Bleedout default", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "CLAS\\InventoryImage", "label": "Inventory image", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
-        {"path": "CLAS\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "CLAS\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "CLAS\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {"path": "CLAS\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
@@ -7270,7 +7324,25 @@
           "maximum": 4294967295,
           "insertion": "existing_only"
         },
-        {"path": "RACE\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "RACE\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "RACE\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -10168,7 +10240,25 @@
           "minimum_payload_size": 16,
           "insertion": "existing_only"
         },
-        {"path": "STAT\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "STAT\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "STAT\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {"path": "STAT\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -10484,7 +10574,25 @@
           "minimum_payload_size": 64,
           "insertion": "existing_only"
         },
-        {"path": "LIGH\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "LIGH\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "LIGH\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {"path": "LIGH\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -21806,7 +21914,25 @@
           "payload_size": 4,
           "insertion": "existing_only"
         },
-        {"path": "ACTI\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "ACTI\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "ACTI\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -22237,7 +22363,25 @@
             }
           ]
         },
-        {"path": "CONT\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "CONT\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "CONT\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -23148,7 +23292,25 @@
           "subrecord": "XMRK",
           "insertion": "existing_only"
         },
-        {"path": "FURN\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "FURN\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "FURN\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -23441,7 +23603,25 @@
           "maximum": 1,
           "insertion": "existing_only"
         },
-        {"path": "MSTT\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "MSTT\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "MSTT\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -24120,7 +24300,25 @@
           "subrecord": "XMRK",
           "insertion": "existing_only"
         },
-        {"path": "TERM\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "TERM\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "TERM\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {
@@ -26745,7 +26943,25 @@
           "maximum": 4294967295,
           "insertion": "existing_only"
         },
-        {"path": "NPC_\\PropertyValue", "label": "Property value", "kind": "scalar", "subrecord": "PRPS", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "stride": 8, "insertion": "existing_only"}
+        {
+          "path": "NPC_\\Properties",
+          "label": "Properties",
+          "kind": "counted_array",
+          "subrecord": "PRPS",
+          "stride": 8,
+          "insertion": "existing_only",
+          "members": [
+            {
+              "path": "NPC_\\PropertyValue",
+              "label": "Property value",
+              "offset": 4,
+              "storage": "f32",
+              "presentation": "identity",
+              "minimum": -3.4028234663852886e+38,
+              "maximum": 3.4028234663852886e+38
+            }
+          ]
+        }
       ],
       "formlink_fields": [
         {

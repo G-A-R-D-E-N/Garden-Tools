@@ -120,7 +120,8 @@ def parse_counted_array(field, record_signature: str):
         raise ValueError(f"counted_array label is invalid: {label!r}")
     subrecord = field.get("subrecord", "")
     count_subrecord = field.get("count_subrecord", "")
-    for signature in (subrecord, count_subrecord):
+    signatures = (subrecord, count_subrecord) if "count_subrecord" in field else (subrecord,)
+    for signature in signatures:
         if not isinstance(signature, str) or not valid_signature(signature):
             raise ValueError(f"counted_array signatures must be four printable ASCII characters: {signature!r}: {path!r}")
     if count_subrecord == subrecord:
@@ -427,6 +428,8 @@ def load_schema(schema_path: Path):
                  if (other["record"], other["subrecord"]) == (array["record"], array["subrecord"])]
         if len(twins) > 1:
             raise ValueError(f"counted_array subrecord {array['subrecord']} is declared twice in {array['record']}: {array['path']!r}")
+        if not array["count_subrecord"]:
+            continue
         sharers = [other for other in arrays
                    if (other["record"], other["count_subrecord"]) == (array["record"], array["count_subrecord"])]
         if len(sharers) > 1:
@@ -574,7 +577,8 @@ def render(fields, arrays=(), groups=()) -> str:
                 f"{cpp_string(array['path'])}, " +
                 f"{cpp_string(array['label'])}, " +
                 f"Signature::from_string({cpp_string(array['subrecord'])}), " +
-                f"Signature::from_string({cpp_string(array['count_subrecord'])}), " +
+                (f"Signature::from_string({cpp_string(array['count_subrecord'])})" if array["count_subrecord"]
+                 else "Signature{}") + ", " +
                 f"{array['stride']}" +
                 "},")
         lines.append("}};")

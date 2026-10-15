@@ -570,6 +570,13 @@ class SchemaCodegenTests(unittest.TestCase):
                         members=[member("OtherA", 0), member("OtherB", 4)])
         self.rejects("shared by two arrays", counted(), other, count_row())
 
+    def test_uncounted_arrays_need_no_count_row_and_may_share_a_record(self):
+        other = counted(path="TEST" + BS + "Other", label="Other", subrecord="OTHR", count_subrecord=None, members=[member("OtherA", 0)])
+        fields, arrays, _groups = self.load_schema(counted(count_subrecord=None), other)
+        self.assertEqual([array["count_subrecord"] for array in arrays], ["", ""])
+        self.assertIn('Signature::from_string("DATA"), Signature{}, 8},', schema_codegen.render(fields, arrays))
+        self.rejects("counted_array signatures must be four printable ASCII", counted(count_subrecord=""), count_row())
+
     def test_subrecord_group_expands_member_rows_and_renders_the_table(self):
         fields, arrays, groups = self.load_schema(group(), count_row(subrecord="COCT"))
         self.assertEqual(arrays, [])

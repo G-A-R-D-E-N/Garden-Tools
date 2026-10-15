@@ -1523,9 +1523,27 @@ Inserts a zero-filled element at `index` and writes count+1. An `index` equal to
 
 Removes the element at `index` and writes count-1. An index at or above the count returns `index_out_of_range`. Removing the last element keeps both subrecords, the payload empty and the count zero, so a later insert does not have to create subrecords. Missing-subrecord insertion is not generated; see the insertion policy in `Radicle/tools/schema_codegen.py:parse_counted_array`.
 
+## Radicle/src/plugin/field_writer.cpp:insert_record_counted_element
+
+An uncounted array is a `counted_array` row with no `count_subrecord`, so `CountedArrayDescriptor::count_subrecord` is the zero signature. `counted_array_subrecords` then finds only the payload, and the same insert and remove functions skip the count write. Insert zero-fills `stride` bytes at `index`, which may equal the element count; remove erases the element at `index`. Removing the last element leaves an empty payload subrecord, the same as the counted path leaves an empty payload with a zero count. A missing payload subrecord returns `subrecord_missing` from both, as a missing pair does on the counted path. A payload that is not a whole number of elements throws `CountedArrayError` before any change. `is_counted_array_count_subrecord` ignores the zero signature, so a plain write to an uncounted payload is not refused.
+
+Converted to uncounted arrays. Each array's stride scalar member keeps its path, label and offset, and the counted row is named `<RECORD>\Properties`, `CLMT\WeatherTypes` or `<RECORD>\FilterKeywordChances`. The xEdit definitions are in `Core/wbDefinitionsFO4.pas` of the pinned xEdit checkout (93cc0bc5):
+- PRPS, `wbArrayS(PRPS, 'Properties', wbObjectProperty)` at line 5272 with no count. Used by ACTI (line 5644), CLAS (6107), CONT (6207), FLOR (12176), FURN (6869), LIGH (9885), MSTT (7091), NPC_ (10394), RACE (11067), STAT (12073) and TERM (12687). Member: the f32 `<RECORD>\PropertyValue` at offset 4. The actor-value formlink at offset 0 stays a `formlink_fields` row at stride 8.
+- WLST, `wbArrayS(WLST, 'Weather Types', ...)` at line 6117 in CLMT. Member: `CLMT\WeatherChance` (i32, offset 4). The Weather and WeatherGlobal formlinks at offsets 0 and 8 stay stride-12 formlink rows.
+- LLKC, `wbArrayS(LLKC, 'Filter Keyword Chances', ...)` at line 9980, used by LVLN (line 10005) and LVLI (line 10028). Member: `<RECORD>\FilterChance` (u32, offset 4). The keyword formlink at offset 0 stays a stride-8 formlink row.
+
+Formlink members cannot join a counted array, because `parse_counted_array` accepts only the scalar `MEMBER_KEYS` and a counted array needs at least one scalar member. So formlink rows stay as they are and keep their index editing. The insert and remove calls change the bytes of every member at once.
+
+Excluded, with the reason each was not converted:
+- WEAP DAMA: no definition in the pinned xEdit `Core/` folder (the name appears only in `Build/Edit Scripts`), and its rows carry `max_form_version`, which `MEMBER_KEYS` does not take.
+- MUST SNAM, `wbArray(SNAM, 'Tracks', ...)` at line 8816, and MUSC TNAM, `wbArray(TNAM, 'Music Tracks', ...)` at line 8683: both are variable-length formlink arrays with no count, but their only stride rows are formlinks, so no scalar member exists. They stay formlink-only until codegen accepts formlink members.
+- WTHR stride rows: not converted. xEdit `NAM4` at line 13051 is `wbArray(NAM4, 'Unknown', ..., 32)`, a fixed count of 32. The other WTHR stride rows were excluded by rule without re-reading their xEdit definitions.
+- FSTS DATA: its counts come from the XCNT subrecord, which the codegen treats as a count (line 8692 onward).
+- REFR XWCU: already a counted array with XWCN.
+
 ## Radicle/tools/schema_codegen.py:parse_counted_array
 
-Validates a `counted_array` entry. Keys are limited to `COUNTED_ARRAY_KEYS` and `MEMBER_KEYS`; the stride must be a positive integer; insertion must be `existing_only`; members carry no names. Members expand into scalar rows with the array's subrecord and stride, so the shared address and overlap rules check that each member fits one stride element and does not overlap another.
+Validates a `counted_array` entry. `count_subrecord` may be omitted for an uncounted array, see `Radicle/src/plugin/field_writer.cpp:insert_record_counted_element`. Keys are limited to `COUNTED_ARRAY_KEYS` and `MEMBER_KEYS`; the stride must be a positive integer; insertion must be `existing_only`; members carry no names. Members expand into scalar rows with the array's subrecord and stride, so the shared address and overlap rules check that each member fits one stride element and does not overlap another.
 
 ## Radicle/tools/schema_codegen.py:load_schema
 
