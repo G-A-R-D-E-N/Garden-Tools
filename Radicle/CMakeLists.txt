@@ -446,6 +446,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_scopes.cpp
     tests/test_condition_scopes_records.cpp
     tests/test_condition_root_insert.cpp
+    tests/test_root_condition_lists.cpp
     tests/test_condition_scopes_real.cpp
     tests/test_condition_functions.cpp
     tests/test_package_targets.cpp
