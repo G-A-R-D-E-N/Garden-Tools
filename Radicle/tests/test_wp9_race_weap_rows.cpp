@@ -1,8 +1,11 @@
 #include "fo4/forms/weapon.hpp"
+#include "fo4/graph/check_errors.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/formlink_slots.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
@@ -313,4 +316,30 @@ TEST(WP9RaceWeapRows, DamaTwelveByteEntriesAreNotRowed) {
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, formlink_row("WEAP", "WEAP\\DamageType"), 0, target),
             fo4::FormLinkFieldMutationStatus::subrecord_missing);
   EXPECT_EQ(payload(plugin, "000B02:Patch.esp", "DAMA"), before);
+}
+
+TEST(WP9RaceWeapRows, FormVersion152DamaCurvSlotIsNotDamageType) {
+  auto out = make_plugin();
+  add_record(out, "CURV", 0xC12, {});
+  add_record(out, "WEAP", 0xB03,
+             {{"DAMA", u32_words({0x00000C10u, 5u, 0x02000C12u, 0x00000C11u, 9u, 0x02000C12u})}}, 152);
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000B03:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+
+  const auto fields = fo4::schema::formlink_fields(fo4::Signature::from_string("WEAP"));
+  const auto dama = fo4::Signature::from_string("DAMA");
+  const auto at_dmgt = fo4::schema::formlink_field_at(fields, *record, dama, 0, 0);
+  const auto at_curv = fo4::schema::formlink_field_at(fields, *record, dama, 0, 8);
+  EXPECT_FALSE(at_dmgt.has_value());
+  EXPECT_FALSE(at_curv.has_value());
+
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = fo4::check_load_order(load_order);
+  std::size_t wrong_type = 0;
+  for (const auto& finding : findings) {
+    if (finding.code == fo4::CheckCode::wrong_target_type && finding.record == key) ++wrong_type;
+  }
+  EXPECT_EQ(wrong_type, 0u);
 }
