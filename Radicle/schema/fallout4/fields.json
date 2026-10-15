@@ -5559,7 +5559,75 @@
     },
     {
       "signature": "LTEX",
-      "fields": [],
+      "fields": [
+        {
+          "path": "LTEX\\Friction",
+          "label": "Friction",
+          "kind": "scalar",
+          "subrecord": "HNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 2,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LTEX\\Restitution",
+          "label": "Restitution",
+          "kind": "scalar",
+          "subrecord": "HNAM",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 2,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LTEX\\SpecularExponent",
+          "label": "Texture specular exponent",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "LTEX\\TextureSet",
+          "label": "Texture set",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "TXST"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "LTEX\\MaterialType",
+          "label": "Material type",
+          "subrecord": "MNAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MATT"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        }
+      ],
       "formlink_lists": [
         {
           "path": "LTEX\\Grasses",
@@ -5837,9 +5905,34 @@
             "minimum": 0,
             "maximum": 255,
             "insertion": "existing_only"
+          },
+          {
+            "path": "LVLI\\FilterChance",
+            "label": "Filter chance",
+            "kind": "scalar",
+            "subrecord": "LLKC",
+            "offset": 4,
+            "storage": "u32",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 4294967295,
+            "stride": 8,
+            "insertion": "existing_only"
           }
         ],
         "formlink_fields": [
+          {
+            "path": "LVLI\\FilterKeyword",
+            "label": "Filter keyword",
+            "subrecord": "LLKC",
+            "offset": 0,
+            "stride": 8,
+            "targets": [
+              "KYWD"
+            ],
+            "nullable": false,
+            "insertion": "existing_only"
+          },
           {
             "path": "LVLI\\UseGlobal",
             "label": "Use global",
@@ -5998,10 +6091,35 @@
             "minimum": 0,
             "maximum": 255,
             "insertion": "existing_only"
+          },
+          {
+            "path": "LVLN\\FilterChance",
+            "label": "Filter chance",
+            "kind": "scalar",
+            "subrecord": "LLKC",
+            "offset": 4,
+            "storage": "u32",
+            "presentation": "identity",
+            "minimum": 0,
+            "maximum": 4294967295,
+            "stride": 8,
+            "insertion": "existing_only"
           }
         ],
         "formlink_fields": [
           {"path": "LVLN\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+          {
+            "path": "LVLN\\FilterKeyword",
+            "label": "Filter keyword",
+            "subrecord": "LLKC",
+            "offset": 0,
+            "stride": 8,
+            "targets": [
+              "KYWD"
+            ],
+            "nullable": false,
+            "insertion": "existing_only"
+          },
           {
             "path": "LVLN\\UseGlobal",
             "label": "Use global",
