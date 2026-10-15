@@ -200,6 +200,7 @@ TEST_CASE("Generated PROJ EXPL HAZD FormLink descriptors match the audited slots
         Expected{"PROJ", "PROJ\\DefaultWeaponSource", "DNAM", 60, {"WEAP", {}}, 1},
         Expected{"PROJ", "PROJ\\DecalData", "DNAM", 80, {"TXST", {}}, 1},
         Expected{"PROJ", "PROJ\\CollisionLayer", "DNAM", 84, {"COLL", {}}, 1},
+        Expected{"PROJ", "PROJ\\VATSProjectile", "DNAM", 89, {"PROJ", {}}, 1},
         Expected{"EXPL", "EXPL\\Light", "DATA", 0, {"LIGH", {}}, 1},
         Expected{"EXPL", "EXPL\\Sound1", "DATA", 4, {"SNDR", {}}, 1},
         Expected{"EXPL", "EXPL\\Sound2", "DATA", 8, {"SNDR", {}}, 1},
@@ -213,7 +214,7 @@ TEST_CASE("Generated PROJ EXPL HAZD FormLink descriptors match the audited slots
         Expected{"HAZD", "HAZD\\ImageSpaceModifier", "MNAM", 0, {"IMAD", {}}, 1},
     };
 
-    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("PROJ")).size() == 10);
+    REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("PROJ")).size() == 11);
     REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("EXPL")).size() == 7);
     REQUIRE(fo4::schema::formlink_fields(fo4::Signature::from_string("HAZD")).size() == 6);
     for (const auto& item : expected) {
@@ -258,6 +259,7 @@ TEST_CASE("Native SetField writes every audited PROJ EXPL HAZD FormLink slot") {
         Write{"PROJ", "000900:Patch.esp", "PROJ\\DefaultWeaponSource", "000803:Patch.esp", 0x803},
         Write{"PROJ", "000900:Patch.esp", "PROJ\\DecalData", "000804:Patch.esp", 0x804},
         Write{"PROJ", "000900:Patch.esp", "PROJ\\CollisionLayer", "000805:Patch.esp", 0x805},
+        Write{"PROJ", "000900:Patch.esp", "PROJ\\VATSProjectile", "000806:Patch.esp", 0x806},
         Write{"EXPL", "000901:Patch.esp", "EXPL\\Light", "000800:Patch.esp", 0x800},
         Write{"EXPL", "000901:Patch.esp", "EXPL\\Sound1", "000802:Patch.esp", 0x802},
         Write{"EXPL", "000901:Patch.esp", "EXPL\\Sound2", "000802:Patch.esp", 0x802},

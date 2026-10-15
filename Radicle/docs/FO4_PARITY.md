@@ -156,7 +156,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | PKIN | 12571 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PROJ | 7115 | 22 | 1 | 10 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| PROJ | 7115 | 22 | 2 | 11 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | 1 | 4 | 22 | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
@@ -173,13 +173,13 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | SMEN | 8762 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
-| SNDR | 9406 | 10 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
+| SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
 | SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
 | SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 10 | 1 | 3 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
+| STAT | 12045 | 10 | 1 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 9 | 2 | 3 | - | 7 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
@@ -307,7 +307,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PKIN | 7 | - | - | - | 1 | i16, u32 | - | - | - | existing_only |
 | PLYR | - | - | - | - | - | - | - | - | - | - |
 | PMIS | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PROJ | 22 | - | - | - | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
+| PROJ | 22 | - | - | - | 2 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | 1 | - | - | - | 4 | f32 | 2 | 2 | - | existing_only |
 | REFR | 6 | 1 | - | - | - | f32, u32 | - | 4 | - | existing_only |
@@ -324,7 +324,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SMEN | 1 | - | 1 | 1 | - | u32 | - | - | - | existing_only |
 | SMQN | 3 | - | - | 1 | - | f32, u32 | - | - | - | existing_only |
 | SNCT | 4 | - | - | 1 | - | f32, u16, u32 | - | - | - | existing_only |
-| SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
+| SNDR | 10 | - | 1 | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOPM | 14 | - | 1 | 1 | - | f32, i16, u32, u8 | - | - | - | existing_only |
 | SOUN | 9 | - | - | - | - | f32, i16, u8 | - | - | - | existing_only |
 | SPEL | 10 | - | 3 | 1 | - | f32, i16, u32 | - | - | - | existing_only |
