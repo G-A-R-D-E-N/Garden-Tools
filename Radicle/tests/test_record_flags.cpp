@@ -1,3 +1,4 @@
+#include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/record_flags.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
@@ -147,6 +148,29 @@ const fo4::Group* parent_group(const fo4::Group& group, const fo4::FormKey& key)
 const fo4::Group* parent_group(const fo4::Plugin& plugin, const fo4::FormKey& key) {
   for (const auto& group : plugin.groups) {
     if (const auto* found = parent_group(group, key)) return found;
+  }
+  return nullptr;
+}
+
+std::string position_data(float x, float y, float z) {
+  fo4::test::ByteWriter out;
+  out.f32(x);
+  out.f32(y);
+  out.f32(z);
+  out.f32(0.0f);
+  out.f32(0.0f);
+  out.f32(0.0f);
+  return std::string(reinterpret_cast<const char*>(out.bytes.data()), out.bytes.size());
+}
+
+std::string as_text(const Bytes& bytes) {
+  return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
+const fo4::Subrecord* subrecord_named(const fo4::Record& record, std::string_view name) {
+  const auto signature = fo4::Signature::from_string(name);
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == signature) return &sub;
   }
   return nullptr;
 }
@@ -315,4 +339,99 @@ TEST(RecordFlags, LocalRecordAndAlreadyDeletedReturnWithoutChange) {
   EXPECT_EQ(fo4::mark_override_deleted(deleted, fo4::FormKey::parse("000800:Base.esm")),
             fo4::MarkDeletedStatus::already_deleted);
   EXPECT_EQ(fo4::write_plugin(deleted), deleted_before);
+}
+
+TEST(RecordFlags, UndeleteClearsDeletedDisablesAndParentsToPlayerReference) {
+  auto plugin = load(CellPlugin{
+      .name = "Patch.esp",
+      .masters = {"Fallout4.esm"},
+      .cell_form = 0x01000900,
+      .ref_flags = fo4::RecordFlags::deleted | fo4::RecordFlags::compressed,
+      .ref_subs =
+          {
+              {"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+              {"DATA", position_data(1.0f, 2.0f, 3.0f)},
+              {"XESP", std::string{'\x00', '\x08', '\0', '\0', '\0', '\0', '\0', '\0'}},
+              {"XTEL", std::string(32, '\0')},
+              {"XSCL", std::string{'\0', '\0', '\x80', '\x3f'}},
+          },
+  });
+  const auto ref = fo4::FormKey::parse("000800:Fallout4.esm");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, ref), fo4::UndeleteStatus::undeleted);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, ref);
+  ASSERT_NE(record, nullptr);
+  EXPECT_FALSE(record->header.flags.is_deleted());
+  EXPECT_TRUE(record->header.flags.is_compressed());
+  EXPECT_TRUE(record->header.flags.test(fo4::RecordFlags::initially_disabled));
+  const auto* xesp = subrecord_named(*record, "XESP");
+  ASSERT_NE(xesp, nullptr);
+  EXPECT_EQ(as_text(xesp->data), std::string("\x14\0\0\0\x01\0\0\0", 8));
+  EXPECT_EQ(subrecord_named(*record, "XTEL"), nullptr);
+  EXPECT_NE(subrecord_named(*record, "XSCL"), nullptr);
+  const auto transform = fo4::forms::decode_placed_reference(reread, *record)->transform;
+  EXPECT_FLOAT_EQ(transform.x, 1.0f);
+  EXPECT_FLOAT_EQ(transform.y, 2.0f);
+  EXPECT_FLOAT_EQ(transform.z, -30000.0f);
+  const auto* bucket = parent_group(reread, ref);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type, static_cast<std::int32_t>(fo4::GroupType::cell_temporary_children));
+}
+
+TEST(RecordFlags, UndeleteKeepsPersistentReferenceZAndBucket) {
+  auto plugin = load(CellPlugin{
+      .bucket = fo4::GroupType::cell_persistent_children,
+      .ref_flags = fo4::RecordFlags::deleted | fo4::RecordFlags::persistent,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}},
+                   {"DATA", position_data(1.0f, 2.0f, 3.0f)}},
+  });
+  const auto ref = fo4::FormKey::parse("000800:Cells.esp");
+  ASSERT_EQ(fo4::undelete_and_disable_reference(plugin, ref), fo4::UndeleteStatus::undeleted);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Cells.esp");
+  const auto* record = fo4::find_record(reread, ref);
+  ASSERT_NE(record, nullptr);
+  EXPECT_FALSE(record->header.flags.is_deleted());
+  EXPECT_TRUE(record->header.flags.is_persistent());
+  EXPECT_TRUE(record->header.flags.test(fo4::RecordFlags::initially_disabled));
+  EXPECT_FLOAT_EQ(fo4::forms::decode_placed_reference(reread, *record)->transform.z, 3.0f);
+  const auto* bucket = parent_group(reread, ref);
+  ASSERT_NE(bucket, nullptr);
+  EXPECT_EQ(bucket->header.group_type, static_cast<std::int32_t>(fo4::GroupType::cell_persistent_children));
+}
+
+TEST(RecordFlags, UndeleteRefusesNonDeletedReferenceWithoutChange) {
+  auto plugin = load({});
+  const auto ref = fo4::FormKey::parse("000800:Cells.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, ref), fo4::UndeleteStatus::not_deleted);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(RecordFlags, UndeleteRefusesDeletedStubWithoutDataWithoutChange) {
+  auto plugin = load(CellPlugin{
+      .ref_flags = fo4::RecordFlags::deleted,
+      .ref_subs = {{"NAME", std::string{'\x01', '\x08', '\0', '\0'}}},
+  });
+  const auto ref = fo4::FormKey::parse("000800:Cells.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, ref), fo4::UndeleteStatus::incomplete_reference);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(RecordFlags, UndeleteRefusesNonReferenceWithoutChange) {
+  auto plugin = fo4::read_plugin(weapon_plugin(), "Patch.esp");
+  const auto weapon = fo4::FormKey::parse("000800:Base.esm");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, weapon), fo4::UndeleteStatus::not_a_reference);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
+TEST(RecordFlags, UndeleteRefusesMissingFormKeyWithoutChange) {
+  auto plugin = load({});
+  const auto missing = fo4::FormKey::parse("000999:Cells.esp");
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::undelete_and_disable_reference(plugin, missing), fo4::UndeleteStatus::record_missing);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
