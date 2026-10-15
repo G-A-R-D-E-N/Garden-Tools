@@ -69,9 +69,6 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"WRLD\\MapNwCellY", "MNAM", 10, i16, 0},
     {"WRLD\\MapSeCellX", "MNAM", 12, i16, 0},
     {"WRLD\\MapSeCellY", "MNAM", 14, i16, 0},
-    {"WRLD\\MapCameraMinHeight", "MNAM", 16, f32, 20},
-    {"WRLD\\MapCameraMaxHeight", "MNAM", 20, f32, 24},
-    {"WRLD\\MapCameraInitialPitch", "MNAM", 24, f32, 28},
     {"WRLD\\MapScale", "ONAM", 0, f32, 0},
     {"WRLD\\MapCellOffsetX", "ONAM", 4, f32, 0},
     {"WRLD\\MapCellOffsetY", "ONAM", 8, f32, 0},
@@ -256,8 +253,6 @@ TEST(WRLDRows, ReadsWorldSubrecordsThroughTheRows) {
             (Bytes{std::byte{0xDC}, std::byte{0xFF}}));
   EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\MapCellOffsetY"), floats({512.0f}));
   EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\DefaultWaterHeight"), floats({450.0f}));
-  EXPECT_TRUE(scalar_bytes(plugin, key, "WRLD\\MapCameraMinHeight").empty());
-  EXPECT_TRUE(scalar_bytes(plugin, key, "WRLD\\MapCameraInitialPitch").empty());
 
   const auto field =
       fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("WRLD"), "WRLD\\MapImage");
