@@ -381,6 +381,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_cobj_rows.cpp
     tests/test_wp9_race_weap_rows.cpp
     tests/test_wp9_scol.cpp
+    tests/test_furn_rows.cpp
     tests/test_wrld_rows.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp

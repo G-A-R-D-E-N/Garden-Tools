@@ -23348,6 +23348,129 @@
           "insertion": "existing_only"
         },
         {
+          "path": "FURN\\ItemTotal",
+          "label": "Item total",
+          "kind": "scalar",
+          "subrecord": "COCT",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\Items",
+          "label": "Items",
+          "kind": "subrecord_group",
+          "count_subrecord": "COCT",
+          "insertion": "existing_only",
+          "successors": ["MNAM", "WBDT", "NAM1", "ENAM", "NAM0", "FNPR", "XMRK", "SNAM", "APPR", "OBTE", "OBTF", "OBTS", "STOP", "NVNM"],
+          "members": [
+            {
+              "subrecord": "CNTO",
+              "required": true,
+              "repeatable": false,
+              "payload_size": 8,
+              "default": "0000000001000000",
+              "fields": [
+                {
+                  "path": "FURN\\ItemCount",
+                  "label": "Count",
+                  "offset": 4,
+                  "storage": "i32",
+                  "presentation": "identity",
+                  "minimum": -2147483648,
+                  "maximum": 2147483647,
+                  "insertion": "existing_only"
+                }
+              ],
+              "formlink_fields": [
+                {
+                  "path": "FURN\\ItemObject",
+                  "label": "Item",
+                  "offset": 0,
+                  "nullable": true,
+                  "insertion": "existing_only",
+                  "target_union": "sigBaseObjects"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "FURN\\MarkerIndex",
+          "label": "Marker index",
+          "kind": "scalar",
+          "subrecord": "ENAM",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerDisabledPoints",
+          "label": "Marker disabled points",
+          "kind": "scalar",
+          "subrecord": "NAM0",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Front"},
+            {"bit": 1, "name": "Behind"},
+            {"bit": 2, "name": "Right"},
+            {"bit": 3, "name": "Left"},
+            {"bit": 4, "name": "Up"}
+          ],
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerEntryType",
+          "label": "Marker entry type",
+          "kind": "scalar",
+          "subrecord": "FNPR",
+          "offset": 0,
+          "storage": "u16",
+          "presentation": "enum",
+          "names": [
+            {"value": 1, "name": "Sit"},
+            {"value": 2, "name": "Lay"},
+            {"value": 4, "name": "Lean"}
+          ],
+          "minimum": 0,
+          "maximum": 4,
+          "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerEntryPoints",
+          "label": "Marker entry points",
+          "kind": "scalar",
+          "subrecord": "FNPR",
+          "offset": 2,
+          "storage": "u16",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Front"},
+            {"bit": 1, "name": "Behind"},
+            {"bit": 2, "name": "Right"},
+            {"bit": 3, "name": "Left"},
+            {"bit": 4, "name": "Up"}
+          ],
+          "minimum": 0,
+          "maximum": 65535,
+          "payload_size": 4,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
           "path": "FURN\\Properties",
           "label": "Properties",
           "kind": "counted_array",
