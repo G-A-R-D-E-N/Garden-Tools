@@ -123,8 +123,8 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | LIGH | 9871 | 25 | 2 | 4 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
-| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVLI | 10009 | 9 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVLN | 9986 | 9 | 1 | 2 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
 | LVSP | 10033 | 6 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
 | MATO | 9375 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
@@ -179,7 +179,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 9 | 1 | 1 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
+| STAT | 12045 | 9 | 1 | 2 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 8 | 2 | 2 | - | 7 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
@@ -274,8 +274,8 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LIGH | 24 | - | - | 1 | 2 | f32, i16, i32, u32, u8 | - | - | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
-| LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
-| LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
+| LVLI | 9 | - | - | - | - | i16, u8 | - | - | - | existing_only |
+| LVLN | 9 | - | - | - | 1 | i16, u8 | - | - | - | existing_only |
 | LVSP | 6 | - | - | - | - | i16 | - | - | - | existing_only |
 | MATO | 7 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MATT | 4 | - | - | 1 | 2 | f32, u32 | - | - | - | existing_only |

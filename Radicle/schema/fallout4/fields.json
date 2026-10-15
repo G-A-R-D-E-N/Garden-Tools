@@ -5794,6 +5794,12 @@
           ]
         },
         "fields": [
+          {"path": "LVLI\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLI\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLI\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLI\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLI\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLI\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
           {
             "path": "LVLI\\ChanceNone",
             "label": "Chance none",
@@ -5948,6 +5954,13 @@
           ]
         },
         "fields": [
+          {"path": "LVLN\\BoundMinX", "label": "Min X", "kind": "scalar", "subrecord": "OBND", "offset": 0, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLN\\BoundMinY", "label": "Min Y", "kind": "scalar", "subrecord": "OBND", "offset": 2, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLN\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLN\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLN\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLN\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+          {"path": "LVLN\\Model", "label": "Model file name", "kind": "string", "subrecord": "MODL", "insertion": "existing_only"},
           {
             "path": "LVLN\\ChanceNone",
             "label": "Chance none",
@@ -5983,6 +5996,7 @@
           }
         ],
         "formlink_fields": [
+          {"path": "LVLN\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
           {
             "path": "LVLN\\UseGlobal",
             "label": "Use global",
@@ -9611,6 +9625,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "STAT\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "STAT\\Material",
           "label": "Material",
