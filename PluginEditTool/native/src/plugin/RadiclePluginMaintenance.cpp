@@ -25,6 +25,7 @@
 namespace fo4ide::plugin {
 
 using support::editorId;
+using support::topLevelRecord;
 
 namespace {
 
@@ -58,17 +59,6 @@ std::string maintenanceLower(std::string_view value) {
     return out;
 }
 
-const fo4::Record* topLevelRecord(const fo4::Plugin& plugin, const fo4::FormKey& key) {
-    for (const auto& group : plugin.groups) {
-        if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-        for (const auto& child : group.children) {
-            const auto* record = std::get_if<fo4::Record>(&child);
-            if (record != nullptr && record->form_key == key) return record;
-        }
-    }
-    return nullptr;
-}
-
 fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
     fo4::Record* found = nullptr;
     fo4::visit_records(plugin, [&](fo4::Record& record) {
@@ -90,10 +80,24 @@ Result<fo4::FormKey> RadiclePluginBackend::copyRecordAsNewLocked(
     if (newEditorId.has_value()) options.editor_id = std::string(*newEditorId);
     const auto result = fo4::forms::copy_record_as_new(mutated, source.plugin, key, options);
     if (result.status == fo4::forms::RecordCopyNewStatus::created) return result.new_record;
+    const auto targetName = std::string(mutated.key.filename());
     if (result.status == fo4::forms::RecordCopyNewStatus::unsupported_signature) {
         return std::unexpected(Error{
             "CopyAsNewUnsupportedType",
             "CopyAsNewRecord does not copy this record type (xEdit refuses it): " + key.to_string()
+        });
+    }
+    if (result.status == fo4::forms::RecordCopyNewStatus::parent_cell_missing) {
+        return std::unexpected(Error{
+            "TargetParentCellMissing",
+            "The placed reference's parent CELL is not present in " + targetName +
+            "; copy or override the parent CELL into the target first"
+        });
+    }
+    if (result.status == fo4::forms::RecordCopyNewStatus::parent_dial_missing) {
+        return std::unexpected(Error{
+            "TargetParentDialMissing",
+            "The INFO's parent QUST/DIAL hierarchy is not present in " + targetName
         });
     }
     return std::unexpected(Error{

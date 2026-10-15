@@ -92,12 +92,12 @@ std::vector<std::byte> stat_source(std::string_view editor_id) {
   return out.bytes;
 }
 
-std::vector<std::byte> plyr_source() {
+std::vector<std::byte> top_level_source(std::string_view signature) {
   fo4::test::ByteWriter out;
   write_header(out, {"Base.esm"}, 0x900);
-  const auto top = fo4::test::begin_group(out, "PLYR", 0);
-  const auto plyr = fo4::test::begin_record(out, "PLYR", 0, 0x01000801u);
-  fo4::test::end_record(out, plyr);
+  const auto top = fo4::test::begin_group(out, signature, 0);
+  const auto record = fo4::test::begin_record(out, signature, 0, 0x01000801u);
+  fo4::test::end_record(out, record);
   fo4::test::end_group(out, top);
   return out.bytes;
 }
@@ -288,8 +288,8 @@ TEST(CopyAsNewRecord, DelegatesContainedReferenceToThePlacedCopy) {
   EXPECT_EQ(fo4::forms::placed_references_for_cell(target, cell).size(), 1u);
 }
 
-TEST(CopyAsNewRecord, RefusesPlayerReferenceBeforeWriting) {
-  const auto source = fo4::read_plugin(plyr_source(), "Source.esp");
+void expect_refused_before_writing(std::string_view signature) {
+  const auto source = fo4::read_plugin(top_level_source(signature), "Source.esp");
   auto target = fo4::read_plugin(header_only({"Other.esm"}, 0x800), "Patch.esp");
 
   const auto result = fo4::forms::copy_record_as_new(
@@ -297,6 +297,11 @@ TEST(CopyAsNewRecord, RefusesPlayerReferenceBeforeWriting) {
   EXPECT_EQ(result.status, fo4::forms::RecordCopyNewStatus::unsupported_signature);
   EXPECT_EQ(target.header.masters.size(), 1u);
   EXPECT_EQ(target.header.next_form_id, 0x800u);
+}
+
+TEST(CopyAsNewRecord, RefusesPlayerAndNoiseRecordsBeforeWriting) {
+  expect_refused_before_writing("PLYR");
+  expect_refused_before_writing("NOCM");
 }
 
 TEST(CopyAsNewRecord, ReportsAMissingSource) {
