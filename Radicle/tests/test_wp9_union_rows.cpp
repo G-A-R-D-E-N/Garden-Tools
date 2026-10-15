@@ -238,6 +238,6 @@ TEST(WP9UnionRows, ActionColorChannelsReadAndWriteTheirBytes) {
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(payloads(reread, k_action, "CNAM"),
-            std::vector<Bytes>{Bytes{std::byte{5}, std::byte{20}, std::byte{30}, std::byte{128}}});
+            (std::vector<Bytes>{Bytes{std::byte{5}, std::byte{20}, std::byte{30}, std::byte{128}}}));
   EXPECT_TRUE(slot_valid(reread, k_action, "AACT\\ColorGreen"));
 }
