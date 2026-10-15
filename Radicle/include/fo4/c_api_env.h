@@ -567,6 +567,11 @@ typedef enum radicle_placed_copy_status {
   RADICLE_PLACED_COPY_ALREADY_EXISTS = 2
 } radicle_placed_copy_status;
 
+typedef enum radicle_placed_move_status {
+  RADICLE_PLACED_MOVE_MOVED = 0,
+  RADICLE_PLACED_MOVE_RELOCATED = 1
+} radicle_placed_move_status;
+
 RADICLE_API radicle_status radicle_plugin_create(const char* filename, radicle_plugin** out_plugin);
 RADICLE_API radicle_status radicle_plugin_copy_placed_ref_override(radicle_plugin* plugin,
                                                                    const radicle_env* env,
@@ -581,6 +586,11 @@ RADICLE_API radicle_status radicle_plugin_set_placed_transform(radicle_plugin* p
                                                                radicle_form_key reference,
                                                                const float position[3],
                                                                const float rotation[3]);
+RADICLE_API radicle_status radicle_plugin_move_placed_ref(radicle_plugin* plugin,
+                                                          radicle_form_key reference,
+                                                          const float position[3],
+                                                          const float rotation[3],
+                                                          radicle_placed_move_status* out_status);
 RADICLE_API radicle_status radicle_plugin_set_placed_scale(radicle_plugin* plugin,
                                                            radicle_form_key reference,
                                                            int32_t has_scale,
