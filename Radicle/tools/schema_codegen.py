@@ -372,6 +372,12 @@ def load_schema(schema_path: Path):
             if "min_form_version" in field:
                 if type(min_form_version) is not int or not 0 < min_form_version <= 0xFFFF:
                     raise ValueError(f"min_form_version must be a 16-bit positive integer: {path!r}")
+            max_form_version = field.get("max_form_version", 0)
+            if "max_form_version" in field:
+                if type(max_form_version) is not int or not 0 < max_form_version <= 0xFFFF:
+                    raise ValueError(f"max_form_version must be a 16-bit positive integer: {path!r}")
+                if max_form_version <= min_form_version:
+                    raise ValueError(f"max_form_version must exceed min_form_version: {path!r}")
 
             if is_string:
                 minimum = maximum = 0.0
@@ -410,6 +416,7 @@ def load_schema(schema_path: Path):
                 "payload_size": payload_size,
                 "minimum_payload_size": minimum_payload_size,
                 "min_form_version": min_form_version,
+                "max_form_version": max_form_version,
                 "address": address,
                 "localized": localized,
                 "can_insert": False,
@@ -531,10 +538,13 @@ def render(fields, arrays=(), groups=()) -> str:
             trailing = f", {field['minimum_payload_size']}"
         if field["min_form_version"]:
             trailing += f", {field['min_form_version']}"
-        if field["localized"]:
+        if field["localized"] or field["max_form_version"]:
             names = (f"std::span<const ScalarName>(k_scalar_names_{tables[names_key(field)]})"
                      if field["names"] else "{}")
-            trailing = f", {field['minimum_payload_size']}, {names}, {field['min_form_version']}, true"
+            localized = "true" if field["localized"] else "false"
+            trailing = f", {field['minimum_payload_size']}, {names}, {field['min_form_version']}, {localized}"
+        if field["max_form_version"]:
+            trailing += f", {field['max_form_version']}"
         presentation = CPP_PRESENTATIONS.get(field["presentation"], field["presentation"])
         lines.append(
             "{" +

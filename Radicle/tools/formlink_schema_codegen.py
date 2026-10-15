@@ -183,6 +183,9 @@ def load_lists(schema_path: Path):
                     raise ValueError(f"FormLink payload_sizes must contain fitting positive integers: {path!r}")
                 if len(set(payload_sizes)) != len(payload_sizes):
                     raise ValueError(f"FormLink payload_sizes contains duplicate sizes: {path!r}")
+            max_form_version = row.get("max_form_version", 0)
+            if "max_form_version" in row and (type(max_form_version) is not int or not 0 < max_form_version <= 0xFFFF):
+                raise ValueError(f"FormLink max_form_version must be a 16-bit positive integer: {path!r}")
             fields.append({
                 "record": record_signature,
                 "path": path,
@@ -192,6 +195,7 @@ def load_lists(schema_path: Path):
                 "nullable": nullable,
                 "address": parse_address(row, path, subrecord, True, 4),
                 "payload_sizes": payload_sizes,
+                "max_form_version": max_form_version,
                 "targets": parse_formlink_field_targets(row, path, union_targets),
             })
 
@@ -476,7 +480,9 @@ def render(lists, nested_lists, fields, unions) -> str:
             ("true" if row["nullable"] else "false") + ", " +
             f"{first_target}, {target_count}, " +
             render_address(row["address"]) +
-            (", {{" + ", ".join(map(str, row["payload_sizes"])) + "}}" if row["payload_sizes"] else "") +
+            (", {{" + ", ".join(map(str, row["payload_sizes"])) + "}}"
+             if row["payload_sizes"] or row["max_form_version"] else "") +
+            (f", {row['max_form_version']}" if row["max_form_version"] else "") +
             "},"
         )
     lines.append("};")
