@@ -499,6 +499,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad_array_elements.cpp
     tests/test_conflict_graph.cpp
     tests/test_check_errors.cpp
+    tests/test_check_errors_conditions.cpp
     tests/test_check_dialogue.cpp
     tests/test_remap_non_formid_slots.cpp
     tests/test_struct_payload_remap.cpp
