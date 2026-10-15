@@ -116,7 +116,7 @@ Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (Ga
 | Records | n/a | n/a | n/a | n/a | GRAS, TREE, LTEX, FLOR (non-localized plugins) via `radicle_plugin_create_record` / `PluginFile.CreateRecord` | n/a |
 
 Stays opaque: MODL/MODT/MODC/MODS/MODF (MODL cannot be removed: it would orphan its siblings), VMAD,
-DEST and its stage subrecords, DAMC, PRPS, ATTX, RNAM, FULL, KSIZ/KWDA (use `FLOR\Keywords`),
+DEST and its stage subrecords, DAMC, ATTX, RNAM, FULL, KSIZ/KWDA (use `FLOR\Keywords`),
 and every byte
 of an official record that no edit touched. Four FLOR records in Fallout4.esm (FloraFern01/02,
 FloraCornStalk01/02, two destructible stages) cannot take `AddSubrecord` because the flat order check does
