@@ -70,60 +70,69 @@ void move_to_bucket(MutableLocation& located, GroupType bucket_type, const Plugi
   erase_if_empty(cell_children, old_header);
 }
 
-RecordFlagStatus relocate_exterior_reference(Plugin& plugin,
-                                             const FormKey& record_key,
-                                             RecordFlags::value_type flags,
-                                             GroupType target) {
+RecordFlagStatus relocate_reference(Plugin& plugin,
+                                    const FormKey& record_key,
+                                    RecordFlags::value_type flags,
+                                    GroupType target,
+                                    bool interior) {
   Plugin next = plugin;
   auto located = find_mutable_location(next, record_key);
   if (!located || located->path.size() < 3) {
     throw forms::PlacedReferenceError("placed reference is not beneath a CELL child GRUP");
   }
   const auto depth = located->path.size();
+  const auto context = plugin_form_id_context(next);
   Group& bucket = *located->path.back();
   Group& cell_children = *located->path[depth - 2];
   Group& owner = *located->path[depth - 3];
-  const auto owner_type = static_cast<GroupType>(owner.header.group_type);
-  const auto* cell = forms::detail::preceding_record(owner, cell_children);
-  if (cell == nullptr || cell->header.signature != k_cell) {
-    throw forms::PlacedReferenceError("placed reference CELL record is missing from its group");
-  }
-  if (owner_type != GroupType::world_children && owner_type != GroupType::exterior_cell_subblock) {
-    throw forms::PlacedReferenceError("exterior placed reference CELL is not inside a worldspace");
-  }
-  const auto* worldspace = forms::detail::worldspace_record(located->path, depth - 3);
-  if (worldspace == nullptr || worldspace->header.signature != k_wrld) {
-    throw forms::PlacedReferenceError("exterior placed reference CELL has no WRLD record");
-  }
-  const auto worldspace_key = worldspace->form_key;
-  const auto cell_key = cell->form_key;
-
-  FormKey destination = cell_key;
-  if (target == GroupType::cell_persistent_children) {
-    if (owner_type != GroupType::world_children) {
-      const auto* persistent = forms::find_persistent_exterior_cell(next, worldspace_key);
-      if (persistent == nullptr) return RecordFlagStatus::target_cell_missing;
-      destination = persistent->form_key;
+  FormKey source = resolve_plugin_form_id(RawFormId{cell_children.header.label_as_u32()}, context);
+  FormKey destination = source;
+  if (!interior) {
+    const auto owner_type = static_cast<GroupType>(owner.header.group_type);
+    const auto* cell = forms::detail::preceding_record(owner, cell_children);
+    if (cell == nullptr || cell->header.signature != k_cell) {
+      throw forms::PlacedReferenceError("placed reference CELL record is missing from its group");
     }
-  } else {
-    const auto position = forms::decode_placed_reference(next, located->record())->transform;
-    if (!forms::detail::exterior_grid_in_range(position.x) ||
-        !forms::detail::exterior_grid_in_range(position.y)) {
-      return RecordFlagStatus::target_cell_missing;
+    require_decodable(*cell);
+    const auto* data = find_subrecord(*cell, k_data);
+    if (data == nullptr || data->data.empty()) {
+      throw forms::PlacedReferenceError("exterior placed reference CELL is missing DATA");
     }
-    const auto* grid = forms::find_exterior_cell(next, worldspace_key,
-                                                 forms::detail::grid_coordinate(position.x),
-                                                 forms::detail::grid_coordinate(position.y));
-    if (grid == nullptr) return RecordFlagStatus::target_cell_missing;
-    destination = grid->form_key;
+    if (owner_type != GroupType::world_children && owner_type != GroupType::exterior_cell_subblock) {
+      throw forms::PlacedReferenceError("exterior placed reference CELL is not inside a worldspace");
+    }
+    const auto* worldspace = forms::detail::worldspace_record(located->path, depth - 3);
+    if (worldspace == nullptr || worldspace->header.signature != k_wrld) {
+      throw forms::PlacedReferenceError("exterior placed reference CELL has no WRLD record");
+    }
+    const auto worldspace_key = worldspace->form_key;
+    source = cell->form_key;
+    destination = source;
+    if (target == GroupType::cell_persistent_children) {
+      if (owner_type != GroupType::world_children) {
+        const auto* persistent = forms::find_persistent_exterior_cell(next, worldspace_key);
+        if (persistent == nullptr) return RecordFlagStatus::target_cell_missing;
+        destination = persistent->form_key;
+      }
+    } else {
+      const auto position = forms::decode_placed_reference(next, located->record())->transform;
+      if (!forms::detail::exterior_grid_in_range(position.x) ||
+          !forms::detail::exterior_grid_in_range(position.y)) {
+        return RecordFlagStatus::target_cell_missing;
+      }
+      const auto* grid = forms::find_exterior_cell(next, worldspace_key,
+                                                   forms::detail::grid_coordinate(position.x),
+                                                   forms::detail::grid_coordinate(position.y));
+      if (grid == nullptr) return RecordFlagStatus::target_cell_missing;
+      destination = grid->form_key;
+    }
   }
 
   Record& record = located->record();
   detail::mark_record_modified(next, record);
   record.header.flags = RecordFlags{flags};
-  const auto context = plugin_form_id_context(next);
-  if (destination == cell_key) {
-    move_to_bucket(*located, target, context);
+  if (destination == source) {
+    if (!has_type(bucket.header, target)) move_to_bucket(*located, target, context);
     plugin = std::move(next);
     return RecordFlagStatus::changed;
   }
@@ -176,16 +185,14 @@ RecordFlagStatus set_record_flags(Plugin& plugin, const FormKey& record_key, Rec
   const bool relocates = persistent_changed && depth >= 2 &&
                          is_placed_reference_signature(record.header.signature) &&
                          is_cell_bucket(path.back()->header) &&
-                         has_type(path[depth - 2]->header, GroupType::cell_children) &&
-                         !has_type(path.back()->header, target);
-  if (relocates && !cell_is_interior(plugin, path[depth - 2]->header.label_as_u32())) {
-    return relocate_exterior_reference(plugin, record_key, next, target);
+                         has_type(path[depth - 2]->header, GroupType::cell_children);
+  const bool interior = relocates && cell_is_interior(plugin, path[depth - 2]->header.label_as_u32());
+  if (!relocates || (interior && has_type(path.back()->header, target))) {
+    detail::mark_record_modified(plugin, record);
+    record.header.flags = RecordFlags{next};
+    return RecordFlagStatus::changed;
   }
-
-  detail::mark_record_modified(plugin, record);
-  record.header.flags = RecordFlags{next};
-  if (relocates) move_to_bucket(*located, target, plugin_form_id_context(plugin));
-  return RecordFlagStatus::changed;
+  return relocate_reference(plugin, record_key, next, target, interior);
 }
 
 MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_key) {
