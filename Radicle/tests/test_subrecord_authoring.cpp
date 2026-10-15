@@ -583,10 +583,16 @@ TEST(SubrecordAuthoring, RemoveRefusesDebrDataWhoseModelTextureHasNoRule) {
   EXPECT_EQ(order(plugin, 0x801), (std::vector<std::string>{"EDID", "DATA"}));
 }
 
-TEST(SubrecordAuthoring, HazdCreateStaysNotAuthorableWhileModelIsCoupled) {
+TEST(SubrecordAuthoring, HazdCreateAuthorsEdidObndDnamWithoutModel) {
   auto plugin = fo4::read_plugin(build({}), k_plugin);
-  EXPECT_EQ(fo4::create_record(plugin, sig("HAZD"), "Gen").status, fo4::RecordCreateStatus::not_authorable);
-  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+  const auto created = fo4::create_record(plugin, sig("HAZD"), "Gen");
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  EXPECT_EQ(created.key, key(0x900));
+  EXPECT_EQ(order(plugin, 0x900), (std::vector<std::string>{"EDID", "OBND", "DNAM"}));
+  const auto* dnam = find_sub(plugin, 0x900, "DNAM");
+  ASSERT_NE(dnam, nullptr);
+  EXPECT_EQ(dnam->data.size(), 52u);
+  EXPECT_TRUE(authoring_clean(plugin, key(0x900)));
 }
 
 TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {
