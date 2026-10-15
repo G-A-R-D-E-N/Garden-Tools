@@ -11,7 +11,7 @@ enum class RecordFlagStatus {
   record_missing,
   header_record,
   deleted_bit,
-  exterior_relocation_unsupported,
+  target_cell_missing,
 };
 
 enum class MarkDeletedStatus {
