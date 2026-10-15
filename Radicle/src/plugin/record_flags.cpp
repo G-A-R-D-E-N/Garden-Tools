@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -24,36 +23,9 @@ constexpr RecordFlags::value_type k_kept_bits = RecordFlags::compressed | Record
 constexpr std::uint32_t k_player_form = 0x14;
 constexpr float k_undelete_z = -30000.0f;
 
-struct MutableLocation {
-  std::vector<Group*> path;
-  std::size_t index{0};
-
-  Record& record() const { return std::get<Record>(path.back()->children[index]); }
-};
-
-bool locate_in_group(Group& group, const FormKey& record_key, MutableLocation& found) {
-  found.path.push_back(&group);
-  for (std::size_t index = 0; index < group.children.size(); ++index) {
-    if (auto* record = std::get_if<Record>(&group.children[index])) {
-      if (record->form_key == record_key) {
-        found.index = index;
-        return true;
-      }
-    } else if (locate_in_group(std::get<Group>(group.children[index]), record_key, found)) {
-      return true;
-    }
-  }
-  found.path.pop_back();
-  return false;
-}
-
-std::optional<MutableLocation> find_mutable_location(Plugin& plugin, const FormKey& record_key) {
-  for (auto& group : plugin.groups) {
-    MutableLocation found;
-    if (locate_in_group(group, record_key, found)) return found;
-  }
-  return std::nullopt;
-}
+using detail::MutableLocation;
+using detail::erase_if_empty;
+using detail::find_mutable_location;
 
 bool has_type(const GroupHeader& header, GroupType type) {
   return header.group_type == static_cast<std::int32_t>(type);
@@ -78,9 +50,7 @@ bool cell_is_interior(const Plugin& plugin, std::uint32_t label) {
   const auto* cell = find_record(plugin, cell_key);
   if (cell == nullptr || cell->header.signature != k_cell) return false;
   require_decodable(*cell);
-  const auto* data = find_subrecord(*cell, k_data);
-  return data != nullptr && !data->data.empty() &&
-         (std::to_integer<std::uint8_t>(data->data[0]) & 1u) != 0;
+  return detail::is_interior_cell(*cell);
 }
 
 Group& ensure_bucket(Group& cell_children, const GroupHeader& wanted) {
@@ -99,18 +69,6 @@ Group& ensure_bucket(Group& cell_children, const GroupHeader& wanted) {
         return group != nullptr && group->header.group_type > wanted.group_type;
       });
   return std::get<Group>(*cell_children.children.insert(later, std::move(created)));
-}
-
-void erase_if_empty(Group& parent, const GroupHeader& wanted) {
-  for (auto it = parent.children.begin(); it != parent.children.end(); ++it) {
-    auto* group = std::get_if<Group>(&*it);
-    if (group == nullptr || group->header.group_type != wanted.group_type ||
-        group->header.label != wanted.label) {
-      continue;
-    }
-    if (group->children.empty()) parent.children.erase(it);
-    return;
-  }
 }
 
 void move_to_bucket(MutableLocation& located, GroupType bucket_type) {
