@@ -125,6 +125,17 @@ bool slot_valid(const fo4::Plugin& plugin, std::string_view record_key, std::str
       .valid;
 }
 
+std::string text_value(const fo4::Plugin& plugin, std::string_view record_key, std::string_view path) {
+  const auto field = scalar(path);
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(record_key));
+  const auto resolved = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+  const auto& slot = resolved.slots.at(0);
+  return fo4::schema::decode_scalar(
+      fo4::schema::scalar_slot_bytes(record->subrecords[slot.subrecord].data, slot, field.scalar),
+      field.scalar);
+}
+
 }  // namespace
 
 TEST(WP9UnionRows, GameSettingDataFollowsTheXEditDecider) {
@@ -155,6 +166,36 @@ TEST(WP9UnionRows, GameSettingDataFollowsTheXEditDecider) {
   EXPECT_FALSE(slot_valid(reread, k_other, "GMST\\FloatValue"));
   EXPECT_TRUE(slot_valid(reread, k_scale, "GMST\\FloatValue"));
   EXPECT_FALSE(slot_valid(reread, k_scale, "GMST\\IntegerValue"));
+}
+
+TEST(WP9UnionRows, GuardFailingTextPayloadIsNotAWidthError) {
+  auto plugin = load(0);
+  const auto text_key = fo4::FormKey::parse(k_text);
+  for (const auto path : {"GMST\\IntegerValue", "GMST\\FloatValue", "GMST\\BooleanValue"}) {
+    SCOPED_TRACE(path);
+    const auto field = scalar(path);
+    const auto* record = fo4::find_record(plugin, text_key);
+    ASSERT_NE(record, nullptr);
+    const auto resolved = fo4::schema::resolve_field_slots(
+        *record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+    EXPECT_FALSE(resolved.malformed);
+    EXPECT_FALSE(resolved.misaligned);
+    EXPECT_FALSE(slot_valid(plugin, k_text, path));
+    EXPECT_EQ(fo4::record_field_count(plugin, text_key, path), 1u);
+    EXPECT_EQ(fo4::set_record_scalar(plugin, text_key, field, 0, "1"),
+              fo4::ScalarMutationStatus::subrecord_missing);
+  }
+  EXPECT_EQ(text_value(plugin, k_text, "GMST\\StringValue"), "Hello");
+  EXPECT_EQ(fo4::set_record_string(plugin, text_key, "GMST\\StringValue", 0, "Bye"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(text_value(reread, k_text, "GMST\\StringValue"), "Bye");
+  for (const auto& issue : fo4::schema::preflight_plugin(reread)) {
+    EXPECT_NE(issue.path, "GMST\\IntegerValue") << issue.code;
+    EXPECT_NE(issue.path, "GMST\\FloatValue") << issue.code;
+    EXPECT_NE(issue.path, "GMST\\BooleanValue") << issue.code;
+  }
 }
 
 TEST(WP9UnionRows, LocalizedGameSettingStringIsRefusedAndNotReadAsText) {

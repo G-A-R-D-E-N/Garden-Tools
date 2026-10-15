@@ -62,6 +62,8 @@ TEST_P(ConfigRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesEveryRow)
     for (const auto& field : fo4::schema::scalar_fields(signature)) {
       const auto slots = fo4::schema::resolve_field_slots(
           record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+      EXPECT_FALSE(slots.malformed) << record.form_key.to_string() << ' ' << field.path;
+      EXPECT_FALSE(slots.misaligned) << record.form_key.to_string() << ' ' << field.path;
       for (const auto& slot : slots.slots) {
         if (!slot.valid || (field.scalar.localized && plugin.header.tes4_flags.is_localized())) continue;
         static_cast<void>(fo4::schema::decode_scalar(

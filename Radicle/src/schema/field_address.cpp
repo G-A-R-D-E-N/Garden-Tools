@@ -96,11 +96,12 @@ FieldSlots resolve_field_slots(const Record& record,
 
     if (shape.whole_payload) {
       FieldSlot slot{index, 0, false, false};
-      if (shape.width != 0 && data.size() != shape.width) {
+      const bool guard_passes =
+          external_ok && (!guarded || external || listed(when, read_discriminator(data, 0, when)));
+      if (shape.width != 0 && data.size() != shape.width && guard_passes) {
         out.malformed = true;
       } else {
-        slot.valid = sized && external_ok &&
-                     (!guarded || external || listed(when, read_discriminator(data, 0, when)));
+        slot.valid = sized && guard_passes;
       }
       out.slots.push_back(slot);
       continue;
