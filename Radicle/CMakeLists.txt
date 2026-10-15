@@ -373,6 +373,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_list_rows.cpp
     tests/test_wp9_misc_rows_b.cpp
     tests/test_wp9_misc_rows_c.cpp
+    tests/test_wp9_small_records.cpp
     tests/test_wp9_prps_rows.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
