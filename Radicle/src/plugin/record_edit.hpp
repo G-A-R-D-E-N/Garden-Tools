@@ -58,4 +58,56 @@ inline void mark_record_modified(Plugin& plugin, Record& record) {
   plugin.original_range.clear();
 }
 
+inline void erase_if_empty(Group& parent, const GroupHeader& wanted) {
+  for (auto it = parent.children.begin(); it != parent.children.end(); ++it) {
+    auto* group = std::get_if<Group>(&*it);
+    if (group == nullptr || group->header.group_type != wanted.group_type ||
+        group->header.label != wanted.label) {
+      continue;
+    }
+    if (group->children.empty()) parent.children.erase(it);
+    return;
+  }
+}
+
+struct MutableLocation {
+  std::vector<Group*> path;
+  std::size_t index{0};
+
+  Record& record() const { return std::get<Record>(path.back()->children[index]); }
+};
+
+inline bool locate_in_group(Group& group, const FormKey& record_key, MutableLocation& found) {
+  found.path.push_back(&group);
+  for (std::size_t index = 0; index < group.children.size(); ++index) {
+    if (auto* record = std::get_if<Record>(&group.children[index])) {
+      if (record->form_key == record_key) {
+        found.index = index;
+        return true;
+      }
+    } else if (locate_in_group(std::get<Group>(group.children[index]), record_key, found)) {
+      return true;
+    }
+  }
+  found.path.pop_back();
+  return false;
+}
+
+inline std::optional<MutableLocation> find_mutable_location(Plugin& plugin, const FormKey& record_key) {
+  for (auto& group : plugin.groups) {
+    MutableLocation found;
+    if (locate_in_group(group, record_key, found)) return found;
+  }
+  return std::nullopt;
+}
+
+inline bool is_interior_cell(const Record& cell) {
+  constexpr auto data = Signature::from_string("DATA");
+  for (const auto& subrecord : cell.subrecords) {
+    if (subrecord.signature != data) continue;
+    return !subrecord.data.empty() && (std::to_integer<std::uint8_t>(subrecord.data[0]) & 1u) != 0;
+  }
+  return false;
+}
+
 }

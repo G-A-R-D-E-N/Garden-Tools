@@ -125,6 +125,17 @@ bool set_placed_reference_transform(
     const FormKey& reference,
     const PositionRotation& transform);
 
+enum class PlacedReferenceMoveStatus {
+  moved,
+  relocated,
+  reference_missing,
+  target_cell_missing,
+};
+
+PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
+                                                const FormKey& reference,
+                                                const PositionRotation& transform);
+
 struct PlacedReferenceCreation {
   FormKey cell;
   FormKey base;
