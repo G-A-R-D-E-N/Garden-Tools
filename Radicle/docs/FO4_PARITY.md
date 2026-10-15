@@ -110,7 +110,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | INGR | 9788 | 11 | 3 | 5 | - | 1 | yes | yes | - | - | 1 | L4 |
 | INNR | 12337 | 1 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | IPCT | 7978 | 20 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
-| IPDS | 8014 | - | - | - | - | - | yes | - | - | - | 2 | L4 |
+| IPDS | 8014 | - | - | 2 | - | - | yes | - | - | - | 2 | L4 |
 | KEYM | 9823 | 9 | 3 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | yes | 1 | L4 |
 | KYWD | 6947 | 5 | 2 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
@@ -131,7 +131,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
 | MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
 | MISC | 10212 | - | - | - | - | 1 | - | yes | forms/components | yes | 1 | L2 |
-| MOVT | 9393 | 5 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| MOVT | 9393 | 33 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | MSTT | 7067 | 8 | 1 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | MSWP | 12437 | - | - | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
 | MUSC | 8665 | 4 | - | - | 1 | - | yes | - | environment/sound | yes | 2 | L4 |
@@ -263,7 +263,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | INGR | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
 | INNR | - | - | 1 | - | - | u32 | - | - | - | existing_only |
 | IPCT | 15 | - | 3 | 2 | 1 | f32, u32, u8 | - | - | - | existing_only |
-| IPDS | - | - | - | - | - | - | - | - | - | - |
+| IPDS | - | - | - | - | - | - | 2 | - | - | existing_only |
 | KEYM | 9 | - | - | - | 3 | f32, i16, i32 | - | - | - | existing_only |
 | KSSM | 1 | - | - | - | - | f32 | - | - | - | existing_only |
 | KYWD | 4 | - | 1 | - | 2 | u32, u8 | - | - | - | existing_only |
@@ -283,7 +283,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MESG | 1 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | MGEF | 12 | - | 4 | 1 | - | f32, u32 | - | - | - | existing_only |
 | MISC | - | - | - | - | - | - | - | - | - | - |
-| MOVT | 5 | - | - | - | 1 | f32 | - | - | - | existing_only |
+| MOVT | 33 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MSTT | 7 | - | 1 | - | 1 | f32, i16, u8 | - | 2 | - | existing_only |
 | MSWP | - | - | - | - | - | - | - | - | - | - |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | - | - | existing_only |
