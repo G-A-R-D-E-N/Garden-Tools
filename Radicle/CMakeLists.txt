@@ -347,6 +347,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_master_metadata.cpp
     tests/test_load_order.cpp
     tests/test_plugin_flags.cpp
+    tests/test_tes4_header_setters.cpp
     tests/test_mutation.cpp
     tests/test_editor_id_text.cpp
     tests/test_record_lifecycle.cpp
