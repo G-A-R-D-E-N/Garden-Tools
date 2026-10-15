@@ -186,7 +186,7 @@ std::vector<PreflightIssue> preflight_record(const Record& record, bool localize
     for (const auto& slot : resolved.slots) {
       if (!slot.valid) continue;
       if (localized && field.scalar.storage == ScalarStorage::zstring && record.subrecords[slot.subrecord].data.size() == 4 &&
-          is_localized_field(field.record, field.scalar.subrecord)) {
+          (field.scalar.localized || is_localized_field(field.record, field.scalar.subrecord))) {
         continue;
       }
       std::string decoded;

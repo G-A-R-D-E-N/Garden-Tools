@@ -102,7 +102,8 @@ Result<std::vector<SemanticFieldCell>> semanticFieldCells(const fo4::Plugin& plu
             SemanticFieldCell cell{indexedPath(field.path, scalar.address, index), {}, false, false};
             const bool localized = scalar.storage == fo4::schema::ScalarStorage::zstring &&
                 plugin.header.tes4_flags.is_localized() &&
-                fo4::schema::is_localized_field(field.record, scalar.subrecord);
+                (fo4::schema::is_localized_field(field.record, scalar.subrecord) ||
+                 (scalar.localized && index < resolved.slots.size() && resolved.slots[index].valid));
             if (localized) {
                 cell.value = "<opaque/localized>";
             } else if (index < resolved.slots.size() && resolved.slots[index].valid) {
