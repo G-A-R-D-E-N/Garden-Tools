@@ -519,6 +519,55 @@ TEST(SubrecordAuthoring, RefusesDefaultFieldsInLocalizedPlugins) {
   EXPECT_EQ(fo4::create_record(plugin, sig("ARMO"), "X").status, fo4::RecordCreateStatus::created);
 }
 
+TEST(SubrecordAuthoring, CreatesRecordsWhoseRequiredSubrecordsHaveAuthoredDefaults) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+  struct Case {
+    const char* record;
+    const char* editor_id;
+    std::vector<std::string> order;
+    std::vector<std::pair<std::string, std::size_t>> sizes;
+  };
+  const std::vector<Case> cases{
+      {"NPC_", "NewNpc", {"EDID", "OBND", "ACBS", "RNAM", "AIDT", "CNAM", "DATA", "NAM5", "NAM6", "NAM8"},
+       {{"RNAM", 4}, {"CNAM", 4}, {"DATA", 0}, {"NAM5", 2}, {"NAM6", 4}, {"NAM8", 4}}},
+      {"ADDN", "", {"DATA", "DNAM"}, {{"DATA", 4}, {"DNAM", 4}}},
+      {"MESG", "", {"DESC", "INAM", "DNAM"}, {{"DESC", 1}, {"INAM", 4}, {"DNAM", 4}}},
+      {"LSCR", "", {"DESC"}, {{"DESC", 1}}},
+      {"IMAD", "NewImad", {"EDID", "DNAM", "TNAM", "NAM3"}, {{"DNAM", 252}, {"TNAM", 40}, {"NAM3", 40}}},
+      {"DOBJ", "", {"DNAM"}, {{"DNAM", 8}}},
+      {"DEBR", "", {"DATA"}, {{"DATA", 3}}},
+  };
+  std::uint32_t local = 0x900;
+  for (const auto& test : cases) {
+    const auto created = fo4::create_record(plugin, sig(test.record), test.editor_id);
+    ASSERT_EQ(created.status, fo4::RecordCreateStatus::created) << test.record;
+    EXPECT_EQ(created.key, key(local)) << test.record;
+    ++local;
+  }
+  const auto reloaded = reload(plugin);
+  local = 0x900;
+  for (const auto& test : cases) {
+    for (const auto* target : {static_cast<const fo4::Plugin*>(&plugin), &reloaded}) {
+      EXPECT_EQ(order(*target, local), test.order) << test.record;
+      for (const auto& [name, size] : test.sizes) {
+        const auto* sub = find_sub(*target, local, name.c_str());
+        ASSERT_NE(sub, nullptr) << test.record << " " << name;
+        EXPECT_EQ(sub->data.size(), size) << test.record << " " << name;
+      }
+      EXPECT_TRUE(authoring_clean(*target, key(local))) << test.record;
+    }
+    ++local;
+  }
+}
+
+TEST(SubrecordAuthoring, LocalizedDescriptionsStillRefuseCreateDefaults) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+  plugin.header.tes4_flags = fo4::RecordFlags{plugin.header.tes4_flags.value() | fo4::RecordFlags::localized};
+  EXPECT_EQ(fo4::create_record(plugin, sig("LSCR"), "").status, fo4::RecordCreateStatus::no_default);
+  EXPECT_EQ(fo4::create_record(plugin, sig("MESG"), "").status, fo4::RecordCreateStatus::no_default);
+  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}
+
 TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
