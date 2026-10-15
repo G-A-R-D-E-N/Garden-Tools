@@ -6,7 +6,6 @@
 #include "placed_reference_copy_internal.hpp"
 
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -20,14 +19,6 @@ constexpr auto k_refr = Signature::from_string("REFR");
 constexpr auto k_name = Signature::from_string("NAME");
 constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_xclc = Signature::from_string("XCLC");
-constexpr float k_exterior_cell_span = 4096.0f;
-
-GroupHeader group_header(GroupType type, std::uint32_t label) {
-  GroupHeader header;
-  header.group_type = static_cast<std::int32_t>(type);
-  header.label = detail::u32_label(label);
-  return header;
-}
 
 struct CellSlot {
   Group* parent{nullptr};
@@ -59,14 +50,6 @@ std::int32_t read_i32(const std::vector<std::byte>& data, std::size_t offset) {
   return value;
 }
 
-std::int32_t grid_coordinate(float world) {
-  const auto cells = std::floor(world / k_exterior_cell_span);
-  if (!(std::fabs(cells) < 2147483648.0f)) {
-    throw PlacedReferenceError("placed reference position is not a finite grid coordinate");
-  }
-  return static_cast<std::int32_t>(cells);
-}
-
 void require_placement_in_cell(const Record& cell, const PlacedReferenceCreation& creation) {
   const auto* data = find_subrecord(cell, k_data);
   if (data == nullptr || data->data.empty()) {
@@ -82,8 +65,8 @@ void require_placement_in_cell(const Record& cell, const PlacedReferenceCreation
   if (grid == nullptr || grid->data.size() < 8) {
     throw PlacedReferenceError("exterior placed reference CELL is missing XCLC");
   }
-  if (grid_coordinate(creation.transform.x) != read_i32(grid->data, 0) ||
-      grid_coordinate(creation.transform.y) != read_i32(grid->data, 4)) {
+  if (detail::grid_coordinate(creation.transform.x) != read_i32(grid->data, 0) ||
+      detail::grid_coordinate(creation.transform.y) != read_i32(grid->data, 4)) {
     throw PlacedReferenceError("placed reference position is outside its exterior CELL grid");
   }
 }
@@ -126,11 +109,12 @@ FormKey create_placed_reference(Plugin& plugin, const PlacedReferenceCreation& c
   const auto base_bytes = detail::u32_label(encode_plugin_form_id(creation.base, context).value());
 
   auto* children = detail::ensure_cell_children_group(
-      *slot.parent, group_header(GroupType::cell_children, cell_label), creation.cell, context, context);
+      *slot.parent, detail::group_header(GroupType::cell_children, cell_label), creation.cell,
+      context, context);
   const auto bucket_type = creation.persistent ? GroupType::cell_persistent_children
                                                : GroupType::cell_temporary_children;
   auto* bucket = detail::ensure_reference_bucket(
-      *children, group_header(bucket_type, cell_label), context, context);
+      *children, detail::group_header(bucket_type, cell_label), context, context);
 
   const auto key = reserve_local_form_key(next);
   RecordFlags::value_type flags = creation.persistent ? RecordFlags::persistent : 0u;

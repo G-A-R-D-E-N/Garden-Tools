@@ -125,6 +125,7 @@ add_library(fo4
   src/forms/info_copy.cpp
   src/forms/placed_reference_edit.cpp
   src/forms/placed_reference_create.cpp
+  src/forms/placed_reference_move.cpp
   src/forms/static_collection.cpp
   src/forms/eyes.cpp
   src/forms/weather.cpp
@@ -185,6 +186,7 @@ add_library(fo4
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
+  src/graph/check_errors_records.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
@@ -369,6 +371,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
     tests/test_placed_reference_create.cpp
+    tests/test_placed_reference_move.cpp
     tests/test_record_flags.cpp
     tests/test_extension_light_kinds.cpp
     tests/test_static_collection.cpp

@@ -4,6 +4,7 @@
 #include "fo4/signature.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <set>
 #include <string_view>
@@ -62,5 +63,22 @@ void validate_destination_record_path(
     const PluginFormIdContext& source_context,
     const PluginFormIdContext& destination_context,
     std::string_view label);
+
+inline constexpr float k_exterior_cell_span = 4096.0f;
+
+inline GroupHeader group_header(GroupType type, std::uint32_t label) {
+  GroupHeader header;
+  header.group_type = static_cast<std::int32_t>(type);
+  header.label = u32_label(label);
+  return header;
+}
+
+inline std::int32_t grid_coordinate(float world) {
+  const auto cells = std::floor(world / k_exterior_cell_span);
+  if (!(std::fabs(cells) < 2147483648.0f)) {
+    throw PlacedReferenceError("placed reference position is not a finite grid coordinate");
+  }
+  return static_cast<std::int32_t>(cells);
+}
 
 }  // namespace fo4::forms::detail
