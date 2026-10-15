@@ -15,6 +15,19 @@ public static class LifecycleSmoke
 {
     public static int Main(string[] args)
     {
+        string temp = Directory.CreateTempSubdirectory("bgs-uismoke-").FullName;
+        foreach (string name in new[] { "TMPDIR", "TMP", "TEMP" })
+            Environment.SetEnvironmentVariable(name, temp);
+        try { return Run(args); }
+        finally
+        {
+            try { Directory.Delete(temp, true); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private static int Run(string[] args)
+    {
         if (args.Contains("--rig-authoring"))
         {
             bool render = args.Contains("--render-rig");
@@ -63,7 +76,16 @@ public static class LifecycleSmoke
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
         int workspace = WorkspaceSmoke.Run();
-        int lifecycle = RagdollLifecycle();
+        string lifecycleSettings = Path.Combine(Path.GetTempPath(), $"bgs-lifecycle-{Guid.NewGuid():N}.cfg");
+        Settings.SettingsPathForTest = lifecycleSettings;
+        Settings.TrySet("tour_done", "1", out _);
+        int lifecycle;
+        try { lifecycle = RagdollLifecycle(); }
+        finally
+        {
+            File.Delete(lifecycleSettings);
+            Settings.SettingsPathForTest = null;
+        }
         return existing == 0 && workspace == 0 && lifecycle == 0 ? 0 : 1;
     }
 

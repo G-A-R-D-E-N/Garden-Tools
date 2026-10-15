@@ -345,3 +345,11 @@ A stale radicle.dll or a RADICLE_NATIVE_PATH pointing at another build throws Ra
 ## BGS/src/Archive/GameData.cs:Names
 
 A missing native library reaches Names as an InvalidDataException wrapping the native error. The catch used to treat that as a DX10 or unreadable archive and returned no names silently. Native-load failures now propagate with their "could not be loaded" message, so the caller sees the cause. `GameData.Entries` uses the same filter.
+
+## BGS/tools/uismoke/RagdollLifecycleSmoke.cs:LifecycleSmoke.Main
+
+Every uismoke mode now runs with TMPDIR, TMP and TEMP pointed at a fresh `bgs-uismoke-*` directory, which is deleted on exit. The smokes and the app code they drive write fixed-name paths under `Path.GetTempPath()`: `BGS/tools/uismoke/Smoke.cs` (`uismoke-templates`, `uismoke-archive.ba2`, `uismoke-savecurrent-*.hkx` and others), `BGS/tools/uismoke/AuditLifecycleSmoke.cs` (`bgs-audit-*.hkx`), and `BGS/app/MainWindow.Document.cs` (`bgs_edit`). Two BGS CI jobs on one runner host share the system temp folder as the same user, so these paths collided. A per-process root fixes all of them in one place. The alternative was editing each path inside `Smoke.cs`, which is over the 750-line limit. Path.GetTempPath reads TMPDIR on each call on Unix and TMP/TEMP on Windows, and managed child processes inherit the variables (native `getenv` on Unix does not see them).
+
+## BGS/tools/uismoke/SettingsRetentionSmoke.cs:ConcurrentSettingsWritesPreserveAllValues
+
+This check, moved here from `BGS/tools/uismoke/Smoke.cs` with `SettingsWriteFailureLeavesExistingFileUntouched`, used to reset `Settings.SettingsPathForTest` to null in its `finally`. As a result, every check `Smoke.Main` ran after it, including the Chain tab sweeps and `NativeAuthoringSmoke.Run`, read and wrote the real per-user settings file. Two BGS Linux CI jobs on the same runner host share that file, so one job's `gameDataFolder` replaced the other's and the Chain sweep checks failed intermittently. The check now restores the previous path. `BGS/tools/uismoke/RagdollLifecycleSmoke.cs:LifecycleSmoke.Main` also gives `RagdollLifecycle` its own temp settings file, because `Smoke.Main` and `WorkspaceSmoke.Run` each clear the path when they finish.
