@@ -16789,6 +16789,17 @@
             "default": "000000000000000000000000"
           },
           {
+            "signature": "CITC",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "SNAM",
             "minimum": 0,
             "maximum": 1
@@ -20847,6 +20858,11 @@
             "maximum": 1
           },
           {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
             "signature": "DNAM",
             "minimum": 0,
             "maximum": 1,
@@ -21645,6 +21661,17 @@
             "signature": "KNAM",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "CITC",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
           }
         ]
       },
@@ -22808,6 +22835,17 @@
             "minimum": 1,
             "maximum": 1,
             "default": "0000"
+          },
+          {
+            "signature": "CITC",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "CTDA",
+            "minimum": 0,
+            "maximum": 65535
           },
           {
             "signature": "COCT",
@@ -25232,7 +25270,8 @@
           { "signature": "KSIZ", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "KWDA", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "DATA", "minimum": 1, "maximum": 1, "default": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" },
-          { "signature": "DNAM", "minimum": 0, "maximum": 1 }
+          { "signature": "DNAM", "minimum": 0, "maximum": 1 },
+          { "signature": "CTDA", "minimum": 0, "maximum": 65535 }
         ]
       },
       "fields": [

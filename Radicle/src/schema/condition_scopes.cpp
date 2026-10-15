@@ -9,6 +9,7 @@
 #include <charconv>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -37,6 +38,8 @@ constexpr Signature sig_qust = Signature::from_string("QUST");
 constexpr Signature sig_indx = Signature::from_string("INDX");
 constexpr Signature sig_next = Signature::from_string("NEXT");
 constexpr Signature sig_prkc = Signature::from_string("PRKC");
+constexpr Signature sig_pnam = Signature::from_string("PNAM");
+constexpr Signature sig_scen = Signature::from_string("SCEN");
 
 constexpr Signature k_package_branch_members[] = {
     sig_citc, sig_ctda, sig_cis1, sig_cis2, Signature::from_string("PRCB"),
@@ -73,6 +76,107 @@ constexpr Signature k_perk_root_successors[] = {
 
 constexpr Signature k_qust_root_successors[] = {
     sig_next,
+};
+
+constexpr Signature k_acti_root_successors[] = {
+    Signature::from_string("NVNM"),
+};
+
+constexpr Signature k_cams_root_successors[] = {
+    Signature::from_string("DATA"), Signature::from_string("MNAM"),
+};
+
+constexpr Signature k_cobj_root_successors[] = {
+    Signature::from_string("CNAM"), Signature::from_string("BNAM"),
+    Signature::from_string("NAM1"), Signature::from_string("NAM2"),
+    Signature::from_string("NAM3"), Signature::from_string("ANAM"),
+    Signature::from_string("FNAM"), Signature::from_string("INTV"),
+};
+
+constexpr Signature k_cpth_root_successors[] = {
+    Signature::from_string("ANAM"), Signature::from_string("DATA"),
+    Signature::from_string("SNAM"),
+};
+
+constexpr Signature k_furn_root_successors[] = {
+    Signature::from_string("COCT"), Signature::from_string("CNTO"),
+    Signature::from_string("MNAM"), Signature::from_string("WBDT"),
+    Signature::from_string("NAM1"), Signature::from_string("ENAM"),
+    Signature::from_string("FNPR"), Signature::from_string("XMRK"),
+    Signature::from_string("SNAM"), Signature::from_string("APPR"),
+    Signature::from_string("OBTE"), Signature::from_string("NVNM"),
+};
+
+constexpr Signature k_idle_root_successors[] = {
+    Signature::from_string("DNAM"), Signature::from_string("ENAM"),
+    Signature::from_string("ANAM"), Signature::from_string("DATA"),
+    Signature::from_string("GNAM"),
+};
+
+constexpr Signature k_lscr_root_successors[] = {
+    Signature::from_string("NNAM"), Signature::from_string("TNAM"),
+    Signature::from_string("ONAM"), Signature::from_string("ZNAM"),
+    Signature::from_string("MOD2"),
+};
+
+constexpr Signature k_must_root_successors[] = {
+    Signature::from_string("SNAM"),
+};
+
+constexpr Signature k_scen_root_successors[] = {
+    Signature::from_string("SCQS"), Signature::from_string("NNAM"),
+    Signature::from_string("TNAM"), Signature::from_string("XNAM"),
+};
+
+constexpr Signature k_smbn_root_successors[] = {
+    Signature::from_string("DNAM"), Signature::from_string("XNAM"),
+};
+
+constexpr Signature k_smen_root_successors[] = {
+    Signature::from_string("DNAM"), Signature::from_string("XNAM"),
+    Signature::from_string("ENAM"),
+};
+
+constexpr Signature k_smqn_root_successors[] = {
+    Signature::from_string("DNAM"), Signature::from_string("XNAM"),
+    Signature::from_string("MNAM"), Signature::from_string("HNAM"),
+    Signature::from_string("QNAM"), Signature::from_string("NNAM"),
+};
+
+constexpr Signature k_sndr_root_successors[] = {
+    Signature::from_string("LNAM"), Signature::from_string("BNAM"),
+    Signature::from_string("DNAM"), Signature::from_string("ITMC"),
+    Signature::from_string("ITMS"),
+};
+
+struct RootListAnchor {
+  Signature record;
+  std::span<const Signature> successors;
+  bool end_when_absent;
+};
+
+constexpr RootListAnchor k_root_list_anchors[] = {
+    {Signature::from_string("ACTI"), k_acti_root_successors, true},
+    {Signature::from_string("CAMS"), k_cams_root_successors, true},
+    {Signature::from_string("CLFM"), {}, true},
+    {Signature::from_string("COBJ"), k_cobj_root_successors, true},
+    {Signature::from_string("CPTH"), k_cpth_root_successors, true},
+    {Signature::from_string("FACT"), {}, true},
+    {Signature::from_string("FURN"), k_furn_root_successors, true},
+    {Signature::from_string("HDPT"), {}, true},
+    {Signature::from_string("IDLE"), k_idle_root_successors, true},
+    {sig_info, k_info_root_successors, true},
+    {Signature::from_string("LSCR"), k_lscr_root_successors, true},
+    {Signature::from_string("MGEF"), {}, true},
+    {Signature::from_string("MUST"), k_must_root_successors, true},
+    {sig_pack, k_pack_root_successors, false},
+    {sig_perk, k_perk_root_successors, true},
+    {sig_qust, k_qust_root_successors, false},
+    {Signature::from_string("SCEN"), k_scen_root_successors, true},
+    {Signature::from_string("SMBN"), k_smbn_root_successors, true},
+    {Signature::from_string("SMEN"), k_smen_root_successors, true},
+    {Signature::from_string("SMQN"), k_smqn_root_successors, true},
+    {Signature::from_string("SNDR"), k_sndr_root_successors, true},
 };
 
 constexpr Signature k_perk_tab_members[] = {
@@ -405,25 +509,32 @@ std::optional<std::vector<ScopeRange>> nested_scope_ranges(const Record& record)
   return ranges;
 }
 
-template <std::size_t N>
 std::optional<std::size_t> first_member_index(const std::vector<Subrecord>& subs,
-                                              const Signature (&set)[N]) {
-  for (std::size_t i = 0; i < subs.size(); ++i) {
-    if (contains_signature(set, subs[i].signature)) return i;
+                                              std::size_t begin,
+                                              std::span<const Signature> set) {
+  for (std::size_t i = begin; i < subs.size(); ++i) {
+    if (std::find(set.begin(), set.end(), subs[i].signature) != set.end()) return i;
   }
   return std::nullopt;
 }
 
-std::optional<std::size_t> root_insert_anchor(const Record& record) {
+std::optional<std::size_t> root_insert_anchor(const Record& record, std::size_t begin) {
   const auto& subs = record.subrecords;
-  if (record.header.signature == sig_pack) return first_member_index(subs, k_pack_root_successors);
-  if (record.header.signature == sig_info) {
-    return first_member_index(subs, k_info_root_successors).value_or(subs.size());
+  for (const auto& entry : k_root_list_anchors) {
+    if (entry.record != record.header.signature) continue;
+    const auto anchor = first_member_index(subs, begin, entry.successors);
+    if (anchor.has_value() || entry.end_when_absent) return anchor.value_or(subs.size());
+    return std::nullopt;
   }
-  if (record.header.signature == sig_perk) {
-    return first_member_index(subs, k_perk_root_successors).value_or(subs.size());
+  return std::nullopt;
+}
+
+std::optional<std::size_t> root_window_begin(const Record& record) {
+  if (record.header.signature != sig_scen) return std::size_t{0};
+  const auto& subs = record.subrecords;
+  for (std::size_t i = subs.size(); i > 0; --i) {
+    if (subs[i - 1].signature == sig_pnam) return i;
   }
-  if (record.header.signature == sig_qust) return first_member_index(subs, k_qust_root_successors);
   return std::nullopt;
 }
 
@@ -468,8 +579,13 @@ RootConditionWindow root_condition_window(const Record& record) {
       found.end = end;
     }
   };
+  const auto window_begin = root_window_begin(record);
+  if (!window_begin.has_value()) {
+    return RootConditionWindow{RootConditionStatus::alias_structure_invalid, 0, 0, std::nullopt};
+  }
+  const auto start = *window_begin;
   const auto limit = root_window_limit(record);
-  std::size_t cursor = 0;
+  std::size_t cursor = start;
   for (const auto& range : *nested) {
     if (cursor < range.begin) consider(cursor, std::min(range.begin, limit));
     cursor = std::max(cursor, range.end);
@@ -479,11 +595,11 @@ RootConditionWindow root_condition_window(const Record& record) {
   if (lists > 1) return RootConditionWindow{RootConditionStatus::multiple_lists, 0, 0, std::nullopt};
   if (lists == 1) return found;
 
-  const auto anchor = root_insert_anchor(record);
+  const auto anchor = root_insert_anchor(record, start);
   if (!anchor.has_value()) {
     return RootConditionWindow{RootConditionStatus::no_list, 0, 0, std::nullopt};
   }
-  std::size_t begin = 0;
+  std::size_t begin = start;
   std::size_t end = limit;
   for (const auto& range : *nested) {
     if (range.end <= *anchor) begin = std::max(begin, range.end);
