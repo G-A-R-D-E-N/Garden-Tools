@@ -234,6 +234,19 @@ TEST(RootConditionLists, ScenRootListIgnoresNestedListAndLandsBeforeTnam) {
   EXPECT_TRUE(after.functions.empty());
 }
 
+TEST(RootConditionLists, ScenWithoutPnamRefusesRootListAndIsUnchanged) {
+  auto plugin = make_plugin("SCEN", {{"ANAM", u32_bytes(0)},
+                                     {"CTDA", ctda_bytes(1)},
+                                     {"TNAM", zeros(4)}});
+  const auto before = fo4::write_plugin(plugin);
+  const auto read = fo4::schema::read_root_conditions(*cond_record(plugin));
+  EXPECT_FALSE(read.ok);
+  EXPECT_EQ(read.error, fo4::schema::ScopedConditionStatus::alias_structure_invalid);
+  EXPECT_EQ(set_root(plugin, {function_condition(9)}),
+            fo4::ConditionMutationStatus::alias_structure_invalid);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+}
+
 TEST(RootConditionLists, CApiCreatesCobjListThroughRadicleExport) {
   TempRoot root{std::filesystem::temp_directory_path() /
                 ("radicle_root_lists_" +

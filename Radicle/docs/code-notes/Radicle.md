@@ -2528,4 +2528,4 @@ CITC: an insert writes a CITC only for the owners in `Radicle/src/schema/ctda.cp
 
 Authoring (`Radicle/schema/fallout4/fields.json`): CITC (optional, coupled, as FACT) and CTDA were added to ACTI, FURN and MUST; CTDA alone was added to SCEN (between KWDA and NNAM), IDLE (after EDID) and MGEF (last). The other new rows already had CTDA, and no record without an authoring block gained one.
 
-Known gap: a SCEN with no PNAM falls back to window start 0, so a single nested list would be read as the root list. The corpus has no such record.
+A SCEN with no PNAM is refused: `Radicle/src/schema/condition_scopes.cpp:root_window_begin` returns nullopt, so `root_condition_window` reports `alias_structure_invalid` and both the read and `set_record_conditions` return that status with the record unchanged. PNAM is required in xEdit and all 4778 corpus SCEN records carry one. The CITC drop on a cleared ACTI, FACT, FURN or MUST list stays in place, since no corpus record of those types keeps a zero-count CITC without a list.

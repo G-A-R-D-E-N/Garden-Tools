@@ -529,13 +529,13 @@ std::optional<std::size_t> root_insert_anchor(const Record& record, std::size_t 
   return std::nullopt;
 }
 
-std::size_t root_window_begin(const Record& record) {
-  if (record.header.signature != sig_scen) return 0;
+std::optional<std::size_t> root_window_begin(const Record& record) {
+  if (record.header.signature != sig_scen) return std::size_t{0};
   const auto& subs = record.subrecords;
   for (std::size_t i = subs.size(); i > 0; --i) {
     if (subs[i - 1].signature == sig_pnam) return i;
   }
-  return 0;
+  return std::nullopt;
 }
 
 std::size_t root_window_limit(const Record& record) {
@@ -579,7 +579,11 @@ RootConditionWindow root_condition_window(const Record& record) {
       found.end = end;
     }
   };
-  const auto start = root_window_begin(record);
+  const auto window_begin = root_window_begin(record);
+  if (!window_begin.has_value()) {
+    return RootConditionWindow{RootConditionStatus::alias_structure_invalid, 0, 0, std::nullopt};
+  }
+  const auto start = *window_begin;
   const auto limit = root_window_limit(record);
   std::size_t cursor = start;
   for (const auto& range : *nested) {
