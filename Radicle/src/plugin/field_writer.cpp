@@ -215,7 +215,7 @@ void write_counter(std::vector<std::byte>& data, std::uint32_t value) {
 
 struct CountedArraySubrecords {
   std::size_t payload;
-  std::size_t counter;
+  std::optional<std::size_t> counter;
   std::size_t count;
 };
 
@@ -239,10 +239,19 @@ std::optional<CountedArraySubrecords> counted_array_subrecords(const Record& rec
       counter = i;
     }
   }
-  if (!payload || !counter) return std::nullopt;
+  if (!payload) return std::nullopt;
+
+  const auto& data = record.subrecords[*payload].data;
+  if (array.count_subrecord == Signature{}) {
+    if (data.size() % array.stride != 0) {
+      throw schema::CountedArrayError(std::string(array.path) + " " + array.subrecord.to_string() +
+                                      " payload is not a whole number of elements");
+    }
+    return CountedArraySubrecords{*payload, std::nullopt, data.size() / array.stride};
+  }
+  if (!counter) return std::nullopt;
 
   const auto& count_data = record.subrecords[*counter].data;
-  const auto& data = record.subrecords[*payload].data;
   if (count_data.size() != 4) {
     throw schema::CountedArrayError(std::string(array.path) + " count subrecord must be four bytes");
   }
@@ -471,7 +480,9 @@ CountedArrayMutationStatus insert_record_counted_element(Plugin& plugin,
 
   auto& data = target->subrecords[found->payload].data;
   data.insert(data.begin() + static_cast<std::ptrdiff_t>(index * array.stride), array.stride, std::byte{0});
-  write_counter(target->subrecords[found->counter].data, static_cast<std::uint32_t>(found->count + 1));
+  if (found->counter) {
+    write_counter(target->subrecords[*found->counter].data, static_cast<std::uint32_t>(found->count + 1));
+  }
   mark_record_modified(plugin, *target);
   return CountedArrayMutationStatus::updated;
 }
@@ -487,11 +498,14 @@ CountedArrayMutationStatus remove_record_counted_element(Plugin& plugin,
   const auto found = counted_array_subrecords(*target, array);
   if (!found) return CountedArrayMutationStatus::subrecord_missing;
   if (index >= found->count) return CountedArrayMutationStatus::index_out_of_range;
+  if (!found->counter && found->count == 1) return CountedArrayMutationStatus::would_empty;
 
   auto& data = target->subrecords[found->payload].data;
   const auto first = data.begin() + static_cast<std::ptrdiff_t>(index * array.stride);
   data.erase(first, first + static_cast<std::ptrdiff_t>(array.stride));
-  write_counter(target->subrecords[found->counter].data, static_cast<std::uint32_t>(found->count - 1));
+  if (found->counter) {
+    write_counter(target->subrecords[*found->counter].data, static_cast<std::uint32_t>(found->count - 1));
+  }
   mark_record_modified(plugin, *target);
   return CountedArrayMutationStatus::updated;
 }
