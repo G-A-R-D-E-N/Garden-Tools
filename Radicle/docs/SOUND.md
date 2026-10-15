@@ -125,7 +125,7 @@ decoders but not writable per field.
 | Family | READ | WRITE | ADD | REMOVE | CREATE | REMAP |
 | --- | --- | --- | --- | --- | --- | --- |
 | SNDR NNAM notes | raw | `SNDR\Notes` | yes, empty string | yes | optional | none |
-| SNDR CNAM kind | `SoundDescriptor.Kind` (absent when missing) | OPAQUE (enum, selects the BNAM layout) | refused (coupled) | refused (coupled) | optional | none |
+| SNDR CNAM kind | `SoundDescriptor.Kind` (absent when missing) | `SNDR\DescriptorType` (u32 enum row, range checked only, selects the BNAM layout) | refused (coupled) | refused (coupled) | optional | none |
 | SNDR GNAM, SNAM, ONAM links | `Category`, `Alternate`, `OutputModel` | `SNDR\Category` (SNCT), `AlternateSoundFor` (SNDR), `OutputModel` (SOPM), not nullable | `no_default` | yes | optional | yes |
 | SNDR ANAM files | `Files` | `SNDR\Sounds` by occurrence | yes, empty string (uncounted) | yes | optional | none |
 | SNDR CTDA conditions | condition code | condition code | refused | refused | optional | condition code |
