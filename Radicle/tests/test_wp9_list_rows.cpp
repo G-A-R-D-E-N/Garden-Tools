@@ -2,11 +2,13 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -69,7 +71,9 @@ ByteWriter make_plugin() {
   add_record(out, "DOOR", 0xA02,
              {{"TNAM", u32_bytes(0x00000A20)}, {"TNAM", u32_bytes(0x00000A21)}});
   add_record(out, "EQUP", 0xA03,
-             {{"PNAM", u32_words({0x00000A30, 0x00000A31, 0x00000A32})}});
+             {{"PNAM", u32_words({0x00000A30, 0x00000A31, 0x00000A32})},
+              {"DATA", u32_bytes(0)}});
+  add_record(out, "EQUP", 0xA05, {{"DATA", u32_bytes(0)}});
   add_record(out, "LVSP", 0xA04,
              {{"OBND", Bytes(12)},
               {"LVLD", u8_bytes(5)},
@@ -107,6 +111,20 @@ Bytes payload(const fo4::Plugin& plugin, std::string_view key, std::string_view 
     return {};
   }
   return all.front();
+}
+
+std::string signature_list(const fo4::Plugin& plugin, std::string_view key) {
+  std::string out;
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) {
+    ADD_FAILURE() << key;
+    return out;
+  }
+  for (std::size_t index = 0; index < record->subrecords.size(); ++index) {
+    if (index != 0) out += ',';
+    out += record->subrecords[index].signature.to_string();
+  }
+  return out;
 }
 
 }  // namespace
@@ -184,4 +202,84 @@ TEST(WP9ListRows, LvspChanceNoneMaxCountAndFlagsReadAndWrite) {
   EXPECT_EQ(payload(reread, "000A04:Patch.esp", "LVLD"), u8_bytes(9));
   EXPECT_EQ(payload(reread, "000A04:Patch.esp", "LVLM"), u8_bytes(2));
   EXPECT_EQ(payload(reread, "000A04:Patch.esp", "LVLF"), u8_bytes(4));
+}
+
+TEST(WP9ListRows, PackedSlotParentsInsertAndRemoveKeepAuthoringOrder) {
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto descriptor = list("EQUP", "EQUP\\SlotParents");
+  const auto key = fo4::FormKey::parse("000A03:Patch.esp");
+  const auto target = fo4::FormKey::parse("000A20:Objects.esp");
+  const auto updated = fo4::schema::FormLinkListMutationStatus::updated;
+  const std::string authored = "EDID,PNAM,DATA";
+  const Bytes three = u32_words({0x00000A30, 0x00000A31, 0x00000A32});
+  const Bytes four = u32_words({0x00000A30, 0x00000A31, 0x00000A32, 0x01000A20});
+  const Bytes five = u32_words({0x01000A20, 0x00000A30, 0x00000A31, 0x00000A32, 0x01000A20});
+
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, key, descriptor, 3, target),
+            updated);
+  EXPECT_EQ(signature_list(plugin, "000A03:Patch.esp"), authored);
+  EXPECT_EQ(payload(plugin, "000A03:Patch.esp", "PNAM"), four);
+
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, key, descriptor, 0, target),
+            updated);
+  EXPECT_EQ(signature_list(plugin, "000A03:Patch.esp"), authored);
+  EXPECT_EQ(payload(plugin, "000A03:Patch.esp", "PNAM"), five);
+
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, key, descriptor, 0), updated);
+  EXPECT_EQ(signature_list(plugin, "000A03:Patch.esp"), authored);
+  EXPECT_EQ(payload(plugin, "000A03:Patch.esp", "PNAM"), four);
+
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, key, descriptor, 3), updated);
+  EXPECT_EQ(signature_list(plugin, "000A03:Patch.esp"), authored);
+  EXPECT_EQ(payload(plugin, "000A03:Patch.esp", "PNAM"), three);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(signature_list(reread, "000A03:Patch.esp"), authored);
+  EXPECT_EQ(fo4::schema::record_formlink_list_size(reread, key, descriptor), 3u);
+}
+
+TEST(WP9ListRows, PackedSlotParentsInsertIntoAbsentListAnchorsAfterEdid) {
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto descriptor = list("EQUP", "EQUP\\SlotParents");
+  const auto key = fo4::FormKey::parse("000A05:Patch.esp");
+  const auto target = fo4::FormKey::parse("000A20:Objects.esp");
+  const auto updated = fo4::schema::FormLinkListMutationStatus::updated;
+  const std::string authored = "EDID,PNAM,DATA";
+  const Bytes one = u32_words({0x01000A20});
+
+  EXPECT_EQ(fo4::schema::record_formlink_list_size(plugin, key, descriptor), 0u);
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, key, descriptor, 0, target),
+            updated);
+  EXPECT_EQ(signature_list(plugin, "000A05:Patch.esp"), authored);
+  EXPECT_EQ(payload(plugin, "000A05:Patch.esp", "PNAM"), one);
+
+  EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, key, descriptor, 0), updated);
+  const std::string emptied = "EDID,DATA";
+  EXPECT_EQ(signature_list(plugin, "000A05:Patch.esp"), emptied);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(signature_list(reread, "000A05:Patch.esp"), emptied);
+  EXPECT_EQ(fo4::schema::record_formlink_list_size(reread, key, descriptor), 0u);
+}
+
+TEST(WP9ListRows, RepeatedSubrecordsAreAddableInAuthoring) {
+  const std::string_view records[] = {"CPTH", "DOOR"};
+  const std::string_view subrecords[] = {"SNAM", "TNAM"};
+  for (std::size_t i = 0; i < 2; ++i) {
+    SCOPED_TRACE(records[i]);
+    const auto constraint =
+        fo4::schema::record_authoring_constraint(fo4::Signature::from_string(records[i]));
+    ASSERT_TRUE(constraint.has_value());
+    const auto rules = fo4::schema::authoring_subrecords(*constraint);
+    const auto wanted = fo4::Signature::from_string(subrecords[i]);
+    const auto rule = std::find_if(
+        rules.begin(), rules.end(),
+        [&](const fo4::schema::SubrecordAuthoringConstraint& candidate) {
+          return candidate.signature == wanted;
+        });
+    ASSERT_NE(rule, rules.end());
+    EXPECT_EQ(rule->maximum, std::uint16_t{65535});
+  }
 }

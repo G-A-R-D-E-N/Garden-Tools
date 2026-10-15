@@ -6466,7 +6466,7 @@
         {"path": "EQUP\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Use All Parents"}, {"bit": 1, "name": "Parents Optional"}, {"bit": 2, "name": "Item Slot"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
       ],
       "formlink_lists": [
-        {"path": "EQUP\\SlotParents", "label": "Slot parents", "subrecord": "PNAM", "targets": ["EQUP"], "nullable": false, "storage": "packed_array", "mutation": "appendable"}
+        {"path": "EQUP\\SlotParents", "label": "Slot parents", "subrecord": "PNAM", "targets": ["EQUP"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["EDID"]}
       ],
       "localized_subrecords": []
     },

@@ -122,6 +122,11 @@ def load_lists(schema_path: Path):
             storage = row.get("storage", "per_subrecord")
             if storage not in ("per_subrecord", "packed_array"):
                 raise ValueError(f"unsupported FormLink list storage: {storage!r}")
+            explicit_anchor = row.get("anchor_predecessors")
+            if explicit_anchor is not None and (
+                    not isinstance(explicit_anchor, list)
+                    or not all(isinstance(value, str) and valid_signature(value) for value in explicit_anchor)):
+                raise ValueError(f"FormLink list anchor_predecessors must be signatures: {path!r}")
 
             lists.append({
                 "record": record_signature,
@@ -136,6 +141,7 @@ def load_lists(schema_path: Path):
                 "can_insert": mutation in ("existing_neighbors", "appendable"),
                 "wildcard_target": wildcard_target,
                 "append_when_empty": mutation == "appendable",
+                "explicit_anchor": explicit_anchor,
             })
 
         field_rows = record.get("formlink_fields", [])
@@ -254,6 +260,10 @@ def load_lists(schema_path: Path):
         record_groups.setdefault(item["record"], []).append(item)
     for group in record_groups.values():
         for position, item in enumerate(group):
+            if item["explicit_anchor"] is not None:
+                item["anchor_predecessors"] = list(item["explicit_anchor"])
+                item["anchor_successors"] = []
+                continue
             item["anchor_predecessors"] = [
                 group[j]["subrecord"] for j in range(position - 1, -1, -1)
             ]
