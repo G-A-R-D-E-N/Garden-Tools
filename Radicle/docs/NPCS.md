@@ -109,7 +109,7 @@ Edit rules:
 | FO4:10348-10369 | INAM, VTCK, TPLT, LTPT, LTPC, TPTA | FormIDs, not scalars. TPTA is a thirteen-FormID struct. Covered by the FormLink tables where they exist. |
 | FO4:10370-10383 | RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR | FormIDs, not scalars. |
 | FO4:10371, 10372 | SPCT count, SPLO list | Count with no typed owner; a generic write would desync it from SPLO. |
-| FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | PRPS is an object property list; FTYP and NTRM are FormIDs; PKID is a repeated FormID list. |
+| FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | Properties (xEdit `wbPRPS`, `Core/wbDefinitionsFO4.pas:10394` at pin 93cc0bc5), an array of 8-byte `wbObjectProperty` entries (`:5266-5272`). Modeled by `NPC_\PropertyActorValue` (link to AVIF, nullable, offset 0, stride 8) and `NPC_\PropertyValue` (f32, offset 4, stride 8) in `Radicle/schema/fallout4/fields.json`, both existing_only. FTYP and NTRM are form IDs; PKID is a repeated form ID list. |
 | FO4:10403-10404 | KWDA/KSIZ keywords, APPR | Covered by the keyword FormLink tables. |
 | FO4:10405 | Object template OBTE/OBTF/OBTS/STOP | Combination struct; not modeled. |
 | FO4:10406-10408 | CNAM, FULL, SHRT | CNAM is a FormID. FULL and SHRT are localized strings; NPC_ is not in `localized_subrecords`, so localization is unchanged. |
