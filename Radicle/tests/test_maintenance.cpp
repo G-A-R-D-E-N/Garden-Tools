@@ -11,12 +11,18 @@
 
 namespace {
 
+struct Subspec {
+  std::string_view signature;
+  std::string_view data;
+};
+
 struct RecordSpec {
   std::string_view signature;
   std::uint32_t form_id;
   std::string_view editor_id;
   std::uint32_t keyword{0};
   std::uint32_t flags{0};
+  std::vector<Subspec> extra{};
 };
 
 fo4::Plugin make_plugin(std::string_view name,
@@ -53,6 +59,7 @@ fo4::Plugin make_plugin(std::string_view name,
       kwda.u32(spec.keyword);
       fo4::test::write_subrecord(out, "KWDA", kwda.bytes);
     }
+    for (const auto& extra : spec.extra) fo4::test::write_subrecord(out, extra.signature, extra.data);
     fo4::test::end_record(out, record);
     fo4::test::end_group(out, group);
   }
@@ -85,6 +92,80 @@ TEST(Maintenance, IdenticalAcrossDifferentMasterOrder) {
   ASSERT_EQ(itm.size(), 1u);
   EXPECT_EQ(itm[0].key, fo4::FormKey::parse("000900:Mod.esp"));
   EXPECT_EQ(itm[0].previous.filename(), "Mod.esp");
+}
+
+TEST(Maintenance, IgnoredSubrecordDifferenceStillIdenticalToMaster) {
+  const auto base = make_plugin("Base.esm", {},
+                                {{"TACT", 0x000800, std::string_view{"Item\0", 5}, 0, 0,
+                                  {{"PNAM", std::string_view{"\x01\0\0\0", 4}}}}});
+  const auto patch = make_plugin("Patch.esp", {"Base.esm"},
+                                 {{"TACT", 0x00000800, std::string_view{"Item\0", 5}, 0, 0,
+                                   {{"PNAM", std::string_view{"\x02\0\0\0", 4}}}}});
+  const std::vector<const fo4::Plugin*> load_order{&base, &patch};
+  const auto itm = fo4::find_identical_to_master(load_order, 1);
+  ASSERT_EQ(itm.size(), 1u);
+  EXPECT_EQ(itm[0].key, fo4::FormKey::parse("000800:Base.esm"));
+  EXPECT_EQ(itm[0].previous.filename(), "Base.esm");
+}
+
+TEST(Maintenance, RealFieldDifferenceIsNotIdenticalEvenWithIgnoredSubrecord) {
+  const auto base = make_plugin("Base.esm", {},
+                                {{"TACT", 0x000800, std::string_view{"Item\0", 5}, 0, 0,
+                                  {{"PNAM", std::string_view{"\x01\0\0\0", 4}}}}});
+  const auto patch = make_plugin("Patch.esp", {"Base.esm"},
+                                 {{"TACT", 0x00000800, std::string_view{"Other\0", 6}, 0, 0,
+                                   {{"PNAM", std::string_view{"\x02\0\0\0", 4}}}}});
+  const std::vector<const fo4::Plugin*> load_order{&base, &patch};
+  EXPECT_TRUE(fo4::find_identical_to_master(load_order, 1).empty());
+}
+
+TEST(Maintenance, CellWaterHeightIsComparedForInteriorAndExteriorCells) {
+  const std::string_view interior{"\x01\x00", 2};
+  const std::string_view exterior{"\x00\x00", 2};
+  const std::string_view water_low{"\x00\x00\x80\x3f", 4};
+  const std::string_view water_high{"\x00\x00\x00\x40", 4};
+  const auto itm_count = [](std::string_view data, std::string_view base_water, std::string_view patch_water) {
+    const auto base = make_plugin("Base.esm", {},
+                                  {{"CELL", 0x000800, std::string_view{"Cell\0", 5}, 0, 0,
+                                    {{"DATA", data}, {"XCLW", base_water}}}});
+    const auto patch = make_plugin("Patch.esp", {"Base.esm"},
+                                   {{"CELL", 0x00000800, std::string_view{"Cell\0", 5}, 0, 0,
+                                     {{"DATA", data}, {"XCLW", patch_water}}}});
+    const std::vector<const fo4::Plugin*> load_order{&base, &patch};
+    return fo4::find_identical_to_master(load_order, 1).size();
+  };
+  EXPECT_EQ(itm_count(interior, water_low, water_low), 1u);
+  EXPECT_EQ(itm_count(interior, water_low, water_high), 0u);
+  EXPECT_EQ(itm_count(exterior, water_low, water_low), 1u);
+  EXPECT_EQ(itm_count(exterior, water_low, water_high), 0u);
+}
+
+TEST(Maintenance, OverrideIdenticalToMasterIsNotItmWhenAnInterveningOverrideDiffers) {
+  const auto master = make_plugin("A.esm", {}, {{"MISC", 0x000800, std::string_view{"Item\0", 5}}});
+  const auto intervening = make_plugin("B.esp", {"A.esm"}, {{"MISC", 0x00000800, std::string_view{"Changed\0", 8}}});
+  const auto last = make_plugin("C.esp", {"A.esm"}, {{"MISC", 0x00000800, std::string_view{"Item\0", 5}}});
+  const std::vector<const fo4::Plugin*> load_order{&master, &intervening, &last};
+  EXPECT_TRUE(fo4::find_identical_to_master(load_order, 2).empty());
+}
+
+TEST(Maintenance, OverrideIdenticalToAnInterveningOverrideIsNotItmWhenItDiffersFromMaster) {
+  const auto master = make_plugin("A.esm", {}, {{"MISC", 0x000800, std::string_view{"Item\0", 5}}});
+  const auto intervening = make_plugin("B.esp", {"A.esm"}, {{"MISC", 0x00000800, std::string_view{"Changed\0", 8}}});
+  const auto last = make_plugin("C.esp", {"A.esm"}, {{"MISC", 0x00000800, std::string_view{"Changed\0", 8}}});
+  const std::vector<const fo4::Plugin*> load_order{&master, &intervening, &last};
+  EXPECT_TRUE(fo4::find_identical_to_master(load_order, 2).empty());
+}
+
+TEST(Maintenance, OverrideIdenticalToMasterIsItmWhileALaterOverrideStillHoldsTheRecord) {
+  const auto master = make_plugin("A.esm", {}, {{"MISC", 0x000800, std::string_view{"Item\0", 5}}});
+  const auto first = make_plugin("B.esp", {"A.esm"}, {{"MISC", 0x00000800, std::string_view{"Changed\0", 8}}});
+  const auto middle = make_plugin("C.esp", {"A.esm"}, {{"MISC", 0x00000800, std::string_view{"Item\0", 5}}});
+  const auto last = make_plugin("D.esp", {"A.esm"}, {{"MISC", 0x00000800, std::string_view{"Item\0", 5}}});
+  const std::vector<const fo4::Plugin*> load_order{&master, &first, &middle, &last};
+  const auto itm = fo4::find_identical_to_master(load_order, 2);
+  ASSERT_EQ(itm.size(), 1u);
+  EXPECT_EQ(itm[0].previous.filename(), "A.esm");
+  EXPECT_TRUE(fo4::find_identical_to_master(load_order, 3).empty());
 }
 
 TEST(Maintenance, CountsDeletedRecordsAndNavmeshes) {
