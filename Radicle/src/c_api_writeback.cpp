@@ -1,9 +1,11 @@
 #include "c_api_env_internal.hpp"
+#include "fo4/forms/copy_as_new.hpp"
 #include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/writer.hpp"
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -100,6 +102,54 @@ radicle_status radicle_plugin_copy_placed_ref_new(radicle_plugin* plugin,
       return fail(RADICLE_STATUS_NOT_FOUND, "source record is not in its plugin");
     } catch (const fo4::forms::PlacedReferenceError& error) {
       return placed_error(error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_copy_record_as_new(radicle_plugin* destination,
+                                                 const radicle_plugin* source,
+                                                 radicle_form_key record,
+                                                 const char* editor_id,
+                                                 const char* remove_prefix,
+                                                 const char* remove_suffix,
+                                                 const char* prefix,
+                                                 const char* suffix,
+                                                 radicle_form_key* out_key) {
+  clear_error();
+  const auto key = to_form_key(record);
+  if (destination == nullptr || source == nullptr || !key || out_key == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "destination, source, a valid record and out_key are required");
+  }
+  *out_key = {nullptr, 0};
+  return guarded("unknown exception while copying record", [&] {
+    fo4::forms::RecordCopyNewOptions options;
+    if (editor_id != nullptr) options.editor_id = editor_id;
+    if (remove_prefix != nullptr) options.editor_id_remove_prefix = remove_prefix;
+    if (remove_suffix != nullptr) options.editor_id_remove_suffix = remove_suffix;
+    if (prefix != nullptr) options.editor_id_prefix = prefix;
+    if (suffix != nullptr) options.editor_id_suffix = suffix;
+    try {
+      auto next = destination->value;
+      const auto result = fo4::forms::copy_record_as_new(next, source->value, *key, options);
+      switch (result.status) {
+        case fo4::forms::RecordCopyNewStatus::created:
+          destination->value = std::move(next);
+          *out_key = {destination->value.key.filename().data(), result.new_record.local().value()};
+          return RADICLE_STATUS_OK;
+        case fo4::forms::RecordCopyNewStatus::unsupported_signature:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record type is not copied as new");
+        case fo4::forms::RecordCopyNewStatus::parent_cell_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin does not contain the reference's parent CELL");
+        case fo4::forms::RecordCopyNewStatus::parent_dial_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin does not contain the INFO's parent DIAL");
+        case fo4::forms::RecordCopyNewStatus::source_missing:
+          break;
+      }
+      return fail(RADICLE_STATUS_NOT_FOUND, "source record is not in its plugin");
+    } catch (const fo4::forms::PlacedReferenceError& error) {
+      return placed_error(error);
+    } catch (const fo4::forms::InfoCopyError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
     }
   });
 }

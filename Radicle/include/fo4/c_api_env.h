@@ -582,6 +582,15 @@ RADICLE_API radicle_status radicle_plugin_copy_placed_ref_new(radicle_plugin* pl
                                                               const radicle_env* env,
                                                               const radicle_record* record,
                                                               radicle_form_key* out_key);
+RADICLE_API radicle_status radicle_plugin_copy_record_as_new(radicle_plugin* destination,
+                                                             const radicle_plugin* source,
+                                                             radicle_form_key record,
+                                                             const char* editor_id,
+                                                             const char* remove_prefix,
+                                                             const char* remove_suffix,
+                                                             const char* prefix,
+                                                             const char* suffix,
+                                                             radicle_form_key* out_key);
 RADICLE_API radicle_status radicle_plugin_set_placed_transform(radicle_plugin* plugin,
                                                                radicle_form_key reference,
                                                                const float position[3],
