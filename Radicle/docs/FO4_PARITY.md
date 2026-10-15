@@ -146,20 +146,20 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
 | PARW | 5944 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PBAR | 5945 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PBEA | 5946 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PCON | 5947 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PBAR | 5945 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PBEA | 5946 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PCON | 5947 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PERK | 7582 | - | - | - | - | 3 | - | - | - | yes | 1 | L0 |
-| PFLA | 5948 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PGRE | 5949 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PHZD | 5950 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PFLA | 5948 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PGRE | 5949 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PHZD | 5950 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PKIN | 12571 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
+| PMIS | 5951 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 22 | 2 | 11 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | 40 | 4 | 24 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
-| REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| REFR | 11347 | 23 | - | 11 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -298,20 +298,20 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | OVIS | - | - | - | - | - | - | - | - | - | - |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
 | PARW | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PBAR | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PBEA | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PCON | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PBAR | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PBEA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PCON | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PERK | - | - | - | - | - | - | - | - | - | - |
-| PFLA | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PGRE | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PHZD | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PFLA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PGRE | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PHZD | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PKIN | 7 | - | - | - | 1 | i16, u32 | - | - | - | existing_only |
 | PLYR | - | - | - | - | - | - | - | - | - | - |
-| PMIS | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PMIS | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PROJ | 22 | - | - | - | 2 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | 32 | - | 5 | 3 | 4 | f32, i16, i32, u32, u8 | 3 | 2 | - | existing_only |
-| REFR | 6 | 1 | - | - | - | f32, u32 | - | 4 | - | existing_only |
+| REFR | 20 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
 | REGN | - | - | - | - | - | - | - | - | - | - |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |

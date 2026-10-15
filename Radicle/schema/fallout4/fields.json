@@ -8343,6 +8343,407 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\Radius",
+          "label": "Radius",
+          "kind": "scalar",
+          "subrecord": "XRDS",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\ItemCount",
+          "label": "Item count",
+          "kind": "scalar",
+          "subrecord": "XCNT",
+          "storage": "i32",
+          "presentation": "identity",
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\CollisionLayer",
+          "label": "Collision layer",
+          "kind": "scalar",
+          "subrecord": "XTRI",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\AlphaCutoff",
+          "label": "Alpha cutoff",
+          "kind": "scalar",
+          "subrecord": "XALP",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 2,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\AlphaBase",
+          "label": "Alpha base",
+          "kind": "scalar",
+          "subrecord": "XALP",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 2,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LockLevel",
+          "label": "Lock level",
+          "kind": "scalar",
+          "subrecord": "XLOC",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "None"
+            },
+            {
+              "value": 1,
+              "name": "Novice 1"
+            },
+            {
+              "value": 25,
+              "name": "Novice 25"
+            },
+            {
+              "value": 50,
+              "name": "Advanced"
+            },
+            {
+              "value": 75,
+              "name": "Expert"
+            },
+            {
+              "value": 100,
+              "name": "Master"
+            },
+            {
+              "value": 251,
+              "name": "Barred"
+            },
+            {
+              "value": 252,
+              "name": "Chained"
+            },
+            {
+              "value": 253,
+              "name": "Requires Terminal"
+            },
+            {
+              "value": 254,
+              "name": "Inaccessible"
+            },
+            {
+              "value": 255,
+              "name": "Requires Key"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LockFlags",
+          "label": "Lock flags",
+          "kind": "scalar",
+          "subrecord": "XLOC",
+          "offset": 8,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 2,
+              "name": "Leveled Lock"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 16,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LightFov",
+          "label": "Light FOV",
+          "kind": "scalar",
+          "subrecord": "XLIG",
+          "offset": 0,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LightFade",
+          "label": "Light fade",
+          "kind": "scalar",
+          "subrecord": "XLIG",
+          "offset": 4,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LightEndDistanceCap",
+          "label": "Light end distance cap",
+          "kind": "scalar",
+          "subrecord": "XLIG",
+          "offset": 8,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LightShadowDepthBias",
+          "label": "Light shadow depth bias",
+          "kind": "scalar",
+          "subrecord": "XLIG",
+          "offset": 12,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LightNearClip",
+          "label": "Light near clip",
+          "kind": "scalar",
+          "subrecord": "XLIG",
+          "offset": 16,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 20,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LightVolumetricIntensity",
+          "label": "Light volumetric intensity",
+          "kind": "scalar",
+          "subrecord": "XLIG",
+          "offset": 20,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "minimum_payload_size": 24,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "REFR\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LeveledItemBase",
+          "label": "Leveled item base",
+          "subrecord": "XLIB",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LVLI"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\TeleportLocationName",
+          "label": "Teleport location name",
+          "subrecord": "XTNM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MESG"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\AcousticRestriction",
+          "label": "Acoustic restriction",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\MultiboundReference",
+          "label": "Multibound reference",
+          "subrecord": "XMBR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\SpawnContainer",
+          "label": "Spawn container",
+          "subrecord": "XSPC",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LockKey",
+          "label": "Lock key",
+          "subrecord": "XLOC",
+          "offset": 4,
+          "payload_sizes": [
+            16
+          ],
+          "targets": [
+            "KEYM"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
         }
       ],
       "localized_subrecords": []
@@ -8807,9 +9208,127 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "PBAR\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBAR\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
         {
           "path": "PBAR\\Base",
           "label": "Base",
@@ -9067,9 +9586,127 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "PBEA\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PBEA\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
         {
           "path": "PBEA\\Base",
           "label": "Base",
@@ -9327,9 +9964,127 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "PCON\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PCON\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
         {
           "path": "PCON\\Base",
           "label": "Base",
@@ -9587,9 +10342,127 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "PFLA\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PFLA\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
         {
           "path": "PFLA\\Base",
           "label": "Base",
@@ -9847,9 +10720,127 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "PGRE\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PGRE\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
         {
           "path": "PGRE\\Base",
           "label": "Base",
@@ -10106,9 +11097,127 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "PHZD\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PHZD\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
         {
           "path": "PHZD\\Base",
           "label": "Base",
@@ -10366,9 +11475,127 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "PMIS\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PMIS\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
         {
           "path": "PMIS\\Base",
           "label": "Base",

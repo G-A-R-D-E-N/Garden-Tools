@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -47,9 +48,12 @@ TEST(ScalarSchema, GeneratedRefrFieldsAreRecordQualified) {
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_misc, "REFR\\Scale").has_value());
 
   const auto fields = fo4::schema::scalar_fields(k_refr);
-  ASSERT_EQ(fields.size(), 7u);
-  EXPECT_EQ(fields[0].path, "REFR\\HealthPercent");
-  EXPECT_EQ(fields[1].path, "REFR\\Scale");
+  ASSERT_EQ(fields.size(), 23u);
+  const auto has = [&fields](std::string_view path) {
+    return std::any_of(fields.begin(), fields.end(), [path](const auto& field) { return field.path == path; });
+  };
+  EXPECT_TRUE(has("REFR\\HealthPercent"));
+  EXPECT_TRUE(has("REFR\\Scale"));
 }
 
 TEST(ScalarSchema, XhltIsU32HumanPercent) {
