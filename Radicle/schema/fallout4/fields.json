@@ -4547,11 +4547,11 @@
         "placement": "top_level",
         "subrecords": [
           {"signature": "EDID", "minimum": 1, "maximum": 1},
-          {"signature": "DNAM", "minimum": 1, "maximum": 1},
+          {"signature": "DNAM", "minimum": 1, "maximum": 1, "default": "000000000000803f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000003f0000003f00000000000000000000000000000000000000000000000002000000000000000000000000000000"},
           {"signature": "BNAM", "minimum": 0, "maximum": 1},
           {"signature": "VNAM", "minimum": 0, "maximum": 1},
-          {"signature": "TNAM", "minimum": 1, "maximum": 1},
-          {"signature": "NAM3", "minimum": 1, "maximum": 1},
+          {"signature": "TNAM", "minimum": 1, "maximum": 1, "default": "000000000000803f0000803f0000803f000000000000803f0000803f0000803f0000803f00000000"},
+          {"signature": "NAM3", "minimum": 1, "maximum": 1, "default": "000000000000803f0000803f0000803f000000000000803f0000803f0000803f0000803f00000000"},
           {"signature": "RNAM", "minimum": 0, "maximum": 1},
           {"signature": "SNAM", "minimum": 0, "maximum": 1},
           {"signature": "UNAM", "minimum": 0, "maximum": 1},
@@ -5432,7 +5432,8 @@
           {
             "signature": "OBND",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000"
           },
           {
             "signature": "FULL",
@@ -5443,12 +5444,14 @@
             "signature": "MODL",
             "minimum": 1,
             "maximum": 1,
+            "default": "00",
             "coupled": true
           },
           {
             "signature": "MODT",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": ""
           },
           {
             "signature": "MNAM",
@@ -5458,7 +5461,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "000000000000000000000000000000009a99993e0000000000000000000000000000000000000000000000000000000000000000"
           }
         ]
       },
@@ -8856,7 +8860,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           }
         ]
       },
@@ -13554,7 +13559,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "0000000000000000"
           }
         ]
       },
@@ -17866,7 +17872,8 @@
           {
             "signature": "DESC",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "CTDA",
@@ -17959,7 +17966,9 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 65535
+            "maximum": 65535,
+            "default": "000000",
+            "uncounted": true
           }
         ]
       }
@@ -18113,7 +18122,8 @@
           {
             "signature": "DESC",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00"
           },
           {
             "signature": "FULL",
@@ -18134,7 +18144,8 @@
           {
             "signature": "DNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "TNAM",
@@ -23562,7 +23573,8 @@
           {
             "signature": "RNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "SPCT",
@@ -23725,7 +23737,8 @@
           {
             "signature": "CNAM",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "FULL",
@@ -23740,7 +23753,8 @@
           {
             "signature": "DATA",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": ""
           },
           {
             "signature": "DNAM",
@@ -23775,12 +23789,14 @@
           {
             "signature": "NAM5",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "0000"
           },
           {
             "signature": "NAM6",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "NAM7",
@@ -23800,7 +23816,8 @@
           {
             "signature": "NAM8",
             "minimum": 1,
-            "maximum": 1
+            "maximum": 1,
+            "default": "00000000"
           },
           {
             "signature": "CS2H",

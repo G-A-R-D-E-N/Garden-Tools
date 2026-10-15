@@ -146,6 +146,14 @@ SubrecordRemoveStatus remove_with_rules(Plugin& plugin,
   if (occurrence >= positions.size()) return SubrecordRemoveStatus::absent;
   if (positions.size() - 1 < rules[*target].minimum) return SubrecordRemoveStatus::below_minimum;
 
+  if (rules[*target].maximum > 1) {
+    for (const auto& existing : record->subrecords) {
+      if (!rule_index(rules, existing.signature).has_value()) {
+        return SubrecordRemoveStatus::unknown_order;
+      }
+    }
+  }
+
   record->subrecords.erase(record->subrecords.begin() +
                            static_cast<std::ptrdiff_t>(positions[occurrence]));
   detail::mark_record_modified(plugin, *record);

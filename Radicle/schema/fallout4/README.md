@@ -2,7 +2,7 @@
 
 FormLink locations, not full record layouts.
 
-- 179 four-byte form ID subrecords: xEdit `wbFormIDCk` plus hand-added `EITM`, `CS2K`, `CS2D`, `HEAD`, `MDOB` and `PLYR` (remap only if payload is exactly 4 bytes). Tables: `include/fo4/schema/formid_subrecords.inc`
+- 179 four-byte form ID subrecords: xEdit `wbFormIDCk` signatures plus hand-added `EITM`, `CS2K`, `CS2D`, `HEAD`, `MDOB` and `PLYR` (remap only if payload is exactly 4 bytes). The list is hand-maintained (no generator in the repo) and is not complete: form IDs from `wbDefinitionsCommon.pas` helpers and computed signatures are not all listed. Tables: `include/fo4/schema/formid_subrecords.inc`
 - Arrays: `KWDA`, `SPLO`, TES4 `ONAM`, `XLKR`, `APPR`
 - Record-qualified packed arrays (`form_link_mixed.cpp:packed_formid_array_offsets`): ARMO and ARMA `MODL` (a path string in other records), NPC_ `TPTA` (13 form IDs) and OVIS `INDX` (one STAT form ID per entry)
 - Structured mixed payloads (`structured_formids.inc`): `CNTO` item at 0, `LVLO` reference at 4, `XTEL` door at 0, `XLOC` key at 4, `XESP` parent at 0, `COED` owner at 0, `DSTD` explosion at 8 and debris at 12, `XNDP` navmesh at 0, `ATKD` attack spell at 8
