@@ -1,6 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
@@ -95,8 +96,7 @@ void write_group(ByteWriter& out, std::string_view label, const std::vector<Entr
   fo4::test::end_group(out, group);
 }
 
-std::vector<std::byte> make_plugin() {
-  ByteWriter out;
+void write_header(ByteWriter& out) {
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   ByteWriter hedr;
   hedr.f32(1.0f);
@@ -108,6 +108,21 @@ std::vector<std::byte> make_plugin() {
   fo4::test::write_subrecord(out, "MAST", std::string_view{"Objects.esp\0", 12});
   fo4::test::write_subrecord(out, "DATA", Bytes(8));
   fo4::test::end_record(out, tes4);
+}
+
+Bytes make_note_plugin(std::uint8_t note_type, const Bytes& snam) {
+  ByteWriter out;
+  write_header(out);
+  write_group(out, "SCEN", {{0x0B01, {{"EDID", zstr("RadicleScene")}}}});
+  std::vector<Sub> subs{{"EDID", zstr("RadicleNote")}, {"DNAM", Bytes{std::byte{note_type}}}};
+  if (!snam.empty()) subs.push_back({"SNAM", snam});
+  write_group(out, "NOTE", {{0x0B02, subs}});
+  return out.bytes;
+}
+
+std::vector<std::byte> make_plugin() {
+  ByteWriter out;
+  write_header(out);
 
   write_group(out, "IPCT", {{0x0A01, {{"EDID", zstr("RadicleImpact")},
                                        {"DODT", payload(36, {{28, 0x05}, {29, 0x03}, {32, 0x11},
@@ -145,6 +160,22 @@ Bytes scalar_bytes(const fo4::Plugin& plugin, std::string_view record, std::stri
   const auto data = sub_bytes(plugin, key, field->scalar.subrecord.to_string());
   const auto bytes = fo4::schema::scalar_field_bytes(data, field->scalar);
   return Bytes(bytes.begin(), bytes.end());
+}
+
+fo4::FormLinkFieldMutationStatus note_link(fo4::Plugin& plugin, std::string_view path,
+                                           const fo4::FormKey& target) {
+  const auto field = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("NOTE"), path);
+  return fo4::set_record_formlink_field(plugin, fo4::FormKey::parse("000B02:Patch.esp"), field.value(),
+                                        0, target);
+}
+
+std::size_t note_snam_hits(const fo4::Plugin& plugin) {
+  const auto note = fo4::FormKey::parse("000B02:Patch.esp");
+  std::size_t count = 0;
+  for (const auto& hit : fo4::collect_form_links(plugin)) {
+    if (hit.record == note && hit.subrecord == fo4::Signature::from_string("SNAM")) ++count;
+  }
+  return count;
 }
 
 }  // namespace
@@ -228,4 +259,26 @@ TEST(WP9MiscRowsB, LightPreviewTransformRetargetsAndRejectsNull) {
   const fo4::FormKey none{};
   EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, *field, none),
                fo4::schema::FormLinkFieldError);
+}
+
+TEST(WP9MiscRowsB, NoteSnamIsGuardedByDnamType) {
+  auto voice_note = fo4::read_plugin(make_note_plugin(1, u32_bytes(raw_id(0x0B01))), "Patch.esp");
+  const auto scene = fo4::FormKey::parse("000B01:Patch.esp");
+  const auto other = fo4::FormKey::parse("000A20:Objects.esp");
+  EXPECT_EQ(note_link(voice_note, "NOTE\\VoiceTarget", scene),
+            fo4::FormLinkFieldMutationStatus::unchanged);
+  EXPECT_EQ(note_link(voice_note, "NOTE\\SoundTarget", other),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(note_link(voice_note, "NOTE\\TerminalTarget", other),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(note_snam_hits(voice_note), 1u);
+
+  auto program_note = fo4::read_plugin(make_note_plugin(2, {}), "Patch.esp");
+  EXPECT_EQ(note_link(program_note, "NOTE\\SoundTarget", other),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(note_link(program_note, "NOTE\\VoiceTarget", other),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(note_link(program_note, "NOTE\\TerminalTarget", other),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(note_snam_hits(program_note), 0u);
 }
