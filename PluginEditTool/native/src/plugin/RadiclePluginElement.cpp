@@ -93,6 +93,9 @@ std::optional<Error> authoringStatusError(fo4::SubrecordRemoveStatus status) {
             return Error{"ElementBelowMinimum", "Removal would violate the required subrecord count"};
         case fo4::SubrecordRemoveStatus::not_authorable:
             return Error{"ElementNotAuthorable", "Subrecord is coupled or has no independent authoring rule"};
+        case fo4::SubrecordRemoveStatus::unknown_order:
+            return Error{"ElementUnknownOrder",
+                "Removal cannot be proven safe: the record has subrecords the authoring order does not describe"};
     }
     return Error{"ElementRemoveFailed", "Unknown authoring status"};
 }

@@ -119,6 +119,7 @@ add_library(fo4
   src/forms/cell.cpp
   src/forms/cell_create.cpp
   src/forms/components.cpp
+  src/forms/effects.cpp
   src/forms/placed_reference.cpp
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
@@ -185,6 +186,7 @@ add_library(fo4
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
   src/graph/check_errors.cpp
+  src/graph/check_errors_records.cpp
   src/graph/plugin_diff.cpp
   src/graph/reachability.cpp
   src/environment/environment.cpp
@@ -356,6 +358,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_flst_formlink_lists.cpp
     tests/test_kwda_formlink_lists.cpp
     tests/test_components.cpp
+    tests/test_magic_effects.cpp
     tests/test_nested_formlink_lists.cpp
     tests/test_formlink_list_management.cpp
     tests/test_sraf_formlinks.cpp
