@@ -6826,7 +6826,212 @@
     },
     {
       "signature": "SCOL",
-      "fields": [],
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {
+            "signature": "EDID",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBND",
+            "minimum": 1,
+            "maximum": 1,
+            "default": "000000000000000000000000"
+          },
+          {
+            "signature": "PTRN",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODL",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "MODT",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODS",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "MODF",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FULL",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "FLTR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 1,
+            "maximum": 65535,
+            "coupled": true
+          },
+          {
+            "signature": "DATA",
+            "minimum": 1,
+            "maximum": 65535,
+            "coupled": true
+          }
+        ]
+      },
+      "fields": [
+        {
+          "path": "SCOL\\BoundMinX",
+          "label": "Min X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 0,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\BoundMinY",
+          "label": "Min Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 2,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\BoundMinZ",
+          "label": "Min Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 4,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\BoundMaxX",
+          "label": "Max X",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 6,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\BoundMaxY",
+          "label": "Max Y",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 8,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\BoundMaxZ",
+          "label": "Max Z",
+          "kind": "scalar",
+          "subrecord": "OBND",
+          "offset": 10,
+          "storage": "i16",
+          "presentation": "identity",
+          "minimum": -32768,
+          "maximum": 32767,
+          "payload_size": 12,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\Model",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MODL",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\Filter",
+          "label": "Filter",
+          "kind": "string",
+          "subrecord": "FLTR",
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "SCOL\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": [
+            "TRNS"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCOL\\PartStatic",
+          "label": "Part static",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "targets": [
+            "ACTI",
+            "ALCH",
+            "AMMO",
+            "BOOK",
+            "CONT",
+            "DOOR",
+            "FLOR",
+            "FURN",
+            "MISC",
+            "MSTT",
+            "STAT",
+            "TERM",
+            "WEAP"
+          ],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        }
+      ],
       "localized_subrecords": [
         "FULL"
       ]
