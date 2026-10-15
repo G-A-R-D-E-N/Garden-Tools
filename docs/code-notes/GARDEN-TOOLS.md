@@ -2367,3 +2367,7 @@ Findings were read only when assembly failed. A successful assembly now copies e
 ## PluginEditTool/publish.bat — missing deploy folder is a failure (#504 audit2 GT-280)
 
 A deploy folder that does not exist now exits with code 1 and prints no success message. Running without any deploy folder still builds and skips the copy.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:copyRecordAsNewLocked — delegates to Radicle copy_record_as_new (#602 D-11)
+
+`copyRecordAsNewLocked` is now a thin wrapper over `Radicle/src/forms/copy_as_new.cpp:copy_record_as_new`, which holds the top-level copy algorithm that used to be inline here (masters for the form links, local allocation, remap, EDID last). The wrapper maps the result: `created` returns the new key, `unsupported_signature` returns the new `CopyAsNewUnsupportedType` error (PLYR and NOCM, which xEdit refuses), and anything else returns `RecordNotFound`. The EDID argument is passed as the replacement EDID, so `copyAsWrapper` and `CopyAsNewRecord` keep their existing output. The copy's errors still propagate as before: an undecodable source throws, and an unrepresentable EDID throws and is reported as `CopyAsNewFailed`. The `CopyAsNewAllocationFailed` code is gone because that failure now throws `std::logic_error` inside Radicle, which is unreachable in practice. The nested INFO and placed-reference branch of `invokeLegacyBackend` is unchanged: it still calls the Radicle primitives directly and still reports `CopyAsNewEditorIdFailed`.

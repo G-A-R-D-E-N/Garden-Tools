@@ -86,6 +86,13 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
             "until " + target->name + " loads after them.");
     }
 
+    if (support::topLevelRecord(source->plugin, key) == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record is not present in " + source->name + ": " + key.to_string()
+        });
+    }
+
     try {
         auto mutated = target->plugin;
         const auto copiedKey = copyRecordAsNewLocked(

@@ -6,13 +6,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
-#include <set>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
 
+#include <fo4/forms/copy_as_new.hpp>
 #include <fo4/forms/placed_reference.hpp>
 #include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
@@ -25,6 +25,7 @@
 namespace fo4ide::plugin {
 
 using support::editorId;
+using support::topLevelRecord;
 
 namespace {
 
@@ -58,17 +59,6 @@ std::string maintenanceLower(std::string_view value) {
     return out;
 }
 
-const fo4::Record* topLevelRecord(const fo4::Plugin& plugin, const fo4::FormKey& key) {
-    for (const auto& group : plugin.groups) {
-        if (group.header.group_type != static_cast<std::int32_t>(fo4::GroupType::top)) continue;
-        for (const auto& child : group.children) {
-            const auto* record = std::get_if<fo4::Record>(&child);
-            if (record != nullptr && record->form_key == key) return record;
-        }
-    }
-    return nullptr;
-}
-
 fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
     fo4::Record* found = nullptr;
     fo4::visit_records(plugin, [&](fo4::Record& record) {
@@ -79,22 +69,6 @@ fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
     return found;
 }
 
-fo4::PluginKind maintenanceOwnerKind(const fo4::Plugin& source,
-                                     const fo4::PluginKey& owner) {
-    if (owner == source.key) {
-        return fo4::classify_plugin_kind(source.header.tes4_flags, source.key);
-    }
-    for (const auto& master : source.header.masters) {
-        if (master.key == owner) return master.kind;
-    }
-    return owner.looks_light() ? fo4::PluginKind::light : fo4::PluginKind::full;
-}
-
-bool maintenanceHasMaster(const fo4::Plugin& plugin, const fo4::PluginKey& owner) {
-    return std::any_of(plugin.header.masters.begin(), plugin.header.masters.end(),
-                       [&](const auto& master) { return master.key == owner; });
-}
-
 }  // namespace
 
 Result<fo4::FormKey> RadiclePluginBackend::copyRecordAsNewLocked(
@@ -102,64 +76,34 @@ Result<fo4::FormKey> RadiclePluginBackend::copyRecordAsNewLocked(
     const LoadedPlugin& source,
     const fo4::FormKey& key,
     std::optional<std::string_view> newEditorId) const {
-    const auto* sourceRecord = topLevelRecord(source.plugin, key);
-    if (sourceRecord == nullptr) {
+    fo4::forms::RecordCopyNewOptions options;
+    if (newEditorId.has_value()) options.editor_id = std::string(*newEditorId);
+    const auto result = fo4::forms::copy_record_as_new(mutated, source.plugin, key, options);
+    if (result.status == fo4::forms::RecordCopyNewStatus::created) return result.new_record;
+    const auto targetName = std::string(mutated.key.filename());
+    if (result.status == fo4::forms::RecordCopyNewStatus::unsupported_signature) {
         return std::unexpected(Error{
-            "RecordNotFound",
-            "Record is not present in " + source.name + ": " + key.to_string()
+            "CopyAsNewUnsupportedType",
+            "CopyAsNewRecord does not copy this record type (xEdit refuses it): " + key.to_string()
         });
     }
-    fo4::require_decodable(*sourceRecord);
-
-    std::set<fo4::PluginKey> requiredOwners;
-    for (const auto& link : fo4::collect_form_links(source.plugin)) {
-        if (link.record != key || link.key.owner().empty()) continue;
-        requiredOwners.insert(link.key.owner());
-    }
-
-    std::vector<fo4::MasterDescriptor> masters;
-    masters.reserve(mutated.header.masters.size() + requiredOwners.size());
-    for (const auto& master : mutated.header.masters) {
-        masters.push_back({master.key, master.kind});
-    }
-    bool addedMaster = false;
-    for (const auto& owner : requiredOwners) {
-        if (owner == mutated.key || maintenanceHasMaster(mutated, owner)) continue;
-        masters.push_back({owner, maintenanceOwnerKind(source.plugin, owner)});
-        addedMaster = true;
-    }
-    if (addedMaster) {
-        mutated = fo4::remap_plugin_masters(std::move(mutated), std::move(masters));
-    }
-
-    const auto newKey = fo4::create_local_record(mutated, sourceRecord->header.signature);
-    auto copied = *sourceRecord;
-    const auto sourceContext = fo4::plugin_form_id_context(source.plugin);
-    const auto destinationContext = fo4::plugin_form_id_context(mutated);
-    copied.form_key = newKey;
-    copied.header.form_id = fo4::encode_plugin_form_id(newKey, destinationContext);
-    fo4::remap_record_form_links(copied, sourceContext, destinationContext);
-    copied.original_range.clear();
-    copied.decompressed_payload.clear();
-    copied.header.data_size = 0;
-    copied.uncompressed_size = 0;
-
-    auto* allocated = mutableRecord(mutated, newKey);
-    if (allocated == nullptr) {
+    if (result.status == fo4::forms::RecordCopyNewStatus::parent_cell_missing) {
         return std::unexpected(Error{
-            "CopyAsNewAllocationFailed",
-            "Allocated record disappeared before duplication"
+            "TargetParentCellMissing",
+            "The placed reference's parent CELL is not present in " + targetName +
+            "; copy or override the parent CELL into the target first"
         });
     }
-    *allocated = std::move(copied);
-
-    if (newEditorId.has_value() && !fo4::set_record_editor_id(mutated, newKey, *newEditorId)) {
+    if (result.status == fo4::forms::RecordCopyNewStatus::parent_dial_missing) {
         return std::unexpected(Error{
-            "CopyAsNewEditorIdFailed",
-            "Could not set EditorID on the duplicated record"
+            "TargetParentDialMissing",
+            "The INFO's parent QUST/DIAL hierarchy is not present in " + targetName
         });
     }
-    return newKey;
+    return std::unexpected(Error{
+        "RecordNotFound",
+        "Record is not present in " + source.name + ": " + key.to_string()
+    });
 }
 
 Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
