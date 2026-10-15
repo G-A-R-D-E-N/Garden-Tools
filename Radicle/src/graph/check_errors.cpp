@@ -2,12 +2,14 @@
 
 #include "check_errors_records.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/schema/condition_functions.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/formlink_slots.hpp"
 #include "fo4/schema/preflight.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <string_view>
@@ -55,10 +57,57 @@ struct SlotTargets {
   std::span<const Signature> targets;
 };
 
+constexpr std::size_t k_ctda_compare = 4;
+constexpr std::size_t k_ctda_function = 8;
+constexpr std::size_t k_ctda_param1 = 12;
+constexpr std::size_t k_ctda_param2 = 16;
+constexpr std::size_t k_ctda_run_on = 20;
+constexpr std::size_t k_ctda_reference = 24;
+constexpr std::uint32_t k_run_on_max = 10;
+
+constexpr std::array<Signature, 1> k_glob_targets{Signature::from_string("GLOB")};
+constexpr std::array<Signature, 12> k_reference_targets{
+    Signature::from_string("NULL"), Signature::from_string("PLYR"), Signature::from_string("ACHR"),
+    Signature::from_string("REFR"), Signature::from_string("PGRE"), Signature::from_string("PHZD"),
+    Signature::from_string("PMIS"), Signature::from_string("PARW"), Signature::from_string("PBAR"),
+    Signature::from_string("PBEA"), Signature::from_string("PCON"), Signature::from_string("PFLA")};
+
+template <typename T>
+T read_payload(const Subrecord& sub, std::size_t offset) {
+  T value{};
+  std::memcpy(&value, sub.data.data() + offset, sizeof(T));
+  return value;
+}
+
+const Subrecord* nth_subrecord(const Record& record, Signature signature, std::size_t ordinal) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == signature && ordinal-- == 0) return &sub;
+  }
+  return nullptr;
+}
+
+std::optional<SlotTargets> ctda_slot_targets(const Record& record, std::size_t ordinal,
+                                             std::size_t offset) {
+  const auto* sub = nth_subrecord(record, sig_ctda, ordinal);
+  if (sub == nullptr) return std::nullopt;
+  if (offset == k_ctda_compare) return SlotTargets{false, k_glob_targets};
+  if (offset == k_ctda_reference) return SlotTargets{false, k_reference_targets};
+  if (offset != k_ctda_param1 && offset != k_ctda_param2) return std::nullopt;
+  const auto* desc = schema::condition_function(read_payload<std::uint16_t>(*sub, k_ctda_function));
+  if (desc == nullptr) return std::nullopt;
+  const auto* type = desc->parameters[offset == k_ctda_param1 ? 0 : 1];
+  if (type == nullptr || type->kind != schema::ConditionParameterKind::form_link ||
+      type->targets.empty()) {
+    return SlotTargets{true, {}};
+  }
+  return SlotTargets{false, type->targets};
+}
+
 std::optional<SlotTargets> slot_targets(const Record& record,
                                         Signature subrecord,
                                         std::size_t ordinal,
                                         std::size_t offset) {
+  if (subrecord == sig_ctda) return ctda_slot_targets(record, ordinal, offset);
   if (const auto field = schema::formlink_field_at(schema::formlink_fields(record.header.signature),
                                                    record, subrecord, ordinal, offset)) {
     return SlotTargets{false, schema::formlink_field_targets(*field)};
@@ -162,6 +211,37 @@ void check_links(const Plugin& plugin,
                       target->second.signature.to_string() + ", expected one of " +
                       join_signatures(slot->targets);
     sink.add(std::move(finding));
+  }
+}
+
+void check_conditions(const Plugin& plugin, FindingSink& sink) {
+  const auto add = [&](const Record& record, std::size_t offset, std::string message) {
+    CheckFinding finding;
+    finding.code = CheckCode::invalid_condition;
+    finding.severity = CheckSeverity::error;
+    finding.plugin = plugin.key;
+    finding.record = record.form_key;
+    finding.subrecord = sig_ctda;
+    finding.offset = offset;
+    finding.message = std::move(message);
+    sink.add(std::move(finding));
+  };
+  for (const auto* record : collect_records(plugin)) {
+    for (const auto& sub : record->subrecords) {
+      if (sub.signature != sig_ctda || sub.data.size() < k_ctda_function + 2) continue;
+      const auto function = read_payload<std::uint16_t>(sub, k_ctda_function);
+      if (schema::condition_function(function) == nullptr) {
+        add(*record, k_ctda_function,
+            "CTDA function index " + std::to_string(function) +
+                " is not a known condition function");
+      }
+      if (sub.data.size() < k_ctda_run_on + 4) continue;
+      const auto run_on = read_payload<std::uint32_t>(sub, k_ctda_run_on);
+      if (run_on > k_run_on_max) {
+        add(*record, k_ctda_run_on,
+            "CTDA Run On " + std::to_string(run_on) + " is not a known Run On value (0-10)");
+      }
+    }
   }
 }
 
@@ -284,6 +364,7 @@ std::string_view check_code_name(CheckCode code) noexcept {
     case CheckCode::partial_form_content: return "partial_form_content";
     case CheckCode::light_object_id_overflow: return "light_object_id_overflow";
     case CheckCode::internal_form_id_mismatch: return "internal_form_id_mismatch";
+    case CheckCode::invalid_condition: return "invalid_condition";
   }
   return "unknown";
 }
@@ -369,6 +450,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     check_dialogue_links(*plugin, winners, sink);
     check_preflight(*plugin, sink);
     for (auto& finding : check_record_levels(*plugin)) sink.add(std::move(finding));
+    check_conditions(*plugin, sink);
   }
 
   for (const auto& cycle : find_leveled_list_cycles(load_order)) {
