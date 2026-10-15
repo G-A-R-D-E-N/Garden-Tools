@@ -5592,14 +5592,13 @@
           },
           {
             "signature": "MODL",
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 1,
-            "default": "00",
             "coupled": true
           },
           {
             "signature": "MODT",
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 1,
             "default": ""
           },
