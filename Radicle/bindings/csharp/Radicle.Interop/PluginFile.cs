@@ -126,6 +126,23 @@ public sealed unsafe class PluginFile : IDisposable
         return status;
     }
 
+    public ConditionWriteStatus SetConditions(FormKey record, string? scopePath, IReadOnlyList<RadicleCondition> conditions)
+    {
+        ArgumentNullException.ThrowIfNull(conditions);
+        using var use = Use();
+        using var strings = new NativeStrings();
+        var rows = conditions.Select(c => new Native.Condition
+        {
+            FlagsByte = c.FlagsByte, ComparisonRaw = c.ComparisonRaw, Function = c.Function, Unknown2 = c.Unknown2,
+            Param1 = c.Param1, Param2 = c.Param2, RunOn = c.RunOn, Reference = c.Reference, Unknown3 = c.Unknown3,
+            Parameter1String = strings.Add(c.Parameter1String), Parameter2String = strings.Add(c.Parameter2String),
+        }).ToArray();
+        ConditionWriteStatus status;
+        fixed (Native.Condition* p = rows)
+            Call.Check(RadicleNative.PluginSetConditions(use.Pointer, strings.Key(record), scopePath, p, (nuint)rows.Length, &status));
+        return status;
+    }
+
     public bool SetScale(FormKey reference, float? scale) =>
         Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedScale(plugin, key, scale.HasValue ? 1 : 0, scale ?? 0));
 
