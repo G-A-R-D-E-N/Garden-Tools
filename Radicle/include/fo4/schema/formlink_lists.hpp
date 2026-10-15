@@ -31,6 +31,7 @@ struct FormLinkFieldDescriptor {
   std::size_t target_count{0};
   FieldAddress address{};
   std::array<std::size_t, 2> payload_sizes{};
+  std::uint16_t max_form_version{0};
 };
 
 class FormLinkFieldError : public std::runtime_error {

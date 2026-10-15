@@ -117,6 +117,7 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;
   shape.width = sizeof(std::uint32_t);
+  shape.max_form_version = field.max_form_version;
   auto resolved = schema::resolve_field_slots(record, shape, field.address);
   if (resolved.duplicate) {
     throw schema::FormLinkFieldError("record contains duplicate FormLink subrecords: " +
