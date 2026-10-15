@@ -6780,6 +6780,11 @@
             "maximum": 1
           },
           {
+            "signature": "APPR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "DATA",
             "minimum": 1,
             "maximum": 1
@@ -6871,6 +6876,16 @@
           ],
           "nullable": true,
           "mutation": "existing_neighbors"
+        },
+        {
+          "path": "RACE\\AttachParentSlots",
+          "label": "Attach parent slots",
+          "subrecord": "APPR",
+          "targets": ["KYWD"],
+          "nullable": false,
+          "storage": "packed_array",
+          "mutation": "appendable",
+          "anchor_predecessors": ["PRPS", "KWDA", "KSIZ", "BOD2", "WNAM", "SPLO", "SPCT", "DESC", "FULL", "STCP", "EDID"]
         }
       ],
       "nested_formlink_lists": [
@@ -6931,9 +6946,52 @@
           "subrecord": "PHTN",
           "repeated": true,
           "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\FirstPersonFlags",
+          "label": "First person flags",
+          "kind": "scalar",
+          "subrecord": "BOD2",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\EquipmentFlags",
+          "label": "Equipment flags",
+          "kind": "scalar",
+          "subrecord": "VNAM",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "RACE\\AnimationSound",
+          "label": "Animation sound",
+          "subrecord": "STCP",
+          "offset": 0,
+          "targets": ["STAG"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ActorEffects",
+          "label": "Actor effects",
+          "subrecord": "SPLO",
+          "offset": 0,
+          "targets": ["SPEL", "LVSP"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
         {
           "path": "RACE\\Skin",
           "label": "Skin",
@@ -23772,7 +23830,20 @@
           "names": [
             { "bit": 0, "name": "Has FaceBones Model" },
             { "bit": 1, "name": "Has 1stPerson Model" }
-          ], "minimum": 0, "maximum": 255, "insertion": "existing_only"}
+          ], "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {
+          "path": "WEAP\\DamageAmount",
+          "label": "Damage amount",
+          "kind": "scalar",
+          "subrecord": "DAMA",
+          "offset": 4,
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "stride": 8,
+          "insertion": "existing_only"
+        }
       ],
       "formlink_fields": [
         {"path": "WEAP\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -23937,6 +24008,16 @@
           "targets": ["TRNS"],
           "nullable": false,
           "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\DamageType",
+          "label": "Damage type",
+          "subrecord": "DAMA",
+          "offset": 0,
+          "stride": 8,
+          "targets": ["DMGT"],
+          "nullable": false,
           "insertion": "existing_only"
         }
       ],

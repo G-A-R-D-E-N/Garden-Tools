@@ -158,7 +158,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 22 | 1 | 10 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
-| RACE | 11054 | - | 4 | 21 | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
+| RACE | 11054 | 2 | 4 | 23 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -188,7 +188,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 45 | 1 | 29 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
+| WEAP | 12877 | 46 | 1 | 30 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
 | WRLD | 13110 | - | - | - | - | 1 | - | - | environment/world | yes | 1 | L2 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
@@ -309,7 +309,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PMIS | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PROJ | 22 | - | - | - | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
-| RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
+| RACE | 2 | - | - | - | 4 | u32 | 3 | - | - | existing_only |
 | REFR | 6 | 1 | - | - | - | f32, u32 | - | 4 | - | existing_only |
 | REGN | - | - | - | - | - | - | - | - | - | - |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
@@ -338,7 +338,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | TXST | 17 | - | - | 2 | 9 | f32, i16, u16, u8 | - | - | - | existing_only |
 | VTYP | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
-| WEAP | 36 | - | 6 | 3 | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
+| WEAP | 37 | - | 6 | 3 | 1 | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
 | WRLD | - | - | - | - | - | - | - | - | - | - |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
 | ZOOM | 4 | - | 1 | - | - | f32, u32 | - | - | - | existing_only |
