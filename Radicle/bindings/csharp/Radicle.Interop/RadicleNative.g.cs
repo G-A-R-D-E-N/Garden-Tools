@@ -1730,7 +1730,7 @@ public unsafe struct ConditionList
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 43u;
+    public const uint CompiledAbiVersion = 44u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1935,6 +1935,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_placed_ref_new")]
     public static extern Status PluginCopyPlacedRefNew(IntPtr plugin, IntPtr env, IntPtr record, FormKey* out_key);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_copy_record_as_new")]
+    public static extern Status PluginCopyRecordAsNew(IntPtr destination, IntPtr source, FormKey record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? editor_id, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? remove_suffix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? prefix, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? suffix, FormKey* out_key);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_transform")]
     public static extern Status PluginSetPlacedTransform(IntPtr plugin, FormKey reference, float* position, float* rotation);
