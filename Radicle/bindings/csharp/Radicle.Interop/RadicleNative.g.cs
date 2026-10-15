@@ -1730,7 +1730,7 @@ public unsafe struct ConditionList
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 42u;
+    public const uint CompiledAbiVersion = 43u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1755,6 +1755,15 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remap_masters")]
     public static extern Status PluginRemapMasters(IntPtr plugin, MasterDescriptor* masters, nuint master_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_author")]
+    public static extern Status PluginSetAuthor(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? author);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_description")]
+    public static extern Status PluginSetDescription(IntPtr plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? description);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_master_flag")]
+    public static extern Status PluginSetMasterFlag(IntPtr plugin, int master);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_collect_form_keys")]
     public static extern Status PluginCollectFormKeys(IntPtr plugin, IntPtr** out_strings, nuint* out_count);

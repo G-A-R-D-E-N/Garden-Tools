@@ -215,7 +215,7 @@ HEDR `formCount` counts major records excluding TES4, plus every GRUP including 
 
 `MAST` is a zstring plugin name. `DATA` is 8 bytes (file size, often zero in small patches). Masters come in MAST+DATA pairs.
 
-Other TES4 subrecords preserved generically: `CNAM`, `SNAM`, `ONAM`, `INTV`, `INCC`, plus anything unknown.
+`CNAM` (author) and `SNAM` (description) are read as zstrings and set by `set_plugin_author` and `set_plugin_description`. Other TES4 subrecords preserved generically: `ONAM`, `INTV`, `INCC`, plus anything unknown.
 
 ## TES4 flags (file header)
 
