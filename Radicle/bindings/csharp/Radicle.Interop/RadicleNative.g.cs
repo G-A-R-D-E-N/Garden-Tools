@@ -1691,10 +1691,38 @@ public enum OfficialTable : int
     Ae = 1,
 }
 
+public enum ConditionWriteStatus : int
+{
+    Updated = 0,
+    Unchanged = 1,
+    NoList = 2,
+    MultipleLists = 3,
+    AliasStructureInvalid = 4,
+    ScopeIndexOutOfRange = 5,
+    ElementNotConditioned = 6,
+    Unrepresentable = 7,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct Condition
+{
+    public byte FlagsByte;
+    public uint ComparisonRaw;
+    public ushort Function;
+    public ushort Unknown2;
+    public int Param1;
+    public int Param2;
+    public uint RunOn;
+    public uint Reference;
+    public int Unknown3;
+    public IntPtr Parameter1String;
+    public IntPtr Parameter2String;
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 41u;
+    public const uint CompiledAbiVersion = 42u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -2370,5 +2398,11 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_load_order_assemble")]
     public static extern Status LoadOrderAssemble([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin_list_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? ccc_path, OfficialTable table, IntPtr** out_rows, nuint* out_row_count, IntPtr** out_findings, nuint* out_finding_count, int* out_failed);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_conditions")]
+    public static extern Status RecordConditions(IntPtr env, IntPtr record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, Condition** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_conditions")]
+    public static extern Status PluginSetConditions(IntPtr plugin, FormKey record, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? scope_path, Condition* rows, nuint count, ConditionWriteStatus* out_status);
 
 }
