@@ -47,7 +47,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 1 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
-| ACTI | 5611 | 7 | 1 | 8 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
+| ACTI | 5611 | 10 | 1 | 9 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 9 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | 11 | 3 | 7 | - | 3 | yes | yes | - | yes | 1 | L4 |
@@ -91,7 +91,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | EXPL | 7334 | 21 | 1 | 7 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |
-| FLOR | 12167 | 11 | 1 | 3 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
+| FLOR | 12167 | 14 | 1 | 4 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
 | FLST | 7574 | - | - | - | 1 | 1 | - | - | - | - | - | L3 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
@@ -200,7 +200,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | AACT | - | - | 1 | - | 1 | u32 | - | - | - | existing_only |
-| ACTI | 6 | - | - | 1 | 1 | i16, u16 | - | - | - | existing_only |
+| ACTI | 9 | - | - | 1 | 1 | i16, u16, u8 | - | - | - | existing_only |
 | ADDN | 8 | - | 1 | - | 1 | i16, u16, u32 | - | - | - | existing_only |
 | AECH | - | - | - | - | - | - | - | - | - | - |
 | ALCH | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
@@ -243,7 +243,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | EXPL | 21 | - | - | - | 1 | f32, i16, u32 | - | - | - | existing_only |
 | EYES | - | - | - | - | - | - | - | - | - | - |
 | FACT | 12 | - | 5 | 1 | - | f32, u16, u32, u8 | 1 | - | - | existing_only |
-| FLOR | 11 | - | - | - | 1 | i16, u16, u8 | - | - | - | existing_only |
+| FLOR | 14 | - | - | - | 1 | i16, u16, u8 | - | - | - | existing_only |
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
 | FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
