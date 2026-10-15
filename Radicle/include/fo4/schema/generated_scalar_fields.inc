@@ -1701,6 +1701,7 @@ constexpr std::uint8_t k_subrecord_group_default_1[] = {0x00, 0x00, 0x00, 0x00, 
 constexpr Signature k_subrecord_group_successors_1[] = {Signature::from_string("MNAM"), Signature::from_string("WBDT"), Signature::from_string("NAM1"), Signature::from_string("ENAM"), Signature::from_string("NAM0"), Signature::from_string("FNPR"), Signature::from_string("XMRK"), Signature::from_string("SNAM"), Signature::from_string("APPR"), Signature::from_string("OBTE"), Signature::from_string("OBTF"), Signature::from_string("OBTS"), Signature::from_string("STOP"), Signature::from_string("NVNM")};
 constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_1[] = {
 {Signature::from_string("CNTO"), true, false, 8, std::span<const std::uint8_t>(k_subrecord_group_default_1)},
+{Signature::from_string("COED"), false, false, 12},
 };
 constexpr std::array<SubrecordGroupDescriptor, 2> k_subrecord_groups{{
 {Signature::from_string("CONT"), "CONT\\Items", "Items", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), std::span<const Signature>(k_subrecord_group_successors_0)},

@@ -22,6 +22,7 @@ using Bytes = std::vector<std::byte>;
 constexpr auto k_furn = fo4::Signature::from_string("FURN");
 constexpr auto k_coct = fo4::Signature::from_string("COCT");
 constexpr auto k_cnto = fo4::Signature::from_string("CNTO");
+constexpr auto k_coed = fo4::Signature::from_string("COED");
 
 struct Piece {
   std::string_view signature;
@@ -184,11 +185,14 @@ TEST(FurnRows, ItemsGroupNamesItsCountAndItemMember) {
   const auto group = items_group();
   EXPECT_EQ(group.record, k_furn);
   EXPECT_EQ(group.count_subrecord, k_coct);
-  ASSERT_EQ(group.members.size(), 1u);
+  ASSERT_EQ(group.members.size(), 2u);
   EXPECT_EQ(group.members[0].subrecord, k_cnto);
   EXPECT_TRUE(group.members[0].required);
   EXPECT_FALSE(group.members[0].repeatable);
   EXPECT_EQ(group.members[0].payload_size, 8u);
+  EXPECT_EQ(group.members[1].subrecord, k_coed);
+  EXPECT_FALSE(group.members[1].required);
+  EXPECT_EQ(group.members[1].payload_size, 12u);
   EXPECT_EQ(fo4::schema::subrecord_group_for_member(k_furn, k_cnto)->path, "FURN\\Items");
   EXPECT_TRUE(fo4::schema::is_subrecord_group_count_subrecord(k_furn, k_coct));
   EXPECT_FALSE(fo4::schema::is_subrecord_group_count_subrecord(k_furn, k_cnto));
@@ -239,6 +243,20 @@ TEST(FurnRows, InsertsAndRemovesRunsAndSyncsTheTotal) {
   EXPECT_EQ(signatures(removed_after), (std::vector<std::string>{"COCT", "CNTO", "MNAM", "WBDT"}));
   EXPECT_EQ(stored_count(removed_after), 1u);
   EXPECT_EQ(cnto_item(removed_after, 0), 0x901u);
+}
+
+TEST(FurnRows, RemovingARunTakesItsOptionalCoedAndKeepsTheCountAtZero) {
+  auto plugin = fo4::read_plugin(make_plugin({{"COCT", u32_bytes(1)},
+                                              {"CNTO", cnto_bytes(0x900, 5)},
+                                              {"COED", zeros(12)},
+                                              {"MNAM", u32_bytes(0)},
+                                              {"WBDT", zeros(1)}}),
+                                 "Patch.esp");
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record_key(), items_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"COCT", "MNAM", "WBDT"}));
+  EXPECT_EQ(stored_count(after), 0u);
 }
 
 TEST(FurnRows, InsertsItemsBeforeTheFirstSuccessorOfAnItemlessRecord) {

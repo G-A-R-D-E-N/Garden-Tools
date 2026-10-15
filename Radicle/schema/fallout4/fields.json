@@ -23394,6 +23394,12 @@
                   "target_union": "sigBaseObjects"
                 }
               ]
+            },
+            {
+              "subrecord": "COED",
+              "required": false,
+              "repeatable": false,
+              "payload_size": 12
             }
           ]
         },
