@@ -27,10 +27,11 @@ std::optional<std::int64_t> read_discriminator(std::span<const std::byte> payloa
 }
 
 bool listed(const FieldDiscriminator& when, std::optional<std::int64_t> value) {
-  if (!value.has_value()) return false;
+  if (!value.has_value()) return when.negated && when.match_absent;
   const auto count = std::min(when.count, when.equals.size());
-  return std::find(when.equals.begin(), when.equals.begin() + static_cast<std::ptrdiff_t>(count),
-                   *value) != when.equals.begin() + static_cast<std::ptrdiff_t>(count);
+  const bool found = std::find(when.equals.begin(), when.equals.begin() + static_cast<std::ptrdiff_t>(count),
+                               *value) != when.equals.begin() + static_cast<std::ptrdiff_t>(count);
+  return found != when.negated;
 }
 
 bool record_discriminator_matches(const Record& record, const FieldDiscriminator& when) {
@@ -95,11 +96,12 @@ FieldSlots resolve_field_slots(const Record& record,
 
     if (shape.whole_payload) {
       FieldSlot slot{index, 0, false, false};
-      if (shape.width != 0 && data.size() != shape.width) {
+      const bool guard_passes =
+          external_ok && (!guarded || external || listed(when, read_discriminator(data, 0, when)));
+      if (shape.width != 0 && data.size() != shape.width && guard_passes) {
         out.malformed = true;
       } else {
-        slot.valid = sized && external_ok &&
-                     (!guarded || external || listed(when, read_discriminator(data, 0, when)));
+        slot.valid = sized && guard_passes;
       }
       out.slots.push_back(slot);
       continue;

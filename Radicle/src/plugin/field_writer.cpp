@@ -168,7 +168,7 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   auto& data = target->subrecords[slot.subrecord].data;
 
   if (is_string && plugin.header.tes4_flags.is_localized() &&
-      schema::is_localized_field(field.record, field.scalar.subrecord)) {
+      (field.scalar.localized || schema::is_localized_field(field.record, field.scalar.subrecord))) {
     throw schema::ScalarError(std::string(field.path) +
                               " is a localized string in a localized plugin");
   }
