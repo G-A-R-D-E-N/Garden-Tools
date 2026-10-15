@@ -128,10 +128,15 @@ TEST(Tes4Header, RejectsEmbeddedNulAndUnrepresentableText) {
                std::invalid_argument);
 }
 
-TEST(Tes4Header, RefusesAuthorAndDescriptionOnLocalizedPlugin) {
-  const auto plugin = fo4::read_plugin(make_tes4(0x80, false), "Header.esp");
-  EXPECT_THROW(static_cast<void>(fo4::set_plugin_author(plugin, "Ricky")), std::invalid_argument);
-  EXPECT_THROW(static_cast<void>(fo4::set_plugin_description(plugin, "Desc")), std::invalid_argument);
+TEST(Tes4Header, AuthorAndDescriptionAreZstringsOnLocalizedPlugin) {
+  auto plugin = fo4::read_plugin(make_tes4(0x80, false), "Header.esp");
+  plugin = fo4::set_plugin_author(std::move(plugin), "Ricky");
+  plugin = fo4::set_plugin_description(std::move(plugin), "Desc");
+  const auto reloaded = round_trip(plugin);
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_localized());
+  EXPECT_EQ(reloaded.header.author, "Ricky");
+  EXPECT_EQ(reloaded.header.description, "Desc");
+  EXPECT_EQ(subrecord_names(reloaded), (std::vector<std::string>{"HEDR", "CNAM", "SNAM"}));
 }
 
 TEST(Tes4Header, MasterFlagSetAndClearKeepsSmallFile) {

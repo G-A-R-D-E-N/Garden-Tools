@@ -28,13 +28,6 @@ std::string stored_tes4_text(std::string_view utf8, std::string_view field) {
   return *stored;
 }
 
-void require_not_localized(const Plugin& plugin, std::string_view field) {
-  if (plugin.header.tes4_flags.is_localized()) {
-    throw std::invalid_argument(std::string(field) +
-                                " is a string ID on a localized plugin; string table conversion is not implemented");
-  }
-}
-
 void clear_tes4_original_bytes(Plugin& plugin) {
   plugin.original_range.clear();
   plugin.tes4.original_range.clear();
@@ -120,7 +113,6 @@ Plugin set_plugin_master_flag(Plugin plugin, bool master) {
 }
 
 Plugin set_plugin_author(Plugin plugin, std::string_view author) {
-  require_not_localized(plugin, "author");
   const auto stored = stored_tes4_text(author, "author");
   set_tes4_zstring(plugin.tes4, sig_cnam, stored);
   plugin.header.author = stored;
@@ -129,7 +121,6 @@ Plugin set_plugin_author(Plugin plugin, std::string_view author) {
 }
 
 Plugin set_plugin_description(Plugin plugin, std::string_view description) {
-  require_not_localized(plugin, "description");
   const auto stored = stored_tes4_text(description, "description");
   if (stored.empty()) {
     std::erase_if(plugin.tes4.subrecords, [](const Subrecord& sub) { return sub.signature == sig_snam; });
