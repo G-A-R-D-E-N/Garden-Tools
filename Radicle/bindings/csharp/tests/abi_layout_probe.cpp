@@ -48,6 +48,11 @@ int main() {
   printf("RecordInfo.HasBounds %zu\n", offsetof(radicle_record_info, has_bounds));
   printf("RecordInfo.BoundsMin %zu\n", offsetof(radicle_record_info, bounds_min));
   printf("RecordInfo.BoundsMax %zu\n", offsetof(radicle_record_info, bounds_max));
+  printf("ReferenceHit %zu\n", sizeof(radicle_reference_hit));
+  printf("ReferenceHit.Record %zu\n", offsetof(radicle_reference_hit, record));
+  printf("ReferenceHit.PluginIndex %zu\n", offsetof(radicle_reference_hit, plugin_index));
+  printf("ReferenceHit.Subrecord %zu\n", offsetof(radicle_reference_hit, subrecord));
+  printf("ReferenceHit.Offset %zu\n", offsetof(radicle_reference_hit, offset));
   printf("WorldspaceInfo %zu\n", sizeof(radicle_worldspace_info));
   printf("WorldspaceInfo.Parent %zu\n", offsetof(radicle_worldspace_info, parent));
   printf("WorldspaceInfo.HasParentFlags %zu\n", offsetof(radicle_worldspace_info, has_parent_flags));
