@@ -138,6 +138,31 @@ std::vector<std::byte> ench_enit(std::size_t size) {
   return data.bytes;
 }
 
+std::vector<std::byte> ench_with_flst_plugin(std::size_t enit_size) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(3);
+  hedr.u32(0x802);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto ench_group = fo4::test::begin_group(out, "ENCH", 0);
+  const auto ench = fo4::test::begin_record(out, "ENCH", 0, 0x00000800, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
+  fo4::test::write_subrecord(out, "ENIT", ench_enit(enit_size));
+  fo4::test::end_record(out, ench);
+  fo4::test::end_group(out, ench_group);
+
+  const auto flst_group = fo4::test::begin_group(out, "FLST", 0);
+  const auto flst = fo4::test::begin_record(out, "FLST", 0, 0x00000801, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"LegacyList\0", 11});
+  fo4::test::end_record(out, flst);
+  fo4::test::end_group(out, flst_group);
+  return out.bytes;
+}
+
 }  // namespace
 
 TEST(ScalarEmbedded, ReadsEveryPayloadFieldAtItsMeasuredOffset) {
@@ -558,24 +583,30 @@ TEST(ScalarEmbedded, EnchEnitShortFormsReadOnlyTheMembersXEditReadsCleanly) {
   ASSERT_TRUE(base.has_value());
   ASSERT_TRUE(worn.has_value());
 
-  auto short_form =
-      fo4::read_plugin(one_subrecord_plugin("ENCH", "ENIT", 131, ench_enit(28)), "Legacy.esp");
+  const auto list = fo4::FormKey::parse("000801:Legacy.esp");
+  const auto expect_size_error = [](auto&& write) {
+    try {
+      static_cast<void>(write());
+      ADD_FAILURE() << "expected a FormLinkFieldError";
+    } catch (const fo4::schema::FormLinkFieldError& error) {
+      EXPECT_NE(std::string(error.what()).find("unexpected payload size"), std::string::npos)
+          << error.what();
+    }
+  };
+
+  auto short_form = fo4::read_plugin(ench_with_flst_plugin(28), "Legacy.esp");
   EXPECT_TRUE(exposed(short_form, key, field("ENCH\\Cost")));
   EXPECT_TRUE(exposed(short_form, key, field("ENCH\\ChargeTime")));
   EXPECT_EQ(fo4::set_record_scalar(short_form, key, field("ENCH\\Cost"), "75"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(short_form, key, *base, key)),
-               fo4::schema::FormLinkFieldError);
+  expect_size_error([&] { return fo4::set_record_formlink_field(short_form, key, *base, key); });
 
-  auto mid_form =
-      fo4::read_plugin(one_subrecord_plugin("ENCH", "ENIT", 131, ench_enit(32)), "Legacy.esp");
+  auto mid_form = fo4::read_plugin(ench_with_flst_plugin(32), "Legacy.esp");
   EXPECT_EQ(fo4::set_record_formlink_field(mid_form, key, *base, key),
             fo4::FormLinkFieldMutationStatus::updated);
-  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(mid_form, key, *worn, key)),
-               fo4::schema::FormLinkFieldError);
+  expect_size_error([&] { return fo4::set_record_formlink_field(mid_form, key, *worn, list); });
 
-  auto full_form =
-      fo4::read_plugin(one_subrecord_plugin("ENCH", "ENIT", 131, ench_enit(36)), "Legacy.esp");
-  EXPECT_EQ(fo4::set_record_formlink_field(full_form, key, *worn, key),
+  auto full_form = fo4::read_plugin(ench_with_flst_plugin(36), "Legacy.esp");
+  EXPECT_EQ(fo4::set_record_formlink_field(full_form, key, *worn, list),
             fo4::FormLinkFieldMutationStatus::updated);
 }
