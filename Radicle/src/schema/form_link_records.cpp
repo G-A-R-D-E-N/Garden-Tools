@@ -21,6 +21,7 @@ constexpr auto k_rcec = Signature::from_string("RCEC");
 constexpr auto k_rnam = Signature::from_string("RNAM");
 constexpr auto k_stag = Signature::from_string("STAG");
 constexpr auto k_stat = Signature::from_string("STAT");
+constexpr auto k_tes4 = Signature::from_string("TES4");
 constexpr auto k_tnam = Signature::from_string("TNAM");
 constexpr auto k_wrld = Signature::from_string("WRLD");
 constexpr auto k_xcri = Signature::from_string("XCRI");
@@ -58,6 +59,7 @@ const RecordFixedLayout k_record_fixed_layouts[] = {
     {"BPTD", {"BPND", 101, {4, 8, 16, 20, 52, 56, 67, 79, 83, 87, 91}, true, 0}},
     {"CELL", {"XPRI", 4, {0}, false, 0}},
     {"IDLM", {"IDLA", 4, {0}, false, 0}},
+    {"MUST", {"SNAM", 4, {0}, false, 0}},
     {"LAND", {"BTXT", 8, {0}, true, 0}},
     {"LAND", {"ATXT", 8, {0}, true, 0}},
     {"RACE", {"TTEC", 14, {0}, false, 0}},
@@ -148,6 +150,19 @@ std::optional<std::vector<std::size_t>> stag_tnam_offsets(const Record& record,
   return std::vector<std::size_t>{0};
 }
 
+std::optional<std::vector<std::size_t>> transient_type_offsets(const Record& record,
+                                                              const Subrecord& sub,
+                                                              bool strict_remap) {
+  if (record.header.signature != k_tes4 || sub.signature != k_tnam) return std::nullopt;
+  const auto size = sub.data.size();
+  if (size < 4 || size % 4 != 0) {
+    return malformed(strict_remap, "cannot safely remap malformed TES4 TNAM payload");
+  }
+  std::vector<std::size_t> offsets;
+  for (std::size_t offset = 4; offset < size; offset += 4) offsets.push_back(offset);
+  return offsets;
+}
+
 std::optional<std::vector<std::size_t>> large_reference_offsets(const Record& record,
                                                                const Subrecord& sub,
                                                                bool strict_remap) {
@@ -191,6 +206,7 @@ std::optional<std::vector<std::size_t>> record_struct_formid_offsets(const Recor
   if (auto offsets = combined_reference_offsets(record, sub, strict_remap)) return offsets;
   if (auto offsets = race_data_offsets(record, sub, strict_remap)) return offsets;
   if (auto offsets = stag_tnam_offsets(record, sub, strict_remap)) return offsets;
+  if (auto offsets = transient_type_offsets(record, sub, strict_remap)) return offsets;
   if (auto offsets = large_reference_offsets(record, sub, strict_remap)) return offsets;
   return nvnm_outside_navm_offsets(record, sub, strict_remap);
 }
