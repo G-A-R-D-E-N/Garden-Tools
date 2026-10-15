@@ -63,6 +63,12 @@ public enum PlacedCopyStatus : int
     AlreadyExists = 2,
 }
 
+public enum PlacedMoveStatus : int
+{
+    Moved = 0,
+    Relocated = 1,
+}
+
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct FormKey
 {
@@ -1688,7 +1694,7 @@ public enum OfficialTable : int
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 40u;
+    public const uint CompiledAbiVersion = 41u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1887,6 +1893,9 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_transform")]
     public static extern Status PluginSetPlacedTransform(IntPtr plugin, FormKey reference, float* position, float* rotation);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_move_placed_ref")]
+    public static extern Status PluginMovePlacedRef(IntPtr plugin, FormKey reference, float* position, float* rotation, PlacedMoveStatus* out_status);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_placed_scale")]
     public static extern Status PluginSetPlacedScale(IntPtr plugin, FormKey reference, int has_scale, float scale);
