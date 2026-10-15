@@ -48,7 +48,7 @@ fo4::schema::ScalarFieldDescriptor field(std::string_view path) {
   return *descriptor;
 }
 
-std::vector<std::byte> expl_plugin_at(std::uint16_t form_version) {
+std::vector<std::byte> expl_plugin_at(std::uint16_t form_version, std::size_t data_size = 84) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
@@ -74,7 +74,9 @@ std::vector<std::byte> expl_plugin_at(std::uint16_t form_version) {
   data.f32(0.0F);
   data.u32(2);
   for (int i = 0; i < 5; ++i) data.u32(0);
-  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  std::vector<std::byte> payload = data.bytes;
+  payload.resize(data_size);
+  fo4::test::write_subrecord(out, "DATA", payload);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   return out.bytes;
@@ -379,4 +381,80 @@ TEST(ScalarEmbedded, InnerRadiusIsGatedByFormVersion97) {
   const auto& data = find_subrecord(*new_record, "DATA")->data;
   EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(data, inner.scalar), inner.scalar),
             "400");
+}
+
+TEST(ScalarEmbedded, ExplDataFullLayoutReadsAndWritesLaterMembersFrom112) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  auto pre_spawn = fo4::read_plugin(expl_plugin_at(111), "Legacy.esp");
+  EXPECT_TRUE(exposed(pre_spawn, key, field("EXPL\\StaggerMagnitude")));
+  EXPECT_FALSE(exposed(pre_spawn, key, field("EXPL\\ProjectileCount")));
+  EXPECT_EQ(fo4::set_record_scalar(pre_spawn, key, field("EXPL\\ProjectileCount"), "7"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  auto plugin = fo4::read_plugin(expl_plugin_at(112), "Legacy.esp");
+  const auto read = [&plugin, &key](std::string_view path) {
+    const auto* record = fo4::find_record(plugin, key);
+    const auto descriptor = field(path);
+    return fo4::schema::decode_scalar(
+        fo4::schema::scalar_field_bytes(find_subrecord(*record, "DATA")->data, descriptor.scalar),
+        descriptor.scalar);
+  };
+  EXPECT_EQ(read("EXPL\\InnerRadius"), "300");
+  EXPECT_EQ(read("EXPL\\OuterRadius"), "1024");
+  EXPECT_EQ(read("EXPL\\Flags"), "1");
+  EXPECT_EQ(read("EXPL\\SoundLevel"), "3");
+  EXPECT_EQ(read("EXPL\\StaggerMagnitude"), "2");
+  EXPECT_EQ(read("EXPL\\ProjectileCount"), "0");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, field("EXPL\\ProjectileCount"), "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(read("EXPL\\ProjectileCount"), "7");
+  EXPECT_EQ(read("EXPL\\Flags"), "1");
+  EXPECT_EQ(read("EXPL\\InnerRadius"), "300");
+}
+
+TEST(ScalarEmbedded, ExplDataOlderLayoutsHideGatedMembersWithoutMutation) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  const auto check = [&key](std::uint16_t version, std::size_t size) {
+    auto plugin = fo4::read_plugin(expl_plugin_at(version, size), "Legacy.esp");
+    const auto* record = fo4::find_record(plugin, key);
+    ASSERT_NE(record, nullptr);
+    const auto before = find_subrecord(*record, "DATA")->data;
+    for (const std::string_view path : {"EXPL\\InnerRadius", "EXPL\\Flags", "EXPL\\StaggerMagnitude",
+                                        "EXPL\\ProjectileCount"}) {
+      const auto descriptor = field(path);
+      EXPECT_FALSE(exposed(plugin, key, descriptor)) << path << " at form version " << version;
+      EXPECT_EQ(fo4::set_record_scalar(plugin, key, descriptor, "9"),
+                fo4::ScalarMutationStatus::subrecord_missing)
+          << path << " at form version " << version;
+    }
+    EXPECT_TRUE(exposed(plugin, key, field("EXPL\\Force")));
+    record = fo4::find_record(plugin, key);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(find_subrecord(*record, "DATA")->data, before);
+  };
+  check(69, 52);
+  check(90, 56);
+  check(96, 60);
+}
+
+TEST(ScalarEmbedded, ExplData64BytesFrom97ExposesStaggerButNotSpawnRows) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  auto plugin = fo4::read_plugin(expl_plugin_at(100, 64), "Legacy.esp");
+  EXPECT_TRUE(exposed(plugin, key, field("EXPL\\PlacedObjectFadeDelay")));
+  EXPECT_TRUE(exposed(plugin, key, field("EXPL\\StaggerMagnitude")));
+  EXPECT_FALSE(exposed(plugin, key, field("EXPL\\SpawnProjectileVectorX")));
+  EXPECT_FALSE(exposed(plugin, key, field("EXPL\\ProjectileCount")));
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, field("EXPL\\StaggerMagnitude"), "3"),
+            fo4::ScalarMutationStatus::updated);
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto stagger = field("EXPL\\StaggerMagnitude");
+  EXPECT_EQ(fo4::schema::decode_scalar(
+                fo4::schema::scalar_field_bytes(find_subrecord(*record, "DATA")->data, stagger.scalar),
+                stagger.scalar),
+            "3");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, field("EXPL\\SpawnProjectileVectorX"), "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
 }
