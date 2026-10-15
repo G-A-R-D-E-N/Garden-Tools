@@ -24,6 +24,7 @@ enum class SubrecordRemoveStatus {
   absent,
   below_minimum,
   not_authorable,
+  unknown_order,
 };
 
 enum class RecordCreateStatus {
