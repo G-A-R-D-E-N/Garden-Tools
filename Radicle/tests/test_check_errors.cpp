@@ -507,6 +507,19 @@ TEST(CheckErrors, PartialFormContentOtherThanEditorIdIsFlagged) {
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
 }
 
+TEST(CheckErrors, PartialDialogueInfoOrderIsNotContentButOtherSubrecordsAre) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_record_with_subrecords(out, "DIAL", k_partial_form_flag, 0x000800, {"EDID", "INOM"});
+  write_record_with_subrecords(out, "DIAL", k_partial_form_flag, 0x000801, {"EDID", "FULL"});
+  const auto plugin = fo4::read_plugin(out.bytes, "PartialDial.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::partial_form_content);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:PartialDial.esp"));
+  EXPECT_EQ(findings[0].message, "Record is Partial Form, but contains: FULL");
+}
+
 TEST(CheckErrors, LightPluginObjectIdAboveTwelveBitsIsInvalid) {
   fo4::test::ByteWriter out;
   write_header(out, "Base.esm", k_small_file_flag);

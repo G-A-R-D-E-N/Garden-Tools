@@ -4,21 +4,25 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <format>
+#include <span>
 #include <string>
 #include <utility>
 
 namespace fo4 {
 namespace {
 
-constexpr Signature k_sig_edid = Signature::from_string("EDID");
-constexpr Signature k_sig_name = Signature::from_string("NAME");
+constexpr std::array<Signature, 1> k_reference_base{sig_name};
+constexpr std::array<Signature, 3> k_partial_allowed{
+    sig_edid, Signature::from_string("INOM"), Signature::from_string("INOA")};
 
-std::string contents_except(const Record& record, Signature allowed) {
+std::string contents_except(const Record& record, std::span<const Signature> allowed) {
   std::string out;
   for (const auto& sub : record.subrecords) {
-    if (sub.signature == allowed) continue;
+    if (std::find(allowed.begin(), allowed.end(), sub.signature) != allowed.end()) continue;
     if (!out.empty()) out += ", ";
     out += sub.signature.to_string();
   }
@@ -61,8 +65,10 @@ std::vector<CheckFinding> check_record_levels(const Plugin& plugin) {
       continue;
     }
     if (record->header.flags.is_deleted()) {
-      const auto allowed =
-          is_placed_reference_signature(record->header.signature) ? k_sig_name : Signature{};
+      const std::span<const Signature> allowed =
+          is_placed_reference_signature(record->header.signature)
+              ? std::span<const Signature>{k_reference_base}
+              : std::span<const Signature>{};
       const auto contents = contents_except(*record, allowed);
       if (!contents.empty()) {
         emit(out, plugin, record->form_key, CheckCode::deleted_record_content, CheckSeverity::error,
@@ -71,7 +77,7 @@ std::vector<CheckFinding> check_record_levels(const Plugin& plugin) {
       continue;
     }
     if (is_partial_form(*record)) {
-      const auto contents = contents_except(*record, k_sig_edid);
+      const auto contents = contents_except(*record, k_partial_allowed);
       if (!contents.empty()) {
         emit(out, plugin, record->form_key, CheckCode::partial_form_content, CheckSeverity::error,
             "Record is Partial Form, but contains: " + contents);
