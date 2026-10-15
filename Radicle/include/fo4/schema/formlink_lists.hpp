@@ -131,6 +131,8 @@ bool formlink_field_target_allowed(
 std::optional<FormLinkListDescriptor> formlink_list_descriptor(
     Signature record,
     std::string_view base_path) noexcept;
+std::optional<FormLinkListDescriptor> packed_formlink_list_path(
+    std::string_view path) noexcept;
 // Resolves a list by the Mutagen property name the AI list tools address it by
 // (record signature + field alias, e.g. FLST + "Items"), matched ASCII
 // case-insensitively to mirror C# BindingFlags.IgnoreCase. Empty alias never matches.
