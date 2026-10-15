@@ -22,6 +22,10 @@ enum class CheckCode {
   schema_preflight,
   branch_starting_topic_not_dial,
   topic_children_not_dial,
+  deleted_record_content,
+  partial_form_content,
+  light_object_id_overflow,
+  internal_form_id_mismatch,
 };
 
 enum class CheckSeverity {

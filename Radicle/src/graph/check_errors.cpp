@@ -1,5 +1,6 @@
 #include "fo4/graph/check_errors.hpp"
 
+#include "check_errors_records.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -279,6 +280,10 @@ std::string_view check_code_name(CheckCode code) noexcept {
     case CheckCode::schema_preflight: return "schema_preflight";
     case CheckCode::branch_starting_topic_not_dial: return "branch_starting_topic_not_dial";
     case CheckCode::topic_children_not_dial: return "topic_children_not_dial";
+    case CheckCode::deleted_record_content: return "deleted_record_content";
+    case CheckCode::partial_form_content: return "partial_form_content";
+    case CheckCode::light_object_id_overflow: return "light_object_id_overflow";
+    case CheckCode::internal_form_id_mismatch: return "internal_form_id_mismatch";
   }
   return "unknown";
 }
@@ -363,6 +368,7 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
     check_links(*plugin, records, winners, game_master, sink);
     check_dialogue_links(*plugin, winners, sink);
     check_preflight(*plugin, sink);
+    for (auto& finding : check_record_levels(*plugin)) sink.add(std::move(finding));
   }
 
   for (const auto& cycle : find_leveled_list_cycles(load_order)) {
