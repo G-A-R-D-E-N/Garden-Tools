@@ -48,28 +48,28 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
 | ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
 | ACTI | 5611 | 7 | 1 | 8 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
-| ADDN | 7796 | 3 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
+| ADDN | 7796 | 9 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ALCH | 5691 | 11 | 3 | 7 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | AMDL | 12246 | 16 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | AMMO | 5741 | 12 | 2 | 5 | - | 3 | yes | yes | - | - | 1 | L4 |
-| ANIO | 5777 | - | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| ANIO | 5777 | - | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | ARMA | 5845 | - | - | - | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARMO | 5786 | - | - | - | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
-| ASPC | 7057 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
+| ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | - | - | - | - | - | - | - | - | - | - | L0 |
 | AVIF | 7826 | 3 | - | - | - | 3 | yes | - | - | - | 2 | L4 |
-| BNDS | 12280 | 8 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
+| BNDS | 12280 | 14 | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | BPTD | 7693 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
-| CAMS | 7880 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| CAMS | 7880 | 16 | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
 | CELL | 5953 | - | - | - | - | 1 | - | - | forms/cell, environment/world | yes | 1 | L2 |
 | CLAS | 6102 | 1 | 1 | - | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
-| CMPO | 12294 | 1 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
+| CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
 | COBJ | 10266 | - | - | - | - | 1 | - | - | forms/components | yes | - | L2 |
 | COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
 | CONT | 6176 | 10 | 1 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
@@ -83,15 +83,15 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | DMGT | 12310 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | DOBJ | 8618 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | DOOR | 6477 | 7 | 1 | 6 | - | 3 | yes | yes | - | - | 1 | L4 |
-| DUAL | 9452 | 1 | - | 5 | - | - | yes | - | - | - | 1 | L4 |
+| DUAL | 9452 | 7 | - | 5 | - | - | yes | - | - | - | 1 | L4 |
 | ECZN | 8022 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
-| EFSH | 6510 | - | 5 | - | - | - | yes | - | - | yes | 1 | L4 |
-| ENCH | 6726 | 7 | - | 2 | - | 1 | yes | - | - | - | 2 | L4 |
+| EFSH | 6510 | - | 6 | 1 | - | - | yes | - | - | yes | 1 | L4 |
+| ENCH | 6726 | 13 | - | 2 | - | 1 | yes | - | - | - | 2 | L4 |
 | EQUP | 8835 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| EXPL | 7334 | 15 | - | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| EXPL | 7334 | 21 | 1 | 7 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | EYES | 6752 | - | - | - | - | 1 | yes | - | forms/eyes | - | 1 | L4 |
 | FACT | 6785 | 18 | - | 9 | - | 3 | yes | - | forms/faction | yes | 1 | L4 |
-| FLOR | 12167 | 5 | - | 2 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
+| FLOR | 12167 | 11 | 1 | 3 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
 | FLST | 7574 | - | - | - | 1 | 1 | - | - | - | - | - | L3 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
@@ -99,9 +99,9 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GMST | 6936 | 3 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
-| GRAS | 9612 | 10 | - | - | - | - | yes | - | environment/vegetation | - | 1 | L4 |
-| HAZD | 7180 | 9 | - | 5 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
-| HDPT | 7006 | 3 | 1 | 3 | 1 | 1 | yes | - | - | - | 1 | L4 |
+| GRAS | 9612 | 16 | 1 | 1 | - | - | yes | - | environment/vegetation | - | 1 | L4 |
+| HAZD | 7180 | 15 | 1 | 6 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| HDPT | 7006 | 3 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
 | IMAD | 7466 | 64 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -109,7 +109,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 11 | 3 | 5 | - | 1 | yes | yes | - | - | 1 | L4 |
 | INNR | 12337 | 1 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
-| IPCT | 7978 | 8 | - | 6 | - | - | yes | - | - | - | 1 | L4 |
+| IPCT | 7978 | 8 | 1 | 7 | - | - | yes | - | - | - | 1 | L4 |
 | IPDS | 8014 | - | - | - | - | - | yes | - | - | - | 2 | L4 |
 | KEYM | 9823 | 9 | 3 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
 | KSSM | 12387 | 1 | - | 3 | 1 | - | yes | - | - | yes | 1 | L4 |
@@ -120,13 +120,13 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | LCTN | 8039 | 2 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
 | LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LGTM | 8629 | 16 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
-| LIGH | 9871 | 19 | 1 | 3 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
+| LIGH | 9871 | 25 | 2 | 4 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | LTEX | 9967 | - | - | - | 1 | - | yes | - | environment/terrain, environment/vegetation | - | 1 | L4 |
-| LVLI | 10009 | 3 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVLN | 9986 | 3 | - | 1 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
-| LVSP | 10033 | - | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
-| MATO | 9375 | 7 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| LVLI | 10009 | 9 | - | 2 | - | 1 | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVLN | 9986 | 9 | 1 | 2 | - | - | yes | - | forms/leveled_list | yes | 1 | L4 |
+| LVSP | 10033 | 6 | - | - | - | 1 | yes | - | forms/leveled_list, forms/leveled_spell | - | 1 | L4 |
+| MATO | 9375 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | MATT | 7958 | 5 | 2 | 2 | - | - | yes | - | - | - | 2 | L4 |
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
 | MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
@@ -139,7 +139,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
-| NOTE | 12470 | 3 | 3 | 3 | - | 1 | yes | - | - | - | 1 | L4 |
+| NOTE | 12470 | 9 | 3 | 4 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 47 | - | 27 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -153,10 +153,10 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | PFLA | 5948 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PGRE | 5949 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PHZD | 5950 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PKIN | 12571 | 1 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
+| PKIN | 12571 | 7 | 1 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
-| PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| PROJ | 7115 | 22 | 1 | 10 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | - | 4 | 21 | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
@@ -175,20 +175,20 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | SNDR | 9406 | 10 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
 | SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
-| SOUN | 11961 | 3 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
-| SPEL | 12030 | 8 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
+| SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
+| SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 3 | 1 | 1 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
+| STAT | 12045 | 9 | 1 | 2 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 8 | 2 | 2 | - | 7 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
-| TREE | 12134 | 16 | - | 2 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
+| TREE | 12134 | 22 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| TXST | 6984 | 13 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
+| TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 45 | - | 28 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
+| WEAP | 12877 | 45 | 1 | 29 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
 | WRLD | 13110 | - | - | - | - | 1 | - | - | environment/world | yes | 1 | L2 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
@@ -201,27 +201,27 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
 | ACTI | 6 | - | - | 1 | 1 | i16, u16 | - | - | - | existing_only |
-| ADDN | 2 | - | 1 | - | - | u16, u32 | - | - | - | existing_only |
+| ADDN | 8 | - | 1 | - | 1 | i16, u16, u32 | - | - | - | existing_only |
 | AECH | - | - | - | - | - | - | - | - | - | - |
 | ALCH | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
 | AMDL | 16 | - | - | - | - | f32, u32 | - | - | - | existing_only |
 | AMMO | 11 | - | - | 1 | 2 | f32, i16, u32, u8 | - | - | - | existing_only |
-| ANIO | - | - | - | - | 1 | - | - | - | - | existing_only |
+| ANIO | - | - | - | - | 2 | - | - | - | - | existing_only |
 | AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
 | ARMA | - | - | - | - | - | - | - | - | - | - |
 | ARMO | - | - | - | - | - | - | - | - | - | - |
 | ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
-| ASPC | 1 | - | 1 | - | - | u16, u8 | - | - | - | existing_only |
+| ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
 | AVIF | 1 | - | 1 | 1 | - | f32, u32 | - | - | - | existing_only |
-| BNDS | 7 | - | 1 | - | - | f32, u16 | - | - | - | existing_only |
+| BNDS | 13 | - | 1 | - | - | f32, i16, u16 | - | - | - | existing_only |
 | BOOK | 11 | - | - | 1 | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
 | BPTD | - | - | - | - | - | - | - | - | - | - |
-| CAMS | 12 | - | 3 | 1 | - | f32, u32 | - | - | - | existing_only |
+| CAMS | 12 | - | 3 | 1 | 1 | f32, u32 | - | - | - | existing_only |
 | CELL | - | - | - | - | - | - | - | - | - | - |
 | CLAS | 1 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | CLFM | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
-| CMPO | 1 | - | - | - | - | u32 | - | - | - | existing_only |
+| CMPO | 7 | - | - | - | - | i16, u32 | - | - | - | existing_only |
 | COBJ | - | - | - | - | - | - | - | - | - | - |
 | COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | CONT | 9 | - | - | 1 | 1 | f32, i16, i32, u32, u8 | 2 | - | - | existing_only |
@@ -235,15 +235,15 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | DMGT | - | - | - | - | - | - | - | - | - | - |
 | DOBJ | - | - | - | - | - | - | - | - | - | - |
 | DOOR | 6 | - | - | 1 | 1 | i16, u8 | - | - | - | existing_only |
-| DUAL | - | - | - | 1 | - | u32 | - | - | - | existing_only |
+| DUAL | 6 | - | - | 1 | - | i16, u32 | - | - | - | existing_only |
 | ECZN | 3 | - | - | 1 | - | i8, u8 | - | - | - | existing_only |
-| EFSH | - | - | - | - | 5 | - | - | - | - | existing_only |
-| ENCH | 3 | - | 3 | 1 | - | f32, i32, u32 | - | - | - | existing_only |
+| EFSH | - | - | - | - | 6 | - | - | - | - | existing_only |
+| ENCH | 9 | - | 3 | 1 | - | f32, i16, i32, u32 | - | - | - | existing_only |
 | EQUP | - | - | - | 1 | - | u32 | - | - | - | existing_only |
-| EXPL | 15 | - | - | - | - | f32, u32 | - | - | - | existing_only |
+| EXPL | 21 | - | - | - | 1 | f32, i16, u32 | - | - | - | existing_only |
 | EYES | - | - | - | - | - | - | - | - | - | - |
 | FACT | 12 | - | 5 | 1 | - | f32, u16, u32, u8 | 1 | - | - | existing_only |
-| FLOR | 5 | - | - | - | - | u16, u8 | - | - | - | existing_only |
+| FLOR | 11 | - | - | - | 1 | i16, u16, u8 | - | - | - | existing_only |
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
 | FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
@@ -251,9 +251,9 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |
 | GMST | 2 | - | 1 | - | 1 | f32, i32, u32 | - | - | 4 | existing_only |
-| GRAS | 10 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
-| HAZD | 9 | - | - | - | - | f32, u32 | - | - | - | existing_only |
-| HDPT | - | - | 2 | 1 | 1 | u32, u8 | 2 | - | - | existing_only |
+| GRAS | 16 | - | - | - | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
+| HAZD | 15 | - | - | - | 1 | f32, i16, u32 | - | - | - | existing_only |
+| HDPT | - | - | 2 | 1 | 2 | u32, u8 | 2 | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | IDLM | 9 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
 | IMAD | 60 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
@@ -261,7 +261,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
 | INGR | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
 | INNR | - | - | 1 | - | - | u32 | - | - | - | existing_only |
-| IPCT | 4 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
+| IPCT | 4 | - | 3 | 1 | 1 | f32, u32, u8 | - | - | - | existing_only |
 | IPDS | - | - | - | - | - | - | - | - | - | - |
 | KEYM | 9 | - | - | - | 3 | f32, i16, i32 | - | - | - | existing_only |
 | KSSM | 1 | - | - | - | - | f32 | - | - | - | existing_only |
@@ -271,13 +271,13 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LCTN | 2 | - | - | - | - | f32 | - | - | - | existing_only |
 | LENS | 1 | - | - | - | - | f32 | - | - | - | existing_only |
 | LGTM | 16 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
-| LIGH | 18 | - | - | 1 | 1 | f32, i32, u32, u8 | - | - | - | existing_only |
+| LIGH | 24 | - | - | 1 | 2 | f32, i16, i32, u32, u8 | - | - | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
 | LTEX | - | - | - | - | - | - | - | - | - | - |
-| LVLI | 3 | - | - | - | - | u8 | - | - | - | existing_only |
-| LVLN | 3 | - | - | - | - | u8 | - | - | - | existing_only |
-| LVSP | - | - | - | - | - | - | - | - | - | - |
-| MATO | 7 | - | - | - | - | f32 | - | - | - | existing_only |
+| LVLI | 9 | - | - | - | - | i16, u8 | - | - | - | existing_only |
+| LVLN | 9 | - | - | - | 1 | i16, u8 | - | - | - | existing_only |
+| LVSP | 6 | - | - | - | - | i16 | - | - | - | existing_only |
+| MATO | 7 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MATT | 4 | - | - | 1 | 2 | f32, u32 | - | - | - | existing_only |
 | MESG | 1 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | MGEF | 12 | - | 4 | 1 | - | f32, u32 | - | - | - | existing_only |
@@ -290,7 +290,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |
-| NOTE | 2 | - | 1 | - | 3 | f32, u32, u8 | - | - | - | existing_only |
+| NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
 | NPC_ | 37 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | OMOD | - | - | - | - | - | - | - | - | - | - |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
@@ -304,10 +304,10 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PFLA | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PGRE | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PHZD | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PKIN | 1 | - | - | - | 1 | u32 | - | - | - | existing_only |
+| PKIN | 7 | - | - | - | 1 | i16, u32 | - | - | - | existing_only |
 | PLYR | - | - | - | - | - | - | - | - | - | - |
 | PMIS | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PROJ | 16 | - | - | - | - | f32, u16, u32, u8 | - | - | - | existing_only |
+| PROJ | 22 | - | - | - | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | - | - | - | - | 4 | - | 2 | - | - | existing_only |
 | REFR | 6 | 1 | - | - | - | f32, u32 | - | 4 | - | existing_only |
@@ -326,19 +326,19 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SNCT | 4 | - | - | 1 | - | f32, u16, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | - | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
 | SOPM | 14 | - | 1 | 1 | - | f32, i16, u32, u8 | - | - | - | existing_only |
-| SOUN | 3 | - | - | - | - | f32, u8 | - | - | - | existing_only |
-| SPEL | 4 | - | 3 | 1 | - | f32, u32 | - | - | - | existing_only |
+| SOUN | 9 | - | - | - | - | f32, i16, u8 | - | - | - | existing_only |
+| SPEL | 10 | - | 3 | 1 | - | f32, i16, u32 | - | - | - | existing_only |
 | SPGD | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
 | STAG | - | - | - | - | - | - | - | - | - | - |
-| STAT | 3 | - | - | - | 1 | f32 | - | - | - | existing_only |
+| STAT | 9 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
 | TACT | 6 | - | - | - | 1 | i16 | - | - | - | existing_only |
 | TERM | 6 | - | - | 2 | 2 | i16, u16, u32 | - | - | - | existing_only |
-| TREE | 16 | - | - | - | - | f32, u8 | - | - | - | existing_only |
+| TREE | 22 | - | - | - | 1 | f32, i16, u8 | - | - | - | existing_only |
 | TRNS | 9 | - | - | - | - | f32 | - | - | - | existing_only |
-| TXST | 11 | - | - | 2 | 9 | f32, u16, u8 | - | - | - | existing_only |
+| TXST | 17 | - | - | 2 | 9 | f32, i16, u16, u8 | - | - | - | existing_only |
 | VTYP | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
-| WEAP | 36 | - | 6 | 3 | - | f32, i16, u16, u32, u8 | - | - | - | existing_only |
+| WEAP | 36 | - | 6 | 3 | 1 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | WRLD | - | - | - | - | - | - | - | - | - | - |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
 | ZOOM | 4 | - | 1 | - | - | f32, u32 | - | - | - | existing_only |
