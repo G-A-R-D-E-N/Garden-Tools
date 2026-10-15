@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
+Tier counts: L0 6, L1 0, L2 7, L3 1, L4 133.
 
 ### Per-signature coverage
 
@@ -70,7 +70,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
 | CMPO | 12294 | 7 | - | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| COBJ | 10266 | - | - | - | - | 1 | - | - | forms/components | yes | - | L2 |
+| COBJ | 10266 | 2 | - | 5 | 1 | 1 | yes | - | forms/components | yes | - | L4 |
 | COLL | 9547 | 3 | 1 | - | - | 1 | yes | - | - | yes | 2 | L4 |
 | CONT | 6176 | 10 | 1 | 9 | - | 1 | yes | yes | - | - | 1 | L4 |
 | CPTH | 7930 | 1 | - | 2 | 1 | - | yes | - | - | - | 1 | L4 |
@@ -222,7 +222,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | CLFM | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
 | CMPO | 7 | - | - | - | - | i16, u32 | - | - | - | existing_only |
-| COBJ | - | - | - | - | - | - | - | - | - | - |
+| COBJ | 2 | - | - | - | - | u16 | - | - | - | existing_only |
 | COLL | 2 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | CONT | 9 | - | - | 1 | 1 | f32, i16, i32, u32, u8 | 2 | - | - | existing_only |
 | CPTH | - | - | - | 1 | - | u8 | - | - | - | existing_only |
@@ -389,7 +389,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | CLFM | U | U | U | U | U | U | U | G | field audit pending |
 | CLMT | P | U | U | U | U | P | P | G | environment / plugin headers; PR #398 |
 | CMPO | U | U | U | U | U | U | U | G | field audit pending |
-| COBJ | P | P | P | P | U | P | P | G | forms/components.hpp |
+| COBJ | P | P | P | P | I | P | P | G | forms/components.hpp; generated authoring rows; tests/test_wp9_cobj_rows.cpp |
 | COLL | U | U | U | U | U | U | U | G | field audit pending |
 | CONT | I | I | I | I | U | U | I | G | field audit pending |
 | CPTH | U | U | U | U | U | U | U | G | field audit pending |
@@ -525,7 +525,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
 | CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
-| MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | Other record members and whole-record creation |
+| MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | MISC members and whole-record creation; COBJ CTDA (WP-7) and NAM1-NAM3 (unused by xEdit; one corpus record) |
 | WTHR MNAM | forms/weather_concept.hpp; tests/test_weather_concept.cpp | Other weather fields; missing/duplicate MNAM refuses mutation |
 | FLST / generated keywords | schema/formlink_lists.hpp; tests/test_formlink_lists.cpp | Each record's empty-list anchors and save/reload proof; unrelated fields |
 | Form IDs / masters | schema/form_links.hpp; tests/test_formlinks.cpp, test_navmesh_formlinks.cpp, test_remap_non_formid_slots.cpp | Mixed/opaque containers require complete ownership proof; unsupported VMAD refuses remap |

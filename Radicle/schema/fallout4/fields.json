@@ -16668,7 +16668,21 @@
     },
     {
       "signature": "COBJ",
-      "fields": [],
+      "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "YNAM", "minimum": 0, "maximum": 1}, {"signature": "ZNAM", "minimum": 0, "maximum": 1}, {"signature": "FVPA", "minimum": 0, "maximum": 1, "coupled": true}, {"signature": "DESC", "minimum": 0, "maximum": 1}, {"signature": "CTDA", "minimum": 0, "maximum": 65535}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "BNAM", "minimum": 0, "maximum": 1}, {"signature": "ANAM", "minimum": 0, "maximum": 1}, {"signature": "FNAM", "minimum": 0, "maximum": 1}, {"signature": "INTV", "minimum": 1, "maximum": 1, "default": "01000000"}]},
+      "fields": [
+        {"path": "COBJ\\CreatedObjectCount", "label": "Created object count", "kind": "scalar", "subrecord": "INTV", "offset": 0, "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "insertion": "existing_only"},
+        {"path": "COBJ\\Priority", "label": "Priority", "kind": "scalar", "subrecord": "INTV", "offset": 2, "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "minimum_payload_size": 4, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "COBJ\\CreatedObject", "label": "Created object", "subrecord": "CNAM", "offset": 0, "target_union": "sigBaseObjects", "nullable": true, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "COBJ\\WorkbenchKeyword", "label": "Workbench keyword", "subrecord": "BNAM", "offset": 0, "targets": ["KYWD"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "COBJ\\MenuArtObject", "label": "Menu art object", "subrecord": "ANAM", "offset": 0, "targets": ["ARTO"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "COBJ\\PickUpSound", "label": "Sound - pick up", "subrecord": "YNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "COBJ\\PutDownSound", "label": "Sound - put down", "subrecord": "ZNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "COBJ\\Category", "label": "Category", "subrecord": "FNAM", "targets": ["KYWD"], "nullable": false, "storage": "packed_array", "mutation": "existing_neighbors", "anchor_predecessors": ["ANAM", "BNAM", "CNAM", "CTDA", "DESC", "FVPA", "ZNAM", "YNAM", "EDID"]}
+      ],
       "localized_subrecords": [
         "DESC"
       ]
