@@ -100,7 +100,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GMST | 6936 | 3 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GRAS | 9612 | 10 | - | - | - | - | yes | - | environment/vegetation | - | 1 | L4 |
-| HAZD | 7180 | 9 | - | 4 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
+| HAZD | 7180 | 9 | - | 5 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | HDPT | 7006 | 2 | - | 3 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
@@ -140,7 +140,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 3 | 3 | 3 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 47 | - | - | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
+| NPC_ | 10286 | 47 | - | 27 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -158,7 +158,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
-| RACE | 11054 | - | 4 | - | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
+| RACE | 11054 | - | 4 | 21 | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -188,7 +188,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | TXST | 6984 | 13 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 45 | - | 13 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
+| WEAP | 12877 | 45 | - | 27 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
 | WRLD | 13110 | - | - | - | - | 1 | - | - | environment/world | yes | 1 | L2 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |

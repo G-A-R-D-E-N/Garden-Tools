@@ -5445,6 +5445,16 @@
           "targets": ["SNDR"],
           "nullable": true,
           "insertion": "existing_only"
+        },
+        {
+          "path": "HAZD\\ImageSpaceModifier",
+          "label": "Image Space Modifier",
+          "subrecord": "MNAM",
+          "offset": 0,
+          "targets": ["IMAD"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
         }
       ],
       "authoring": {
@@ -6643,6 +6653,218 @@
           "kind": "string",
           "subrecord": "PHTN",
           "repeated": true,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "RACE\\Skin",
+          "label": "Skin",
+          "subrecord": "WNAM",
+          "offset": 0,
+          "targets": ["ARMO"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\AttackRace",
+          "label": "Attack Race",
+          "subrecord": "ATKR",
+          "offset": 0,
+          "targets": ["RACE"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\BodyPartData",
+          "label": "Body Part Data",
+          "subrecord": "GNAM",
+          "offset": 0,
+          "targets": ["BPTD"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ImpactMaterialType",
+          "label": "Impact Material Type",
+          "subrecord": "NAM4",
+          "offset": 0,
+          "targets": ["MATT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ImpactDataSet",
+          "label": "Impact Data Set",
+          "subrecord": "NAM5",
+          "offset": 0,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\DismemberBloodArt",
+          "label": "Dismember Blood Art",
+          "subrecord": "NAM7",
+          "offset": 0,
+          "targets": ["ARTO"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\MeatCapTextureSet",
+          "label": "Meat Cap TextureSet",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "targets": ["TXST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\SoundOpenCorpse",
+          "label": "Sound - Open Corpse",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\SoundCloseCorpse",
+          "label": "Sound - Close Corpse",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\UnarmedWeapon",
+          "label": "Unarmed Weapon",
+          "subrecord": "UNWP",
+          "offset": 0,
+          "targets": ["WEAP"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\BaseMovementDefaultsDefault",
+          "label": "Base Movement Defaults - Default",
+          "subrecord": "WKMV",
+          "offset": 0,
+          "targets": ["MOVT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\BaseMovementDefaultsSwim",
+          "label": "Base Movement Defaults - Swim",
+          "subrecord": "SWMV",
+          "offset": 0,
+          "targets": ["MOVT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\BaseMovementDefaultsFly",
+          "label": "Base Movement Defaults - Fly",
+          "subrecord": "FLMV",
+          "offset": 0,
+          "targets": ["MOVT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\BaseMovementDefaultsSneak",
+          "label": "Base Movement Defaults - Sneak",
+          "subrecord": "SNMV",
+          "offset": 0,
+          "targets": ["MOVT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\MaleDefaultFaceTexture",
+          "label": "Male Default Face Texture",
+          "subrecord": "DFTM",
+          "offset": 0,
+          "targets": ["TXST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\FemaleDefaultFaceTexture",
+          "label": "Female Default Face Texture",
+          "subrecord": "DFTF",
+          "offset": 0,
+          "targets": ["TXST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\MorphRace",
+          "label": "Morph Race",
+          "subrecord": "NAM8",
+          "offset": 0,
+          "targets": ["RACE"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\ArmorRace",
+          "label": "Armor Race",
+          "subrecord": "RNAM",
+          "offset": 0,
+          "targets": ["RACE"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\SubgraphTemplateRace",
+          "label": "Subgraph Template Race",
+          "subrecord": "SRAC",
+          "offset": 0,
+          "targets": ["RACE"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\SubgraphAdditiveRace",
+          "label": "Subgraph Additive Race",
+          "subrecord": "SADD",
+          "offset": 0,
+          "targets": ["RACE"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\DialogueQuest",
+          "label": "Dialogue Quest",
+          "subrecord": "QSTI",
+          "offset": 0,
+          "targets": ["QUST"],
+          "nullable": true,
+          "payload_sizes": [4],
           "insertion": "existing_only"
         }
       ],
@@ -23130,7 +23352,147 @@
         {"path": "WEAP\\SoundUnEquip", "label": "Sound - UnEquip Sound", "subrecord": "DNAM", "offset": 97, "payload_sizes": [132], "targets": ["SNDR"], "nullable": true, "insertion": "existing_only"},
         {"path": "WEAP\\SoundFastEquip", "label": "Sound - Fast Equip Sound", "subrecord": "DNAM", "offset": 101, "payload_sizes": [132], "targets": ["SNDR"], "nullable": true, "insertion": "existing_only"},
         {"path": "WEAP\\OverrideProjectile", "label": "Override projectile", "subrecord": "FNAM", "offset": 29, "payload_sizes": [41], "targets": ["PROJ"], "nullable": true, "insertion": "existing_only"},
-        {"path": "WEAP\\CritEffect", "label": "Crit effect", "subrecord": "CRDT", "offset": 8, "payload_sizes": [12], "targets": ["SPEL"], "nullable": true, "insertion": "existing_only"}
+        {"path": "WEAP\\CritEffect", "label": "Crit effect", "subrecord": "CRDT", "offset": 8, "payload_sizes": [12], "targets": ["SPEL"], "nullable": true, "insertion": "existing_only"},
+        {
+          "path": "WEAP\\AnimationSound",
+          "label": "Animation Sound",
+          "subrecord": "STCP",
+          "offset": 0,
+          "targets": ["STAG"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\BlockBashImpactDataSet",
+          "label": "Block Bash Impact Data Set",
+          "subrecord": "BIDS",
+          "offset": 0,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\AlternateBlockMaterial",
+          "label": "Alternate Block Material",
+          "subrecord": "BAMT",
+          "offset": 0,
+          "targets": ["MATT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\SoundPickUp",
+          "label": "Sound - Pick Up",
+          "subrecord": "YNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\SoundPutDown",
+          "label": "Sound - Put Down",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": ["SNDR"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\InstanceNaming",
+          "label": "Instance Naming",
+          "subrecord": "INRD",
+          "offset": 0,
+          "targets": ["INNR"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\EmbeddedWeaponMod",
+          "label": "Embedded Weapon Mod",
+          "subrecord": "NNAM",
+          "offset": 0,
+          "targets": ["OMOD"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\ImpactDataSet",
+          "label": "Impact Data Set",
+          "subrecord": "INAM",
+          "offset": 0,
+          "targets": ["IPDS"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\NPCAddAmmoList",
+          "label": "NPC Add Ammo List",
+          "subrecord": "LNAM",
+          "offset": 0,
+          "targets": ["LVLI"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\AimModel",
+          "label": "Aim Model",
+          "subrecord": "WAMD",
+          "offset": 0,
+          "targets": ["AMDL"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\Zoom",
+          "label": "Zoom",
+          "subrecord": "WZMD",
+          "offset": 0,
+          "targets": ["ZOOM"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\Template",
+          "label": "Template",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "targets": ["WEAP"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\EquipmentType",
+          "label": "Equipment Type",
+          "subrecord": "ETYP",
+          "offset": 0,
+          "targets": ["EQUP"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "WEAP\\Effect",
+          "label": "Effect",
+          "subrecord": "EITM",
+          "offset": 0,
+          "targets": ["ENCH"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        }
       ],
       "localized_subrecords": ["FULL", "DESC"]
     },
@@ -24646,6 +25008,278 @@
           ],
           "minimum": 0,
           "maximum": 4294967295,
+          "insertion": "existing_only"
+        }
+      ],
+      "formlink_fields": [
+        {
+          "path": "NPC_\\DeathItem",
+          "label": "Death item",
+          "subrecord": "INAM",
+          "offset": 0,
+          "targets": ["LVLI"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\Voice",
+          "label": "Voice",
+          "subrecord": "VTCK",
+          "offset": 0,
+          "targets": ["VTYP"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\DefaultTemplate",
+          "label": "Default Template",
+          "subrecord": "TPLT",
+          "offset": 0,
+          "targets": ["LVLN", "NPC_"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\LegendaryTemplate",
+          "label": "Legendary Template",
+          "subrecord": "LTPT",
+          "offset": 0,
+          "targets": ["LVLN", "NPC_"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\LegendaryChance",
+          "label": "Legendary Chance",
+          "subrecord": "LTPC",
+          "offset": 0,
+          "targets": ["GLOB"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\Race",
+          "label": "Race",
+          "subrecord": "RNAM",
+          "offset": 0,
+          "targets": ["RACE"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\Skin",
+          "label": "Skin",
+          "subrecord": "WNAM",
+          "offset": 0,
+          "targets": ["ARMO"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\FarAwayModel",
+          "label": "Far away model",
+          "subrecord": "ANAM",
+          "offset": 0,
+          "targets": ["ARMO"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\AttackRace",
+          "label": "Attack Race",
+          "subrecord": "ATKR",
+          "offset": 0,
+          "targets": ["RACE"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\SpectatorOverridePackageList",
+          "label": "Spectator Override Package List",
+          "subrecord": "SPOR",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\ObserveDeadBodyOverridePackageList",
+          "label": "Observe Dead Body Override Package List",
+          "subrecord": "OCOR",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\GuardWarnOverridePackageList",
+          "label": "Guard Warn Override Package List",
+          "subrecord": "GWOR",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\CombatOverridePackageList",
+          "label": "Combat Override Package List",
+          "subrecord": "ECOR",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\FollowerCommandPackageList",
+          "label": "Follower Command Package List",
+          "subrecord": "FCPL",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\FollowerElevatorPackageList",
+          "label": "Follower Elevator Package List",
+          "subrecord": "RCLR",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\Class",
+          "label": "Class",
+          "subrecord": "CNAM",
+          "offset": 0,
+          "targets": ["CLAS"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\HairColor",
+          "label": "Hair Color",
+          "subrecord": "HCLF",
+          "offset": 0,
+          "targets": ["CLFM"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\FacialHairColor",
+          "label": "Facial Hair Color",
+          "subrecord": "BCLF",
+          "offset": 0,
+          "targets": ["CLFM"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\CombatStyle",
+          "label": "Combat Style",
+          "subrecord": "ZNAM",
+          "offset": 0,
+          "targets": ["CSTY"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\GiftFilter",
+          "label": "Gift Filter",
+          "subrecord": "GNAM",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\InheritsSoundsFrom",
+          "label": "Inherits Sounds From",
+          "subrecord": "CSCR",
+          "offset": 0,
+          "targets": ["NPC_"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\PowerArmorStand",
+          "label": "Power Armor Stand",
+          "subrecord": "PFRN",
+          "offset": 0,
+          "targets": ["FURN"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\DefaultOutfit",
+          "label": "Default Outfit",
+          "subrecord": "DOFT",
+          "offset": 0,
+          "targets": ["OTFT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\SleepingOutfit",
+          "label": "Sleeping Outfit",
+          "subrecord": "SOFT",
+          "offset": 0,
+          "targets": ["OTFT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\DefaultPackageList",
+          "label": "Default Package List",
+          "subrecord": "DPLT",
+          "offset": 0,
+          "targets": ["FLST"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\CrimeFaction",
+          "label": "Crime Faction",
+          "subrecord": "CRIF",
+          "offset": 0,
+          "targets": ["FACT"],
+          "nullable": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\HeadTexture",
+          "label": "Head Texture",
+          "subrecord": "FTST",
+          "offset": 0,
+          "targets": ["TXST"],
+          "nullable": true,
+          "payload_sizes": [4],
           "insertion": "existing_only"
         }
       ],
