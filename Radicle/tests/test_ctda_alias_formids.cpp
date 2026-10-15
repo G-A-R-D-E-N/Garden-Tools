@@ -17,6 +17,7 @@ namespace {
 constexpr std::uint16_t k_get_distance = 1;
 constexpr std::uint16_t k_get_faction_rank_difference = 60;
 constexpr std::uint16_t k_get_is_current_package = 161;
+constexpr std::uint16_t k_get_in_worldspace = 310;
 constexpr std::uint32_t k_run_on_subject = 0;
 constexpr std::uint32_t k_run_on_quest_alias = 5;
 constexpr std::uint32_t k_missing = 0xFFFFFFFFu;
@@ -134,6 +135,16 @@ TEST(CtdaReferenceParams, ReferenceParamWithoutAliasFlagIsStillRemapped) {
   write_cobj(out, 0x03000801, make_ctda(0, k_get_distance, 3, 0, k_run_on_subject));
   const auto ctda = remapped_ctda(
       out, "PlainMove.esp",
+      {fo4::PluginKey::from_filename("RadiationOverhaul.esp"),
+       fo4::PluginKey::from_filename("Fallout4.esm")});
+  EXPECT_EQ(read_u32(ctda, 12), 0x01000003u);
+}
+
+TEST(CtdaReferenceParams, GetInWorldspaceParamOneIsRemappedOnMasterReorder) {
+  auto out = plugin_with_masters();
+  write_cobj(out, 0x03000801, make_ctda(0, k_get_in_worldspace, 3, 0, k_run_on_subject));
+  const auto ctda = remapped_ctda(
+      out, "WorldspaceMove.esp",
       {fo4::PluginKey::from_filename("RadiationOverhaul.esp"),
        fo4::PluginKey::from_filename("Fallout4.esm")});
   EXPECT_EQ(read_u32(ctda, 12), 0x01000003u);
