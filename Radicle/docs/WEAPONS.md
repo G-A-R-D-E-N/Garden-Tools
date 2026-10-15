@@ -117,7 +117,7 @@ Enum ranges are the count of xEdit enum members (`On Hit` 4, `Animation Type` 12
 
 ## FormLinks
 
-Embedded form IDs go through the single-FormLink table with a payload size. Top-level form ID subrecords (INAM, LNAM, WAMD, WZMD, CNAM, BIDS, BAMT, ETYP, NNAM, INRD, YNAM, ZNAM, PTRN, STCP, FLTR, MODS, MO4S) are covered by `Radicle/include/fo4/schema/formid_subrecords.inc`, which is keyed by signature.
+Embedded form IDs go through the single-FormLink table with a payload size. Top-level form ID subrecords (INAM, LNAM, WAMD, WZMD, CNAM, BIDS, BAMT, ETYP, NNAM, INRD, YNAM, ZNAM, PTRN, STCP, MODS, MO4S, EITM) are covered by `Radicle/include/fo4/schema/formid_subrecords.inc`, which is keyed by signature. `APPR` (a keyword array, `Core/wbDefinitionsFO4.pas:5275`) is covered by `Radicle/src/schema/form_links.cpp:is_formid_array_signature`. `FLTR` is a string (`Core/wbDefinitionsFO4.pas:5274`), so it is not remapped.
 
 | Path | Subrecord | Offset | Targets | xEdit |
 | --- | --- | --- | --- | --- |
