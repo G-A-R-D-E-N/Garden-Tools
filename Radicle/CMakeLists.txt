@@ -382,6 +382,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_wp9_race_weap_rows.cpp
     tests/test_race_data_rows.cpp
     tests/test_wp9_scol.cpp
+    tests/test_furn_rows.cpp
     tests/test_wrld_rows.cpp
     tests/test_armo_arma_rows.cpp
     tests/test_packed_formlink_arrays.cpp
