@@ -127,3 +127,37 @@ TEST(MusicTrackLists, FieldPathCApiCountAndSetStillResolveOnTracks) {
   EXPECT_EQ(tracks, 2u);
   radicle_plugin_destroy(plugin);
 }
+
+TEST(MusicTrackLists, AppendAfterLastConditionSubrecordWhenTracksAbsent) {
+  auto entries = fixture();
+  for (auto& entry : entries) {
+    if (entry.id == k_must) {
+      entry.subs = {{"EDID", zstr("Track")}, {"CITC", words({2})}, {"CTDA", filled(32, 0)},
+                    {"CIS2", zstr("p")}, {"CTDA", filled(32, 0)}};
+    }
+  }
+  auto plugin = read(build(entries));
+  const auto list = track_list("MUST", "MUST\\Tracks");
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, key(k_must), list, 0, key(k_must)),
+            ListStatus::updated);
+  EXPECT_EQ(order(plugin, k_must), (Order{"EDID", "CITC", "CTDA", "CIS2", "CTDA", "SNAM"}));
+}
+
+TEST(MusicTrackLists, CApiNullInsertWritesZeroIntoPackedTracks) {
+  TempRoot root;
+  std::filesystem::create_directories(root.path / "out");
+  fo4::write_plugin_file(read(build(fixture())), root.path / k_plugin);
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file((root.path / k_plugin).string().c_str(), &plugin), RADICLE_STATUS_OK);
+  const radicle_form_key music{k_plugin, k_music}, must{k_plugin, k_must};
+  EXPECT_EQ(radicle_plugin_formlink_list_insert(plugin, music, "MUSC\\Tracks", 0, &must), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_formlink_list_insert(plugin, music, "MUSC\\Tracks", 1, nullptr), RADICLE_STATUS_OK);
+  size_t tracks = 0;
+  EXPECT_EQ(radicle_plugin_formlink_list_size(plugin, music, "MUSC\\Tracks", &tracks), RADICLE_STATUS_OK);
+  EXPECT_EQ(tracks, 4u);
+  const auto saved = root.path / "out" / k_plugin;
+  ASSERT_EQ(radicle_plugin_write_file(plugin, saved.string().c_str()), RADICLE_STATUS_OK);
+  radicle_plugin_destroy(plugin);
+  const auto reread = fo4::read_plugin_file(saved);
+  EXPECT_EQ(payloads(reread, k_music, "TNAM"), (std::vector<Bytes>{words({k_must, 0, k_must, 0})}));
+}

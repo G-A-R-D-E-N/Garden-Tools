@@ -103,21 +103,16 @@ std::span<const Signature> anchor_successors(
           descriptor.successor_count};
 }
 
-// Positions the first element of an otherwise-empty flat FormLink list. With no
-// existing element of its own to anchor against, fall back to the schema's
-// declared sibling order: insert immediately after the nearest preceding sibling
-// list that is present, or immediately before the nearest following one. When no
-// sibling list is present the record offers no anchor and insertion fails closed.
 std::optional<std::size_t> empty_list_insertion_point(
     const Record& record,
     const FormLinkListDescriptor& descriptor) {
-  for (const auto predecessor : anchor_predecessors(descriptor)) {
-    std::optional<std::size_t> last;
-    for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
-      if (record.subrecords[index].signature == predecessor) last = index;
-    }
-    if (last.has_value()) return *last + 1;
+  const auto predecessors = anchor_predecessors(descriptor);
+  std::optional<std::size_t> after;
+  for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
+    const auto signature = record.subrecords[index].signature;
+    if (std::find(predecessors.begin(), predecessors.end(), signature) != predecessors.end()) after = index + 1;
   }
+  if (after.has_value()) return after;
   for (const auto successor : anchor_successors(descriptor)) {
     for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
       if (record.subrecords[index].signature == successor) return index;
@@ -609,8 +604,9 @@ FormLinkListMutationStatus insert_record_formlink_list_null_element(
         std::string(descriptor.path) + " does not allow null FormLink elements");
   }
   auto next = plugin;
-  const auto status = insert_encoded_element(
-      next, record_key, descriptor, index, RawFormId{0});
+  const auto status = descriptor.storage == FormLinkListStorage::packed_array
+      ? insert_packed_element(next, record_key, descriptor, index, RawFormId{0})
+      : insert_encoded_element(next, record_key, descriptor, index, RawFormId{0});
   if (status == FormLinkListMutationStatus::updated) plugin = std::move(next);
   return status;
 }

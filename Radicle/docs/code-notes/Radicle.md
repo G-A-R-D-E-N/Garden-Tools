@@ -2557,3 +2557,11 @@ MUST SNAM (`Tracks`, targets MUST, nullable) is a packed appendable `formlink_li
 ## Radicle/src/schema/formlink_lists.cpp:packed_formlink_list_path (#602 track lists)
 
 The field-path entry points fall back to this helper when `formlink_field_descriptor(path)` finds nothing: `radicle_plugin_set_record_formlink` in `Radicle/src/c_api_fields.cpp` and the path overload of `fo4::record_field_count` in `Radicle/src/plugin/field_writer.cpp`. It returns a list only for packed_array storage, so other list kinds keep the unknown-path result. Index-out-of-range maps to NOT_FOUND on the C side, as the field path did. A bad target type or record mismatch maps to INVALID_ARGUMENT; the C++ field path threw where the list path returns a status, and both reach the same C code.
+
+## Radicle/src/schema/formlink_lists.cpp:insert_record_formlink_list_null_element (#602 track lists)
+
+A NULL insert dispatches on storage the same way the element insert does: packed_array lists go to `insert_packed_element` with a zero element, so the single array subrecord grows by four bytes; per-subrecord lists keep `insert_encoded_element`. The nullable refusal is unchanged. Before this, a NULL insert into MUSC or MUST `Tracks` went through the per-subrecord path and threw from `matching_positions` on the array's size.
+
+## Radicle/src/schema/formlink_lists.cpp:empty_list_insertion_point (#602 track lists)
+
+The first element of an absent flat list goes after the last subrecord whose signature is any listed anchor predecessor (the maximum position over the predecessors present), not after the first listed predecessor that exists. The list order is therefore not significant for predecessors. Example: MUST with `CITC CTDA CIS2 CTDA` and no SNAM places SNAM after the final CTDA; the old first-listed rule put it after CIS2, inside the condition block. With no predecessor present, the first present successor in list order anchors the insert before it; with no anchor and `append_when_empty`, the element goes at the end of the record; otherwise insertion fails closed. Tests: `MusicTrackLists.AppendAfterLastConditionSubrecordWhenTracksAbsent`, `WP9CobjRows.CategoryKeywordAnchorsAfterTheNearestPresentPredecessor` (unchanged position), `FormLinkListMutation.InsertsFirstEmptyElementAfterPrecedingSibling`.
