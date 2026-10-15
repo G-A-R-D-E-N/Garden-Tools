@@ -3095,9 +3095,62 @@
           "maximum": 255,
           "payload_size": 4,
           "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\MarkerColorRed",
+          "label": "Marker color red (unused)",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\MarkerColorGreen",
+          "label": "Marker color green (unused)",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FLOR\\MarkerColorBlue",
+          "label": "Marker color blue (unused)",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
+        {
+          "path": "FLOR\\PreviewTransform",
+          "label": "Preview transform",
+          "subrecord": "PTRN",
+          "offset": 0,
+          "targets": [
+            "TRNS"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
         {"path": "FLOR\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
         {
           "path": "FLOR\\Ingredient",
@@ -21323,6 +21376,45 @@
           "minimum": 0,
           "maximum": 65535,
           "insertion": "existing_only"
+        },
+        {
+          "path": "ACTI\\MarkerColorRed",
+          "label": "Marker color red",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ACTI\\MarkerColorGreen",
+          "label": "Marker color green",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ACTI\\MarkerColorBlue",
+          "label": "Marker color blue",
+          "kind": "scalar",
+          "subrecord": "PNAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 4,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -21347,6 +21439,20 @@
           "offset": 0,
           "targets": [
             "TRNS"
+          ],
+          "nullable": false,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ACTI\\AnimationSound",
+          "label": "Animation sound",
+          "subrecord": "STCP",
+          "offset": 0,
+          "targets": [
+            "STAG"
           ],
           "nullable": false,
           "payload_sizes": [
