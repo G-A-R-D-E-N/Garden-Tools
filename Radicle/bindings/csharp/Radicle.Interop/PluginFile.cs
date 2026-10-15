@@ -115,6 +115,17 @@ public sealed unsafe class PluginFile : IDisposable
             return RadicleNative.PluginSetPlacedTransform(plugin, key, p, r);
         });
 
+    public PlacedMoveStatus MoveTransform(FormKey reference, Vector3 position, Vector3 rotation)
+    {
+        using var use = Use();
+        using var strings = new NativeStrings();
+        var p = stackalloc float[] { position.X, position.Y, position.Z };
+        var r = stackalloc float[] { rotation.X, rotation.Y, rotation.Z };
+        PlacedMoveStatus status;
+        Call.Check(RadicleNative.PluginMovePlacedRef(use.Pointer, strings.Key(reference), p, r, &status));
+        return status;
+    }
+
     public bool SetScale(FormKey reference, float? scale) =>
         Edit(reference, (plugin, s, key) => RadicleNative.PluginSetPlacedScale(plugin, key, scale.HasValue ? 1 : 0, scale ?? 0));
 
