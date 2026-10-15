@@ -117,10 +117,10 @@ Not yet run; needs a GardenEngine checkout whose Radicle pin is this PR head (Ga
 
 Stays opaque: MODL/MODT/MODC/MODS/MODF (MODL cannot be removed: it would orphan its siblings), VMAD,
 PTRN, DEST and its stage subrecords, DAMC, PRPS, PNAM, ATTX, RNAM, FULL, KSIZ/KWDA (use `FLOR\Keywords`),
-LTEX TNAM, HNAM, MNAM and SNAM (no typed field; present only through the generic surfaces), and every byte
+and every byte
 of an official record that no edit touched. Four FLOR records in Fallout4.esm (FloraFern01/02,
 FloraCornStalk01/02, two destructible stages) cannot take `AddSubrecord` because the flat order check does
-not model repeating stage groups; their field edits and removals still work.
+not model repeating stage groups; their field edits and removals still work. LTEX TNAM, MNAM, HNAM and SNAM have schema rows (`LTEX\TextureSet`, `LTEX\MaterialType`, `LTEX\Friction`, `LTEX\Restitution`, `LTEX\SpecularExponent`) for existing subrecords only; there is no typed field.
 
 Field list, size guards, defaults provenance and refusal rules are in
 `docs/code-notes/radicle-vegetation-writer.md`. Subrecord add, remove and create semantics are in

@@ -260,7 +260,7 @@ set_target_properties(radicle_c PROPERTIES
 fo4_apply_warnings(radicle_c)
 fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
-target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp)
+target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp src/c_api_conditions.cpp)
 target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
 
 if(RADICLE_INSTALL)
@@ -367,6 +367,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_dobj_formlinks.cpp
     tests/test_wp9_link_rows.cpp
     tests/test_wp9_bounds_model_rows.cpp
+    tests/test_wp9_ltex_llkc_rows.cpp
     tests/test_wp9_list_rows.cpp
     tests/test_packed_formlink_arrays.cpp
     tests/test_formlink_ordinals.cpp
@@ -551,6 +552,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp
     tests/test_environment_base_records.cpp
+    tests/test_c_api_conditions.cpp
     tests/test_water_real.cpp
     tests/test_water_authoring.cpp
     tests/test_water_c_api.cpp
