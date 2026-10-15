@@ -5759,7 +5759,10 @@
         {"path": "LVSP\\BoundMinZ", "label": "Min Z", "kind": "scalar", "subrecord": "OBND", "offset": 4, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {"path": "LVSP\\BoundMaxX", "label": "Max X", "kind": "scalar", "subrecord": "OBND", "offset": 6, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
         {"path": "LVSP\\BoundMaxY", "label": "Max Y", "kind": "scalar", "subrecord": "OBND", "offset": 8, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
-        {"path": "LVSP\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"}
+        {"path": "LVSP\\BoundMaxZ", "label": "Max Z", "kind": "scalar", "subrecord": "OBND", "offset": 10, "storage": "i16", "presentation": "identity", "minimum": -32768, "maximum": 32767, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "LVSP\\ChanceNone", "label": "Chance none", "kind": "scalar", "subrecord": "LVLD", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LVSP\\MaxCount", "label": "Max count", "kind": "scalar", "subrecord": "LVLM", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "LVSP\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "LVLF", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL"
@@ -6645,6 +6648,9 @@
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "PNAM", "minimum": 0, "maximum": 1}, {"signature": "DATA", "minimum": 1, "maximum": 1, "default": "00000000"}, {"signature": "ANAM", "minimum": 0, "maximum": 1}]},
       "fields": [
         {"path": "EQUP\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Use All Parents"}, {"bit": 1, "name": "Parents Optional"}, {"bit": 2, "name": "Item Slot"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "EQUP\\SlotParents", "label": "Slot parents", "subrecord": "PNAM", "targets": ["EQUP"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["EDID"]}
       ],
       "localized_subrecords": []
     },
@@ -17402,6 +17408,11 @@
             "minimum": 1,
             "maximum": 1,
             "default": "00"
+          },
+          {
+            "signature": "SNAM",
+            "minimum": 0,
+            "maximum": 65535
           }
         ]
       },
@@ -17474,6 +17485,16 @@
           ],
           "nullable": true,
           "insertion": "existing_only"
+        }
+      ],
+      "formlink_lists": [
+        {
+          "path": "CPTH\\CameraShots",
+          "label": "Camera shots",
+          "subrecord": "SNAM",
+          "targets": ["CAMS"],
+          "nullable": false,
+          "mutation": "appendable"
         }
       ],
       "localized_subrecords": []
@@ -21215,6 +21236,11 @@
             "signature": "CNAM",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "TNAM",
+            "minimum": 0,
+            "maximum": 65535
           }
         ]
       },
@@ -21426,6 +21452,16 @@
             4
           ],
           "insertion": "existing_only"
+        }
+      ],
+      "formlink_lists": [
+        {
+          "path": "DOOR\\RandomTeleportDestinations",
+          "label": "Random teleport destinations",
+          "subrecord": "TNAM",
+          "targets": ["CELL", "WRLD"],
+          "nullable": false,
+          "mutation": "appendable"
         }
       ],
       "localized_subrecords": [
