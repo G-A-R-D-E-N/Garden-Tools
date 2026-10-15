@@ -229,7 +229,7 @@ TEST(REFRExtraRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
     ASSERT_TRUE(field.has_value());
     EXPECT_EQ(field->subrecord, fo4::Signature::from_string(row.subrecord));
     EXPECT_EQ(field->offset, row.offset);
-    EXPECT_TRUE(field->nullable);
+    EXPECT_EQ(field->nullable, std::string_view{row.path} == "REFR\\LockKey");
     EXPECT_EQ(field->payload_sizes[0], row.payload_size);
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
@@ -237,7 +237,10 @@ TEST(REFRExtraRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
   const auto key = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("REFR"),
                                                           "REFR\\LockKey");
   ASSERT_TRUE(key.has_value());
-  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(*key, fo4::Signature::from_string("STAT")));
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *key, fo4::Signature::from_string("KEYM")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *key, fo4::Signature::from_string("STAT")));
 }
 
 TEST(REFRExtraRows, ReadsScalarsAndLinksFromThePlugin) {
@@ -288,7 +291,7 @@ TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *lock_level, "75"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *alpha, "128"),
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *alpha, "64"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *lock_key,
                                            fo4::FormKey::parse("000A20:Objects.esp")),
@@ -300,7 +303,7 @@ TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XRDS"), floats({2048.0f}));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XALP"),
-            (Bytes{std::byte{0x80}, std::byte{0x20}}));
+            (Bytes{std::byte{0x40}, std::byte{0x20}}));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XLOC"), lock_bytes(75, 0x01000A20, 0x04));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XEZN"), u32_bytes(0x01000A40));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XCNT"), i32_bytes(-3));

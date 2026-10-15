@@ -311,7 +311,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PROJ | 22 | - | - | - | 2 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | 32 | - | 5 | 3 | 4 | f32, i16, i32, u32, u8 | 3 | 2 | - | existing_only |
-| REFR | 21 | 1 | - | 1 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
+| REFR | 20 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
 | REGN | - | - | - | - | - | - | - | - | - | - |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |

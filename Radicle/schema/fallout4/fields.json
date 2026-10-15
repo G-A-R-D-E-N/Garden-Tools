@@ -8411,7 +8411,53 @@
           "subrecord": "XLOC",
           "offset": 0,
           "storage": "u8",
-          "presentation": "identity",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "None"
+            },
+            {
+              "value": 1,
+              "name": "Novice 1"
+            },
+            {
+              "value": 25,
+              "name": "Novice 25"
+            },
+            {
+              "value": 50,
+              "name": "Advanced"
+            },
+            {
+              "value": 75,
+              "name": "Expert"
+            },
+            {
+              "value": 100,
+              "name": "Master"
+            },
+            {
+              "value": 251,
+              "name": "Barred"
+            },
+            {
+              "value": 252,
+              "name": "Chained"
+            },
+            {
+              "value": 253,
+              "name": "Requires Terminal"
+            },
+            {
+              "value": 254,
+              "name": "Inaccessible"
+            },
+            {
+              "value": 255,
+              "name": "Requires Key"
+            }
+          ],
           "minimum": 0,
           "maximum": 255,
           "payload_size": 16,
@@ -8523,7 +8569,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8537,7 +8583,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8551,7 +8597,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8565,7 +8611,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8579,7 +8625,7 @@
           "targets": [
             "LVLI"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8593,7 +8639,7 @@
           "targets": [
             "MESG"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8608,7 +8654,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8622,7 +8668,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8636,7 +8682,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -8650,7 +8696,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9177,7 +9223,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9191,7 +9237,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9205,7 +9251,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9219,7 +9265,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9233,7 +9279,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9248,7 +9294,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9555,7 +9601,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9569,7 +9615,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9583,7 +9629,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9597,7 +9643,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9611,7 +9657,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9626,7 +9672,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9933,7 +9979,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9947,7 +9993,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9961,7 +10007,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9975,7 +10021,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -9989,7 +10035,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10004,7 +10050,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10311,7 +10357,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10325,7 +10371,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10339,7 +10385,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10353,7 +10399,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10367,7 +10413,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10382,7 +10428,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10689,7 +10735,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10703,7 +10749,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10717,7 +10763,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10731,7 +10777,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10745,7 +10791,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -10760,7 +10806,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11066,7 +11112,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11080,7 +11126,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11094,7 +11140,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11108,7 +11154,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11122,7 +11168,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11137,7 +11183,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11444,7 +11490,7 @@
           "targets": [
             "ECZN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11458,7 +11504,7 @@
           "targets": [
             "REFR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11472,7 +11518,7 @@
           "targets": [
             "LAYR"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11486,7 +11532,7 @@
           "targets": [
             "MSWP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11500,7 +11546,7 @@
           "targets": [
             "RFGP"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
@@ -11515,7 +11561,7 @@
             "LIGH",
             "REGN"
           ],
-          "nullable": true,
+          "nullable": false,
           "insertion": "existing_only"
         },
         {
