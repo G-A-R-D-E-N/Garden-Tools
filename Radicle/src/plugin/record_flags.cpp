@@ -1,5 +1,6 @@
 #include "fo4/plugin/record_flags.hpp"
 
+#include "fo4/forms/placed_reference.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
 #include "record_edit.hpp"
@@ -17,7 +18,11 @@ namespace {
 constexpr auto k_cell = Signature::from_string("CELL");
 constexpr auto k_data = Signature::from_string("DATA");
 constexpr auto k_name = Signature::from_string("NAME");
+constexpr auto k_xesp = Signature::from_string("XESP");
+constexpr auto k_xtel = Signature::from_string("XTEL");
 constexpr RecordFlags::value_type k_kept_bits = RecordFlags::compressed | RecordFlags::partial_form;
+constexpr std::uint32_t k_player_form = 0x14;
+constexpr float k_undelete_z = -30000.0f;
 
 struct MutableLocation {
   std::vector<Group*> path;
@@ -182,6 +187,40 @@ MarkDeletedStatus mark_override_deleted(Plugin& plugin, const FormKey& record_ke
   record.subrecords = std::move(kept);
   detail::mark_record_modified(plugin, record);
   return MarkDeletedStatus::marked;
+}
+
+UndeleteStatus undelete_and_disable_reference(Plugin& plugin, const FormKey& record_key) {
+  assign_record_form_keys(plugin);
+  if (plugin.tes4.form_key == record_key) return UndeleteStatus::header_record;
+  const auto located = find_mutable_location(plugin, record_key);
+  if (!located) return UndeleteStatus::record_missing;
+  const Record& source = located->record();
+  if (!is_placed_reference_signature(source.header.signature)) return UndeleteStatus::not_a_reference;
+  if (!source.header.flags.is_deleted()) return UndeleteStatus::not_deleted;
+  require_decodable(source);
+  if (find_subrecord(source, k_name) == nullptr || find_subrecord(source, k_data) == nullptr) {
+    return UndeleteStatus::incomplete_reference;
+  }
+
+  Plugin next = plugin;
+  auto placed = find_mutable_location(next, record_key);
+  if (!placed) return UndeleteStatus::record_missing;
+  Record& record = placed->record();
+  const bool persistent = record.header.flags.is_persistent();
+  detail::mark_record_modified(next, record);
+  record.header.flags =
+      RecordFlags{(record.header.flags.value() & ~RecordFlags::deleted) | RecordFlags::initially_disabled};
+  std::erase_if(record.subrecords,
+                [](const Subrecord& sub) { return sub.signature == k_xesp || sub.signature == k_xtel; });
+  if (!persistent) {
+    auto transform = forms::decode_placed_reference(next, record)->transform;
+    transform.z = k_undelete_z;
+    forms::set_placed_reference_transform(next, record_key, transform);
+  }
+  forms::set_placed_reference_enable_parent(
+      next, record_key, resolve_plugin_form_id(RawFormId{k_player_form}, plugin_form_id_context(next)), 1);
+  plugin = std::move(next);
+  return UndeleteStatus::undeleted;
 }
 
 }  // namespace fo4
