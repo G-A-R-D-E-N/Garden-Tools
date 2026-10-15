@@ -246,8 +246,12 @@ TEST(MOVTRows, ShorterSpedPayloadsHideTheSpeedRows) {
 }
 
 TEST(MOVTRows, SpedBelowFormVersion104StaysHidden) {
-  const auto plugin = fo4::read_plugin(make_movt_plugin(ramp(28), 100), "Patch.esp");
-  EXPECT_TRUE(scalar_bytes(plugin, "000C02:Patch.esp", "MOVT\\LeftStanding").empty());
+  auto plugin = fo4::read_plugin(make_movt_plugin(ramp(28), 100), "Patch.esp");
+  const auto left =
+      fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("MOVT"), "MOVT\\LeftStanding");
+  ASSERT_TRUE(left.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, fo4::FormKey::parse("000C02:Patch.esp"), *left, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
 }
 
 TEST(MOVTRows, WritesSpeedRowAndRereads) {
