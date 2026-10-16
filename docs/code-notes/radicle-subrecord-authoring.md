@@ -169,7 +169,7 @@ test in this change.
 ## Radicle/src/forms/eyes.cpp:create_eyes
 
 EDID, FULL, and ICON are stored as Windows-1252 through `stored_editor_id` and `stored_inline_text`. Tests:
-`Radicle/tests/test_eyes_creation.cpp:StoresEditorIdAsWindows1252` (EDID only).
+`Radicle/tests/test_eyes.cpp:StoresEditorIdAsWindows1252` (EDID only).
 
 ## Radicle/src/forms/eyes.cpp:set_eyes_text_fields
 

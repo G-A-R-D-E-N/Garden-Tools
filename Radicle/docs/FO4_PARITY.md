@@ -409,7 +409,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | EQUP | U | U | U | U | U | P | U | G | field audit pending |
 | EXPL | P | P | U | U | P | P | P | G | forms/proj_expl_hazd.hpp |
 | EYES | P | P | P | U | P | P | P | G | forms/eyes.hpp |
-| FACT | P | P | P | P | P | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, test_faction_creation.cpp, tests/test_packed_formlink_arrays.cpp (XNAM and PLVD remap); docs/FACTIONS.md |
+| FACT | P | P | P | P | P | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, tests/test_packed_formlink_arrays.cpp (XNAM and PLVD remap); docs/FACTIONS.md |
 | FLOR | I | I | I | I | U | U | I | G | field audit pending; PR #404 |
 | FLST | P | P | P | P | U | P | P | G | environment / plugin headers |
 | FSTP | U | U | U | U | U | U | U | G | field audit pending; PR #400 |
@@ -520,9 +520,9 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | EYES EDID / FULL / DATA | forms/eyes.hpp; tests/test_eyes.cpp | Localized/opaque FULL cannot be rewritten as inline text; broad deletion not proven |
 | LVSP settings / entries | forms/leveled_spell.hpp, forms/leveled_list.hpp; tests/test_lvsp.cpp | LVLI/LVLN share the entry code but have no creator; creation defaults need separate evidence |
 | PROJ / EXPL / HAZD fixed values | forms/proj_expl_hazd.hpp; tests/test_scalar_embedded.cpp | Complete per-field edited round-trips, C ABI/C# mutation exposure |
-| QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection_authoring.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
+| QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
 | RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
-| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
+| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
 | CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | Other record members and whole-record creation |

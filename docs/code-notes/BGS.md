@@ -336,7 +336,7 @@ Every BGS project receives the native Radicle library as a `None` item from `Rad
 
 ## BGS/tools/tests/Ba2RadicleTests.cs:WriteGeneralBa2
 
-Radicle requires each GNRL record to declare a 16-byte chunk header (the count and size word is `0x00100100`) and the `0xBAADF00D` chunk sentinel. Fixtures that wrote zeros there passed only because the previous reader ignored those fields. `BGS/tools/tests/ArchivePathRegressionTests.cs:WriteBa2` and `BGS/tools/tests/AuditRegressionTests.cs:WriteBa2` use the same layout.
+Radicle requires each GNRL record to declare a 16-byte chunk header (the count and size word is `0x00100100`) and the `0xBAADF00D` chunk sentinel. Fixtures that wrote zeros there passed only because the previous reader ignored those fields. `BGS/tools/tests/AuditRegressionTests.cs:WriteBa2` uses the same layout.
 
 ## BGS/src/Archive/Ba2.cs:IsNativeLoadFailure
 
