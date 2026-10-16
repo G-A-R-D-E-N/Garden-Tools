@@ -6,6 +6,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -18,6 +19,8 @@ namespace BehaviourStudio.App;
 public sealed partial class RigAuthoringWindow
 {
     private HavokRagdollModel? _physics;
+    private PhysicsLoadReport? _physicsReport;
+    private string _physicsReportPath = "";
     private RagdollSimulation? _simulation;
     private readonly Dictionary<int, float> _masses = new();
     private readonly Dictionary<int, HavokConstraint> _previewJoints = new();
@@ -52,7 +55,8 @@ public sealed partial class RigAuthoringWindow
         panel.Children.Add(Row(Button("Open ragdoll HKX", () => _ = BrowsePhysics()),
             Button("Start / resume simulation", () => Run(StartPhysics)),
             Button("Pause simulation", PausePhysics), Button("Reset simulation", ResetPhysics),
-            Button("Step physics", () => Run(() => { EnsureSimulation(); PausePhysics(); AdvancePhysics(1f / 60); }))));
+            Button("Step physics", () => Run(() => { EnsureSimulation(); PausePhysics(); AdvancePhysics(1f / 60); })),
+            Button("Copy diagnostics", () => _ = CopyPhysicsDiagnostics())));
         panel.Children.Add(new TextBlock { Text = "Interactive BEPU physics with gravity, hull collisions and preview joints. Simulation settings stay in this window; the HKX is unchanged. This does not reproduce the game's Havok solver.", TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(Row(Ux.Label("Body"), _physicsBodies, Ux.Label("Simulation mass"), _mass,
             Button("Set body mass", () => Run(() => SetMass(false))), Button("Set all masses", () => Run(() => SetMass(true)))));
@@ -82,10 +86,34 @@ public sealed partial class RigAuthoringWindow
         return AuthoringPanel(panel, _physicsView);
     }
 
+    /// <summary>
+    /// Load a ragdoll for the physics tab. A file that carries no usable ragdoll is explained in the
+    /// window's status line instead of being refused with a bare sentence, because the reason is the
+    /// useful part: no physics at all, physics in the older format, shapes without a readable body,
+    /// or a body set this build could not measure.
+    /// </summary>
     public void OpenPhysics(string path)
     {
-        var model = HavokPhysicsExtractor.TryExtract(InputFilePolicy.ReadHkx(path));
-        if (model == null || model.Bodies.Count == 0) throw new NotSupportedException("This HKX has no readable ragdoll.");
+        var model = HavokPhysicsExtractor.TryExtract(InputFilePolicy.ReadHkx(path), out var report);
+        _physicsReport = report;
+        _physicsReportPath = path;
+
+        if (model == null || model.Bodies.Count == 0)
+        {
+            StopPhysics();
+            _physics = null;
+            _masses.Clear();
+            _previewJoints.Clear();
+            _physicsBodies.ItemsSource = null;
+            _physicsBodies.SelectedIndex = -1;
+            _physicsJoints.ItemsSource = null;
+            _physicsJoints.SelectedIndex = -1;
+            _physicsView.ShowMesh(null);
+            _physicsView.SetBodies(null);
+            Say($"No ragdoll loaded ({report.StatusLabel}). {report.Summary}");
+            return;
+        }
+
         StopPhysics();
         _physics = model;
         _physicsView.ShowMesh(null);
@@ -97,7 +125,39 @@ public sealed partial class RigAuthoringWindow
         _physicsJoints.SelectedIndex = model.Constraints.Count > 0 ? 0 : -1;
         _physicsView.SetBodies(model);
         _physicsView.Frame();
-        Say($"Loaded {model.Bodies.Count} bodies and {model.Constraints.Count} joints. Set simulation masses and preview limits before starting.");
+        Say($"Loaded {model.Bodies.Count} bodies and {model.Constraints.Count} joints. " +
+            $"Set simulation masses and preview limits before starting. ({report.StatusLabel})");
+    }
+
+    private async Task CopyPhysicsDiagnostics()
+    {
+        if (_physicsReport is not { } report)
+        {
+            Say("There is no physics report to copy yet; open a ragdoll HKX first.");
+            return;
+        }
+
+        long? size = null;
+        try { if (File.Exists(_physicsReportPath)) size = new FileInfo(_physicsReportPath).Length; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+
+        string text = report.Diagnostics(_physicsReportPath, size, BuildInfo.Report);
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+        {
+            Say("This environment has no clipboard, so the physics diagnostics were not copied.");
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(text);
+            Say($"Physics diagnostics for {Path.GetFileName(_physicsReportPath)} copied ({report.StatusLabel}).");
+        }
+        catch (Exception error)
+        {
+            Say("The physics diagnostics could not be copied: " + error.Message);
+        }
     }
 
     private async Task BrowsePhysics()

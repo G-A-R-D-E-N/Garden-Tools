@@ -20,47 +20,111 @@ public static class HavokPhysicsExtractor
     public const string CapsuleShapeClass = "hknpCapsuleShape";
     public const string MapperClass = "hkaSkeletonMapper";
 
-    public static HavokRagdollModel? TryExtract(byte[]? hkx)
+    public static HavokRagdollModel? TryExtract(byte[]? hkx) => TryExtract(hkx, out _);
+
+    /// <summary>
+    /// Extract the ragdoll and report why it was or was not produced. The report keeps the reason a
+    /// caller would otherwise lose: the null contract above is unchanged, and every caller that only
+    /// wants the model keeps working.
+    /// </summary>
+    public static HavokRagdollModel? TryExtract(byte[]? hkx, out PhysicsLoadReport report)
     {
-        if (hkx == null || hkx.Length == 0) return null;
+        var facts = new Facts();
+        byte[] bytes = hkx ?? Array.Empty<byte>();
+
+        string? problem = PhysicsLoadClassifier.ContainerProblem(bytes, out int? version, out int? pointer);
+        facts.FileVersion = version;
+        facts.PointerSize = pointer;
+        if (problem != null)
+        {
+            report = PhysicsLoadClassifier.Classify(facts.Container(problem).Build());
+            return null;
+        }
 
         PackfileImage image;
         PackfileObjects objects;
         try
         {
-            image = PackfileImage.Read(hkx);
+            image = PackfileImage.Read(bytes);
             objects = new PackfileObjects(image);
         }
-        catch (Exception)
+        catch (Exception error)
         {
+            report = PhysicsLoadClassifier.Classify(facts.Parse("container", error.Message).Build());
             return null;
         }
 
+        facts.FileVersion = image.FileVersion;
+        facts.PointerSize = objects.PointerWidth;
+        foreach (var group in objects.Instances.GroupBy(instance => instance.ClassName))
+            facts.ClassCounts[group.Key] = group.Count();
+
         string xml;
         try { xml = NativeXml.From(objects, image); }
-        catch (Exception) { return null; }
+        catch (Exception error)
+        {
+            report = PhysicsLoadClassifier.Classify(facts.Parse("byte-backed XML", error.Message).Build());
+            return null;
+        }
 
-        var graph = BehaviourGraphModel.Parse(xml);
+        BehaviourGraphModel graph;
+        try { graph = BehaviourGraphModel.Parse(xml); }
+        catch (Exception error)
+        {
+            report = PhysicsLoadClassifier.Classify(facts.Parse("model", error.Message).Build());
+            return null;
+        }
+
         var ragdoll = graph.Objects.FirstOrDefault(o => o.Class == RagdollDataClass);
-        if (ragdoll == null) return null;
+        if (ragdoll == null)
+        {
+            report = PhysicsLoadClassifier.Classify(facts.Build());
+            return null;
+        }
 
         var model = new HavokRagdollModel();
 
         foreach (var instance in objects.Instances.Where(i => i.ClassName == CapsuleShapeClass))
             if (Shape(objects, instance) is { } shape)
                 model.Shapes.Add(shape);
+        facts.ShapeCount = model.Shapes.Count;
 
         ragdoll.StructLists.TryGetValue("motionCinfos", out var motions);
 
         if (ragdoll.StructLists.TryGetValue("bodyCinfos", out var cinfos))
+        {
+            facts.BodyCount = cinfos.Count;
             for (int i = 0; i < cinfos.Count; i++)
-                if (Body(graph, i, cinfos[i], motions) is { } body)
-                    model.Bodies.Add(body);
+            {
+                if (Body(graph, i, cinfos[i], motions) is not { } body)
+                {
+                    facts.SkippedBodies++;
+                    continue;
+                }
+
+                model.Bodies.Add(body);
+                string shapeClass = ShapeClassOf(objects, cinfos[i]);
+                if (shapeClass == CapsuleShapeClass) continue;
+
+                // A body whose shape BGS cannot measure still has a frame, so it stays listed; the
+                // footprint it would collide with is what is missing.
+                string label = shapeClass.Length > 0 ? shapeClass : "(no shape reference)";
+                facts.UnsupportedShapeBodies++;
+                facts.UnsupportedShapeClasses[label] =
+                    facts.UnsupportedShapeClasses.TryGetValue(label, out int seen) ? seen + 1 : 1;
+            }
+        }
+        facts.UsableBodies = model.Bodies.Count;
 
         if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
             for (int i = 0; i < constraints.Count; i++)
+            {
                 if (Constraint(objects, graph, i, constraints[i]) is { } constraint)
                     model.Constraints.Add(constraint);
+                else
+                    facts.SkippedConstraints++;
+            }
+        facts.ConstraintCount = model.Constraints.Count;
 
         if (ragdoll.Lists.TryGetValue("boneToBodyMap", out var map))
             for (int bone = 0; bone < map.Count; bone++)
@@ -89,8 +153,71 @@ public static class HavokPhysicsExtractor
                 }
             }
         }
+        facts.Mappings = model.Mappings.Count;
 
+        report = PhysicsLoadClassifier.Classify(facts.Build());
         return model;
+    }
+
+    /// <summary>The class name of the shape a body cinfo points at, or "" when there is no usable reference.</summary>
+    private static string ShapeClassOf(PackfileObjects objects, IReadOnlyDictionary<string, string> cinfo)
+    {
+        if (!cinfo.TryGetValue("shape", out var reference)) return "";
+
+        int index = RefId(reference) - NativeGraphModel.FirstId;
+        return index >= 0 && index < objects.Instances.Count ? objects.Instances[index].ClassName : "";
+    }
+
+    /// <summary>Mutable measurement carried through one extraction, frozen into a report at the end.</summary>
+    private sealed class Facts
+    {
+        public string? ContainerProblem { get; private set; }
+        public string? ParseStage { get; private set; }
+        public string? ParseMessage { get; private set; }
+        public int? FileVersion { get; set; }
+        public int? PointerSize { get; set; }
+        public Dictionary<string, int> ClassCounts { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, int> UnsupportedShapeClasses { get; } = new(StringComparer.Ordinal);
+        public int BodyCount { get; set; }
+        public int UsableBodies { get; set; }
+        public int SkippedBodies { get; set; }
+        public int SkippedConstraints { get; set; }
+        public int UnsupportedShapeBodies { get; set; }
+        public int Mappings { get; set; }
+        public int ShapeCount { get; set; }
+        public int ConstraintCount { get; set; }
+
+        public Facts Container(string problem)
+        {
+            ContainerProblem = problem;
+            return this;
+        }
+
+        public Facts Parse(string stage, string? message)
+        {
+            ParseStage = stage;
+            ParseMessage = message;
+            return this;
+        }
+
+        public PhysicsLoadFacts Build() => new()
+        {
+            ContainerProblem = ContainerProblem,
+            ParseStage = ParseStage,
+            ParseMessage = ParseMessage,
+            FileVersion = FileVersion,
+            PointerSize = PointerSize,
+            ClassCounts = ClassCounts,
+            BodyCount = BodyCount,
+            UsableBodies = UsableBodies,
+            SkippedBodies = SkippedBodies,
+            SkippedConstraints = SkippedConstraints,
+            UnsupportedShapeBodies = UnsupportedShapeBodies,
+            UnsupportedShapeClasses = UnsupportedShapeClasses,
+            Mappings = Mappings,
+            ShapeCount = ShapeCount,
+            ConstraintCount = ConstraintCount,
+        };
     }
 
     private static int? MemberAt(PackfileObjects objects, PackfileObjects.Instance instance, string member)

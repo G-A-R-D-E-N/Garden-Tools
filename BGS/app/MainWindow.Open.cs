@@ -207,7 +207,7 @@ public partial class MainWindow : Window
             {
                 LoadPose(path, Path.GetFileName(path));
                 FindMeshForFile();
-                AppendRagdollSourceNote();
+                AppendPhysicsNotes();
             }
             return;
         }
@@ -271,15 +271,29 @@ public partial class MainWindow : Window
         if (_animationData != null)
         {
             LoadPose(path, Path.GetFileName(path));
-            AppendRagdollSourceNote();
+            AppendPhysicsNotes();
         }
         if (settingsWarning != null) SetStatus(settingsWarning, Ux.WarnBrush);
     }
 
-    private void AppendRagdollSourceNote()
+    /// <summary>
+    /// Put the physics and ragdoll-source notes back on the Playback summary after the pose and mesh
+    /// loaders have had their say, so a reason measured at open time is not overwritten by a later
+    /// "no skeleton resolved" line.
+    /// </summary>
+    private void AppendPhysicsNotes()
     {
-        if (_ragdollSourceNote == null) return;
-        SetPlaybackSummary(_summaryBaseText + "  |  " + _ragdollSourceNote, Ux.MetaBrush);
+        var parts = new List<string>();
+        if (_ragdollSourceNote is { Length: > 0 } source) parts.Add(source);
+        if (_physicsReportNote is { Length: > 0 } note &&
+            !_summaryBaseText.Contains(note, StringComparison.Ordinal))
+            parts.Add(note);
+        if (parts.Count == 0) return;
+
+        IBrush brush = _physicsReportNote is { Length: > 0 } && _ragdollSourceNote == null
+            ? PhysicsReportBrush()
+            : Ux.MetaBrush;
+        SetPlaybackSummary(_summaryBaseText + "  |  " + string.Join("  |  ", parts), brush);
     }
 
     private static int? NonEightByteLayout(string path)

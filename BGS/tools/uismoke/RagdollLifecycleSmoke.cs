@@ -136,6 +136,11 @@ public static class LifecycleSmoke
             Check("clearing body-frame distance removes the production status",
                 window.FrameDistanceStatusForTest.Length == 0 && !window.FrameDistanceVisibleForTest, ref failed);
 
+            var diagnostics = Smoke.Find<Button>(window)
+                .FirstOrDefault(button => button.Content?.ToString() == "Copy diagnostics");
+            Check("Copy diagnostics is offered once a physics report exists",
+                diagnostics is { IsEnabled: true }, ref failed);
+
             Smoke.Click(play);
             Check("animation playback starts before Drop", window.IsPlaying, ref failed);
             Smoke.Click(drop);
@@ -183,6 +188,11 @@ public static class LifecycleSmoke
             Check("no-ragdoll load clears sibling source state",
                 !window.PlaybackSummary.Contains("loaded from the sibling skeleton", StringComparison.Ordinal),
                 ref failed);
+            Check("no-ragdoll load explains why physics is missing",
+                window.PlaybackSummary.Contains("no ragdoll", StringComparison.Ordinal) &&
+                window.PlaybackSummary.Contains("hknpRagdollData", StringComparison.Ordinal), ref failed);
+            Check("no-ragdoll load keeps Copy diagnostics available for the report",
+                diagnostics is { IsEnabled: true }, ref failed);
 
             TryDelete(refused);
             TryDelete(orphan);

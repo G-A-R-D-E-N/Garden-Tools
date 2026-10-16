@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -166,6 +167,13 @@ public partial class MainWindow : Window
         var clearMesh = Ux.Secondary("No mesh");
         clearMesh.Click += (_, _) => { ClearMesh(); ShowFrame(_playback.Frame, stop: false); };
 
+        _copyDiagnosticsButton = Ux.Secondary("Copy diagnostics");
+        ToolTip.SetTip(_copyDiagnosticsButton,
+            "Copy why this file's physics loaded or did not: status, findings, class counts, file " +
+            "version and pointer size, plus the BGS build. Paste it into a bug report.");
+        _copyDiagnosticsButton.IsEnabled = false;
+        _copyDiagnosticsButton.Click += async (_, _) => await CopyPhysicsDiagnostics();
+
         _scrub.PropertyChanged += (_, e) =>
         {
 
@@ -199,7 +207,8 @@ public partial class MainWindow : Window
             ToolbarGroup("Playback controls", _playButton, first, back, forward, last, fit),
             ToolbarGroup("Viewport overlays", reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle,
                 _physicsSkeletonToggle, _framesToggle, _engineerToggle),
-            ToolbarGroup("Scene tools", _clearFrameDistanceButton, _dropButton, reload, mesh, clearMesh));
+            ToolbarGroup("Scene tools", _clearFrameDistanceButton, _dropButton, reload, mesh, clearMesh,
+                _copyDiagnosticsButton));
 
         _skeleton.ClipToBounds = true;
         _playbackViewportHost = Framed(_skeleton);
@@ -223,9 +232,20 @@ public partial class MainWindow : Window
     {
         byte[] raw;
         try { raw = File.ReadAllBytes(path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Nothing was measured for this path, so do not leave a previous file's physics report
+            // behind to be appended to this file's summary.
+            _ragdollReport = null;
+            _ragdollReportPath = "";
+            _physicsReportNote = null;
+            if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = false;
+            return;
+        }
 
-        _ragdoll = HavokPhysicsExtractor.TryExtract(raw);
+        _ragdoll = HavokPhysicsExtractor.TryExtract(raw, out var report);
+        _ragdollReport = report;
+        _ragdollReportPath = path;
         bool any = _ragdoll is { Bodies.Count: > 0 };
         string? ragdollSource = null;
         if (!any)
@@ -235,18 +255,30 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    var siblingModel = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(sibling));
+                    var siblingModel = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(sibling), out var siblingReport);
                     if (siblingModel is { Bodies.Count: > 0 })
                     {
                         _ragdoll = siblingModel;
+                        _ragdollReport = siblingReport;
+                        _ragdollReportPath = sibling;
                         any = true;
                         ragdollSource = sibling;
+                    }
+                    else if (siblingReport.Status == PhysicsLoadStatus.LegacyPhysics ||
+                             siblingReport.Status == PhysicsLoadStatus.UnsupportedShapes)
+                    {
+                        // The sibling skeleton is where a Fallout 4 ragdoll normally lives, so its
+                        // report is the more useful one to explain a missing ragdoll.
+                        _ragdollReport = siblingReport;
+                        _ragdollReportPath = sibling;
                     }
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             }
         }
         _ragdollSourceName = ragdollSource == null ? null : Path.GetFileName(ragdollSource);
+        _physicsReportNote = DescribePhysicsReport(path);
+        if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = _ragdollReport != null;
         _bodiesToggle.IsEnabled = any;
         _bodiesToggle.IsChecked = any;
         _constraintsToggle.IsEnabled = any;
@@ -264,7 +296,11 @@ public partial class MainWindow : Window
         if (!any && _skeleton.IsDropped) _skeleton.ClearDrop();
         _skeleton.SetBodies(any ? _ragdoll : null);
         UpdateScaleStatus();
-        if (!any) return;
+        if (!any)
+        {
+            ShowPhysicsReport(path);
+            return;
+        }
 
         bool mappings = any && _ragdoll is { Mappings.Count: > 0, AnimationSkeleton: { BoneNames.Count: > 0 } };
         string source = ragdollSource == null
@@ -289,6 +325,83 @@ public partial class MainWindow : Window
         catch { skeleton = null; }
         if (skeleton != null && skeleton.BoneNames.Count > 0)
             _skeleton.Show(AnimationPose.ReferencePose(skeleton));
+    }
+
+    /// <summary>
+    /// Explain a physics load in the same status line the successful summary uses. The reason used to
+    /// be dropped on the floor, which is exactly what made a custom skeleton "load with physics
+    /// missing" and no explanation.
+    /// </summary>
+    private void ShowPhysicsReport(string path)
+    {
+        _physicsReportNote = DescribePhysicsReport(path);
+        if (_physicsReportNote is not { Length: > 0 } note) return;
+
+        SetPlaybackSummary(note, PhysicsReportBrush());
+    }
+
+    /// <summary>
+    /// The sentence a non-Ok physics report deserves in the Playback status line, or null for a clean
+    /// ragdoll. The report may describe a sibling skeleton, which the note names.
+    /// </summary>
+    private string? DescribePhysicsReport(string path)
+    {
+        if (_ragdollReport is not { } report || report.Status == PhysicsLoadStatus.Ok) return null;
+
+        bool aboutThisFile = string.Equals(SafeFullPath(path), SafeFullPath(_ragdollReportPath),
+                                          StringComparison.OrdinalIgnoreCase);
+        string prefix = aboutThisFile || _ragdollReportPath.Length == 0
+            ? ""
+            : $"The sibling skeleton {Path.GetFileName(_ragdollReportPath)}: ";
+        return prefix + report.Summary;
+    }
+
+    private IBrush PhysicsReportBrush() => _ragdollReport?.Severity switch
+    {
+        PhysicsLoadSeverity.Info => Ux.MutedBrush,
+        PhysicsLoadSeverity.Warning => Ux.WarnBrush,
+        _ => Ux.BadBrush,
+    };
+
+    private async Task CopyPhysicsDiagnostics()
+    {
+        if (_ragdollReport is not { } report)
+        {
+            SetStatus("There is no physics report to copy yet; open a file first.", Ux.MutedBrush);
+            return;
+        }
+
+        long? size = null;
+        try { if (File.Exists(_ragdollReportPath)) size = new FileInfo(_ragdollReportPath).Length; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+
+        string text = report.Diagnostics(_ragdollReportPath, size, BuildInfo.Report);
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null)
+        {
+            SetStatus("This environment has no clipboard, so the physics diagnostics were not copied.", Ux.WarnBrush);
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(text);
+            SetStatus($"Physics diagnostics for {Path.GetFileName(_ragdollReportPath)} copied " +
+                      $"({report.StatusLabel}).", Ux.MetaBrush);
+        }
+        catch (Exception error)
+        {
+            SetStatus("The physics diagnostics could not be copied: " + error.Message, Ux.WarnBrush);
+        }
+    }
+
+    private static string SafeFullPath(string path)
+    {
+        try { return path.Length == 0 ? "" : Path.GetFullPath(path); }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path;
+        }
     }
 
     private HkxSkeleton? PoseSkeleton(string? animationPath = null)
