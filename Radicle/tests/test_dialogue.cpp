@@ -165,7 +165,7 @@ TEST_F(DialogueRead, LocalizedInfoTextIdsOfAnotherSizeFailClosed) {
                       "string ID must be four bytes");
 
   write({{"INFO", 0x802, {{"TRDA", response(1)}, {"NAM1", std::vector<std::byte>{std::byte{'a'}, std::byte{'b'}}}}},
-    {"INFO", 0x803, {{"RNAM", std::vector<std::byte>{std::byte{'a'}, std::byte{0}, std::byte{'b'}, std::byte{0}}}}});
+    {"INFO", 0x803, {{"RNAM", std::vector<std::byte>{std::byte{'a'}, std::byte{0}, std::byte{'b'}, std::byte{0}}}}}});
   const auto inline_env = load();
   expect_decode_error([&] { fo4::env::decode_dialogue_info(inline_env, record(inline_env, 0x802)); },
                       "invalid inline text");
