@@ -167,6 +167,7 @@ public partial class MainWindow : Window
             _classWarning = "";
             _animation.Clear();
             _animationData = null;
+            ResetGeometry();
             _animationSummary.Text = "";
             RememberRecent(path);
             RefreshRecents();
@@ -217,6 +218,7 @@ public partial class MainWindow : Window
             _animationSummary.Foreground = Ux.MutedBrush;
             _animation.Clear();
             _animationData = null;
+            ResetGeometry();
         }
 
         _hkxPath = path;

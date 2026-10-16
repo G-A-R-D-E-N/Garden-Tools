@@ -249,6 +249,7 @@ public partial class MainWindow : Window
 
         var result = AnimationSaveTransaction.Commit(
             _hkxPath, anim, _sourceStamp, _editTrack, _editFrame,
+            timeline: _animationTimeline,
             verificationFault: VerifyFaultForTest);
         if (!result.Committed)
         {

@@ -33,10 +33,10 @@ public static class NativeAnimation
             $"{From} written out as {Frames} frame(s) of {Tracks} track(s), {Grew} bytes larger";
     }
 
-    public static Result Interleave(string hkxPath, HkxAnimationData decoded) =>
-        Interleave(InputFilePolicy.ReadHkx(hkxPath), decoded);
+    public static Result Interleave(string hkxPath, HkxAnimationData decoded, Timeline? cut = null) =>
+        Interleave(InputFilePolicy.ReadHkx(hkxPath), decoded, cut);
 
-    public static Result Interleave(byte[] hkx, HkxAnimationData decoded)
+    public static Result Interleave(byte[] hkx, HkxAnimationData decoded, Timeline? cut = null)
     {
         ArgumentNullException.ThrowIfNull(hkx);
         ArgumentNullException.ThrowIfNull(decoded);
@@ -78,11 +78,14 @@ public static class NativeAnimation
                     $"A track decoded to a different number of frames than the {frames} this " +
                     "animation declares, so it was not written out.");
 
-        float duration = BitConverter.ToSingle(data.Data, at + Duration);
+        float duration = cut?.Duration ?? BitConverter.ToSingle(data.Data, at + Duration);
         var annotations = objects.ArrayAt(at + AnnotationTracks);
         int self = image.Sections.IndexOf(data);
         var motion = data.Globals().FirstOrDefault(g => g.Source == at + ExtractedMotion);
         bool hasMotion = data.Globals().Any(g => g.Source == at + ExtractedMotion);
+        bool replacingMotion = cut?.Motion is not null && hasMotion &&
+                               motion.Section == self &&
+                               objects.Instances.Any(i => i.Offset == motion.Destination);
 
         var added = NativeAppend.Object(image, InterleavedClass);
 
@@ -99,9 +102,17 @@ public static class NativeAnimation
             int copied = CopyStructRun(image, data, annotations.At, annotations.Count, "hkaAnnotationTrack");
             data.SetLocal(made + AnnotationTracks, copied);
             Array.Copy(data.Data, at + AnnotationTracks + 8, data.Data, made + AnnotationTracks + 8, 8);
+
+            if (cut != null && copied >= 0)
+                RebaseAnnotations(data, copied, annotations.Count, cut);
         }
 
-        if (hasMotion) data.SetGlobal(made + ExtractedMotion, motion.Section, motion.Destination);
+        if (replacingMotion)
+        {
+            int frame = WriteReferenceFrame(image, data, motion.Destination, cut!.Motion!);
+            data.SetGlobal(made + ExtractedMotion, self, frame);
+        }
+        else if (hasMotion) data.SetGlobal(made + ExtractedMotion, motion.Section, motion.Destination);
 
         data.AlignData(NativeAppend.Alignment);
         var run = new byte[frames * tracks * HkxBinaryReader.QsTransformSize];

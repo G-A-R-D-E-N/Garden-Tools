@@ -7,6 +7,7 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 ## Unreleased
 
 * Animations whose compression this build cannot decode now say so in plain English, name the class or the spline sub-format (rotation quantization format N), and state that the file was not changed, in the window, the inspection assistant, the round-trip report and the command line. `symrm scale` and `symrm frames` now count and list every file they cannot decode, and exit 0 when the only problems were unsupported animation classes or refused spline sub-formats instead of skipping them silently; a read failure or a run that decoded nothing still exits 1, and their new `--strict` flag also exits 1 for unsupported or refused files.
+* The Animation tab can trim a clip to a frame range, retime it by a speed factor or to a new length, and close a loop by matching the last frame to the first (or easing the last few frames into it), with a preview before each change. Annotation times move with the clip and annotations outside a trim are dropped, with the count shown before and after. Each change is saved through the same verified path as a frame edit, keeping the original as a `.bak`.
 * Skin weights on full-precision skinned meshes are read and saved at the correct vertex offset. Skinned shapes whose vertex stride does not match their declared attributes are refused instead of misread.
 
 * When several base game archives contain the same file, the copy from the plugin loaded last is used, as in the game, instead of the copy from the first plugin in plugins.txt.

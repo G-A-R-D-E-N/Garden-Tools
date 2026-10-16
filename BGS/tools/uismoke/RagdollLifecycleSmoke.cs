@@ -75,6 +75,7 @@ public static class LifecycleSmoke
         }
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
+        int geometry = AnimationGeometrySmoke.Run();
         int workspace = WorkspaceSmoke.Run();
         string lifecycleSettings = Path.Combine(Path.GetTempPath(), $"bgs-lifecycle-{Guid.NewGuid():N}.cfg");
         Settings.SettingsPathForTest = lifecycleSettings;
@@ -86,7 +87,7 @@ public static class LifecycleSmoke
             File.Delete(lifecycleSettings);
             Settings.SettingsPathForTest = null;
         }
-        return existing == 0 && workspace == 0 && lifecycle == 0 ? 0 : 1;
+        return existing == 0 && workspace == 0 && lifecycle == 0 && geometry == 0 ? 0 : 1;
     }
 
     private static int RagdollLifecycle()

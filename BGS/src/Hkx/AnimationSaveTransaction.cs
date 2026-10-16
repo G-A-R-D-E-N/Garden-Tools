@@ -17,7 +17,8 @@ internal static class AnimationSaveTransaction
         bool spline,
         HkxAnimationData animation,
         int editedTrack,
-        int editedFrame);
+        int editedFrame,
+        NativeAnimation.Timeline? timeline);
 
     internal static Result Commit(
         string path,
@@ -25,6 +26,7 @@ internal static class AnimationSaveTransaction
         DocumentSourceStamp? openedStamp,
         int editedTrack = -1,
         int editedFrame = -1,
+        NativeAnimation.Timeline? timeline = null,
         Func<Exception>? verificationFault = null,
         Action? beforeSourceRecheck = null,
         Encoder? encoder = null,
@@ -60,8 +62,8 @@ internal static class AnimationSaveTransaction
             written = encoder != null
                 ? encoder(source, animation)
                 : spline
-                    ? NativeAnimation.Recompress(source, animation)
-                    : NativeAnimation.Interleave(source, animation);
+                    ? NativeAnimation.Recompress(source, animation, null, true, timeline)
+                    : NativeAnimation.Interleave(source, animation, timeline);
         }
         catch (Exception error)
         {
@@ -71,7 +73,7 @@ internal static class AnimationSaveTransaction
 
         try
         {
-            (verifier ?? Verify)(written, spline, animation, editedTrack, editedFrame);
+            (verifier ?? Verify)(written, spline, animation, editedTrack, editedFrame, timeline);
             if (verificationFault != null) throw verificationFault();
         }
         catch (Exception error)
@@ -110,7 +112,8 @@ internal static class AnimationSaveTransaction
         bool spline,
         HkxAnimationData animation,
         int editedTrack,
-        int editedFrame)
+        int editedFrame,
+        NativeAnimation.Timeline? timeline = null)
     {
         ArgumentNullException.ThrowIfNull(written);
         ArgumentNullException.ThrowIfNull(animation);
@@ -141,6 +144,41 @@ internal static class AnimationSaveTransaction
         if (Math.Abs(rebuilt.Duration - animation.Duration) > 1e-3f)
             throw new InvalidDataException(
                 $"rebuilt duration {rebuilt.Duration} differs from the edited {animation.Duration}");
+
+        if (timeline != null)
+        {
+            float clipLimit = spline ? 0.05f : 0.001f;
+            float worstPosition = 0, worstRotation = 0;
+            int atTrack = -1, atFrame = -1;
+
+            for (int t = 0; t < rebuilt.Tracks.Count && t < animation.Tracks.Count; t++)
+            {
+                var asked = animation.Tracks[t];
+                var got = rebuilt.Tracks[t];
+                int frames = Math.Min(Math.Min(got.Translations.Count, asked.Translations.Count),
+                                      Math.Min(got.Rotations.Count, asked.Rotations.Count));
+
+                for (int f = 0; f < frames; f++)
+                {
+                    float distance = (got.Translations[f] - asked.Translations[f]).Length();
+                    if (distance > worstPosition) { worstPosition = distance; atTrack = t; atFrame = f; }
+
+                    float angle = SplineQuat.AngleBetween(got.Rotations[f], asked.Rotations[f]);
+                    if (angle > worstRotation) { worstRotation = angle; atTrack = t; atFrame = f; }
+                }
+            }
+
+            if (worstPosition > clipLimit || worstRotation > clipLimit)
+                throw new InvalidDataException(
+                    $"the rebuilt clip does not hold the frames it was written from: track {atTrack} " +
+                    $"frame {atFrame} moved {worstPosition:F4} unit(s) and {worstRotation:F5} radian(s), " +
+                    $"past the {clipLimit} a clip this kind can be re-encoded by");
+
+            if (rebuilt.Annotations.Count != animation.Annotations.Count)
+                throw new InvalidDataException(
+                    $"the rebuilt clip holds {rebuilt.Annotations.Count} annotation(s), and the edit " +
+                    $"left {animation.Annotations.Count}, so the file and the editor would disagree");
+        }
 
         if (editedTrack < 0 || editedFrame < 0 ||
             editedTrack >= rebuilt.Tracks.Count ||

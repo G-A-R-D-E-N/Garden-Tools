@@ -55,9 +55,12 @@ public partial class MainWindow : Window
 
         _animation.SelectionChanged += ShowSelectedFrame;
 
+        var geometry = GeometryToolbarGroups();
         RegisterToolbar("Animation", navigation, find,
-            ToolbarGroup("Edit selected frame", _framePosition, _frameRotation, _frameScale, apply, write));
+            ToolbarGroup("Edit selected frame", _framePosition, _frameRotation, _frameScale, apply, write),
+            geometry[0], geometry[1], geometry[2]);
         AddTop(panel, _frameEditAnswer);
+        AddTop(panel, _geometryAnswer);
 
         panel.Children.Add(_animation);
         return panel;
@@ -247,6 +250,7 @@ public partial class MainWindow : Window
         _aimedFrame = -1;
         _editTrack = _editFrame = -1;
         _animationEdited = false;
+        ResetGeometry();
         _fractionAnswer.Text = "";
         _framePosition.Text = _frameRotation.Text = _frameScale.Text = "";
         _frameEditAnswer.Text = "";
@@ -284,6 +288,7 @@ public partial class MainWindow : Window
         _animationData = anim;
         _animationSkeleton = SiblingSkeleton(path);
         _frameStart = 0;
+        ResetGeometry();
         ShowAnimationFrames();
         return true;
     }

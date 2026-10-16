@@ -29,5 +29,7 @@
     <None Include="../../tools/symrm/samples/TurretMountedSkeleton.hkx" Link="samples/TurretMountedSkeleton.hkx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/symrm/samples/TurretIdleWeapReady.hkx" Link="samples/TurretIdleWeapReady.hkx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../tools/symrm/samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" Link="samples/Meshes/Actors/Turret/CharacterAssets/TurretMounted.nif" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Genuine 19 frame clip with annotations and root motion, used by the trim, retime and loop smoke. -->
+    <None Include="../../tools/tests/fixtures/vanilla/Meshes/Actors/RadRoach/Animations/TurnLeft90.hkx" Link="fixtures/RadRoachTurnLeft90.hkx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
