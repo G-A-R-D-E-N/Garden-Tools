@@ -18,6 +18,9 @@ using OpenCommonwealth.Services;
 
 namespace BehaviourStudio.App;
 
+internal readonly record struct RagdollChoice(HavokRagdollModel? Model, PhysicsLoadReport? Report,
+                                              string ReportPath, string? SourcePath);
+
 public partial class MainWindow : Window
 {
     private Control BuildPlaybackTab()
@@ -234,44 +237,22 @@ public partial class MainWindow : Window
         try { raw = File.ReadAllBytes(path); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            _ragdollReport = null;
-            _ragdollReportPath = "";
-            _physicsReportNote = null;
-            if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = false;
+            ClearPhysicsReport();
             return;
         }
 
-        _ragdoll = HavokPhysicsExtractor.TryExtract(raw, out var report);
-        _ragdollReport = report;
-        _ragdollReportPath = path;
-        bool any = _ragdoll is { Bodies.Count: > 0 };
-        string? ragdollSource = null;
-        if (!any)
+        var own = HavokPhysicsExtractor.TryExtract(raw, out var ownReport);
+        var choice = ChooseRagdoll(path, own, ownReport, SiblingSkeletonPath(path), sibling =>
         {
-            string? sibling = SiblingSkeletonPath(path);
-            if (sibling != null)
-            {
-                try
-                {
-                    var siblingModel = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(sibling), out var siblingReport);
-                    if (siblingModel is { Bodies.Count: > 0 })
-                    {
-                        _ragdoll = siblingModel;
-                        _ragdollReport = siblingReport;
-                        _ragdollReportPath = sibling;
-                        any = true;
-                        ragdollSource = sibling;
-                    }
-                    else if (siblingReport.Status == PhysicsLoadStatus.LegacyPhysics ||
-                             siblingReport.Status == PhysicsLoadStatus.UnsupportedShapes)
-                    {
-                        _ragdollReport = siblingReport;
-                        _ragdollReportPath = sibling;
-                    }
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-            }
-        }
+            var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(sibling), out var report);
+            return (model, report);
+        });
+
+        _ragdoll = choice.Model;
+        _ragdollReport = choice.Report;
+        _ragdollReportPath = choice.ReportPath;
+        string? ragdollSource = choice.SourcePath;
+        bool any = _ragdoll is { Bodies.Count: > 0 };
         _ragdollSourceName = ragdollSource == null ? null : Path.GetFileName(ragdollSource);
         _physicsReportNote = DescribePhysicsReport(path);
         if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = _ragdollReport != null;
@@ -321,6 +302,43 @@ public partial class MainWindow : Window
         catch { skeleton = null; }
         if (skeleton != null && skeleton.BoneNames.Count > 0)
             _skeleton.Show(AnimationPose.ReferencePose(skeleton));
+    }
+
+    internal static RagdollChoice ChooseRagdoll(string path, HavokRagdollModel? own, PhysicsLoadReport ownReport,
+                                                string? sibling,
+                                                Func<string, (HavokRagdollModel? Model, PhysicsLoadReport Report)> extract)
+    {
+        var choice = new RagdollChoice(own, ownReport, path, null);
+        if (own is { Bodies.Count: > 0 } || sibling == null) return choice;
+
+        HavokRagdollModel? siblingModel;
+        PhysicsLoadReport siblingReport;
+        try { (siblingModel, siblingReport) = extract(sibling); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            var failed = PhysicsLoadClassifier.Classify(new PhysicsLoadFacts
+            {
+                ParseStage = "sibling read",
+                ParseMessage = error.Message,
+            });
+            return new RagdollChoice(null, failed, sibling, null);
+        }
+
+        if (siblingModel is { Bodies.Count: > 0 })
+            return new RagdollChoice(siblingModel, siblingReport, sibling, sibling);
+
+        if (siblingReport.Status != PhysicsLoadStatus.SkeletonOnly)
+            return new RagdollChoice(null, siblingReport, sibling, null);
+
+        return choice;
+    }
+
+    private void ClearPhysicsReport()
+    {
+        _ragdollReport = null;
+        _ragdollReportPath = "";
+        _physicsReportNote = null;
+        if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = false;
     }
 
     private void ShowPhysicsReport(string path)
@@ -465,13 +483,9 @@ public partial class MainWindow : Window
         if (_poseSource == key) return;
 
         Stop();
-        try { _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry); }
-        catch (InvalidDataException ex)
-        {
-            ClearPose();
-            SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
-            return;
-        }
+        bool foreign = !string.Equals(SafeFullPath(_hkxPath), SafeFullPath(key), StringComparison.OrdinalIgnoreCase);
+        if (foreign) ClearPhysicsReport();
+        _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry);
 
         HkxAnimationData animation;
         try
@@ -504,6 +518,7 @@ public partial class MainWindow : Window
             _poseSource = "";
             _playback.Clear();
             _scrub.Maximum = 0;
+            AppendPhysicsNotes();
             return;
         }
 
@@ -540,6 +555,7 @@ public partial class MainWindow : Window
             $"{animation.Duration:F2}s   {driven} of {_poseSkeleton!.BoneNames.Count} bones driven   " +
             $"on {_poseSkeleton.Name}{travelled}{from}", Ux.MetaBrush);
         UpdateFrameLabel();
+        AppendPhysicsNotes();
     }
 
     private HkxSkeleton? ArchiveSkeleton(string? animationEntry)

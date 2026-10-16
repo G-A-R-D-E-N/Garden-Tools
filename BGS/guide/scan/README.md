@@ -38,7 +38,7 @@ Every mode returns the same three exit codes, so a scan can gate a script or a C
 | Exit | Meaning |
 |---|---|
 | `0` | Clean — nothing inspected was defective. |
-| `1` | Defects found — corrupt files, missing animations, unresolved clips, or a skeleton with no usable ragdoll. |
+| `1` | Defects found — corrupt files, missing animations, unresolved clips, or a skeleton whose physics is unreadable, legacy or missing a usable ragdoll (a skeleton-only file is reported, not failed). |
 | `2` | Usage or configuration error — a missing/omitted path argument, or an MO2 instance that could not be opened. |
 
 ```bash

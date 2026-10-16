@@ -30,11 +30,6 @@ public static class HavokPhysicsExtractor
         string? problem = PhysicsLoadClassifier.ContainerProblem(bytes, out int? version, out int? pointer);
         facts.FileVersion = version;
         facts.PointerSize = pointer;
-        if (problem != null)
-        {
-            report = PhysicsLoadClassifier.Classify(facts.Container(problem).Build());
-            return null;
-        }
 
         PackfileImage image;
         PackfileObjects objects;
@@ -45,7 +40,7 @@ public static class HavokPhysicsExtractor
         }
         catch (Exception error)
         {
-            report = PhysicsLoadClassifier.Classify(facts.Parse("container", error.Message).Build());
+            report = Failure(facts, problem, "container", error.Message);
             return null;
         }
 
@@ -58,7 +53,7 @@ public static class HavokPhysicsExtractor
         try { xml = NativeXml.From(objects, image); }
         catch (Exception error)
         {
-            report = PhysicsLoadClassifier.Classify(facts.Parse("byte-backed XML", error.Message).Build());
+            report = Failure(facts, problem, "byte-backed XML", error.Message);
             return null;
         }
 
@@ -66,91 +61,115 @@ public static class HavokPhysicsExtractor
         try { graph = BehaviourGraphModel.Parse(xml); }
         catch (Exception error)
         {
-            report = PhysicsLoadClassifier.Classify(facts.Parse("model", error.Message).Build());
+            report = Failure(facts, problem, "model", error.Message);
             return null;
         }
 
         var ragdoll = graph.Objects.FirstOrDefault(o => o.Class == RagdollDataClass);
         if (ragdoll == null)
         {
-            report = PhysicsLoadClassifier.Classify(facts.Build());
+            report = Finish(facts, problem, usable: false);
             return null;
         }
 
         var model = new HavokRagdollModel();
 
-        foreach (var instance in objects.Instances.Where(i => i.ClassName == CapsuleShapeClass))
-            if (Shape(objects, instance) is { } shape)
-                model.Shapes.Add(shape);
-        facts.ShapeCount = model.Shapes.Count;
-
-        ragdoll.StructLists.TryGetValue("motionCinfos", out var motions);
-
-        if (ragdoll.StructLists.TryGetValue("bodyCinfos", out var cinfos))
+        try
         {
-            facts.BodyCount = cinfos.Count;
-            for (int i = 0; i < cinfos.Count; i++)
+            foreach (var instance in objects.Instances.Where(i => i.ClassName == CapsuleShapeClass))
+                if (Shape(objects, instance) is { } shape)
+                    model.Shapes.Add(shape);
+            facts.ShapeCount = model.Shapes.Count;
+
+            ragdoll.StructLists.TryGetValue("motionCinfos", out var motions);
+
+            if (ragdoll.StructLists.TryGetValue("bodyCinfos", out var cinfos))
             {
-                if (Body(graph, i, cinfos[i], motions) is not { } body)
+                facts.BodyCount = cinfos.Count;
+                for (int i = 0; i < cinfos.Count; i++)
                 {
-                    facts.SkippedBodies++;
-                    continue;
-                }
+                    if (Body(graph, i, cinfos[i], motions) is not { } body)
+                    {
+                        facts.SkippedBodies++;
+                        continue;
+                    }
 
-                model.Bodies.Add(body);
-                string shapeClass = ShapeClassOf(objects, cinfos[i]);
-                if (shapeClass == CapsuleShapeClass) continue;
+                    model.Bodies.Add(body);
+                    string shapeClass = ShapeClassOf(objects, cinfos[i]);
+                    if (shapeClass == CapsuleShapeClass) continue;
 
-                string label = shapeClass.Length > 0 ? shapeClass : "(no shape reference)";
-                facts.UnsupportedShapeBodies++;
-                facts.UnsupportedShapeClasses[label] =
-                    facts.UnsupportedShapeClasses.TryGetValue(label, out int seen) ? seen + 1 : 1;
-            }
-        }
-        facts.UsableBodies = model.Bodies.Count;
-
-        if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
-            for (int i = 0; i < constraints.Count; i++)
-            {
-                if (Constraint(objects, graph, i, constraints[i]) is { } constraint)
-                    model.Constraints.Add(constraint);
-                else
-                    facts.SkippedConstraints++;
-            }
-        facts.ConstraintCount = model.Constraints.Count;
-
-        if (ragdoll.Lists.TryGetValue("boneToBodyMap", out var map))
-            for (int bone = 0; bone < map.Count; bone++)
-                if (int.TryParse(map[bone], NumberStyles.Integer, CultureInfo.InvariantCulture, out int body))
-                    model.BoneBindings.Add(new HavokRagdollBoneBinding(bone, body));
-
-        if (ragdoll.Scalars.TryGetValue("skeleton", out var skeletonReference) &&
-            RefId(skeletonReference) is { } skeletonId && skeletonId >= 0)
-        {
-            int index = skeletonId - NativeGraphModel.FirstId;
-            if (index >= 0 && index < objects.Instances.Count &&
-                objects.Instances[index].ClassName == "hkaSkeleton" &&
-                SkeletonMapperReader.ReadSkeleton(objects, objects.Instances[index]) is { } skeleton)
-                model.Skeleton = skeleton;
-
-            if (model.Skeleton != null)
-            {
-                var mapper = SkeletonMapperReader.Read(objects).FirstOrDefault(candidate =>
-                    candidate.SkeletonBObjectId == skeletonId &&
-                    candidate.MappingType == 0 &&
-                    candidate.SimpleMappings.Count > 0);
-                if (mapper != null)
-                {
-                    model.Mappings.AddRange(mapper.SimpleMappings);
-                    model.AnimationSkeleton = mapper.SkeletonA;
+                    string label = shapeClass.Length > 0 ? shapeClass : "(no shape reference)";
+                    facts.UnsupportedShapeBodies++;
+                    facts.UnsupportedShapeClasses[label] =
+                        facts.UnsupportedShapeClasses.TryGetValue(label, out int seen) ? seen + 1 : 1;
                 }
             }
-        }
-        facts.Mappings = model.Mappings.Count;
+            facts.UsableBodies = model.Bodies.Count;
 
-        report = PhysicsLoadClassifier.Classify(facts.Build());
-        return model;
+            if (ragdoll.StructLists.TryGetValue("constraintCinfos", out var constraints))
+                for (int i = 0; i < constraints.Count; i++)
+                {
+                    if (Constraint(objects, graph, i, constraints[i]) is { } constraint)
+                        model.Constraints.Add(constraint);
+                    else
+                        facts.SkippedConstraints++;
+                }
+            facts.ConstraintCount = model.Constraints.Count;
+
+            if (ragdoll.Lists.TryGetValue("boneToBodyMap", out var map))
+                for (int bone = 0; bone < map.Count; bone++)
+                    if (int.TryParse(map[bone], NumberStyles.Integer, CultureInfo.InvariantCulture, out int body))
+                        model.BoneBindings.Add(new HavokRagdollBoneBinding(bone, body));
+
+            if (ragdoll.Scalars.TryGetValue("skeleton", out var skeletonReference) &&
+                RefId(skeletonReference) is { } skeletonId && skeletonId >= 0)
+            {
+                int index = skeletonId - NativeGraphModel.FirstId;
+                if (index >= 0 && index < objects.Instances.Count &&
+                    objects.Instances[index].ClassName == "hkaSkeleton" &&
+                    SkeletonMapperReader.ReadSkeleton(objects, objects.Instances[index]) is { } skeleton)
+                    model.Skeleton = skeleton;
+
+                if (model.Skeleton != null)
+                {
+                    var mapper = SkeletonMapperReader.Read(objects).FirstOrDefault(candidate =>
+                        candidate.SkeletonBObjectId == skeletonId &&
+                        candidate.MappingType == 0 &&
+                        candidate.SimpleMappings.Count > 0);
+                    if (mapper != null)
+                    {
+                        model.Mappings.AddRange(mapper.SimpleMappings);
+                        model.AnimationSkeleton = mapper.SkeletonA;
+                    }
+                }
+            }
+            facts.Mappings = model.Mappings.Count;
+        }
+        catch (Exception error)
+        {
+            report = Failure(facts, problem, "ragdoll", error.Message);
+            return null;
+        }
+
+        bool usable = model.Bodies.Count > 0;
+        bool unusual = problem is { Length: > 0 };
+        report = Finish(facts, problem, usable);
+        return unusual && !usable ? null : model;
     }
+
+    private static PhysicsLoadReport Finish(Facts facts, string? containerProblem, bool usable)
+    {
+        if (containerProblem is { Length: > 0 } && !usable)
+            return PhysicsLoadClassifier.Classify(facts.Container(containerProblem).Build());
+
+        facts.Notice(containerProblem);
+        return PhysicsLoadClassifier.Classify(facts.Build());
+    }
+
+    private static PhysicsLoadReport Failure(Facts facts, string? containerProblem, string stage, string? message) =>
+        containerProblem is { Length: > 0 }
+            ? PhysicsLoadClassifier.Classify(facts.Container(containerProblem).Build())
+            : PhysicsLoadClassifier.Classify(facts.Parse(stage, message).Build());
 
     private static string ShapeClassOf(PackfileObjects objects, IReadOnlyDictionary<string, string> cinfo)
     {
@@ -163,6 +182,7 @@ public static class HavokPhysicsExtractor
     private sealed class Facts
     {
         public string? ContainerProblem { get; private set; }
+        public string? ContainerNotice { get; private set; }
         public string? ParseStage { get; private set; }
         public string? ParseMessage { get; private set; }
         public int? FileVersion { get; set; }
@@ -184,6 +204,12 @@ public static class HavokPhysicsExtractor
             return this;
         }
 
+        public Facts Notice(string? notice)
+        {
+            ContainerNotice = notice;
+            return this;
+        }
+
         public Facts Parse(string stage, string? message)
         {
             ParseStage = stage;
@@ -194,6 +220,7 @@ public static class HavokPhysicsExtractor
         public PhysicsLoadFacts Build() => new()
         {
             ContainerProblem = ContainerProblem,
+            ContainerNotice = ContainerNotice,
             ParseStage = ParseStage,
             ParseMessage = ParseMessage,
             FileVersion = FileVersion,

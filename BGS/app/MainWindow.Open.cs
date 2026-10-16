@@ -279,7 +279,9 @@ public partial class MainWindow : Window
     private void AppendPhysicsNotes()
     {
         var parts = new List<string>();
-        if (_ragdollSourceNote is { Length: > 0 } source) parts.Add(source);
+        if (_ragdollSourceNote is { Length: > 0 } source &&
+            !_summaryBaseText.Contains(source, StringComparison.Ordinal))
+            parts.Add(source);
         if (_physicsReportNote is { Length: > 0 } note &&
             !_summaryBaseText.Contains(note, StringComparison.Ordinal))
             parts.Add(note);

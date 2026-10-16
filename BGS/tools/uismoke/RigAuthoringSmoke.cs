@@ -68,9 +68,23 @@ internal static class RigAuthoringSmoke
             Require(File.ReadAllBytes(skinPath + ".bak").SequenceEqual(before), "skin backup must preserve the original");
 
             tabs.SelectedIndex = 2;
-            editor.OpenPhysics(skeletonSource);
+            editor.OpenPhysics(skeletonSource, out _);
             Dispatcher.UIThread.RunJobs();
             ViewportFits(editor);
+            string hairSource = Path.Combine("tools", "tests", "fixtures", "vanilla", "Meshes", "Actors",
+                                             "Character", "CharacterAssets", "Hair", "Female", "FemaleHair04.hkx");
+            bool ragdollLoaded = editor.OpenPhysics(hairSource, out PhysicsLoadReport skeletonOnlyReport);
+            Require(!ragdollLoaded && skeletonOnlyReport.Status == PhysicsLoadStatus.SkeletonOnly,
+                    "a skeleton-only file must not count as a ragdoll");
+            Require(editor.PhysicsStatusForTest.Contains("previous ragdoll kept", StringComparison.Ordinal),
+                    "a refused ragdoll open must say the previous ragdoll was kept");
+            owner.AssistantFile(editor, "ragdoll", hairSource);
+            Dispatcher.UIThread.RunJobs();
+            Require(owner.StatusForTest.Contains("Assistant file action refused", StringComparison.Ordinal) &&
+                    owner.StatusForTest.Contains("no ragdoll", StringComparison.Ordinal),
+                    "the assistant must refuse a ragdoll open with the report summary");
+            editor.OpenPhysics(skeletonSource, out _);
+            Dispatcher.UIThread.RunJobs();
             Click(editor, "Step physics");
             Require(Simulation(editor) == null, "physics must refuse missing user-authored masses/settings");
             Smoke.Find<TextBox>(editor).Single(box => box.Name == "SimulationMass").Text = "5";

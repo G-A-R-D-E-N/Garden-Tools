@@ -199,9 +199,7 @@ public partial class MainWindow : Window
         _ragdoll = null;
         _ragdollSourceName = null;
         _ragdollSourceNote = null;
-        _ragdollReport = null;
-        _ragdollReportPath = "";
-        if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = false;
+        ClearPhysicsReport();
 
         foreach (var toggle in new[]
                  { _bodiesToggle, _constraintsToggle, _bindingsToggle,

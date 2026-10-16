@@ -22,6 +22,7 @@ public static partial class ModlistScan
         int scanned = 0, archives = 0, skippedArchives = 0, unreadable = 0;
 
         var ba2s = Mo2ScanData.EnumerateFilesSafe(root, "*.ba2", recursive: true)
+            .Where(path => path.EndsWith(".ba2", StringComparison.OrdinalIgnoreCase))
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
         Info(json, $"scanning {ba2s.Count} .ba2 archive(s) under {root}");
@@ -69,7 +70,8 @@ public static partial class ModlistScan
             }
         }
 
-        var loose = Mo2ScanData.EnumerateFilesSafe(root, "skeleton*.hkx", recursive: true)
+        var loose = Mo2ScanData.EnumerateFilesSafe(root, "*.hkx", recursive: true)
+            .Where(IsLooseSkeleton)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
         Info(json, $"scanning {loose.Count} loose skeleton .hkx");
@@ -95,15 +97,20 @@ public static partial class ModlistScan
 
         int ok = counts.GetValueOrDefault(PhysicsLoadStatus.Ok);
         int unsupported = counts.GetValueOrDefault(PhysicsLoadStatus.UnsupportedShapes);
-        int withoutPhysics = scanned - ok - unsupported;
-        int exit = withoutPhysics > 0 || unreadable > 0 ? 1 : 0;
+        int skeletonOnly = counts.GetValueOrDefault(PhysicsLoadStatus.SkeletonOnly);
+        int noUsable = counts.GetValueOrDefault(PhysicsLoadStatus.LegacyPhysics) +
+                       counts.GetValueOrDefault(PhysicsLoadStatus.MapperMissing) +
+                       counts.GetValueOrDefault(PhysicsLoadStatus.NoBodies) +
+                       counts.GetValueOrDefault(PhysicsLoadStatus.WrongContainer) +
+                       counts.GetValueOrDefault(PhysicsLoadStatus.ParseError);
+        int exit = noUsable > 0 || unreadable > 0 ? 1 : 0;
 
         var summary = new Dictionary<string, int>
         {
             ["archives"] = archives,
             ["scanned"] = scanned,
             ["ok"] = ok,
-            ["skeletonOnly"] = counts.GetValueOrDefault(PhysicsLoadStatus.SkeletonOnly),
+            ["skeletonOnly"] = skeletonOnly,
             ["legacyPhysics"] = counts.GetValueOrDefault(PhysicsLoadStatus.LegacyPhysics),
             ["unsupportedShapes"] = unsupported,
             ["mapperMissing"] = counts.GetValueOrDefault(PhysicsLoadStatus.MapperMissing),
@@ -119,7 +126,8 @@ public static partial class ModlistScan
                                              summary, findings, exit).ToJson());
         else
             Console.WriteLine($"done  {scanned} skeleton file(s) scanned across {archives} archive(s) + loose, " +
-                              $"{ok} with a readable ragdoll, {withoutPhysics} with no usable ragdoll, " +
+                              $"{ok} with a readable ragdoll, {unsupported} with preview gaps, " +
+                              $"{skeletonOnly} skeleton-only, {noUsable} with no usable ragdoll, " +
                               $"{unreadable} unreadable");
         return exit;
     }
@@ -167,5 +175,9 @@ public static partial class ModlistScan
     private static bool IsSkeletonEntry(Ba2.Entry entry) =>
         entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
         entry.FileName.StartsWith("skeleton", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLooseSkeleton(string path) =>
+        path.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
+        Path.GetFileName(path).StartsWith("skeleton", StringComparison.OrdinalIgnoreCase);
 
 }

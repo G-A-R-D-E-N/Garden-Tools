@@ -264,7 +264,7 @@ public sealed class ScanCliTests
     }
 
     [Fact]
-    public void ScanSkeletonPhysicsFlagsASkeletonWithNoPhysics()
+    public void ScanSkeletonPhysicsReportsASkeletonWithNoPhysicsWithoutFailing()
     {
         using var dir = new TempDir("bgs-skeleton-nophysics");
         File.WriteAllBytes(Path.Combine(dir.Path, "skeleton.hkx"),
@@ -273,9 +273,10 @@ public sealed class ScanCliTests
         var (exit, stdout, _) = Capture(() =>
             ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
 
-        Assert.Equal(1, exit);
+        Assert.Equal(0, exit);
         var json = ParseSingle(stdout);
-        Assert.Equal(exit, json.GetProperty("exitCode").GetInt32());
+        Assert.Equal(0, json.GetProperty("exitCode").GetInt32());
+        Assert.Equal(0, json.GetProperty("summary").GetProperty("legacyPhysics").GetInt32());
         Assert.Equal(1, json.GetProperty("summary").GetProperty("skeletonOnly").GetInt32());
         Assert.Equal(0, json.GetProperty("summary").GetProperty("ok").GetInt32());
 
@@ -283,6 +284,41 @@ public sealed class ScanCliTests
         Assert.Equal("skeleton-only", row.GetProperty("kind").GetString());
         Assert.Contains(row.GetProperty("details").EnumerateArray(),
             detail => detail.GetString()!.Contains("has a skeleton but no ragdoll"));
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsSkeletonOnlyOnlyScanExitsZero()
+    {
+        using var dir = new TempDir("bgs-skeleton-only-only");
+        Directory.CreateDirectory(Path.Combine(dir.Path, "Meshes", "Actors", "Character", "CharacterAssets"));
+        File.WriteAllBytes(
+            Path.Combine(dir.Path, "Meshes", "Actors", "Character", "CharacterAssets", "skeleton.hkx"),
+            File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path }));
+
+        Assert.Equal(0, exit);
+        Assert.Contains("SKELETON ONLY", stdout);
+        Assert.Contains("1 skeleton-only", stdout);
+        Assert.Contains("0 with no usable ragdoll", stdout);
+        Assert.Contains("1 skeleton file(s) scanned", stdout);
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsFindsACapitalisedSkeletonFileName()
+    {
+        using var dir = new TempDir("bgs-skeleton-case");
+        File.WriteAllBytes(Path.Combine(dir.Path, "Skeleton.hkx"),
+            File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("scanned").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("ok").GetInt32());
     }
 
     [Fact]
@@ -365,7 +401,8 @@ public sealed class ScanCliTests
         return replaced;
     }
 
-    private static void WriteSingleEntryArchive(string path, string entryName, byte[] payload)    {
+    private static void WriteSingleEntryArchive(string path, string entryName, byte[] payload)
+    {
         using var stream = File.Create(path);
         using var writer = new BinaryWriter(stream);
         long headerEnd = 24 + 36;

@@ -2,17 +2,16 @@
 
 Date: 2026-10-16
 
-Command (from `BGS/`, branch `bgs/660-physics-load-report` off `origin/nomad/dev` ccbbeeb2, plus the
-uncommitted #660/#659 work):
+Command (from `BGS/`):
 
 ```bash
-BehaviourGraphStudio.exe --scan-skeleton-physics "D:\SteamLibrary\steamapps\common\Fallout 4\Data" --json
+BehaviourGraphStudio.exe --scan-skeleton-physics "<Steam library>/steamapps/common/Fallout 4/Data" --json
 ```
 
-Install: `D:\SteamLibrary\steamapps\common\Fallout 4\Data` (read-only). The scan walks every `.ba2`
-under the folder plus every loose `skeleton*.hkx`. This install has **no loose skeleton files**: all
-195 of them live inside 7 `.ba2` archives. 37 further archives were skipped because they are DX10
-texture archives (`Textures are stored differently`), which cannot hold a skeleton.
+Install: a Steam install of Fallout 4 (read-only). The scan walks every `.ba2` under the folder plus
+every loose `skeleton*.hkx`. This install has **no loose skeleton files**: all 195 of them live inside
+7 `.ba2` archives. 37 further archives were skipped because they are DX10 texture archives
+(`Textures are stored differently`), which cannot hold a skeleton.
 
 Only class names, statuses and counts are recorded here. No game bytes are reproduced.
 
@@ -188,8 +187,9 @@ props, doors, elevators and first-person rigs the game animates without physics.
 
 ```bash
 dotnet run --project app/BehaviourStudio.csproj -c Release -- \
-  --scan-skeleton-physics "D:\SteamLibrary\steamapps\common\Fallout 4\Data" --json > census.json
+  --scan-skeleton-physics "<Steam library>/steamapps/common/Fallout 4/Data" --json > census.json
 ```
 
-Exit code was `1`, because 154 of the 195 files carry no ragdoll. The per-file rows are the `findings`
-array (`kind` is the status slug), and `skip` rows name the DX10 texture archives.
+Exit code was `0`: the 154 skeleton-only files are reported as `SKELETON ONLY` and are not counted
+as failures. The per-file rows are the `findings` array (`kind` is the status slug), and `skip` rows
+name the DX10 texture archives.

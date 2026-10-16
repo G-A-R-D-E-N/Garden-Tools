@@ -8,6 +8,8 @@ public sealed record PhysicsLoadFacts
 {
     public string? ContainerProblem { get; init; }
 
+    public string? ContainerNotice { get; init; }
+
     public string? ParseStage { get; init; }
 
     public string? ParseMessage { get; init; }
@@ -60,6 +62,9 @@ public static class PhysicsLoadClassifier
         if (LooksLikeXml(bytes))
             return "the bytes are XML, which is an unpacked tagfile rather than a packed Fallout 4 file";
 
+        if (IsBinaryTagfile(bytes))
+            return "the bytes are a binary tagfile, which is not a packed Fallout 4 file";
+
         uint magic0 = PackfileImage.U32(bytes, 0);
         uint magic1 = PackfileImage.U32(bytes, 4);
         if (magic0 != PackfileImage.Magic0 || magic1 != PackfileImage.Magic1)
@@ -101,6 +106,13 @@ public static class PhysicsLoadClassifier
         ArgumentNullException.ThrowIfNull(facts);
 
         var findings = new List<PhysicsLoadFinding>();
+
+        if (facts.ContainerNotice is { Length: > 0 } notice)
+            findings.Add(new PhysicsLoadFinding(
+                PhysicsLoadSeverity.Info,
+                $"This file's container is unusual for Fallout 4 but still reads: {notice}.",
+                "Fallout 4 ships packfile version 11 with 8-byte pointers; a file that reads anyway is " +
+                "still measured here."));
 
         if (facts.ContainerProblem is { Length: > 0 } problem)
             return Build(PhysicsLoadStatus.WrongContainer, facts, findings, new PhysicsLoadFinding(
@@ -148,6 +160,8 @@ public static class PhysicsLoadClassifier
         }
 
         if (facts.UsableBodies == 0)
+        {
+            AddExtraFindings(findings, facts, PhysicsLoadStatus.NoBodies, legacy);
             return Build(PhysicsLoadStatus.NoBodies, facts, findings, new PhysicsLoadFinding(
                 PhysicsLoadSeverity.Error,
                 facts.BodyCount == 0
@@ -157,34 +171,70 @@ public static class PhysicsLoadClassifier
                       $"{facts.BodyCount} bodies could not be read, so no rigid body is left to preview.",
                 "Each body needs a readable position and orientation in its hknpBodyCinfo; re-export the " +
                 "ragdoll so its body frames are written."));
+        }
 
         if (facts.Mappings == 0)
+        {
+            bool mapperPresent = facts.Has(PhysicsLoadReport.MapperClass);
+            AddExtraFindings(findings, facts, PhysicsLoadStatus.MapperMissing, legacy);
             return Build(PhysicsLoadStatus.MapperMissing, facts, findings, new PhysicsLoadFinding(
                 PhysicsLoadSeverity.Warning,
-                "This file has a readable ragdoll, but no " + PhysicsLoadReport.MapperClass +
-                " links the animation skeleton to it, so the ragdoll cannot follow the animation.",
+                mapperPresent
+                    ? $"An {PhysicsLoadReport.MapperClass} is present but none of its mappings link this ragdoll " +
+                      "to the animation skeleton, so the ragdoll cannot follow the animation."
+                    : "This file has a readable ragdoll, but no " + PhysicsLoadReport.MapperClass +
+                      " links the animation skeleton to it, so the ragdoll cannot follow the animation.",
                 "Re-export the skeleton with the ragdoll mapper included (hkaSkeletonMapper)."));
+        }
 
         var incomplete = IncompleteReasons(facts);
         if (incomplete.Count > 0)
+        {
+            AddExtraFindings(findings, facts, PhysicsLoadStatus.UnsupportedShapes, legacy);
             return Build(PhysicsLoadStatus.UnsupportedShapes, facts, findings, new PhysicsLoadFinding(
                 PhysicsLoadSeverity.Warning,
                 "The ragdoll is readable but not complete: " + string.Join("; ", incomplete) + ".",
                 "BGS previews capsule shapes (hknpCapsuleShape) only; the other bodies are still listed " +
                 "with their frames, but they are drawn with no collision hull."));
+        }
+
+        AddExtraFindings(findings, facts, PhysicsLoadStatus.Ok, legacy);
 
         var ok = new PhysicsLoadFinding(
             PhysicsLoadSeverity.Info,
             $"This file carries a readable ragdoll: {facts.UsableBodies} rigid bodies, " +
             $"{facts.ShapeCount} shapes and {facts.ConstraintCount} constraints.");
 
-        if (legacy.Count > 0)
+        return Build(PhysicsLoadStatus.Ok, facts, findings, ok);
+    }
+
+    private static void AddExtraFindings(List<PhysicsLoadFinding> findings, PhysicsLoadFacts facts,
+                                         PhysicsLoadStatus status, Dictionary<string, int> legacy)
+    {
+        if (facts.UnsupportedShapeBodies > 0 && status != PhysicsLoadStatus.UnsupportedShapes)
+            findings.Add(new PhysicsLoadFinding(
+                PhysicsLoadSeverity.Info,
+                $"{facts.UnsupportedShapeBodies} of {facts.BodyCount} bodies use shapes BGS cannot preview yet (" +
+                PhysicsLoadReport.DescribeClasses(facts.UnsupportedShapeClasses) + ").",
+                "Those bodies are still listed with their frames, but they are drawn with no collision hull."));
+
+        if (facts.SkippedBodies > 0 && status != PhysicsLoadStatus.NoBodies)
+            findings.Add(new PhysicsLoadFinding(
+                PhysicsLoadSeverity.Info,
+                Entry(facts.SkippedBodies, "body", "bodies") + " could not be read, so those bodies are missing " +
+                "from the preview."));
+
+        if (facts.SkippedConstraints > 0 && status != PhysicsLoadStatus.UnsupportedShapes)
+            findings.Add(new PhysicsLoadFinding(
+                PhysicsLoadSeverity.Info,
+                Entry(facts.SkippedConstraints, "constraint", "constraints") + " could not be read, so those " +
+                "joints are missing from the preview."));
+
+        if (legacy.Count > 0 && (status == PhysicsLoadStatus.Ok || status == PhysicsLoadStatus.NoBodies))
             findings.Add(new PhysicsLoadFinding(
                 PhysicsLoadSeverity.Info,
                 "This file also carries older hkp objects (" + PhysicsLoadReport.DescribeClasses(legacy) +
                 "). Fallout 4 loads the hknp ragdoll, so they are ignored."));
-
-        return Build(PhysicsLoadStatus.Ok, facts, findings, ok);
     }
 
     private static List<string> IncompleteReasons(PhysicsLoadFacts facts)
@@ -244,6 +294,10 @@ public static class PhysicsLoadClassifier
                 return bytes[at] == (byte)'<';
         return false;
     }
+
+    private static bool IsBinaryTagfile(byte[] bytes) =>
+        bytes.Length >= 8 && bytes[4] == (byte)'T' && bytes[5] == (byte)'A' &&
+        bytes[6] == (byte)'G' && bytes[7] == (byte)'0';
 
     private static string Trim(string? message)
     {

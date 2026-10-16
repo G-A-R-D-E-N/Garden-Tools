@@ -9,13 +9,16 @@ inside every `.ba2` — and reports, for each one, what physics it holds: the lo
 shapes and constraints the file declares, whether the ragdoll skeleton mapper is there, and whether
 the file carries `hknpBSMaterial`.
 
+Discovery enumerates `*.hkx` and `*.ba2` and matches the names case-insensitively, so
+`Skeleton.hkx` is found on Linux as well as on Windows.
+
 This is the command to reach for when a character "loads with physics missing": it says whether the
 file has no ragdoll at all, has one BGS cannot read completely, or stores physics in a format
 Fallout 4 does not load.
 
 Like `--scan-archives` it does **not** need an MO2 instance — it reads the folder you point it at. A
 skeleton file with no ragdoll is a normal thing to find (hair and props have none), so the output is
-a census rather than a pass/fail list.
+a census rather than a pass/fail list: `SKELETON ONLY` is reported and never fails the run.
 
 ## What it reports per file
 
@@ -30,18 +33,27 @@ a census rather than a pass/fail list.
 | mapper | Whether `hkaSkeletonMapper` is present, and how many animation-to-ragdoll mappings it produced. |
 | `hknpBSMaterial` | Whether the file carries the Fallout 4 material object. |
 
+A row can carry extra findings beyond its status: an unusual container that still read, bodies whose
+shapes BGS cannot preview, body or constraint entries that could not be read, and older `hkp` objects
+next to a readable ragdoll. They are listed in the row's `details` in JSON mode and printed under the
+`why:` line in human mode.
+
 ### Statuses
 
 | Status | What it means |
 |---|---|
 | `OK` | A readable ragdoll: bodies, capsule shapes and a usable mapper. |
-| `SKELETON ONLY` | No `hknpRagdollData`. Legitimate for animations, hair and props; the reason a custom skeleton's physics is "missing". |
+| `SKELETON ONLY` | No `hknpRagdollData`. Legitimate for animations, hair and props; the reason a custom skeleton's physics is "missing". 154 of the 195 vanilla skeletons are this, and it never fails the scan. |
 | `LEGACY PHYSICS` | The file holds older `hkp` rigid bodies, shapes or a physics system instead of `hknp` bodies. `hkp` **constraint data** alone is normal inside a Fallout 4 ragdoll and never causes this. |
 | `UNSUPPORTED SHAPES` | A ragdoll is present and readable, but some bodies use a shape BGS cannot preview yet (only `hknpCapsuleShape` is drawn), or a body/constraint entry could not be read. The class names and counts are listed. |
-| `MAPPER MISSING` | A readable ragdoll with no usable `hkaSkeletonMapper`, so it cannot follow the animation. |
+| `MAPPER MISSING` | A readable ragdoll that cannot follow the animation. Either the file has no `hkaSkeletonMapper` at all, or one is present but none of its mappings link this ragdoll to the animation skeleton. |
 | `NO BODIES` | `hknpRagdollData` is present but declares no body, or none of its bodies carried a readable frame. |
-| `WRONG CONTAINER` | Not a Fallout 4 packfile: a tagfile, a different packfile version, or a pointer width other than 8 bytes. The detected value is named. |
-| `PARSE ERROR` | Reading failed after the header. The failing stage and message are reported. |
+| `WRONG CONTAINER` | The bytes are not a Fallout 4 packfile and no usable ragdoll came out of them — BGS still reads them first: an XML (unpacked) tagfile, a binary tagfile (its `TAG0` marker sits at byte offset 4), a different packfile version, a pointer width other than 8 bytes, big-endian, other layout rules, or a file too small to hold a header. The detected value is named. |
+| `PARSE ERROR` | Reading failed after the header. The failing stage (`container`, `byte-backed XML`, `model` or `ragdoll`) and message are reported. |
+
+The container is never refused before it is read: BGS attempts the parse and the extraction first, so
+a file with an unusual container that still yields a readable ragdoll keeps the status its physics
+deserves and gains an extra `Info` finding naming the container problem.
 
 ## Reading the output
 
@@ -66,7 +78,7 @@ SKELETON ONLY     Meshes/SetDressing/Animated/TargetDummy01/CharacterAssets/Skel
     shape classes: none
     constraint classes: none
     physics classes: none
-done  195 skeleton file(s) scanned across 7 archive(s) + loose, 21 with a readable ragdoll, 154 with no usable ragdoll, 0 unreadable
+done  195 skeleton file(s) scanned across 7 archive(s) + loose, 21 with a readable ragdoll, 20 with preview gaps, 154 skeleton-only, 0 with no usable ragdoll, 0 unreadable
 ```
 
 The three rows above are real output from the vanilla install; the full run is written up in
@@ -79,11 +91,16 @@ The three rows above are real output from the vanilla install; the full run is w
 
 ## Exit codes
 
-- `0` — every file scanned either has a readable ragdoll (`OK`) or is readable with reported gaps
-  (`UNSUPPORTED SHAPES`).
-- `1` — at least one file has no usable ragdoll (`SKELETON ONLY`, `LEGACY PHYSICS`, `MAPPER MISSING`,
-  `NO BODIES`, `WRONG CONTAINER`, `PARSE ERROR`), or an entry could not be read at all.
+- `0` — every file scanned is `OK`, `UNSUPPORTED SHAPES` or `SKELETON ONLY`, and nothing was
+  unreadable. A `SKELETON ONLY` file is a normal census row (154 of the 195 vanilla skeletons),
+  not a defect, so it never fails the scan.
+- `1` — at least one file is `LEGACY PHYSICS`, `MAPPER MISSING`, `NO BODIES`, `WRONG CONTAINER` or
+  `PARSE ERROR`, or an entry could not be read at all.
 - `2` — usage error: the folder is missing or was not given.
+
+The `done` line reports skeleton-only files separately from the `with no usable ragdoll` count, and
+that count is exactly the five statuses above plus the unreadable entries: skeleton-only files are
+never part of it.
 
 ## JSON summary and findings
 

@@ -86,26 +86,31 @@ public sealed partial class RigAuthoringWindow
         return AuthoringPanel(panel, _physicsView);
     }
 
-    public void OpenPhysics(string path)
+    public bool OpenPhysics(string path, out PhysicsLoadReport report)
     {
-        var model = HavokPhysicsExtractor.TryExtract(InputFilePolicy.ReadHkx(path), out var report);
+        byte[] bytes;
+        try { bytes = InputFilePolicy.ReadHkx(path); }
+        catch (Exception error)
+        {
+            report = PhysicsLoadClassifier.Classify(new PhysicsLoadFacts
+            {
+                ParseStage = "read",
+                ParseMessage = error.Message,
+            });
+            _physicsReport = report;
+            _physicsReportPath = path;
+            Say(RefusedPhysics(path, report));
+            return false;
+        }
+
+        var model = HavokPhysicsExtractor.TryExtract(bytes, out report);
         _physicsReport = report;
         _physicsReportPath = path;
 
         if (model == null || model.Bodies.Count == 0)
         {
-            StopPhysics();
-            _physics = null;
-            _masses.Clear();
-            _previewJoints.Clear();
-            _physicsBodies.ItemsSource = null;
-            _physicsBodies.SelectedIndex = -1;
-            _physicsJoints.ItemsSource = null;
-            _physicsJoints.SelectedIndex = -1;
-            _physicsView.ShowMesh(null);
-            _physicsView.SetBodies(null);
-            Say($"No ragdoll loaded ({report.StatusLabel}). {report.Summary}");
-            return;
+            Say(RefusedPhysics(path, report));
+            return false;
         }
 
         StopPhysics();
@@ -121,7 +126,14 @@ public sealed partial class RigAuthoringWindow
         _physicsView.Frame();
         Say($"Loaded {model.Bodies.Count} bodies and {model.Constraints.Count} joints. " +
             $"Set simulation masses and preview limits before starting. ({report.StatusLabel})");
+        return true;
     }
+
+    private string RefusedPhysics(string path, PhysicsLoadReport report) =>
+        $"No ragdoll loaded from {Path.GetFileName(path)} ({report.StatusLabel}). {report.Summary}" +
+        (_physics is { Bodies.Count: > 0 } ? " The previous ragdoll kept in the preview is unchanged." : "");
+
+    public string PhysicsStatusForTest => _status.Text ?? "";
 
     private async Task CopyPhysicsDiagnostics()
     {
@@ -161,7 +173,7 @@ public sealed partial class RigAuthoringWindow
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Open ragdoll HKX",
                 FileTypeFilter = new[] { new FilePickerFileType("Havok") { Patterns = new[] { "*.hkx" } } } });
             string? path = files.FirstOrDefault()?.TryGetLocalPath();
-            if (path != null) OpenPhysics(path);
+            if (path != null) OpenPhysics(path, out _);
         }
         catch (Exception error) { Say(error.Message); }
     }

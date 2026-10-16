@@ -166,7 +166,96 @@ public sealed class PhysicsLoadReportTests
         Assert.Equal(PhysicsLoadStatus.MapperMissing, report.Status);
         Assert.Equal(PhysicsLoadSeverity.Warning, report.Severity);
         Assert.Contains("hkaSkeletonMapper", report.Headline);
+        Assert.Contains("is present but none of its mappings link this ragdoll to the animation skeleton",
+                        report.Headline);
         Assert.Contains("cannot follow the animation", report.Headline);
+    }
+
+    [Fact]
+    public void ARagdollWithNoMapperClassSaysTheMapperIsAbsent()
+    {
+        var report = PhysicsLoadClassifier.Classify(Ragdoll() with
+        {
+            ClassCounts = new Dictionary<string, int>
+            {
+                ["hknpRagdollData"] = 1,
+                ["hknpCapsuleShape"] = 18,
+                ["hkaSkeleton"] = 1,
+            },
+            Mappings = 0,
+        });
+
+        Assert.Equal(PhysicsLoadStatus.MapperMissing, report.Status);
+        Assert.False(report.MapperPresent);
+        Assert.Contains("no hkaSkeletonMapper links the animation skeleton to it", report.Headline);
+        Assert.Contains("cannot follow the animation", report.Headline);
+    }
+
+    [Fact]
+    public void UnsupportedShapeAndSkippedEntryCountsSurviveAnotherPrimaryStatus()
+    {
+        var report = PhysicsLoadClassifier.Classify(Ragdoll() with
+        {
+            BodyCount = 18,
+            UsableBodies = 18,
+            UnsupportedShapeBodies = 3,
+            UnsupportedShapeClasses = new Dictionary<string, int> { ["hknpConvexPolytopeShape"] = 3 },
+            SkippedConstraints = 2,
+            Mappings = 0,
+        });
+
+        Assert.Equal(PhysicsLoadStatus.MapperMissing, report.Status);
+        Assert.Contains("is present but none of its mappings link this ragdoll", report.Headline);
+        Assert.Contains(report.Findings, finding =>
+            finding.Severity == PhysicsLoadSeverity.Info &&
+            finding.Message.Contains("3 of 18 bodies use shapes BGS cannot preview yet") &&
+            finding.Message.Contains("hknpConvexPolytopeShape x3"));
+        Assert.Contains(report.Findings, finding =>
+            finding.Severity == PhysicsLoadSeverity.Info &&
+            finding.Message.Contains("2 constraints entries could not be read"));
+    }
+
+    [Fact]
+    public void AMixedLegacyAndRagdollFileStaysOkWithAnInfoLegacyFinding()
+    {
+        var counts = new Dictionary<string, int>
+        {
+            ["hknpRagdollData"] = 1,
+            ["hknpCapsuleShape"] = 18,
+            ["hkaSkeletonMapper"] = 1,
+            ["hkpRigidBody"] = 2,
+            ["hkpSphereShape"] = 2,
+        };
+        var report = PhysicsLoadClassifier.Classify(Ragdoll() with { ClassCounts = counts });
+
+        Assert.Equal(PhysicsLoadStatus.Ok, report.Status);
+        Assert.Equal(PhysicsLoadSeverity.Info, report.Severity);
+        Assert.Contains(report.Findings, finding =>
+            finding.Severity == PhysicsLoadSeverity.Info &&
+            finding.Message.Contains("older hkp objects") &&
+            finding.Message.Contains("hkpRigidBody x2"));
+    }
+
+    [Fact]
+    public void ALegacyObjectBesideAnUnusableRagdollIsStillNamed()
+    {
+        var counts = new Dictionary<string, int>
+        {
+            ["hknpRagdollData"] = 1,
+            ["hkpRigidBody"] = 1,
+        };
+        var report = PhysicsLoadClassifier.Classify(Ragdoll() with
+        {
+            ClassCounts = counts,
+            BodyCount = 0,
+            UsableBodies = 0,
+        });
+
+        Assert.Equal(PhysicsLoadStatus.NoBodies, report.Status);
+        Assert.Contains(report.Findings, finding =>
+            finding.Severity == PhysicsLoadSeverity.Info &&
+            finding.Message.Contains("older hkp objects") &&
+            finding.Message.Contains("hkpRigidBody x1"));
     }
 
     [Fact]
@@ -305,6 +394,88 @@ public sealed class PhysicsLoadReportTests
         Assert.Equal(PhysicsLoadStatus.WrongContainer, report.Status);
         Assert.Contains("4-byte pointers", report.Headline);
         Assert.Equal(4, report.PointerSize);
+        Assert.Equal(1, report.CountOf("hknpRagdollData"));
+        Assert.Equal(0, report.UsableBodies);
+    }
+
+    [Fact]
+    public void AnUnusualContainerThatStillReadsIsAnInfoFindingNotAStatus()
+    {
+        var report = PhysicsLoadClassifier.Classify(Ragdoll() with
+        {
+            FileVersion = 10,
+            ContainerNotice = "it is a version 10 packfile, and Fallout 4 uses version 11",
+        });
+
+        Assert.Equal(PhysicsLoadStatus.Ok, report.Status);
+        Assert.Equal(PhysicsLoadSeverity.Info, report.Severity);
+        Assert.Contains(report.Findings, finding =>
+            finding.Severity == PhysicsLoadSeverity.Info &&
+            finding.Message.Contains("version 10 packfile"));
+    }
+
+    [Fact]
+    public void AVersionTenContainerNoticeComesFromTheRealExtractor()
+    {
+        byte[] bytes = File.ReadAllBytes(Fixture(Skeleton));
+        bytes[0x0C] = 10;
+
+        var model = HavokPhysicsExtractor.TryExtract(bytes, out var report);
+
+        Assert.NotNull(model);
+        Assert.Equal(18, model!.Bodies.Count);
+        Assert.Equal(PhysicsLoadStatus.Ok, report.Status);
+        Assert.Equal(10, report.FileVersion);
+        Assert.Contains(report.Findings, finding =>
+            finding.Severity == PhysicsLoadSeverity.Info &&
+            finding.Message.Contains("version 10 packfile"));
+    }
+
+    [Fact]
+    public void ASectionCountPastTheEndOfTheFileIsAParseError()
+    {
+        byte[] bytes = File.ReadAllBytes(Fixture(Skeleton));
+        bytes[0x14] = 0xFF;
+        bytes[0x15] = 0xFF;
+        bytes[0x16] = 0xFF;
+        bytes[0x17] = 0x7F;
+
+        var model = HavokPhysicsExtractor.TryExtract(bytes, out var report);
+
+        Assert.Null(model);
+        Assert.Equal(PhysicsLoadStatus.ParseError, report.Status);
+        Assert.Equal("container", report.FailingStage);
+        Assert.Contains("failed at the container stage", report.Headline);
+        Assert.Equal(11, report.FileVersion);
+    }
+
+    [Fact]
+    public void ABinaryTagfileIsRefusedByItsTag0Marker()
+    {
+        var bytes = new byte[PackfileImage.HeaderSize + 8];
+        bytes[0] = 0x57; bytes[1] = 0xE0; bytes[2] = 0xE0; bytes[3] = 0x57;
+        bytes[4] = (byte)'T'; bytes[5] = (byte)'A'; bytes[6] = (byte)'G'; bytes[7] = (byte)'0';
+
+        var model = HavokPhysicsExtractor.TryExtract(bytes, out var report);
+
+        Assert.Null(model);
+        Assert.Equal(PhysicsLoadStatus.WrongContainer, report.Status);
+        Assert.Contains("tagfile", report.Headline);
+    }
+
+    [Fact]
+    public void ARagdollWithNoSkeletonClassNamesTheAbsentMapperThroughTheExtractor()
+    {
+        byte[] bytes = ReplaceClassName(File.ReadAllBytes(Fixture(Skeleton)), "hkaSkeleton", "hkxSkeleton");
+
+        var model = HavokPhysicsExtractor.TryExtract(bytes, out var report);
+
+        Assert.NotNull(model);
+        Assert.Equal(18, model!.Bodies.Count);
+        Assert.Equal(PhysicsLoadStatus.MapperMissing, report.Status);
+        Assert.False(report.MapperPresent);
+        Assert.Equal(0, report.CountOf("hkaSkeleton"));
+        Assert.Contains("no hkaSkeletonMapper links the animation skeleton to it", report.Headline);
     }
 
     [Fact]
