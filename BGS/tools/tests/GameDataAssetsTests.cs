@@ -1,0 +1,376 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using OpenCommonwealth.Services.Archive;
+using Xunit;
+
+namespace BehaviourStudio.Tests;
+
+public sealed class GameDataAssetsTests
+{
+    private const string Prefix = "Meshes/Actors/Turret";
+
+    [Fact]
+    public void ReadEntryReadsThroughTheHeldOpenArchiveCache()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-entry");
+        byte[] payload = Bytes(5, 1);
+        string archive = Path.Combine(root.Path, "tiny.ba2");
+        TestArchives.WriteGeneralBa2(archive, ("Meshes\\Actors/Turret/Idle.hkx", payload));
+
+        using var data = GameData.Discover(root.Path, Path.Combine(root.Path, "plugins.txt"));
+
+        Ba2.OpenCountForTest = 0;
+        Assert.Equal(payload, data.ReadEntry(archive, "Meshes/Actors/Turret/Idle.hkx"));
+        Assert.Equal(payload, data.ReadEntry(archive, "meshes/actors/turret/idle.HKX"));
+        Assert.Equal(payload, data.ReadEntry(archive, "Meshes\\Actors\\Turret\\Idle.hkt"));
+        Assert.Equal(1, Ba2.OpenCountForTest);
+
+        Assert.True(data.TryReadEntry(archive, "Meshes/Actors/Turret/Idle.hkx",
+                                      out byte[] bytes, out string? warning));
+        Assert.Equal(payload, bytes);
+        Assert.Null(warning);
+    }
+
+    [Fact]
+    public void ReadEntryReportsMissesAndSkippableArchives()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-miss");
+        string archive = Path.Combine(root.Path, "tiny.ba2");
+        TestArchives.WriteGeneralBa2(archive, ("Meshes/Actors/Turret/Idle.hkx", Bytes(3, 7)));
+
+        using var data = GameData.Discover(root.Path, Path.Combine(root.Path, "plugins.txt"));
+
+        Assert.Null(data.ReadEntry(archive, "Meshes/Actors/Turret/Absent.hkx"));
+        Assert.False(data.TryReadEntry(archive, "Meshes/Actors/Turret/Absent.hkx",
+                                       out byte[] missed, out string? missedWarning));
+        Assert.Empty(missed);
+        Assert.Null(missedWarning);
+
+        Assert.Null(data.ReadEntry(archive, ""));
+        Assert.False(data.TryReadEntry(archive, "", out _, out string? emptyWarning));
+        Assert.Null(emptyWarning);
+
+        string broken = Path.Combine(root.Path, "broken.ba2");
+        File.WriteAllText(broken, "this is not a BTDX archive");
+        Assert.Null(data.ReadEntry(broken, "Meshes/Actors/Turret/Idle.hkx"));
+        Assert.False(data.TryReadEntry(broken, "Meshes/Actors/Turret/Idle.hkx",
+                                       out byte[] unreadable, out string? brokenWarning));
+        Assert.Empty(unreadable);
+        Assert.NotNull(brokenWarning);
+        Assert.Contains("broken.ba2", brokenWarning, StringComparison.Ordinal);
+
+        string absent = Path.Combine(root.Path, "absent.ba2");
+        Assert.Null(data.ReadEntry(absent, "Meshes/Actors/Turret/Idle.hkx"));
+        Assert.False(data.TryReadEntry(absent, "Meshes/Actors/Turret/Idle.hkx",
+                                       out _, out string? absentWarning));
+        Assert.NotNull(absentWarning);
+        Assert.Contains("absent.ba2", absentWarning, StringComparison.Ordinal);
+
+        string textures = Path.Combine(root.Path, "textures.ba2");
+        using (var stream = File.Create(textures))
+        using (var writer = new BinaryWriter(stream))
+        {
+            writer.Write("BTDX"u8.ToArray());
+            writer.Write((uint)1);
+            writer.Write("DX10"u8.ToArray());
+            writer.Write((uint)0);
+            writer.Write((ulong)0);
+        }
+        Assert.Null(data.ReadEntry(textures, "Meshes/Actors/Turret/Idle.hkx"));
+        Assert.False(data.TryReadEntry(textures, "Meshes/Actors/Turret/Idle.hkx",
+                                       out _, out string? textureWarning));
+        Assert.Null(textureWarning);
+    }
+
+    [Fact]
+    public void DisposedGameDataClosesItsArchivesAndRefusesFurtherReads()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-lifetime");
+        byte[] payload = Bytes(2, 9);
+        string archive = Path.Combine(root.Path, "tiny.ba2");
+        TestArchives.WriteGeneralBa2(archive, ("Meshes/Actors/Turret/Idle.hkx", payload));
+
+        var data = GameData.Discover(root.Path, Path.Combine(root.Path, "plugins.txt"));
+        Assert.Equal(payload, data.ReadEntry(archive, "Meshes/Actors/Turret/Idle.hkx"));
+
+        data.Dispose();
+        data.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => data.ReadEntry(archive, "Meshes/Actors/Turret/Idle.hkx"));
+        Assert.Throws<ObjectDisposedException>(() => data.EnumerateWinners(Prefix));
+
+        File.Delete(archive);
+        Assert.False(File.Exists(archive));
+    }
+
+    [Fact]
+    public void EnumerateWinnersAppliesLoadOrderPrecedenceAcrossSources()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-winners");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string low = Path.Combine(root.Path, "mods", "Low");
+        string high = Path.Combine(root.Path, "mods", "High");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(low);
+        Directory.CreateDirectory(high);
+
+        string shared = Prefix + "/shared.hkx";
+        Put(dataFolder, shared, Bytes(1, 1));
+        Put(low, shared, Bytes(2, 2));
+        Put(high, shared, Bytes(3, 3));
+        Put(high, Prefix + "/high-only.hkx", Bytes(4, 4));
+        Put(low, Prefix + "/low-only.hkx", Bytes(5, 5));
+        Put(dataFolder, Prefix + "/data-only.hkx", Bytes(6, 6));
+        Put(high, Prefix + "/pair.hkx", Bytes(7, 7));
+        Put(high, Prefix + "/pair.hkt", Bytes(8, 8));
+        Put(low, Prefix + "/pair.hkx", Bytes(9, 9));
+        Put(dataFolder, "Meshes/Actors/Canine/outside.hkx", Bytes(10, 10));
+
+        string highArchive = Path.Combine(high, "High - Main.ba2");
+        TestArchives.WriteGeneralBa2(highArchive,
+            (shared, Bytes(11, 11)),
+            (Prefix + "/arch-only.hkx", Bytes(12, 12)));
+        string lowArchive = Path.Combine(low, "Low - Main.ba2");
+        TestArchives.WriteGeneralBa2(lowArchive, (shared, Bytes(13, 13)));
+        string firstBase = Path.Combine(dataFolder, "a - Base.ba2");
+        TestArchives.WriteGeneralBa2(firstBase,
+            (shared, Bytes(14, 14)),
+            (Prefix + "/arch-only.hkx", Bytes(15, 15)),
+            (Prefix + "/only-a.hkx", Bytes(16, 16)),
+            (Prefix + "/data-only.hkx", Bytes(17, 17)));
+        string secondBase = Path.Combine(dataFolder, "z - Base.ba2");
+        TestArchives.WriteGeneralBa2(secondBase, (Prefix + "/only-a.hkx", Bytes(18, 18)));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"),
+                                           new[] { low, high });
+        Assert.Equal(new[] { highArchive, lowArchive, firstBase, secondBase }, data.ArchivePaths);
+
+        IReadOnlyList<GameAsset> winners = data.EnumerateWinners(Prefix);
+
+        GameAsset winner = Only(winners, shared);
+        Assert.Equal(GameAssetOrigin.Loose, winner.Origin);
+        Assert.Equal(high, winner.SourceRoot);
+        Assert.Null(winner.ArchivePath);
+        Assert.Null(winner.EntryName);
+        Assert.Equal(3, winner.Size);
+        Assert.Equal(Path.Combine(high, "Meshes", "Actors", "Turret", "shared.hkx"), winner.FullPath);
+        Assert.Equal(Bytes(3, 3), data.Read(winner));
+
+        Assert.Equal(5, winner.Shadowed.Count);
+        Assert.Equal(
+            new[] { low, dataFolder, highArchive, lowArchive, firstBase },
+            winner.Shadowed.Select(s => s.Origin == GameAssetOrigin.Loose ? s.SourceRoot : s.ArchivePath));
+        Assert.Equal(Bytes(2, 2), data.Read(winner.Shadowed[0]));
+        Assert.Equal(Bytes(1, 1), data.Read(winner.Shadowed[1]));
+        Assert.Equal(Bytes(11, 11), data.Read(winner.Shadowed[2]));
+        Assert.Equal(Bytes(13, 13), data.Read(winner.Shadowed[3]));
+        Assert.Equal(Bytes(14, 14), data.Read(winner.Shadowed[4]));
+        Assert.All(winner.Shadowed, s => Assert.Empty(s.Shadowed));
+
+        GameAsset highOnly = Only(winners, Prefix + "/high-only.hkx");
+        Assert.Equal(high, highOnly.SourceRoot);
+        Assert.Equal("Meshes/Actors/Turret/high-only.hkx", highOnly.VirtualPath);
+        Assert.Empty(highOnly.Shadowed);
+
+        GameAsset lowOnly = Only(winners, Prefix + "/low-only.hkx");
+        Assert.Equal(low, lowOnly.SourceRoot);
+        Assert.Equal(Bytes(5, 5), data.Read(lowOnly));
+
+        GameAsset archOnly = Only(winners, Prefix + "/arch-only.hkx");
+        Assert.Equal(GameAssetOrigin.Archive, archOnly.Origin);
+        Assert.Equal(highArchive, archOnly.ArchivePath);
+        Assert.Equal("Meshes/Actors/Turret/arch-only.hkx", archOnly.EntryName);
+        Assert.Null(archOnly.SourceRoot);
+        Assert.Null(archOnly.FullPath);
+        Assert.Equal(12, archOnly.Size);
+        Assert.Equal(Bytes(12, 12), data.Read(archOnly));
+        Assert.Equal(new[] { firstBase }, archOnly.Shadowed.Select(s => s.ArchivePath));
+
+        GameAsset onlyA = Only(winners, Prefix + "/only-a.hkx");
+        Assert.Equal(firstBase, onlyA.ArchivePath);
+        Assert.Equal(secondBase, Assert.Single(onlyA.Shadowed).ArchivePath);
+
+        GameAsset dataOnly = Only(winners, Prefix + "/data-only.hkx");
+        Assert.Equal(dataFolder, dataOnly.SourceRoot);
+        Assert.Equal(Bytes(6, 6), data.Read(dataOnly));
+        Assert.Equal(firstBase, Assert.Single(dataOnly.Shadowed).ArchivePath);
+
+        Assert.DoesNotContain(winners, a => a.VirtualPath.Contains("Canine", StringComparison.Ordinal));
+
+        var ranks = winners.Select(asset => Rank(asset, data, high, low, dataFolder)).ToList();
+        Assert.Equal(ranks.OrderBy(rank => rank), ranks);
+        Assert.Equal(new[] { 0, 1, 2, 3, 5 }, ranks.Distinct().OrderBy(rank => rank));
+        Assert.Equal(4, ranks.Count(rank => rank == 0));
+        Assert.Equal(1, ranks.Count(rank => rank == 1));
+        Assert.Equal(1, ranks.Count(rank => rank == 2));
+    }
+
+    [Fact]
+    public void EnumerateWinnersKeepsDistinctFilesWithinOneSource()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-pair");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string low = Path.Combine(root.Path, "mods", "Low");
+        string high = Path.Combine(root.Path, "mods", "High");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(low);
+        Directory.CreateDirectory(high);
+
+        Put(high, Prefix + "/pair.hkx", Bytes(1, 1));
+        Put(high, Prefix + "/pair.hkt", Bytes(2, 2));
+        Put(low, Prefix + "/pair.hkx", Bytes(3, 3));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"),
+                                           new[] { low, high });
+
+        IReadOnlyList<GameAsset> winners = data.EnumerateWinners(Prefix);
+
+        IReadOnlyList<GameAsset> pair = Match(winners, Prefix + "/pair.hkx");
+        Assert.Equal(2, pair.Count);
+        Assert.All(pair, asset => Assert.Equal(high, asset.SourceRoot));
+        Assert.Contains(pair, asset => asset.VirtualPath.EndsWith(".hkt", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pair, asset => asset.VirtualPath.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase));
+        GameAsset carrying = Assert.Single(pair, asset => asset.Shadowed.Count == 1);
+        Assert.Equal(low, Assert.Single(carrying.Shadowed).SourceRoot);
+
+        IReadOnlyList<GameAsset> hkxOnly = data.EnumerateWinners(
+            Prefix, path => path.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase));
+        Assert.Single(Match(hkxOnly, Prefix + "/pair.hkx"));
+        Assert.DoesNotContain(hkxOnly, asset => asset.VirtualPath.EndsWith(".hkt", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Empty(data.EnumerateWinners("Meshes/Actors/Canine"));
+    }
+
+    [Fact]
+    public void EnumerateWinnersSkipsReparsePoints()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-reparse");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string outside = Path.Combine(root.Path, "outside", "Turret");
+        Directory.CreateDirectory(Path.Combine(dataFolder, "Meshes", "Actors", "Turret"));
+        Directory.CreateDirectory(outside);
+        File.WriteAllBytes(Path.Combine(dataFolder, "Meshes", "Actors", "Turret", "visible.hkx"),
+                           Bytes(2, 2));
+        File.WriteAllBytes(Path.Combine(outside, "linked.hkx"), Bytes(1, 1));
+
+        string link = Path.Combine(dataFolder, "Meshes", "Actors", "Turret", "linked");
+        try { Directory.CreateSymbolicLink(link, outside); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return;
+        }
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+        IReadOnlyList<GameAsset> winners = data.EnumerateWinners(Prefix);
+
+        Assert.Contains(winners, asset => asset.VirtualPath.EndsWith("visible.hkx", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(winners, asset => asset.VirtualPath.EndsWith("linked.hkx", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void LoosePathsOutsideTheirRootAreRefused()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-root");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(Path.Combine(dataFolder, "Meshes"));
+        string file = Path.Combine(dataFolder, "Meshes", "a.hkx");
+        File.WriteAllBytes(file, Bytes(1, 1));
+
+        Assert.True(GameData.IsInsideRoot(dataFolder, file));
+        Assert.True(GameData.IsInsideRoot(dataFolder, dataFolder));
+        Assert.False(GameData.IsInsideRoot(dataFolder, Path.Combine(root.Path, "outside", "a.hkx")));
+        Assert.False(GameData.IsInsideRoot(dataFolder, Path.Combine(dataFolder, "..", "outside.hkx")));
+        Assert.False(GameData.IsInsideRoot(dataFolder, dataFolder + "-sibling"));
+    }
+
+    [Fact]
+    public void ModlistPathMatchesTheFileDiscoverModdedReads()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-modlist");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string mods = Path.Combine(root.Path, "mo2");
+        Directory.CreateDirectory(dataFolder);
+        Directory.CreateDirectory(Path.Combine(mods, "mods", "High"));
+        Directory.CreateDirectory(Path.Combine(mods, "mods", "Middle"));
+        Directory.CreateDirectory(Path.Combine(mods, "mods", "Disabled"));
+        Directory.CreateDirectory(Path.Combine(mods, "profiles", "Fallen World"));
+        Directory.CreateDirectory(Path.Combine(mods, "overwrite"));
+
+        string list = Path.Combine(mods, "profiles", "Fallen World", "modlist.txt");
+        File.WriteAllText(list, "# comment\n+High\n+Middle\n-Disabled\n*Unmanaged\n");
+
+        Assert.Equal(list, GameData.ModlistPath(mods, "Fallen World"));
+        Assert.Null(GameData.ModlistPath(mods, null));
+        Assert.Null(GameData.ModlistPath(mods, "Missing"));
+
+        File.WriteAllText(Path.Combine(mods, "modlist.txt"), "+Middle\n");
+        Assert.Equal(Path.Combine(mods, "modlist.txt"), GameData.ModlistPath(mods, null));
+
+        using var taken = GameData.DiscoverModded(dataFolder, mods, "Fallen World");
+
+        string named = GameData.ModlistPath(mods, "Fallen World")!;
+        var expected = File.ReadAllLines(named)
+            .Reverse()
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith('+'))
+            .Select(line => Path.Combine(mods, "mods", line[1..].Trim()))
+            .Where(Directory.Exists)
+            .Append(Path.Combine(mods, "overwrite"))
+            .ToList();
+
+        Assert.Equal(expected, taken.ModRoots);
+        Assert.Equal(Path.Combine(mods, "mods", "Middle"), taken.ModRoots[0]);
+        Assert.Equal(Path.Combine(mods, "mods", "High"), taken.ModRoots[1]);
+        Assert.Equal(Path.Combine(mods, "overwrite"), taken.ModRoots[^1]);
+    }
+
+    [Theory]
+    [InlineData("Meshes/Actors/Character/CharacterAssets/skeleton.hkx", true)]
+    [InlineData("Meshes/Actors/Turret/CharacterAssets/Skeleton.HKX", true)]
+    [InlineData("Meshes/Actors/Turret/CharacterAssets/Rig.hkx", true)]
+    [InlineData("Meshes/Actors/Dogmeat/Rig/skeleton_physics.hkx", true)]
+    [InlineData("skeleton.hkx", true)]
+    [InlineData("Meshes/Actors/Character/Animations/Idle.hkx", false)]
+    [InlineData("Meshes/Actors/Character/CharacterAssets/skeleton.hkt", false)]
+    [InlineData("Meshes/Actors/Character/CharacterAssets/skeleton.nif", false)]
+    [InlineData("Meshes/Actors/Turret/CharacterAssets/Idle.hkx", true)]
+    [InlineData("Meshes/Weapons/skeletons/rifle.hkx", false)]
+    public void IsSkeletonPathCoversCharacterAssetsAndSkeletonNames(string virtualPath, bool expected) =>
+        Assert.Equal(expected, GameData.IsSkeletonPath(virtualPath));
+
+    private static byte[] Bytes(int count, byte value)
+    {
+        var bytes = new byte[count];
+        Array.Fill(bytes, value);
+        return bytes;
+    }
+
+    private static void Put(string root, string virtualPath, byte[] bytes)
+    {
+        string path = Path.Combine(root, virtualPath.Replace('/', Path.DirectorySeparatorChar));
+        string? folder = Path.GetDirectoryName(path);
+        if (folder != null) Directory.CreateDirectory(folder);
+        File.WriteAllBytes(path, bytes);
+    }
+
+    private static GameAsset Only(IReadOnlyList<GameAsset> winners, string virtualPath) =>
+        Assert.Single(Match(winners, virtualPath));
+
+    private static IReadOnlyList<GameAsset> Match(IReadOnlyList<GameAsset> winners, string virtualPath)
+    {
+        string key = GameData.Normalize(virtualPath);
+        return winners.Where(asset => string.Equals(GameData.Normalize(asset.VirtualPath), key,
+                                                     StringComparison.Ordinal)).ToList();
+    }
+
+    private static int Rank(GameAsset asset, GameData data, string high, string low, string dataFolder)
+    {
+        if (asset.Origin == GameAssetOrigin.Archive)
+            return 3 + data.ArchivePaths.ToList().IndexOf(asset.ArchivePath!);
+        if (string.Equals(asset.SourceRoot, high, StringComparison.OrdinalIgnoreCase)) return 0;
+        if (string.Equals(asset.SourceRoot, low, StringComparison.OrdinalIgnoreCase)) return 1;
+        return 2;
+    }
+}

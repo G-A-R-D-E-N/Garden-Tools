@@ -44,6 +44,7 @@ public sealed partial class GameData : IDisposable
     private readonly Dictionary<string, HashSet<string>> _names = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string>? _modLooseIndex;
     private List<WeaponTypeSet>? _weaponSets;
+    private bool _disposed;
 
     private GameData(string dataFolder, List<string> archivePaths, string? pluginsPath, List<string> modRoots)
     {
@@ -221,13 +222,13 @@ public sealed partial class GameData : IDisposable
 
         var (archive, entry) = FindEntry(projectRoot, declared);
         if (entry == null) return null;
-        try { return new AnimationRead(archive.Read(entry), Path.GetFileName(archive.Path), entry.Name); }
-        catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
+        byte[]? packed = ReadEntry(archive.Path, entry.Name);
+        return packed == null ? null : new AnimationRead(packed, Path.GetFileName(archive.Path), entry.Name);
     }
 
     private string? DataRelativePath(string fullPath)
     {
-        if (!IsUnder(fullPath, DataFolder)) return null;
+        if (!IsInsideRoot(DataFolder, fullPath)) return null;
         return Path.GetRelativePath(DataFolder, fullPath);
     }
 
@@ -350,7 +351,7 @@ public sealed partial class GameData : IDisposable
             string absolute = Path.GetFullPath(Path.Combine(projectRoot,
                 declared.Replace('\\', Path.DirectorySeparatorChar)
                         .Replace('/', Path.DirectorySeparatorChar)));
-            if (IsUnder(absolute, DataFolder))
+            if (IsInsideRoot(DataFolder, absolute))
             {
                 string rel = Path.GetRelativePath(DataFolder, absolute)
                                .Replace('\\', '/').ToLowerInvariant();
@@ -517,10 +518,16 @@ public sealed partial class GameData : IDisposable
 
     private Ba2 Open(string archivePath)
     {
+        EnsureAlive();
         if (_opened.TryGetValue(archivePath, out var archive)) return archive;
         archive = Ba2.Open(archivePath);
         _opened[archivePath] = archive;
         return archive;
+    }
+
+    private void EnsureAlive()
+    {
+        if (_disposed) throw new ObjectDisposedException(nameof(GameData));
     }
 
     public bool TryArchiveEntries(string archivePath, out IReadOnlyList<Ba2.Entry> entries, out string? warning)
@@ -538,18 +545,9 @@ public sealed partial class GameData : IDisposable
         }
         catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
-            warning = $"{Path.GetFileName(archivePath)}: {e.Message.Split('\n')[0].Trim()}";
+            warning = ArchiveWarning(archivePath, e);
             return false;
         }
-    }
-
-    private static bool IsUnder(string path, string root)
-    {
-        if (path.Length < root.Length) return false;
-        if (string.Equals(path, root, StringComparison.OrdinalIgnoreCase)) return true;
-        if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return false;
-        return path[root.Length] == Path.DirectorySeparatorChar ||
-               path[root.Length] == Path.AltDirectorySeparatorChar;
     }
 
     private static List<string> OrderByPlugins(List<string> archives, string pluginsPath)
@@ -688,7 +686,11 @@ public sealed partial class GameData : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         foreach (var archive in _opened.Values) archive.Dispose();
         _opened.Clear();
+        _names.Clear();
+        _modLooseIndex = null;
     }
 }
