@@ -399,6 +399,7 @@ public partial class MainWindow : Window
         _tabs.Items.Add(Tab("Project search", BuildProjectSearchTab()));
         _tabs.Items.Add(Tab("Animation", BuildAnimationTab()));
         _tabs.Items.Add(Tab("Playback", BuildPlaybackTab()));
+        _tabs.Items.Add(Tab("Animations", BuildAnimationIndexTab()));
         _tabs.Items.Add(Tab("Compare", BuildDiffTab()));
 
         _bridgeSave.IsEnabled = false;

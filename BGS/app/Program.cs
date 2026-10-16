@@ -59,6 +59,7 @@ public static class Program
         if (args.Contains("--scan-modlist")) return ModlistScan.ScanModlist(args);
         if (args.Contains("--scan-clips")) return ModlistScan.ScanClips(args);
         if (args.Contains("--scan-skeleton-physics")) return ModlistScan.ScanSkeletonPhysics(args);
+        if (args.Contains("--scan-index")) return IndexScan.Run(args);
         if (args.Contains("--extract")) return ModlistScan.Extract(args);
         if (args.Contains("--headless")) return Headless.Run(args);
 

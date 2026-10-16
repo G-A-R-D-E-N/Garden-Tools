@@ -160,7 +160,7 @@ public static class Smoke
         Check("there is one tab control", 1, tabs.Count);
 
         var headers = tabs[0].Items.OfType<TabItem>().Select(t => t.Header?.ToString()).ToList();
-        Check("tabs", "Bridge, Tree, Graph, Symbols, Chain, Project search, Animation, Playback, Compare", string.Join(", ", headers));
+        Check("tabs", "Bridge, Tree, Graph, Symbols, Chain, Project search, Animation, Playback, Animations, Compare", string.Join(", ", headers));
 
         var canvases = 0;
         var viewports = 0;
@@ -178,8 +178,7 @@ public static class Smoke
 
         Check("the node canvas exists", 1, canvases);
         Check("the skeleton viewport exists", 1, viewports);
-        Check("the tree, symbol, chain, project search, animation, clip and compare grids build without opening tools",
-              7, grids.Count);
+        Check("the tree, symbol, chain, project search, animation, clip, index and compare grids build without opening tools", 8, grids.Count);
 
         Check("collapsed details leave no hidden grids under the canvas", 0, grids.Count(g => !g.IsVisible));
         foreach (string expected in new[]
