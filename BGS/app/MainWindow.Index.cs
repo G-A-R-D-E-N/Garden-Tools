@@ -10,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using OpenCommonwealth.Services;
 using OpenCommonwealth.Services.Archive;
 
 namespace BehaviourStudio.App;
@@ -129,9 +130,7 @@ public partial class MainWindow : Window
         failure = "";
         try
         {
-            return mods.Length > 0 && Directory.Exists(mods)
-                ? AnimationIndexRequest.ForModsFolder(data, mods)
-                : AnimationIndexRequest.ForDataFolder(data);
+            return AnimationIndexRequest.FromLoadOrder(data, mods.Length > 0 ? mods : null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException
                                        or NotSupportedException)
@@ -395,30 +394,38 @@ public partial class MainWindow : Window
             return;
         }
 
+        AnimationIndex? index = _animationIndex;
+        if (index == null)
+        {
+            SetStatus("Build the index before opening one of its entries.", Ux.MutedBrush);
+            return;
+        }
+
         try
         {
-            using var archive = Ba2.Open(entry.Location);
-            string wanted = GameData.Normalize(entry.VirtualPath);
-            var match = archive.Entries.FirstOrDefault(candidate => GameData.Normalize(candidate.Name) == wanted);
-            if (match == null)
+            if (entry.Size > 0) InputFilePolicy.EnsureHkx(entry.Size, entry.VirtualPath);
+
+            using GameData data = index.Request.OpenGameData();
+            if (!data.TryReadEntry(entry.Location, entry.VirtualPath, out byte[] bytes, out string? warning))
             {
-                SetStatus($"{entry.VirtualPath} is no longer inside {Path.GetFileName(entry.Location)}.",
-                          Ux.WarnBrush);
+                SetStatus($"{entry.VirtualPath} is no longer inside {Path.GetFileName(entry.Location)}" +
+                          (warning == null ? "." : ": " + warning), Ux.WarnBrush);
                 return;
             }
 
+            InputFilePolicy.EnsureHkx(bytes.Length, entry.VirtualPath);
             string folder = Path.Combine(Path.GetTempPath(), "BehaviourGraphStudio", TempDirKey(entry.Location));
             Directory.CreateDirectory(folder);
-            string copy = Path.Combine(folder, Ba2.FlatFileName(match.Name));
-            File.WriteAllBytes(copy, archive.Read(match));
+            string copy = Path.Combine(folder, Ba2.FlatFileName(entry.VirtualPath));
+            File.WriteAllBytes(copy, bytes);
 
             _pathField.Text = copy;
             Load();
             _readOnly = true;
-            _readOnlyWhy = $"{match.FileName} came out of {Path.GetFileName(entry.Location)}, and " +
+            _readOnlyWhy = $"{entry.VirtualPath} came out of {Path.GetFileName(entry.Location)}, and " +
                            "nothing here writes back into an archive. Save a copy somewhere of " +
                            "your own and open that to edit it.";
-            SetStatus($"Opened {match.Name} from {Path.GetFileName(entry.Location)}, read only. " +
+            SetStatus($"Opened {entry.VirtualPath} from {Path.GetFileName(entry.Location)}, read only. " +
                       $"The copy is at {copy}", Ux.MetaBrush);
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException

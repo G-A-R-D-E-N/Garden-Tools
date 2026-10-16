@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using BehaviourStudio.App;
@@ -436,47 +435,8 @@ public sealed class AnimationIndexBuildTests
             AddLoose(DataFolder, relative, File.ReadAllBytes(Fixture(relative)));
 
         public void WriteArchive(params (string Name, byte[] Payload)[] entries) =>
-            WriteBa2(Path.Combine(DataFolder, ArchiveName), entries);
+            TestArchives.WriteGeneralBa2(Path.Combine(DataFolder, ArchiveName), entries);
         public void Dispose() => _root.Dispose();
-
-        private static void WriteBa2(string path, (string Name, byte[] Payload)[] entries)
-        {
-            const int headerBytes = 24;
-            const int recordBytes = 36;
-            ulong nameTable = (ulong)(headerBytes + recordBytes * entries.Length);
-            int names = entries.Sum(entry => 2 + Encoding.UTF8.GetBytes(entry.Name).Length);
-            ulong cursor = nameTable + (ulong)names;
-
-            using var stream = File.Create(path);
-            using var writer = new BinaryWriter(stream);
-            writer.Write(Encoding.ASCII.GetBytes("BTDX"));
-            writer.Write((uint)1);
-            writer.Write(Encoding.ASCII.GetBytes("GNRL"));
-            writer.Write((uint)entries.Length);
-            writer.Write(nameTable);
-
-            foreach (var entry in entries)
-            {
-                writer.Write(0u);
-                writer.Write(0u);
-                writer.Write(0u);
-                writer.Write(0x00100100u);
-                writer.Write(cursor);
-                writer.Write(0u);
-                writer.Write((uint)entry.Payload.Length);
-                writer.Write(0xBAADF00Du);
-                cursor += (ulong)entry.Payload.Length;
-            }
-
-            foreach (var entry in entries)
-            {
-                byte[] name = Encoding.UTF8.GetBytes(entry.Name);
-                writer.Write((ushort)name.Length);
-                writer.Write(name);
-            }
-
-            foreach (var entry in entries) writer.Write(entry.Payload);
-        }
     }
 }
 
@@ -560,33 +520,8 @@ public sealed class AnimationIndexScanCliTests
         return document.RootElement.Clone();
     }
 
-    private static void WriteSingleEntryArchive(string path, string entryName, byte[] payload)
-    {
-        byte[] name = Encoding.UTF8.GetBytes(entryName);
-        const int headerBytes = 24;
-        const int recordBytes = 36;
-        ulong nameTable = headerBytes + recordBytes;
-        ulong dataOffset = nameTable + 2u + (uint)name.Length;
-
-        using var stream = File.Create(path);
-        using var writer = new BinaryWriter(stream);
-        writer.Write(Encoding.ASCII.GetBytes("BTDX"));
-        writer.Write((uint)1);
-        writer.Write(Encoding.ASCII.GetBytes("GNRL"));
-        writer.Write((uint)1);
-        writer.Write(nameTable);
-        writer.Write((uint)0);
-        writer.Write((uint)0);
-        writer.Write((uint)0);
-        writer.Write((uint)0x00100100);
-        writer.Write(dataOffset);
-        writer.Write((uint)0);
-        writer.Write((uint)payload.Length);
-        writer.Write(0xBAADF00Du);
-        writer.Write((ushort)name.Length);
-        writer.Write(name);
-        writer.Write(payload);
-    }
+    private static void WriteSingleEntryArchive(string path, string entryName, byte[] payload) =>
+        TestArchives.WriteBa2(path, entryName, payload);
 }
 
 internal sealed class TempDir : IDisposable

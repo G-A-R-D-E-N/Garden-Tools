@@ -20,25 +20,10 @@ public static class IndexScan
         bool noCache = args.Contains("--no-cache");
         bool fresh = args.Contains("--rebuild");
 
-        string? profile = null;
-        string? dataFolder = null;
         AnimationIndexRequest request;
         try
         {
-            if (Mo2ScanData.TryOpen(root, out var scan, out _))
-            {
-                using (scan!)
-                {
-                    request = AnimationIndexRequest.ForGameData(scan!.Data, scan.Info.ModlistPath,
-                                                               scan.Info.Profile);
-                    profile = scan.Info.Profile;
-                    dataFolder = scan.Info.GameDataFolder;
-                }
-            }
-            else
-            {
-                request = AnimationIndexRequest.ForDataFolder(root);
-            }
+            request = AnimationIndexRequest.FromLoadOrder(root, null);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException
                                        or NotSupportedException or InvalidDataException)
@@ -54,7 +39,7 @@ public static class IndexScan
         Info(json, $"indexing {request.DataFolder}");
         if (request.ModRootsHighToLow.Count > 0)
             Info(json, $"  {request.ModRootsHighToLow.Count} mod root(s)" +
-                       (profile != null ? $", profile {profile}" : ""));
+                       (request.Profile != null ? $", profile {request.Profile}" : ""));
         Info(json, $"  {request.ArchivePaths.Count} archive(s)");
         if (cachePath.Length > 0) Info(json, $"  cache {cachePath}" + (fresh ? " (rebuilt)" : ""));
 
@@ -83,7 +68,7 @@ public static class IndexScan
         int exit = index.Entries.Count > 0 ? 0 : 1;
         if (json)
         {
-            var context = new ScanContext(root, profile, dataFolder ?? request.DataFolder,
+            var context = new ScanContext(root, request.Profile, request.DataFolder,
                                           request.ModRootsHighToLow.Count);
             Console.WriteLine(new ScanReport("scan-index", context, summary,
                                              Array.Empty<ScanFinding>(), exit).ToJson());

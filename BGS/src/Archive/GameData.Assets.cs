@@ -20,7 +20,11 @@ public sealed record GameAsset(
     string? FullPath)
 {
     public IReadOnlyList<GameAsset> Shadowed { get; init; } = Array.Empty<GameAsset>();
+
+    public string Source { get; init; } = "";
 }
+
+public readonly record struct GameLooseFile(string VirtualPath, string FullPath, long Size, long ModifiedTicks);
 
 public sealed partial class GameData
 {
@@ -59,6 +63,51 @@ public sealed partial class GameData
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
+    internal static GameData FromParts(string dataFolder, IReadOnlyList<string> archivePaths,
+                                       IReadOnlyList<string> modRootsLowToHigh)
+    {
+        var roots = new List<string>(modRootsLowToHigh.Count);
+        var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string root in modRootsLowToHigh)
+        {
+            string full = Path.GetFullPath(root);
+            if (placed.Add(full)) roots.Add(full);
+        }
+
+        var archives = new List<string>(archivePaths.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string archive in archivePaths)
+        {
+            string full = Path.GetFullPath(archive);
+            if (seen.Add(full)) archives.Add(full);
+        }
+
+        return new GameData(Path.GetFullPath(dataFolder), archives, null, roots);
+    }
+
+    public IReadOnlyList<GameLooseFile> EnumerateLoose(string root)
+    {
+        EnsureAlive();
+        var files = new List<GameLooseFile>();
+        if (!Directory.Exists(root)) return files;
+
+        string fullRoot = Path.GetFullPath(root);
+        foreach (string file in WalkLoose(root))
+        {
+            string relative = Path.GetRelativePath(fullRoot, file).Replace('\\', '/');
+            FileInfo info;
+            try { info = new FileInfo(file); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { continue; }
+            long size = info.Exists ? info.Length : -1;
+            long ticks = info.Exists ? info.LastWriteTimeUtc.Ticks : 0;
+            files.Add(new GameLooseFile(relative, file, size, ticks));
+        }
+
+        files.Sort((left, right) =>
+            string.Compare(left.VirtualPath, right.VirtualPath, StringComparison.OrdinalIgnoreCase));
+        return files;
+    }
+
     public IReadOnlyList<GameAsset> EnumerateWinners(string virtualPrefix, Func<string, bool>? nameFilter = null,
                                                      Action<string>? warn = null)
     {
@@ -91,7 +140,7 @@ public sealed partial class GameData
 
         var winners = new List<GameAsset>(order.Count);
         foreach (Winner winner in order)
-            winners.Add(winner.Asset with { Shadowed = winner.Shadows.ToArray() });
+            winners.Add(winner.Asset with { Shadowed = winner.Shadows.ToArray(), Source = winner.Source });
         return winners;
 
         void OfferLoose(string root, string full)

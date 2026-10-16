@@ -82,23 +82,31 @@ public sealed class AnimationIndexRequest
     public static AnimationIndexRequest ForModsFolder(string dataFolder, string modsFolder)
     {
         string? profile = GameData.ModlistProfile(modsFolder);
-        string? modlist = ModlistOf(modsFolder, profile);
+        string? modlist = GameData.ModlistPath(modsFolder, profile);
         if (modlist == null) return ForDataFolder(dataFolder);
 
         using var data = GameData.DiscoverModded(dataFolder, modsFolder, profile);
         return ForGameData(data, modlist, profile);
     }
 
-    public static string? ModlistOf(string modsFolder, string? profile)
+    internal static AnimationIndexRequest FromLoadOrder(string? dataFolder, string? mo2Folder)
     {
-        if (profile != null)
+        string? instance = ExistingFolder(mo2Folder) ?? ExistingFolder(dataFolder);
+        if (instance != null && Mo2ScanData.TryOpen(instance, out Mo2ScanData? scan, out _))
         {
-            string profiled = Path.Combine(modsFolder, "profiles", profile, "modlist.txt");
-            return File.Exists(profiled) ? profiled : null;
+            using (scan)
+                return ForGameData(scan!.Data, scan.Info.ModlistPath, scan.Info.Profile);
         }
 
-        string root = Path.Combine(modsFolder, "modlist.txt");
-        return File.Exists(root) ? root : null;
+        if (ExistingFolder(mo2Folder) is { } mods) return ForModsFolder(RequiredFolder(dataFolder), mods);
+        return ForDataFolder(RequiredFolder(dataFolder));
+    }
+
+    internal GameData OpenGameData()
+    {
+        var roots = new List<string>(ModRootsHighToLow);
+        roots.Reverse();
+        return GameData.FromParts(DataFolder, ArchivePaths, roots);
     }
 
     internal List<(string Kind, string Path, string Source)> LooseRoots()
@@ -127,6 +135,12 @@ public sealed class AnimationIndexRequest
         }
         return list;
     }
+
+    private static string? ExistingFolder(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && Directory.Exists(path) ? Path.GetFullPath(path) : null;
+
+    private static string RequiredFolder(string? path) =>
+        ExistingFolder(path) ?? throw new ArgumentException("no game Data folder was given", nameof(path));
 
     private static string Full(string path)
     {
@@ -275,6 +289,7 @@ public sealed class AnimationIndex
         AnimationIndexCache? cache = options.CachePath == null ? null : new AnimationIndexCache(options.CachePath);
         AnimationIndexCacheData? stored = options.ReuseCache && cache != null ? cache.Load() : null;
         var notes = new List<string>();
+        var warnings = new List<string>();
         bool discarded = options.ReuseCache && cache != null && stored == null && File.Exists(cache.Path);
         if (discarded) notes.Add("the previous index cache was stale or unreadable and has been discarded");
 
@@ -285,7 +300,11 @@ public sealed class AnimationIndex
 
         var sources = new List<AnimationIndexSource>(planned.Count);
         var perSource = new Dictionary<string, List<AnimationIndexEntry>>(StringComparer.OrdinalIgnoreCase);
+        var rowOf = new Dictionary<string, Dictionary<string, AnimationIndexEntry>>(StringComparer.OrdinalIgnoreCase);
         int done = 0, reused = 0, scanned = 0, rejected = 0;
+
+        token.ThrowIfCancellationRequested();
+        using GameData data = request.OpenGameData();
 
         progress?.Invoke(new AnimationIndexProgress(0, planned.Count, "reading sources"));
         foreach (var (kind, path, label) in planned)
@@ -294,7 +313,7 @@ public sealed class AnimationIndex
             done++;
 
             bool loose = kind != ArchiveKind;
-            var files = loose ? LooseFiles(path, token) : new List<(string Rel, string Full, long Size, long Ticks)>();
+            List<GameLooseFile> files = loose ? IndexedFiles(data.EnumerateLoose(path)) : new List<GameLooseFile>();
             string stamp = loose ? LooseStamp(files) : FileStamp(path);
             string identity = Identity(kind, path);
 
@@ -308,42 +327,27 @@ public sealed class AnimationIndex
             else
             {
                 entries = loose
-                    ? files.Select(file => Classify(file.Rel, label, file.Size, file.Full)).ToList()
-                    : ArchiveEntries(path, label, token);
+                    ? files.Select(file => Classify(file.VirtualPath, label, file.Size, file.FullPath)).ToList()
+                    : ArchiveEntries(data, path, label, token, warnings);
                 scanned++;
                 progress?.Invoke(new AnimationIndexProgress(done, planned.Count, "indexed " + label));
             }
 
             sources.Add(new AnimationIndexSource(kind, path, label, stamp));
             perSource[identity] = entries;
+            rowOf[identity] = RowsOf(entries);
         }
 
+        token.ThrowIfCancellationRequested();
         progress?.Invoke(new AnimationIndexProgress(planned.Count, planned.Count, "merging"));
-        var merged = new List<AnimationIndexEntry>();
-        var seenWithinSource = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var claimedBy = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var source in sources)
-        {
-            string identity = Identity(source.Kind, source.Path);
-            foreach (var entry in perSource[identity])
-            {
-                if (!seenWithinSource.Add(identity + "\u0000" + entry.VirtualPath)) continue;
-                string key = GameData.Normalize(entry.VirtualPath);
-                if (claimedBy.TryGetValue(key, out string? owner) && owner != identity) continue;
-                claimedBy[key] = identity;
-                merged.Add(entry);
-            }
-        }
-
-        merged = merged
-            .OrderBy(entry => entry.VirtualPath, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(entry => entry.Source, StringComparer.Ordinal)
-            .ToList();
+        List<AnimationIndexEntry> merged = MergeWinners(data, SourceIdentities(sources), rowOf, warnings);
 
         if (rejected > 0)
             notes.Add((rejected == 1 ? "1 cached entry" : rejected.ToString(CultureInfo.InvariantCulture) +
                                                                  " cached entries") +
                       " pointed outside its source and were dropped");
+
+        notes.AddRange(warnings);
 
         if (cache != null)
         {
@@ -352,10 +356,10 @@ public sealed class AnimationIndex
             if (stored != null && (stored.ModlistStamp ?? "") != (modlistStamp ?? "") && !discarded)
                 notes.Add("the modlist changed since the previous index build");
 
-            var data = new AnimationIndexCacheData(
+            var cacheData = new AnimationIndexCacheData(
                 AnimationIndexCache.CurrentVersion, request.DataFolder, request.Profile, request.ModlistPath,
                 modlistStamp, sources.Select(source => CacheOf(source, perSource)).ToList());
-            if (!cache.Save(data, out string failure)) notes.Add("the index cache could not be written: " + failure);
+            if (!cache.Save(cacheData, out string failure)) notes.Add("the index cache could not be written: " + failure);
         }
 
         watch.Stop();
@@ -370,6 +374,64 @@ public sealed class AnimationIndex
         Task.Run(() => Build(request, options, progress, token), token);
 
     internal static string Identity(string kind, string path) => kind + "\u0000" + path;
+
+    private static Dictionary<string, string> SourceIdentities(IReadOnlyList<AnimationIndexSource> sources)
+    {
+        var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (AnimationIndexSource source in sources)
+            identities[SourceKey(source.Kind, source.Path)] = Identity(source.Kind, source.Path);
+        return identities;
+    }
+
+    private static string SourceKey(string kind, string path) =>
+        (kind == ArchiveKind ? "archive:" : "loose:") + path;
+
+    private static List<AnimationIndexEntry> MergeWinners(
+        GameData data, Dictionary<string, string> identityOfSource,
+        Dictionary<string, Dictionary<string, AnimationIndexEntry>> rowOf, List<string> warnings)
+    {
+        IReadOnlyList<GameAsset> winners = data.EnumerateWinners("", IsIndexedName, warnings.Add);
+        var merged = new List<AnimationIndexEntry>(winners.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (GameAsset winner in winners)
+        {
+            if (!identityOfSource.TryGetValue(winner.Source, out string? identity)) continue;
+            if (!rowOf.TryGetValue(identity, out var rows)) continue;
+            string flat = Flat(winner.VirtualPath);
+            if (!rows.TryGetValue(flat, out AnimationIndexEntry? row) &&
+                !rows.TryGetValue(GameData.Normalize(flat), out row)) continue;
+            if (!seen.Add(identity + "\u0000" + Flat(row.VirtualPath))) continue;
+            merged.Add(row);
+        }
+
+        return merged.OrderBy(entry => entry.VirtualPath, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(entry => entry.Source, StringComparer.Ordinal)
+                     .ToList();
+    }
+
+    private static Dictionary<string, AnimationIndexEntry> RowsOf(List<AnimationIndexEntry> entries)
+    {
+        var rows = new Dictionary<string, AnimationIndexEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (AnimationIndexEntry entry in entries)
+        {
+            string flat = Flat(entry.VirtualPath);
+            if (!rows.ContainsKey(flat)) rows[flat] = entry;
+            string key = GameData.Normalize(flat);
+            if (key.Length > 0 && !rows.ContainsKey(key)) rows[key] = entry;
+        }
+        return rows;
+    }
+
+    private static string Flat(string virtualPath) => virtualPath.Replace('\\', '/').TrimStart('/');
+
+    private static List<GameLooseFile> IndexedFiles(IReadOnlyList<GameLooseFile> files)
+    {
+        var indexed = new List<GameLooseFile>(files.Count);
+        foreach (GameLooseFile file in files)
+            if (IsIndexedName(file.VirtualPath)) indexed.Add(file);
+        return indexed;
+    }
 
     private static AnimationIndexCacheSource CacheOf(AnimationIndexSource source,
                                                      Dictionary<string, List<AnimationIndexEntry>> perSource)
@@ -397,7 +459,8 @@ public sealed class AnimationIndex
             string location;
             if (loose)
             {
-                if (!TryLocation(source.Kind, root, virtualPath, out location) || !IsWithinRoot(root, location))
+                if (!TryLocation(source.Kind, root, virtualPath, out location) ||
+                    !GameData.IsInsideRoot(root, location))
                 {
                     rejected++;
                     continue;
@@ -426,25 +489,6 @@ public sealed class AnimationIndex
         return IsIndexedName(flat);
     }
 
-    internal static bool IsWithinRoot(string root, string location)
-    {
-        try
-        {
-            string fullRoot = Path.GetFullPath(root)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            string full = Path.GetFullPath(location);
-            StringComparison comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-            return full.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison);
-        }
-        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException
-                                       or IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
     private static bool TryLocation(string kind, string root, string virtualPath, out string location)
     {
         try
@@ -462,113 +506,38 @@ public sealed class AnimationIndex
     private static string LocationOf(string kind, string root, string virtualPath) =>
         kind == ArchiveKind ? root : Path.Combine(root, virtualPath.Replace('/', Path.DirectorySeparatorChar));
 
-    private static List<AnimationIndexEntry> ArchiveEntries(string path, string label, CancellationToken token)
+    private static List<AnimationIndexEntry> ArchiveEntries(GameData data, string path, string label,
+                                                            CancellationToken token, List<string> warnings)
     {
         var entries = new List<AnimationIndexEntry>();
-        Ba2 archive;
-        try
+        if (!data.TryArchiveEntries(path, out IReadOnlyList<Ba2.Entry> found, out string? warning))
         {
-            archive = Ba2.Open(path);
-        }
-        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e))
-        {
+            if (warning != null) warnings.Add(warning);
             return entries;
         }
 
-        using (archive)
+        int seen = 0;
+        foreach (Ba2.Entry entry in found)
         {
-            int seen = 0;
-            foreach (var entry in archive.Entries)
-            {
-                if ((++seen & 0x3FF) == 0) token.ThrowIfCancellationRequested();
-                if (!IsIndexedName(entry.Name)) continue;
-                entries.Add(Classify(entry.Name, label, entry.Unpacked, path));
-            }
+            if ((++seen & 0x3FF) == 0) token.ThrowIfCancellationRequested();
+            if (!IsIndexedName(entry.Name)) continue;
+            entries.Add(Classify(entry.Name, label, entry.Unpacked, path));
         }
         return entries;
     }
 
-    private static List<(string Rel, string Full, long Size, long Ticks)> LooseFiles(string root,
-                                                                                    CancellationToken token)
-    {
-        var found = new List<(string, string, long, long)>();
-        if (!Directory.Exists(root)) return found;
-
-        var pending = new Stack<string>();
-        pending.Push(root);
-        while (pending.Count > 0)
-        {
-            token.ThrowIfCancellationRequested();
-            string dir = pending.Pop();
-
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(dir);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
-            foreach (string file in files)
-            {
-                if (!IsIndexedName(file)) continue;
-                if (IsReparsePoint(file)) continue;
-                try
-                {
-                    var info = new FileInfo(file);
-                    found.Add((Path.GetRelativePath(root, file).Replace('\\', '/'), file, info.Length,
-                               info.LastWriteTimeUtc.Ticks));
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                }
-            }
-
-            string[] children;
-            try
-            {
-                children = Directory.GetDirectories(dir);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
-            for (int i = children.Length - 1; i >= 0; i--)
-                if (!IsReparsePoint(children[i])) pending.Push(children[i]);
-        }
-
-        found.Sort((left, right) => string.Compare(left.Item1, right.Item1, StringComparison.OrdinalIgnoreCase));
-        return found;
-    }
-
-    private static bool IsReparsePoint(string path)
-    {
-        try
-        {
-            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException
-                                       or NotSupportedException or PathTooLongException)
-        {
-            return true;
-        }
-    }
-
-    private static string LooseStamp(List<(string Rel, string Full, long Size, long Ticks)> files)
+    private static string LooseStamp(List<GameLooseFile> files)
     {
         ulong hash = 14695981039346656037UL;
         long bytes = 0;
         long newest = 0;
-        foreach (var file in files)
+        foreach (GameLooseFile file in files)
         {
             bytes += file.Size;
-            if (file.Ticks > newest) newest = file.Ticks;
-            hash = Mix(hash, file.Rel);
+            if (file.ModifiedTicks > newest) newest = file.ModifiedTicks;
+            hash = Mix(hash, file.VirtualPath);
             hash = Mix(hash, file.Size.ToString(CultureInfo.InvariantCulture));
-            hash = Mix(hash, file.Ticks.ToString(CultureInfo.InvariantCulture));
+            hash = Mix(hash, file.ModifiedTicks.ToString(CultureInfo.InvariantCulture));
         }
 
         return string.Join(':', files.Count.ToString(CultureInfo.InvariantCulture),
