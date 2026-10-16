@@ -86,12 +86,6 @@ public sealed partial class RigAuthoringWindow
         return AuthoringPanel(panel, _physicsView);
     }
 
-    /// <summary>
-    /// Load a ragdoll for the physics tab. A file that carries no usable ragdoll is explained in the
-    /// window's status line instead of being refused with a bare sentence, because the reason is the
-    /// useful part: no physics at all, physics in the older format, shapes without a readable body,
-    /// or a body set this build could not measure.
-    /// </summary>
     public void OpenPhysics(string path)
     {
         var model = HavokPhysicsExtractor.TryExtract(InputFilePolicy.ReadHkx(path), out var report);

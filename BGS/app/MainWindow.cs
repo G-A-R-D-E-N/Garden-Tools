@@ -155,8 +155,6 @@ public partial class MainWindow : Window
     private string? _ragdollSourceName;
     private string? _ragdollSourceNote;
 
-    // Why the last physics load ended the way it did, so the Playback tab can explain a missing
-    // ragdoll and offer the same diagnosis on the clipboard.
     private PhysicsLoadReport? _ragdollReport;
     private string _ragdollReportPath = "";
     private string? _physicsReportNote;

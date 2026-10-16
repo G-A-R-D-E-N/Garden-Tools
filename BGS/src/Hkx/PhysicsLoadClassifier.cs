@@ -4,16 +4,10 @@ using System.Linq;
 
 namespace OpenCommonwealth.Services.Hkx;
 
-/// <summary>
-/// What one load attempt measured, before it is turned into a verdict. Keeping the verdict a pure
-/// function of these facts means every status can be tested without a fixture that produces it.
-/// </summary>
 public sealed record PhysicsLoadFacts
 {
-    /// <summary>Set when the bytes are not a Fallout 4 packfile at all; the text says what was seen.</summary>
     public string? ContainerProblem { get; init; }
 
-    /// <summary>Set when reading failed after the header: the pipeline stage that failed.</summary>
     public string? ParseStage { get; init; }
 
     public string? ParseMessage { get; init; }
@@ -21,10 +15,8 @@ public sealed record PhysicsLoadFacts
     public int? FileVersion { get; init; }
     public int? PointerSize { get; init; }
 
-    /// <summary>Object count per class name, one entry per class instance in the packfile.</summary>
     public IReadOnlyDictionary<string, int> ClassCounts { get; init; } = new Dictionary<string, int>(StringComparer.Ordinal);
 
-    /// <summary>Body entries hknpRagdollData declares.</summary>
     public int BodyCount { get; init; }
 
     public int UsableBodies { get; init; }
@@ -34,10 +26,8 @@ public sealed record PhysicsLoadFacts
     public IReadOnlyDictionary<string, int> UnsupportedShapeClasses { get; init; } = new Dictionary<string, int>(StringComparer.Ordinal);
     public int Mappings { get; init; }
 
-    /// <summary>Capsule shapes the extractor read into the model.</summary>
     public int ShapeCount { get; init; }
 
-    /// <summary>Constraints the extractor read into the model.</summary>
     public int ConstraintCount { get; init; }
 
     public int CountOf(string className) =>
@@ -46,30 +36,18 @@ public sealed record PhysicsLoadFacts
     public bool Has(string className) => CountOf(className) > 0;
 }
 
-/// <summary>
-/// Turns measured facts into a <see cref="PhysicsLoadReport"/>. The taxonomy is deliberately coarse:
-/// one dominant reason per file, chosen in a fixed order, plus any additional measured findings.
-/// </summary>
 public static class PhysicsLoadClassifier
 {
-    /// <summary>The packfile version every shipped Fallout 4 Havok file uses.</summary>
     public const int Fallout4FileVersion = 11;
 
-    /// <summary>The pointer width every shipped Fallout 4 Havok file uses.</summary>
     public const int Fallout4PointerSize = 8;
 
-    /// <summary>Read a file end to end and report what happened, without needing the model.</summary>
     public static PhysicsLoadReport Inspect(byte[]? hkx)
     {
         HavokPhysicsExtractor.TryExtract(hkx, out var report);
         return report;
     }
 
-    /// <summary>
-    /// Check the bytes far enough to say whether they are a Fallout 4 packfile at all, and report the
-    /// version and pointer width when they are. Returns null when the container is usable, otherwise a
-    /// plain-words description of what was detected instead.
-    /// </summary>
     public static string? ContainerProblem(byte[] bytes, out int? fileVersion, out int? pointerSize)
     {
         fileVersion = null;
@@ -105,19 +83,12 @@ public static class PhysicsLoadClassifier
         return null;
     }
 
-    /// <summary>A shape class in either the modern (hknp) or legacy (hkp) physics format.</summary>
     public static bool IsShapeClass(string className) =>
         className.EndsWith("Shape", StringComparison.Ordinal);
 
-    /// <summary>Constraint data, which the legacy format shares with the Fallout 4 one.</summary>
     public static bool IsConstraintClass(string className) =>
         className.EndsWith("ConstraintData", StringComparison.Ordinal);
 
-    /// <summary>
-    /// Rigid bodies, shapes and physics systems from the older hkp format. Constraint data and
-    /// constraint atoms are excluded on purpose: a Fallout 4 ragdoll legitimately stores
-    /// hkpRagdollConstraintData, hkpLimitedHingeConstraintData and hkp*ConstraintAtom objects.
-    /// </summary>
     public static bool IsLegacyPhysicsClass(string className)
     {
         if (className == "hkpPhysicsSystem" || className == "hkpPhysicsData") return true;

@@ -6,41 +6,22 @@ using System.Text;
 
 namespace OpenCommonwealth.Services.Hkx;
 
-/// <summary>
-/// Why a physics load ended the way it did. The point of the taxonomy is that "no ragdoll" stops
-/// being one silent outcome: a file can legitimately have no physics, or it can hold physics BGS
-/// cannot use yet, and each of those needs a different sentence for the person who exported it.
-/// </summary>
 public enum PhysicsLoadStatus
 {
-    /// <summary>A readable hknp ragdoll: every body has a capsule shape and the mapper is usable.</summary>
     Ok,
 
-    /// <summary>No hknpRagdollData at all. Legitimate for animations and props; the reason a skeleton
-    /// with physics "missing" ends up here.</summary>
     SkeletonOnly,
 
-    /// <summary>Older hkp rigid bodies/shapes/a physics system instead of hknp bodies. Constraint data
-    /// alone (hkpRagdollConstraintData and friends) is normal inside a Fallout 4 ragdoll and never
-    /// selects this status.</summary>
     LegacyPhysics,
 
-    /// <summary>A ragdoll is present and bodies were read, but some bodies use a shape other than
-    /// hknpCapsuleShape, or a body/constraint entry could not be read.</summary>
     UnsupportedShapes,
 
-    /// <summary>A readable ragdoll with no usable hkaSkeletonMapper, so it cannot follow the animation.</summary>
     MapperMissing,
 
-    /// <summary>hknpRagdollData is present but no usable rigid body could be read from it.</summary>
     NoBodies,
 
-    /// <summary>Not a Fallout 4 packfile container: not a packfile at all (a tagfile or XML), a
-    /// version other than 11, or a pointer width other than 8.</summary>
     WrongContainer,
 
-    /// <summary>Reading failed after the container header: a section, the byte-backed XML or the model
-    /// could not be produced. <see cref="PhysicsLoadReport.FailingStage"/> names the stage.</summary>
     ParseError,
 }
 
@@ -53,11 +34,6 @@ public enum PhysicsLoadSeverity
 
 public sealed record PhysicsLoadFinding(PhysicsLoadSeverity Severity, string Message, string? Hint = null);
 
-/// <summary>
-/// The measured outcome of one physics load attempt: the status, why it happened, and the class
-/// census the decision was made from. The report explains a null <see cref="HavokRagdollModel"/> and
-/// never changes what a load is willing to accept.
-/// </summary>
 public sealed class PhysicsLoadReport
 {
     public const string RagdollClass = "hknpRagdollData";
@@ -71,10 +47,8 @@ public sealed class PhysicsLoadReport
     public int? FileVersion { get; init; }
     public int? PointerSize { get; init; }
 
-    /// <summary>Set only for <see cref="PhysicsLoadStatus.ParseError"/>: the pipeline stage that failed.</summary>
     public string? FailingStage { get; init; }
 
-    /// <summary>Body entries the ragdoll declares (readable or not).</summary>
     public int BodyCount { get; init; }
 
     public int UsableBodies { get; init; }
@@ -82,16 +56,12 @@ public sealed class PhysicsLoadReport
     public int SkippedConstraints { get; init; }
     public int UnsupportedShapeBodies { get; init; }
 
-    /// <summary>Shape classes the ragdoll's bodies use that BGS cannot preview yet, with body counts.</summary>
     public IReadOnlyDictionary<string, int> UnsupportedShapeClasses { get; init; } = EmptyCounts;
 
-    /// <summary>Shapes the extractor read into the model (capsule shapes today).</summary>
     public int ShapeCount { get; init; }
 
-    /// <summary>Constraints the extractor read into the model.</summary>
     public int ConstraintCount { get; init; }
 
-    /// <summary>Animation-to-ragdoll bone mappings the mapper actually produced.</summary>
     public int Mappings { get; init; }
 
     private static readonly IReadOnlyDictionary<string, int> EmptyCounts =
@@ -105,7 +75,6 @@ public sealed class PhysicsLoadReport
     public bool MapperPresent => Has(MapperClass);
     public bool MaterialPresent => Has(MaterialClass);
 
-    /// <summary>The status as a short label for logs and scan output.</summary>
     public string StatusLabel => Status switch
     {
         PhysicsLoadStatus.Ok => "OK",
@@ -119,7 +88,6 @@ public sealed class PhysicsLoadReport
         _ => "UNKNOWN",
     };
 
-    /// <summary>The status as a stable slug for machine-readable output.</summary>
     public string StatusSlug => Status switch
     {
         PhysicsLoadStatus.Ok => "ok",
@@ -136,24 +104,19 @@ public sealed class PhysicsLoadReport
     public PhysicsLoadSeverity Severity =>
         Findings.Count == 0 ? PhysicsLoadSeverity.Error : Findings[0].Severity;
 
-    /// <summary>The first finding in plain words: the sentence that explains the outcome.</summary>
     public string Headline =>
         Findings.Count > 0 ? Findings[0].Message : $"Physics could not be loaded ({StatusLabel}).";
 
-    /// <summary>The first available next-step sentence, if the report offers one.</summary>
     public string? Hint => Findings.Select(finding => finding.Hint).FirstOrDefault(hint => !string.IsNullOrEmpty(hint));
 
-    /// <summary>Headline plus the next step, for one-line UI status text.</summary>
     public string Summary => Hint is { Length: > 0 } hint ? Headline + " " + hint : Headline;
 
     public IReadOnlyDictionary<string, int> ShapeClasses => Filtered(ClassCounts, IsShapeName);
 
     public IReadOnlyDictionary<string, int> ConstraintClasses => Filtered(ClassCounts, IsConstraintName);
 
-    /// <summary>Every physics class the file carries (hknp/hkp), with its object count.</summary>
     public IReadOnlyDictionary<string, int> PhysicsClasses => PhysicsClassesOf(ClassCounts);
 
-    /// <summary>Every hknp/hkp class in a census, with its object count.</summary>
     public static IReadOnlyDictionary<string, int> PhysicsClassesOf(IReadOnlyDictionary<string, int> counts) =>
         Filtered(counts, name => name.StartsWith("hknp", StringComparison.Ordinal) ||
                                  name.StartsWith("hkp", StringComparison.Ordinal));
@@ -171,7 +134,6 @@ public sealed class PhysicsLoadReport
         return kept;
     }
 
-    /// <summary>Class counts as "name xCount" text, most common first.</summary>
     public static string DescribeClasses(IReadOnlyDictionary<string, int> counts) =>
         counts.Count == 0
             ? "none"
@@ -185,10 +147,6 @@ public sealed class PhysicsLoadReport
         ? Mappings > 0 ? $"present ({Mappings} mappings)" : "present, no usable mappings"
         : "absent";
 
-    /// <summary>
-    /// The full plain-text dump the "Copy diagnostics" buttons put on the clipboard. The product line
-    /// comes from the caller so core code does not depend on the app's build stamp.
-    /// </summary>
     public string Diagnostics(string path, long? fileSize = null, string? product = null)
     {
         var text = new StringBuilder();

@@ -266,8 +266,6 @@ public sealed class PhysicsLoadReportTests
         Assert.Equal(8, reports.Count);
         foreach (var report in reports)
         {
-            // Every sentence has to stand on its own for someone who has the file and not the tool: a
-            // full explanation of what was found, not a status label or a bare class name.
             Assert.False(string.IsNullOrWhiteSpace(report.Headline));
             Assert.True(report.Headline.Length > 40, $"'{report.Status}' explains itself in one sentence");
             Assert.DoesNotContain(report.StatusSlug, report.Headline);
@@ -312,7 +310,6 @@ public sealed class PhysicsLoadReportTests
     [Fact]
     public void AnXmlTagfileIsRefusedByTheExtractorWithTheReason()
     {
-        // A real tagfile is unpacked XML: long enough to be a file, and unmistakably not a packfile.
         string xml = "<?xml version=\"1.0\" encoding=\"ascii\"?>\n<hkpackfile classversion=\"11\" contentsversion=\"hk_2014.1.0-r1\">\n</hkpackfile>\n";
         Assert.True(Encoding.ASCII.GetByteCount(xml) > PackfileImage.HeaderSize);
 

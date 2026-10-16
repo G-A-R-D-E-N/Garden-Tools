@@ -22,11 +22,6 @@ public static class HavokPhysicsExtractor
 
     public static HavokRagdollModel? TryExtract(byte[]? hkx) => TryExtract(hkx, out _);
 
-    /// <summary>
-    /// Extract the ragdoll and report why it was or was not produced. The report keeps the reason a
-    /// caller would otherwise lose: the null contract above is unchanged, and every caller that only
-    /// wants the model keeps working.
-    /// </summary>
     public static HavokRagdollModel? TryExtract(byte[]? hkx, out PhysicsLoadReport report)
     {
         var facts = new Facts();
@@ -106,8 +101,6 @@ public static class HavokPhysicsExtractor
                 string shapeClass = ShapeClassOf(objects, cinfos[i]);
                 if (shapeClass == CapsuleShapeClass) continue;
 
-                // A body whose shape BGS cannot measure still has a frame, so it stays listed; the
-                // footprint it would collide with is what is missing.
                 string label = shapeClass.Length > 0 ? shapeClass : "(no shape reference)";
                 facts.UnsupportedShapeBodies++;
                 facts.UnsupportedShapeClasses[label] =
@@ -159,7 +152,6 @@ public static class HavokPhysicsExtractor
         return model;
     }
 
-    /// <summary>The class name of the shape a body cinfo points at, or "" when there is no usable reference.</summary>
     private static string ShapeClassOf(PackfileObjects objects, IReadOnlyDictionary<string, string> cinfo)
     {
         if (!cinfo.TryGetValue("shape", out var reference)) return "";
@@ -168,7 +160,6 @@ public static class HavokPhysicsExtractor
         return index >= 0 && index < objects.Instances.Count ? objects.Instances[index].ClassName : "";
     }
 
-    /// <summary>Mutable measurement carried through one extraction, frozen into a report at the end.</summary>
     private sealed class Facts
     {
         public string? ContainerProblem { get; private set; }

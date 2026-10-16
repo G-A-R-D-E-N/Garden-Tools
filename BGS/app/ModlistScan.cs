@@ -7,10 +7,6 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
-/// <summary>
-/// Headless load-order scanners for behaviour/animation defects. The skeleton physics census lives
-/// in <c>ModlistScan.SkeletonPhysics.cs</c>; both halves share this class's output helpers.
-/// </summary>
 public static partial class ModlistScan
 {
     public static int Extract(string[] args)

@@ -234,8 +234,6 @@ public partial class MainWindow : Window
         try { raw = File.ReadAllBytes(path); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Nothing was measured for this path, so do not leave a previous file's physics report
-            // behind to be appended to this file's summary.
             _ragdollReport = null;
             _ragdollReportPath = "";
             _physicsReportNote = null;
@@ -267,8 +265,6 @@ public partial class MainWindow : Window
                     else if (siblingReport.Status == PhysicsLoadStatus.LegacyPhysics ||
                              siblingReport.Status == PhysicsLoadStatus.UnsupportedShapes)
                     {
-                        // The sibling skeleton is where a Fallout 4 ragdoll normally lives, so its
-                        // report is the more useful one to explain a missing ragdoll.
                         _ragdollReport = siblingReport;
                         _ragdollReportPath = sibling;
                     }
@@ -327,11 +323,6 @@ public partial class MainWindow : Window
             _skeleton.Show(AnimationPose.ReferencePose(skeleton));
     }
 
-    /// <summary>
-    /// Explain a physics load in the same status line the successful summary uses. The reason used to
-    /// be dropped on the floor, which is exactly what made a custom skeleton "load with physics
-    /// missing" and no explanation.
-    /// </summary>
     private void ShowPhysicsReport(string path)
     {
         _physicsReportNote = DescribePhysicsReport(path);
@@ -340,10 +331,6 @@ public partial class MainWindow : Window
         SetPlaybackSummary(note, PhysicsReportBrush());
     }
 
-    /// <summary>
-    /// The sentence a non-Ok physics report deserves in the Playback status line, or null for a clean
-    /// ragdoll. The report may describe a sibling skeleton, which the note names.
-    /// </summary>
     private string? DescribePhysicsReport(string path)
     {
         if (_ragdollReport is not { } report || report.Status == PhysicsLoadStatus.Ok) return null;

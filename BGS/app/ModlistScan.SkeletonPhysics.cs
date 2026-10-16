@@ -7,18 +7,8 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.App;
 
-/// <summary>
-/// The <c>--scan-skeleton-physics</c> census: what physics each <c>skeleton*.hkx</c> in a folder (or
-/// inside a <c>.ba2</c> under it) actually carries.
-/// </summary>
 public static partial class ModlistScan
 {
-    /// <summary>
-    /// Census the physics every skeleton in a folder carries: loose <c>skeleton*.hkx</c> files plus
-    /// the same files inside every <c>.ba2</c>. A skeleton with no ragdoll is legitimate, so the
-    /// output is one row per file with its status, body/shape/constraint classes and mapper, rather
-    /// than a pass/fail list.
-    /// </summary>
     public static int ScanSkeletonPhysics(string[] args)
     {
         bool json = args.Contains("--json");

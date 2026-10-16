@@ -346,10 +346,6 @@ public sealed class ScanCliTests
         Assert.Contains("checked", stderr);
     }
 
-    /// <summary>
-    /// Swap one class name for another of the same length, to hand the scan a file whose physics is in
-    /// a format the shipped class table does not describe.
-    /// </summary>
     private static bool ReplaceAscii(byte[] bytes, string from, string to)
     {
         Assert.Equal(from.Length, to.Length);

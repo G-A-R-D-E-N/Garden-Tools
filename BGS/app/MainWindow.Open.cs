@@ -276,11 +276,6 @@ public partial class MainWindow : Window
         if (settingsWarning != null) SetStatus(settingsWarning, Ux.WarnBrush);
     }
 
-    /// <summary>
-    /// Put the physics and ragdoll-source notes back on the Playback summary after the pose and mesh
-    /// loaders have had their say, so a reason measured at open time is not overwritten by a later
-    /// "no skeleton resolved" line.
-    /// </summary>
     private void AppendPhysicsNotes()
     {
         var parts = new List<string>();

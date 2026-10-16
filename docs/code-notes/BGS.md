@@ -626,3 +626,33 @@ Regressions, all in `BGS/tools/tests/HkxSkeletonReadTests.cs`:
 `AGlobalFixupIntoTheDataSectionResolvesASkeletonMember`, `AGlobalFixupIntoAnotherSectionIsRefused`,
 `AMissingSlotOrPartitionNameIsKeptApartFromAnEmptyOne`, `ANonFiniteReferenceFloatIsRefusedOnWrite`,
 `ANonFinitePoseValueIsRefusedOnWrite` and `WronglyTypedJsonIsRefused`.
+## BGS/src/Hkx/PhysicsLoadClassifier.cs — physics load report (#660)
+
+`PhysicsLoadClassifier.Classify(PhysicsLoadFacts)` is a pure function of measured facts, so a status is testable without a fixture that produces it. It chooses one dominant status in a fixed order and puts that finding first:
+
+- **WrongContainer** — `ContainerProblem` rejects the bytes before anything is read: empty, shorter than a header, XML (an unpacked tagfile), wrong magic, a version other than `Fallout4FileVersion` 11, a pointer width other than `Fallout4PointerSize` 8, big-endian, or layout rules other than `8 1 0 1`. The message names what was detected.
+- **ParseError** — reading failed after the header; `FailingStage` names the stage (`container`, `byte-backed XML`, `model`).
+- **LegacyPhysics** — legacy hkp rigid bodies, shapes or a physics system, and no `hknpRagdollData`. `IsLegacyPhysicsClass` excludes constraint classes and constraint atoms on purpose (`hkpRagdollConstraintData`, `hkpLimitedHingeConstraintData`, `hkp*ConstraintAtom`): a Fallout 4 ragdoll carries those legitimately, so hkp constraint data alone never selects this status.
+- **SkeletonOnly** — no `hknpRagdollData` at all; Warning when an `hkaSkeleton` is present, Info otherwise, with a hint naming the file's other physics classes or the sibling skeleton.
+- **NoBodies** — a ragdoll is present but `UsableBodies == 0`: it declares no bodies, or every `hknpBodyCinfo` frame failed to read.
+- **MapperMissing** — readable bodies but `Mappings == 0`, so no `hkaSkeletonMapper` links the ragdoll to the animation.
+- **UnsupportedShapes** — a readable ragdoll that is incomplete: bodies using a shape other than `hknpCapsuleShape`, or body/constraint entries that could not be read. The remaining bodies are still listed, with no collision hull.
+- **Ok** — everything above held.
+
+A readable ragdoll that also carries hkp objects stays `Ok` and gets an extra Info finding naming those classes: Fallout 4 loads the hknp ragdoll, so the legacy objects are ignored rather than a downgrade.
+
+`HavokPhysicsExtractor.TryExtract(byte[]? hkx, out PhysicsLoadReport report)` is the reporting overload; the one-argument overload and its null contract are unchanged, and `PhysicsLoadClassifier.Inspect` is the model-free entry point the census uses. `PhysicsLoadReport.StatusLabel`/`StatusSlug`/`Summary`/`Diagnostics` render the outcome for logs, machine output and the clipboard.
+
+UI: `BGS/app/MainWindow.Playback.cs:ShowPhysicsReport` stores a non-Ok sentence in `_physicsReportNote` and colours it by severity. `BGS/app/MainWindow.Open.cs:AppendPhysicsNotes` (the renamed `AppendRagdollSourceNote`) runs after the pose and mesh loaders and appends each note at most once — the physics note is added only when `_summaryBaseText` does not already contain it, so it is idempotent across its two call sites. "Copy diagnostics" is enabled only once a report exists and disabled when a load measures nothing; with no report it says so, and with no clipboard it says the environment has none instead of throwing. `BGS/app/RigAuthoringWindow.Physics.cs:OpenPhysics` used to throw `NotSupportedException` for a file without a readable ragdoll; it now clears the previous ragdoll and puts `StatusLabel` plus `Summary` in the window's status line.
+
+Coverage: `BGS/tools/tests/PhysicsLoadReportTests.cs` (every status, the diagnostics dump, the extractor paths) and `BGS/tools/uismoke/RagdollLifecycleSmoke.cs` (Playback note and Copy diagnostics button).
+
+## BGS/app/ModlistScan.SkeletonPhysics.cs — --scan-skeleton-physics (#659)
+
+`ModlistScan.ScanSkeletonPhysics` (a partial `ModlistScan`, dispatched from `BGS/app/Program.cs`) censuses the physics of a folder: every `*.ba2` under it recursively, taking only entries whose name starts with `skeleton` and ends `.hkx`, then every loose `skeleton*.hkx` under the same folder. `RecordSkeletonPhysics` turns each file into a `PhysicsLoadReport` and one row with its status, bodies, shapes, constraints, physics/shape/constraint classes, mapper and material. A skeleton with no ragdoll is a row, not a failure — this is a census, not a pass/fail list.
+
+Under `--json` the output is a `ScanReport` named `scan-skeleton-physics` with summary keys `archives`, `scanned`, `ok`, `skeletonOnly`, `legacyPhysics`, `unsupportedShapes`, `mapperMissing`, `noBodies`, `wrongContainer`, `parseError`, `unreadable` and `skippedArchives`; each file's finding kind is the report's status slug. Human mode prints one `STATUS LABEL path [source]` line per file plus its detail lines.
+
+Exit code 0 when every scanned file is `Ok` or `UnsupportedShapes` and nothing was unreadable; 1 when any file has no usable ragdoll or is unreadable; 2 for a missing or nonexistent directory, through the shared usage path. A `.ba2` that cannot be opened is a `skip` finding counted in `skippedArchives` and does not change the exit code; a skeleton file that cannot be read is an `unreadable` finding and does force exit 1.
+
+Measured census and per-fixture evidence: `BGS/docs/research/fo4-skeleton-physics-census.md`. CLI coverage: `BGS/tools/tests/ScanCliTests.cs`.
