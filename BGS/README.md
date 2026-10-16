@@ -67,10 +67,13 @@ gate a build in CI:
 ```bash
 BehaviourGraphStudio.exe --scan-archives "D:\Mods\MyAnimationMod"
 BehaviourGraphStudio.exe --scan-clips  "C:\MO2\Instances\Fallout 4"
+BehaviourGraphStudio.exe --scan-skeleton-physics "D:\SteamLibrary\steamapps\common\Fallout 4\Data"
 ```
 
 `--scan-archives` finds corrupt behaviour files, `--scan-modlist` finds missing declared
-animations, and `--scan-clips` finds clips whose animation is absent from the merged load order.
+animations, `--scan-clips` finds clips whose animation is absent from the merged load order, and
+`--scan-skeleton-physics` censuses the physics every `skeleton*.hkx` (loose or inside a `.ba2`)
+actually carries — including skeletons that have no ragdoll at all.
 These are static findings rather than a reproduction of the game's runtime load path. Each mode
 returns an exit code (`0`/`1`/`2`) and takes `--json` for a
 machine-readable report. See the [Headless scanning guide](guide/scan/README.md).

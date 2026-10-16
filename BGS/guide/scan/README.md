@@ -4,16 +4,18 @@ Behaviour Graph Studio can scan a whole load order from the command line, withou
 window, and report behaviour/animation defects that would otherwise only show up as an in‑game
 crash or a broken animation. This is meant for load‑order authors and for gating a build in CI.
 
-There are three scan modes, each on its own page:
+There are four scan modes, each on its own page:
 
 | Mode | Answers | Page |
 |---|---|---|
 | `--scan-archives` | Are any behaviour/character `.hkx` files in these archives (or loose) corrupt or unreadable? | [scan-archives](scan-archives.md) |
 | `--scan-modlist` | Do the character files a modlist actually loads still have all the animations they declare? | [scan-modlist](scan-modlist.md) |
 | `--scan-clips` | Does every clip that a loaded behaviour plays resolve to an animation that exists in the load order? | [scan-clips](scan-clips.md) |
+| `--scan-skeleton-physics` | What physics does each `skeleton*.hkx` in this folder carry — a ragdoll, nothing, or a format Fallout 4 does not load? | [scan-skeleton-physics](scan-skeleton-physics.md) |
 
 `--scan-modlist` and `--scan-clips` read a **Mod Organizer 2 instance** — see
-[MO2 instance setup](#mo2-instance-setup) below. `--scan-archives` just walks a folder.
+[MO2 instance setup](#mo2-instance-setup) below. `--scan-archives` and `--scan-skeleton-physics`
+just walk a folder.
 
 ## Running a scan
 
@@ -24,6 +26,7 @@ scan and exits instead of opening the window:
 BehaviourGraphStudio.exe --scan-archives "D:\Mods\MyAnimationMod"
 BehaviourGraphStudio.exe --scan-modlist "C:\MO2\Instances\Fallout 4"
 BehaviourGraphStudio.exe --scan-clips  "C:\MO2\Instances\Fallout 4"
+BehaviourGraphStudio.exe --scan-skeleton-physics "C:\Games\Fallout 4\Data"
 ```
 
 On Linux, run `BehaviourGraphStudio` (no `.exe`). Quote any path that contains spaces.
@@ -35,7 +38,7 @@ Every mode returns the same three exit codes, so a scan can gate a script or a C
 | Exit | Meaning |
 |---|---|
 | `0` | Clean — nothing inspected was defective. |
-| `1` | Defects found — corrupt files, missing animations, or unresolved clips. |
+| `1` | Defects found — corrupt files, missing animations, unresolved clips, or a skeleton with no usable ragdoll. |
 | `2` | Usage or configuration error — a missing/omitted path argument, or an MO2 instance that could not be opened. |
 
 ```bash

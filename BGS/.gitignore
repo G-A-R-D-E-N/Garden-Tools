@@ -17,5 +17,8 @@ obj/
 /BehaviourGraphStudio/
 /.worktrees/
 
-# Local docs and planning notes
-/docs/
+# Local docs and planning notes. docs/research/ holds committed measured results, so it stays
+# visible to git while everything else under docs/ is local.
+/docs/*
+!/docs/research/
+!/docs/research/**

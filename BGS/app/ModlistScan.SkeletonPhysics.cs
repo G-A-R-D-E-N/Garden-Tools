@@ -1,0 +1,181 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using OpenCommonwealth.Services.Archive;
+using OpenCommonwealth.Services.Hkx;
+
+namespace BehaviourStudio.App;
+
+/// <summary>
+/// The <c>--scan-skeleton-physics</c> census: what physics each <c>skeleton*.hkx</c> in a folder (or
+/// inside a <c>.ba2</c> under it) actually carries.
+/// </summary>
+public static partial class ModlistScan
+{
+    /// <summary>
+    /// Census the physics every skeleton in a folder carries: loose <c>skeleton*.hkx</c> files plus
+    /// the same files inside every <c>.ba2</c>. A skeleton with no ragdoll is legitimate, so the
+    /// output is one row per file with its status, body/shape/constraint classes and mapper, rather
+    /// than a pass/fail list.
+    /// </summary>
+    public static int ScanSkeletonPhysics(string[] args)
+    {
+        bool json = args.Contains("--json");
+        string? root = After(args, "--scan-skeleton-physics");
+        if (root == null || !Directory.Exists(root))
+            return Fail(json, "scan-skeleton-physics", root ?? "", "usage",
+                        "--scan-skeleton-physics needs an existing directory");
+
+        var findings = new List<ScanFinding>();
+        var counts = new Dictionary<PhysicsLoadStatus, int>();
+        int scanned = 0, archives = 0, skippedArchives = 0, unreadable = 0;
+
+        var ba2s = Mo2ScanData.EnumerateFilesSafe(root, "*.ba2", recursive: true)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Info(json, $"scanning {ba2s.Count} .ba2 archive(s) under {root}");
+
+        int opened = 0;
+        foreach (string ba2path in ba2s)
+        {
+            if (StepDue(++opened, ba2s.Count)) Progress($"  opened {opened}/{ba2s.Count} archive(s)...");
+            Ba2 archive;
+            try { archive = Ba2.Open(ba2path); }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                skippedArchives++;
+                if (!json) Console.WriteLine($"skip     {Rel(root, ba2path)}: {First(e.Message)}");
+                findings.Add(new ScanFinding("skip", Rel(root, ba2path), null, new[] { First(e.Message) }));
+                continue;
+            }
+
+            using (archive)
+            {
+                var entries = archive.Entries
+                    .Where(IsSkeletonEntry)
+                    .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (entries.Count == 0) continue;
+                archives++;
+
+                foreach (var entry in entries)
+                {
+                    byte[] bytes;
+                    try { bytes = archive.Read(entry); }
+                    catch (Exception e)
+                    {
+                        unreadable++;
+                        if (!json)
+                            Console.WriteLine($"UNREADABLE  {entry.Name}  [{Rel(root, ba2path)}]: {First(e.Message)}");
+                        findings.Add(new ScanFinding("unreadable", entry.Name, Rel(root, ba2path),
+                                                     new[] { First(e.Message) }));
+                        continue;
+                    }
+
+                    scanned++;
+                    RecordSkeletonPhysics(bytes, entry.Name, Rel(root, ba2path), json, findings, counts);
+                }
+            }
+        }
+
+        var loose = Mo2ScanData.EnumerateFilesSafe(root, "skeleton*.hkx", recursive: true)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Info(json, $"scanning {loose.Count} loose skeleton .hkx");
+
+        int checkedLoose = 0;
+        foreach (string path in loose)
+        {
+            if (StepDue(++checkedLoose, loose.Count)) Progress($"  checked {checkedLoose}/{loose.Count} loose file(s)...");
+            string relative = Rel(root, path);
+            byte[] bytes;
+            try { bytes = InputFilePolicy.ReadHkx(path); }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+            {
+                unreadable++;
+                if (!json) Console.WriteLine($"UNREADABLE  {relative}: {First(e.Message)}");
+                findings.Add(new ScanFinding("unreadable", relative, "loose", new[] { First(e.Message) }));
+                continue;
+            }
+
+            scanned++;
+            RecordSkeletonPhysics(bytes, relative, "loose", json, findings, counts);
+        }
+
+        int ok = counts.GetValueOrDefault(PhysicsLoadStatus.Ok);
+        int unsupported = counts.GetValueOrDefault(PhysicsLoadStatus.UnsupportedShapes);
+        int withoutPhysics = scanned - ok - unsupported;
+        int exit = withoutPhysics > 0 || unreadable > 0 ? 1 : 0;
+
+        var summary = new Dictionary<string, int>
+        {
+            ["archives"] = archives,
+            ["scanned"] = scanned,
+            ["ok"] = ok,
+            ["skeletonOnly"] = counts.GetValueOrDefault(PhysicsLoadStatus.SkeletonOnly),
+            ["legacyPhysics"] = counts.GetValueOrDefault(PhysicsLoadStatus.LegacyPhysics),
+            ["unsupportedShapes"] = unsupported,
+            ["mapperMissing"] = counts.GetValueOrDefault(PhysicsLoadStatus.MapperMissing),
+            ["noBodies"] = counts.GetValueOrDefault(PhysicsLoadStatus.NoBodies),
+            ["wrongContainer"] = counts.GetValueOrDefault(PhysicsLoadStatus.WrongContainer),
+            ["parseError"] = counts.GetValueOrDefault(PhysicsLoadStatus.ParseError),
+            ["unreadable"] = unreadable,
+            ["skippedArchives"] = skippedArchives,
+        };
+
+        if (json)
+            Console.WriteLine(new ScanReport("scan-skeleton-physics", new ScanContext(root, null, null, 0),
+                                             summary, findings, exit).ToJson());
+        else
+            Console.WriteLine($"done  {scanned} skeleton file(s) scanned across {archives} archive(s) + loose, " +
+                              $"{ok} with a readable ragdoll, {withoutPhysics} with no usable ragdoll, " +
+                              $"{unreadable} unreadable");
+        return exit;
+    }
+
+    private static void RecordSkeletonPhysics(byte[] bytes, string path, string? source, bool json,
+                                              List<ScanFinding> findings,
+                                              Dictionary<PhysicsLoadStatus, int> counts)
+    {
+        PhysicsLoadReport report = PhysicsLoadClassifier.Inspect(bytes);
+        counts[report.Status] = counts.TryGetValue(report.Status, out int seen) ? seen + 1 : 1;
+
+        var details = new List<string>
+        {
+            $"status: {report.Status} ({report.StatusLabel})",
+            $"bodies: {report.DescribeBodies()}",
+            $"shapes: {report.ShapeCount} read",
+            $"constraints: {report.ConstraintCount} read, {report.SkippedConstraints} skipped",
+            $"physics classes: {PhysicsLoadReport.DescribeClasses(report.PhysicsClasses)}",
+            $"shape classes: {PhysicsLoadReport.DescribeClasses(report.ShapeClasses)}",
+            $"constraint classes: {PhysicsLoadReport.DescribeClasses(report.ConstraintClasses)}",
+            $"mapper: {report.DescribeMapper()}",
+            $"{PhysicsLoadReport.MaterialClass}: {(report.MaterialPresent ? "present" : "absent")}",
+            $"why: {report.Headline}",
+        };
+        if (report.Hint is { Length: > 0 } hint) details.Add("next: " + hint);
+        findings.Add(new ScanFinding(report.StatusSlug, path, source, details));
+
+        if (json) return;
+
+        Console.WriteLine($"{report.StatusLabel,-17} {path}" + (source == null ? "" : $"  [{source}]"));
+        if (report.Status != PhysicsLoadStatus.Ok)
+        {
+            Console.WriteLine("    " + report.Headline);
+            if (report.Hint is { Length: > 0 } next) Console.WriteLine("    next: " + next);
+        }
+        Console.WriteLine($"    bodies {report.UsableBodies} usable of {report.BodyCount}, {report.SkippedBodies} skipped; " +
+                          $"shapes {report.ShapeCount}; constraints {report.ConstraintCount}, {report.SkippedConstraints} skipped; " +
+                          $"mapper {report.DescribeMapper()}; " +
+                          $"{PhysicsLoadReport.MaterialClass} {(report.MaterialPresent ? "present" : "absent")}");
+        Console.WriteLine("    shape classes: " + PhysicsLoadReport.DescribeClasses(report.ShapeClasses));
+        Console.WriteLine("    constraint classes: " + PhysicsLoadReport.DescribeClasses(report.ConstraintClasses));
+        Console.WriteLine("    physics classes: " + PhysicsLoadReport.DescribeClasses(report.PhysicsClasses));
+    }
+
+    private static bool IsSkeletonEntry(Ba2.Entry entry) =>
+        entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
+        entry.FileName.StartsWith("skeleton", StringComparison.OrdinalIgnoreCase);
+
+}
