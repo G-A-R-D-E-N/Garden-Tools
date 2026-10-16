@@ -11,8 +11,6 @@ public partial class HkxBinaryReader
 
     private struct SectionInfo
     {
-        /// <summary>Position of this section in the file's section header table, which is the number
-        /// a global fixup names as its destination.</summary>
         public int Index;
         public int DataStart;
         public int LocalFixupAbs;
@@ -191,12 +189,6 @@ public partial class HkxBinaryReader
         ParseGlobalFixupsWithSections(data, sec)
             .ToDictionary(entry => entry.Key, entry => entry.Value.Destination);
 
-    /// <summary>
-    /// The global fixup table of <paramref name="sec"/>: each entry is a source site inside that
-    /// section, the index of the section its destination lives in and the offset inside that
-    /// destination section. A global fixup is not a __data__ pointer unless it names __data__, so
-    /// the destination section index is kept rather than dropped.
-    /// </summary>
     private static Dictionary<int, (int Section, int Destination)> ParseGlobalFixupsWithSections(
         byte[] data, SectionInfo sec)
     {

@@ -542,3 +542,87 @@ The slack is covered by two tests on a synthetic 60 fps lossless clip built by `
 `BGS/tools/uismoke/AnimationGeometrySmoke.cs` drives the real window on a copy of the same spline clip, linked into the smoke output as `fixtures/RadRoachTurnLeft90.hkx`: a trim preview reports the annotation it would drop and changes nothing, trim/retime/loop each apply, save and reopen, and the reopened file is checked for frame count, duration, annotation count and placement, for the loop landing back on the first frame without losing its travel, and for the applied answers carrying the no-undo and `.bak` hint. The retime check also confirms the speed and duration boxes and the loop box are cleared by the apply. A file with no animation keeps its existing message. It runs from `BGS/tools/uismoke/RagdollLifecycleSmoke.cs:LifecycleSmoke.Run` in the default uismoke mode, alongside the other smokes, and gives itself a temporary settings file while restoring the previous one.
 
 `symrm trim` and `symrm retime` themselves were left alone: they are corpus sweeps over spline clips, and they call the same `AnimationEdit.Trim` and `AnimationEdit.Retime` the tab calls, so the same frame range or scale produces the same clip either way. The GUI reaches the extra lossless case only because it writes through `Interleave` with a timeline; the CLI sweeps do not read lossless clips at all, which is unchanged.
+## BGS/src/Hkx/HkxBinaryReader.Skeleton.cs — full hkaSkeleton read (#661)
+
+`BGS/src/Hkx/HkxBinaryReader.Skeleton.cs:ParseSkeleton` reads all of the 136-byte `hkaSkeleton` object
+instead of its first five members, so the model carries `lockTranslation`, `referenceFloats`,
+`floatSlots`, `localFrames` and `partitions` rather than the reader skipping them. The member offsets
+are the ones the class initializers in `BGS/src/Hkx/HavokClassLayouts.json` declare: `name` 16,
+`parentIndices` 24, `bones` 40, `referencePose` 56, `referenceFloats` 72, `floatSlots` 88,
+`localFrames` 104, `partitions` 120. Every array member is an `hkArray<T>`: an eight-byte data pointer
+at the member offset, an int32 count at member + 8 and an int32 capacity at member + 12. Element sizes
+and inner offsets come from the same file through `BGS/src/Hkx/HkxBinaryReader.Skeleton.cs:StructSize`
+and `MemberOffset`, whose fallbacks are the shared ones: `hkaBone` 0x10 with `lockTranslation` at 8,
+`hkaSkeletonLocalFrameOnBone` 0x10 with `boneIndex` at 8, `hkaSkeletonPartition` 0x10 with
+`startBoneIndex` at 8 and `numBones` at 10, and a 48-byte `qstransform` per pose. Fallout 4 writes
+64-bit packfiles and `ParseHkx` refuses every packfile version but 11, so a pointer field is eight
+bytes wide — and is still never read as a pointer.
+`BGS/src/Hkx/HkxBinaryReader.Skeleton.cs:Require16BitMember` refuses a layout whose element is too
+small to hold the 16-bit member it must contain, because reading it there would take the neighbouring
+element's bytes instead.
+
+Pointer fields are resolved through the local fixup table with one lazy fallback to the global fixup
+table, now read by `BGS/src/Hkx/HkxBinaryReader.Sections.cs:ParseGlobalFixupsWithSections`, which
+keeps each entry's destination section index rather than dropping it. Local fixups only cover pointers
+inside `__data__`; a global fixup is not a `__data__` pointer unless it names `__data__`, so the
+fallback is restricted to that section, and a global fixup into any other section throws
+`InvalidDataException` instead of being read as a `__data__` offset.
+
+A resolved pointer is validated against the end of the `__data__` payload —
+`BGS/src/Hkx/HkxBinaryReader.Sections.cs:SectionInfo.LocalFixupAbs`, where that section's local fixup
+table begins — and not against `HkxBinaryReader.cs:SectionInfo.End`. The section's own end also spans
+the local, global, virtual, export and import tables, and those bytes are neither array data nor
+strings. The checks run in long arithmetic so a hostile offset cannot wrap into an address that looks
+plausible.
+
+Counts are strict and never trimmed. A negative count, an unusable element size, a pointer outside
+`__data__`, or `count * stride` larger than the bytes left in `__data__` throws `InvalidDataException`
+naming the member. A count of zero returns before the pointer check, because a stale pointer beside a
+zero count is harmless. One refusal keeps its old shape deliberately: the bones array still returns a
+null skeleton for a count that cannot fit, because the existing count regressions depend on that,
+though its pointer is checked in long arithmetic like the rest.
+
+A floatSlot or partition whose entry has no fixup at all stores `null`, which is not the same as a
+fixup resolving to the empty string; `BGS/src/Hkx/HkxDataStructures.cs:HkxSkeleton.FloatSlots` and
+`HkxSkeletonPartition.Name` are nullable for that reason.
+`BGS/src/Hkx/HkxDataStructures.cs:HkxSkeletonLocalFrame` keeps the frame object opaque: it records
+only `BoneIndex`, `HasFrame` and the section-relative `FrameOffset` (`-1` when unresolved, and not a
+byte offset into the file). No layout is invented for the frame object's contents.
+
+`BGS/src/Hkx/SkeletonJson.cs:SkeletonJson.Write` refuses a non-finite float rather than writing it:
+the JSON number grammar cannot carry NaN or infinity, and substituting 0 would hand back a different
+skeleton. Reading is typed and strict — a wrong JSON kind, a missing required member, a wrong-length
+vector or quaternion, or an integer that does not fit throws `InvalidDataException` naming the member
+path (`bones[3].translation[1]`). The arrays this change added are optional: a missing member and an
+explicit JSON `null` both mean "not carried", which is what the writer does with an empty array, so
+documents written before the change still read. `fo4-skeleton` stays at version 1.
+
+`BGS/src/Hkx/SkeletonDocument.cs:SkeletonDocument` patches the original XML in place, so the members
+the document does not own — `partitions`, `localFrames` and the frame reference inside a localFrame —
+survive an edit and a save untouched, and `SkeletonDocument.Read` now exposes them read-only. A
+localFrame's XML reference is an object reference rather than a byte offset, so `FrameOffset` stays `-1`
+there while `HasFrame` keeps the fact that the reference exists.
+`BGS/src/Hkx/SkeletonDocument.cs:Standalone` refuses a bone-count or bone-order change when either
+array is non-empty: neither is one of the arrays the standalone editor owns, and `partitions` is
+indexed by bone, so a remap would be required.
+
+The shipped fixture
+`BGS/tools/tests/fixtures/vanilla/Meshes/Actors/Character/CharacterAssets/skeleton.hkx` holds two
+`hkaSkeleton` objects. `ReadSkeleton` reports the one with the most bones: `Root`, 95 bones, 93 of them
+with `lockTranslation` set. The other is `Ragdoll_NPC COM`, 18 bones, which is the skeleton
+`HavokPhysicsExtractor` reports. All four of `referenceFloats`, `floatSlots`, `localFrames` and
+`partitions` are empty in that fixture, which is also why a standalone skeleton with no partitions is
+still standalone.
+
+Regressions, all in `BGS/tools/tests/HkxSkeletonReadTests.cs`:
+`TheVanillaFixtureReadsEverySkeletonMember`, `FloatSlotsReferenceFloatsPartitionsAndLocalFramesAllReadBack`,
+`TheSkeletonJsonRoundTripKeepsTheNewMembersAndStillReadsOlderDocuments`,
+`AnUneditedVanillaSkeletonLoadsAndSavesByteIdentical`,
+`EditingAPoseKeepsPartitionsLocalFramesFloatSlotsAndReferenceFloats`,
+`ANonEmptyPartitionArrayStopsAStandaloneSkeletonFromChangingBoneCount`,
+`ACountThatCannotFitInTheSectionIsRefused`, `ANegativeArrayCountIsRefused`,
+`AnArrayPointerPastTheDataSectionIsRefused`, `AnArrayPointerBeforeTheDataSectionIsRefused`,
+`AnArrayPointerPastTheEndOfTheFileIsRefused`, `ATruncatedSkeletonFileIsRefused`,
+`AGlobalFixupIntoTheDataSectionResolvesASkeletonMember`, `AGlobalFixupIntoAnotherSectionIsRefused`,
+`AMissingSlotOrPartitionNameIsKeptApartFromAnEmptyOne`, `ANonFiniteReferenceFloatIsRefusedOnWrite`,
+`ANonFinitePoseValueIsRefusedOnWrite` and `WronglyTypedJsonIsRefused`.

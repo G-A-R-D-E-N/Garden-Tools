@@ -187,10 +187,6 @@ public static class SkeletonJson
         return skeleton;
     }
 
-    /// <summary>
-    /// One float, refused rather than written when it is not finite. The JSON number grammar cannot
-    /// carry NaN or infinity, and writing 0 instead would hand back a different skeleton.
-    /// </summary>
     private static void WriteNumber(Utf8JsonWriter w, string member, float value)
     {
         if (!float.IsFinite(value))
@@ -249,11 +245,6 @@ public static class SkeletonJson
         throw new InvalidDataException($"{member} is not a boolean");
     }
 
-    /// <summary>
-    /// An optional array member. A missing member and an explicit JSON null both mean "not carried",
-    /// which is what the writer does with an empty array; anything else that is not an array is
-    /// refused instead of being silently ignored.
-    /// </summary>
     private static bool OptionalArray(JsonElement root, string property, out JsonElement value)
     {
         if (!root.TryGetProperty(property, out value) || value.ValueKind == JsonValueKind.Null) return false;

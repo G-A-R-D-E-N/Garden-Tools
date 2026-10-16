@@ -186,8 +186,6 @@ public sealed class SkeletonDocument
         if (frames != null)
             foreach (XElement frame in frames.Elements("hkobject"))
             {
-                // The document text carries the frame as an object reference, not as a byte offset, so
-                // the offset stays unknown (-1) here while the presence of a reference is preserved.
                 string reference = Optional(frame, "localFrame")?.Value ?? "";
                 model.LocalFrames.Add(new HkxSkeletonLocalFrame
                 {

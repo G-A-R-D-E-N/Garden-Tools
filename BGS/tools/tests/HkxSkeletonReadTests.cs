@@ -9,11 +9,6 @@ using Xunit;
 
 namespace BehaviourStudio.Tests;
 
-/// <summary>
-/// Covers the whole hkaSkeleton object: the members that were already read, the ones the reader used
-/// to skip (referenceFloats, floatSlots, localFrames, partitions and lockTranslation) and the fact
-/// that the file editor keeps them when it patches a file in place.
-/// </summary>
 public sealed class HkxSkeletonReadTests
 {
     private static string VanillaFixture => Path.Combine(AppContext.BaseDirectory, "fixtures", "vanilla",
@@ -24,7 +19,6 @@ public sealed class HkxSkeletonReadTests
     {
         var skeleton = new HkxBinaryReader().ReadSkeleton(VanillaFixture);
 
-        // The fixture holds two hkaSkeleton objects; ReadSkeleton reports the one with the most bones.
         Assert.Equal("Root", skeleton.Name);
         Assert.Equal(95, skeleton.BoneNames.Count);
         Assert.Equal(new[] { "Root", "COM", "Pelvis", "LLeg_Thigh", "LLeg_Calf", "LLeg_Foot" },
@@ -42,8 +36,6 @@ public sealed class HkxSkeletonReadTests
         Assert.False(skeleton.LockTranslation[0]);
         Assert.True(skeleton.LockTranslation[2]);
 
-        // The shipped human skeleton leaves every one of these arrays empty, which is also why the
-        // file editor still treats a standalone skeleton with no partitions as standalone.
         Assert.Empty(skeleton.ReferenceFloats);
         Assert.Empty(skeleton.FloatSlots);
         Assert.Empty(skeleton.LocalFrames);
@@ -140,11 +132,6 @@ public sealed class HkxSkeletonReadTests
         Assert.Empty(legacy.Partitions);
     }
 
-    /// <summary>
-    /// An unedited load plus save must not rewrite a single byte. It proves the reader and the file
-    /// editor agree on what the file already says; the crafted edit test below is the proof that the
-    /// new members survive a real edit.
-    /// </summary>
     [Fact]
     public void AnUneditedVanillaSkeletonLoadsAndSavesByteIdentical()
     {
@@ -221,7 +208,6 @@ public sealed class HkxSkeletonReadTests
             Assert.Equal("2", (string?)savedSkeleton.Elements("hkparam")
                 .Single(e => (string?)e.Attribute("name") == "localFrames")!.Attribute("numelements"));
 
-            // Reopening the saved file and saving it again must not rewrite anything.
             var reopened = new SkeletonDocument(path);
             Assert.False(reopened.Dirty);
             reopened.Save();
@@ -283,8 +269,6 @@ public sealed class HkxSkeletonReadTests
                 return;
             }
 
-            // partitions is not one of the arrays the standalone editor owns, and it is indexed by
-            // bone, so a non-empty one correctly makes a bone count change refuse.
             Assert.Equal("All", document.Skeletons[0].Partitions[0].Name);
             Assert.Equal(1, document.Skeletons[0].Partitions[0].NumBones);
             Assert.False(document.CanChangeBoneCount);
@@ -296,7 +280,6 @@ public sealed class HkxSkeletonReadTests
     [Fact]
     public void ACountThatCannotFitInTheSectionIsRefused()
     {
-        // Control: the same crafted skeleton without the hostile count reads its two floats.
         Assert.Equal(new[] { 0.25f, 0.5f }, new HkxBinaryReader().ReadSkeleton(CraftedSkeletonFile()).ReferenceFloats);
 
         byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
@@ -410,7 +393,6 @@ public sealed class HkxSkeletonReadTests
         int bones = crafted.Block(new byte[16]);
         crafted.Point(bones, root);
 
-        // floatSlots and partitions each carry two entries: one with a name fixup, one with none.
         int slots = crafted.Block(new byte[2 * 8]);
         crafted.Point(slots, crafted.Text(""));
         int partitions = crafted.Block(new byte[2 * 16]);
@@ -482,7 +464,6 @@ public sealed class HkxSkeletonReadTests
         Assert.Throws<InvalidDataException>(() => SkeletonJson.Read(json));
     }
 
-    /// <summary>One bone with a finite pose, so a write test can make exactly one value non-finite.</summary>
     private static HkxSkeleton Skeleton(string name)
     {
         var skeleton = new HkxSkeleton { Name = name };
@@ -493,19 +474,11 @@ public sealed class HkxSkeletonReadTests
         return skeleton;
     }
 
-    /// <summary>
-    /// A skeleton whose skeleton object is the file's only object, carrying two bones and non-empty
-    /// referenceFloats, floatSlots, localFrames and partitions. <paramref name="corrupt"/> runs after
-    /// the object is wired up and before the file is rebuilt, so a test can inject a pointer, a count
-    /// or a fixup kind that a real writer would never produce.
-    /// </summary>
     private static byte[] CraftedSkeletonFile(
         Action<CraftedSkeleton, NativeAppend.Added>? corrupt = null)
     {
         var crafted = new CraftedSkeleton();
 
-        // The arrays come first so that the objects appended afterwards sit at non-zero section
-        // offsets, which is what the real packfiles look like too.
         int name = crafted.Text("Crafted ragdoll");
         int root = crafted.Text("Root");
         int child = crafted.Text("Child");
@@ -609,7 +582,6 @@ public sealed class HkxSkeletonReadTests
 
         public void Point(int at, int target) => Data.SetLocal(at, target);
 
-        /// <summary>Declares a member's hkArray: its data pointer and its element count.</summary>
         public void Element(string className, string member, NativeAppend.Added obj, int arrayAt, int count)
         {
             int field = obj.Offset + Field(className, member);
@@ -626,26 +598,18 @@ public sealed class HkxSkeletonReadTests
 
         public int DataLength => Data.Data.Length;
 
-        /// <summary>The destination the member's local fixup currently names.</summary>
         public int LocalTarget(string className, string member, NativeAppend.Added obj) =>
             Data.Locals().First(fixup => fixup.Source == FieldOffset(className, member, obj)).Destination;
 
-        /// <summary>Drops the member's local fixup, so only a global fixup can resolve it.</summary>
         public void ClearLocal(string className, string member, NativeAppend.Added obj) =>
             Data.SetLocal(FieldOffset(className, member, obj), -1);
 
         public void SetGlobal(string className, string member, NativeAppend.Added obj, int section, int destination) =>
             Data.SetGlobal(FieldOffset(className, member, obj), section, destination);
 
-        /// <summary>
-        /// Re-targets the member's local fixup. Unlike <see cref="Point"/> this can point at a negative
-        /// offset, which a pointer before the data section needs: SetLocal reads a negative destination
-        /// as "remove the fixup".
-        /// </summary>
         public void Retarget(string className, string member, NativeAppend.Added obj, int destination) =>
             Data.SetLocals(Data.Locals().Append((FieldOffset(className, member, obj), destination)));
 
-        /// <summary>Overrides the member's declared element count without touching its pointer.</summary>
         public void SetCount(string className, string member, NativeAppend.Added obj, int count) =>
             BitConverter.GetBytes(count).CopyTo(Data.Data, FieldOffset(className, member, obj) + PointerSize);
 

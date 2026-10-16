@@ -7,10 +7,6 @@ namespace OpenCommonwealth.Services.Hkx;
 
 public partial class HkxBinaryReader
 {
-    // hkaSkeleton is 136 bytes in hk_2014.1.0-r1, and these member offsets are the ones the class
-    // initializers in the shipped HavokClassLayouts.json declare for it. Every array member is an
-    // hkArray<T>: an eight-byte data pointer at the member offset, an int32 count at member + 8 and an
-    // int32 capacity at member + 12.
     private const int SkeletonSize = 136;
     private const int SkeletonNameAt = 16;
     private const int ParentIndicesAt = 24;
@@ -21,9 +17,6 @@ public partial class HkxBinaryReader
     private const int LocalFramesAt = 104;
     private const int PartitionsAt = 120;
 
-    // Fallout 4 writes 64-bit packfiles and ParseHkx refuses any packfile version other than 11, so a
-    // pointer field is eight bytes wide here. Pointer fields are still never read as pointers: they are
-    // resolved through the local fixup table, falling back to the global fixup table.
     private const int PointerWidth = 8;
 
     private const int ReferencePoseStride = 48;
@@ -49,15 +42,8 @@ public partial class HkxBinaryReader
 
         var skel = new HkxSkeleton();
 
-        // Everything a skeleton points at has to live in __data__'s payload, which ends where its local
-        // fixup table begins. The section's own end covers the local, global, virtual, export and import
-        // tables as well, and those bytes are not array data or strings.
         long dataEnd = Math.Min(Math.Min((long)dataSec.LocalFixupAbs, (long)dataSec.End), data.Length);
 
-        // Local fixups cover pointers inside __data__. Objects that live in another section are reached
-        // through the global fixup table instead, so a miss falls back to it once. A global fixup that
-        // names a section other than __data__ is not a pointer this reader can follow, so it is refused
-        // instead of being read as a __data__ offset.
         Dictionary<int, (int Section, int Destination)>? globals = null;
         bool Target(int fieldRel, out int target)
         {
@@ -72,8 +58,6 @@ public partial class HkxBinaryReader
             return true;
         }
 
-        // A section-relative pointer, checked in long arithmetic so a hostile offset cannot wrap into
-        // an address that looks plausible. Only ever called for a pointer that is about to be read.
         int At(string member, int targetRel)
         {
             long abs = dataAbs + (long)targetRel;
@@ -84,9 +68,6 @@ public partial class HkxBinaryReader
             return (int)abs;
         }
 
-        // How many elements of an array member to read, or a refusal when the declared count cannot be
-        // honoured. A count of zero reads nothing, so a stale pointer beside it is harmless; anything
-        // else has to fit entirely inside __data__ and the file, with no trimming and no int overflow.
         int ArrayCount(string member, int count, int stride, int targetRel, out int abs)
         {
             abs = 0;
@@ -127,8 +108,6 @@ public partial class HkxBinaryReader
         if (boneCount < 0) return null;
         if (Target(skelRel + BonesAt, out int bonesDataRel))
         {
-            // The bones array keeps its long-standing refusal (a null skeleton) rather than the newer
-            // InvalidDataException, but its pointer is still checked in long arithmetic.
             long bonesAt = dataAbs + (long)bonesDataRel;
             if (bonesAt < dataAbs || bonesAt > data.Length ||
                 boneCount > (dataSec.End - bonesAt) / boneStride) return null;
@@ -172,11 +151,8 @@ public partial class HkxBinaryReader
         int slotCount = SafeReadI32(data, a + FloatSlotsAt + PointerWidth);
         if (Target(skelRel + FloatSlotsAt, out int slotsDataRel))
         {
-            // Each slot names its own string, so the array's base address is not needed here.
             int count = ArrayCount("floatSlots", slotCount, PointerWidth, slotsDataRel, out _);
             for (int i = 0; i < count; i++)
-                // A slot with no fixup at all carries no name, which is not the same as a name that
-                // happens to be the empty string.
                 skel.FloatSlots.Add(Target(slotsDataRel + i * PointerWidth, out int slotRel)
                     ? ReadNullTermString(data, At($"floatSlots[{i}]", slotRel), 256)
                     : null);
@@ -224,10 +200,6 @@ public partial class HkxBinaryReader
         return skel;
     }
 
-    /// <summary>
-    /// A 16-bit struct member has to sit inside one element: reading it from a layout whose stride is
-    /// too small would read the neighbouring element's bytes instead of this one's.
-    /// </summary>
     private static void Require16BitMember(string className, string member, int offset, int stride)
     {
         if (offset < 0 || offset + 2 > stride)
