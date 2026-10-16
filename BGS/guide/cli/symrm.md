@@ -33,6 +33,7 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 | `scale` | Inspect decoded animation scale channels. |
 | `skeleton` | Print skeleton bones and reference transforms. |
 | `rig` | Audit rig/skeleton data across one file or a corpus. |
+| `mapper` | Read a file's skeleton mappers, round-trip them, and recompute simple rows. |
 | `extract` | Extract matching BA2 entries, optionally preserving their directory tree. |
 | `ba2` | Inspect a Bethesda BA2 archive and its entries. |
 | `motion` | Inspect decoded root-motion data. |
@@ -95,6 +96,7 @@ The catalog exposes the switches currently parsed by `symrm`:
 - `extract`: `--tree`
 - `types`: `--members`
 - `defaults`: `--write`
+- `mapper`: `--recompute`, `--out <file>`, `--data <folder>`
 - `check` and `chain`: `--data`, `--plugins`
 - `crash` and `sweep`: `--data`, `--mods`, `--profile`
 - `diff`: `--data`, `--mods`, `--profile`

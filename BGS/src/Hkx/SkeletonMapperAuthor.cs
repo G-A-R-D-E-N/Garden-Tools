@@ -54,6 +54,35 @@ public static class SkeletonMapperAuthor
         return rows;
     }
 
+    public static HavokRagdollMapping Recompute(HavokRagdollSkeleton skeletonA, int boneA,
+                                                HavokRagdollSkeleton skeletonB, int boneB)
+    {
+        ArgumentNullException.ThrowIfNull(skeletonA);
+        ArgumentNullException.ThrowIfNull(skeletonB);
+
+        var refusals = new List<string>();
+        refusals.AddRange(Refusals(skeletonA));
+        refusals.AddRange(Refusals(skeletonB));
+
+        if (boneA < 0 || boneA >= skeletonA.BoneNames.Count)
+            refusals.Add($"bone {boneA} is not a bone of {Describe(skeletonA)}");
+        if (boneB < 0 || boneB >= skeletonB.BoneNames.Count)
+            refusals.Add($"bone {boneB} is not a bone of {Describe(skeletonB)}");
+        if (refusals.Count > 0)
+            throw new ArgumentException(
+                $"row (bone {boneA} -> bone {boneB}) cannot be recomputed: {string.Join("; ", refusals)}",
+                nameof(boneA));
+
+        var framesA = CheckedWorldFrames(skeletonA);
+        var framesB = CheckedWorldFrames(skeletonB);
+
+        if (!TryCompose(Invert(framesA[boneA]), framesB[boneB], out var composed))
+            throw new ArgumentException(
+                $"the composed transform for bone {boneA} -> bone {boneB} is not usable", nameof(boneA));
+
+        return new HavokRagdollMapping(boneA, boneB, composed.Position, composed.Rotation);
+    }
+
     public static IReadOnlyList<HavokRagdollMapping> Reverse(IReadOnlyList<HavokRagdollMapping> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);

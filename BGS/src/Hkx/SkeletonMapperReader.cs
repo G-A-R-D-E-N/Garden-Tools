@@ -5,6 +5,121 @@ using System.Numerics;
 
 namespace OpenCommonwealth.Services.Hkx;
 
+public sealed class HavokSkeletonMappingTransform : IEquatable<HavokSkeletonMappingTransform>
+{
+    public const int LaneCount = 12;
+    public const int TranslationLane = 0;
+    public const int RotationLane = 4;
+    public const int ScaleLane = 8;
+
+    public static readonly HavokSkeletonMappingTransform Identity =
+        From(Vector3.Zero, Quaternion.Identity, Vector3.One);
+
+    private readonly float[] _lanes;
+
+    public HavokSkeletonMappingTransform(float[] lanes)
+    {
+        ArgumentNullException.ThrowIfNull(lanes);
+        if (lanes.Length != LaneCount)
+            throw new ArgumentException($"a mapping transform holds {LaneCount} lanes, not {lanes.Length}",
+                                        nameof(lanes));
+
+        _lanes = (float[])lanes.Clone();
+    }
+
+    public static HavokSkeletonMappingTransform From(Vector3 translation, Quaternion rotation, Vector3 scale)
+    {
+        var lanes = new float[LaneCount];
+        lanes[0] = translation.X;
+        lanes[1] = translation.Y;
+        lanes[2] = translation.Z;
+        lanes[4] = rotation.X;
+        lanes[5] = rotation.Y;
+        lanes[6] = rotation.Z;
+        lanes[7] = rotation.W;
+        lanes[8] = scale.X;
+        lanes[9] = scale.Y;
+        lanes[10] = scale.Z;
+        return new HavokSkeletonMappingTransform(lanes);
+    }
+
+    public float this[int lane]
+    {
+        get
+        {
+            if (lane < 0 || lane >= LaneCount) throw new ArgumentOutOfRangeException(nameof(lane));
+            return _lanes[lane];
+        }
+    }
+
+    public float[] Lanes => (float[])_lanes.Clone();
+
+    public Vector3 Translation => new(_lanes[0], _lanes[1], _lanes[2]);
+
+    public Quaternion Rotation => new(_lanes[4], _lanes[5], _lanes[6], _lanes[7]);
+
+    public Vector3 Scale => new(_lanes[8], _lanes[9], _lanes[10]);
+
+    public bool IsFinite =>
+        _lanes.All(float.IsFinite);
+
+    public bool HasUnitRotation(float tolerance) =>
+        !HasRotation || MathF.Abs(Rotation.Length() - 1f) <= tolerance;
+
+    private bool HasRotation => Rotation.LengthSquared() > 1e-12f;
+
+    public HavokSkeletonMappingTransform WithTranslation(Vector3 translation) => Replaced(
+        new[] { translation.X, translation.Y, translation.Z }, TranslationLane);
+
+    public HavokSkeletonMappingTransform WithRotation(Quaternion rotation) => Replaced(
+        new[] { rotation.X, rotation.Y, rotation.Z, rotation.W }, RotationLane);
+
+    public HavokSkeletonMappingTransform WithScale(Vector3 scale) => Replaced(
+        new[] { scale.X, scale.Y, scale.Z }, ScaleLane);
+
+    private HavokSkeletonMappingTransform Replaced(IReadOnlyList<float> values, int first)
+    {
+        var lanes = (float[])_lanes.Clone();
+        for (int i = 0; i < values.Count; i++) lanes[first + i] = values[i];
+        return new HavokSkeletonMappingTransform(lanes);
+    }
+
+    public bool Equals(HavokSkeletonMappingTransform? other)
+    {
+        if (other is null) return false;
+        for (int i = 0; i < LaneCount; i++)
+            if (!_lanes[i].Equals(other._lanes[i])) return false;
+        return true;
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as HavokSkeletonMappingTransform);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (float lane in _lanes) hash.Add(lane);
+        return hash.ToHashCode();
+    }
+
+    public override string ToString() =>
+        $"({Translation.X:0.######} {Translation.Y:0.######} {Translation.Z:0.######}) " +
+        $"({Rotation.X:0.######} {Rotation.Y:0.######} {Rotation.Z:0.######} {Rotation.W:0.######}) " +
+        $"({Scale.X:0.######} {Scale.Y:0.######} {Scale.Z:0.######})";
+}
+
+public sealed record HavokSkeletonSimpleMappingRow(
+    int BoneA,
+    int BoneB,
+    HavokSkeletonMappingTransform AFromB);
+
+public sealed record HavokSkeletonChainMappingRow(
+    int StartBoneA,
+    int EndBoneA,
+    int StartBoneB,
+    int EndBoneB,
+    HavokSkeletonMappingTransform StartAFromB,
+    HavokSkeletonMappingTransform EndAFromB);
+
 public sealed record HavokSkeletonMapper(
     int ObjectId,
     int SkeletonAObjectId,
@@ -12,13 +127,19 @@ public sealed record HavokSkeletonMapper(
     HavokRagdollSkeleton SkeletonA,
     HavokRagdollSkeleton SkeletonB,
     int MappingType,
-    IReadOnlyList<HavokRagdollMapping> SimpleMappings);
+    IReadOnlyList<HavokRagdollMapping> SimpleMappings,
+    IReadOnlyList<HavokSkeletonSimpleMappingRow> Rows,
+    IReadOnlyList<HavokSkeletonChainMappingRow> ChainMappings,
+    IReadOnlyList<int> UnmappedBones,
+    bool KeepUnmappedLocal,
+    HavokSkeletonMappingTransform ExtractedMotionMapping);
 
 public static class SkeletonMapperReader
 {
     private const string MapperClass = "hkaSkeletonMapper";
     private const string MapperDataClass = "hkaSkeletonMapperData";
     private const string SimpleMappingClass = "hkaSkeletonMapperDataSimpleMapping";
+    private const string ChainMappingClass = "hkaSkeletonMapperDataChainMapping";
     private const string SkeletonClass = "hkaSkeleton";
 
     public static IReadOnlyList<HavokSkeletonMapper> Read(PackfileObjects objects)
@@ -30,6 +151,13 @@ public static class SkeletonMapperReader
             if (ReadMapper(objects, instance) is { } mapper)
                 result.Add(mapper);
         return result;
+    }
+
+    public static HavokSkeletonMapper? Read(PackfileObjects objects, PackfileObjects.Instance instance)
+    {
+        ArgumentNullException.ThrowIfNull(objects);
+        ArgumentNullException.ThrowIfNull(instance);
+        return instance.ClassName == MapperClass ? ReadMapper(objects, instance) : null;
     }
 
     internal static HavokRagdollSkeleton? ReadSkeleton(
@@ -98,6 +226,10 @@ public static class SkeletonMapperReader
             dataLayout.OffsetOf("skeletonA") is not { } skeletonAOffset ||
             dataLayout.OffsetOf("skeletonB") is not { } skeletonBOffset ||
             dataLayout.OffsetOf("simpleMappings") is not { } rowsOffset ||
+            dataLayout.OffsetOf("chainMappings") is not { } chainsOffset ||
+            dataLayout.OffsetOf("unmappedBones") is not { } unmappedOffset ||
+            dataLayout.OffsetOf("extractedMotionMapping") is not { } extractedOffset ||
+            dataLayout.OffsetOf("keepUnmappedLocal") is not { } keepOffset ||
             dataLayout.OffsetOf("mappingType") is not { } typeOffset)
             return null;
 
@@ -109,7 +241,11 @@ public static class SkeletonMapperReader
         var skeletonA = ReadSkeleton(objects, skeletonAInstance);
         var skeletonB = ReadSkeleton(objects, skeletonBInstance);
         int? mappingType = objects.ReadNarrowAt(mappingAt.Value + typeOffset, 4);
-        if (skeletonA == null || skeletonB == null || mappingType == null)
+        int? keepUnmapped = objects.ReadNarrowAt(mappingAt.Value + keepOffset, 1);
+        float[]? extracted = objects.ReadFloatsAt(mappingAt.Value + extractedOffset,
+                                                  HavokSkeletonMappingTransform.LaneCount);
+        if (skeletonA == null || skeletonB == null || mappingType == null || keepUnmapped == null ||
+            extracted == null)
             return null;
 
         var simpleLayout = LayoutWalker.Active(HavokClassTypes.Shipped, SimpleMappingClass, objects.PointerWidth);
@@ -124,26 +260,80 @@ public static class SkeletonMapperReader
             return null;
 
         var mappings = new List<HavokRagdollMapping>(rows.Count);
+        var rawRows = new List<HavokSkeletonSimpleMappingRow>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
         {
             int row = rows.At + i * simpleLayout.Size;
             int? boneA = objects.ReadNarrowAt(row + boneAOffset, 2);
             int? boneB = objects.ReadNarrowAt(row + boneBOffset, 2);
-            float[]? values = objects.ReadFloatsAt(row + transformOffset, 12);
+            float[]? values = objects.ReadFloatsAt(row + transformOffset, HavokSkeletonMappingTransform.LaneCount);
             if (boneA == null || boneB == null || values == null)
                 return null;
 
+            var transform = new HavokSkeletonMappingTransform(values);
             var translation = new Vector3(values[0], values[1], values[2]);
             var rotation = new Quaternion(values[4], values[5], values[6], values[7]);
             if (!Finite(translation) || !Finite(rotation) || rotation.LengthSquared() < 1e-10f)
                 return null;
 
+            rawRows.Add(new HavokSkeletonSimpleMappingRow(
+                unchecked((short)boneA.Value), unchecked((short)boneB.Value), transform));
             mappings.Add(new HavokRagdollMapping(
                 unchecked((short)boneA.Value),
                 unchecked((short)boneB.Value),
                 translation,
                 Quaternion.Normalize(rotation)));
         }
+
+        var chainLayout = LayoutWalker.Active(HavokClassTypes.Shipped, ChainMappingClass, objects.PointerWidth);
+        if (chainLayout == null || chainLayout.Size <= 0 ||
+            chainLayout.OffsetOf("startBoneA") is not { } startBoneAOffset ||
+            chainLayout.OffsetOf("endBoneA") is not { } endBoneAOffset ||
+            chainLayout.OffsetOf("startBoneB") is not { } startBoneBOffset ||
+            chainLayout.OffsetOf("endBoneB") is not { } endBoneBOffset ||
+            chainLayout.OffsetOf("startAFromBTransform") is not { } startTransformOffset ||
+            chainLayout.OffsetOf("endAFromBTransform") is not { } endTransformOffset)
+            return null;
+
+        var chains = objects.ArrayAt(mappingAt.Value + chainsOffset, chainLayout.Size);
+        if (chains == null)
+            return null;
+
+        var rawChains = new List<HavokSkeletonChainMappingRow>(chains.Count);
+        for (int i = 0; i < chains.Count; i++)
+        {
+            int chain = chains.At + i * chainLayout.Size;
+            int? startBoneA = objects.ReadNarrowAt(chain + startBoneAOffset, 2);
+            int? endBoneA = objects.ReadNarrowAt(chain + endBoneAOffset, 2);
+            int? startBoneB = objects.ReadNarrowAt(chain + startBoneBOffset, 2);
+            int? endBoneB = objects.ReadNarrowAt(chain + endBoneBOffset, 2);
+            float[]? startValues = objects.ReadFloatsAt(chain + startTransformOffset,
+                                                        HavokSkeletonMappingTransform.LaneCount);
+            float[]? endValues = objects.ReadFloatsAt(chain + endTransformOffset,
+                                                      HavokSkeletonMappingTransform.LaneCount);
+            if (startBoneA == null || endBoneA == null || startBoneB == null || endBoneB == null ||
+                startValues == null || endValues == null)
+                return null;
+
+            rawChains.Add(new HavokSkeletonChainMappingRow(
+                unchecked((short)startBoneA.Value),
+                unchecked((short)endBoneA.Value),
+                unchecked((short)startBoneB.Value),
+                unchecked((short)endBoneB.Value),
+                new HavokSkeletonMappingTransform(startValues),
+                new HavokSkeletonMappingTransform(endValues)));
+        }
+
+        var unmapped = new List<int>();
+        if (objects.ArrayAt(mappingAt.Value + unmappedOffset, 2) is { } unmappedArray)
+            for (int i = 0; i < unmappedArray.Count; i++)
+            {
+                int? bone = objects.ReadNarrowAt(unmappedArray.At + i * 2, 2);
+                if (bone == null) return null;
+                unmapped.Add(unchecked((short)bone.Value));
+            }
+        else
+            return null;
 
         return new HavokSkeletonMapper(
             NativeGraphModel.FirstId + objects.IndexOf(instance),
@@ -152,7 +342,12 @@ public static class SkeletonMapperReader
             skeletonA,
             skeletonB,
             mappingType.Value,
-            mappings);
+            mappings,
+            rawRows,
+            rawChains,
+            unmapped,
+            keepUnmapped.Value != 0,
+            new HavokSkeletonMappingTransform(extracted));
     }
 
     private static bool Finite(Vector3 value) =>

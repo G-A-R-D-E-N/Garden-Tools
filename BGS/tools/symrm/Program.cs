@@ -9,7 +9,7 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.Tools;
 
-public static class Program
+public static partial class Program
 {
     private static string _root = "";
 
@@ -28,6 +28,7 @@ public static class Program
             case "frames": return Frames(argv);
             case "scale": return Scale(argv);
             case "skeleton": return Skeleton(argv);
+            case "mapper": return Mapper(argv);
             case "rig": return Rig(argv);
             case "extract": return Extract(argv);
             case "ba2": return Ba2Browse(argv);

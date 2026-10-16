@@ -13,7 +13,7 @@ public sealed class SymrmHelpTests
     {
         string[] expected =
         {
-            "corpus", "check", "states", "events", "frames", "scale", "skeleton", "rig",
+            "corpus", "check", "states", "events", "frames", "scale", "skeleton", "rig", "mapper",
             "extract", "ba2", "motion", "pose", "channels", "packfile", "nullsave", "layout",
             "relayout", "ground", "offsets", "convert", "compare", "delete", "paste", "template",
             "conditions", "savedelete", "classcheck", "types", "chain", "crash", "hash", "sweep",

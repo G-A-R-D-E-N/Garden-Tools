@@ -656,3 +656,76 @@ Under `--json` the output is a `ScanReport` named `scan-skeleton-physics` with s
 Exit code 0 when every scanned file is `Ok`, `UnsupportedShapes` or `SkeletonOnly` and nothing was unreadable; 1 only when a file is `LegacyPhysics`, `MapperMissing`, `NoBodies`, `WrongContainer` or `ParseError`, or something could not be read; 2 for a missing or nonexistent directory, through the shared usage path. `SkeletonOnly` is 154 of the 195 vanilla skeletons, so it is reported separately and is never part of the "no usable ragdoll" count. A `.ba2` that cannot be opened is a `skip` finding counted in `skippedArchives` and does not change the exit code; a skeleton file that cannot be read is an `unreadable` finding and does force exit 1.
 
 Measured census and per-fixture evidence: `BGS/docs/research/fo4-skeleton-physics-census.md`. CLI coverage: `BGS/tools/tests/ScanCliTests.cs`.
+## BGS/src/Hkx/SkeletonMapperDocument.cs — skeleton mapper write-back (#672)
+
+`SkeletonMapperDocument` edits `hkaSkeletonMapper` data and writes it back into the packfile.
+`symrm mapper <file> [--recompute] [--out <file>] [--data <Data folder>]` is its user-facing surface;
+`BGS/tools/tests/SkeletonMapperWritebackTests.cs` covers it (17 tests).
+
+**Layout provenance.** The field table below is RE doc 68 §2 (`hkaSkeletonMapperData`, 176 B;
+`hkaSkeletonMapper`, 192 B with `mapping` @ `0x10`; simple row 64 B; chain row 112 B), which doc 63
+§1.2/§1.3 and doc 67 §1 cross-check against what `mapPose` reads. It was compared field by field with
+`BGS/src/Hkx/HavokClassLayouts.json` and `BGS/src/Hkx/HavokClassTypes.json` before any code was
+written: every offset, size and type agrees, with **no disagreements** (`hkaSkeletonMapperData`:
+`skeletonA` @0, `skeletonB` @8, `partitionMap` @`0x10`, `simpleMappingPartitionRanges` @`0x20`,
+`chainMappingPartitionRanges` @`0x30`, `simpleMappings` @`0x40`, `chainMappings` @`0x50`,
+`unmappedBones` @`0x60`, `extractedMotionMapping` @`0x70`, `keepUnmappedLocal` @`0xA0`,
+`mappingType` @`0xA4`; simple row `boneA` int16 @0, `boneB` int16 @2, `aFromBTransform` @`0x10`;
+chain row `startBoneA`/`endBoneA`/`startBoneB`/`endBoneB` int16 @0/2/4/6,
+`startAFromBTransform` @`0x10`, `endAFromBTransform` @`0x40`). A `hkQsTransform` is 12 lanes with
+translation at lane 0, rotation at lane 4 and scale at lane 8 (doc 63 §1.3).
+
+**Reading.** `SkeletonMapperReader` used to drop everything but the simple rows. It now also reads
+`chainMappings`, `unmappedBones`, `keepUnmappedLocal` and `extractedMotionMapping`, and keeps each
+row's 12 raw lanes in `HavokSkeletonMappingTransform`. That matches the shipped corpus: doc 66 §2.1
+measures chain rows in 25 of 43 forward mappers and doc 66 §2.2 non-empty `unmappedBones` on every
+reverse mapper, and the committed human fixture reads back as 4 chain rows per mapper and 71 unmapped
+bones on the reverse mapper, the figures doc 63 §3 and doc 66 §2.2 report for it. `SimpleMappings`
+(the consumer view the physics extractor uses) is derived from the raw rows, so no existing caller
+changed.
+
+**Editing, and what is refused.** Simple rows can have their bones or their transform set, be added,
+inserted or removed; chain rows have their four indices and two transforms replaced; `mappingType`
+and `keepUnmappedLocal` can be set. `SkeletonMapperAuthor.Recompute` adds the single-row form of the
+doc 63 §2 value `inverse(modelSpace_A[boneA]) * modelSpace_B[boneB]`, and `RecomputeSimpleRow(s)`
+writes only its translation and rotation onto the stored row. Refusals are explicit
+`InvalidOperationException`s: bone indices outside the referenced skeleton, non-finite lanes, a
+non-unit rotation (tolerance `SkeletonMapperAuthor.UnitTolerance`), a `mappingType` other than the 0
+(ragdoll) and 1 (retargeting) the generator itself defines (doc 63 §6.4), and a simple-row edit that
+would map a bone twice. The duplicate rule is a policy, not a format limit: shipped files contain
+exact duplicate rows (doc 66 §2.3) and doc 68 §3.5 records that nothing rejects them, so an explicit
+`allowDuplicatePair: true` writes one while the default refuses it. The **scale and pad lanes are
+never invented**: doc 63 §3 and doc 65 §4.1 leave row scale semantics unresolved, so a recompute
+preserves the stored lanes, the `(translation, rotation)` overload preserves them too, and only a
+caller who passes a whole transform replaces them. Chain rows are never recomputed and cannot be
+added or removed, because the interior distribution and blend weights of a chain run are unresolved
+(doc 67 §2/§4, doc 65 §4.3); replacing the stored endpoints is a byte edit and is allowed.
+
+**Write-back, two paths.** A file with no edits returns its own bytes, so an unedited load and save
+is byte-identical by construction. Edits that change no row count are patched straight into the
+`__data__` section at the row's offset and the file is rebuilt from its sections; each written field
+records the byte range it owns, and a diff byte outside every recorded range is refused rather than
+written. Row add/remove goes through the native relocate path, mirroring what `NativeSave.Regrow`
+does for an instance's array: append a 16-byte-aligned run to `__data__`, copy the rows that survive,
+repoint the array's fixup (its local one, or its global one; a header that has both, or neither, is
+refused), move any fixup that pointed inside the old run, write the count at `+8` and `flags|count`
+at `+12`, reorder fixups with `FixupOrder.Reorder` and rebuild. That machinery is reimplemented here
+rather than called through `NativeSave.Apply` because `hkaSkeletonMapperData` is an embedded struct
+inside `hkaSkeletonMapper`: `NativeSave.Resolve` looks an edit's class up among the packfile's
+instances, so a change naming `hkaSkeletonMapperData` has no instance to land on, and
+`NativeSave.Compare` sees only one flattened `mapping.simpleMappings` text field with no byte layout.
+The primitives are the same ones `Apply` uses (`PackfileSection` append/align/fixup setters,
+`FixupOrder`, `PackfileImage.Rebuild`). Shared row storage (another fixup pointing into the rows) is
+refused, as are a non-8-byte layout and a file whose class signatures this build does not describe.
+After either path the produced bytes are re-read through `SkeletonMapperReader` and every mapper —
+edited and untouched — must come back equal to the model that was written, or nothing is returned at
+all. `Save` writes through `FileSafety.ReplaceChecked` with the source stamp, like the other
+documents.
+
+**Measured.** Over the whole Fallout 4 install (7 archives, the 43 rigs and 86 mappers of doc 66
+§1): 43 of 43 mapper-bearing files round-trip byte-identically when unedited, and 43 of 43 survive an
+add-then-remove of a simple row read back through the reader. Recomputing all 1901 shipped simple
+rows gives a worst translation error of `3.31e-4` and a worst rotation error of `6.91e-4` rad; on the
+human skeleton doc 63 measured `3.8e-5` on, the per-row recompute gives `4.72e-5` translation and `0`
+rotation over its 36 rows. The larger corpus figure is the larger rigs' scale, not a different rule.
+
