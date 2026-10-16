@@ -41,7 +41,8 @@ public sealed partial class GameData : IDisposable
     public sealed record WeaponTypeSet(string Type, IReadOnlyList<string> Prefixes);
 
     private readonly Dictionary<string, Ba2> _opened = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, HashSet<string>> _names = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ArchiveIndex> _indexes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string?> _indexFailures = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string>? _modLooseIndex;
     private List<WeaponTypeSet>? _weaponSets;
     private bool _disposed;
@@ -365,22 +366,25 @@ public sealed partial class GameData : IDisposable
 
         foreach (string archive in ArchivePaths)
         {
-            var names = Names(archive);
-            if (prefixed != null && !names.Contains(prefixed)) continue;
-            if (prefixed == null && !names.Any(n => n.EndsWith("/" + key, StringComparison.Ordinal))) continue;
+            if (!TryIndex(archive, out ArchiveIndex index, out _)) continue;
 
-            foreach (var entry in Entries(archive))
+            int at;
+            if (prefixed != null)
             {
-                string normalized = Normalize(entry.Name);
-                if (prefixed != null)
-                {
-                    if (normalized == prefixed) return (Open(archive), entry);
-                }
-                else if (normalized.EndsWith("/" + key, StringComparison.Ordinal))
-                {
-                    return (Open(archive), entry);
-                }
+                if (!index.Normalized.TryGetValue(prefixed, out at)) continue;
             }
+            else
+            {
+                string suffix = "/" + key;
+                int best = int.MaxValue;
+                foreach (var pair in index.Normalized)
+                    if (pair.Value < best && pair.Key.EndsWith(suffix, StringComparison.Ordinal)) best = pair.Value;
+                if (best == int.MaxValue) continue;
+                at = best;
+            }
+
+            Ba2 found = Open(archive);
+            return (found, found.Entries[at]);
         }
         return (null!, null);
     }
@@ -498,23 +502,65 @@ public sealed partial class GameData : IDisposable
         return string.Join('/', stack);
     }
 
-    private HashSet<string> Names(string archivePath)
+    private sealed class ArchiveIndex
     {
-        if (_names.TryGetValue(archivePath, out var names)) return names;
+        internal Dictionary<string, int> Exact { get; } = new(StringComparer.OrdinalIgnoreCase);
+        internal Dictionary<string, int> Normalized { get; } = new(StringComparer.Ordinal);
+    }
 
-        names = new HashSet<string>(StringComparer.Ordinal);
+    internal static string ExactName(string name) => name.Replace('\\', '/').TrimStart('/');
+
+    private bool TryIndex(string archivePath, out ArchiveIndex index, out string? warning)
+    {
+        index = null!;
+        warning = null;
+        if (_indexes.TryGetValue(archivePath, out ArchiveIndex? known))
+        {
+            index = known;
+            return true;
+        }
+        if (_indexFailures.TryGetValue(archivePath, out string? failed))
+        {
+            warning = failed;
+            return false;
+        }
+        if (!TryArchiveEntries(archivePath, out IReadOnlyList<Ba2.Entry> entries, out warning))
+        {
+            _indexFailures[archivePath] = warning;
+            return false;
+        }
+
+        index = new ArchiveIndex();
+        for (int i = 0; i < entries.Count; i++)
+        {
+            index.Exact.TryAdd(entries[i].Name, i);
+            index.Normalized.TryAdd(Normalize(entries[i].Name), i);
+        }
+        _indexes[archivePath] = index;
+        return true;
+    }
+
+    private bool TryReadAt(string archivePath, int at, out byte[] bytes, out string? warning)
+    {
+        bytes = Array.Empty<byte>();
+        warning = null;
         try
         {
-            var archive = Open(archivePath);
-            foreach (var entry in archive.Entries) names.Add(Normalize(entry.Name));
+            Ba2 archive = Open(archivePath);
+            bytes = archive.Read(archive.Entries[at]);
+            return true;
         }
         catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
-            // a texture (DX10) archive or an unreadable file simply holds no animations
+            warning = ArchiveWarning(archivePath, e);
+            return false;
         }
-        _names[archivePath] = names;
-        return names;
     }
+
+    private IEnumerable<string> Names(string archivePath) =>
+        TryIndex(archivePath, out ArchiveIndex index, out _)
+            ? index.Normalized.Keys
+            : Array.Empty<string>();
 
     private Ba2 Open(string archivePath)
     {
@@ -690,7 +736,8 @@ public sealed partial class GameData : IDisposable
         _disposed = true;
         foreach (var archive in _opened.Values) archive.Dispose();
         _opened.Clear();
-        _names.Clear();
+        _indexes.Clear();
+        _indexFailures.Clear();
         _modLooseIndex = null;
     }
 }

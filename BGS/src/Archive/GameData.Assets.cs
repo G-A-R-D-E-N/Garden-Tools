@@ -34,23 +34,13 @@ public sealed partial class GameData
 
         string key = Normalize(entryName);
         if (key.Length == 0) return false;
-        if (!TryArchiveEntries(archivePath, out IReadOnlyList<Ba2.Entry> entries, out warning)) return false;
+        if (!TryIndex(archivePath, out ArchiveIndex index, out warning)) return false;
 
-        foreach (Ba2.Entry entry in entries)
-        {
-            if (!string.Equals(Normalize(entry.Name), key, StringComparison.Ordinal)) continue;
-            try
-            {
-                bytes = Open(archivePath).Read(entry);
-                return true;
-            }
-            catch (Exception e) when (IsSkippableArchiveFailure(e))
-            {
-                warning = ArchiveWarning(archivePath, e);
-                return false;
-            }
-        }
-        return false;
+        int at;
+        if (!index.Exact.TryGetValue(ExactName(entryName), out at) &&
+            !index.Normalized.TryGetValue(key, out at))
+            return false;
+        return TryReadAt(archivePath, at, out bytes, out warning);
     }
 
     public byte[]? Read(GameAsset asset)
@@ -58,9 +48,10 @@ public sealed partial class GameData
         ArgumentNullException.ThrowIfNull(asset);
 
         if (asset.Origin == GameAssetOrigin.Archive)
-            return asset.ArchivePath == null || asset.EntryName == null
-                ? null
-                : ReadEntry(asset.ArchivePath, asset.EntryName);
+        {
+            if (asset.ArchivePath == null || asset.EntryName == null) return null;
+            return ReadEntry(asset.ArchivePath, asset.EntryName);
+        }
 
         string? full = asset.FullPath;
         if (full == null) return null;
@@ -68,12 +59,13 @@ public sealed partial class GameData
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    public IReadOnlyList<GameAsset> EnumerateWinners(string virtualPrefix, Func<string, bool>? nameFilter = null)
+    public IReadOnlyList<GameAsset> EnumerateWinners(string virtualPrefix, Func<string, bool>? nameFilter = null,
+                                                     Action<string>? warn = null)
     {
         EnsureAlive();
         string prefix = FlattenPrefix(virtualPrefix);
         var order = new List<Winner>();
-        var byKey = new Dictionary<string, Winner>(StringComparer.Ordinal);
+        var byKey = new Dictionary<string, List<Winner>>(StringComparer.Ordinal);
 
         for (int i = ModRoots.Count - 1; i >= 0; i--)
         {
@@ -84,22 +76,27 @@ public sealed partial class GameData
         foreach (string file in WalkLoose(DataFolder)) OfferLoose(DataFolder, file);
 
         foreach (string archive in ArchivePaths)
-            foreach (Ba2.Entry entry in Entries(archive))
+        {
+            if (!TryArchiveEntries(archive, out IReadOnlyList<Ba2.Entry> entries, out string? warning))
+            {
+                if (warning != null) warn?.Invoke(warning);
+                continue;
+            }
+
+            foreach (Ba2.Entry entry in entries)
                 Offer(new GameAsset(entry.Name, GameAssetOrigin.Archive, null, archive, entry.Name,
                                     entry.Unpacked, null),
                       "archive:" + archive);
+        }
 
         var winners = new List<GameAsset>(order.Count);
         foreach (Winner winner in order)
             winners.Add(winner.Asset with { Shadowed = winner.Shadows.ToArray() });
         return winners;
 
-        void OfferLoose(string root, string file)
+        void OfferLoose(string root, string full)
         {
-            string full = Path.GetFullPath(file);
-            if (!IsInsideRoot(root, full)) return;
             string relative = Path.GetRelativePath(root, full).Replace('\\', '/');
-            if (relative.Length == 0) return;
             Offer(new GameAsset(relative, GameAssetOrigin.Loose, root, null, null, SizeOf(full), full),
                   "loose:" + root);
         }
@@ -113,21 +110,23 @@ public sealed partial class GameData
             string key = Normalize(virtualPath);
             if (key.Length == 0) return;
 
-            if (!byKey.TryGetValue(key, out Winner? winner))
+            if (!byKey.TryGetValue(key, out List<Winner>? group))
             {
-                winner = new Winner(candidate, source);
-                byKey[key] = winner;
+                var winner = new Winner(candidate, source);
+                byKey[key] = new List<Winner> { winner };
                 order.Add(winner);
                 return;
             }
 
-            if (string.Equals(winner.Source, source, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(group[0].Source, source, StringComparison.OrdinalIgnoreCase))
             {
-                order.Add(new Winner(candidate, source));
+                var winner = new Winner(candidate, source);
+                group.Add(winner);
+                order.Add(winner);
                 return;
             }
 
-            winner.Shadows.Add(candidate);
+            foreach (Winner shadowed in group) shadowed.Shadows.Add(candidate);
         }
     }
 
@@ -140,25 +139,37 @@ public sealed partial class GameData
         return File.Exists(candidate) ? candidate : null;
     }
 
-    public static bool IsSkeletonPath(string virtualPath)
+    public static bool IsSkeletonName(string fileName)
     {
-        string flat = virtualPath.Replace('\\', '/').Trim();
+        string flat = fileName.Replace('\\', '/').Trim();
         if (!flat.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) return false;
 
         int slash = flat.LastIndexOf('/');
         string name = slash >= 0 ? flat[(slash + 1)..] : flat;
-        if (name.StartsWith("skeleton", StringComparison.OrdinalIgnoreCase)) return true;
+        return name.StartsWith("skeleton", StringComparison.OrdinalIgnoreCase);
+    }
 
+    public static bool IsCharacterAssetPath(string virtualPath)
+    {
+        string flat = virtualPath.Replace('\\', '/').Trim();
         string[] parts = flat.Split('/', StringSplitOptions.RemoveEmptyEntries);
         for (int i = 0; i < parts.Length - 1; i++)
             if (string.Equals(parts[i], "CharacterAssets", StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 
-    internal static bool IsInsideRoot(string root, string path)
+    public static bool IsSkeletonPath(string virtualPath)
     {
-        string fullRoot = Path.GetFullPath(root);
-        string full = Path.GetFullPath(path);
+        string flat = virtualPath.Replace('\\', '/').Trim();
+        if (!flat.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) return false;
+        return IsSkeletonName(flat) || IsCharacterAssetPath(flat);
+    }
+
+    internal static bool IsInsideRoot(string root, string path) =>
+        InsideRootFull(Path.GetFullPath(root), Path.GetFullPath(path));
+
+    private static bool InsideRootFull(string fullRoot, string full)
+    {
         if (fullRoot.Length > 0 && fullRoot[^1] == Path.DirectorySeparatorChar)
             fullRoot = fullRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -193,8 +204,9 @@ public sealed partial class GameData
     {
         if (!Directory.Exists(root)) yield break;
 
+        string fullRoot = Path.GetFullPath(root);
         var pending = new Stack<string>();
-        pending.Push(Path.GetFullPath(root));
+        pending.Push(fullRoot);
         while (pending.Count > 0)
         {
             string folder = pending.Pop();
@@ -204,9 +216,10 @@ public sealed partial class GameData
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { continue; }
             foreach (string file in files)
             {
-                if (!IsInsideRoot(root, file)) continue;
-                if (IsReparsePoint(file)) continue;
-                yield return file;
+                string full = Path.GetFullPath(file);
+                if (!InsideRootFull(fullRoot, full)) continue;
+                if (IsReparsePoint(full)) continue;
+                yield return full;
             }
 
             string[] children;
@@ -214,33 +227,18 @@ public sealed partial class GameData
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { continue; }
             foreach (string child in children)
             {
-                if (!IsInsideRoot(root, child)) continue;
-                if (IsReparsePoint(child)) continue;
-                pending.Push(child);
+                string full = Path.GetFullPath(child);
+                if (!InsideRootFull(fullRoot, full)) continue;
+                if (IsReparsePoint(full)) continue;
+                pending.Push(full);
             }
         }
     }
 
     private static bool IsReparsePoint(string path)
     {
-        try
-        {
-            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return true;
-        }
-
-        try
-        {
-            FileSystemInfo info = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path);
-            return info.LinkTarget != null;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            return true;
-        }
+        try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return true; }
     }
 
     private sealed class Winner

@@ -232,8 +232,7 @@ public sealed class GameDataAssetsTests
         Assert.All(pair, asset => Assert.Equal(high, asset.SourceRoot));
         Assert.Contains(pair, asset => asset.VirtualPath.EndsWith(".hkt", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(pair, asset => asset.VirtualPath.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase));
-        GameAsset carrying = Assert.Single(pair, asset => asset.Shadowed.Count == 1);
-        Assert.Equal(low, Assert.Single(carrying.Shadowed).SourceRoot);
+        Assert.All(pair, asset => Assert.Equal(low, Assert.Single(asset.Shadowed).SourceRoot));
 
         IReadOnlyList<GameAsset> hkxOnly = data.EnumerateWinners(
             Prefix, path => path.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase));
@@ -339,6 +338,93 @@ public sealed class GameDataAssetsTests
     [InlineData("Meshes/Weapons/skeletons/rifle.hkx", false)]
     public void IsSkeletonPathCoversCharacterAssetsAndSkeletonNames(string virtualPath, bool expected) =>
         Assert.Equal(expected, GameData.IsSkeletonPath(virtualPath));
+
+    [Fact]
+    public void ReadEntryPrefersTheExactNameWhenExtensionsShareANormalizedKey()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-exact");
+        byte[] hkx = Bytes(1, 1);
+        byte[] hkt = Bytes(2, 2);
+        string archive = Path.Combine(root.Path, "tiny.ba2");
+        TestArchives.WriteGeneralBa2(archive,
+            (Prefix + "/pair.hkx", hkx),
+            (Prefix + "/pair.hkt", hkt));
+
+        using var data = GameData.Discover(root.Path, Path.Combine(root.Path, "plugins.txt"));
+
+        Assert.Equal(hkt, data.ReadEntry(archive, Prefix + "/pair.hkt"));
+        Assert.Equal(hkx, data.ReadEntry(archive, Prefix + "/pair.hkx"));
+
+        IReadOnlyList<GameAsset> pair = Match(data.EnumerateWinners(Prefix), Prefix + "/pair.hkx");
+        Assert.Equal(2, pair.Count);
+        foreach (GameAsset asset in pair)
+        {
+            byte[] expected = asset.EntryName!.EndsWith(".hkt", StringComparison.OrdinalIgnoreCase) ? hkt : hkx;
+            Assert.Equal(expected, data.Read(asset));
+        }
+    }
+
+    [Fact]
+    public void EnumerateWinnersWarnsAboutArchivesItCannotRead()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-warn");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+
+        TestArchives.WriteGeneralBa2(Path.Combine(dataFolder, "a - Good.ba2"),
+                                     (Prefix + "/kept.hkx", Bytes(3, 3)));
+
+        string full = Path.Combine(root.Path, "full.ba2");
+        TestArchives.WriteGeneralBa2(full,
+            (Prefix + "/gone.hkx", Bytes(9, 9)),
+            (Prefix + "/also-gone.hkx", Bytes(9, 9)));
+        byte[] written = File.ReadAllBytes(full);
+        File.WriteAllBytes(Path.Combine(dataFolder, "z - Truncated.ba2"), written[..(written.Length / 2)]);
+
+        string textures = Path.Combine(dataFolder, "m - Textures.ba2");
+        using (var stream = File.Create(textures))
+        using (var writer = new BinaryWriter(stream))
+        {
+            writer.Write("BTDX"u8.ToArray());
+            writer.Write((uint)1);
+            writer.Write("DX10"u8.ToArray());
+            writer.Write((uint)0);
+            writer.Write((ulong)0);
+        }
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+
+        var warnings = new List<string>();
+        IReadOnlyList<GameAsset> winners = data.EnumerateWinners(Prefix, null, warnings.Add);
+
+        Assert.Contains(winners, asset => asset.VirtualPath.EndsWith("kept.hkx", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(winners, asset => asset.VirtualPath.Contains("gone", StringComparison.Ordinal));
+        Assert.Single(warnings);
+        Assert.Contains("Truncated.ba2", warnings[0], StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("skeleton.hkx", true)]
+    [InlineData("Skeleton.HKX", true)]
+    [InlineData("skeleton_physics.hkx", true)]
+    [InlineData("Meshes/Actors/Character/CharacterAssets/skeleton.hkx", true)]
+    [InlineData("Meshes/Actors/Turret/CharacterAssets/Rig.hkx", false)]
+    [InlineData("skeleton.hkt", false)]
+    [InlineData("skeleton.nif", false)]
+    [InlineData("Meshes/Weapons/skeletons/rifle.hkx", false)]
+    [InlineData("", false)]
+    public void IsSkeletonNameCoversSkeletonHkxNames(string fileName, bool expected) =>
+        Assert.Equal(expected, GameData.IsSkeletonName(fileName));
+
+    [Theory]
+    [InlineData("Meshes/Actors/Character/CharacterAssets/skeleton.hkt", true)]
+    [InlineData("Meshes/Actors/Character/CharacterAssets/Rig.hkx", true)]
+    [InlineData("CharacterAssets/skeleton.hkx", true)]
+    [InlineData("Meshes/Actors/Character/Animations/Idle.hkx", false)]
+    [InlineData("CharacterAssets", false)]
+    [InlineData("Meshes/CharacterAssets", false)]
+    public void IsCharacterAssetPathCoversTheFolderRule(string virtualPath, bool expected) =>
+        Assert.Equal(expected, GameData.IsCharacterAssetPath(virtualPath));
 
     private static byte[] Bytes(int count, byte value)
     {
