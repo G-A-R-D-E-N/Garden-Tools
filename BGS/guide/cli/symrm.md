@@ -96,7 +96,7 @@ The catalog exposes the switches currently parsed by `symrm`:
 - `extract`: `--tree`
 - `types`: `--members`
 - `defaults`: `--write`
-- `mapper`: `--recompute`, `--out <file>`, `--force`, `--data <folder>`
+- `mapper`: `--recompute`, `--out <file>`, `--force`, `--data <Data folder or MO2 instance>`
 - `check` and `chain`: `--data`, `--plugins`
 - `crash` and `sweep`: `--data`, `--mods`, `--profile`
 - `diff`: `--data`, `--mods`, `--profile`
@@ -119,7 +119,7 @@ result is re-read and checked against the model — and it reproduces the input 
 ```bash
 symrm mapper skeleton.hkx                              # describe + verified rebuild, writes nothing
 symrm mapper skeleton.hkx --recompute --out fixed.hkx  # recompute simple rows and keep the result
-symrm mapper x --data "/path/to/Data"                  # sweep every mapper-bearing skeleton in the archives
+symrm mapper x --data "/path/to/Data"                  # sweep every mapper-bearing skeleton the game data resolves
 ```
 
 - `--recompute` recomputes each simple row's translation and rotation from the two skeletons' reference
@@ -129,8 +129,10 @@ symrm mapper x --data "/path/to/Data"                  # sweep every mapper-bear
 - `--out <file>` writes the result. Without `--force`, `symrm` refuses an `--out` that is the file being
   read or that already exists; with `--force` it overwrites. The write goes to a temporary file beside the
   target and is then moved into place, so a failure leaves the existing file alone.
-- `--data <folder>` sweeps: it opens the game's BA2 archives through the shared archive layer, finds every
-  mapper-bearing `CharacterAssets` skeleton, verifies an unedited forced rebuild byte for byte, then
-  exercises an add-then-remove of a simple row. A sweep writes nothing anywhere, so `--out` is refused in
-  that mode.
+- `--data <folder>` sweeps a game `Data` folder, or an MO2 instance: its `ModOrganizer.ini` game path,
+  profile and enabled mod roots resolve the Data folder and the mod archives, exactly as the app's scans
+  do. It builds one `GameData` for the folder and reads every mapper-bearing `CharacterAssets` skeleton
+  the game data resolves — a candidate that a higher-priority copy hides is not read twice — verifies an
+  unedited forced rebuild byte for byte, then exercises an add-then-remove of a simple row. A sweep writes
+  nothing anywhere, so `--out` is refused in that mode.
 - Unknown switches, or `--out`/`--data` without a value, print the usage above and exit 1.

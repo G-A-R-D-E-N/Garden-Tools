@@ -809,6 +809,17 @@ is refused outright in that mode rather than ignored. The sweep's unedited check
 `ForceRebuild` and counts a file as byte-identical only when the comparison succeeded, instead of
 counting first and reporting the failure afterwards.
 
+**The sweep reads through `GameData` (#696).** `MapperSweepData` builds one `GameData` for `--data`: the
+`GameData` `Mo2ScanData.TryOpen` already discovered with the instance's mod roots when the folder is an
+MO2 instance, `GameData.Discover(folder)` otherwise. Candidates come from `EnumerateWinners("",
+IsMapperCandidate)` — the same `.hkx` under `CharacterAssets` whose last path component contains
+`skeleton`, with `GameData.IsSkeletonName` as the first test — and each winner is read with
+`GameData.Read(asset)`, so an archive is opened once through the held-open cache instead of `Ba2.Open` per
+archive group, and a candidate a higher-priority copy hides is not read twice. `archives` counts the
+archives that held a candidate, winner or shadowed. Re-run on the same vanilla install after the change:
+7 archives, 43 file(s), 86 mappers, 43 of 43 byte-identical, 43 of 43 add-then-remove (41 duplicated a
+bone pair), 0 unreadable, 0 failures, exit 0 — identical to the pre-refactor sweep.
+
 **Measured.** The Fallout 4 install (7 archives, the 43 rigs and 86 mappers of doc 66 §1) was re-run
 through the forced rebuild. **43 of 43 mapper-bearing files come back byte-identical when an unedited
 file is pushed through the writer's full path** — `RequireStorage`, the value pass, `RequireConfined`,

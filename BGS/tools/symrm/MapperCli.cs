@@ -238,99 +238,98 @@ public static partial class Program
             return 1;
         }
 
-        using var data = OpenCommonwealth.Services.Archive.GameData.Discover(dataFolder);
+        using var data = MapperSweepData(dataFolder);
 
-        var candidates = data.EnumerateEntries()
-                             .Where(item => item.Entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
-                                            item.Entry.Name.Contains("CharacterAssets", StringComparison.OrdinalIgnoreCase) &&
-                                            item.Entry.FileName.Contains("skeleton", StringComparison.OrdinalIgnoreCase))
-                             .GroupBy(item => item.ArchivePath, StringComparer.OrdinalIgnoreCase)
-                             .OrderBy(group => group.Key, StringComparer.Ordinal)
+        var candidates = data.EnumerateWinners("", IsMapperCandidate)
+                             .OrderBy(asset => asset.ArchivePath, StringComparer.Ordinal)
+                             .ThenBy(asset => asset.VirtualPath, StringComparer.Ordinal)
                              .ToList();
 
-        int archives = 0, files = 0, mappers = 0, byteIdentical = 0, unreadable = 0;
+        int files = 0, mappers = 0, byteIdentical = 0, unreadable = 0;
         int recomputed = 0, structuralOk = 0, structuralDuplicated = 0, structuralFailed = 0;
         float worstTranslation = 0f, worstRotation = 0f;
         var failures = new List<string>();
 
-        foreach (var group in candidates)
+        var archiveSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var asset in candidates)
         {
-            archives++;
-            using var archive = OpenCommonwealth.Services.Archive.Ba2.Open(group.Key);
+            if (asset.ArchivePath != null) archiveSet.Add(asset.ArchivePath);
+            foreach (var loser in asset.Shadowed)
+                if (loser.ArchivePath != null) archiveSet.Add(loser.ArchivePath);
+        }
+        int archives = archiveSet.Count;
 
-            var entries = group.Select(item => item.Entry)
-                               .OrderBy(entry => entry.Name, StringComparer.Ordinal)
-                               .ToList();
-
-            foreach (var entry in entries)
+        foreach (var asset in candidates)
+        {
+            byte[] bytes;
+            try
             {
-                byte[] bytes;
-                try { bytes = archive.Read(entry); }
-                catch (Exception error) { failures.Add($"{entry.Name}: {error.Message}"); continue; }
+                bytes = data.Read(asset) ?? throw new InvalidDataException("the winning copy could not be read");
+            }
+            catch (Exception error) { failures.Add($"{asset.VirtualPath}: {error.Message}"); continue; }
 
-                int count;
-                try { count = SkeletonMapperReader.Read(new PackfileObjects(PackfileImage.Read(bytes))).Count; }
-                catch (Exception) { unreadable++; continue; }
-                if (count == 0) continue;
+            int count;
+            try { count = SkeletonMapperReader.Read(new PackfileObjects(PackfileImage.Read(bytes))).Count; }
+            catch (Exception) { unreadable++; continue; }
+            if (count == 0) continue;
 
-                files++;
-                mappers += count;
+            files++;
+            mappers += count;
+
+            try
+            {
+                var document = new SkeletonMapperDocument(bytes);
+                byte[] rebuilt = document.ForceRebuild();
+                if (!rebuilt.AsSpan().SequenceEqual(bytes))
+                {
+                    int at = FirstDifference(bytes, rebuilt);
+                    failures.Add($"{asset.VirtualPath}: rebuilding the unedited file was not byte-identical " +
+                                 $"({bytes.Length} bytes in, {rebuilt.Length} out, " +
+                                 $"first difference at 0x{at:x})");
+                }
+                else
+                {
+                    byteIdentical++;
+                }
+
+                if (recompute)
+                    foreach (var node in document.Mappers)
+                        for (int row = 0; row < node.Rows.Count; row++)
+                        {
+                            var stored = node.Rows[row];
+                            var wanted = SkeletonMapperDocument.RecomputedTransform(
+                                node.SkeletonA, stored.BoneA, node.SkeletonB, stored.BoneB);
+                            worstTranslation = MathF.Max(worstTranslation,
+                                Vector3.Distance(stored.AFromB.Translation, wanted.Translation));
+                            worstRotation = MathF.Max(worstRotation,
+                                RotationDistance(stored.AFromB.Rotation, wanted.Rotation));
+                            recomputed++;
+                        }
+
+                var mapper = document.Mappers[0];
+                var original = mapper.Rows.ToList();
+                var free = FreePair(mapper);
+                var pair = free ?? (BoneA: mapper.Rows[0].BoneA, BoneB: mapper.Rows[0].BoneB);
 
                 try
                 {
-                    var document = new SkeletonMapperDocument(bytes);
-                    byte[] rebuilt = document.ForceRebuild();
-                    if (!rebuilt.AsSpan().SequenceEqual(bytes))
-                    {
-                        int at = FirstDifference(bytes, rebuilt);
-                        failures.Add($"{entry.Name}: rebuilding the unedited file was not byte-identical " +
-                                     $"({bytes.Length} bytes in, {rebuilt.Length} out, " +
-                                     $"first difference at 0x{at:x})");
-                    }
-                    else
-                    {
-                        byteIdentical++;
-                    }
+                    int at = mapper.Rows.Count;
+                    document.AddSimpleRow(0, pair.BoneA, pair.BoneB, free == null);
+                    if (free == null) structuralDuplicated++;
+                    var grown = new SkeletonMapperDocument(document.Serialize());
+                    if (grown.Mappers[0].Rows.Count != original.Count + 1)
+                        throw new InvalidDataException("the grown file did not read back with one more row");
 
-                    if (recompute)
-                        foreach (var node in document.Mappers)
-                            for (int row = 0; row < node.Rows.Count; row++)
-                            {
-                                var stored = node.Rows[row];
-                                var wanted = SkeletonMapperDocument.RecomputedTransform(
-                                    node.SkeletonA, stored.BoneA, node.SkeletonB, stored.BoneB);
-                                worstTranslation = MathF.Max(worstTranslation,
-                                    Vector3.Distance(stored.AFromB.Translation, wanted.Translation));
-                                worstRotation = MathF.Max(worstRotation,
-                                    RotationDistance(stored.AFromB.Rotation, wanted.Rotation));
-                                recomputed++;
-                            }
+                    grown.RemoveSimpleRow(0, at);
+                    var shrunk = new SkeletonMapperDocument(grown.Serialize());
+                    if (!shrunk.Mappers[0].Rows.SequenceEqual(original))
+                        throw new InvalidDataException("the shrunk file did not read back as the loaded rows");
 
-                    var mapper = document.Mappers[0];
-                    var original = mapper.Rows.ToList();
-                    var free = FreePair(mapper);
-                    var pair = free ?? (BoneA: mapper.Rows[0].BoneA, BoneB: mapper.Rows[0].BoneB);
-
-                    try
-                    {
-                        int at = mapper.Rows.Count;
-                        document.AddSimpleRow(0, pair.BoneA, pair.BoneB, free == null);
-                        if (free == null) structuralDuplicated++;
-                        var grown = new SkeletonMapperDocument(document.Serialize());
-                        if (grown.Mappers[0].Rows.Count != original.Count + 1)
-                            throw new InvalidDataException("the grown file did not read back with one more row");
-
-                        grown.RemoveSimpleRow(0, at);
-                        var shrunk = new SkeletonMapperDocument(grown.Serialize());
-                        if (!shrunk.Mappers[0].Rows.SequenceEqual(original))
-                            throw new InvalidDataException("the shrunk file did not read back as the loaded rows");
-
-                        structuralOk++;
-                    }
-                    catch (Exception error) { structuralFailed++; failures.Add($"{entry.Name}: {error.Message}"); }
+                    structuralOk++;
                 }
-                catch (Exception error) { failures.Add($"{entry.Name}: {error.Message}"); }
+                catch (Exception error) { structuralFailed++; failures.Add($"{asset.VirtualPath}: {error.Message}"); }
             }
+            catch (Exception error) { failures.Add($"{asset.VirtualPath}: {error.Message}"); }
         }
 
         foreach (string failure in failures.Take(20)) Console.WriteLine("  " + failure);
@@ -347,6 +346,23 @@ public static partial class Program
                           $"({structuralDuplicated} needed a duplicated bone pair), {structuralFailed} failed");
 
         return failures.Count == 0 ? 0 : 1;
+    }
+
+    private static OpenCommonwealth.Services.Archive.GameData MapperSweepData(string folder) =>
+        OpenCommonwealth.Services.Archive.Mo2ScanData.TryOpen(folder, out OpenCommonwealth.Services.Archive.Mo2ScanData? instance, out _) && instance != null
+            ? instance.Data
+            : OpenCommonwealth.Services.Archive.GameData.Discover(folder);
+
+    private static bool IsMapperCandidate(string virtualPath)
+    {
+        string flat = virtualPath.Replace('\\', '/');
+        if (!flat.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!flat.Contains("CharacterAssets", StringComparison.OrdinalIgnoreCase)) return false;
+        if (OpenCommonwealth.Services.Archive.GameData.IsSkeletonName(flat)) return true;
+
+        int slash = flat.LastIndexOf('/');
+        string name = slash >= 0 ? flat[(slash + 1)..] : flat;
+        return name.Contains("skeleton", StringComparison.OrdinalIgnoreCase);
     }
 
     private static (int BoneA, int BoneB)? FreePair(SkeletonMapperNode node)
