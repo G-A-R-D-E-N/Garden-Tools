@@ -243,12 +243,16 @@ public partial class MainWindow : Window
 
         var own = HavokPhysicsExtractor.TryExtract(raw, out var ownReport);
         string? sibling = SiblingSkeletonPath(path);
-        string? packed = sibling == null ? DataRelativePath(path) : null;
-        byte[]? packedBytes = packed == null ? null : PackedSkeletonBytes(packed);
-        if (packedBytes != null) sibling = packed;
+        string? packedAnimation = null;
+        if (own is not { Bodies.Count: > 0 } && sibling == null && _gameData != null)
+        {
+            packedAnimation = _gameData.DataRelativePath(path);
+            if (packedAnimation != null) sibling = _gameData.SkeletonEntryName(packedAnimation);
+        }
+
         var choice = ChooseRagdoll(path, own, ownReport, sibling, key =>
         {
-            byte[] bytes = packedBytes ?? File.ReadAllBytes(key);
+            byte[] bytes = PackedSkeleton(_gameData, packedAnimation, key);
             var model = HavokPhysicsExtractor.TryExtract(bytes, out var report);
             return (model, report);
         });
@@ -573,31 +577,16 @@ public partial class MainWindow : Window
         catch { return null; }
     }
 
-    private string? DataRelativePath(string path)
+    internal static byte[] PackedSkeleton(GameData? data, string? packedAnimation, string key)
     {
-        if (_gameData == null) return null;
-
-        string folder = _gameData.DataFolder;
-        string prefix = folder.EndsWith(Path.DirectorySeparatorChar) ? folder : folder + Path.DirectorySeparatorChar;
-        string full;
-        try { full = Path.GetFullPath(path); }
-        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        if (packedAnimation != null && data != null &&
+            data.TrySkeletonEntry(packedAnimation, out string? entry, out byte[] packed) &&
+            entry != null && string.Equals(entry, key, StringComparison.OrdinalIgnoreCase))
         {
-            return null;
+            return packed;
         }
 
-        if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
-        return full[prefix.Length..].Replace('\\', '/');
-    }
-
-    private byte[]? PackedSkeletonBytes(string virtualPath)
-    {
-        if (_gameData == null) return null;
-        try { return _gameData.SkeletonBytes(virtualPath); }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+        return File.ReadAllBytes(key);
     }
 
 }

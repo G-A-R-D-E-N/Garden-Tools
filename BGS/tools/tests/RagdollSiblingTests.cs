@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using BehaviourStudio.App;
+using OpenCommonwealth.Services.Archive;
 using OpenCommonwealth.Services.Hkx;
 using Xunit;
 
@@ -167,5 +168,34 @@ public sealed class RagdollSiblingTests
         Assert.Same(own, choice.Report);
         Assert.Equal("clip.hkx", choice.ReportPath);
         Assert.Null(choice.SourcePath);
+    }
+
+    [Fact]
+    public void ThePackedSkeletonComesFromTheSkeletonEntryRatherThanTheAnimation()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-ragdoll-packed");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+        byte[] skeleton = { 5, 5, 5, 5 };
+        TestArchives.WriteGeneralBa2(Path.Combine(dataFolder, "Fallout4 - Animations.ba2"),
+            ("Meshes/Actors/Turret/Animations/Idle.hkx", new byte[] { 1, 1 }),
+            ("Meshes/Actors/Turret/CharacterAssets/skeleton.hkx", skeleton));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+        string animation = data.DataRelativePath(Path.Combine(dataFolder, "Meshes", "Actors", "Turret",
+                                                              "Animations", "Idle.hkx"))!;
+        Assert.Equal("Meshes/Actors/Turret/Animations/Idle.hkx", animation);
+
+        string? sibling = data.SkeletonEntryName(animation);
+        Assert.Equal("Meshes/Actors/Turret/CharacterAssets/skeleton.hkx", sibling);
+        Assert.Equal(skeleton, MainWindow.PackedSkeleton(data, animation, sibling!));
+        Assert.Equal(skeleton, data.SkeletonBytes(animation));
+
+        var choice = MainWindow.ChooseRagdoll(animation, null, SkeletonOnly(), sibling,
+            _ => (OneBody(), Ragdoll()));
+
+        Assert.Equal("Meshes/Actors/Turret/CharacterAssets/skeleton.hkx", choice.SourcePath);
+        Assert.Equal(sibling, choice.ReportPath);
+        Assert.NotNull(choice.Model);
     }
 }

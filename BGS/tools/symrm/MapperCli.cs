@@ -238,7 +238,7 @@ public static partial class Program
             return 1;
         }
 
-        using var data = MapperSweepData(dataFolder);
+        using var data = OpenCommonwealth.Services.Archive.Mo2ScanData.OpenScanData(dataFolder);
 
         var candidates = data.EnumerateWinners("", IsMapperCandidate)
                              .OrderBy(asset => asset.ArchivePath, StringComparer.Ordinal)
@@ -261,12 +261,12 @@ public static partial class Program
 
         foreach (var asset in candidates)
         {
-            byte[] bytes;
-            try
+            if (!data.TryRead(asset, out byte[] bytes, out string? warning))
             {
-                bytes = data.Read(asset) ?? throw new InvalidDataException("the winning copy could not be read");
+                unreadable++;
+                failures.Add($"{asset.VirtualPath}: {warning ?? "the winning copy could not be read"}");
+                continue;
             }
-            catch (Exception error) { failures.Add($"{asset.VirtualPath}: {error.Message}"); continue; }
 
             int count;
             try { count = SkeletonMapperReader.Read(new PackfileObjects(PackfileImage.Read(bytes))).Count; }
@@ -347,11 +347,6 @@ public static partial class Program
 
         return failures.Count == 0 ? 0 : 1;
     }
-
-    private static OpenCommonwealth.Services.Archive.GameData MapperSweepData(string folder) =>
-        OpenCommonwealth.Services.Archive.Mo2ScanData.TryOpen(folder, out OpenCommonwealth.Services.Archive.Mo2ScanData? instance, out _) && instance != null
-            ? instance.Data
-            : OpenCommonwealth.Services.Archive.GameData.Discover(folder);
 
     private static bool IsMapperCandidate(string virtualPath)
     {

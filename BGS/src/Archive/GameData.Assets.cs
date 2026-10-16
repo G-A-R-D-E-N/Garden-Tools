@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using OpenCommonwealth.Services;
 
 namespace OpenCommonwealth.Services.Archive;
 
@@ -47,20 +49,60 @@ public sealed partial class GameData
         return TryReadAt(archivePath, at, out bytes, out warning);
     }
 
-    public byte[]? Read(GameAsset asset)
+    internal long ReadLimitBytes { get; set; } = InputFilePolicy.MaximumHkxBytes;
+
+    public byte[]? Read(GameAsset asset) =>
+        TryRead(asset, out byte[] bytes, out _) ? bytes : null;
+
+    public bool TryRead(GameAsset asset, out byte[] bytes, out string? warning)
     {
         ArgumentNullException.ThrowIfNull(asset);
+        bytes = Array.Empty<byte>();
+        warning = null;
+
+        if (asset.Size >= 0)
+        {
+            warning = InputFilePolicy.RefusalIfTooLarge(asset.Size, ReadLimitBytes, asset.VirtualPath);
+            if (warning != null) return false;
+        }
 
         if (asset.Origin == GameAssetOrigin.Archive)
         {
-            if (asset.ArchivePath == null || asset.EntryName == null) return null;
-            return ReadEntry(asset.ArchivePath, asset.EntryName);
+            if (asset.ArchivePath == null || asset.EntryName == null)
+            {
+                warning = $"{asset.VirtualPath}: the entry names no archive";
+                return false;
+            }
+
+            if (!TryReadEntry(asset.ArchivePath, asset.EntryName, out bytes, out warning)) return false;
+            warning = InputFilePolicy.RefusalIfTooLarge(bytes.Length, ReadLimitBytes, asset.VirtualPath);
+            if (warning == null) return true;
+
+            bytes = Array.Empty<byte>();
+            return false;
         }
 
         string? full = asset.FullPath;
-        if (full == null) return null;
-        try { return File.ReadAllBytes(full); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        if (full == null)
+        {
+            warning = $"{asset.VirtualPath}: the entry has no loose file behind it";
+            return false;
+        }
+
+        try
+        {
+            long length = new FileInfo(full).Length;
+            warning = InputFilePolicy.RefusalIfTooLarge(length, ReadLimitBytes, asset.VirtualPath);
+            if (warning != null) return false;
+
+            bytes = File.ReadAllBytes(full);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            warning = $"{asset.VirtualPath}: {e.Message.Split('\n')[0].Trim()}";
+            return false;
+        }
     }
 
     internal static GameData FromParts(string dataFolder, IReadOnlyList<string> archivePaths,
@@ -109,7 +151,12 @@ public sealed partial class GameData
     }
 
     public IReadOnlyList<GameAsset> EnumerateWinners(string virtualPrefix, Func<string, bool>? nameFilter = null,
-                                                     Action<string>? warn = null)
+                                                     Action<string>? warn = null) =>
+        EnumerateWinners(virtualPrefix, nameFilter,
+                         warn == null ? null : (string archivePath, string message) => warn(ArchiveWarning(archivePath, message)));
+
+    public IReadOnlyList<GameAsset> EnumerateWinners(string virtualPrefix, Func<string, bool>? nameFilter,
+                                                     Action<string, string>? warnPath)
     {
         EnsureAlive();
         string prefix = FlattenPrefix(virtualPrefix);
@@ -128,7 +175,7 @@ public sealed partial class GameData
         {
             if (!TryArchiveEntries(archive, out IReadOnlyList<Ba2.Entry> entries, out string? warning))
             {
-                if (warning != null) warn?.Invoke(warning);
+                if (warning != null) warnPath?.Invoke(archive, ArchiveReason(ReasonAfter(archive, warning)));
                 continue;
             }
 
@@ -230,7 +277,57 @@ public sealed partial class GameData
     }
 
     internal static string ArchiveWarning(string archivePath, Exception error) =>
-        $"{Path.GetFileName(archivePath)}: {error.Message.Split('\n')[0].Trim()}";
+        ArchiveWarning(archivePath, error.Message);
+
+    internal static string ArchiveWarning(string archivePath, string message) =>
+        $"{archivePath}: {ArchiveReason(message)}";
+
+    internal static string ArchiveReason(string message) =>
+        message.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? message.Trim();
+
+    private static string ReasonAfter(string archivePath, string warning)
+    {
+        string prefix = archivePath + ": ";
+        return warning.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? warning[prefix.Length..] : warning;
+    }
+
+    public string? DataRelativePath(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath) || !IsInsideRoot(DataFolder, fullPath)) return null;
+        return Path.GetRelativePath(DataFolder, fullPath).Replace('\\', '/');
+    }
+
+    public byte[]? SkeletonBytes(string animationEntryName) =>
+        TrySkeletonEntry(animationEntryName, out _, out byte[] bytes) ? bytes : null;
+
+    public string? SkeletonEntryName(string animationEntryName) =>
+        TrySkeletonEntry(animationEntryName, out string? entryName, out _) ? entryName : null;
+
+    public bool TrySkeletonEntry(string animationEntryName, out string? entryName, out byte[] bytes)
+    {
+        entryName = null;
+        bytes = Array.Empty<byte>();
+        if (string.IsNullOrWhiteSpace(animationEntryName)) return false;
+
+        string flat = animationEntryName.Replace('\\', '/');
+        int anims = flat.LastIndexOf("/Animations/", StringComparison.Ordinal);
+        if (anims < 0) return false;
+        string assets = flat[..anims] + "/CharacterAssets/";
+
+        foreach (string archive in ArchivePaths)
+        {
+            foreach (Ba2.Entry entry in Entries(archive))
+            {
+                if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!IsSkeletonPath(entry.Name)) continue;
+                try { bytes = Open(archive).Read(entry); }
+                catch (Exception e) when (IsSkippableArchiveFailure(e)) { return false; }
+                entryName = entry.Name;
+                return true;
+            }
+        }
+        return false;
+    }
 
     private static string FlattenPrefix(string virtualPrefix) =>
         (virtualPrefix ?? "").Replace('\\', '/').Trim().Trim('/').ToLowerInvariant();

@@ -6,16 +6,6 @@ using Radicle.Interop;
 
 namespace OpenCommonwealth.Services.Archive;
 
-/// <summary>
-/// The game's data tree as the engine sees it: a folder holding loose files plus every .ba2
-/// archive under it, consulted in load order. Loose files win over archives, and within the
-/// archives the later-loaded archive wins; for existence checks any hit is enough.
-///
-/// A project chain declares animation paths relative to its root, which is normally a folder
-/// somewhere inside the data tree (for Fallout 4's vanilla character: Data\Meshes\Actors\
-/// Character). The same path inside an archive appears with that data-relative prefix, so an
-/// animation that is not loose can still exist inside e.g. "Fallout4 - Animations.ba2".
-/// </summary>
 public sealed partial class GameData : IDisposable
 {
     public string DataFolder { get; }
@@ -227,12 +217,6 @@ public sealed partial class GameData : IDisposable
         return packed == null ? null : new AnimationRead(packed, Path.GetFileName(archive.Path), entry.Name);
     }
 
-    private string? DataRelativePath(string fullPath)
-    {
-        if (!IsInsideRoot(DataFolder, fullPath)) return null;
-        return Path.GetRelativePath(DataFolder, fullPath);
-    }
-
     private Dictionary<string, string> ModLooseIndex()
     {
         if (_modLooseIndex != null) return _modLooseIndex;
@@ -304,39 +288,6 @@ public sealed partial class GameData : IDisposable
             current = found;
         }
         return current;
-    }
-
-    public static bool IsSkeletonPath(string name)
-    {
-        string flat = "/" + name.Replace('\\', '/').Trim('/');
-        return flat.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
-               flat.Contains("/CharacterAssets/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// The first .hkx under the character's CharacterAssets folder in the archives, given an
-    /// animation entry name like "Meshes/Actors/Turret/Animations/...". Returns its bytes, or
-    /// null when no packed skeleton exists there. The rig is usually the loose chain skeleton,
-    /// so this is the fallback for fully packed actors.
-    /// </summary>
-    public byte[]? SkeletonBytes(string animationEntryName)
-    {
-        string flat = animationEntryName.Replace('\\', '/');
-        int anims = flat.LastIndexOf("/Animations/", StringComparison.Ordinal);
-        if (anims < 0) return null;
-        string assets = flat[..anims] + "/CharacterAssets/";
-
-        foreach (string archive in ArchivePaths)
-        {
-            foreach (var entry in Entries(archive))
-            {
-                if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!IsSkeletonPath(entry.Name)) continue;
-                try { return Open(archive).Read(entry); }
-                catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
-            }
-        }
-        return null;
     }
 
     private (Ba2 Archive, Ba2.Entry? Entry) FindEntry(string projectRoot, string declared)

@@ -1,7 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
-using System.Text;
 using BehaviourStudio.App;
 
 namespace BehaviourStudio.UiSmoke;
@@ -34,7 +32,7 @@ public static class AnimationIndexSmoke
             int expected = fixture ? 6 : 5;
             int behaviours = fixture ? 2 : 1;
 
-            WriteBa2(Path.Combine(data, "Fallout4 - Animations.ba2"), new[]
+            BehaviourStudio.Tests.TestArchives.WriteGeneralBa2(Path.Combine(data, "Fallout4 - Animations.ba2"), new[]
             {
                 ("Meshes/Actors/Character/Animations/Packed.hkx", new byte[] { 8, 8 }),
                 ("Meshes/Actors/RadRoach/Characters/RadRoachCharacter.hkx", new byte[] { 9, 9, 9 }),
@@ -147,44 +145,5 @@ public static class AnimationIndexSmoke
         }
         Console.WriteLine($"        animation index: the {relative} fixture is not here, so that entry is skipped");
         return false;
-    }
-
-    private static void WriteBa2(string path, (string Name, byte[] Payload)[] entries)
-    {
-        const int headerBytes = 24;
-        const int recordBytes = 36;
-        ulong nameTable = (ulong)(headerBytes + recordBytes * entries.Length);
-        int names = entries.Sum(entry => 2 + Encoding.UTF8.GetBytes(entry.Name).Length);
-        ulong cursor = nameTable + (ulong)names;
-
-        using var stream = File.Create(path);
-        using var writer = new BinaryWriter(stream);
-        writer.Write(Encoding.ASCII.GetBytes("BTDX"));
-        writer.Write((uint)1);
-        writer.Write(Encoding.ASCII.GetBytes("GNRL"));
-        writer.Write((uint)entries.Length);
-        writer.Write(nameTable);
-
-        foreach (var entry in entries)
-        {
-            writer.Write(0u);
-            writer.Write(0u);
-            writer.Write(0u);
-            writer.Write(0x00100100u);
-            writer.Write(cursor);
-            writer.Write(0u);
-            writer.Write((uint)entry.Payload.Length);
-            writer.Write(0xBAADF00Du);
-            cursor += (ulong)entry.Payload.Length;
-        }
-
-        foreach (var entry in entries)
-        {
-            byte[] name = Encoding.UTF8.GetBytes(entry.Name);
-            writer.Write((ushort)name.Length);
-            writer.Write(name);
-        }
-
-        foreach (var entry in entries) writer.Write(entry.Payload);
     }
 }

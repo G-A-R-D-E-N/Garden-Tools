@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="*.cs" />
     <Compile Include="../../app/*.cs" />
+    <Compile Include="../tests/TestArchives.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.2" />

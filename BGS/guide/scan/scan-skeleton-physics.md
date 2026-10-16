@@ -10,11 +10,15 @@ status, the bodies, shapes and constraints the file declares, whether the ragdol
 there, and whether the file carries `hknpBSMaterial`.
 
 Discovery belongs to `GameData`: the folder's archives in the game's own load order, plus loose files
-(and, for an MO2 instance, the enabled mods), merged by virtual path with the game's precedence. A
-loose skeleton that overrides a packed copy is censused once, as the winner, and the copies it hides
-are listed in the row's `details` as `shadowed: <virtual path> [<archive or loose>]`. The name rule is
+(and, for an MO2 instance, the enabled mods), merged by virtual path with the game's precedence. The
+archives it reads are the `.ba2` files directly under the `Data` folder — the ones the game loads —
+ordered by `plugins.txt`, plus the enabled mod roots' own top-level archives; an archive buried in a
+Data subfolder is not part of the game's data tree and is not censused. A loose skeleton that
+overrides a packed copy is censused once, as the winner, and the copies it hides are listed in the
+row's `details` as `shadowed: <virtual path> [<archive or loose>]`. The name rule is
 `GameData.IsSkeletonName` — a `.hkx` whose file name starts with `skeleton`, matched case-insensitively
-— so `Skeleton.hkx` is found on Linux as well as on Windows.
+— so `Skeleton.hkx` is found on Linux as well as on Windows. A skeleton that cannot be read (over the
+512 MB HKX cap, or an IO or permission failure) is reported as `unreadable` with the reason.
 
 This is the command to reach for when a character "loads with physics missing": it says whether the
 file has no ragdoll at all, has one BGS cannot read completely, or stores physics in a format

@@ -18,6 +18,19 @@ internal static class InputFilePolicy
     internal static void EnsureNif(long length, string name = "NIF input") =>
         Ensure(length, MaximumNifBytes, "NIF", name);
 
+    internal static string? RefusalIfTooLarge(long length, long maximum, string name)
+    {
+        try
+        {
+            Ensure(length, maximum, "HKX", name);
+            return null;
+        }
+        catch (InvalidDataException error)
+        {
+            return error.Message;
+        }
+    }
+
     private static byte[] Read(string path, long maximum, string kind)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,

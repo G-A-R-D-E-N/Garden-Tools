@@ -21,28 +21,16 @@ public static partial class ModlistScan
         var counts = new Dictionary<PhysicsLoadStatus, int>();
         int scanned = 0, archives = 0, skippedArchives = 0, unreadable = 0, shadowed = 0;
 
-        using GameData data = SkeletonPhysicsData(root);
+        using GameData data = Mo2ScanData.OpenScanData(root);
         Info(json, $"scanning skeleton .hkx under {root}");
 
-        var archiveByFileName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string archive in data.ArchivePaths)
-            archiveByFileName[Path.GetFileName(archive)] = archive;
-
-        var winners = data.EnumerateWinners("", GameData.IsSkeletonName, warning =>
+        var failedArchives = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var winners = data.EnumerateWinners("", GameData.IsSkeletonName, (archivePath, message) =>
         {
-            skippedArchives++;
-            string name = warning;
-            string why = warning;
-            int at = warning.IndexOf(':');
-            if (at >= 0)
-            {
-                name = warning[..at].Trim();
-                why = warning[(at + 1)..].Trim();
-            }
-
-            string where = archiveByFileName.TryGetValue(name, out string? failed) ? Rel(root, failed) : name;
-            if (!json) Console.WriteLine($"skip     {where}: {why}");
-            findings.Add(new ScanFinding("skip", where, null, new[] { why }));
+            if (failedArchives.Add(archivePath)) skippedArchives++;
+            string where = Rel(root, archivePath);
+            if (!json) Console.WriteLine($"skip     {where}: {message}");
+            findings.Add(new ScanFinding("skip", where, null, new[] { message }));
         });
 
         var packed = winners.Where(winner => winner.Origin == GameAssetOrigin.Archive)
@@ -122,20 +110,10 @@ public static partial class ModlistScan
 
         void ReadSkeleton(GameAsset asset, string path, string source)
         {
-            byte[]? bytes;
-            string? failure = null;
-            try { bytes = data.Read(asset); }
-            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException
-                                        or ArgumentException or NotSupportedException)
-            {
-                bytes = null;
-                failure = First(e.Message);
-            }
-
-            if (bytes == null)
+            if (!data.TryRead(asset, out byte[] bytes, out string? warning))
             {
                 unreadable++;
-                string why = failure ?? "the winning copy could not be read";
+                string why = warning ?? "the winning copy could not be read";
                 if (!json) Console.WriteLine($"UNREADABLE  {path}  [{source}]: {why}");
                 findings.Add(new ScanFinding("unreadable", path, source, new[] { why }));
                 return;
@@ -145,11 +123,6 @@ public static partial class ModlistScan
             RecordSkeletonPhysics(bytes, path, source, json, findings, counts, ShadowDetails(root, asset));
         }
     }
-
-    private static GameData SkeletonPhysicsData(string root) =>
-        Mo2ScanData.TryOpen(root, out Mo2ScanData? instance, out _) && instance != null
-            ? instance.Data
-            : GameData.Discover(root);
 
     private static List<string>? ShadowDetails(string root, GameAsset asset)
     {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using OpenCommonwealth.Services;
 using OpenCommonwealth.Services.Archive;
 using Xunit;
 
@@ -401,6 +402,115 @@ public sealed class GameDataAssetsTests
         Assert.DoesNotContain(winners, asset => asset.VirtualPath.Contains("gone", StringComparison.Ordinal));
         Assert.Single(warnings);
         Assert.Contains("Truncated.ba2", warnings[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EnumerateWinnersReportsTheFailedArchivePathSeparatelyFromTheReason()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-warnpath");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+
+        string full = Path.Combine(root.Path, "full.ba2");
+        TestArchives.WriteGeneralBa2(full, (Prefix + "/gone.hkx", Bytes(9, 9)));
+        byte[] written = File.ReadAllBytes(full);
+        string truncated = Path.Combine(dataFolder, "z - Truncated.ba2");
+        File.WriteAllBytes(truncated, written[..(written.Length / 2)]);
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+
+        var failed = new List<(string Path, string Message)>();
+        data.EnumerateWinners(Prefix, null, (path, message) => failed.Add((path, message)));
+
+        var only = Assert.Single(failed);
+        Assert.Equal(truncated, only.Path);
+        Assert.DoesNotContain(truncated, only.Message, StringComparison.Ordinal);
+        Assert.NotEmpty(only.Message);
+    }
+
+    [Fact]
+    public void ReadRefusesAnAssetOverTheHkxCapAndSaysWhy()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-cap");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+
+        var asset = new GameAsset(Prefix + "/big.hkx", GameAssetOrigin.Archive, null,
+                                  Path.Combine(dataFolder, "a.ba2"), Prefix + "/big.hkx",
+                                  InputFilePolicy.MaximumHkxBytes + 1, null);
+
+        Assert.False(data.TryRead(asset, out byte[] bytes, out string? warning));
+        Assert.Empty(bytes);
+        Assert.NotNull(warning);
+        Assert.Contains("big.hkx", warning!, StringComparison.Ordinal);
+        Assert.Contains("HKX", warning!, StringComparison.Ordinal);
+        Assert.Contains("512 MiB", warning!, StringComparison.Ordinal);
+        Assert.Null(data.Read(asset));
+    }
+
+    [Fact]
+    public void ReadRefusesALooseFileOverTheHkxCapBeforeReadingIt()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-cap-loose");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string loose = Path.Combine(dataFolder, Prefix.Replace('/', Path.DirectorySeparatorChar), "big.hkx");
+        Directory.CreateDirectory(Path.GetDirectoryName(loose)!);
+        using (var stream = File.Create(loose)) stream.SetLength(InputFilePolicy.MaximumHkxBytes + 1);
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+
+        GameAsset asset = Assert.Single(data.EnumerateWinners(Prefix));
+        Assert.Equal(InputFilePolicy.MaximumHkxBytes + 1, asset.Size);
+
+        Assert.False(data.TryRead(asset, out byte[] bytes, out string? warning));
+        Assert.Empty(bytes);
+        Assert.NotNull(warning);
+        Assert.Contains("HKX", warning!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadRefusesAnArchiveEntryOverAnInjectableCap()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-cap-entry");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+        byte[] payload = Bytes(4, 4);
+        TestArchives.WriteGeneralBa2(Path.Combine(dataFolder, "a - Good.ba2"),
+                                     (Prefix + "/small.hkx", payload));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+
+        GameAsset asset = Assert.Single(data.EnumerateWinners(Prefix));
+        Assert.Equal(payload.Length, asset.Size);
+
+        data.ReadLimitBytes = payload.Length - 1;
+        Assert.False(data.TryRead(asset, out byte[] refused, out string? warning));
+        Assert.Empty(refused);
+        Assert.NotNull(warning);
+        Assert.Contains("HKX", warning!, StringComparison.Ordinal);
+
+        data.ReadLimitBytes = InputFilePolicy.MaximumHkxBytes;
+        Assert.Equal(payload, data.Read(asset));
+    }
+
+    [Fact]
+    public void ReadReportsTheIoDetailForALooseFileThatVanished()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-missing");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        string loose = Path.Combine(dataFolder, Prefix.Replace('/', Path.DirectorySeparatorChar), "gone.hkx");
+        Directory.CreateDirectory(Path.GetDirectoryName(loose)!);
+        File.WriteAllBytes(loose, Bytes(2, 2));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+        GameAsset asset = Assert.Single(data.EnumerateWinners(Prefix));
+        File.Delete(loose);
+
+        Assert.False(data.TryRead(asset, out byte[] bytes, out string? warning));
+        Assert.Empty(bytes);
+        Assert.NotNull(warning);
+        Assert.Contains("gone.hkx", warning!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

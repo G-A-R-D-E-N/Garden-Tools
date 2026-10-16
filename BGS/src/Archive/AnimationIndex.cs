@@ -99,7 +99,10 @@ public sealed class AnimationIndexRequest
         }
 
         if (ExistingFolder(mo2Folder) is { } mods) return ForModsFolder(RequiredFolder(dataFolder), mods);
-        return ForDataFolder(RequiredFolder(dataFolder));
+
+        GameData discovered = Mo2ScanData.OpenScanData(RequiredFolder(dataFolder));
+        using (discovered)
+            return ForGameData(discovered, null, null);
     }
 
     internal GameData OpenGameData()
