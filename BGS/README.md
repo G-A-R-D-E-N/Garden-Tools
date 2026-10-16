@@ -44,8 +44,11 @@ Files opened from a `.ba2` are read-only copies. Copy one to a folder you contro
 BGS is conservative about unsupported formats and edits. Areas that are not fully reduced or
 validated are read-only, refused, or clearly marked in the application:
 
-- Skeleton-mapper serialization/write-back and chain-mapper authoring are not complete. Shipped
-  Fallout 4 files do contain chain and unmapped-bone data; automatic bone pairing is not proven.
+- Skeleton-mapper write-back covers the simple row form: `symrm mapper` reads a shipped
+  `hkaSkeletonMapper`, recomputes and measures its rows against the reference, and writes them back
+  through the verified save path (`--out` for a copy, `--force` for an in-place overwrite). Chain
+  authoring is not supported: shipped Fallout 4 mappers do contain chain and unmapped-bone data, and
+  automatic bone pairing is not proven.
 - Reciprocal mapper generation is a construction tool based on the measured human fixture. It does
   not claim that every shipped mapper pair is symmetrical.
 - Ragdoll and physics tools are primarily inspection and engineering previews. Drop/Recover is a

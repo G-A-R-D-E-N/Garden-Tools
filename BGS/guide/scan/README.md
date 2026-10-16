@@ -4,7 +4,7 @@ Behaviour Graph Studio can scan a whole load order from the command line, withou
 window, and report behaviour/animation defects that would otherwise only show up as an in‑game
 crash or a broken animation. This is meant for load‑order authors and for gating a build in CI.
 
-There are four scan modes, each on its own page:
+There are five scan modes, each on its own page:
 
 | Mode | Answers | Page |
 |---|---|---|
@@ -12,10 +12,11 @@ There are four scan modes, each on its own page:
 | `--scan-modlist` | Do the character files a modlist actually loads still have all the animations they declare? | [scan-modlist](scan-modlist.md) |
 | `--scan-clips` | Does every clip that a loaded behaviour plays resolve to an animation that exists in the load order? | [scan-clips](scan-clips.md) |
 | `--scan-skeleton-physics` | What physics does each `skeleton*.hkx` in this folder carry — a ragdoll, nothing, or a format Fallout 4 does not load? | [scan-skeleton-physics](scan-skeleton-physics.md) |
+| `--scan-index` | Which animation, behaviour, character and project files does this load order reach, and where does each one come from? | [scan-index](scan-index.md) |
 
-`--scan-modlist` and `--scan-clips` read a **Mod Organizer 2 instance** — see
+`--scan-modlist`, `--scan-clips` and `--scan-index` read a **Mod Organizer 2 instance** — see
 [MO2 instance setup](#mo2-instance-setup) below. `--scan-archives` and `--scan-skeleton-physics`
-just walk a folder.
+just walk a folder; `--scan-index` accepts either.
 
 ## Running a scan
 
@@ -27,6 +28,7 @@ BehaviourGraphStudio.exe --scan-archives "D:\Mods\MyAnimationMod"
 BehaviourGraphStudio.exe --scan-modlist "C:\MO2\Instances\Fallout 4"
 BehaviourGraphStudio.exe --scan-clips  "C:\MO2\Instances\Fallout 4"
 BehaviourGraphStudio.exe --scan-skeleton-physics "C:\Games\Fallout 4\Data"
+BehaviourGraphStudio.exe --scan-index "C:\Games\Fallout 4\Data"
 ```
 
 On Linux, run `BehaviourGraphStudio` (no `.exe`). Quote any path that contains spaces.
@@ -45,6 +47,9 @@ Every mode returns the same three exit codes, so a scan can gate a script or a C
 BehaviourGraphStudio.exe --scan-clips "C:\MO2\Instances\Fallout 4"
 if [ $? -ne 0 ]; then echo "load order has behaviour defects"; fi
 ```
+
+For `--scan-index`, exit `1` means the load order reached no indexed file at all rather than a
+defect; see [scan-index](scan-index.md).
 
 ## Machine‑readable output (`--json`)
 
