@@ -384,7 +384,7 @@ public static class Program
                                                         StringComparison.OrdinalIgnoreCase))
                                  .OrderBy(f => f).ToList();
 
-            int read = 0, empty = 0, unsupported = 0, threw = 0;
+            int read = 0, empty = 0, unsupported = 0, refused = 0, threw = 0;
             var classes = new Dictionary<string, int>();
             var reasons = new Dictionary<string, int>();
 
@@ -392,15 +392,26 @@ public static class Program
             {
                 try
                 {
+                    // TryReadAnimation still fills AnimationClass when it refuses a class this
+                    // reader does not decode, so the refusal can be named instead of parsed.
                     if (!new HkxBinaryReader().TryReadAnimation(file, out var a))
                     {
                         unsupported++;
                         classes[a.AnimationClass] = classes.GetValueOrDefault(a.AnimationClass) + 1;
                         continue;
                     }
+
                     bool any = a.Tracks.Any(t => t.Rotations.Count > 0 || t.Translations.Count > 0 || t.Scales.Count > 0);
                     if (a.NumFrames <= 0 || !any) { empty++; Console.WriteLine($"  empty  {Short(file, target)}  {a.GetSummary()}"); }
                     else read++;
+                }
+                catch (NotSupportedException ex)
+                {
+                    // A refused spline sub-format has no class name to group by, so keep the
+                    // reader's own sentence.
+                    refused++;
+                    string why = ex.Message;
+                    reasons[why] = reasons.GetValueOrDefault(why) + 1;
                 }
                 catch (Exception ex)
                 {
@@ -411,15 +422,27 @@ public static class Program
             }
 
             Console.WriteLine($"\n{files.Count} animations: {read} decoded, {unsupported} in a class this reader " +
-                              $"does not decode, {empty} decoded to nothing, {threw} threw");
-            foreach (var kv in classes.OrderByDescending(k => k.Value)) Console.WriteLine($"  {kv.Value,5}  {kv.Key}");
+                              $"does not decode, {refused} in a spline sub-format this reader does not decode, " +
+                              $"{empty} decoded to nothing, {threw} threw");
+            foreach (var kv in classes.OrderByDescending(k => k.Value))
+                Console.WriteLine($"  {kv.Value,5}  {kv.Key}: {AnimationCompression.Describe(kv.Key)}");
             foreach (var kv in reasons.OrderByDescending(k => k.Value)) Console.WriteLine($"  {kv.Value,5}  {kv.Key}");
-            return threw == 0 && empty == 0 ? 0 : 1;
+            return threw == 0 && empty == 0 && unsupported == 0 && refused == 0 ? 0 : 1;
         }
 
         if (argv.Length > 2 && argv[2] == "--digest")
         {
-            var a = new HkxBinaryReader().ReadAnimation(target);
+            HkxAnimationData a;
+            try
+            {
+                a = new HkxBinaryReader().ReadAnimation(target);
+            }
+            catch (NotSupportedException ex)
+            {
+                Console.WriteLine($"{Path.GetFileName(target)}: {ex.Message}");
+                return 1;
+            }
+
             double sum = 0;
             foreach (var tr in a.Tracks)
             {
@@ -603,15 +626,44 @@ public static class Program
                        .OrderBy(f => f).ToList()
             : new List<string> { target };
 
-        int read = 0, withScale = 0, degenerate = 0;
+        string root = Directory.Exists(target) ? target : Path.GetDirectoryName(target)!;
+        int read = 0, withScale = 0, degenerate = 0, unsupported = 0, refused = 0, failed = 0;
         var byClass = new Dictionary<string, int>();
         var scaledByClass = new Dictionary<string, int>();
+        var unsupportedByClass = new Dictionary<string, int>();
+        var refusals = new Dictionary<string, int>();
+        var failures = new Dictionary<string, int>();
 
         foreach (string file in files)
         {
             HkxAnimationData a;
-            try { a = new HkxBinaryReader().ReadAnimation(file); }
-            catch { continue; }
+            try
+            {
+                // TryReadAnimation still fills AnimationClass when it refuses a class this reader
+                // does not decode, so the refusal can be named instead of vanishing.
+                if (!new HkxBinaryReader().TryReadAnimation(file, out a))
+                {
+                    unsupported++;
+                    unsupportedByClass[a.AnimationClass] = unsupportedByClass.GetValueOrDefault(a.AnimationClass) + 1;
+                    Console.WriteLine($"  unsupported  {Short(file, root),-64} {a.AnimationClass}");
+                    continue;
+                }
+            }
+            catch (NotSupportedException error)
+            {
+                // No class name to group by: the reader refused a spline sub-format.
+                refused++;
+                refusals[error.Message] = refusals.GetValueOrDefault(error.Message) + 1;
+                Console.WriteLine($"  unsupported  {Short(file, root),-64} {error.Message}");
+                continue;
+            }
+            catch (Exception error)
+            {
+                failed++;
+                string why = error.Message.Split('\n')[0];
+                failures[why] = failures.GetValueOrDefault(why) + 1;
+                continue;
+            }
             read++;
             byClass[a.AnimationClass] = byClass.GetValueOrDefault(a.AnimationClass) + 1;
 
@@ -639,16 +691,24 @@ public static class Program
             scaledByClass[a.AnimationClass] = scaledByClass.GetValueOrDefault(a.AnimationClass) + 1;
             if (zeroFrames > 0) degenerate++;
 
-            Console.WriteLine($"  {Short(file, Directory.Exists(target) ? target : Path.GetDirectoryName(target)!),-64} " +
+            Console.WriteLine($"  {Short(file, root),-64} " +
                               $"{a.AnimationClass,-34} {oddTracks}/{a.Tracks.Count} tracks  " +
                               $"range {lo:F4}..{hi:F4}" + (zeroFrames > 0 ? $"  ZERO x{zeroFrames}" : ""));
         }
 
         Console.WriteLine($"\n{read} animations read, {withScale} carry a scale that is not the identity, " +
-                          $"{degenerate} of those contain a zero");
+                          $"{degenerate} of those contain a zero, {unsupported} in a class this reader does not " +
+                          $"decode, {refused} in a spline sub-format this reader does not decode, {failed} could " +
+                          "not be read");
         foreach (var kv in byClass.OrderByDescending(k => k.Value))
             Console.WriteLine($"  {kv.Value,6} {kv.Key}, {scaledByClass.GetValueOrDefault(kv.Key)} of them scaled");
-        return 0;
+        foreach (var kv in unsupportedByClass.OrderByDescending(k => k.Value))
+            Console.WriteLine($"  {kv.Value,6} {kv.Key}: {AnimationCompression.Describe(kv.Key)}");
+        foreach (var kv in refusals.OrderByDescending(k => k.Value))
+            Console.WriteLine($"  {kv.Value,6} {kv.Key}");
+        foreach (var kv in failures.OrderByDescending(k => k.Value))
+            Console.WriteLine($"  {kv.Value,6} {kv.Key}");
+        return unsupported == 0 && refused == 0 && failed == 0 ? 0 : 1;
     }
 
     private static string Short(string file, string root) =>
@@ -6967,7 +7027,7 @@ public static class Program
         var skeleton = new HkxBinaryReader().ReadSkeleton(Path.GetFullPath(argv[1]));
         if (!new HkxBinaryReader().TryReadAnimation(Path.GetFullPath(argv[2]), out var animation))
         {
-            Console.WriteLine($"{Path.GetFileName(argv[2])}: {animation.AnimationClass} is not decoded");
+            Console.WriteLine($"{Path.GetFileName(argv[2])}: {AnimationCompression.Describe(animation.AnimationClass)}");
             return 1;
         }
 

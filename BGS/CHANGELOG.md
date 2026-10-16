@@ -6,6 +6,7 @@ New to BGS? See the [Getting Started Guide](https://prisma-user-interface-framew
 
 ## Unreleased
 
+* Animations whose compression this build cannot decode now say so in plain English, name the class or the spline sub-format, and state that the file was not changed, in the window, the inspection assistant, the round-trip report and the command line. `symrm scale` and `symrm frames` count those files and exit non-zero instead of skipping them silently.
 * Skin weights on full-precision skinned meshes are read and saved at the correct vertex offset. Skinned shapes whose vertex stride does not match their declared attributes are refused instead of misread.
 
 * When several base game archives contain the same file, the copy from the plugin loaded last is used, as in the game, instead of the copy from the first plugin in plugins.txt.

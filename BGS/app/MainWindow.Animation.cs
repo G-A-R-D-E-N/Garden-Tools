@@ -257,8 +257,7 @@ public partial class MainWindow : Window
             if (!new HkxBinaryReader().TryReadAnimation(path, out anim))
             {
                 _animationSummary.Text =
-                    $"{anim.UnsupportedReason}: {anim.AnimationClass}. " +
-                    $"Only {HkxAnimationData.SupportedAnimationClasses} are read, so there is no frame data to show.";
+                    "Unsupported: " + AnimationCompression.Describe(anim.AnimationClass);
                 _animationSummary.Foreground = Ux.BadBrush;
                 _animation.Add(null, anim.AnimationClass, "", "", "no frame data was read from this file", "")
                           .Colour(0, Ux.BadBrush).Colour(3, Ux.MutedBrush);

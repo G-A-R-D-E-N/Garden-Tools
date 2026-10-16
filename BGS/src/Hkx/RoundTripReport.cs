@@ -112,8 +112,13 @@ public sealed class RoundTripReport
                     RoundTripLossKind.UnsupportedAnimation,
                     null,
                     "",
-                    $"animation class {animation.AnimationClass} is not decoded; only " +
-                    $"{HkxAnimationData.SupportedAnimationClasses} are supported"));
+                    AnimationCompression.Describe(animation.AnimationClass)));
+        }
+        catch (NotSupportedException error)
+        {
+            // A spline sub-format this build cannot decode is a named loss, not an unreadable file:
+            // the data stays in the file untouched, but the animation cannot be shown.
+            report.Add(new RoundTripLoss(RoundTripLossKind.UnsupportedAnimation, null, "", error.Message));
         }
         catch (Exception error) when (IsFormatFailure(error))
         {

@@ -378,6 +378,8 @@ public partial class MainWindow : Window
         {
             if (!new HkxBinaryReader().TryReadAnimation(hkx, out animation))
             {
+                SetPlaybackSummary($"{label}: {AnimationCompression.Describe(animation.AnimationClass)}",
+                                   Ux.BadBrush);
                 ClearPose();
                 SetPlaybackSummary(
                     $"{label}: {animation.UnsupportedReason} in {animation.AnimationClass}, so it cannot be drawn.",

@@ -151,7 +151,7 @@ public static class SplineQuat
     };
 
     internal static NotSupportedException Unsupported(int format) =>
-        new($"spline rotation quantization {format} is not supported (only 1, 2 and 5 are)");
+        AnimationCompression.UnsupportedSplineEncoding(format);
 
     public static float AngleBetween(Quaternion a, Quaternion b)
     {
