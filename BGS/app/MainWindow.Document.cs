@@ -163,6 +163,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        CancelIndexOnClose();
         _gameData?.Dispose();
         _gameData = null;
         base.OnClosed(e);

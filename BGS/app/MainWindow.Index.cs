@@ -16,7 +16,6 @@ namespace BehaviourStudio.App;
 
 public partial class MainWindow : Window
 {
-    private const int MaxIndexRows = 2000;
     private const string AllKinds = "all kinds";
     private const string AllProjects = "all projects";
     private const string AllFolders = "all folders";
@@ -43,6 +42,7 @@ public partial class MainWindow : Window
     private AnimationIndex? _animationIndex;
     private AnimationIndexEntry[] _indexShown = Array.Empty<AnimationIndexEntry>();
     private CancellationTokenSource? _indexCancellation;
+    private int _indexGeneration;
     private bool _indexBuilding;
     private bool _indexFilterPaused;
 
@@ -121,7 +121,12 @@ public partial class MainWindow : Window
         }
 
         Settings.TrySet("gameDataFolder", data, out _);
-        string mods = Settings.Get("gameModsFolder");
+        return DiscoverIndexRequest(data, Settings.Get("gameModsFolder"), out failure);
+    }
+
+    private static AnimationIndexRequest? DiscoverIndexRequest(string data, string mods, out string failure)
+    {
+        failure = "";
         try
         {
             return mods.Length > 0 && Directory.Exists(mods)
@@ -145,25 +150,47 @@ public partial class MainWindow : Window
             return;
         }
 
-        var request = IndexRequestFor(_indexDataField.Text ?? "", out string failure);
-        if (request == null)
+        string data = (_indexDataField.Text ?? "").Trim();
+        if (data.Length == 0) data = Settings.Get("gameDataFolder");
+        if (data.Length == 0 || !Directory.Exists(data))
         {
-            _indexProgress.Text = failure;
+            _indexProgress.Text = "set the game Data folder first";
             _indexProgress.Foreground = Ux.WarnBrush;
             return;
         }
 
-        string? cache = AnimationIndex.DefaultCachePath;
-        var options = force ? AnimationIndexOptions.Fresh(cache) : AnimationIndexOptions.Cached(cache);
+        Settings.TrySet("gameDataFolder", data, out _);
+        string mods = Settings.Get("gameModsFolder");
+
         _indexBuilding = true;
-        _indexCancellation = new CancellationTokenSource();
+        int generation = ++_indexGeneration;
+        var cancellation = new CancellationTokenSource();
+        _indexCancellation = cancellation;
         _indexProgress.Foreground = Ux.MutedBrush;
         _indexProgress.Text = "indexing...";
-        IProgress<AnimationIndexProgress> progress = new Progress<AnimationIndexProgress>(ShowIndexProgress);
+        IProgress<AnimationIndexProgress> progress = new Progress<AnimationIndexProgress>(
+            step => ShowIndexProgress(step, generation));
 
         try
         {
-            var index = await AnimationIndex.BuildAsync(request, options, progress.Report, _indexCancellation.Token);
+            string failure = "";
+            var index = await Task.Run(() =>
+            {
+                var request = DiscoverIndexRequest(data, mods, out failure);
+                if (request == null) return null;
+
+                string cache = AnimationIndex.DefaultCachePathFor(request);
+                var options = force ? AnimationIndexOptions.Fresh(cache) : AnimationIndexOptions.Cached(cache);
+                return AnimationIndex.Build(request, options, progress.Report, cancellation.Token);
+            }, cancellation.Token);
+
+            if (index == null)
+            {
+                _indexProgress.Text = failure;
+                _indexProgress.Foreground = Ux.WarnBrush;
+                return;
+            }
+
             ApplyIndex(index);
         }
         catch (OperationCanceledException)
@@ -179,15 +206,22 @@ public partial class MainWindow : Window
         }
         finally
         {
+            if (generation == _indexGeneration) _indexGeneration++;
             _indexBuilding = false;
-            _indexCancellation?.Dispose();
-            _indexCancellation = null;
+            cancellation.Dispose();
+            if (ReferenceEquals(_indexCancellation, cancellation)) _indexCancellation = null;
         }
     }
 
-    private void ShowIndexProgress(AnimationIndexProgress progress)
+    internal void CancelIndexOnClose()
     {
-        if (!_indexBuilding) return;
+        _indexGeneration++;
+        _indexCancellation?.Cancel();
+    }
+
+    private void ShowIndexProgress(AnimationIndexProgress progress, int generation)
+    {
+        if (!_indexBuilding || generation != _indexGeneration) return;
         _indexProgress.Text = progress.Total == 0
             ? progress.Phase
             : $"indexing {progress.Done}/{progress.Total} — {progress.Phase}";
@@ -220,17 +254,26 @@ public partial class MainWindow : Window
             string project = SelectedText(_indexProject, AllProjects);
             string folder = SelectedText(_indexFolder, AllFolders);
 
-            FillCombo(_indexKind, AllKinds,
-                entries.Select(entry => AnimationIndex.Label(entry.Kind)).Distinct(StringComparer.Ordinal)
-                       .OrderBy(name => name, StringComparer.Ordinal), kind);
-            FillCombo(_indexProject, AllProjects,
-                entries.Where(entry => entry.Project.Length > 0).Select(entry => entry.Project)
-                       .Distinct(StringComparer.OrdinalIgnoreCase)
-                       .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).Take(400), project);
-            FillCombo(_indexFolder, AllFolders,
-                entries.Where(entry => entry.Folder.Length > 0).Select(entry => entry.Folder)
-                       .Distinct(StringComparer.OrdinalIgnoreCase)
-                       .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).Take(400), folder);
+            var projects = entries.Where(entry => entry.Project.Length > 0).Select(entry => entry.Project)
+                                  .Distinct(StringComparer.OrdinalIgnoreCase)
+                                  .Where(name => !name.Equals(AllProjects, StringComparison.OrdinalIgnoreCase))
+                                  .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+            var folders = entries.Where(entry => entry.Folder.Length > 0).Select(entry => entry.Folder)
+                                 .Distinct(StringComparer.OrdinalIgnoreCase)
+                                 .Where(name => !name.Equals(AllFolders, StringComparison.OrdinalIgnoreCase))
+                                 .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+
+            FillCombo(_indexKind,
+                AnimationIndexView.CappedValues(
+                    entries.Select(entry => AnimationIndex.Label(entry.Kind)).Distinct(StringComparer.Ordinal)
+                           .OrderBy(name => name, StringComparer.Ordinal), AllKinds,
+                    AnimationIndexView.MaxFilterValues, out _), kind);
+            FillCombo(_indexProject,
+                AnimationIndexView.CappedValues(projects, AllProjects, AnimationIndexView.MaxFilterValues, out _),
+                project);
+            FillCombo(_indexFolder,
+                AnimationIndexView.CappedValues(folders, AllFolders, AnimationIndexView.MaxFilterValues, out _),
+                folder);
         }
         finally
         {
@@ -238,14 +281,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void FillCombo(ComboBox combo, string all, IEnumerable<string> values, string keep)
+    private static void FillCombo(ComboBox combo, IReadOnlyList<string> items, string keep)
     {
-        var items = new List<string> { all };
-        foreach (string value in values)
-            if (value.Length > 0 && !value.Equals(all, StringComparison.OrdinalIgnoreCase)) items.Add(value);
-
         combo.ItemsSource = items;
-        int at = keep.Length == 0 ? -1 : items.IndexOf(keep);
+        int at = keep.Length == 0 ? -1 : items.ToList().IndexOf(keep);
         combo.SelectedIndex = at < 0 ? 0 : at;
     }
 
@@ -259,9 +298,9 @@ public partial class MainWindow : Window
         IReadOnlyList<AnimationIndexEntry> all = _animationIndex?.Entries
             ?? (IReadOnlyList<AnimationIndexEntry>)Array.Empty<AnimationIndexEntry>();
         string[] words = (_indexSearch.Text ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        string kind = SelectedText(_indexKind, AllKinds);
-        string project = SelectedText(_indexProject, AllProjects);
-        string folder = SelectedText(_indexFolder, AllFolders);
+        string kind = AnimationIndexView.FilterValue(SelectedText(_indexKind, AllKinds), AllKinds);
+        string project = AnimationIndexView.FilterValue(SelectedText(_indexProject, AllProjects), AllProjects);
+        string folder = AnimationIndexView.FilterValue(SelectedText(_indexFolder, AllFolders), AllFolders);
 
         var shown = new List<AnimationIndexEntry>();
         foreach (var entry in all)
@@ -274,14 +313,18 @@ public partial class MainWindow : Window
         }
 
         _indexShown = shown.ToArray();
-        PaintIndexGrid(_indexShown);
+        int painted = PaintIndexGrid(_indexShown);
 
-        _indexSummary.Text = _animationIndex == null
-            ? "no index built yet"
-            : shown.Count == all.Count
-                ? $"{all.Count} entries"
-                : $"{shown.Count} of {all.Count} entries" +
-                  (shown.Count > MaxIndexRows ? $", showing the first {MaxIndexRows}" : "");
+        if (_animationIndex == null)
+        {
+            _indexSummary.Text = "no index built yet";
+            return;
+        }
+
+        string count = shown.Count == all.Count
+            ? $"{all.Count} entries"
+            : $"{shown.Count} of {all.Count} entries";
+        _indexSummary.Text = painted < shown.Count ? $"{count}, showing {painted}" : count;
     }
 
     private static bool MatchesIndexWords(AnimationIndexEntry entry, string[] words)
@@ -294,26 +337,22 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void PaintIndexGrid(IReadOnlyList<AnimationIndexEntry> shown)
+    private int PaintIndexGrid(IReadOnlyList<AnimationIndexEntry> shown)
     {
         _indexGrid.Clear();
-        int budget = MaxIndexRows;
-        foreach (AnimationKind kind in Enum.GetValues<AnimationKind>())
+        var groups = AnimationIndexView.Groups(shown);
+        foreach (var group in groups)
         {
-            var group = shown.Where(entry => entry.Kind == kind).ToList();
-            if (group.Count == 0) continue;
-
-            var head = _indexGrid.Add(null, $"{AnimationIndex.GroupLabel(kind)} ({group.Count})", "", "", "")
+            var head = _indexGrid.Add(null, group.Heading, "", "", "")
                                  .Colour(0, Ux.TitleBrush);
-            foreach (var entry in group)
+            foreach (var entry in group.Entries)
             {
-                if (budget <= 0) break;
-                budget--;
                 _indexGrid.Add(head, entry.VirtualPath, entry.Source, AnimationIndex.Label(entry.Kind),
                                entry.Project)
                           .Colour(0, Ux.CodeBrush).Colour(2, Ux.MutedBrush).Tag(entry);
             }
         }
+        return AnimationIndexView.ShownCount(groups);
     }
 
     private void UpdateIndexStatus()
@@ -370,7 +409,7 @@ public partial class MainWindow : Window
 
             string folder = Path.Combine(Path.GetTempPath(), "BehaviourGraphStudio", TempDirKey(entry.Location));
             Directory.CreateDirectory(folder);
-            string copy = Path.Combine(folder, match.Name.Replace('/', '_'));
+            string copy = Path.Combine(folder, Ba2.FlatFileName(match.Name));
             File.WriteAllBytes(copy, archive.Read(match));
 
             _pathField.Text = copy;

@@ -26,6 +26,14 @@ public sealed class AnimationIndexCache
 {
     public const int CurrentVersion = 1;
 
+    public const long MaxCacheBytes = 256L * 1024 * 1024;
+
+    internal const int MaxSources = 4096;
+
+    internal const int MaxEntriesPerSource = 4_000_000;
+
+    internal const int MaxPathLength = 4096;
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -38,19 +46,29 @@ public sealed class AnimationIndexCache
 
     public string Path { get; }
 
+    internal static bool IsLoadableSize(long bytes) => bytes >= 0 && bytes <= MaxCacheBytes;
+
     public AnimationIndexCacheData? Load()
     {
-        if (!File.Exists(Path)) return null;
         try
         {
+            var info = new FileInfo(Path);
+            if (!info.Exists) return null;
+            if (!IsLoadableSize(info.Length)) return null;
+
             var data = JsonSerializer.Deserialize<AnimationIndexCacheData>(File.ReadAllText(Path), Options);
             if (data == null || data.Version != CurrentVersion) return null;
             if (string.IsNullOrEmpty(data.DataFolder) || data.Sources == null) return null;
+            if (data.Sources.Count > MaxSources) return null;
 
             foreach (var source in data.Sources)
             {
                 if (source == null || source.Paths == null || source.Sizes == null) return null;
                 if (source.Kind == null || source.Path == null || source.Stamp == null) return null;
+                if (source.Paths.Count != source.Sizes.Count) return null;
+                if (source.Paths.Count > MaxEntriesPerSource) return null;
+                foreach (string path in source.Paths)
+                    if (string.IsNullOrEmpty(path) || path.Length > MaxPathLength) return null;
             }
             return data;
         }

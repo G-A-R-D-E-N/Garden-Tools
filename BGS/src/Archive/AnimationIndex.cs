@@ -155,7 +155,7 @@ public sealed class AnimationIndex
     private readonly List<AnimationIndexEntry> _entries;
 
     private AnimationIndex(AnimationIndexRequest request, List<AnimationIndexSource> sources,
-                           List<AnimationIndexEntry> entries, int reused, int scanned,
+                           List<AnimationIndexEntry> entries, int reused, int scanned, int rejected,
                            TimeSpan elapsed, string? note)
     {
         Request = request;
@@ -163,13 +163,31 @@ public sealed class AnimationIndex
         _entries = entries;
         ReusedSources = reused;
         ScannedSources = scanned;
+        RejectedCacheEntries = rejected;
         Elapsed = elapsed;
         CacheNote = note;
     }
 
-    public static string DefaultCachePath { get; } = Path.Combine(
+    public static string CacheFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "BehaviourGraphStudio", "cache", "animation-index.json");
+        "BehaviourGraphStudio", "cache");
+
+    public static string DefaultCachePathFor(AnimationIndexRequest request) =>
+        Path.Combine(CacheFolder, "animation-index-" + KeyHash(request) + ".json");
+
+    internal static string KeyHash(AnimationIndexRequest request)
+    {
+        ulong hash = 14695981039346656037UL;
+        hash = Mix(hash, KeyPart(request.DataFolder));
+        hash = Mix(hash, "\u0000");
+        hash = Mix(hash, KeyPart(request.Profile));
+        hash = Mix(hash, "\u0000");
+        hash = Mix(hash, KeyPart(request.ModlistPath));
+        return hash.ToString("x16", CultureInfo.InvariantCulture);
+    }
+
+    private static string KeyPart(string? path) =>
+        (path ?? "").TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToLowerInvariant();
 
     public AnimationIndexRequest Request { get; }
 
@@ -180,6 +198,8 @@ public sealed class AnimationIndex
     public int ReusedSources { get; }
 
     public int ScannedSources { get; }
+
+    public int RejectedCacheEntries { get; }
 
     public TimeSpan Elapsed { get; }
 
@@ -254,9 +274,9 @@ public sealed class AnimationIndex
 
         AnimationIndexCache? cache = options.CachePath == null ? null : new AnimationIndexCache(options.CachePath);
         AnimationIndexCacheData? stored = options.ReuseCache && cache != null ? cache.Load() : null;
-        string? note = null;
-        if (options.ReuseCache && cache != null && stored == null && File.Exists(cache.Path))
-            note = "the previous index cache was stale or unreadable and has been discarded";
+        var notes = new List<string>();
+        bool discarded = options.ReuseCache && cache != null && stored == null && File.Exists(cache.Path);
+        if (discarded) notes.Add("the previous index cache was stale or unreadable and has been discarded");
 
         var reusable = new Dictionary<string, AnimationIndexCacheSource>(StringComparer.OrdinalIgnoreCase);
         if (stored != null && AnimationIndexCache.MatchesKey(stored, request))
@@ -265,7 +285,7 @@ public sealed class AnimationIndex
 
         var sources = new List<AnimationIndexSource>(planned.Count);
         var perSource = new Dictionary<string, List<AnimationIndexEntry>>(StringComparer.OrdinalIgnoreCase);
-        int done = 0, reused = 0, scanned = 0;
+        int done = 0, reused = 0, scanned = 0, rejected = 0;
 
         progress?.Invoke(new AnimationIndexProgress(0, planned.Count, "reading sources"));
         foreach (var (kind, path, label) in planned)
@@ -281,7 +301,7 @@ public sealed class AnimationIndex
             List<AnimationIndexEntry> entries;
             if (reusable.TryGetValue(identity, out var known) && known.Stamp == stamp)
             {
-                entries = FromCache(known, path, label);
+                entries = FromCache(known, path, label, ref rejected);
                 reused++;
                 progress?.Invoke(new AnimationIndexProgress(done, planned.Count, "reused " + label));
             }
@@ -299,34 +319,49 @@ public sealed class AnimationIndex
         }
 
         progress?.Invoke(new AnimationIndexProgress(planned.Count, planned.Count, "merging"));
-        var winners = new Dictionary<string, AnimationIndexEntry>(StringComparer.Ordinal);
+        var merged = new List<AnimationIndexEntry>();
+        var seenWithinSource = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var claimedBy = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var source in sources)
         {
             string identity = Identity(source.Kind, source.Path);
-            foreach (var entry in perSource[identity]) winners.TryAdd(GameData.Normalize(entry.VirtualPath), entry);
+            foreach (var entry in perSource[identity])
+            {
+                if (!seenWithinSource.Add(identity + "\u0000" + entry.VirtualPath)) continue;
+                string key = GameData.Normalize(entry.VirtualPath);
+                if (claimedBy.TryGetValue(key, out string? owner) && owner != identity) continue;
+                claimedBy[key] = identity;
+                merged.Add(entry);
+            }
         }
 
-        var merged = winners.Values
+        merged = merged
             .OrderBy(entry => entry.VirtualPath, StringComparer.OrdinalIgnoreCase)
             .ThenBy(entry => entry.Source, StringComparer.Ordinal)
             .ToList();
+
+        if (rejected > 0)
+            notes.Add((rejected == 1 ? "1 cached entry" : rejected.ToString(CultureInfo.InvariantCulture) +
+                                                                 " cached entries") +
+                      " pointed outside its source and were dropped");
 
         if (cache != null)
         {
             progress?.Invoke(new AnimationIndexProgress(planned.Count, planned.Count, "writing cache"));
             string? modlistStamp = FileStamp(request.ModlistPath);
-            if (stored != null && (stored.ModlistStamp ?? "") != (modlistStamp ?? "") && note == null)
-                note = "the modlist changed since the previous index build";
+            if (stored != null && (stored.ModlistStamp ?? "") != (modlistStamp ?? "") && !discarded)
+                notes.Add("the modlist changed since the previous index build");
 
             var data = new AnimationIndexCacheData(
                 AnimationIndexCache.CurrentVersion, request.DataFolder, request.Profile, request.ModlistPath,
                 modlistStamp, sources.Select(source => CacheOf(source, perSource)).ToList());
-            if (!cache.Save(data, out string failure)) note = "the index cache could not be written: " + failure;
+            if (!cache.Save(data, out string failure)) notes.Add("the index cache could not be written: " + failure);
         }
 
         watch.Stop();
         progress?.Invoke(new AnimationIndexProgress(planned.Count, planned.Count, "done"));
-        return new AnimationIndex(request, sources, merged, reused, scanned, watch.Elapsed, note);
+        return new AnimationIndex(request, sources, merged, reused, scanned, rejected, watch.Elapsed,
+                                  notes.Count == 0 ? null : string.Join("; ", notes));
     }
 
     public static Task<AnimationIndex> BuildAsync(AnimationIndexRequest request, AnimationIndexOptions options,
@@ -345,15 +380,83 @@ public sealed class AnimationIndex
             entries.Select(entry => entry.Size).ToList());
     }
 
-    private static List<AnimationIndexEntry> FromCache(AnimationIndexCacheSource source, string root, string label)
+    private static List<AnimationIndexEntry> FromCache(AnimationIndexCacheSource source, string root, string label,
+                                                       ref int rejected)
     {
         var entries = new List<AnimationIndexEntry>(source.Paths.Count);
+        bool loose = source.Kind != ArchiveKind;
         for (int i = 0; i < source.Paths.Count; i++)
         {
+            string virtualPath = source.Paths[i];
+            if (!IsSafeVirtualPath(virtualPath))
+            {
+                rejected++;
+                continue;
+            }
+
+            string location;
+            if (loose)
+            {
+                if (!TryLocation(source.Kind, root, virtualPath, out location) || !IsWithinRoot(root, location))
+                {
+                    rejected++;
+                    continue;
+                }
+            }
+            else
+            {
+                location = root;
+            }
+
             long size = i < source.Sizes.Count ? source.Sizes[i] : 0;
-            entries.Add(Classify(source.Paths[i], label, size, LocationOf(source.Kind, root, source.Paths[i])));
+            entries.Add(Classify(virtualPath, label, size, location));
         }
         return entries;
+    }
+
+    internal static bool IsSafeVirtualPath(string? virtualPath)
+    {
+        if (string.IsNullOrWhiteSpace(virtualPath)) return false;
+        string flat = virtualPath.Replace('\\', '/');
+        if (flat.Contains(':')) return false;
+        if (flat.StartsWith('/')) return false;
+        if (Path.IsPathRooted(flat)) return false;
+        foreach (string part in flat.Split('/'))
+            if (part == "..") return false;
+        return IsIndexedName(flat);
+    }
+
+    internal static bool IsWithinRoot(string root, string location)
+    {
+        try
+        {
+            string fullRoot = Path.GetFullPath(root)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string full = Path.GetFullPath(location);
+            StringComparison comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return full.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException
+                                       or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryLocation(string kind, string root, string virtualPath, out string location)
+    {
+        try
+        {
+            location = LocationOf(kind, root, virtualPath);
+            return true;
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            location = "";
+            return false;
+        }
     }
 
     private static string LocationOf(string kind, string root, string virtualPath) =>
@@ -411,6 +514,7 @@ public sealed class AnimationIndex
             foreach (string file in files)
             {
                 if (!IsIndexedName(file)) continue;
+                if (IsReparsePoint(file)) continue;
                 try
                 {
                     var info = new FileInfo(file);
@@ -432,11 +536,25 @@ public sealed class AnimationIndex
                 continue;
             }
 
-            for (int i = children.Length - 1; i >= 0; i--) pending.Push(children[i]);
+            for (int i = children.Length - 1; i >= 0; i--)
+                if (!IsReparsePoint(children[i])) pending.Push(children[i]);
         }
 
         found.Sort((left, right) => string.Compare(left.Item1, right.Item1, StringComparison.OrdinalIgnoreCase));
         return found;
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException
+                                       or NotSupportedException or PathTooLongException)
+        {
+            return true;
+        }
     }
 
     private static string LooseStamp(List<(string Rel, string Full, long Size, long Ticks)> files)

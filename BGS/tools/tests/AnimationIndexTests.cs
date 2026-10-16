@@ -226,6 +226,70 @@ public sealed class AnimationIndexBuildTests
     }
 
     [Fact]
+    public void TwoDistinctFilesInOneSourceBothSurviveTheMerge()
+    {
+        using var scenario = new Scenario();
+        scenario.AddLoose(scenario.DataFolder, "Meshes/Actors/Character/Animations/Foo.hkx", new byte[] { 1 });
+        scenario.AddLoose(scenario.DataFolder, "Meshes/Actors/Character/Animations/Foo.hkt", new byte[] { 2, 2 });
+
+        var index = AnimationIndex.Build(scenario.Request, AnimationIndexOptions.None);
+
+        Assert.Equal(2, index.Entries.Count);
+        var hkx = index.Entries.Single(entry => entry.VirtualPath.EndsWith("Foo.hkx", StringComparison.Ordinal));
+        var hkt = index.Entries.Single(entry => entry.VirtualPath.EndsWith("Foo.hkt", StringComparison.Ordinal));
+        Assert.Equal("loose:Data", hkx.Source);
+        Assert.Equal("loose:Data", hkt.Source);
+        Assert.Equal(GameData.Normalize(hkx.VirtualPath), GameData.Normalize(hkt.VirtualPath));
+        Assert.Equal(1, hkx.Size);
+        Assert.Equal(2, hkt.Size);
+    }
+
+    [Fact]
+    public void AModStillShadowsTheSameNameInTheSourceBelowIt()
+    {
+        using var scenario = new Scenario();
+        scenario.AddLoose(scenario.DataFolder, "Meshes/Actors/Character/Animations/Foo.hkx", new byte[] { 1 });
+        scenario.AddLoose(scenario.DataFolder, "Meshes/Actors/Character/Animations/Bar.hkt", new byte[] { 2 });
+        scenario.AddLoose(scenario.ModFolder, "Meshes/Actors/Character/Animations/Foo.hkt", new byte[] { 3, 3, 3 });
+
+        var index = AnimationIndex.Build(scenario.Request, AnimationIndexOptions.None);
+
+        Assert.Equal(2, index.Entries.Count);
+        Assert.Equal("loose:AttackMod",
+            index.Entries.Single(entry => entry.VirtualPath.EndsWith("Foo.hkt", StringComparison.Ordinal)).Source);
+        Assert.DoesNotContain(index.Entries,
+            entry => entry.VirtualPath.EndsWith("Foo.hkx", StringComparison.Ordinal));
+        Assert.Contains(index.Entries,
+            entry => entry.VirtualPath.EndsWith("Bar.hkt", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ALooseRootDoesNotFollowReparsePoints()
+    {
+        using var root = new TempDir("bgs-index-loop");
+        string data = Path.Combine(root.Path, "Data");
+        string animations = Path.Combine(data, "Meshes", "Actors", "Character", "Animations");
+        Directory.CreateDirectory(animations);
+        File.WriteAllBytes(Path.Combine(animations, "Idle.hkx"), new byte[] { 1 });
+
+        try
+        {
+            Directory.CreateSymbolicLink(Path.Combine(data, "Meshes", "loop"), data);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return;
+        }
+
+        var request = new AnimationIndexRequest(data, Array.Empty<string>(), Array.Empty<string>(), null, null);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var index = AnimationIndex.Build(request, AnimationIndexOptions.None, null, cancellation.Token);
+
+        Assert.Single(index.Entries);
+        Assert.EndsWith("Animations/Idle.hkx", index.Entries[0].VirtualPath, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CorruptCacheIsDiscardedAndRewritten()
     {
         using var scenario = new Scenario();

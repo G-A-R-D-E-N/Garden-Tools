@@ -19,10 +19,6 @@ public static class IndexScan
 
         bool noCache = args.Contains("--no-cache");
         bool fresh = args.Contains("--rebuild");
-        string cachePath = After(args, "--cache") ?? (noCache ? "" : AnimationIndex.DefaultCachePath);
-        AnimationIndexOptions options = cachePath.Length == 0
-            ? AnimationIndexOptions.None
-            : fresh ? AnimationIndexOptions.Fresh(cachePath) : AnimationIndexOptions.Cached(cachePath);
 
         string? profile = null;
         string? dataFolder = null;
@@ -49,6 +45,11 @@ public static class IndexScan
         {
             return Fail(json, root, "config", First(e.Message));
         }
+
+        string cachePath = After(args, "--cache") ?? (noCache ? "" : AnimationIndex.DefaultCachePathFor(request));
+        AnimationIndexOptions options = cachePath.Length == 0
+            ? AnimationIndexOptions.None
+            : fresh ? AnimationIndexOptions.Fresh(cachePath) : AnimationIndexOptions.Cached(cachePath);
 
         Info(json, $"indexing {request.DataFolder}");
         if (request.ModRootsHighToLow.Count > 0)
