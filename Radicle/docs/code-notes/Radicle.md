@@ -1122,6 +1122,10 @@ Creates a directory named with the process id and a process-wide atomic counter,
 
 The in-progress part is a plain local `StaticCollectionPartView` with an `open` flag instead of a `std::optional`. GCC 15 at -O3 reported a false -Wmaybe-uninitialized through the optional's inlined vector destructor, so the optional was replaced. The behavior is unchanged.
 
+## Radicle/src/forms/npc.cpp:add_npc_faction, add_npc_perk, add_npc_inventory_item
+
+Each add calls `require_editable` first, like the set and remove paths (GT-276). `replace_run` also refuses an undecodable record, but its encode argument is evaluated first, so an add on an undecodable NPC_ failed with an encode error (for example an unresolvable master) instead of the undecodable refusal. Nothing was written either way. Test: `tests/test_undecodable_edit.cpp:FactionAndNpcAddsRefuseUndecodableRecord`.
+
 ## Radicle/src/forms/npc.cpp:replace_run
 
 source:xEdit NPC_ lists are contiguous runs in the record layout, so one edit replaces one run as a unit. A run with other subrecords between its entries is refused rather than reordered. An encoded run equal to the stored run returns false before the record is marked modified, so a no-op set leaves a parsed plugin clean. An empty list drops its count subrecord (PRKZ or COCT) along with its entries.
