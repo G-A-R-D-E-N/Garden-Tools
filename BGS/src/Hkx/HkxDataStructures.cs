@@ -32,7 +32,7 @@ public class HkxSkeleton
     public List<int> ParentIndices { get; set; } = new();
     public List<HkxBonePose> ReferencePose { get; set; } = new();
     public List<bool> LockTranslation { get; set; } = new();
-    public List<string> FloatSlots { get; set; } = new();
+    public List<string?> FloatSlots { get; set; } = new();
     public List<float> ReferenceFloats { get; set; } = new();
     public List<HkxSkeletonLocalFrame> LocalFrames { get; set; } = new();
     public List<HkxSkeletonPartition> Partitions { get; set; } = new();
@@ -58,7 +58,11 @@ public class HkxSkeletonLocalFrame
 /// <summary>One <c>hkaSkeletonPartition</c> entry: a named, contiguous run of bones.</summary>
 public class HkxSkeletonPartition
 {
-    public string Name { get; set; } = "";
+    /// <summary>
+    /// The partition's name, or null when the entry carries no name reference at all, which is not
+    /// the same as a reference to the empty string.
+    /// </summary>
+    public string? Name { get; set; }
     public int StartBoneIndex { get; set; }
     public int NumBones { get; set; }
 }

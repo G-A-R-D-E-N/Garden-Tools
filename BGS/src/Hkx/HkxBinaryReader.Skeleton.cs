@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 
 namespace OpenCommonwealth.Services.Hkx;
@@ -42,26 +43,83 @@ public partial class HkxBinaryReader
         int partitionStartAt = MemberOffset("hkaSkeletonPartition", "startBoneIndex", 8);
         int partitionCountAt = MemberOffset("hkaSkeletonPartition", "numBones", 10);
 
+        Require16BitMember("hkaSkeletonLocalFrameOnBone", "boneIndex", frameBoneAt, frameStride);
+        Require16BitMember("hkaSkeletonPartition", "startBoneIndex", partitionStartAt, partitionStride);
+        Require16BitMember("hkaSkeletonPartition", "numBones", partitionCountAt, partitionStride);
+
         var skel = new HkxSkeleton();
 
+        // Everything a skeleton points at has to live in __data__'s payload, which ends where its local
+        // fixup table begins. The section's own end covers the local, global, virtual, export and import
+        // tables as well, and those bytes are not array data or strings.
+        long dataEnd = Math.Min(Math.Min((long)dataSec.LocalFixupAbs, (long)dataSec.End), data.Length);
+
         // Local fixups cover pointers inside __data__. Objects that live in another section are reached
-        // through the global fixup table instead, so a miss falls back to it once.
-        Dictionary<int, int>? globals = null;
+        // through the global fixup table instead, so a miss falls back to it once. A global fixup that
+        // names a section other than __data__ is not a pointer this reader can follow, so it is refused
+        // instead of being read as a __data__ offset.
+        Dictionary<int, (int Section, int Destination)>? globals = null;
         bool Target(int fieldRel, out int target)
         {
             if (fixups.TryGetValue(fieldRel, out target)) return true;
-            globals ??= ParseGlobalFixups(data, dataSec);
-            return globals.TryGetValue(fieldRel, out target);
+            globals ??= ParseGlobalFixupsWithSections(data, dataSec);
+            if (!globals.TryGetValue(fieldRel, out var global)) return false;
+            if (global.Section != dataSec.Index)
+                throw new InvalidDataException(
+                    $"hkaSkeleton member at __data__+{fieldRel} is a global fixup into section " +
+                    $"{global.Section}, not the __data__ section ({dataSec.Index})");
+            target = global.Destination;
+            return true;
+        }
+
+        // A section-relative pointer, checked in long arithmetic so a hostile offset cannot wrap into
+        // an address that looks plausible. Only ever called for a pointer that is about to be read.
+        int At(string member, int targetRel)
+        {
+            long abs = dataAbs + (long)targetRel;
+            if (abs < dataAbs || abs >= dataEnd)
+                throw new InvalidDataException(
+                    $"{member} points at __data__+{targetRel}, outside the __data__ data " +
+                    $"({dataAbs}..{dataEnd})");
+            return (int)abs;
+        }
+
+        // How many elements of an array member to read, or a refusal when the declared count cannot be
+        // honoured. A count of zero reads nothing, so a stale pointer beside it is harmless; anything
+        // else has to fit entirely inside __data__ and the file, with no trimming and no int overflow.
+        int ArrayCount(string member, int count, int stride, int targetRel, out int abs)
+        {
+            abs = 0;
+            if (count == 0) return 0;
+            if (count < 0)
+                throw new InvalidDataException($"{member} declares a negative count {count}");
+            if (stride <= 0)
+                throw new InvalidDataException($"{member} has an unusable element size {stride}");
+
+            long start = dataAbs + (long)targetRel;
+            if (start < dataAbs || start >= dataEnd)
+                throw new InvalidDataException(
+                    $"{member} points at __data__+{targetRel}, outside the __data__ data " +
+                    $"({dataAbs}..{dataEnd})");
+
+            long wanted = (long)count * stride;
+            if (wanted > dataEnd - start)
+                throw new InvalidDataException(
+                    $"{member} declares {count} elements of {stride} bytes, more than the " +
+                    $"{dataEnd - start} bytes left in __data__");
+
+            abs = (int)start;
+            return count;
         }
 
         if (Target(skelRel + SkeletonNameAt, out int nameRel))
-            skel.Name = ReadNullTermString(data, dataAbs + nameRel, 256);
+            skel.Name = ReadNullTermString(data, At("name", nameRel), 256);
 
         int parCount = SafeReadI32(data, a + ParentIndicesAt + PointerWidth);
         if (Target(skelRel + ParentIndicesAt, out int parDataRel))
         {
-            int parAbs = dataAbs + parDataRel;
-            for (int i = 0, count = Fit(parCount, 2, parAbs, dataSec.End, data.Length); i < count; i++)
+            int count = ArrayCount("parentIndices", parCount, 2, parDataRel, out int parAbs);
+            for (int i = 0; i < count; i++)
                 skel.ParentIndices.Add(BitConverter.ToInt16(data, parAbs + i * 2));
         }
 
@@ -69,14 +127,17 @@ public partial class HkxBinaryReader
         if (boneCount < 0) return null;
         if (Target(skelRel + BonesAt, out int bonesDataRel))
         {
-            int bonesAbs = dataAbs + bonesDataRel;
-            if (bonesAbs < dataAbs || bonesAbs > data.Length ||
-                boneCount > (dataSec.End - bonesAbs) / boneStride) return null;
+            // The bones array keeps its long-standing refusal (a null skeleton) rather than the newer
+            // InvalidDataException, but its pointer is still checked in long arithmetic.
+            long bonesAt = dataAbs + (long)bonesDataRel;
+            if (bonesAt < dataAbs || bonesAt > data.Length ||
+                boneCount > (dataSec.End - bonesAt) / boneStride) return null;
+            int bonesAbs = (int)bonesAt;
             for (int i = 0; i < boneCount; i++)
             {
                 int boneOff = bonesDataRel + i * boneStride;
                 if (Target(boneOff, out int bnRel))
-                    skel.BoneNames.Add(ReadNullTermString(data, dataAbs + bnRel, 256));
+                    skel.BoneNames.Add(ReadNullTermString(data, At($"bones[{i}].name", bnRel), 256));
                 else
                     skel.BoneNames.Add($"Bone_{i}");
 
@@ -88,9 +149,9 @@ public partial class HkxBinaryReader
         int poseCount = SafeReadI32(data, a + ReferencePoseAt + PointerWidth);
         if (Target(skelRel + ReferencePoseAt, out int poseDataRel))
         {
-            int poseAbs = dataAbs + poseDataRel;
-            for (int i = 0, count = Fit(poseCount, ReferencePoseStride, poseAbs, dataSec.End, data.Length);
-                 i < count; i++)
+            int count = ArrayCount("referencePose", poseCount, ReferencePoseStride, poseDataRel,
+                out int poseAbs);
+            for (int i = 0; i < count; i++)
             {
                 int p = poseAbs + i * ReferencePoseStride;
                 var tx  = new Vector3(ReadF32(data, p),      ReadF32(data, p + 4),  ReadF32(data, p + 8));
@@ -103,28 +164,29 @@ public partial class HkxBinaryReader
         int floatCount = SafeReadI32(data, a + ReferenceFloatsAt + PointerWidth);
         if (Target(skelRel + ReferenceFloatsAt, out int floatsDataRel))
         {
-            int floatsAbs = dataAbs + floatsDataRel;
-            for (int i = 0, count = Fit(floatCount, 4, floatsAbs, dataSec.End, data.Length); i < count; i++)
+            int count = ArrayCount("referenceFloats", floatCount, 4, floatsDataRel, out int floatsAbs);
+            for (int i = 0; i < count; i++)
                 skel.ReferenceFloats.Add(ReadF32(data, floatsAbs + i * 4));
         }
 
         int slotCount = SafeReadI32(data, a + FloatSlotsAt + PointerWidth);
         if (Target(skelRel + FloatSlotsAt, out int slotsDataRel))
         {
-            int slotsAbs = dataAbs + slotsDataRel;
-            for (int i = 0, count = Fit(slotCount, PointerWidth, slotsAbs, dataSec.End, data.Length);
-                 i < count; i++)
+            // Each slot names its own string, so the array's base address is not needed here.
+            int count = ArrayCount("floatSlots", slotCount, PointerWidth, slotsDataRel, out _);
+            for (int i = 0; i < count; i++)
+                // A slot with no fixup at all carries no name, which is not the same as a name that
+                // happens to be the empty string.
                 skel.FloatSlots.Add(Target(slotsDataRel + i * PointerWidth, out int slotRel)
-                    ? ReadNullTermString(data, dataAbs + slotRel, 256)
-                    : "");
+                    ? ReadNullTermString(data, At($"floatSlots[{i}]", slotRel), 256)
+                    : null);
         }
 
         int frameCount = SafeReadI32(data, a + LocalFramesAt + PointerWidth);
         if (Target(skelRel + LocalFramesAt, out int framesDataRel))
         {
-            int framesAbs = dataAbs + framesDataRel;
-            for (int i = 0, count = Fit(frameCount, frameStride, framesAbs, dataSec.End, data.Length);
-                 i < count; i++)
+            int count = ArrayCount("localFrames", frameCount, frameStride, framesDataRel, out int framesAbs);
+            for (int i = 0; i < count; i++)
             {
                 int at = framesAbs + i * frameStride;
                 bool hasFrame = Target(framesDataRel + i * frameStride, out int frameRel);
@@ -140,16 +202,16 @@ public partial class HkxBinaryReader
         int partitionItems = SafeReadI32(data, a + PartitionsAt + PointerWidth);
         if (Target(skelRel + PartitionsAt, out int partsDataRel))
         {
-            int partsAbs = dataAbs + partsDataRel;
-            for (int i = 0, count = Fit(partitionItems, partitionStride, partsAbs, dataSec.End, data.Length);
-                 i < count; i++)
+            int count = ArrayCount("partitions", partitionItems, partitionStride, partsDataRel,
+                out int partsAbs);
+            for (int i = 0; i < count; i++)
             {
                 int at = partsAbs + i * partitionStride;
                 skel.Partitions.Add(new HkxSkeletonPartition
                 {
                     Name = Target(partsDataRel + i * partitionStride, out int partNameRel)
-                        ? ReadNullTermString(data, dataAbs + partNameRel, 256)
-                        : "",
+                        ? ReadNullTermString(data, At($"partitions[{i}].name", partNameRel), 256)
+                        : null,
                     StartBoneIndex = BitConverter.ToInt16(data, at + partitionStartAt),
                     NumBones = BitConverter.ToInt16(data, at + partitionCountAt),
                 });
@@ -163,15 +225,15 @@ public partial class HkxBinaryReader
     }
 
     /// <summary>
-    /// How many <paramref name="stride"/>-byte elements starting at <paramref name="abs"/> are inside
-    /// both the owning section and the file. A hostile count is trimmed to what really exists rather
-    /// than refused, matching how the reference pose and parent indices were already read.
+    /// A 16-bit struct member has to sit inside one element: reading it from a layout whose stride is
+    /// too small would read the neighbouring element's bytes instead of this one's.
     /// </summary>
-    private static int Fit(int count, int stride, int abs, int sectionEnd, int length)
+    private static void Require16BitMember(string className, string member, int offset, int stride)
     {
-        if (count <= 0 || stride <= 0 || abs < 0) return 0;
-        int room = Math.Min(sectionEnd, length) - abs;
-        return room <= 0 ? 0 : Math.Min(count, room / stride);
+        if (offset < 0 || offset + 2 > stride)
+            throw new InvalidDataException(
+                $"{className}.{member} sits at {offset} in a {stride}-byte element, so its 16-bit " +
+                "value would not fit inside that element");
     }
 
     private static int MemberOffset(string className, string member, int fallback) =>

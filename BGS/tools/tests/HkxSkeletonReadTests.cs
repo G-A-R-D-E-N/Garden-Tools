@@ -140,8 +140,13 @@ public sealed class HkxSkeletonReadTests
         Assert.Empty(legacy.Partitions);
     }
 
+    /// <summary>
+    /// An unedited load plus save must not rewrite a single byte. It proves the reader and the file
+    /// editor agree on what the file already says; the crafted edit test below is the proof that the
+    /// new members survive a real edit.
+    /// </summary>
     [Fact]
-    public void LoadingAndSavingTheVanillaSkeletonLeavesTheFileByteIdentical()
+    public void AnUneditedVanillaSkeletonLoadsAndSavesByteIdentical()
     {
         byte[] source = File.ReadAllBytes(VanillaFixture);
         string path = Path.Combine(Path.GetTempPath(), $"bgs-661-vanilla-{Guid.NewGuid():N}.hkx");
@@ -288,11 +293,214 @@ public sealed class HkxSkeletonReadTests
         finally { File.Delete(path); File.Delete(path + ".bak"); }
     }
 
+    [Fact]
+    public void ACountThatCannotFitInTheSectionIsRefused()
+    {
+        // Control: the same crafted skeleton without the hostile count reads its two floats.
+        Assert.Equal(new[] { 0.25f, 0.5f }, new HkxBinaryReader().ReadSkeleton(CraftedSkeletonFile()).ReferenceFloats);
+
+        byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
+            crafted.SetCount("hkaSkeleton", "referenceFloats", skeleton, int.MaxValue));
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadSkeleton(bytes));
+    }
+
+    [Fact]
+    public void ANegativeArrayCountIsRefused()
+    {
+        byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
+            crafted.SetCount("hkaSkeleton", "referenceFloats", skeleton, -4));
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadSkeleton(bytes));
+    }
+
+    [Theory]
+    [InlineData("referenceFloats")]
+    [InlineData("partitions")]
+    [InlineData("floatSlots")]
+    [InlineData("localFrames")]
+    [InlineData("parentIndices")]
+    [InlineData("referencePose")]
+    public void AnArrayPointerPastTheDataSectionIsRefused(string member)
+    {
+        byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
+        {
+            crafted.ClearLocal("hkaSkeleton", member, skeleton);
+            crafted.Retarget("hkaSkeleton", member, skeleton, crafted.DataLength + 64);
+        });
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadSkeleton(bytes));
+    }
+
+    [Theory]
+    [InlineData("referenceFloats")]
+    [InlineData("partitions")]
+    [InlineData("parentIndices")]
+    public void AnArrayPointerBeforeTheDataSectionIsRefused(string member)
+    {
+        byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
+        {
+            crafted.ClearLocal("hkaSkeleton", member, skeleton);
+            crafted.Retarget("hkaSkeleton", member, skeleton, -16);
+        });
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadSkeleton(bytes));
+    }
+
+    [Theory]
+    [InlineData("referenceFloats")]
+    [InlineData("partitions")]
+    public void AnArrayPointerPastTheEndOfTheFileIsRefused(string member)
+    {
+        byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
+        {
+            crafted.ClearLocal("hkaSkeleton", member, skeleton);
+            crafted.Retarget("hkaSkeleton", member, skeleton, crafted.DataLength + 1_000_000);
+        });
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadSkeleton(bytes));
+    }
+
+    [Fact]
+    public void ATruncatedSkeletonFileIsRefused()
+    {
+        byte[] whole = CraftedSkeletonFile();
+        Assert.Equal(2, new HkxBinaryReader().ReadSkeleton(whole).ReferenceFloats.Count);
+
+        byte[] cut = whole[..(whole.Length - 512)];
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadSkeleton(cut));
+    }
+
+    [Fact]
+    public void AGlobalFixupIntoTheDataSectionResolvesASkeletonMember()
+    {
+        byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
+        {
+            int target = crafted.LocalTarget("hkaSkeleton", "referenceFloats", skeleton);
+            crafted.ClearLocal("hkaSkeleton", "referenceFloats", skeleton);
+            crafted.SetGlobal("hkaSkeleton", "referenceFloats", skeleton, crafted.DataSectionIndex, target);
+        });
+
+        var read = new HkxBinaryReader().ReadSkeleton(bytes);
+
+        Assert.Equal(new[] { 0.25f, 0.5f }, read.ReferenceFloats);
+    }
+
+    [Fact]
+    public void AGlobalFixupIntoAnotherSectionIsRefused()
+    {
+        byte[] bytes = CraftedSkeletonFile((crafted, skeleton) =>
+        {
+            int target = crafted.LocalTarget("hkaSkeleton", "referenceFloats", skeleton);
+            int types = crafted.SectionIndex("__types__");
+            Assert.NotEqual(crafted.DataSectionIndex, types);
+            crafted.ClearLocal("hkaSkeleton", "referenceFloats", skeleton);
+            crafted.SetGlobal("hkaSkeleton", "referenceFloats", skeleton, types, target);
+        });
+
+        Assert.Throws<InvalidDataException>(() => new HkxBinaryReader().ReadSkeleton(bytes));
+    }
+
+    [Fact]
+    public void AMissingSlotOrPartitionNameIsKeptApartFromAnEmptyOne()
+    {
+        var crafted = new CraftedSkeleton();
+        int root = crafted.Text("Root");
+        int bones = crafted.Block(new byte[16]);
+        crafted.Point(bones, root);
+
+        // floatSlots and partitions each carry two entries: one with a name fixup, one with none.
+        int slots = crafted.Block(new byte[2 * 8]);
+        crafted.Point(slots, crafted.Text(""));
+        int partitions = crafted.Block(new byte[2 * 16]);
+        crafted.Point(partitions, crafted.Text("Upper"));
+
+        var skeleton = crafted.Object("hkaSkeleton");
+        crafted.Element("hkaSkeleton", "bones", skeleton, bones, 1);
+        crafted.Element("hkaSkeleton", "floatSlots", skeleton, slots, 2);
+        crafted.Element("hkaSkeleton", "partitions", skeleton, partitions, 2);
+
+        var read = new HkxBinaryReader().ReadSkeleton(crafted.Build());
+
+        Assert.Equal(new string?[] { "", null }, read.FloatSlots);
+        Assert.Equal(new string?[] { "Upper", null }, read.Partitions.Select(p => p.Name));
+
+        var back = SkeletonJson.Read(SkeletonJson.Write(read, "names.hkx"));
+
+        Assert.Equal(new string?[] { "", null }, back.FloatSlots);
+        Assert.Equal(new string?[] { "Upper", null }, back.Partitions.Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ANonFiniteReferenceFloatIsRefusedOnWrite()
+    {
+        var good = Skeleton("Good");
+        good.ReferenceFloats.Add(0.5f);
+        Assert.Contains("0.5", SkeletonJson.Write(good, "good.hkx"));
+
+        var bad = Skeleton("Bad");
+        bad.ReferenceFloats.Add(float.NaN);
+
+        Assert.Throws<InvalidDataException>(() => SkeletonJson.Write(bad, "bad.hkx"));
+    }
+
+    [Fact]
+    public void ANonFinitePoseValueIsRefusedOnWrite()
+    {
+        var skeleton = Skeleton("Bad");
+
+        skeleton.ReferencePose[0] = new HkxBonePose(
+            new Vector3(float.PositiveInfinity, 0f, 0f), Quaternion.Identity, Vector3.One);
+        Assert.Throws<InvalidDataException>(() => SkeletonJson.Write(skeleton, "bad.hkx"));
+
+        skeleton.ReferencePose[0] = new HkxBonePose(
+            Vector3.Zero, new Quaternion(0f, 0f, 0f, float.NaN), Vector3.One);
+        Assert.Throws<InvalidDataException>(() => SkeletonJson.Write(skeleton, "bad.hkx"));
+
+        skeleton.ReferencePose[0] = new HkxBonePose(
+            Vector3.Zero, Quaternion.Identity, new Vector3(1f, float.NegativeInfinity, 1f));
+        Assert.Throws<InvalidDataException>(() => SkeletonJson.Write(skeleton, "bad.hkx"));
+    }
+
+    [Theory]
+    [InlineData("""{ "format": "fo4-skeleton", "bones": [] }""")]
+    [InlineData("""{ "format": 7, "name": "Bad", "bones": [] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": {} }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [ 7 ] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [ { "name": "Root", "parent": "zero", "translation": [0,0,0], "rotation": [0,0,0,1], "scale": [1,1,1] } ] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [ { "name": "Root", "parent": -1, "translation": [0,0], "rotation": [0,0,0,1], "scale": [1,1,1] } ] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [ { "name": "Root", "parent": -1, "translation": [0,0,0], "rotation": [0,0,1], "scale": [1,1,1] } ] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [ { "name": "Root", "parent": -1, "translation": [0,0,0], "rotation": [0,0,0,1], "scale": "one" } ] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [], "floatSlots": 7 }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [], "referenceFloats": "0.5" }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [], "referenceFloats": ["0.5"] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [], "partitions": [ { "name": 3 } ] }""")]
+    [InlineData("""{ "format": "fo4-skeleton", "name": "Bad", "bones": [], "localFrames": [ { "boneIndex": "0" } ] }""")]
+    public void WronglyTypedJsonIsRefused(string json)
+    {
+        Assert.Throws<InvalidDataException>(() => SkeletonJson.Read(json));
+    }
+
+    /// <summary>One bone with a finite pose, so a write test can make exactly one value non-finite.</summary>
+    private static HkxSkeleton Skeleton(string name)
+    {
+        var skeleton = new HkxSkeleton { Name = name };
+        skeleton.BoneNames.Add("Root");
+        skeleton.ParentIndices.Add(-1);
+        skeleton.ReferencePose.Add(new HkxBonePose(Vector3.Zero, Quaternion.Identity, Vector3.One));
+        skeleton.LockTranslation.Add(false);
+        return skeleton;
+    }
+
     /// <summary>
     /// A skeleton whose skeleton object is the file's only object, carrying two bones and non-empty
-    /// referenceFloats, floatSlots, localFrames and partitions.
+    /// referenceFloats, floatSlots, localFrames and partitions. <paramref name="corrupt"/> runs after
+    /// the object is wired up and before the file is rebuilt, so a test can inject a pointer, a count
+    /// or a fixup kind that a real writer would never produce.
     /// </summary>
-    private static byte[] CraftedSkeletonFile()
+    private static byte[] CraftedSkeletonFile(
+        Action<CraftedSkeleton, NativeAppend.Added>? corrupt = null)
     {
         var crafted = new CraftedSkeleton();
 
@@ -349,6 +557,7 @@ public sealed class HkxSkeletonReadTests
         crafted.Element("hkaSkeleton", "floatSlots", skeleton, slots, 2);
         crafted.Element("hkaSkeleton", "localFrames", skeleton, frames, 2);
         crafted.Element("hkaSkeleton", "partitions", skeleton, partitions, 2);
+        corrupt?.Invoke(crafted, skeleton);
         return crafted.Build();
     }
 
@@ -407,6 +616,38 @@ public sealed class HkxSkeletonReadTests
             Data.SetLocal(field, arrayAt);
             BitConverter.GetBytes(count).CopyTo(Data.Data, field + PointerSize);
         }
+
+        public int FieldOffset(string className, string member, NativeAppend.Added obj) =>
+            obj.Offset + Field(className, member);
+
+        public int DataSectionIndex => _image.Sections.IndexOf(Data);
+
+        public int SectionIndex(string tag) => _image.Sections.FindIndex(section => section.Tag == tag);
+
+        public int DataLength => Data.Data.Length;
+
+        /// <summary>The destination the member's local fixup currently names.</summary>
+        public int LocalTarget(string className, string member, NativeAppend.Added obj) =>
+            Data.Locals().First(fixup => fixup.Source == FieldOffset(className, member, obj)).Destination;
+
+        /// <summary>Drops the member's local fixup, so only a global fixup can resolve it.</summary>
+        public void ClearLocal(string className, string member, NativeAppend.Added obj) =>
+            Data.SetLocal(FieldOffset(className, member, obj), -1);
+
+        public void SetGlobal(string className, string member, NativeAppend.Added obj, int section, int destination) =>
+            Data.SetGlobal(FieldOffset(className, member, obj), section, destination);
+
+        /// <summary>
+        /// Re-targets the member's local fixup. Unlike <see cref="Point"/> this can point at a negative
+        /// offset, which a pointer before the data section needs: SetLocal reads a negative destination
+        /// as "remove the fixup".
+        /// </summary>
+        public void Retarget(string className, string member, NativeAppend.Added obj, int destination) =>
+            Data.SetLocals(Data.Locals().Append((FieldOffset(className, member, obj), destination)));
+
+        /// <summary>Overrides the member's declared element count without touching its pointer.</summary>
+        public void SetCount(string className, string member, NativeAppend.Added obj, int count) =>
+            BitConverter.GetBytes(count).CopyTo(Data.Data, FieldOffset(className, member, obj) + PointerSize);
 
         public byte[] Build()
         {
