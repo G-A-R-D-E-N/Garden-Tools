@@ -242,9 +242,14 @@ public partial class MainWindow : Window
         }
 
         var own = HavokPhysicsExtractor.TryExtract(raw, out var ownReport);
-        var choice = ChooseRagdoll(path, own, ownReport, SiblingSkeletonPath(path), sibling =>
+        string? sibling = SiblingSkeletonPath(path);
+        string? packed = sibling == null ? DataRelativePath(path) : null;
+        byte[]? packedBytes = packed == null ? null : PackedSkeletonBytes(packed);
+        if (packedBytes != null) sibling = packed;
+        var choice = ChooseRagdoll(path, own, ownReport, sibling, key =>
         {
-            var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(sibling), out var report);
+            byte[] bytes = packedBytes ?? File.ReadAllBytes(key);
+            var model = HavokPhysicsExtractor.TryExtract(bytes, out var report);
             return (model, report);
         });
 
@@ -568,10 +573,31 @@ public partial class MainWindow : Window
         catch { return null; }
     }
 
-    internal static byte[]? SkeletonBytesOrNull(Func<byte[]?> read)
+    private string? DataRelativePath(string path)
     {
-        try { return read(); }
-        catch (Exception e) when (GameData.IsSkippableArchiveFailure(e)) { return null; }
+        if (_gameData == null) return null;
+
+        string folder = _gameData.DataFolder;
+        string prefix = folder.EndsWith(Path.DirectorySeparatorChar) ? folder : folder + Path.DirectorySeparatorChar;
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+
+        if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
+        return full[prefix.Length..].Replace('\\', '/');
+    }
+
+    private byte[]? PackedSkeletonBytes(string virtualPath)
+    {
+        if (_gameData == null) return null;
+        try { return _gameData.SkeletonBytes(virtualPath); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
 }

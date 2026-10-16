@@ -4,21 +4,26 @@
 BehaviourGraphStudio.exe --scan-skeleton-physics "<folder>" [--json]
 ```
 
-Walks every `skeleton*.hkx` under `<folder>` (recursively) — loose files **and** the same names
-inside every `.ba2` — and reports, for each one, what physics it holds: the load status, the bodies,
-shapes and constraints the file declares, whether the ragdoll skeleton mapper is there, and whether
-the file carries `hknpBSMaterial`.
+Walks every `skeleton*.hkx` value the game data resolves under `<folder>` — loose files **and** the
+same names inside `.ba2` archives — and reports, for each winner, what physics it holds: the load
+status, the bodies, shapes and constraints the file declares, whether the ragdoll skeleton mapper is
+there, and whether the file carries `hknpBSMaterial`.
 
-Discovery enumerates `*.hkx` and `*.ba2` and matches the names case-insensitively, so
-`Skeleton.hkx` is found on Linux as well as on Windows.
+Discovery belongs to `GameData`: the folder's archives in the game's own load order, plus loose files
+(and, for an MO2 instance, the enabled mods), merged by virtual path with the game's precedence. A
+loose skeleton that overrides a packed copy is censused once, as the winner, and the copies it hides
+are listed in the row's `details` as `shadowed: <virtual path> [<archive or loose>]`. The name rule is
+`GameData.IsSkeletonName` — a `.hkx` whose file name starts with `skeleton`, matched case-insensitively
+— so `Skeleton.hkx` is found on Linux as well as on Windows.
 
 This is the command to reach for when a character "loads with physics missing": it says whether the
 file has no ragdoll at all, has one BGS cannot read completely, or stores physics in a format
 Fallout 4 does not load.
 
-Like `--scan-archives` it does **not** need an MO2 instance — it reads the folder you point it at. A
-skeleton file with no ragdoll is a normal thing to find (hair and props have none), so the output is
-a census rather than a pass/fail list: `SKELETON ONLY` is reported and never fails the run.
+It reads the folder you point it at: a game `Data` folder, or — like the other scans — an MO2
+instance, whose `ModOrganizer.ini` game path and enabled modlist supply the Data folder and the mod
+roots. A skeleton file with no ragdoll is a normal thing to find (hair and props have none), so the
+output is a census rather than a pass/fail list: `SKELETON ONLY` is reported and never fails the run.
 
 ## What it reports per file
 
@@ -58,7 +63,8 @@ deserves and gains an extra `Info` finding naming the container problem.
 ## Reading the output
 
 ```
-scanning 79 .ba2 archive(s) under D:\SteamLibrary\steamapps\common\Fallout 4\Data
+scanning skeleton .hkx under D:\SteamLibrary\steamapps\common\Fallout 4\Data
+found 195 packed and 0 loose skeleton file(s)
 OK                Meshes/Actors/Character/CharacterAssets/skeleton.hkx  [Fallout4 - Animations.ba2]
     bodies 18 usable of 18, 0 skipped; shapes 19; constraints 17, 0 skipped; mapper present (18 mappings); hknpBSMaterial absent
     shape classes: hknpCapsuleShape x19
@@ -86,8 +92,8 @@ The three rows above are real output from the vanilla install; the full run is w
 
 - `<status> <path>  [<source>]` — `loose` is a file on disk; anything else is the `.ba2` the entry
   came from.
-- `  opened N/N` and `  checked N/N` are progress written to **stderr**, throttled to ~20 updates
-  total. Under `--json` stdout carries only the report.
+- `  read N/N packed` and `  checked N/N loose` are progress written to **stderr**, throttled to ~20
+  updates total. Under `--json` stdout carries only the report.
 
 ## Exit codes
 
@@ -104,16 +110,17 @@ never part of it.
 
 ## JSON summary and findings
 
-`summary` keys: `archives` (archives that held at least one `skeleton*.hkx`), `scanned`, `ok`,
-`skeletonOnly`, `legacyPhysics`, `unsupportedShapes`, `mapperMissing`, `noBodies`, `wrongContainer`,
-`parseError`, `unreadable`, `skippedArchives`.
+`summary` keys: `archives` (archives that held at least one `skeleton*.hkx`, winners and shadowed
+copies alike), `scanned`, `ok`, `skeletonOnly`, `legacyPhysics`, `unsupportedShapes`, `mapperMissing`,
+`noBodies`, `wrongContainer`, `parseError`, `unreadable`, `skippedArchives` and `shadowed` (how many
+copies a higher-priority winner hid).
 
 Every scanned file produces one finding whose `kind` is the status slug (`ok`, `skeleton-only`,
 `legacy-physics`, `unsupported-shapes`, `mapper-missing`, `no-bodies`, `wrong-container`,
 `parse-error`), with `path`, `source` and `details` carrying the bodies, class censuses, mapper and
-`hknpBSMaterial` line. An archive that could not be opened is a `skip` finding (a warning: it is
-usually a texture archive, and it does not change the exit code), and an entry that could not be
-extracted is `unreadable`.
+`hknpBSMaterial` line, plus one `shadowed:` line per copy the winner hides. An archive that could not
+be opened is a `skip` finding (a warning: it is usually a texture archive, and it does not change the
+exit code), and a winner that could not be read is `unreadable`.
 
 ```bash
 BehaviourGraphStudio.exe --scan-skeleton-physics "D:\SteamLibrary\steamapps\common\Fallout 4\Data" --json > skeleton-physics.json

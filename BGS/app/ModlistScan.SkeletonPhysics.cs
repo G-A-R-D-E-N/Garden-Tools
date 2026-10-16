@@ -19,80 +19,63 @@ public static partial class ModlistScan
 
         var findings = new List<ScanFinding>();
         var counts = new Dictionary<PhysicsLoadStatus, int>();
-        int scanned = 0, archives = 0, skippedArchives = 0, unreadable = 0;
+        int scanned = 0, archives = 0, skippedArchives = 0, unreadable = 0, shadowed = 0;
 
-        var ba2s = Mo2ScanData.EnumerateFilesSafe(root, "*.ba2", recursive: true)
-            .Where(path => path.EndsWith(".ba2", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        Info(json, $"scanning {ba2s.Count} .ba2 archive(s) under {root}");
+        using GameData data = SkeletonPhysicsData(root);
+        Info(json, $"scanning skeleton .hkx under {root}");
 
-        int opened = 0;
-        foreach (string ba2path in ba2s)
+        var archiveByFileName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string archive in data.ArchivePaths)
+            archiveByFileName[Path.GetFileName(archive)] = archive;
+
+        var winners = data.EnumerateWinners("", GameData.IsSkeletonName, warning =>
         {
-            if (StepDue(++opened, ba2s.Count)) Progress($"  opened {opened}/{ba2s.Count} archive(s)...");
-            Ba2 archive;
-            try { archive = Ba2.Open(ba2path); }
-            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+            skippedArchives++;
+            string name = warning;
+            string why = warning;
+            int at = warning.IndexOf(':');
+            if (at >= 0)
             {
-                skippedArchives++;
-                if (!json) Console.WriteLine($"skip     {Rel(root, ba2path)}: {First(e.Message)}");
-                findings.Add(new ScanFinding("skip", Rel(root, ba2path), null, new[] { First(e.Message) }));
-                continue;
+                name = warning[..at].Trim();
+                why = warning[(at + 1)..].Trim();
             }
 
-            using (archive)
-            {
-                var entries = archive.Entries
-                    .Where(IsSkeletonEntry)
-                    .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                if (entries.Count == 0) continue;
-                archives++;
+            string where = archiveByFileName.TryGetValue(name, out string? failed) ? Rel(root, failed) : name;
+            if (!json) Console.WriteLine($"skip     {where}: {why}");
+            findings.Add(new ScanFinding("skip", where, null, new[] { why }));
+        });
 
-                foreach (var entry in entries)
-                {
-                    byte[] bytes;
-                    try { bytes = archive.Read(entry); }
-                    catch (Exception e)
-                    {
-                        unreadable++;
-                        if (!json)
-                            Console.WriteLine($"UNREADABLE  {entry.Name}  [{Rel(root, ba2path)}]: {First(e.Message)}");
-                        findings.Add(new ScanFinding("unreadable", entry.Name, Rel(root, ba2path),
-                                                     new[] { First(e.Message) }));
-                        continue;
-                    }
+        var packed = winners.Where(winner => winner.Origin == GameAssetOrigin.Archive)
+                            .OrderBy(winner => winner.ArchivePath, StringComparer.Ordinal)
+                            .ThenBy(winner => winner.VirtualPath, StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+        var loose = winners.Where(winner => winner.Origin == GameAssetOrigin.Loose)
+                           .OrderBy(winner => winner.FullPath, StringComparer.OrdinalIgnoreCase)
+                           .ToList();
 
-                    scanned++;
-                    RecordSkeletonPhysics(bytes, entry.Name, Rel(root, ba2path), json, findings, counts);
-                }
-            }
+        var archiveSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (GameAsset winner in winners)
+        {
+            CountArchive(winner);
+            foreach (GameAsset loser in winner.Shadowed) CountArchive(loser);
+            shadowed += winner.Shadowed.Count;
+        }
+        archives = archiveSet.Count;
+
+        Info(json, $"found {packed.Count} packed and {loose.Count} loose skeleton file(s)");
+
+        int processed = 0;
+        foreach (GameAsset winner in packed)
+        {
+            if (StepDue(++processed, packed.Count)) Progress($"  read {processed}/{packed.Count} packed file(s)...");
+            ReadSkeleton(winner, winner.VirtualPath, Rel(root, winner.ArchivePath!));
         }
 
-        var loose = Mo2ScanData.EnumerateFilesSafe(root, "*.hkx", recursive: true)
-            .Where(IsLooseSkeleton)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        Info(json, $"scanning {loose.Count} loose skeleton .hkx");
-
-        int checkedLoose = 0;
-        foreach (string path in loose)
+        processed = 0;
+        foreach (GameAsset winner in loose)
         {
-            if (StepDue(++checkedLoose, loose.Count)) Progress($"  checked {checkedLoose}/{loose.Count} loose file(s)...");
-            string relative = Rel(root, path);
-            byte[] bytes;
-            try { bytes = InputFilePolicy.ReadHkx(path); }
-            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
-            {
-                unreadable++;
-                if (!json) Console.WriteLine($"UNREADABLE  {relative}: {First(e.Message)}");
-                findings.Add(new ScanFinding("unreadable", relative, "loose", new[] { First(e.Message) }));
-                continue;
-            }
-
-            scanned++;
-            RecordSkeletonPhysics(bytes, relative, "loose", json, findings, counts);
+            if (StepDue(++processed, loose.Count)) Progress($"  checked {processed}/{loose.Count} loose file(s)...");
+            ReadSkeleton(winner, Rel(root, winner.FullPath!), "loose");
         }
 
         int ok = counts.GetValueOrDefault(PhysicsLoadStatus.Ok);
@@ -119,6 +102,7 @@ public static partial class ModlistScan
             ["parseError"] = counts.GetValueOrDefault(PhysicsLoadStatus.ParseError),
             ["unreadable"] = unreadable,
             ["skippedArchives"] = skippedArchives,
+            ["shadowed"] = shadowed,
         };
 
         if (json)
@@ -130,11 +114,62 @@ public static partial class ModlistScan
                               $"{skeletonOnly} skeleton-only, {noUsable} with no usable ragdoll, " +
                               $"{unreadable} unreadable");
         return exit;
+
+        void CountArchive(GameAsset asset)
+        {
+            if (asset.Origin == GameAssetOrigin.Archive && asset.ArchivePath != null) archiveSet.Add(asset.ArchivePath);
+        }
+
+        void ReadSkeleton(GameAsset asset, string path, string source)
+        {
+            byte[]? bytes;
+            string? failure = null;
+            try { bytes = data.Read(asset); }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException
+                                        or ArgumentException or NotSupportedException)
+            {
+                bytes = null;
+                failure = First(e.Message);
+            }
+
+            if (bytes == null)
+            {
+                unreadable++;
+                string why = failure ?? "the winning copy could not be read";
+                if (!json) Console.WriteLine($"UNREADABLE  {path}  [{source}]: {why}");
+                findings.Add(new ScanFinding("unreadable", path, source, new[] { why }));
+                return;
+            }
+
+            scanned++;
+            RecordSkeletonPhysics(bytes, path, source, json, findings, counts, ShadowDetails(root, asset));
+        }
+    }
+
+    private static GameData SkeletonPhysicsData(string root) =>
+        Mo2ScanData.TryOpen(root, out Mo2ScanData? instance, out _) && instance != null
+            ? instance.Data
+            : GameData.Discover(root);
+
+    private static List<string>? ShadowDetails(string root, GameAsset asset)
+    {
+        if (asset.Shadowed.Count == 0) return null;
+
+        var details = new List<string>();
+        foreach (GameAsset loser in asset.Shadowed)
+        {
+            string where = "loose";
+            if (loser.Origin == GameAssetOrigin.Archive && loser.ArchivePath != null) where = Rel(root, loser.ArchivePath);
+            else if (loser.FullPath != null) where = Rel(root, loser.FullPath);
+            details.Add($"shadowed: {loser.VirtualPath} [{where}]");
+        }
+        return details;
     }
 
     private static void RecordSkeletonPhysics(byte[] bytes, string path, string? source, bool json,
                                               List<ScanFinding> findings,
-                                              Dictionary<PhysicsLoadStatus, int> counts)
+                                              Dictionary<PhysicsLoadStatus, int> counts,
+                                              IReadOnlyList<string>? shadowed = null)
     {
         PhysicsLoadReport report = PhysicsLoadClassifier.Inspect(bytes);
         counts[report.Status] = counts.TryGetValue(report.Status, out int seen) ? seen + 1 : 1;
@@ -153,6 +188,7 @@ public static partial class ModlistScan
             $"why: {report.Headline}",
         };
         if (report.Hint is { Length: > 0 } hint) details.Add("next: " + hint);
+        if (shadowed != null) details.AddRange(shadowed);
         findings.Add(new ScanFinding(report.StatusSlug, path, source, details));
 
         if (json) return;
@@ -171,13 +207,4 @@ public static partial class ModlistScan
         Console.WriteLine("    constraint classes: " + PhysicsLoadReport.DescribeClasses(report.ConstraintClasses));
         Console.WriteLine("    physics classes: " + PhysicsLoadReport.DescribeClasses(report.PhysicsClasses));
     }
-
-    private static bool IsSkeletonEntry(Ba2.Entry entry) =>
-        entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
-        entry.FileName.StartsWith("skeleton", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsLooseSkeleton(string path) =>
-        path.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase) &&
-        Path.GetFileName(path).StartsWith("skeleton", StringComparison.OrdinalIgnoreCase);
-
 }

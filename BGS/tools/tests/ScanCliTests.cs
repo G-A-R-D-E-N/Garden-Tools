@@ -346,7 +346,7 @@ public sealed class ScanCliTests
     public void ScanSkeletonPhysicsReadsSkeletonFilesInsideArchives()
     {
         using var dir = new TempDir("bgs-skeleton-archive");
-        WriteSingleEntryArchive(Path.Combine(dir.Path, "Test - Main.ba2"),
+        TestArchives.WriteBa2(Path.Combine(dir.Path, "Test - Main.ba2"),
             "meshes/actors/character/characterassets/skeleton.hkx",
             File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
 
@@ -362,6 +362,54 @@ public sealed class ScanCliTests
         Assert.Equal("ok", row.GetProperty("kind").GetString());
         Assert.Equal("meshes/actors/character/characterassets/skeleton.hkx", row.GetProperty("path").GetString());
         Assert.Equal("Test - Main.ba2", row.GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsReportsALooseSkeletonOverAnArchiveCopyOnce()
+    {
+        using var dir = new TempDir("bgs-skeleton-shadow");
+        TestArchives.WriteBa2(Path.Combine(dir.Path, "Test - Main.ba2"),
+            "meshes/actors/character/characterassets/skeleton.hkx",
+            File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        string loose = Path.Combine(dir.Path, "meshes", "actors", "character", "characterassets", "skeleton.hkx");
+        Directory.CreateDirectory(Path.GetDirectoryName(loose)!);
+        File.WriteAllBytes(loose,
+            File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", dir.Path, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("scanned").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("skeletonOnly").GetInt32());
+        Assert.Equal(0, json.GetProperty("summary").GetProperty("ok").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("archives").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("shadowed").GetInt32());
+
+        var row = Assert.Single(json.GetProperty("findings").EnumerateArray());
+        Assert.Equal("skeleton-only", row.GetProperty("kind").GetString());
+        Assert.Equal("loose", row.GetProperty("source").GetString());
+        Assert.Contains(row.GetProperty("details").EnumerateArray(), detail =>
+            detail.GetString()!.Contains("shadowed: meshes/actors/character/characterassets/skeleton.hkx [Test - Main.ba2]"));
+    }
+
+    [Fact]
+    public void ScanSkeletonPhysicsReadsAnMo2InstanceThroughGameData()
+    {
+        using var mo2 = new Mo2Instance();
+        mo2.AddModArchive("meshes/actors/character/characterassets/skeleton.hkx",
+            File.ReadAllBytes(Fixture("Meshes/Actors/Character/CharacterAssets/skeleton.hkx")));
+
+        var (exit, stdout, _) = Capture(() =>
+            ModlistScan.ScanSkeletonPhysics(new[] { "--scan-skeleton-physics", mo2.Instance, "--json" }));
+
+        Assert.Equal(0, exit);
+        var json = ParseSingle(stdout);
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("scanned").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("ok").GetInt32());
+        Assert.Equal(1, json.GetProperty("summary").GetProperty("archives").GetInt32());
     }
 
     [Fact]
@@ -399,31 +447,6 @@ public sealed class ScanCliTests
             replaced = true;
         }
         return replaced;
-    }
-
-    private static void WriteSingleEntryArchive(string path, string entryName, byte[] payload)
-    {
-        using var stream = File.Create(path);
-        using var writer = new BinaryWriter(stream);
-        long headerEnd = 24 + 36;
-        long nameTableAt = headerEnd + payload.Length;
-
-        writer.Write(new[] { 'B', 'T', 'D', 'X' });
-        writer.Write(1u);
-        writer.Write(new[] { 'G', 'N', 'R', 'L' });
-        writer.Write(1u);
-        writer.Write((ulong)nameTableAt);
-
-        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
-        writer.Write((ulong)headerEnd);
-        writer.Write(0u);
-        writer.Write((uint)payload.Length);
-        writer.Write(0xBAADF00Du);
-
-        writer.Write(payload);
-        var bytes = Encoding.UTF8.GetBytes(entryName.Replace('/', '\\'));
-        writer.Write((ushort)bytes.Length);
-        writer.Write(bytes);
     }
 
     private static (int Exit, string Stdout, string Stderr) Capture(Func<int> action)
@@ -518,7 +541,7 @@ public sealed class ScanCliTests
         }
 
         public void AddModArchive(string entryName, byte[] payload) =>
-            WriteSingleEntryArchive(Path.Combine(Mod, "Test - Main.ba2"), entryName, payload);
+            TestArchives.WriteBa2(Path.Combine(Mod, "Test - Main.ba2"), entryName, payload);
 
         public void Dispose() => _root.Dispose();
     }
