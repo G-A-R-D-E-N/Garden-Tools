@@ -34,6 +34,33 @@ public class HkxSkeleton
     public List<bool> LockTranslation { get; set; } = new();
     public List<string> FloatSlots { get; set; } = new();
     public List<float> ReferenceFloats { get; set; } = new();
+    public List<HkxSkeletonLocalFrame> LocalFrames { get; set; } = new();
+    public List<HkxSkeletonPartition> Partitions { get; set; } = new();
+}
+
+/// <summary>
+/// One <c>hkaSkeletonLocalFrameOnBone</c> entry. The frame it points at is kept opaque: this records
+/// that a frame object is referenced and where it lives, not what the frame contains.
+/// </summary>
+public class HkxSkeletonLocalFrame
+{
+    public int BoneIndex { get; set; }
+
+    public bool HasFrame { get; set; }
+
+    /// <summary>
+    /// Section-relative <c>__data__</c> offset of the referenced frame object when the binary reader
+    /// or the document could resolve one, otherwise -1. It is not a byte offset into the file.
+    /// </summary>
+    public int FrameOffset { get; set; } = -1;
+}
+
+/// <summary>One <c>hkaSkeletonPartition</c> entry: a named, contiguous run of bones.</summary>
+public class HkxSkeletonPartition
+{
+    public string Name { get; set; } = "";
+    public int StartBoneIndex { get; set; }
+    public int NumBones { get; set; }
 }
 
 public class HkxTrackData

@@ -91,7 +91,7 @@ public partial class HkxBinaryReader
         HkxSkeleton? bestSkel = null;
         foreach (int skelRelOff in skelOffsets)
         {
-            var parsed = ParseSkeleton(data, dataAbs, skelRelOff, dataSec.End, fixups);
+            var parsed = ParseSkeleton(data, dataAbs, skelRelOff, dataSec, fixups);
             if (parsed != null)
             {
                 if (bestSkel == null || parsed.BoneNames.Count > bestSkel.BoneNames.Count)

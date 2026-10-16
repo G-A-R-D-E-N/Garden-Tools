@@ -52,6 +52,41 @@ public static class SkeletonJson
                 w.WriteEndArray();
             }
 
+            if (skeleton.ReferenceFloats.Count > 0)
+            {
+                w.WriteStartArray("referenceFloats");
+                foreach (float value in skeleton.ReferenceFloats) w.WriteNumberValue(value);
+                w.WriteEndArray();
+            }
+
+            if (skeleton.Partitions.Count > 0)
+            {
+                w.WriteStartArray("partitions");
+                foreach (var partition in skeleton.Partitions)
+                {
+                    w.WriteStartObject();
+                    w.WriteString("name", partition.Name);
+                    w.WriteNumber("startBoneIndex", partition.StartBoneIndex);
+                    w.WriteNumber("numBones", partition.NumBones);
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
+            }
+
+            if (skeleton.LocalFrames.Count > 0)
+            {
+                w.WriteStartArray("localFrames");
+                foreach (var frame in skeleton.LocalFrames)
+                {
+                    w.WriteStartObject();
+                    w.WriteNumber("boneIndex", frame.BoneIndex);
+                    w.WriteBoolean("hasFrame", frame.HasFrame);
+                    if (frame.FrameOffset >= 0) w.WriteNumber("frameOffset", frame.FrameOffset);
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
+            }
+
             w.WriteEndObject();
         }
         return Encoding.UTF8.GetString(buffer.ToArray());
@@ -74,7 +109,36 @@ public static class SkeletonJson
                 ReadVector(bone, "translation"),
                 ReadQuaternion(bone, "rotation"),
                 ReadVector(bone, "scale")));
+            skeleton.LockTranslation.Add(
+                bone.TryGetProperty("lockTranslation", out var locked) && locked.ValueKind == JsonValueKind.True);
         }
+
+        if (root.TryGetProperty("floatSlots", out var slots) && slots.ValueKind == JsonValueKind.Array)
+            foreach (var slot in slots.EnumerateArray())
+                skeleton.FloatSlots.Add(slot.GetString() ?? "");
+
+        if (root.TryGetProperty("referenceFloats", out var floats) && floats.ValueKind == JsonValueKind.Array)
+            foreach (var value in floats.EnumerateArray())
+                skeleton.ReferenceFloats.Add(value.GetSingle());
+
+        if (root.TryGetProperty("partitions", out var partitions) && partitions.ValueKind == JsonValueKind.Array)
+            foreach (var partition in partitions.EnumerateArray())
+                skeleton.Partitions.Add(new HkxSkeletonPartition
+                {
+                    Name = partition.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
+                    StartBoneIndex = partition.TryGetProperty("startBoneIndex", out var start) ? start.GetInt32() : -1,
+                    NumBones = partition.TryGetProperty("numBones", out var count) ? count.GetInt32() : 0,
+                });
+
+        if (root.TryGetProperty("localFrames", out var frames) && frames.ValueKind == JsonValueKind.Array)
+            foreach (var frame in frames.EnumerateArray())
+                skeleton.LocalFrames.Add(new HkxSkeletonLocalFrame
+                {
+                    BoneIndex = frame.TryGetProperty("boneIndex", out var bone) ? bone.GetInt32() : -1,
+                    HasFrame = frame.TryGetProperty("hasFrame", out var has) && has.ValueKind == JsonValueKind.True,
+                    FrameOffset = frame.TryGetProperty("frameOffset", out var offset) ? offset.GetInt32() : -1,
+                });
+
         return skeleton;
     }
 
