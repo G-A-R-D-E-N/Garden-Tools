@@ -30,32 +30,20 @@ public sealed class HkxAnimationCompressionTests
     [Fact]
     public void AnUnknownClassGetsTheGenericSentenceThatNamesIt()
     {
-        string text = AnimationCompression.Describe("hkaMysteryAnimation");
-
-        Assert.Contains("hkaMysteryAnimation", text, StringComparison.Ordinal);
-        Assert.Contains("cannot decode yet", text, StringComparison.Ordinal);
-        Assert.Contains("has not been changed", text, StringComparison.Ordinal);
-        Assert.NotEqual(AnimationCompression.Describe(Quantized), text);
+        Assert.Equal(
+            "This animation uses an animation class BGS cannot decode yet (hkaMysteryAnimation). " +
+            "The file has not been changed.",
+            AnimationCompression.Describe("hkaMysteryAnimation"));
     }
 
     [Fact]
-    public void AnEmptyClassSaysTheFileNamesNoAnimation()
+    public void AnEmptyOrMissingClassSaysTheFileNamesNoAnimation()
     {
-        string text = AnimationCompression.Describe("");
+        string sentence =
+            "This file does not name an animation class BGS can decode. The file has not been changed.";
 
-        Assert.Contains("has not been changed", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("()", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheTwoCompressedClassesAreRecognisedByExactName()
-    {
-        Assert.True(AnimationCompression.IsQuantized(Quantized));
-        Assert.True(AnimationCompression.IsPredictive(Predictive));
-        Assert.False(AnimationCompression.IsQuantized(Predictive));
-        Assert.False(AnimationCompression.IsPredictive(Quantized));
-        Assert.False(AnimationCompression.IsQuantized(null));
-        Assert.False(AnimationCompression.IsPredictive(null));
+        Assert.Equal(sentence, AnimationCompression.Describe(""));
+        Assert.Equal(sentence, AnimationCompression.Describe(null));
     }
 
     [Theory]
@@ -88,21 +76,40 @@ public sealed class HkxAnimationCompressionTests
     }
 
     [Fact]
-    public void AnUnsupportedSplineEncodingSaysSoAndSaysNothingWasWritten()
+    public void AnUnsupportedSplineSubFormatIsExplainedInPlainEnglish()
     {
         var error = SplineQuat.Unsupported(7);
 
-        Assert.Contains("unsupported spline encoding", error.Message, StringComparison.Ordinal);
-        Assert.Contains("7", error.Message, StringComparison.Ordinal);
-        Assert.Contains("has not been changed", error.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            "This animation uses an unsupported spline sub-format (rotation quantization format 7), " +
+            "which BGS cannot decode yet. The file has not been changed.",
+            error.Message);
     }
 
     [Fact]
-    public void AWiderRotationFormatIsRefusedByWidthTheSameWay()
+    public void AnUnsupportedSplineSubFormatOnAWritePathSaysNothingWasProduced()
+    {
+        string sentence = "BGS cannot encode the spline sub-format (rotation quantization format 7).";
+
+        Assert.Equal(sentence, AnimationCompression.DescribeSplineEncodingForWrite(7));
+
+        var error = Assert.Throws<NotSupportedException>(
+            () => SplineQuat.Write(7, System.Numerics.Quaternion.Identity, new byte[16], 0));
+
+        Assert.Equal(sentence, error.Message);
+        Assert.NotEqual(AnimationCompression.DescribeSplineEncoding(7), error.Message);
+        Assert.DoesNotContain("has not been changed", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWiderRotationFormatIsRefusedByWidthWithTheReadWording()
     {
         var error = Assert.Throws<NotSupportedException>(() => SplineFormat.RotWidth(7));
 
-        Assert.Equal(SplineQuat.Unsupported(7).Message, error.Message);
+        Assert.Equal(
+            "This animation uses an unsupported spline sub-format (rotation quantization format 7), " +
+            "which BGS cannot decode yet. The file has not been changed.",
+            error.Message);
     }
 
     [Fact]

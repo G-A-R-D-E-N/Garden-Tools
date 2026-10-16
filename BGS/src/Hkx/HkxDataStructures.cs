@@ -92,8 +92,6 @@ public class HkxAnimationData
         "hkaInterleavedUncompressedAnimation",
     };
 
-    public static string SupportedAnimationClasses => string.Join(" and ", DecodedAnimationClasses);
-
     public bool HasUnsupportedAnimation =>
         AnimationClass.Length > 0 && Array.IndexOf(DecodedAnimationClasses, AnimationClass) < 0;
 

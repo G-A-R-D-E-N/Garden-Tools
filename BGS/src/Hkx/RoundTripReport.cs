@@ -116,8 +116,9 @@ public sealed class RoundTripReport
         }
         catch (NotSupportedException error)
         {
-            // A spline sub-format this build cannot decode is a named loss, not an unreadable file:
-            // the data stays in the file untouched, but the animation cannot be shown.
+            // Must precede the IsFormatFailure catch below, which also matches NotSupportedException:
+            // a refused class or spline sub-format is a named, non-destructive loss, while the format
+            // failures that filter matches are the unreadable path reported elsewhere.
             report.Add(new RoundTripLoss(RoundTripLossKind.UnsupportedAnimation, null, "", error.Message));
         }
         catch (Exception error) when (IsFormatFailure(error))

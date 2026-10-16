@@ -31,6 +31,8 @@ public static class SplineFormat
         ((flags >> 4) & 0x0F) != 0 ? Channel.Spline :
         (flags & 0x0F) != 0        ? Channel.Static : Channel.Identity;
 
+    // Width table for the block decoder (SplineEncoder.ReadRotation). The encode path calls
+    // SplineQuat.Write first, which reports the encode wording for a format it cannot write.
     public static int RotWidth(int format) => format switch
     {
         1 => 5,

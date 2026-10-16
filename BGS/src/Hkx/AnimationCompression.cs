@@ -14,10 +14,10 @@ public static class AnimationCompression
     /// <summary>The class name Fallout 4 uses for Havok predictive animation (hkaAnimation type 5).</summary>
     public const string PredictiveClass = "hkaPredictiveCompressedAnimation";
 
-    public static bool IsQuantized(string? animationClass) =>
+    private static bool IsQuantized(string? animationClass) =>
         string.Equals(animationClass, QuantizedClass, StringComparison.Ordinal);
 
-    public static bool IsPredictive(string? animationClass) =>
+    private static bool IsPredictive(string? animationClass) =>
         string.Equals(animationClass, PredictiveClass, StringComparison.Ordinal);
 
     /// <summary>
@@ -41,14 +41,26 @@ public static class AnimationCompression
     }
 
     /// <summary>
-    /// Plain English for a spline sub-format this build cannot decode. The reader accepts rotation
-    /// quantizations 0, 1, 2 and 5 and the writer produces 1, 2 and 5; anything else is refused
+    /// Plain English for a spline sub-format this build cannot decode. The reader handles rotation
+    /// quantization formats 0, 1, 2 and 5; the writer writes only 1, 2 and 5, and only the format
+    /// <c>SplineEncoder.Options.RotationFormat</c> asks for (1 by default). Anything else is refused
     /// while the file keeps every byte it came with.
     /// </summary>
     public static string DescribeSplineEncoding(int rotationFormat) =>
-        $"This animation uses an unsupported spline encoding (rotation quantization format {rotationFormat}), " +
+        $"This animation uses an unsupported spline sub-format (rotation quantization format {rotationFormat}), " +
         "which BGS cannot decode yet. The file has not been changed.";
+
+    /// <summary>
+    /// The same refusal on a write path: the caller asked for a rotation quantization format BGS
+    /// cannot write, so nothing was produced. It does not claim the file on disk was unchanged,
+    /// because an encode refusal happens before any file is touched.
+    /// </summary>
+    public static string DescribeSplineEncodingForWrite(int rotationFormat) =>
+        $"BGS cannot encode the spline sub-format (rotation quantization format {rotationFormat}).";
 
     public static NotSupportedException UnsupportedSplineEncoding(int rotationFormat) =>
         new(DescribeSplineEncoding(rotationFormat));
+
+    public static NotSupportedException UnsupportedSplineEncodingForWrite(int rotationFormat) =>
+        new(DescribeSplineEncodingForWrite(rotationFormat));
 }

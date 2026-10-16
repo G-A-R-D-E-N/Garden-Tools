@@ -90,13 +90,19 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 
 The catalog exposes the switches currently parsed by `symrm`:
 
-- `frames`: `--digest`
+- `frames`: `--digest`, `--strict`
+- `scale`: `--strict`
 - `extract`: `--tree`
 - `types`: `--members`
 - `defaults`: `--write`
 - `check` and `chain`: `--data`, `--plugins`
 - `crash` and `sweep`: `--data`, `--mods`, `--profile`
 - `diff`: `--data`, `--mods`, `--profile`
+
+`symrm scale` and `symrm frames` list and count every file they cannot decode. By default they exit
+`0` when the only problems were animation classes this reader does not decode or spline sub-formats
+(rotation quantization format N) it refuses, and exit `1` for a read failure or a run that decoded
+nothing. Both take `--strict` to exit `1` for the unsupported and refused files as well.
 
 Commands not listed in that section currently use positional arguments only. Use `<command> --help`
 rather than relying on this summary when scripting a command; the executable help is the canonical
