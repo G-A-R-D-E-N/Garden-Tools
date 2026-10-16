@@ -20,10 +20,7 @@ using fo4ide::papyrus::test::rootsFromEnv;
 
 TEST_CASE("The whole corpus parses without crashing") {
     const auto roots = rootsFromEnv("FO4RE_PSC_CORPUS");
-    if (roots.empty()) {
-        WARN("FO4RE_PSC_CORPUS is not set; corpus sweep skipped.");
-        return;
-    }
+    if (roots.empty()) SKIP("FO4RE_PSC_CORPUS is not set; corpus sweep skipped.");
 
     std::vector<std::filesystem::path> files;
     for (const auto& root : roots) {
@@ -71,10 +68,7 @@ TEST_CASE("The whole corpus parses without crashing") {
 
 TEST_CASE("The whole corpus yields symbols without crashing") {
     const auto roots = rootsFromEnv("FO4RE_PSC_CORPUS");
-    if (roots.empty()) {
-        WARN("FO4RE_PSC_CORPUS is not set; corpus sweep skipped.");
-        return;
-    }
+    if (roots.empty()) SKIP("FO4RE_PSC_CORPUS is not set; corpus sweep skipped.");
 
     std::vector<std::filesystem::path> files;
     for (const auto& root : roots) {
@@ -111,10 +105,7 @@ TEST_CASE("The whole corpus yields symbols without crashing") {
 
 TEST_CASE("The duplicate check refuses nothing that ships") {
     const auto roots = rootsFromEnv("FO4RE_PSC_ROOTS");
-    if (roots.empty()) {
-        WARN("FO4RE_PSC_ROOTS is not set; sweep skipped.");
-        return;
-    }
+    if (roots.empty()) SKIP("FO4RE_PSC_ROOTS is not set; sweep skipped.");
 
     std::vector<std::filesystem::path> files;
     for (const auto& root : roots) {

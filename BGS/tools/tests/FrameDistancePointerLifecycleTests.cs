@@ -12,14 +12,10 @@ public sealed class FrameDistancePointerLifecycleTests
     private const string Skeleton =
         "Meshes/Actors/Character/CharacterAssets/skeleton.hkx";
 
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Fact]
     public void BodyFrameDistanceSurvivesFrameHideAndPointerMove()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var view = new PointerProbeSkeletonView

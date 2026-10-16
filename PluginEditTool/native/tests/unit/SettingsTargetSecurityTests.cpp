@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/rpc/RpcDispatcher.hpp>
@@ -263,11 +264,12 @@ TEST_CASE("SaveSettings refuses a tool path that is missing or has the wrong fil
 }
 
 TEST_CASE("SaveSettings accepts tool paths with the expected file names and empty values") {
+    const auto texconvName = GENERATE(std::string("Texconv.exe"), std::string("texconv"));
     const auto root = tempRoot();
     Cleanup cleanup{root};
     const auto tools = root / "tools";
     touch(tools / "papyruscompiler.exe");
-    touch(tools / "Texconv.exe");
+    touch(tools / texconvName);
     touch(tools / "claude.exe");
     fo4ide::settings::Store store(root / "settings.json");
     fo4ide::settings::Settings settings;
@@ -279,36 +281,16 @@ TEST_CASE("SaveSettings accepts tool paths with the expected file names and empt
     fo4ide::app::SettingsTarget target(store, shared, platform, runner);
     auto result = saveSettingsJson(
         target, nlohmann::json{{"PapyrusCompilerPath", (tools / "papyruscompiler.exe").string()},
-                               {"TexconvPath", (tools / "Texconv.exe").string()},
+                               {"TexconvPath", (tools / texconvName).string()},
                                {"ClaudeCodePath", (tools / "claude.exe").string()},
                                {"Archive2Path", ""}});
 
     REQUIRE(result.has_value());
     CHECK(*result == "Settings saved.");
     CHECK(shared.snapshot().papyrusCompilerPath == tools / "papyruscompiler.exe");
-    CHECK(shared.snapshot().texconvPath == tools / "Texconv.exe");
+    CHECK(shared.snapshot().texconvPath == tools / texconvName);
     CHECK(shared.snapshot().claudeCodePath == tools / "claude.exe");
     CHECK(shared.snapshot().archive2Path.empty());
-}
-
-TEST_CASE("SaveSettings accepts a TexconvPath named texconv") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto tools = root / "tools";
-    touch(tools / "texconv");
-    fo4ide::settings::Store store(root / "settings.json");
-    fo4ide::settings::Settings settings;
-    fo4ide::settings::SharedSettings shared(settings);
-    FakeRunner runner;
-    FakePlatform platform;
-
-    fo4ide::app::SettingsTarget target(store, shared, platform, runner);
-    auto result = saveSettingsJson(
-        target, nlohmann::json{{"TexconvPath", (tools / "texconv").string()}});
-
-    REQUIRE(result.has_value());
-    CHECK(*result == "Settings saved.");
-    CHECK(shared.snapshot().texconvPath == tools / "texconv");
 }
 
 TEST_CASE("SaveSettings accepts a bare ClaudeCodePath that resolves on PATH") {

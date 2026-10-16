@@ -341,13 +341,15 @@ public sealed class AssistantChatStoreTests : IDisposable
         Assert.Equal("noted, keep it private", redacted.Messages[1].Text);
     }
 
-    [Fact]
-    public void NormalAuthJsonMentionIsSaved()
+    [Theory]
+    [InlineData("see auth.json for token")]
+    [InlineData("How do I refresh an access_token without logging in?")]
+    public void NormalCredentialWordMentionIsSaved(string text)
     {
         AssistantChat chat = AssistantChatStore.CreateEmpty();
         chat = chat.WithMessages(new[]
         {
-            new AssistantChatMessage(AssistantChatRole.User, "see auth.json for token", DateTime.UtcNow),
+            new AssistantChatMessage(AssistantChatRole.User, text, DateTime.UtcNow),
         }, DateTime.UtcNow);
 
         AssistantChatStore.Save(chat);
@@ -355,35 +357,7 @@ public sealed class AssistantChatStoreTests : IDisposable
 
         Assert.NotNull(loaded);
         Assert.Single(loaded!.Messages);
-        Assert.Equal("see auth.json for token", loaded.Messages[0].Text);
-    }
-
-    [Fact]
-    public void NormalAccessTokenMentionIsSaved()
-    {
-        AssistantChat chat = AssistantChatStore.CreateEmpty();
-        chat = chat.WithMessages(new[]
-        {
-            new AssistantChatMessage(AssistantChatRole.User, "How do I refresh an access_token without logging in?", DateTime.UtcNow),
-        }, DateTime.UtcNow);
-
-        AssistantChatStore.Save(chat);
-        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
-
-        Assert.NotNull(loaded);
-        Assert.Single(loaded!.Messages);
-        Assert.Equal("How do I refresh an access_token without logging in?", loaded.Messages[0].Text);
-    }
-
-    [Fact]
-    public void PersistenceScanDoesNotFlagNormalMessageContent()
-    {
-        AssistantChat chat = AssistantChatStore.CreateEmpty();
-        chat = AssistantChatStore.AppendMessage(chat, NewUser("How do I rename a clip?"));
-        chat = AssistantChatStore.AppendMessage(chat, NewAssistant("Use the tools tab."));
-        AssistantChatStore.Save(chat);
-        AssistantChat? loaded = AssistantChatStore.Load(chat.Id);
-        Assert.NotNull(loaded);
+        Assert.Equal(text, loaded.Messages[0].Text);
     }
 
     [Fact]
@@ -394,16 +368,8 @@ public sealed class AssistantChatStoreTests : IDisposable
 
         AssistantChatStore.Rename(chat.Id, "../../../etc/passwd");
         string[] files = Directory.GetFiles(_folder);
-        Assert.All(files, file => Assert.StartsWith(_folder, file));
-    }
-
-    [Fact]
-    public void FilePathDerivedFromIdNotTitle()
-    {
-        AssistantChat chat = AssistantChatStore.CreateEmpty();
-        AssistantChatStore.Save(chat);
-        string expected = Path.Combine(_folder, chat.Id + ".json");
-        Assert.True(File.Exists(expected));
+        Assert.Equal(new[] { Path.Combine(_folder, chat.Id + ".json") }, files);
+        Assert.False(File.Exists(Path.Combine(_folder, "..", "etc", "passwd.json")));
     }
 
     [Fact]

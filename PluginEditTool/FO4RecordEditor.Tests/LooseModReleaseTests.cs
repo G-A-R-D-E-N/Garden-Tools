@@ -12,8 +12,21 @@ namespace FO4RecordEditor.Tests;
 
 
 
-public class LooseModReleaseTests
+[Collection("MutagenLoaderCache")]
+public class LooseModReleaseTests : IDisposable
 {
+    private readonly GlobalStateIsolation _state = new();
+
+    public LooseModReleaseTests()
+    {
+        MutagenLoader.MaxCachedModIndexes = 64;
+        MutagenLoader.MaxCachedIndexRecords = 500_000;
+        MutagenLoader.EditableMods.Clear();
+        MutagenLoader.ClearModIndexCacheForTest();
+    }
+
+    public void Dispose() => _state.Dispose();
+
     private sealed class FakeMod : IDisposable
     {
         public bool Disposed { get; private set; }

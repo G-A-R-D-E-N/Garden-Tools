@@ -688,25 +688,6 @@ TEST(WeatherConcept, UntouchedBytePreservation) {
   EXPECT_EQ(round_trip.tnam.size(), after_model.tnam.size());
 }
 
-TEST(WeatherConcept, RealFallout4EsmDecodesWhenPresent) {
-  const char* dir = std::getenv("FO4_DATA_DIR");
-  if (dir == nullptr) {
-    GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
-  }
-  const auto path = std::filesystem::path{dir} / "Fallout4.esm";
-  if (!std::filesystem::exists(path)) {
-    GTEST_SKIP() << "Fallout4.esm not found under " << dir;
-  }
-  record_game_build(detect_game_build(dir));
-  const auto plugin = fo4::read_plugin_file(path);
-  const auto key = fo4::FormKey::parse("0000015E:Fallout4.esm");
-  const auto model = fo4::forms::decode_weather(plugin, key);
-  EXPECT_TRUE(model.editor_id.has_value());
-  EXPECT_EQ(model.cloud_color_layer_count, 32u);
-  EXPECT_TRUE(model.data.size() == 19 || model.data.size() == 20);
-  EXPECT_TRUE(model.dalc.size() == 4u || model.dalc.size() == 8u);
-}
-
 TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) {
@@ -721,13 +702,20 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
   std::size_t seen = 0;
   std::size_t failed = 0;
   std::vector<std::string> failures;
+  const auto fallout_weather_key = fo4::FormKey::parse("0000015E:Fallout4.esm");
   for (const auto& path : files) {
     const auto plugin = fo4::read_plugin_file(path);
     for (const auto* record : fo4::collect_records(plugin)) {
       if (record->header.signature != fo4::Signature::from_string("WTHR")) continue;
       ++seen;
       try {
-        (void)fo4::forms::decode_weather(plugin, record->form_key);
+        const auto model = fo4::forms::decode_weather(plugin, record->form_key);
+        if (record->form_key == fallout_weather_key) {
+          EXPECT_TRUE(model.editor_id.has_value());
+          EXPECT_EQ(model.cloud_color_layer_count, 32u);
+          EXPECT_TRUE(model.data.size() == 19 || model.data.size() == 20);
+          EXPECT_TRUE(model.dalc.size() == 4u || model.dalc.size() == 8u);
+        }
       } catch (const std::exception& error) {
         ++failed;
         failures.push_back(path.filename().string() + " " + record->form_key.to_string() + ": " +

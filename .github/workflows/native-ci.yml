@@ -23,6 +23,15 @@ on:
       - "docs/**"
       - "**/*.md"
   pull_request:
+    paths-ignore:
+      - "BGS/**"
+      - "PluginEditTool/web/**"
+      - "PluginEditTool/FO4RecordEditor*/**"
+      - "PluginEditTool/Mutagen/**"
+      - "PluginEditTool/docs/**"
+      - "PluginEditTool/images/**"
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
     inputs:
       lane:
@@ -55,7 +64,7 @@ env:
   # don't oversubscribe it. cmake --build reads this when --parallel is absent.
   CMAKE_BUILD_PARALLEL_LEVEL: "4"
   # Fallout 4 data tests: native-windows-real-data runs them, native-windows-tests excludes them.
-  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|[A-Za-z0-9_]*Real\.|NavmeshCorpus\.Fallout4FixturesBoundaryCountsAndNvppSize|PexCorpus\.EveryDataDirArchivePexRoundTripsByteIdentically|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.(RealFallout4EsmDecodesWhenPresent|CorpusDecodeSweepWhenPresent)|BehaviorReal\.|DialogueReal\.|DialogueWriterReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
+  REAL_DATA_TEST_REGEX: '[A-Za-z0-9_]*RealData\.|[A-Za-z0-9_]*Real\.|NavmeshCorpus\.Fallout4FixturesBoundaryCountsAndNvppSize|PexCorpus\.EveryDataDirArchivePexRoundTripsByteIdentically|QuestRuntimeReal\.|QuestConditionCorpus\.|RealPluginPreservation\.|CheckErrors\.VanillaMasterHasNoErrorFindings|HedrCount\.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent|WeatherConcept\.CorpusDecodeSweepWhenPresent|BehaviorReal\.|DialogueReal\.|DialogueWriterReal\.|BehaviorWriterReal\.|ClimateWeatherReal\.|ConditionScopesReal\.|NavmeshReal\.|NavmeshWriterReal\.|NifCorpus\.|QuestStructureReal\.|SoundWriterReal\.|VegetationReal\.|VmadWriterOfficial\.|Official normal and AutoWeapon sounds'
 
 jobs:
   # PluginEditTool/native builds Radicle as a subproject, so one build covers
@@ -156,7 +165,7 @@ jobs:
           FO4_DATA_DIR: ${{ vars.FO4_DATA_DIR_LINUX }}
         run: |
           if [ -z "$FO4_DATA_DIR" ]; then unset FO4_DATA_DIR; fi
-          ctest --test-dir build/native --output-on-failure --parallel 4
+          ctest --test-dir build/native --output-on-failure --parallel 4 -E '^radicle_csharp_bindings$'
 
       - name: Prove clean managed tests without external networking
         run: unshare --user --map-root-user --net python3 Radicle/bindings/csharp/tools/run_managed_tests.py --build-dir build/native --network-isolated
@@ -356,7 +365,7 @@ jobs:
       - name: Set up .NET 8
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         env:
-          DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet-8.0.424
         with:
           global-json-file: Radicle/bindings/csharp/global.json
 
@@ -464,7 +473,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           set FO4_DATA_DIR=
-          ctest --test-dir build\native-debug --output-on-failure --parallel 4
+          ctest --test-dir build\native-debug --output-on-failure --parallel 4 -E "^radicle_csharp_bindings$"
 
       - name: Stop .NET build servers
         if: always()
@@ -556,7 +565,7 @@ jobs:
             '^Radicle/(src|include/fo4)/schema/(scalar|field_address|localized_fields|form_link|nested_formlink|formlink_lists|non_formid_slots|preflight|record_constraints|generated_record)'
             '^Radicle/schema/'
             '^Radicle/tools/.*codegen'
-            '(^|/)CMakeLists\.txt$|\.cmake$'
+            '^(Radicle|PluginEditTool/native)/(.*/)?CMakeLists\.txt$|^cmake/|\.cmake$'
             '^\.github/(workflows/native-ci\.yml|scripts/)'
             '^Radicle/tests/plugin_bytes\.'
             '^Radicle/(src|include/fo4)/plugin/onam\.'
@@ -598,14 +607,6 @@ jobs:
             Write-Output 'Every expensive real-data group runs on this pull request.'
           }
 
-      - name: Set up .NET 8
-        if: steps.fo4.outputs.has_data == 'true'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
-        env:
-          DOTNET_INSTALL_DIR: ${{ github.workspace }}/build/dotnet
-        with:
-          global-json-file: Radicle/bindings/csharp/global.json
-
       - name: Set up MSVC, Ninja and ccache
         if: steps.fo4.outputs.has_data == 'true'
         shell: powershell
@@ -624,7 +625,7 @@ jobs:
           $launcher = @()
           if ($env:CCACHE) { $launcher = @("-DCMAKE_C_COMPILER_LAUNCHER=$env:CCACHE", "-DCMAKE_CXX_COMPILER_LAUNCHER=$env:CCACHE") }
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=ON -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
+            cmake -S PluginEditTool\native -B build\native -G Ninja -DCMAKE_BUILD_TYPE=Release -DFO4IDE_BUILD_TESTS=ON -DFO4IDE_BUILD_HTTP=ON -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON "-DFETCHCONTENT_SOURCE_DIR_FO4IDE_ZLIB=$env:ZLIB_SRC" -DRADICLE_BUILD_TESTS=ON -DRADICLE_BUILD_TOOLS=ON -DRADICLE_CSHARP_TESTS=OFF -DRADICLE_WARNINGS_AS_ERRORS=ON @launcher
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -eq 3) {
               Write-Output "::error::configure failed after 3 attempts"
@@ -650,7 +651,3 @@ jobs:
           if ($env:CTEST_EXCLUDE_REGEX) { $ctestArgs += @('-E', $env:CTEST_EXCLUDE_REGEX) }
           ctest @ctestArgs
           exit $LASTEXITCODE
-
-      - name: Stop .NET build servers
-        if: always() && steps.fo4.outputs.has_data == 'true'
-        run: dotnet build-server shutdown

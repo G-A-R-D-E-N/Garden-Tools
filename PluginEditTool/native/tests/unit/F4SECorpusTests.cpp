@@ -163,11 +163,7 @@ std::vector<std::filesystem::path> moduleDirectories() {
 
 TEST_CASE("F4SE corpus: every registration in a real tree is recovered") {
     const auto directories = moduleDirectories();
-    if (directories.empty()) {
-        WARN("FO4RE_F4SE_SRC is not set to a directory holding an F4SE source tree; "
-             "nothing to scan.");
-        return;
-    }
+    if (directories.empty()) SKIP("FO4RE_F4SE_SRC is not set to a directory holding an F4SE source tree; nothing to scan.");
 
     const fo4ide::f4se::RegistrationExtractor extractor;
     int totalPresent = 0;
@@ -223,10 +219,7 @@ TEST_CASE("F4SE corpus: every registration in a real tree is recovered") {
 
 TEST_CASE("F4SE corpus: recovered bindings are internally consistent") {
     const auto directories = moduleDirectories();
-    if (directories.empty()) {
-        WARN("FO4RE_F4SE_SRC is not set; nothing to scan.");
-        return;
-    }
+    if (directories.empty()) SKIP("FO4RE_F4SE_SRC is not set; nothing to scan.");
 
     const fo4ide::f4se::RegistrationExtractor extractor;
     int checked_ = 0;
@@ -249,10 +242,7 @@ TEST_CASE("F4SE corpus: recovered bindings are internally consistent") {
 
 TEST_CASE("F4SE corpus: recovered registrations agree with the papyrus declarations") {
     const auto found = trees();
-    if (found.empty()) {
-        WARN("FO4RE_F4SE_SRC is not set to an F4SE tree; nothing to cross check.");
-        return;
-    }
+    if (found.empty()) SKIP("FO4RE_F4SE_SRC is not set to an F4SE tree; nothing to cross check.");
 
     const fo4ide::f4se::RegistrationExtractor extractor;
     for (const auto& tree : found) {
@@ -273,10 +263,7 @@ TEST_CASE("F4SE corpus: recovered registrations agree with the papyrus declarati
 
 TEST_CASE("F4SE corpus: the two shipped versions differ only in ways the diff can name") {
     const auto found = trees();
-    if (found.size() < 2) {
-        WARN("FO4RE_F4SE_SRC does not hold two F4SE trees; nothing to diff.");
-        return;
-    }
+    if (found.size() < 2) SKIP("FO4RE_F4SE_SRC does not hold two F4SE trees; nothing to diff.");
 
     const fo4ide::f4se::RegistrationExtractor extractor;
     struct Surface {

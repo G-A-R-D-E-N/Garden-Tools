@@ -411,7 +411,7 @@ fail closed. Recursive lookup supports DIAL records nested beneath quest groups.
 The returned array uses radicle_free_record_array; record handles remain borrowed from
 the supplied environment. Managed TopicChildren copies only the handle array via
 the existing Records helper. Keep the environment alive while reading the children
-and their payloads. No C struct layouts change, but the four new exports move `RADICLE_ABI_VERSION` to 5, so a library built from the ABI-4 headers is refused by the binding's version guard on its first call, before any new export is reached (`AbiGuardTests.cs:ALibraryFromBeforeTheRecordPayloadExportsIsRejected` uses the `radicle_abi_stub_v4` stub). Consumers require a native library containing the new exports. TopicReadTests.cs covers selected and
+and their payloads. No C struct layouts change, but the four new exports move `RADICLE_ABI_VERSION` to 5, so a library built from the ABI-4 headers is refused by the binding's version guard on its first call, before any new export is reached (`AbiGuardTests.cs` covers older and newer libraries with the `radicle_abi_stub_v1` and `radicle_abi_stub` stubs; the guard is a single equality check in `Radicle.Interop/Core.cs:VerifyAbi`). Consumers require a native library containing the new exports. TopicReadTests.cs covers selected and
 overridden versions, physical order, sibling separation, nested topics, master/self
 keys, empty results, invalid owners/types and disposed-environment access. This
 does not validate scene decoding, voice playback or menu fidelity.

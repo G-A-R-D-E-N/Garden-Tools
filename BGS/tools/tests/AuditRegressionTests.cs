@@ -165,6 +165,17 @@ public sealed class AuditRegressionTests
     }
 
     [Fact]
+    public void ArchiveNamesWithColonAreRejectedBeforeExtraction()
+    {
+        using var root = new TempDirectory("bgs-ba2-colon");
+        string archive = Path.Combine(root.Path, "colon.ba2");
+        WriteBa2(archive, "a.hkx:stream", new byte[] { 1, 2, 3 });
+
+        var error = Assert.Throws<InvalidDataException>(() => Ba2.Open(archive));
+        Assert.Contains("path with a colon", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FlatExtractionKeepsNestedNamesInsideTheOutputDirectory()
     {
         using var root = new TempDirectory("bgs-ba2-flat");

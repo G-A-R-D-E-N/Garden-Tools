@@ -8,9 +8,6 @@ namespace BehaviourStudio.Tests;
 
 public sealed class ProjectRoundTripCheckTests
 {
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla", relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Fact]
     public void ProjectCheckProjectsRoundTripLossesIntoProblemsWithoutCountingGraphErrors()
     {
@@ -20,7 +17,7 @@ public sealed class ProjectRoundTripCheckTests
             string behaviours = Path.Combine(root, "Behaviors");
             Directory.CreateDirectory(behaviours);
             string target = Path.Combine(behaviours, "Unsafe.hkx");
-            File.Copy(Fixture("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx"), target);
+            File.Copy(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx"), target);
 
             var result = ProjectCheck.Run(new ProjectChain { Root = root });
 

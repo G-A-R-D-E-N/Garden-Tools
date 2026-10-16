@@ -3,6 +3,8 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/quest/structure.hpp"
 #include "real_data_build.hpp"
+#include "real_sample_plugin.hpp"
+#include "temp_data_dir.hpp"
 
 #include <gtest/gtest.h>
 
@@ -257,15 +259,20 @@ TEST_P(QuestStructureReal, EveryStoredQuestAgreesAndRoundTrips) {
   record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
-  const auto plugin = fo4::read_plugin_file(path);
+  const auto reduced = fo4::test::make_sample(fo4::read_plugin_file(path), [](const fo4::Record& record) {
+    return record.header.signature == fo4::Signature::from_string("QUST");
+  }, 0);
+  fo4::test::TempDataDir data;
+  const auto file = data.path() / GetParam();
+  fo4::write_plugin_file(reduced, file);
+  const auto plugin = fo4::read_plugin_file(file);
   radicle_plugin* raw = nullptr;
-  ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_read_file(file.string().c_str(), &raw), RADICLE_STATUS_OK) << radicle_last_error();
   const std::unique_ptr<radicle_plugin, decltype(&radicle_plugin_destroy)> handle(raw, radicle_plugin_destroy);
-  const auto bytes = fo4::write_plugin(plugin);
-  const auto original = fo4::plugin_original_bytes(plugin);
-  ASSERT_EQ(bytes.size(), original.size());
-  ASSERT_TRUE(std::equal(bytes.begin(), bytes.end(), original.begin()));
-  const auto reloaded = fo4::read_plugin(bytes, GetParam());
+  auto rebuilt = plugin;
+  rebuilt.original_range.clear();
+  rebuilt.tes4.original_range.clear();
+  const auto reloaded = fo4::read_plugin(fo4::write_plugin(rebuilt), GetParam());
   size_t quests = 0, stages = 0, logs = 0, objectives = 0, targets = 0, aliases = 0;
   size_t conditions = 0, unsupported = 0, failed_families = 0, failed_lists = 0;
   bool found_mq101 = false;

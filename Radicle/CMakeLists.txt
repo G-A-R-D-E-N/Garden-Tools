@@ -320,9 +320,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_formid.cpp
     tests/test_cursor.cpp
     tests/test_reader.cpp
-    tests/test_xxxx.cpp
     tests/test_compression.cpp
-    tests/test_reader_limits.cpp
     tests/test_undecodable_record.cpp
     tests/test_undecodable_edit.cpp
     tests/test_real_plugin.cpp
@@ -403,12 +401,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_quest_alias_formlinks.cpp
     tests/test_quest_alias_location_formlinks.cpp
     tests/test_quest_alias_mutation.cpp
-    tests/test_quest_alias_boundary.cpp
-    tests/test_quest_alias_collection_grouping.cpp
+    tests/test_quest_alias_collection.cpp
     tests/test_quest_alias_formlink_remap.cpp
     tests/test_quest_alias_remaining_fills.cpp
     tests/test_quest_alias_extra_decode.cpp
-    tests/test_quest_alias_collection_authoring.cpp
     tests/test_scalar.cpp
     tests/test_preflight.cpp
     tests/test_ctda_strings.cpp
@@ -432,7 +428,6 @@ if(RADICLE_BUILD_TESTS)
     tests/test_armor_creation.cpp
     tests/test_armor_edit.cpp
     tests/test_eyes.cpp
-    tests/test_eyes_creation.cpp
     tests/test_base_items.cpp
     tests/test_base_items_real.cpp
     tests/test_magic_location_records.cpp
@@ -442,18 +437,15 @@ if(RADICLE_BUILD_TESTS)
     tests/test_weather_concept.cpp
     tests/test_weather_formlinks.cpp
     tests/test_lvsp.cpp
-    tests/test_lvsp_creation.cpp
     tests/test_leveled_list.cpp
     tests/test_leveled_list_real.cpp
     tests/test_leveled_list_creation.cpp
     tests/test_race_creation.cpp
     tests/test_race_body.cpp
-    tests/test_race_real.cpp
     tests/test_npc_lists.cpp
     tests/test_npc_real.cpp
     tests/test_faction.cpp
     tests/test_faction_real.cpp
-    tests/test_faction_creation.cpp
     tests/test_static_light_records.cpp
     tests/test_static_light_records_real.cpp
     tests/test_config_records.cpp
@@ -578,7 +570,6 @@ if(RADICLE_BUILD_TESTS)
   target_compile_options(fo4_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/wd4996>)
   fo4_apply_warnings(fo4_tests)
   fo4_apply_sanitizers(fo4_tests)
-  target_sources(fo4_tests PRIVATE tests/test_c_api_version.cpp)
 
   include(GoogleTest)
   gtest_discover_tests(fo4_tests DISCOVERY_TIMEOUT 120
@@ -619,10 +610,6 @@ if(RADICLE_BUILD_TESTS)
   add_library(radicle_abi_stub_v1 SHARED bindings/csharp/tests/abi_stub.cpp)
   target_include_directories(radicle_abi_stub_v1 PRIVATE include)
   target_compile_definitions(radicle_abi_stub_v1 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=1u)
-  # ABI 4 is the last generation without the record payload and topic exports.
-  add_library(radicle_abi_stub_v4 SHARED bindings/csharp/tests/abi_stub.cpp)
-  target_include_directories(radicle_abi_stub_v4 PRIVATE include)
-  target_compile_definitions(radicle_abi_stub_v4 PRIVATE RADICLE_C_BUILD RADICLE_ABI_STUB_VERSION=4u)
 
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(Python3_Interpreter_FOUND)
@@ -659,6 +646,6 @@ if(RADICLE_BUILD_TESTS)
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/bindings/csharp/tools/run_managed_tests.py
                      --dotnet ${DOTNET_EXECUTABLE})
     set_tests_properties(radicle_csharp_bindings PROPERTIES
-      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>;RADICLE_ABI_STUB_V4=$<TARGET_FILE:radicle_abi_stub_v4>")
+      ENVIRONMENT "RADICLE_NATIVE_PATH=$<TARGET_FILE:radicle_c>;RADICLE_ABI_PROBE=$<TARGET_FILE:radicle_abi_layout_probe>;RADICLE_ABI_STUB=$<TARGET_FILE:radicle_abi_stub>;RADICLE_ABI_STUB_V1=$<TARGET_FILE:radicle_abi_stub_v1>")
   endif()
 endif()

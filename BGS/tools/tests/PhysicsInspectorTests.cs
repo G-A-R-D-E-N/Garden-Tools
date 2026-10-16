@@ -11,10 +11,6 @@ namespace BehaviourStudio.Tests;
 
 public sealed class PhysicsInspectorTests
 {
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
     [Theory]
     [InlineData("hkpRagdollConstraintData")]
     [InlineData("hclClothData")]
@@ -65,7 +61,7 @@ public sealed class PhysicsInspectorTests
         string relative,
         Func<HavokPhysicsClassFamily, bool> predicate)
     {
-        string fixture = Fixture(relative);
+        string fixture = TestFixtures.Path(relative);
         byte[] bytes = File.ReadAllBytes(fixture);
         var image = PackfileImage.Read(bytes);
         var objects = new PackfileObjects(image);

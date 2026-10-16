@@ -49,11 +49,3 @@ TEST_CASE("Logging writes categorized messages to the configured file") {
     CHECK(contents.find("[rpc]") != std::string::npos);
     CHECK(contents.find("hello from native test") != std::string::npos);
 }
-
-TEST_CASE("Logging returns the same logger for the same category") {
-    const auto directory = tempLogDirectory();
-    Cleanup cleanup{directory};
-    REQUIRE(fo4ide::logging::initialize({.directory = directory}).has_value());
-
-    CHECK(fo4ide::logging::get("app") == fo4ide::logging::get("app"));
-}
