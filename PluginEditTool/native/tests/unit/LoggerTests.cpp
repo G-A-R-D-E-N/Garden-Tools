@@ -39,6 +39,7 @@ TEST_CASE("Logging writes categorized messages to the configured file") {
     }).has_value());
 
     auto log = fo4ide::logging::get("rpc");
+    CHECK(fo4ide::logging::get("rpc") == log);
     log->info("hello from native test");
     log->flush();
 

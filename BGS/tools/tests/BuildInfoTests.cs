@@ -8,7 +8,7 @@ public sealed class BuildInfoTests
     [Fact]
     public void ReportCarriesVersionBuildAndRuntime()
     {
-        Assert.False(string.IsNullOrWhiteSpace(BuildInfo.Version));
+        Assert.Matches(@"^\d+\.\d+\.\d+$", BuildInfo.Version);
         Assert.False(string.IsNullOrWhiteSpace(BuildInfo.Build));
         Assert.False(string.IsNullOrWhiteSpace(BuildInfo.Runtime));
         Assert.Equal(
