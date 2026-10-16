@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace OpenCommonwealth.Services.Hkx;
 
@@ -12,7 +13,7 @@ internal static class AnimationSaveTransaction
         string Message);
 
     internal delegate NativeAnimation.Result Encoder(byte[] source, HkxAnimationData animation);
-    internal delegate void Verifier(
+    internal delegate string Verifier(
         NativeAnimation.Result written,
         bool spline,
         HkxAnimationData animation,
@@ -71,9 +72,10 @@ internal static class AnimationSaveTransaction
                 "Not saved, and the original is untouched: " + error.Message);
         }
 
+        string report;
         try
         {
-            (verifier ?? Verify)(written, spline, animation, editedTrack, editedFrame, timeline);
+            report = (verifier ?? Verify)(written, spline, animation, editedTrack, editedFrame, timeline);
             if (verificationFault != null) throw verificationFault();
         }
         catch (Exception error)
@@ -104,10 +106,12 @@ internal static class AnimationSaveTransaction
             (spline ? "spline compressed" : "uncompressed") +
             $", {size}. The original is kept as {Path.GetFileName(path + ".bak")}.";
 
+        if (!string.IsNullOrEmpty(report)) message += " " + report;
+
         return new Result(true, spline, written, message);
     }
 
-    internal static void Verify(
+    internal static string Verify(
         NativeAnimation.Result written,
         bool spline,
         HkxAnimationData animation,
@@ -145,11 +149,13 @@ internal static class AnimationSaveTransaction
             throw new InvalidDataException(
                 $"rebuilt duration {rebuilt.Duration} differs from the edited {animation.Duration}");
 
+        string report = "";
+
         if (timeline != null)
         {
             float clipLimit = spline ? 0.05f : 0.001f;
             float worstPosition = 0, worstRotation = 0;
-            int atTrack = -1, atFrame = -1;
+            int atTrack = -1, atFrame = -1, compared = 0;
 
             for (int t = 0; t < rebuilt.Tracks.Count && t < animation.Tracks.Count; t++)
             {
@@ -160,6 +166,9 @@ internal static class AnimationSaveTransaction
 
                 for (int f = 0; f < frames; f++)
                 {
+                    if (compared == 0) { atTrack = t; atFrame = f; }
+                    compared++;
+
                     float distance = (got.Translations[f] - asked.Translations[f]).Length();
                     if (distance > worstPosition) { worstPosition = distance; atTrack = t; atFrame = f; }
 
@@ -178,6 +187,30 @@ internal static class AnimationSaveTransaction
                 throw new InvalidDataException(
                     $"the rebuilt clip holds {rebuilt.Annotations.Count} annotation(s), and the edit " +
                     $"left {animation.Annotations.Count}, so the file and the editor would disagree");
+
+            float noteSlack = timeline.Slack * timeline.Scale;
+            var wantedNotes = animation.Annotations.OrderBy(note => note.Time).ToList();
+            var landedNotes = rebuilt.Annotations.OrderBy(note => note.Time).ToList();
+
+            for (int n = 0; n < landedNotes.Count; n++)
+            {
+                if (landedNotes[n].Text != wantedNotes[n].Text)
+                    throw new InvalidDataException(
+                        $"the rebuilt clip's annotation {n} reads \"{landedNotes[n].Text}\" where the " +
+                        $"edit left \"{wantedNotes[n].Text}\", so the two moved different notes");
+
+                float moved = Math.Abs(landedNotes[n].Time - wantedNotes[n].Time);
+                if (moved > noteSlack + 1e-4f)
+                    throw new InvalidDataException(
+                        $"the rebuilt clip's annotation {n} landed at {landedNotes[n].Time:F4}s where " +
+                        $"the edit left it at {wantedNotes[n].Time:F4}s, {moved:F4}s out, past the " +
+                        $"{noteSlack:F4}s a note in a clip this kind may move by");
+            }
+
+            if (atTrack >= 0)
+                report = $"The worst rebuilt frame is {worstPosition:F4} unit(s) and " +
+                         $"{worstRotation:F5} radian(s) from the edit, on track {atTrack} frame " +
+                         $"{atFrame}.";
         }
 
         if (editedTrack < 0 || editedFrame < 0 ||
@@ -185,7 +218,7 @@ internal static class AnimationSaveTransaction
             editedTrack >= animation.Tracks.Count ||
             editedFrame >= rebuilt.Tracks[editedTrack].Translations.Count ||
             editedFrame >= animation.Tracks[editedTrack].Translations.Count)
-            return;
+            return report;
 
         var wanted = animation.Tracks[editedTrack].Translations[editedFrame];
         var landed = rebuilt.Tracks[editedTrack].Translations[editedFrame];
@@ -194,6 +227,8 @@ internal static class AnimationSaveTransaction
         if (drift > limit)
             throw new InvalidDataException(
                 $"the edited frame did not survive re-encoding (drift {drift})");
+
+        return report;
     }
 
     private static Result Refused(string message) =>

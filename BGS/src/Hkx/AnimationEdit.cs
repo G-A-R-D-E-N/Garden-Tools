@@ -237,16 +237,15 @@ public static class AnimationEdit
     }
 
     public sealed record Looped(HkxAnimationData Animation, RootMotion.Motion? Motion, int BlendFrames,
-                                bool MotionBlended, float WorstPosition, float WorstTurn)
+                                float WorstPosition, float WorstTurn)
     {
         public override string ToString() =>
             (BlendFrames <= 1
-                ? "the last frame now matches the first"
-                : $"the last {BlendFrames} frames now ease into the first") +
-            $", moving {WorstPosition:F4} unit(s) and {WorstTurn:F5} radian(s)" +
-            (Motion is { Any: true } && !MotionBlended
-                ? ", and the travel, which is not sampled once per frame, was left as it was"
-                : "");
+                ? "the last frame now matches the first, so the seam holds that pose for one frame"
+                : $"the last {BlendFrames} frames now ease into the first, so the seam holds that " +
+                  "pose for one frame") +
+            $", moving {WorstPosition:F4} unit(s) and {WorstTurn:F5} radian(s), and the root motion " +
+            "was left as it is";
     }
 
     public static Looped Loop(HkxAnimationData animation, RootMotion.Motion? motion, int blendFrames)
@@ -333,36 +332,7 @@ public static class AnimationEdit
         foreach (var note in animation.Annotations)
             made.Annotations.Add(new HkxAnnotation { Time = note.Time, Text = note.Text });
 
-        var loopedMotion = motion;
-        bool motionBlended = false;
-
-        if (motion is { Any: true } && motion.Samples.Count == animation.NumFrames)
-        {
-            var samples = motion.Samples.ToList();
-            var anchor = samples[0];
-
-            for (int k = 0; k < blendFrames; k++)
-            {
-                int index = first + k;
-                float at = (float)(k + 1) / blendFrames;
-                var sample = samples[index];
-                samples[index] = new RootMotion.Sample(
-                    Vector3.Lerp(sample.Position, anchor.Position, at),
-                    sample.TurnRadians + (anchor.TurnRadians - sample.TurnRadians) * at);
-            }
-
-            var settled = new RootMotion.Motion
-            {
-                Up = motion.Up,
-                Forward = motion.Forward,
-                Duration = animation.Duration,
-            };
-            settled.Samples.AddRange(samples);
-            loopedMotion = settled;
-            motionBlended = true;
-        }
-
-        return new Looped(made, loopedMotion, blendFrames, motionBlended, worstPosition, worstTurn);
+        return new Looped(made, motion, blendFrames, worstPosition, worstTurn);
     }
 
     public static Vector3 Between(IReadOnlyList<Vector3> frames, float at)

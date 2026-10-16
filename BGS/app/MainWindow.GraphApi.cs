@@ -227,6 +227,9 @@ public partial class MainWindow : Window
     public void PreviewRetimeForTest() => PreviewRetime();
     public void ApplyRetimeForTest() => ApplyRetime();
     public void TypeLoopBlend(string text) => _loopBlend.Text = text;
+    public string RetimeSpeedText => _retimeSpeed.Text ?? "";
+    public string RetimeDurationText => _retimeDuration.Text ?? "";
+    public string LoopBlendText => _loopBlend.Text ?? "";
     public void PreviewLoopForTest() => PreviewLoop();
     public void ApplyLoopForTest() => ApplyLoop();
     public HkGrid SymbolGrid => _symbols;

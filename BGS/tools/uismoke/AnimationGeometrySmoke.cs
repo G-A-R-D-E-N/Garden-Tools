@@ -74,6 +74,9 @@ public static class AnimationGeometrySmoke
         Check(ref failed, "of 0.333s", Math.Abs(window.AnimationDuration - 1f / 3f) < 1e-3);
         Check(ref failed, "and three annotations", window.AnimationAnnotationCount == 3);
         Check(ref failed, "leaving the clip dirty with a timeline to write", window.AnimationEdited && window.AnimationHasTimeline);
+        Check(ref failed, "and the answer warns there is no undo and the .bak is the way back",
+              window.GeometryAnswer.Contains("No undo", StringComparison.Ordinal) &&
+              window.GeometryAnswer.Contains(".bak", StringComparison.Ordinal));
 
         bool saved = window.SaveAnimationForTest();
         Dispatcher.UIThread.RunJobs();
@@ -118,6 +121,9 @@ public static class AnimationGeometrySmoke
         Check(ref failed, "twice as long is thirty-seven frames", window.AnimationFrameCount == 37);
         Check(ref failed, "over 1.2s", Math.Abs(window.AnimationDuration - 1.2) < 1e-3);
         Check(ref failed, "and the annotations scale with it", window.AnimationAnnotationCount == 4);
+        Check(ref failed, "with the retime and loop boxes cleared so Enter cannot compound it",
+              window.RetimeSpeedText.Length == 0 && window.RetimeDurationText.Length == 0 &&
+              window.LoopBlendText.Length == 0);
 
         bool saved = window.SaveAnimationForTest();
         Dispatcher.UIThread.RunJobs();
@@ -143,11 +149,15 @@ public static class AnimationGeometrySmoke
         Dispatcher.UIThread.RunJobs();
         Smoke.SelectTab(window, "Animation");
 
+        var travel = RootMotion.Read(path);
+
         window.TypeLoopBlend("1");
         window.PreviewLoopForTest();
         Console.WriteLine("        " + window.GeometryAnswer);
         Check(ref failed, "a loop preview says the last frame would match the first",
               window.GeometryAnswer.Contains("matches the first", StringComparison.Ordinal));
+        Check(ref failed, "and says the seam holds that pose for one frame",
+              window.GeometryAnswer.Contains("holds that pose for one frame", StringComparison.Ordinal));
         Check(ref failed, "and leaves the clip alone", !window.AnimationEdited);
 
         window.ApplyLoopForTest();
@@ -172,6 +182,12 @@ public static class AnimationGeometrySmoke
             landed = Math.Max(landed,
                 (written.Tracks[t].Translations[^1] - written.Tracks[t].Translations[0]).Length());
         Check(ref failed, $"and the last frame comes back on the first ({landed:F5})", landed < 0.05f);
+
+        var kept = RootMotion.Read(path);
+        Check(ref failed, "with the travel it came in with",
+              kept.Samples.Count == travel.Samples.Count &&
+              Math.Abs(kept.Turn - travel.Turn) < 1e-4f &&
+              (kept.Travel - travel.Travel).Length() < 1e-4f);
 
         Smoke.CloseForTest(window);
     }

@@ -84,12 +84,12 @@ public partial class MainWindow : Window
         Say(_animationSummary.Text ?? "Open an animation first.",
             _animationSummary.Foreground ?? Ux.MutedBrush);
 
-    private RootMotion.Motion CurrentMotion()
+    private RootMotion.Motion? CurrentMotion()
     {
-        if (_animationTimeline != null) return _animationTimeline.Motion ?? new RootMotion.Motion();
+        if (_animationTimeline != null) return _animationTimeline.Motion;
 
         try { return RootMotion.Read(_hkxPath); }
-        catch { return new RootMotion.Motion(); }
+        catch { return null; }
     }
 
     private bool TrimRange(HkxAnimationData anim, out int first, out int last)
@@ -129,17 +129,7 @@ public partial class MainWindow : Window
         try { cut = AnimationEdit.Trim(anim, CurrentMotion(), first, last); }
         catch (InvalidOperationException e) { Say(e.Message, Ux.BadBrush); return false; }
 
-        float frame = AnimationEdit.FrameDuration(anim);
-        float from = first * frame;
-        float to = last * frame;
-        var before = _animationTimeline;
-
-        timeline = before == null
-            ? new NativeAnimation.Timeline(cut.Animation.Duration, from, to, 1f, cut.Motion)
-            : new NativeAnimation.Timeline(cut.Animation.Duration,
-                                           before.FromTime + from / before.Scale,
-                                           before.FromTime + to / before.Scale,
-                                           before.Scale, cut.Motion);
+        timeline = (_animationTimeline ?? NativeAnimation.Timeline.Identity(anim)).Then(cut);
         return true;
     }
 
@@ -202,26 +192,21 @@ public partial class MainWindow : Window
                 return false;
             }
 
-            if (anim.Duration <= 0)
+            float was = (anim.NumFrames - 1) * AnimationEdit.FrameDuration(anim);
+            if (was <= 0)
             {
                 Say("This clip has no length to work a new duration out from.", Ux.BadBrush);
                 return false;
             }
 
-            scale = wanted / anim.Duration;
+            scale = wanted / was;
             note = "   (the frames stay at this clip's own rate, so the length lands on the nearest frame)";
         }
 
         try { made = AnimationEdit.Retime(anim, CurrentMotion(), scale); }
         catch (InvalidOperationException e) { Say(e.Message, Ux.BadBrush); return false; }
 
-        float was = (anim.NumFrames - 1) * AnimationEdit.FrameDuration(anim);
-        var before = _animationTimeline;
-
-        timeline = before == null
-            ? new NativeAnimation.Timeline(made.Animation.Duration, 0f, was, made.Scale, made.Motion)
-            : new NativeAnimation.Timeline(made.Animation.Duration, before.FromTime, before.ToTime,
-                                           before.Scale * made.Scale, made.Motion);
+        timeline = (_animationTimeline ?? NativeAnimation.Timeline.Identity(anim)).Then(made);
         return true;
     }
 
@@ -258,12 +243,7 @@ public partial class MainWindow : Window
         try { looped = AnimationEdit.Loop(anim, CurrentMotion(), blend); }
         catch (InvalidOperationException e) { Say(e.Message, Ux.BadBrush); return false; }
 
-        var before = _animationTimeline;
-
-        timeline = before == null
-            ? new NativeAnimation.Timeline(looped.Animation.Duration, 0f, anim.Duration, 1f, looped.Motion)
-            : new NativeAnimation.Timeline(looped.Animation.Duration, before.FromTime, before.ToTime,
-                                           before.Scale, looped.Motion);
+        timeline = (_animationTimeline ?? NativeAnimation.Timeline.Identity(anim)).Then(looped);
         return true;
     }
 
@@ -289,9 +269,13 @@ public partial class MainWindow : Window
         _frameStart = 0;
         _trimStart.Text = "0";
         _trimEnd.Text = (made.NumFrames - 1).ToString(CultureInfo.InvariantCulture);
+        _retimeSpeed.Text = "";
+        _retimeDuration.Text = "";
+        _loopBlend.Text = "";
         _frameEditAnswer.Text = "Frame selection cleared: the clip changed shape.";
         _frameEditAnswer.Foreground = Ux.MutedBrush;
         ShowAnimationFrames();
-        Say(said, Ux.CodeBrush);
+        Say(said + "   No undo: reopen without saving to go back; a save keeps the original as " +
+                   ".bak until the next save replaces it.", Ux.CodeBrush);
     }
 }
