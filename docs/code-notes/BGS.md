@@ -842,6 +842,103 @@ assertion is **relative to the extent** (`SkeletonMapperWritebackTests.Recompute
 with rotation bounded separately in radians. A second scale-aware figure lives in the `--recompute`
 output, which prints both the absolute error and its fraction of the extent.
 
+## BGS/src/Hkx/RagdollDocument.cs — ragdoll value write-back (#671)
+
+`RagdollDocument` edits the values inside a file's `hknpRagdollData` ragdolls and writes them back into the
+packfile in place. `symrm ragdoll <file> [--set <field>:<index>=<values>] [--out <file>] [--force]
+[--allow-shared-material] [--data <folder>]` is its user-facing surface
+(`BGS/tools/symrm/RagdollCli.cs:Ragdoll`), the rig physics tab's masses and joint limits save through it
+(`BGS/app/RigAuthoringWindow.Physics.cs:SaveRagdollValues`), and
+`BGS/tools/tests/RagdollDocumentTests.cs` (`26` tests) covers it. The model and the class-table offset helpers live in `BGS/src/Hkx/RagdollModel.cs`, the
+packfile reader in `BGS/src/Hkx/RagdollReader.cs` and the value writer in `BGS/src/Hkx/RagdollWriteback.cs`.
+
+**Layout provenance.** The offsets below come from the Fallout4.exe 1.10.163 class dumps
+`hkclass-field-layouts-1.10.163.part-001.txt` and `...part-002.txt`
+(`E:\RE-work\F4RR-co\ResearchEvidence\subsystems\havok`). Every one was compared field by field with
+`BGS/src/Hkx/HavokClassLayouts.json` and `BGS/src/Hkx/HavokClassTypes.json` before any code was written:
+all three agree on every member, size and type, with **no disagreements**. Honouring the "fail closed on
+disagreement" rule, the shipped JSON class table is the only source of offsets at run time —
+`RagdollLayout.Field`/`Stride`/`AtomOffset` read it, exactly as `HavokPhysicsExtractor.MemberReader` and
+`SkeletonMapperWriteback.Offsets` do — and the numbers here are provenance for this note, never literals.
+
+An `hkArray<T>` in a 64-bit packfile is a data pointer at the member offset with the `int32` count at
+`+8` and the capacity/flags word at `+12`, so `hknpPhysicsSystemData` (120 B) holds `materials` @16,
+`motionProperties` @32, `motionCinfos` @48, `bodyCinfos` @64 and `constraintCinfos` @80
+(`hknpRagdollData` (144 B) adds `skeleton` @120 and `boneToBodyMap` @128). Element sizes are
+`hknpMaterial` 80, `hknpMotionProperties` 64, `hknpMotionCinfo` 112, `hknpBodyCinfo` 96 and
+`hknpConstraintCinfo` 24. The members that matter: `hknpMotionCinfo.inverseMass` real @4,
+`inverseInertiaLocal` vector4 @32, `centerOfMassWorld` vector4 @48; `hknpBodyCinfo.shape` ptr @0,
+`motionId` u32 @12, `qualityId` u8 @16, `materialId` u16 @18, `collisionFilterInfo` u32 @20;
+`hknpMaterial.dynamicFriction` half @18, `staticFriction` half @20, `restitution` half @22 and
+`isShared` bool @72; `hknpShape.convexRadius` real @20; `hknpCapsuleShape.a` vector4 @80 and `b` @96.
+A ragdoll constraint's atoms are an embedded struct at @32: `angFriction.maxFrictionTorque` at atoms+256+8,
+`twistLimit` min/max at atoms+272+8 and +12, `coneLimit` at atoms+304+8 and +12, `planesLimit` at
+atoms+336+8 and +12. A limited hinge's atoms are at @32 too, with `angFriction.maxFrictionTorque` at
+atoms+200+8 and `angLimit` min/max at atoms+216+4 and +8. One naming detail rather than a disagreement:
+neither table has an `hkpPlanesLimitConstraintAtom` class, because `hkpRagdollConstraintDataAtoms.planesLimit`
+is typed `hkpConeLimitConstraintAtom`; its min/max are still the `ConeLimit` atom's, so the code asks the
+class table for the member's own ctype instead of assuming a class name.
+
+**What is editable, and what is refused.** Body mass, centre of mass, material friction and restitution,
+capsule radius and endpoints, and a constraint's twist, plane and cone limits and angular friction. The
+mass is stored as the file's inverse mass and the body's `inverseInertiaLocal` is **scaled by the mass
+ratio** `newInverseMass / oldInverseMass` — that is `oldMass / newMass` — because a rigid body's inertia
+tensor is proportional to its mass while its shape is unchanged; a body whose stored inverse mass is zero
+or non-finite is refused rather than given an inertia that no measurement supports. Friction writes both
+`dynamicFriction` and `staticFriction` (the class table gives one value each, so they move together) and
+restitution writes `restitution`, all at the class's half precision, and the model stores the
+half-rounded value so a write and a read-back compare exactly. A material that more than one body in the
+same ragdoll names, or that the file itself flags `isShared`, is refused unless `allowShared` is passed,
+because the change would reach every body that names it.
+
+Everything else is refused by construction or by the writer. There is no method that adds or removes a
+body, shape or constraint — the writer separately refuses a model whose array count differs from the
+file's, with "rows are never added or removed" — and no method writes `collisionFilterInfo`, `qualityId`,
+`motionId`, `reservedBodyId`, body flags, position, orientation, `localFrame`, `motionPropertiesId`,
+linear or angular velocity, a constraint's frames or its motors. Limits must be finite and ordered within
+`-pi` and `pi`, a cone within `0` and `pi`, a mass and a radius positive and finite, and an index outside
+the model is refused with the count it was checked against.
+
+**Write-back, one path.** `RagdollWriteback.Write` locates the five arrays through the same
+`PackfileObjects.ArrayAt` the reader used, runs `SkeletonMapperWriteback`'s shared-storage test over each
+run, patches the exact bytes of every field that differs, records the `(start, length)` range it owns, and
+then refuses the result unless `RequireConfined` finds every changed byte inside a recorded range,
+`RequireOtherInstancesIntact` finds every object instance outside those ranges byte-identical, and
+`PackfileImage.Rebuild` reproduces the file. The fixup order is never rewritten — there is no
+`FixupOrder.Reorder` call and nothing is appended or relocated, because a value edit does not move
+anything — and the produced bytes are re-read through the reader and must match the model, field for
+field, or nothing is returned at all.
+
+`RagdollDocument.ForceRebuild` is the honest test of that path: it hands the writer a no-op change for
+every ragdoll and every shape, so storage location, the field pass, the confinement checks, the rebuild and
+the read-back verify all run while nothing is meant to change, and the result must equal the input byte for
+byte. `Write` refuses `force` combined with real edits. An unedited `Serialize` returns the source clone,
+which is why the forced rebuild, not that shortcut, is what the corpus figure measures. Saving goes through
+`FileSafety.ReplaceChecked` with the source stamp, like the other documents, so the original is kept as a
+`.bak` and an external change is refused.
+
+**Measured.** On the vanilla install (`D:\SteamLibrary\steamapps\common\Fallout 4\Data`, read-only), through
+`GameData` (#696): `7` archives, `41` files carry an `hknpRagdollData` — all `41` with at least one body,
+`950` bodies, `897` limit-bearing constraints and `933` capsule shapes between them — and `154` more
+skeleton-named files carry none, which with the census's `195` gives the same population
+`BGS/docs/research/fo4-skeleton-physics-census.md` reports. **`41 of 41` unedited forced rebuilds were
+byte-identical**, `41 of 41` mass edits and `40 of 41` limit edits read back as edited (one rig carries no
+limit-bearing constraint at all, so there was nothing to edit), `0` unreadable and `0` failures, exit `0`.
+Before this was measured the only evidence was the committed human fixture
+(`BGS/tools/tests/fixtures/vanilla/Meshes/Actors/Character/CharacterAssets/skeleton.hkx`: `1` ragdoll,
+`18` bodies, `18` motions, `18` materials, `17` constraints of which `9` are `hkpRagdollConstraintData` and
+`8` `hkpLimitedHingeConstraintData`, and `19` capsule shapes), which the forced rebuild also reproduces
+byte for byte.
+
+`BGS/tools/tests/RagdollDocumentTests.cs` pins the no-op identity on every committed ragdoll fixture, each
+field's edit and its read-back, the byte confinement of each edit (the differing `__data__` offsets must be
+a subset of the field's own range), that every other object instance survives an edit unchanged, that the
+local, global and virtual fixup tables are untouched, the half-precision rounding of a material value, the
+mass-ratio inertia scaling, and every refusal above — including a doctored model whose row count differs
+and a forced rebuild asked to carry an edit. The rig smoke
+(`BGS/tools/uismoke/RigAuthoringSmoke.cs`) saves a mass and the joint limits through the window's own
+controls, checks the file is untouched until Save, that the `.bak` holds the original, that the values read
+back, and that a refused mass leaves the file alone.
 ## BGS/src/Archive/GameData.cs — shared read-by-entry and precedence API (#696)
 
 The audit behind #696 found BGS features opening `.ba2` files and deciding loose-versus-archive precedence themselves, because `GameData` had no public API for it. The rule now lives in one place: `BGS/src/Archive/GameData.Assets.cs` (a partial `GameData`) exposes `ReadEntry`, `TryReadEntry`, `Read(GameAsset)`, `TryRead(GameAsset, out bytes, out warning)`, `EnumerateWinners`, `EnumerateLoose`, `FromParts`, `DataRelativePath`, `SkeletonBytes`, `SkeletonEntryName`, `TrySkeletonEntry`, `ModlistPath`, `IsSkeletonName`, `IsCharacterAssetPath` and `IsSkeletonPath`, plus the `GameAsset` record, `GameLooseFile` and the `GameAssetOrigin` enum. `GameData` is the game's data tree as the engine sees it: the `Data` folder's loose files plus the `.ba2` archives directly under it — `Discover` indexes top-level archives only, ordered by `plugins.txt` through `OrderByPlugins`, and never walks a subfolder for archives — consulted in load order, with the enabled Mod Organizer 2 roots layered over it (`DiscoverModded`, `Mo2ScanData`). Loose files win over archives, and within the archives the later-loaded archive wins. A project chain declares animation paths relative to its root, which is normally a folder somewhere inside the data tree (for Fallout 4's vanilla character: `Data\Meshes\Actors\Character`); the same path inside an archive appears with that data-relative prefix, so an animation that is not loose can still exist inside e.g. `Fallout4 - Animations.ba2`. `FromParts(dataFolder, archivePaths, modRootsLowToHigh)` builds that same view from strings a caller already resolved (`AnimationIndexRequest.OpenGameData`), de-duplicating both lists with `Path.GetFullPath`. `Mo2ScanData.OpenScanData(folder)` is the one place that answers "is this folder an MO2 instance or a plain Data folder": the census, the mapper sweep and `--scan-index`'s plain-folder fallback all use it, so none of them carries its own `TryOpen`-or-`Discover` rule. Everything there goes through `Ba2` (Radicle.Interop) and `GameData`'s held-open archive cache; no BA2 byte parsing was added. Follow-up work moves the features onto this surface. `GameData` is single-threaded: it carries no synchronisation, and the held-open archives, the mod-loose index and the per-archive lookup are only safe from one thread at a time.

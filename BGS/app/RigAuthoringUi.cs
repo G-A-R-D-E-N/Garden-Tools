@@ -170,12 +170,13 @@ public sealed partial class RigAuthoringWindow : Window
             string? path = files.FirstOrDefault()?.TryGetLocalPath();
             if (path == null) return;
             bool dirty = skeleton ? _skeleton?.Dirty == true : _skin?.Dirty == true;
-            if (dirty)
+            if (dirty || _ragdoll?.Dirty == true)
             {
                 var choice = await new DiscardDialog("open another asset").ShowDialog<DiscardChoice>(this);
                 if (choice == DiscardChoice.Cancel) return;
-                if (choice == DiscardChoice.Save) { if (skeleton) _skeleton!.Save(); else _skin!.Save(); }
-                else { if (skeleton) _skeleton = null; else _skin = null; }
+                if (choice == DiscardChoice.Save) { if (skeleton) _skeleton!.Save(); else _skin!.Save(); _ragdoll?.Save(); }
+                else if (dirty) { if (skeleton) _skeleton = null; else _skin = null; }
+                else { _ragdoll?.Reload(); }
             }
             if (skeleton) OpenSkeleton(path); else OpenSkin(path);
         }
@@ -197,7 +198,7 @@ public sealed partial class RigAuthoringWindow : Window
         _ = DecideClose(true);
     }
 
-    private bool Dirty => _skeleton?.Dirty == true || _skin?.Dirty == true;
+    private bool Dirty => _skeleton?.Dirty == true || _skin?.Dirty == true || _ragdoll?.Dirty == true;
 
     private async Task DecideClose(bool owner)
     {
@@ -207,7 +208,7 @@ public sealed partial class RigAuthoringWindow : Window
         {
             var choice = await new DiscardDialog("close with unsaved rig edits").ShowDialog<DiscardChoice>(this);
             if (choice == DiscardChoice.Cancel) return;
-            if (choice == DiscardChoice.Save) { _skeleton?.Save(); _skin?.Save(); }
+            if (choice == DiscardChoice.Save) { _skeleton?.Save(); _skin?.Save(); _ragdoll?.Save(); }
             _closeApproved = true;
             if (owner) _owner.Close(); else Close();
         }

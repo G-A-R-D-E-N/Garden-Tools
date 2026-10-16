@@ -20,8 +20,10 @@ internal static class RigAuthoringSmoke
         string skinSource = Path.Combine("tools", "symrm", "samples", "Meshes", "Actors", "Turret", "CharacterAssets", "TurretMounted.nif");
         string skeletonPath = Path.Combine(Path.GetTempPath(), $"bgs-rig-{Guid.NewGuid():N}.hkx");
         string skinPath = Path.Combine(Path.GetTempPath(), $"bgs-skin-{Guid.NewGuid():N}.nif");
+        string ragdollPath = Path.Combine(Path.GetTempPath(), $"bgs-ragdoll-{Guid.NewGuid():N}.hkx");
         File.Copy(skeletonSource, skeletonPath);
         File.Copy(skinSource, skinPath);
+        File.Copy(skeletonSource, ragdollPath);
         var owner = BehaviourStudio.App.App.CreateMainWindow();
         owner.Show();
         RigAuthoringWindow? editor = null;
@@ -68,7 +70,7 @@ internal static class RigAuthoringSmoke
             Require(File.ReadAllBytes(skinPath + ".bak").SequenceEqual(before), "skin backup must preserve the original");
 
             tabs.SelectedIndex = 2;
-            editor.OpenPhysics(skeletonSource, out _);
+            editor.OpenPhysics(ragdollPath, out _);
             Dispatcher.UIThread.RunJobs();
             ViewportFits(editor);
             string hairSource = Path.Combine("tools", "tests", "fixtures", "vanilla", "Meshes", "Actors",
@@ -83,13 +85,41 @@ internal static class RigAuthoringSmoke
             Require(owner.StatusForTest.Contains("Assistant file action refused", StringComparison.Ordinal) &&
                     owner.StatusForTest.Contains("no ragdoll", StringComparison.Ordinal),
                     "the assistant must refuse a ragdoll open with the report summary");
-            editor.OpenPhysics(skeletonSource, out _);
+            editor.OpenPhysics(ragdollPath, out _);
             Dispatcher.UIThread.RunJobs();
             Click(editor, "Step physics");
             Require(Simulation(editor) == null, "physics must refuse missing user-authored masses/settings");
-            Smoke.Find<TextBox>(editor).Single(box => box.Name == "SimulationMass").Text = "5";
+            byte[] beforeRagdollEdit = File.ReadAllBytes(ragdollPath);
+            var massBox = Smoke.Find<TextBox>(editor).Single(box => box.Name == "SimulationMass");
+            massBox.Text = "0";
+            Click(editor, "Set all masses");
+            Require(editor.PhysicsStatusForTest.StartsWith("Refused:", StringComparison.Ordinal),
+                    "a mass outside the editor's range must be refused and shown");
+            Require(beforeRagdollEdit.SequenceEqual(File.ReadAllBytes(ragdollPath)),
+                    "a refused mass must not touch the file");
+            massBox.Text = "5";
             Click(editor, "Set all masses");
             Click(editor, "Set all preview joints");
+            Require(beforeRagdollEdit.SequenceEqual(File.ReadAllBytes(ragdollPath)),
+                    "ragdoll value edits must stay in memory until Save ragdoll values");
+            Click(editor, "Save ragdoll values");
+            Require(editor.PhysicsStatusForTest.Contains("Ragdoll values saved", StringComparison.Ordinal),
+                    "saving the ragdoll values must say so: " + editor.PhysicsStatusForTest);
+            byte[] afterRagdollSave = File.ReadAllBytes(ragdollPath);
+            Require(!afterRagdollSave.SequenceEqual(beforeRagdollEdit),
+                    "saving the ragdoll values must change the file");
+            Require(File.ReadAllBytes(ragdollPath + ".bak").SequenceEqual(beforeRagdollEdit),
+                    "the ragdoll backup must preserve the original");
+            var savedRagdoll = new RagdollDocument(afterRagdollSave);
+            var savedBodies = savedRagdoll.Ragdolls[0].Bodies;
+            Require(savedRagdoll.Ragdolls[0].Motions[savedBodies[0].MotionId].Mass == 5f,
+                    "the saved simulation mass must read back from the file");
+            var savedLimit = savedRagdoll.Ragdolls[0].Constraints.First(row => row.LimitsEditable);
+            Require(savedLimit.MinAngle == -0.5f && savedLimit.MaxAngle == 0.5f,
+                    "the saved joint limits must read back from the file");
+            Console.WriteLine($"Ragdoll write-back: {savedRagdoll.Ragdolls[0].Bodies.Count} bodies and " +
+                              $"{savedRagdoll.Ragdolls[0].Constraints.Count} joints saved, mass 5.0, " +
+                              $"limits {savedLimit.MinAngle}..{savedLimit.MaxAngle} rad.");
             Click(editor, "Step physics");
             RagdollSimulation simulation = Simulation(editor) ?? throw new InvalidOperationException("configured physics must start through the editor controls");
             Require(simulation.Frames.Count > 0, "physics must expose simulated frames");
@@ -118,7 +148,11 @@ internal static class RigAuthoringSmoke
         {
             editor?.Close();
             owner.Close();
-            foreach (string path in new[] { skeletonPath, skinPath }) { File.Delete(path); File.Delete(path + ".bak"); }
+            foreach (string path in new[] { skeletonPath, skinPath, ragdollPath })
+            {
+                File.Delete(path);
+                File.Delete(path + ".bak");
+            }
         }
     }
 

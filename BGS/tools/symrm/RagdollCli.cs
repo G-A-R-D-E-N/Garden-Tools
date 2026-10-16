@@ -1,0 +1,500 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Numerics;
+using OpenCommonwealth.Services;
+using OpenCommonwealth.Services.Archive;
+using OpenCommonwealth.Services.Hkx;
+
+namespace BehaviourStudio.Tools;
+
+public static partial class Program
+{
+    private static int Ragdoll(string[] argv)
+    {
+        string? target = null;
+        bool force = false;
+        bool allowShared = false;
+        string? outPath = null;
+        string? dataFolder = null;
+        var edits = new List<string>();
+
+        for (int i = 1; i < argv.Length; i++)
+        {
+            string flag = argv[i];
+
+            if (!flag.StartsWith("-", StringComparison.Ordinal))
+            {
+                if (target != null)
+                    return RagdollUsage($"this command reads one file, and '{flag}' is a second");
+
+                if (FullPath(flag) is not string file) return RagdollUsage($"'{flag}' is not a usable path");
+                target = file;
+                continue;
+            }
+
+            switch (flag)
+            {
+                case "--force":
+                    force = true;
+                    continue;
+
+                case "--allow-shared-material":
+                    allowShared = true;
+                    continue;
+
+                case "--set":
+                    if (i + 1 >= argv.Length)
+                        return RagdollUsage("--set needs an edit such as mass:0=5");
+                    edits.Add(argv[++i]);
+                    continue;
+
+                case "--out":
+                    if (i + 1 >= argv.Length) return RagdollUsage("--out needs the file to write");
+                    if (FullPath(argv[++i]) is not string outFile) return RagdollUsage("--out is not a usable path");
+                    outPath = outFile;
+                    continue;
+
+                case "--data":
+                    if (i + 1 >= argv.Length) return RagdollUsage("--data needs the Data folder to sweep");
+                    if (FullPath(argv[++i]) is not string folder) return RagdollUsage("--data is not a usable path");
+                    dataFolder = folder;
+                    continue;
+
+                default:
+                    return RagdollUsage($"'{flag}' is not a ragdoll switch");
+            }
+        }
+
+        if (dataFolder != null) return RagdollSweep(dataFolder, outPath);
+
+        if (target == null) return RagdollUsage("ragdoll needs a file to read, or --data with a Data folder");
+
+        byte[] source;
+        try { source = InputFilePolicy.ReadHkx(target); }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine($"cannot read {target}: {error.Message}");
+            return 1;
+        }
+
+        return RagdollOne(target, source, edits, allowShared, outPath, force);
+    }
+
+    private static int RagdollUsage(string problem)
+    {
+        Console.Error.WriteLine(problem);
+        Console.Error.WriteLine();
+        Console.Error.WriteLine(SymrmHelp.TryCommand("ragdoll", out string help)
+            ? help
+            : "symrm ragdoll <skeleton.hkx> [--set <edit>] [--out <file>] [--force] [--data <Data folder>]");
+        return 1;
+    }
+
+    private static int RagdollOne(string file, byte[] source, IReadOnlyList<string> edits, bool allowShared,
+                                  string? outPath, bool force)
+    {
+        RagdollDocument document;
+        try { document = new RagdollDocument(source); }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine($"{Path.GetFileName(file)}: {error.Message}");
+            return 1;
+        }
+
+        Console.WriteLine($"{Path.GetFileName(file)}  {source.Length} bytes, {document.Ragdolls.Count} ragdoll(s), " +
+                          $"{document.Shapes.Count} capsule shape(s)");
+        DescribeRagdolls(document);
+
+        foreach (string edit in edits)
+        {
+            try
+            {
+                ApplyRagdollEdit(document, edit, allowShared);
+                Console.WriteLine($"  set {edit}");
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"  refused {edit}: {error.Message}");
+                return 1;
+            }
+        }
+
+        byte[] produced;
+        try { produced = document.Dirty ? document.Serialize() : document.ForceRebuild(); }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine($"  refused: {error.Message}");
+            return 1;
+        }
+
+        int firstDifference = FirstDifference(source, produced);
+        Console.WriteLine(firstDifference < 0
+            ? $"  round trip: byte-identical ({source.Length} bytes)"
+            : $"  round trip: {source.Length} bytes in, {produced.Length} out, " +
+              $"first difference at 0x{firstDifference:x}");
+
+        if (document.Dirty)
+        {
+            try { VerifyRagdollEdits(produced, document, edits); }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine($"  refused: {error.Message}");
+                return 1;
+            }
+            Console.WriteLine("  the edits came back as written");
+        }
+        else if (edits.Count == 0)
+        {
+            Console.WriteLine("  the forced no-op rebuild reproduced the file byte for byte");
+        }
+
+        if (outPath == null)
+        {
+            Console.WriteLine("  nothing was written: pass --out <file> to keep the rebuilt file");
+            return 0;
+        }
+
+        if (!force)
+        {
+            if (string.Equals(outPath, Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine($"  refused: {outPath} is the file being read; pass --force to overwrite it");
+                return 1;
+            }
+
+            if (File.Exists(outPath))
+            {
+                Console.Error.WriteLine($"  refused: {outPath} already exists; pass --force to overwrite it");
+                return 1;
+            }
+        }
+
+        try { FileSafety.Replace(outPath, produced); }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine($"  cannot write {outPath}: {error.Message}");
+            return 1;
+        }
+
+        Console.WriteLine($"  written to {outPath}");
+        return 0;
+    }
+
+    private static void DescribeRagdolls(RagdollDocument document)
+    {
+        foreach (var node in document.Ragdolls)
+            Console.WriteLine($"  ragdoll #{node.ObjectId}: '{node.Skeleton?.Name ?? "(no skeleton)"}' " +
+                              $"({node.Skeleton?.BoneNames.Count ?? 0} bones), {node.Bodies.Count} bodies, " +
+                              $"{node.Motions.Count} motions, {node.Materials.Count} materials, " +
+                              $"{node.Constraints.Count} constraints");
+
+        foreach (var material in document.Ragdolls.SelectMany(node => node.Materials))
+            Console.WriteLine($"    material {material.Index}: friction {material.DynamicFriction:0.#####} " +
+                              $"dynamic / {material.StaticFriction:0.#####} static, restitution " +
+                              $"{material.Restitution:0.#####}, shared by {material.ReferencedByBodies} body(ies)" +
+                              (material.FileSaysShared ? ", flagged shared in the file" : ""));
+
+        foreach (var constraint in document.Ragdolls.SelectMany(node => node.Constraints).Take(20))
+            Console.WriteLine($"    constraint {constraint.Index}: {constraint.ClassName}, " +
+                              $"limit {constraint.MinAngle:0.#####}..{constraint.MaxAngle:0.#####} rad, " +
+                              $"cone {constraint.ConeMaxAngle:0.#####}, friction {constraint.Friction:0.#####}");
+
+        foreach (var shape in document.Shapes.Take(20))
+            Console.WriteLine($"    shape {shape.InstanceIndex}: {shape.ClassName} #{shape.ObjectId}, " +
+                              $"radius {shape.Radius:0.#####}, a ({shape.A.X:0.###} {shape.A.Y:0.###} {shape.A.Z:0.###}), " +
+                              $"b ({shape.B.X:0.###} {shape.B.Y:0.###} {shape.B.Z:0.###})");
+    }
+
+    private static void ApplyRagdollEdit(RagdollDocument document, string edit, bool allowShared)
+    {
+        int colon = edit.IndexOf(':');
+        int equals = edit.IndexOf('=');
+        if (colon <= 0 || equals <= colon || equals == edit.Length - 1)
+            throw new InvalidOperationException($"'{edit}' is not <field>:<index>=<values>");
+
+        string field = edit[..colon];
+        int index = int.Parse(edit[(colon + 1)..equals], NumberStyles.Integer, CultureInfo.InvariantCulture);
+        float[] values = edit[(equals + 1)..]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => float.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture))
+            .ToArray();
+
+        switch (field)
+        {
+            case "mass":
+                RequireValues(values, 1, edit);
+                document.SetBodyMass(0, index, values[0]);
+                break;
+
+            case "com":
+                RequireValues(values, 3, edit);
+                document.SetBodyCenterOfMass(0, index, new Vector3(values[0], values[1], values[2]));
+                break;
+
+            case "capsule":
+                RequireValues(values, 6, edit);
+                document.SetCapsuleEndpoints(index, new Vector3(values[0], values[1], values[2]),
+                                             new Vector3(values[3], values[4], values[5]));
+                break;
+
+            case "radius":
+                RequireValues(values, 1, edit);
+                document.SetShapeRadius(index, values[0]);
+                break;
+
+            case "material":
+                if (values.Length is < 1 or > 2)
+                    throw new InvalidOperationException($"'{edit}' needs <friction> or <friction>,<restitution>");
+                document.SetMaterialFriction(0, index, values[0], allowShared);
+                if (values.Length == 2) document.SetMaterialRestitution(0, index, values[1], allowShared);
+                break;
+
+            case "limit":
+                RequireValues(values, 2, edit);
+                document.SetConstraintLimits(0, index, values[0], values[1]);
+                break;
+
+            case "cone":
+                RequireValues(values, 1, edit);
+                document.SetConstraintConeLimit(0, index, values[0]);
+                break;
+
+            case "plane":
+                RequireValues(values, 2, edit);
+                document.SetConstraintPlaneLimits(0, index, values[0], values[1]);
+                break;
+
+            case "friction":
+                RequireValues(values, 1, edit);
+                document.SetConstraintFriction(0, index, values[0]);
+                break;
+
+            default:
+                throw new InvalidOperationException($"'{field}' is not a ragdoll field this command sets");
+        }
+    }
+
+    private static void RequireValues(float[] values, int count, string edit)
+    {
+        if (values.Length != count)
+            throw new InvalidOperationException($"'{edit}' needs {count} number(s)");
+    }
+
+    private static void VerifyRagdollEdits(byte[] produced, RagdollDocument document,
+                                           IReadOnlyList<string> edits)
+    {
+        var expected = document.Ragdolls[0];
+        var read = new RagdollDocument(produced).Ragdolls[0];
+        var readShapes = new RagdollDocument(produced).Shapes;
+
+        for (int i = 0; i < expected.Motions.Count; i++)
+        {
+            if (expected.Motions[i].InverseMass == read.Motions[i].InverseMass &&
+                expected.Motions[i].InverseInertiaLocal == read.Motions[i].InverseInertiaLocal &&
+                expected.Motions[i].CenterOfMassWorld == read.Motions[i].CenterOfMassWorld)
+                continue;
+
+            throw new InvalidDataException(
+                $"motion {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
+        }
+
+        for (int i = 0; i < expected.Materials.Count; i++)
+        {
+            if (expected.Materials[i].DynamicFriction == read.Materials[i].DynamicFriction &&
+                expected.Materials[i].StaticFriction == read.Materials[i].StaticFriction &&
+                expected.Materials[i].Restitution == read.Materials[i].Restitution)
+                continue;
+
+            throw new InvalidDataException(
+                $"material {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
+        }
+
+        for (int i = 0; i < expected.Constraints.Count; i++)
+        {
+            if (expected.Constraints[i].SameAs(read.Constraints[i])) continue;
+
+            throw new InvalidDataException(
+                $"constraint {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
+        }
+
+        for (int i = 0; i < document.Shapes.Count; i++)
+        {
+            var shape = document.Shapes[i];
+            if (i < readShapes.Count && shape.SameAs(readShapes[i])) continue;
+
+            throw new InvalidDataException(
+                $"shape {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
+        }
+    }
+
+    private static int RagdollSweep(string dataFolder, string? outPath)
+    {
+        if (outPath != null)
+        {
+            Console.Error.WriteLine($"--out is refused in sweep mode ({outPath}): " +
+                                    "a sweep reads a whole Data folder and writes nothing");
+            return 1;
+        }
+
+        if (!Directory.Exists(dataFolder))
+        {
+            Console.Error.WriteLine($"--data folder not found: {dataFolder}");
+            return 1;
+        }
+
+        using var data = Mo2ScanData.OpenScanData(dataFolder);
+
+        var candidates = data.EnumerateWinners("", IsRagdollCandidate)
+                             .OrderBy(asset => asset.ArchivePath, StringComparer.Ordinal)
+                             .ThenBy(asset => asset.VirtualPath, StringComparer.Ordinal)
+                             .ToList();
+
+        int files = 0, shapes = 0, bodies = 0, constraints = 0, unreadable = 0, noRagdoll = 0, usable = 0;
+        int byteIdentical = 0, massOk = 0, massSkipped = 0, limitOk = 0, limitSkipped = 0, failed = 0;
+        var failures = new List<string>();
+        var archiveSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var asset in candidates)
+        {
+            if (asset.ArchivePath != null) archiveSet.Add(asset.ArchivePath);
+            foreach (var loser in asset.Shadowed)
+                if (loser.ArchivePath != null) archiveSet.Add(loser.ArchivePath);
+        }
+
+        foreach (var asset in candidates)
+        {
+            if (!data.TryRead(asset, out byte[] bytes, out string? warning))
+            {
+                unreadable++;
+                failures.Add($"{asset.VirtualPath}: {warning ?? "the winning copy could not be read"}");
+                continue;
+            }
+
+            bool carries;
+            try { carries = CarriesRagdoll(bytes); }
+            catch (Exception) { unreadable++; continue; }
+            if (!carries) { noRagdoll++; continue; }
+
+            files++;
+
+            try
+            {
+                var document = new RagdollDocument(bytes);
+                shapes += document.Shapes.Count;
+                bodies += document.Ragdolls.Sum(node => node.Bodies.Count);
+                constraints += document.Ragdolls.SelectMany(node => node.Constraints).Count(row => row.LimitsEditable);
+                if (document.Ragdolls.Any(node => node.Bodies.Count > 0)) usable++;
+
+                byte[] rebuilt = document.ForceRebuild();
+                if (!rebuilt.AsSpan().SequenceEqual(bytes))
+                {
+                    int at = FirstDifference(bytes, rebuilt);
+                    failures.Add($"{asset.VirtualPath}: rebuilding the unedited file was not byte-identical " +
+                                 $"({bytes.Length} bytes in, {rebuilt.Length} out, first difference at 0x{at:x})");
+                }
+                else
+                {
+                    byteIdentical++;
+                }
+
+                string? massNote = SweepMassEdit(document, asset.VirtualPath, failures);
+                if (massNote == null) massOk++;
+                else if (massNote.Length == 0) massSkipped++;
+                else failures.Add(massNote);
+
+                string? limitNote = SweepLimitEdit(document, asset.VirtualPath, failures);
+                if (limitNote == null) limitOk++;
+                else if (limitNote.Length == 0) limitSkipped++;
+                else failures.Add(limitNote);
+            }
+            catch (Exception error)
+            {
+                failed++;
+                failures.Add($"{asset.VirtualPath}: {error.Message}");
+            }
+        }
+
+        foreach (string failure in failures.Take(20)) Console.WriteLine("  " + failure);
+        if (failures.Count > 20) Console.WriteLine($"  ... and {failures.Count - 20} more");
+
+        Console.WriteLine($"\n{archiveSet.Count} archive(s): {files} file(s) with an hknpRagdollData " +
+                          $"({usable} of them with at least one body), {bodies} bodies, {constraints} " +
+                          $"limit-bearing constraints, {shapes} capsule shapes, {unreadable} unreadable, " +
+                          $"{noRagdoll} skeleton-named file(s) without a ragdoll");
+        Console.WriteLine($"unedited forced rebuild: {byteIdentical} byte-identical, " +
+                          $"{files - byteIdentical} did not reproduce their bytes");
+        Console.WriteLine($"mass edit round trip: {massOk} read back as edited, {massSkipped} skipped " +
+                          "(no scalable body)");
+        Console.WriteLine($"limit edit round trip: {limitOk} read back as edited, {limitSkipped} skipped " +
+                          $"(no editable constraint), {failed} file(s) failed to measure");
+
+        return failures.Count == 0 ? 0 : 1;
+    }
+
+    private static bool CarriesRagdoll(byte[] bytes) =>
+        new PackfileObjects(PackfileImage.Read(bytes))
+            .Instances.Any(instance => instance.ClassName == "hknpRagdollData");
+
+    private static string? SweepMassEdit(RagdollDocument document, string virtualPath, List<string> failures)
+    {
+        var node = document.Ragdolls[0];
+        int index = node.Bodies
+                        .Where(body => body.MotionId >= 0 && body.MotionId < node.Motions.Count)
+                        .Where(body => node.Motions[body.MotionId].Mass > 0f &&
+                                       float.IsFinite(node.Motions[body.MotionId].Mass))
+                        .Select(body => body.Index)
+                        .DefaultIfEmpty(-1)
+                        .First();
+        if (index < 0) return "";
+
+        var body = node.Bodies[index];
+        float mass = node.Motions[body.MotionId].Mass;
+        float wanted = mass * 2f;
+        try
+        {
+            document.SetBodyMass(0, index, wanted);
+            var reread = new RagdollDocument(document.Serialize());
+            float read = reread.Ragdolls[0].Motions[reread.Ragdolls[0].Bodies[index].MotionId].Mass;
+            if (read != wanted)
+                return $"{virtualPath}: the mass edit read back as {read} where {wanted} was set";
+            return null;
+        }
+        catch (Exception error)
+        {
+            failures.Add($"{virtualPath}: the mass edit failed: {error.Message}");
+            return "";
+        }
+    }
+
+    private static string? SweepLimitEdit(RagdollDocument document, string virtualPath, List<string> failures)
+    {
+        int index = document.Ragdolls.SelectMany(node => node.Constraints)
+                                     .Where(row => row.LimitsEditable)
+                                     .Select(row => row.Index)
+                                     .DefaultIfEmpty(-1)
+                                     .First();
+        if (index < 0) return "";
+
+        try
+        {
+            document.SetConstraintLimits(0, index, -0.25f, 0.25f);
+            var reread = new RagdollDocument(document.Serialize());
+            var read = reread.Ragdolls[0].Constraints[index];
+            if (read.MinAngle != -0.25f || read.MaxAngle != 0.25f)
+                return $"{virtualPath}: the limit edit read back as {read.MinAngle}..{read.MaxAngle} " +
+                       "where -0.25..0.25 was set";
+            return null;
+        }
+        catch (Exception error)
+        {
+            failures.Add($"{virtualPath}: the limit edit failed: {error.Message}");
+            return "";
+        }
+    }
+
+    private static bool IsRagdollCandidate(string virtualPath) =>
+        GameData.IsSkeletonName(virtualPath.Replace('\\', '/'));
+}
