@@ -542,6 +542,7 @@ The slack is covered by two tests on a synthetic 60 fps lossless clip built by `
 `BGS/tools/uismoke/AnimationGeometrySmoke.cs` drives the real window on a copy of the same spline clip, linked into the smoke output as `fixtures/RadRoachTurnLeft90.hkx`: a trim preview reports the annotation it would drop and changes nothing, trim/retime/loop each apply, save and reopen, and the reopened file is checked for frame count, duration, annotation count and placement, for the loop landing back on the first frame without losing its travel, and for the applied answers carrying the no-undo and `.bak` hint. The retime check also confirms the speed and duration boxes and the loop box are cleared by the apply. A file with no animation keeps its existing message. It runs from `BGS/tools/uismoke/RagdollLifecycleSmoke.cs:LifecycleSmoke.Run` in the default uismoke mode, alongside the other smokes, and gives itself a temporary settings file while restoring the previous one.
 
 `symrm trim` and `symrm retime` themselves were left alone: they are corpus sweeps over spline clips, and they call the same `AnimationEdit.Trim` and `AnimationEdit.Retime` the tab calls, so the same frame range or scale produces the same clip either way. The GUI reaches the extra lossless case only because it writes through `Interleave` with a timeline; the CLI sweeps do not read lossless clips at all, which is unchanged.
+
 ## BGS/src/Hkx/HkxBinaryReader.Skeleton.cs — full hkaSkeleton read (#661)
 
 `BGS/src/Hkx/HkxBinaryReader.Skeleton.cs:ParseSkeleton` reads all of the 136-byte `hkaSkeleton` object
@@ -626,6 +627,7 @@ Regressions, all in `BGS/tools/tests/HkxSkeletonReadTests.cs`:
 `AGlobalFixupIntoTheDataSectionResolvesASkeletonMember`, `AGlobalFixupIntoAnotherSectionIsRefused`,
 `AMissingSlotOrPartitionNameIsKeptApartFromAnEmptyOne`, `ANonFiniteReferenceFloatIsRefusedOnWrite`,
 `ANonFinitePoseValueIsRefusedOnWrite` and `WronglyTypedJsonIsRefused`.
+
 ## BGS/src/Hkx/PhysicsLoadClassifier.cs — physics load report (#660)
 
 `PhysicsLoadClassifier.Classify(PhysicsLoadFacts)` is a pure function of measured facts, so a status is testable without a fixture that produces it. It chooses one dominant status in a fixed order and puts that finding first:
@@ -656,6 +658,7 @@ Under `--json` the output is a `ScanReport` named `scan-skeleton-physics` with s
 Exit code 0 when every scanned file is `Ok`, `UnsupportedShapes` or `SkeletonOnly` and nothing was unreadable; 1 only when a file is `LegacyPhysics`, `MapperMissing`, `NoBodies`, `WrongContainer` or `ParseError`, or something could not be read; 2 for a missing or nonexistent directory, through the shared usage path. `SkeletonOnly` is 154 of the 195 vanilla skeletons, so it is reported separately and is never part of the "no usable ragdoll" count. A `.ba2` that cannot be opened is a `skip` finding counted in `skippedArchives` and does not change the exit code; a skeleton file that cannot be read is an `unreadable` finding and does force exit 1.
 
 Measured census and per-fixture evidence: `BGS/docs/research/fo4-skeleton-physics-census.md`. CLI coverage: `BGS/tools/tests/ScanCliTests.cs`.
+
 ## BGS/src/Hkx/SkeletonMapperDocument.cs — skeleton mapper write-back (#672)
 
 `SkeletonMapperDocument` edits `hkaSkeletonMapper` data and writes it back into the packfile.
