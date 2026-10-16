@@ -198,4 +198,38 @@ public sealed class RagdollSiblingTests
         Assert.Equal(sibling, choice.ReportPath);
         Assert.NotNull(choice.Model);
     }
+
+    [Fact]
+    public void ATransientCopyOfAPackedClipResolvesItsPackedSkeletonFromTheVirtualPathHint()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-ragdoll-hint");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+        byte[] skeleton = { 7, 7, 7, 7 };
+        TestArchives.WriteGeneralBa2(Path.Combine(dataFolder, "Fallout4 - Animations.ba2"),
+            ("Meshes/Actors/Turret/Animations/Idle.hkx", new byte[] { 1, 1 }),
+            ("Meshes/Actors/Turret/CharacterAssets/skeleton.hkx", skeleton));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+        using var temp = new TestArchives.TempDirectory("bgs-ragdoll-copy");
+        string copy = Path.Combine(temp.Path, "Idle.hkx");
+        File.WriteAllBytes(copy, new byte[] { 1, 1 });
+
+        Assert.Null(data.DataRelativePath(copy));
+        Assert.Null(MainWindow.PackedAnimationKey(data, copy, null));
+
+        const string hint = "Meshes/Actors/Turret/Animations/Idle.hkx";
+        Assert.Equal(hint, MainWindow.PackedAnimationKey(data, copy, hint));
+        Assert.Null(MainWindow.PackedAnimationKey(data, copy, "../escape.hkx"));
+
+        string? sibling = data.SkeletonEntryName(hint);
+        Assert.Equal("Meshes/Actors/Turret/CharacterAssets/skeleton.hkx", sibling);
+        Assert.Equal(skeleton, MainWindow.PackedSkeleton(data, hint, sibling!));
+
+        var choice = MainWindow.ChooseRagdoll(copy, null, SkeletonOnly(), sibling,
+            _ => (OneBody(), Ragdoll()));
+
+        Assert.Equal(sibling, choice.ReportPath);
+        Assert.NotNull(choice.Model);
+    }
 }

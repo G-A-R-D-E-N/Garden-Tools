@@ -231,7 +231,7 @@ public partial class MainWindow : Window
         return panel;
     }
 
-    private void TryLoadRagdoll(string path)
+    private void TryLoadRagdoll(string path, string? virtualPathHint = null)
     {
         byte[] raw;
         try { raw = File.ReadAllBytes(path); }
@@ -246,7 +246,7 @@ public partial class MainWindow : Window
         string? packedAnimation = null;
         if (own is not { Bodies.Count: > 0 } && sibling == null && _gameData != null)
         {
-            packedAnimation = _gameData.DataRelativePath(path);
+            packedAnimation = PackedAnimationKey(_gameData, path, virtualPathHint);
             if (packedAnimation != null) sibling = _gameData.SkeletonEntryName(packedAnimation);
         }
 
@@ -311,6 +311,14 @@ public partial class MainWindow : Window
         catch { skeleton = null; }
         if (skeleton != null && skeleton.BoneNames.Count > 0)
             _skeleton.Show(AnimationPose.ReferencePose(skeleton));
+    }
+
+    internal static string? PackedAnimationKey(GameData? data, string path, string? virtualPathHint)
+    {
+        if (data == null) return null;
+        if (!string.IsNullOrWhiteSpace(virtualPathHint) && AnimationIndex.IsSafeVirtualPath(virtualPathHint))
+            return virtualPathHint.Replace('\\', '/').TrimStart('/');
+        return data.DataRelativePath(path);
     }
 
     internal static RagdollChoice ChooseRagdoll(string path, HavokRagdollModel? own, PhysicsLoadReport ownReport,
@@ -580,8 +588,8 @@ public partial class MainWindow : Window
     internal static byte[] PackedSkeleton(GameData? data, string? packedAnimation, string key)
     {
         if (packedAnimation != null && data != null &&
-            data.TrySkeletonEntry(packedAnimation, out string? entry, out byte[] packed) &&
-            entry != null && string.Equals(entry, key, StringComparison.OrdinalIgnoreCase))
+            string.Equals(data.SkeletonEntryName(packedAnimation), key, StringComparison.OrdinalIgnoreCase) &&
+            data.TryReadSkeletonEntry(key, out byte[] packed))
         {
             return packed;
         }

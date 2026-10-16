@@ -20,7 +20,9 @@ public partial class HkxBinaryReader
         public int End;
     }
 
-    internal HkxAnimationData ParseHkx(byte[] data)
+    internal HkxAnimationData ParseHkx(byte[] data) => ParseHkx(data, false);
+
+    internal HkxAnimationData ParseHkx(byte[] data, bool strictSkeleton)
     {
         InputFilePolicy.EnsureHkx(data.LongLength);
         if (data.Length < 64)
@@ -93,14 +95,18 @@ public partial class HkxBinaryReader
         HkxSkeleton? bestSkel = null;
         foreach (int skelRelOff in skelOffsets)
         {
-            var parsed = ParseSkeleton(data, dataAbs, skelRelOff, dataSec, fixups);
-            if (parsed != null)
+            HkxSkeleton? parsed;
+            try
             {
-                if (bestSkel == null || parsed.BoneNames.Count > bestSkel.BoneNames.Count)
-                {
-                    bestSkel = parsed;
-                }
+                parsed = ParseSkeleton(data, dataAbs, skelRelOff, dataSec, fixups);
             }
+            catch (InvalidDataException) when (!strictSkeleton)
+            {
+                continue;
+            }
+
+            if (parsed != null && (bestSkel == null || parsed.BoneNames.Count > bestSkel.BoneNames.Count))
+                bestSkel = parsed;
         }
 
         if (bestSkel != null)

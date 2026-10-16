@@ -552,6 +552,58 @@ public sealed class HkxSkeletonReadTests
     private static int Field(string className, string member) =>
         HavokClasses.Shipped.Field(className, member)!.Offset;
 
+    [Fact]
+    public void AClipWithAMalformedEmbeddedSkeletonStillDecodesAndSaves()
+    {
+        string fixture = Path.Combine(AppContext.BaseDirectory, "fixtures", "vanilla",
+            "Meshes", "Actors", "RadRoach", "Animations", "TurnLeft90.hkx");
+        byte[] original = File.ReadAllBytes(fixture);
+        Assert.DoesNotContain("hkaSkeleton", Encoding.ASCII.GetString(original), StringComparison.Ordinal);
+
+        byte[] bytes = WithMalformedSkeleton(original);
+        Assert.Contains("hkaSkeleton", Encoding.ASCII.GetString(bytes), StringComparison.Ordinal);
+
+        var reader = new HkxBinaryReader();
+        Assert.True(reader.TryReadAnimation(bytes, out HkxAnimationData read));
+        Assert.Equal(NativeAnimation.SplineClass, read.AnimationClass);
+        Assert.True(read.NumFrames > 1);
+        Assert.Null(read.Skeleton);
+        Assert.Throws<InvalidDataException>(() => reader.ReadSkeleton(bytes));
+
+        using var scope = new TestArchives.TempDirectory("bgs-malformed-skeleton");
+        string path = Path.Combine(scope.Path, "clip.hkx");
+        File.WriteAllBytes(path, bytes);
+
+        var saved = AnimationSaveTransaction.Commit(
+            path, read, DocumentSourceStamp.Capture(path), editedTrack: 0, editedFrame: 1);
+
+        Assert.True(saved.Committed, saved.Message);
+        var reopened = new HkxBinaryReader().ParseHkx(File.ReadAllBytes(path));
+        Assert.Equal(read.NumFrames, reopened.NumFrames);
+        Assert.Equal(read.Tracks.Count, reopened.Tracks.Count);
+    }
+
+    private static byte[] WithMalformedSkeleton(byte[] hkx)
+    {
+        var image = PackfileImage.Read(hkx);
+        var data = image.Section("__data__")!;
+        var skeleton = NativeAppend.Object(image, "hkaSkeleton");
+
+        int name = data.AppendData(Encoding.ASCII.GetBytes("Ragdoll\0"));
+        data.AlignData(16);
+        int bones = data.AppendData(new byte[0x10]);
+        data.SetLocal(bones, name);
+        int bonesField = skeleton.Offset + HavokClasses.Shipped.Field("hkaSkeleton", "bones")!.Offset;
+        data.SetLocal(bonesField, bones);
+        BitConverter.GetBytes(1).CopyTo(data.Data, bonesField + image.Layout.PointerSize);
+
+        int floatsField = skeleton.Offset + HavokClasses.Shipped.Field("hkaSkeleton", "referenceFloats")!.Offset;
+        data.SetGlobal(floatsField, (image.Sections.IndexOf(data) + 1) % image.Sections.Count, 0);
+
+        FixupOrder.Reorder(image);
+        return image.Rebuild();
+    }
+
     private sealed class CraftedSkeleton
     {
         private readonly PackfileImage _image = new() { Predicates = new byte[16] };

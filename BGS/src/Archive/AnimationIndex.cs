@@ -293,6 +293,7 @@ public sealed class AnimationIndex
         AnimationIndexCacheData? stored = options.ReuseCache && cache != null ? cache.Load() : null;
         var notes = new List<string>();
         var warnings = new List<string>();
+        var warned = new HashSet<string>(StringComparer.Ordinal);
         bool discarded = options.ReuseCache && cache != null && stored == null && File.Exists(cache.Path);
         if (discarded) notes.Add("the previous index cache was stale or unreadable and has been discarded");
 
@@ -308,6 +309,8 @@ public sealed class AnimationIndex
 
         token.ThrowIfCancellationRequested();
         using GameData data = request.OpenGameData();
+
+        var ordered = new List<(string Source, IEnumerable<(string VirtualPath, long Size)> Entries)>();
 
         progress?.Invoke(new AnimationIndexProgress(0, planned.Count, "reading sources"));
         foreach (var (kind, path, label) in planned)
@@ -331,7 +334,10 @@ public sealed class AnimationIndex
             {
                 entries = loose
                     ? files.Select(file => Classify(file.VirtualPath, label, file.Size, file.FullPath)).ToList()
-                    : ArchiveEntries(data, path, label, token, warnings);
+                    : ArchiveEntries(data, path, label, token, message =>
+                      {
+                          if (warned.Add(message)) warnings.Add(message);
+                      });
                 scanned++;
                 progress?.Invoke(new AnimationIndexProgress(done, planned.Count, "indexed " + label));
             }
@@ -341,9 +347,22 @@ public sealed class AnimationIndex
             rowOf[identity] = RowsOf(entries);
         }
 
+        var rowsBySource = new Dictionary<string, IEnumerable<(string VirtualPath, long Size)>>(
+            StringComparer.OrdinalIgnoreCase);
+        foreach (AnimationIndexSource source in sources)
+            rowsBySource[SourceKey(source.Kind, source.Path)] =
+                perSource[Identity(source.Kind, source.Path)].Select(entry => (entry.VirtualPath, entry.Size));
+
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string source in data.WinnerSourceOrder())
+            if (emitted.Add(source) && rowsBySource.TryGetValue(source, out var rows))
+                ordered.Add((source, rows));
+
         token.ThrowIfCancellationRequested();
         progress?.Invoke(new AnimationIndexProgress(planned.Count, planned.Count, "merging"));
-        List<AnimationIndexEntry> merged = MergeWinners(data, SourceIdentities(sources), rowOf, warnings);
+        IReadOnlyList<GameAsset> winners = data.MergeWinners(ordered, token, offered =>
+            progress?.Invoke(new AnimationIndexProgress(offered, planned.Count, "merging")));
+        List<AnimationIndexEntry> merged = MergeWinners(SourceIdentities(sources), rowOf, winners);
 
         if (rejected > 0)
             notes.Add((rejected == 1 ? "1 cached entry" : rejected.ToString(CultureInfo.InvariantCulture) +
@@ -390,10 +409,9 @@ public sealed class AnimationIndex
         (kind == ArchiveKind ? "archive:" : "loose:") + path;
 
     private static List<AnimationIndexEntry> MergeWinners(
-        GameData data, Dictionary<string, string> identityOfSource,
-        Dictionary<string, Dictionary<string, AnimationIndexEntry>> rowOf, List<string> warnings)
+        Dictionary<string, string> identityOfSource,
+        Dictionary<string, Dictionary<string, AnimationIndexEntry>> rowOf, IReadOnlyList<GameAsset> winners)
     {
-        IReadOnlyList<GameAsset> winners = data.EnumerateWinners("", IsIndexedName, warnings.Add);
         var merged = new List<AnimationIndexEntry>(winners.Count);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -510,12 +528,12 @@ public sealed class AnimationIndex
         kind == ArchiveKind ? root : Path.Combine(root, virtualPath.Replace('/', Path.DirectorySeparatorChar));
 
     private static List<AnimationIndexEntry> ArchiveEntries(GameData data, string path, string label,
-                                                            CancellationToken token, List<string> warnings)
+                                                            CancellationToken token, Action<string> warn)
     {
         var entries = new List<AnimationIndexEntry>();
         if (!data.TryArchiveEntries(path, out IReadOnlyList<Ba2.Entry> found, out string? warning))
         {
-            if (warning != null) warnings.Add(warning);
+            if (warning != null) warn(warning);
             return entries;
         }
 

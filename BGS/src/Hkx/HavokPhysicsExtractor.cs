@@ -18,7 +18,6 @@ public static class HavokPhysicsExtractor
 {
     public const string RagdollDataClass = "hknpRagdollData";
     public const string CapsuleShapeClass = "hknpCapsuleShape";
-    public const string MapperClass = "hkaSkeletonMapper";
 
     public static HavokRagdollModel? TryExtract(byte[]? hkx) => TryExtract(hkx, out _);
 

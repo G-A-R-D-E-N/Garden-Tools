@@ -98,6 +98,8 @@ public partial class MainWindow : Window
     private void Load()
     {
         string path = (_pathField.Text ?? "").Trim().Trim('"');
+        string? virtualPathHint = _pendingVirtualPathHint;
+        _pendingVirtualPathHint = null;
         if (path.Length == 0) { SetSummary("Enter the path to a .hkx file.", Ux.MutedBrush); return; }
         if (!File.Exists(path))
         {
@@ -182,7 +184,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        TryLoadRagdoll(path);
+        TryLoadRagdoll(path, virtualPathHint);
 
         bool isAnimation = BuildAnimation(path);
 

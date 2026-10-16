@@ -498,8 +498,26 @@ public sealed partial class GameData : IDisposable
         try
         {
             Ba2 archive = Open(archivePath);
-            bytes = archive.Read(archive.Entries[at]);
-            return true;
+            if (at < 0 || at >= archive.Entries.Count)
+            {
+                warning = ArchiveWarning(archivePath,
+                                         $"the cached entry index {at} is not in this archive");
+                return false;
+            }
+
+            Ba2.Entry entry = archive.Entries[at];
+            if (entry.Unpacked > ReadLimitBytes)
+            {
+                warning = InputFilePolicy.RefusalIfTooLarge(entry.Unpacked, ReadLimitBytes, entry.Name);
+                return false;
+            }
+
+            bytes = archive.Read(entry);
+            warning = InputFilePolicy.RefusalIfTooLarge(bytes.LongLength, ReadLimitBytes, entry.Name);
+            if (warning == null) return true;
+
+            bytes = Array.Empty<byte>();
+            return false;
         }
         catch (Exception e) when (IsSkippableArchiveFailure(e))
         {

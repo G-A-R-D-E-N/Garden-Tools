@@ -374,6 +374,14 @@ public partial class MainWindow : Window
         OpenIndexEntry(entry);
     }
 
+    private string? _pendingVirtualPathHint;
+
+    private void OpenIndexEntryAt(string path, string virtualPath)
+    {
+        _pendingVirtualPathHint = virtualPath;
+        Open(path);
+    }
+
     private void OpenIndexEntry(AnimationIndexEntry entry)
     {
         if (entry.Location.Length == 0)
@@ -390,7 +398,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            Open(entry.Location);
+            OpenIndexEntryAt(entry.Location, entry.VirtualPath);
             return;
         }
 
@@ -419,8 +427,7 @@ public partial class MainWindow : Window
             string copy = Path.Combine(folder, Ba2.FlatFileName(entry.VirtualPath));
             File.WriteAllBytes(copy, bytes);
 
-            _pathField.Text = copy;
-            Load();
+            OpenIndexEntryAt(copy, entry.VirtualPath);
             _readOnly = true;
             _readOnlyWhy = $"{entry.VirtualPath} came out of {Path.GetFileName(entry.Location)}, and " +
                            "nothing here writes back into an archive. Save a copy somewhere of " +

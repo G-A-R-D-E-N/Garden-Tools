@@ -495,6 +495,59 @@ public sealed class GameDataAssetsTests
     }
 
     [Fact]
+    public void ReadEntryRefusesAnArchiveEntryOverTheCapBeforeItIsRead()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-cap-read");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+        byte[] payload = Bytes(4, 4);
+        TestArchives.WriteGeneralBa2(Path.Combine(dataFolder, "a - Good.ba2"),
+                                     (Prefix + "/packed.hkx", payload));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+        string archive = Assert.Single(data.ArchivePaths);
+        data.ReadLimitBytes = payload.Length - 1;
+
+        Assert.False(data.TryReadEntry(archive, Prefix + "/packed.hkx", out byte[] refused,
+                                       out string? warning));
+        Assert.Empty(refused);
+        Assert.NotNull(warning);
+        Assert.Contains("HKX", warning!, StringComparison.Ordinal);
+
+        data.ReadLimitBytes = InputFilePolicy.MaximumHkxBytes;
+        Assert.Equal(payload, data.ReadEntry(archive, Prefix + "/packed.hkx"));
+    }
+
+    [Fact]
+    public void ASkeletonEntryOverTheCapIsNotReadButItsNameStillResolves()
+    {
+        using var root = new TestArchives.TempDirectory("bgs-gamedata-cap-skeleton");
+        string dataFolder = Path.Combine(root.Path, "Data");
+        Directory.CreateDirectory(dataFolder);
+        byte[] skeleton = Bytes(4, 4);
+        const string animation = "Meshes/Actors/Turret/Animations/Idle.hkx";
+        const string packed = "Meshes/Actors/Turret/CharacterAssets/skeleton.hkx";
+        TestArchives.WriteGeneralBa2(Path.Combine(dataFolder, "Fallout4 - Animations.ba2"),
+                                     (animation, new byte[] { 1, 1 }), (packed, skeleton));
+
+        using var data = GameData.Discover(dataFolder, Path.Combine(root.Path, "plugins.txt"));
+        data.ReadLimitBytes = skeleton.Length - 1;
+
+        Assert.Equal(packed, data.SkeletonEntryName(animation));
+        Assert.Null(data.SkeletonBytes(animation));
+        Assert.False(data.TrySkeletonEntry(animation, out string? entryName, out byte[] bytes));
+        Assert.Equal(packed, entryName);
+        Assert.Empty(bytes);
+        Assert.False(data.TryReadSkeletonEntry(packed, out byte[] refused));
+        Assert.Empty(refused);
+
+        data.ReadLimitBytes = InputFilePolicy.MaximumHkxBytes;
+        Assert.Equal(skeleton, data.SkeletonBytes(animation));
+        Assert.True(data.TryReadSkeletonEntry(packed, out byte[] read));
+        Assert.Equal(skeleton, read);
+    }
+
+    [Fact]
     public void ReadReportsTheIoDetailForALooseFileThatVanished()
     {
         using var root = new TestArchives.TempDirectory("bgs-gamedata-missing");

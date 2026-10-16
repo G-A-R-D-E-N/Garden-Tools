@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using OpenCommonwealth.Services;
 
 namespace OpenCommonwealth.Services.Archive;
@@ -155,54 +156,108 @@ public sealed partial class GameData
         EnumerateWinners(virtualPrefix, nameFilter,
                          warn == null ? null : (string archivePath, string message) => warn(ArchiveWarning(archivePath, message)));
 
+    private const string LoosePrefix = "loose:";
+    private const string ArchivePrefix = "archive:";
+
     public IReadOnlyList<GameAsset> EnumerateWinners(string virtualPrefix, Func<string, bool>? nameFilter,
                                                      Action<string, string>? warnPath)
     {
         EnsureAlive();
         string prefix = FlattenPrefix(virtualPrefix);
-        var order = new List<Winner>();
-        var byKey = new Dictionary<string, List<Winner>>(StringComparer.Ordinal);
+        var sources = new List<(string Source, IEnumerable<(string VirtualPath, long Size)> Entries)>(
+            ModRoots.Count + 1 + ArchivePaths.Count);
+        var warned = new HashSet<string>(StringComparer.Ordinal);
 
         for (int i = ModRoots.Count - 1; i >= 0; i--)
         {
             string root = ModRoots[i];
-            foreach (string file in WalkLoose(root)) OfferLoose(root, file);
+            sources.Add((LooseSource(root), LooseEntries(root, prefix, nameFilter)));
         }
 
-        foreach (string file in WalkLoose(DataFolder)) OfferLoose(DataFolder, file);
+        sources.Add((LooseSource(DataFolder), LooseEntries(DataFolder, prefix, nameFilter)));
 
         foreach (string archive in ArchivePaths)
         {
             if (!TryArchiveEntries(archive, out IReadOnlyList<Ba2.Entry> entries, out string? warning))
             {
-                if (warning != null) warnPath?.Invoke(archive, ArchiveReason(ReasonAfter(archive, warning)));
+                if (warning != null && warned.Add(warning))
+                    warnPath?.Invoke(archive, ArchiveReason(ReasonAfter(archive, warning)));
+                sources.Add((ArchiveSource(archive), new List<(string VirtualPath, long Size)>()));
                 continue;
             }
 
+            var found = new List<(string VirtualPath, long Size)>(entries.Count);
             foreach (Ba2.Entry entry in entries)
-                Offer(new GameAsset(entry.Name, GameAssetOrigin.Archive, null, archive, entry.Name,
-                                    entry.Unpacked, null),
-                      "archive:" + archive);
+            {
+                if (!UnderPrefix(entry.Name, prefix)) continue;
+                if (nameFilter != null && !nameFilter(entry.Name)) continue;
+                found.Add((entry.Name, entry.Unpacked));
+            }
+            sources.Add((ArchiveSource(archive), found));
         }
 
+        return MergeWinners(sources);
+    }
+
+    public static string LooseSource(string root) => LoosePrefix + root;
+
+    public static string ArchiveSource(string archive) => ArchivePrefix + archive;
+
+    private static List<(string VirtualPath, long Size)> LooseEntries(string root, string prefix,
+                                                                      Func<string, bool>? nameFilter)
+    {
+        var entries = new List<(string VirtualPath, long Size)>();
+        foreach (string file in WalkLoose(root))
+        {
+            string relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+            if (!UnderPrefix(relative, prefix)) continue;
+            if (nameFilter != null && !nameFilter(relative)) continue;
+            entries.Add((relative, SizeOf(file)));
+        }
+        return entries;
+    }
+
+    public IReadOnlyList<string> WinnerSourceOrder()
+    {
+        var sources = new List<string>(ModRoots.Count + 1 + ArchivePaths.Count);
+        for (int i = ModRoots.Count - 1; i >= 0; i--) sources.Add(LooseSource(ModRoots[i]));
+        sources.Add(LooseSource(DataFolder));
+        foreach (string archive in ArchivePaths) sources.Add(ArchiveSource(archive));
+        return sources;
+    }
+
+    public IReadOnlyList<GameAsset> MergeWinners(
+        IEnumerable<(string Source, IEnumerable<(string VirtualPath, long Size)> Entries)> orderedSources,
+        CancellationToken token = default,
+        Action<int>? progress = null)
+    {
+        EnsureAlive();
+        var order = new List<Winner>();
+        var byKey = new Dictionary<string, List<Winner>>(StringComparer.Ordinal);
+        int offered = 0;
+
+        foreach (var (source, entries) in orderedSources)
+        {
+            foreach (var (virtualPath, size) in entries)
+            {
+                if ((++offered & 0x3FF) == 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    progress?.Invoke(offered);
+                }
+                Offer(AssetOf(source, virtualPath, size), source);
+            }
+        }
+
+        progress?.Invoke(offered);
         var winners = new List<GameAsset>(order.Count);
         foreach (Winner winner in order)
             winners.Add(winner.Asset with { Shadowed = winner.Shadows.ToArray(), Source = winner.Source });
         return winners;
 
-        void OfferLoose(string root, string full)
-        {
-            string relative = Path.GetRelativePath(root, full).Replace('\\', '/');
-            Offer(new GameAsset(relative, GameAssetOrigin.Loose, root, null, null, SizeOf(full), full),
-                  "loose:" + root);
-        }
-
         void Offer(GameAsset candidate, string source)
         {
             string virtualPath = candidate.VirtualPath;
-            if (!UnderPrefix(virtualPath, prefix)) return;
-            if (nameFilter != null && !nameFilter(virtualPath)) return;
-
             string key = Normalize(virtualPath);
             if (key.Length == 0) return;
 
@@ -224,6 +279,21 @@ public sealed partial class GameData
 
             foreach (Winner shadowed in group) shadowed.Shadows.Add(candidate);
         }
+    }
+
+    private static GameAsset AssetOf(string source, string virtualPath, long size)
+    {
+        if (source.StartsWith(ArchivePrefix, StringComparison.Ordinal))
+            return new GameAsset(virtualPath, GameAssetOrigin.Archive, null,
+                                 source[ArchivePrefix.Length..], virtualPath, size, null);
+
+        string root = source.StartsWith(LoosePrefix, StringComparison.Ordinal)
+            ? source[LoosePrefix.Length..]
+            : "";
+        string full = root.Length == 0
+            ? virtualPath
+            : Path.Combine(root, virtualPath.Replace('/', Path.DirectorySeparatorChar));
+        return new GameAsset(virtualPath, GameAssetOrigin.Loose, root, null, null, size, full);
     }
 
     public static string? ModlistPath(string modsFolder, string? profile)
@@ -293,26 +363,28 @@ public sealed partial class GameData
 
     public string? DataRelativePath(string fullPath)
     {
-        if (string.IsNullOrWhiteSpace(fullPath) || !IsInsideRoot(DataFolder, fullPath)) return null;
-        return Path.GetRelativePath(DataFolder, fullPath).Replace('\\', '/');
+        if (string.IsNullOrWhiteSpace(fullPath)) return null;
+        try
+        {
+            if (!IsInsideRoot(DataFolder, fullPath)) return null;
+            string relative = Path.GetRelativePath(DataFolder, Path.GetFullPath(fullPath)).Replace('\\', '/');
+            return relative == "." ? null : relative;
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
     }
 
     public byte[]? SkeletonBytes(string animationEntryName) =>
-        TrySkeletonEntry(animationEntryName, out _, out byte[] bytes) ? bytes : null;
+        SkeletonEntryName(animationEntryName) is { } entryName && TryReadSkeletonEntry(entryName, out byte[] bytes)
+            ? bytes
+            : null;
 
-    public string? SkeletonEntryName(string animationEntryName) =>
-        TrySkeletonEntry(animationEntryName, out string? entryName, out _) ? entryName : null;
-
-    public bool TrySkeletonEntry(string animationEntryName, out string? entryName, out byte[] bytes)
+    public string? SkeletonEntryName(string animationEntryName)
     {
-        entryName = null;
-        bytes = Array.Empty<byte>();
-        if (string.IsNullOrWhiteSpace(animationEntryName)) return false;
-
-        string flat = animationEntryName.Replace('\\', '/');
-        int anims = flat.LastIndexOf("/Animations/", StringComparison.Ordinal);
-        if (anims < 0) return false;
-        string assets = flat[..anims] + "/CharacterAssets/";
+        string assets = SkeletonFolder(animationEntryName);
+        if (assets.Length == 0) return null;
 
         foreach (string archive in ArchivePaths)
         {
@@ -320,13 +392,40 @@ public sealed partial class GameData
             {
                 if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!IsSkeletonPath(entry.Name)) continue;
-                try { bytes = Open(archive).Read(entry); }
-                catch (Exception e) when (IsSkippableArchiveFailure(e)) { return false; }
-                entryName = entry.Name;
-                return true;
+                return entry.Name;
             }
         }
+        return null;
+    }
+
+    public bool TrySkeletonEntry(string animationEntryName, out string? entryName, out byte[] bytes)
+    {
+        entryName = SkeletonEntryName(animationEntryName);
+        bytes = Array.Empty<byte>();
+        return entryName != null && TryReadSkeletonEntry(entryName, out bytes);
+    }
+
+    public bool TryReadSkeletonEntry(string entryName, out byte[] bytes)
+    {
+        bytes = Array.Empty<byte>();
+        if (string.IsNullOrWhiteSpace(entryName)) return false;
+
+        foreach (string archive in ArchivePaths)
+        {
+            if (!TryReadEntry(archive, entryName, out byte[] read, out _)) continue;
+            if (read.LongLength > ReadLimitBytes) return false;
+            bytes = read;
+            return true;
+        }
         return false;
+    }
+
+    private static string SkeletonFolder(string animationEntryName)
+    {
+        if (string.IsNullOrWhiteSpace(animationEntryName)) return "";
+        string flat = animationEntryName.Replace('\\', '/');
+        int anims = flat.LastIndexOf("/Animations/", StringComparison.Ordinal);
+        return anims < 0 ? "" : flat[..anims] + "/CharacterAssets/";
     }
 
     private static string FlattenPrefix(string virtualPrefix) =>

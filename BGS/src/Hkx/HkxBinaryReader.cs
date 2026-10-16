@@ -67,14 +67,14 @@ public partial class HkxBinaryReader
     public HkxSkeleton ReadSkeleton(string filepath)
     {
         byte[] data = InputFilePolicy.ReadHkx(filepath);
-        var anim = ParseHkx(data);
+        var anim = ParseHkx(data, true);
         if (anim.Skeleton != null) return anim.Skeleton;
         throw new InvalidDataException($"No skeleton (hkaSkeleton) found in: {filepath}");
     }
 
     public HkxSkeleton ReadSkeleton(byte[] data)
     {
-        var anim = ParseHkx(data);
+        var anim = ParseHkx(data, true);
         if (anim.Skeleton != null) return anim.Skeleton;
         throw new InvalidDataException("No skeleton (hkaSkeleton) found in this archive entry");
     }
