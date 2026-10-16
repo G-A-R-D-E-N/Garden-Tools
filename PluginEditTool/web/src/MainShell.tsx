@@ -51,7 +51,7 @@ import type { RecordTab } from './RecordView';
 import { errorMessage } from './errors';
 import ExplorerTree from './Shell/ExplorerTree';
 
-const hitKey = (h: SearchHit) => h.FormKey;
+const hitKey = (h: SearchHit) => `${h.FormKey}|${h.Plugin}`;
 
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
@@ -295,6 +295,7 @@ export default function MainShell() {
   const recPicked = Object.keys(recSel).filter(k => recSel[k]).map(k => recHits[k])
     .filter(h => !loadedSet || loadedSet.has(h.Plugin));
   const recHidden = recPicked.filter(h => !visibleKeys.has(hitKey(h))).length;
+  const recDupes = new Set(recPicked.map(h => h.FormKey)).size !== recPicked.length;
   const selectHit = (h: SearchHit, mode: SelectMode) => {
     const next = selectRow(visibleHits.map(hitKey), recSel, recAnchor, hitKey(h), mode);
     setRecSel(next.sel);
@@ -495,13 +496,18 @@ export default function MainShell() {
                 <div className="sidebar-results" aria-label="Records" tabIndex={0} onKeyDown={e => { if (e.key === 'Escape') clearRecSel(); }}>
                   {recPicked.length > 0 && (
                     <div className="conflicts-actions">
-                      <button className="sidebar-action-btn" disabled={conflictBusy} onClick={copyRecs}>
+                      <button
+                        className="sidebar-action-btn"
+                        disabled={conflictBusy || recDupes}
+                        title={recDupes ? 'A patch can hold only one version of a record; untick one of the duplicates' : undefined}
+                        onClick={copyRecs}
+                      >
                         Copy selected as override…
                       </button>
                       <button
                         className="sidebar-action-btn"
-                        disabled={conflictBusy || recComparing || recPicked.length !== 2}
-                        title={recPicked.length === 2 ? 'Open the two selected records in record tabs' : 'Select exactly two records to compare'}
+                        disabled={conflictBusy || recComparing || recDupes || recPicked.length !== 2}
+                        title={recDupes ? 'Both selections are the same record; open it to see every plugin\'s version' : recPicked.length === 2 ? 'Open the two selected records in record tabs' : 'Select exactly two records to compare'}
                         onClick={() => compareRecords(recPicked.map(h => ({ formKey: h.FormKey, plugin: h.Plugin })), openByFormKey)}
                       >
                         Compare selected
