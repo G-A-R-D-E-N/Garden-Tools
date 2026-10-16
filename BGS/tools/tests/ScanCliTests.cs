@@ -7,6 +7,7 @@ using System.Text.Json;
 using BehaviourStudio.App;
 using OpenCommonwealth.Services.Archive;
 using OpenCommonwealth.Services.Hkx;
+using Radicle.Interop;
 using Xunit;
 
 namespace BehaviourStudio.Tests;
@@ -77,6 +78,17 @@ public sealed class ScanCliTests
         var json = ParseSingle(stdout);
         Assert.Equal(0, json.GetProperty("exitCode").GetInt32());
         Assert.Contains("skip", Kinds(json));
+    }
+
+    [Fact]
+    public void NativeLoadAbortIsAnInvalidDataWrappingANativeLoadFailureOnly()
+    {
+        Assert.True(ModlistScan.IsNativeLoadAbort(
+            new InvalidDataException("wrapped", new RadicleAbiMismatchException("stale radicle.dll"))));
+        Assert.True(ModlistScan.IsNativeLoadAbort(
+            new InvalidDataException("wrapped", new DllNotFoundException("radicle_c"))));
+        Assert.False(ModlistScan.IsNativeLoadAbort(new InvalidDataException("unreadable")));
+        Assert.False(ModlistScan.IsNativeLoadAbort(new IOException("disk")));
     }
 
     [Fact]
