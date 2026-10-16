@@ -33,7 +33,7 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 | `scale` | Inspect decoded animation scale channels. |
 | `skeleton` | Print skeleton bones and reference transforms. |
 | `rig` | Audit rig/skeleton data across one file or a corpus. |
-| `mapper` | Read a file's skeleton mappers, round-trip them, and recompute simple rows. |
+| `mapper` | Read a file's skeleton mappers, rebuild them, and recompute simple rows. |
 | `extract` | Extract matching BA2 entries, optionally preserving their directory tree. |
 | `ba2` | Inspect a Bethesda BA2 archive and its entries. |
 | `motion` | Inspect decoded root-motion data. |
@@ -96,7 +96,7 @@ The catalog exposes the switches currently parsed by `symrm`:
 - `extract`: `--tree`
 - `types`: `--members`
 - `defaults`: `--write`
-- `mapper`: `--recompute`, `--out <file>`, `--data <folder>`
+- `mapper`: `--recompute`, `--out <file>`, `--force`, `--data <folder>`
 - `check` and `chain`: `--data`, `--plugins`
 - `crash` and `sweep`: `--data`, `--mods`, `--profile`
 - `diff`: `--data`, `--mods`, `--profile`
@@ -109,3 +109,28 @@ nothing. Both take `--strict` to exit `1` for the unsupported and refused files 
 Commands not listed in that section currently use positional arguments only. Use `<command> --help`
 rather than relying on this summary when scripting a command; the executable help is the canonical
 usage/flags/example source.
+
+## `mapper` write-back
+
+`symrm mapper <skeleton.hkx>` reads the file's `hkaSkeletonMapper` objects, prints them, and rebuilds the
+file through the writer without editing anything. The rebuild is a real one — the write path runs and the
+result is re-read and checked against the model — and it reproduces the input byte for byte.
+
+```bash
+symrm mapper skeleton.hkx                              # describe + verified rebuild, writes nothing
+symrm mapper skeleton.hkx --recompute --out fixed.hkx  # recompute simple rows and keep the result
+symrm mapper x --data "/path/to/Data"                  # sweep every mapper-bearing skeleton in the archives
+```
+
+- `--recompute` recomputes each simple row's translation and rotation from the two skeletons' reference
+  poses and reports the worst error against the stored values. Both numbers are printed; the translation
+  error is also given relative to the larger skeleton's extent, because a large rig measures the same
+  relative accuracy in larger units. It writes nothing on its own.
+- `--out <file>` writes the result. Without `--force`, `symrm` refuses an `--out` that is the file being
+  read or that already exists; with `--force` it overwrites. The write goes to a temporary file beside the
+  target and is then moved into place, so a failure leaves the existing file alone.
+- `--data <folder>` sweeps: it opens the game's BA2 archives through the shared archive layer, finds every
+  mapper-bearing `CharacterAssets` skeleton, verifies an unedited forced rebuild byte for byte, then
+  exercises an add-then-remove of a simple row. A sweep writes nothing anywhere, so `--out` is refused in
+  that mode.
+- Unknown switches, or `--out`/`--data` without a value, print the usage above and exit 1.

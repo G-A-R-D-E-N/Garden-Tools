@@ -40,9 +40,10 @@ public static class SymrmHelp
         C("rig", "rig <skeleton.hkx-or-dir> [output.json]",
           "Audit rig/skeleton data; a single file can also emit its JSON representation.", "none",
           "symrm rig skeleton.hkx skeleton.json"),
-        C("mapper", "mapper <skeleton.hkx> [--recompute] [--out <file>] [--data <Data folder>]",
-          "Read a file's skeleton mappers, round-trip them, and optionally recompute every simple row.",
-          "--recompute; --out <file>; --data <folder>",
+        C("mapper", "mapper <skeleton.hkx> [--recompute] [--out <file>] [--force] [--data <Data folder>]",
+          "Read a file's skeleton mappers, rebuild them through the writer, and optionally recompute every " +
+          "simple row; --data sweeps a whole Data folder instead of one file.",
+          "--recompute; --out <file>; --force; --data <folder>",
           "symrm mapper skeleton.hkx --recompute --out recomputed.hkx"),
         C("extract", "extract <archive.ba2> <filter> <output-dir> [extension] [--tree]",
           "Extract matching archive entries, optionally preserving their directory tree.",

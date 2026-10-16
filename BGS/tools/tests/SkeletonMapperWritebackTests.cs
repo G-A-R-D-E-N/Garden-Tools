@@ -43,6 +43,32 @@ public sealed class SkeletonMapperWritebackTests
     }
 
     [Fact]
+    public void EveryMapperFixtureForcedRebuildIsByteIdenticallyRebuilt()
+    {
+        var files = Directory.GetFiles(FixturesRoot, "*.hkx", SearchOption.AllDirectories)
+                             .OrderBy(file => file, StringComparer.Ordinal)
+                             .ToList();
+
+        int withMappers = 0;
+        foreach (string file in files)
+        {
+            byte[] bytes = File.ReadAllBytes(file);
+            if (!HasMapper(bytes)) continue;
+
+            withMappers++;
+            var document = new SkeletonMapperDocument(bytes);
+            byte[] rebuilt = document.ForceRebuild();
+
+            Assert.Equal(bytes.Length, rebuilt.Length);
+            Assert.True(rebuilt.AsSpan().SequenceEqual(bytes),
+                $"{Relative(file)} was not byte-identical after a forced rebuild through the writer");
+        }
+
+        _out.WriteLine($"{withMappers} mapper-bearing fixture(s) of {files.Count} survive an unedited forced rebuild");
+        Assert.True(withMappers > 0, "no mapper-bearing fixture was found");
+    }
+
+    [Fact]
     public void ValueEditChangesOnlyTheEditedRowAndReadsBack()
     {
         byte[] bytes = File.ReadAllBytes(FixturePath());
@@ -143,12 +169,23 @@ public sealed class SkeletonMapperWritebackTests
             }
         }
 
-        _out.WriteLine($"{rows} shipped simple row(s): worst translation error {worstTranslation:0.####e+0}, " +
+        float extent = MathF.Max(Extent(document.Mappers[0].SkeletonA), Extent(document.Mappers[0].SkeletonB));
+        float relative = worstTranslation / extent;
+
+        _out.WriteLine($"{rows} shipped simple row(s): worst translation error {worstTranslation:0.####e+0} " +
+                       $"({relative:0.####e+0} of the larger skeleton's {extent:0.###} extent), " +
                        $"worst rotation error {worstRotation:0.####e+0} rad");
 
-        Assert.True(worstTranslation < 1e-4f, $"worst translation error {worstTranslation}");
+        Assert.True(extent > 1f, $"the larger skeleton spans only {extent}, so the fixture is not a real rig");
+        Assert.True(relative < 1e-5f,
+            $"worst translation error {worstTranslation} is {relative} of the {extent} extent");
         Assert.True(worstRotation < 1e-5f, $"worst rotation error {worstRotation}");
     }
+
+    private static float Extent(HavokRagdollSkeleton skeleton) =>
+        skeleton.ReferencePose.Count == 0
+            ? 0f
+            : skeleton.ReferencePose.Max(pose => pose.Translation.Length());
 
     [Fact]
     public void RecomputedRowsAreWrittenBackAndStillMatch()

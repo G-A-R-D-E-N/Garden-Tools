@@ -23,6 +23,7 @@ public sealed class SkeletonMapperNode
         ExtractedMotionMapping = read.ExtractedMotionMapping;
         Rows = read.Rows.ToList();
         ChainMappings = read.ChainMappings.ToList();
+        OptionalMembersRead = read.OptionalMembersRead;
     }
 
     private SkeletonMapperNode(SkeletonMapperNode other)
@@ -40,11 +41,14 @@ public sealed class SkeletonMapperNode
         ExtractedMotionMapping = other.ExtractedMotionMapping;
         Rows = other.Rows.ToList();
         ChainMappings = other.ChainMappings.ToList();
+        OptionalMembersRead = other.OptionalMembersRead;
     }
 
     internal PackfileObjects.Instance Instance { get; }
 
     internal int DataAt { get; }
+
+    internal bool OptionalMembersRead { get; }
 
     public int ObjectId { get; }
 
@@ -287,6 +291,9 @@ public sealed class SkeletonMapperDocument
         return SkeletonMapperWriteback.Write(_source, _nodes, changed);
     }
 
+    internal byte[] ForceRebuild() =>
+        SkeletonMapperWriteback.Write(_source, _nodes, Array.Empty<SkeletonMapperChange>(), force: true);
+
     public void Save()
     {
         string path = Path
@@ -313,6 +320,11 @@ public sealed class SkeletonMapperDocument
         {
             if (instance.ClassName != MapperClass) continue;
             if (SkeletonMapperReader.Read(objects, instance) is not { } mapper) continue;
+            if (!mapper.OptionalMembersRead)
+                throw new InvalidDataException(
+                    $"mapper #{mapper.ObjectId} carries chain mappings, unmapped bones, keepUnmappedLocal or " +
+                    "an extracted motion mapping this build cannot read, so nothing was loaded: a write-back " +
+                    "would silently drop them");
             if (objects.FieldAt(instance, "mapping") is not int dataAt) continue;
             _nodes.Add(new SkeletonMapperNode(instance, dataAt, mapper));
         }

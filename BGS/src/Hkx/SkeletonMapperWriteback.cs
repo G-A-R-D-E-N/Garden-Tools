@@ -16,7 +16,7 @@ internal static class SkeletonMapperWriteback
     private const uint EmbeddedArrayStorage = 0x80000000u;
 
     internal static byte[] Write(byte[] source, IReadOnlyList<SkeletonMapperNode> nodes,
-                                 IReadOnlyList<SkeletonMapperChange> changed)
+                                 IReadOnlyList<SkeletonMapperChange> changed, bool force = false)
     {
         var image = PackfileImage.Read(source);
         NativeLayout.RequireWritable(image);
@@ -32,11 +32,17 @@ internal static class SkeletonMapperWriteback
             ?? throw new InvalidOperationException("this file has no data section, so nothing was written");
         int section = image.Sections.IndexOf(data);
 
-        if (!changed.Any(change => Structural(change)))
+        if (force && changed.Count > 0)
+            throw new InvalidOperationException("a forced no-op rebuild cannot carry edits, so nothing was written");
+
+        var edits = force ? NoOpEdits(nodes) : changed;
+        foreach (var change in edits) RequireComplete(change);
+
+        if (!edits.Any(change => Structural(change)))
         {
             var before = (byte[])data.Data.Clone();
             var ranges = new List<(int Start, int Length)>();
-            foreach (var change in changed)
+            foreach (var change in edits)
             {
                 RequireStorage(image, objects, change.Edited, change.Edited.Rows.Count,
                                change.Edited.ChainMappings.Count);
@@ -49,12 +55,19 @@ internal static class SkeletonMapperWriteback
             return patched;
         }
 
-        foreach (var change in changed)
+        var instances = objects.Instances;
+        var beforeData = (byte[])data.Data.Clone();
+        var localsBefore = data.Locals().ToList();
+        var globalsBefore = data.Globals().ToList();
+        var headers = new List<int>();
+        var retired = new List<(int Start, int Length)>();
+        var appended = new List<(int Start, int Length)>();
+
+        foreach (var change in edits)
         {
             if (!Structural(change)) continue;
-            RequireStorage(image, objects, change.Edited,
-                           Math.Min(change.Edited.Rows.Count, change.Original.Rows.Count),
-                           Math.Min(change.Edited.ChainMappings.Count, change.Original.ChainMappings.Count));
+            RequireStorage(image, objects, change.Edited, change.Original.Rows.Count,
+                           change.Original.ChainMappings.Count);
 
             int header = DataAt(objects, change.Edited) + Offsets.Data("simpleMappings");
             int stride = Offsets.Stride(SimpleRowClass);
@@ -65,24 +78,58 @@ internal static class SkeletonMapperWriteback
                     $"mapper #{change.Edited.ObjectId} has {had} simple row(s) whose storage cannot be located, " +
                     "so its rows were not resized");
 
-            Relocate(image, data, header, run?.At ?? 0, had, change.Edited.Rows.Count, stride, section);
+            var placed = Relocate(image, data, header, run?.At ?? 0, had, change.Edited.Rows.Count, stride, section);
+            if (placed.Length > 0) appended.Add(placed);
+            if (had > 0) retired.Add((run!.At, had * stride));
+            headers.Add(header);
         }
 
         objects = new PackfileObjects(image);
         data = image.Section(PackfileObjects.DataSection)
             ?? throw new InvalidOperationException("this file has no data section, so nothing was written");
 
-        foreach (var change in changed)
+        var owned = new List<(int Start, int Length)>();
+        foreach (var change in edits)
         {
             RequireStorage(image, objects, change.Edited, change.Edited.Rows.Count,
                            change.Edited.ChainMappings.Count);
-            WriteValues(data.Data, objects, change.Edited, change.Original, null);
+            WriteValues(data.Data, objects, change.Edited, change.Original, owned);
         }
+
+        var allowed = new List<(int Start, int Length)>(owned);
+        allowed.AddRange(retired);
+        foreach (int header in headers)
+        {
+            allowed.Add((header, image.Layout.PointerSize));
+            allowed.Add((header + 8, 8));
+        }
+
+        RequireStructuralConfined(beforeData, data.Data, allowed, appended);
+        RequireOtherInstancesIntact(beforeData, data.Data, instances,
+                                    edits.Select(change => change.Edited.Instance.Offset).ToHashSet());
+        RequireFixupsConfined(localsBefore, globalsBefore, data.Locals().ToList(), data.Globals().ToList(),
+                              headers);
 
         FixupOrder.Reorder(image);
         var rebuilt = image.Rebuild();
         Verify(rebuilt, nodes);
         return rebuilt;
+    }
+
+    private static List<SkeletonMapperChange> NoOpEdits(IReadOnlyList<SkeletonMapperNode> nodes)
+    {
+        var edits = new List<SkeletonMapperChange>(nodes.Count);
+        foreach (var node in nodes) edits.Add(new SkeletonMapperChange(node, node.Copy()));
+        return edits;
+    }
+
+    private static void RequireComplete(SkeletonMapperChange change)
+    {
+        if (change.Edited.OptionalMembersRead) return;
+
+        throw new InvalidOperationException(
+            $"mapper #{change.Edited.ObjectId} carries chain mappings, unmapped bones, keepUnmappedLocal or " +
+            "an extracted motion mapping this build cannot read, so nothing was written");
     }
 
     private static bool Structural(SkeletonMapperChange change) =>
@@ -217,7 +264,10 @@ internal static class SkeletonMapperWriteback
             WriteNarrow(data, rowAt + endBoneBAt, 2, row.EndBoneB);
             WriteTransform(data, rowAt + startAt, row.StartAFromB);
             WriteTransform(data, rowAt + endAt, row.EndAFromB);
-            ranges?.Add((rowAt + startBoneAAt, endBoneBAt + 2 - startBoneAAt));
+            ranges?.Add((rowAt + startBoneAAt, 2));
+            ranges?.Add((rowAt + endBoneAAt, 2));
+            ranges?.Add((rowAt + startBoneBAt, 2));
+            ranges?.Add((rowAt + endBoneBAt, 2));
             ranges?.Add((rowAt + startAt, HavokSkeletonMappingTransform.LaneCount * sizeof(float)));
             ranges?.Add((rowAt + endAt, HavokSkeletonMappingTransform.LaneCount * sizeof(float)));
         }
@@ -234,12 +284,11 @@ internal static class SkeletonMapperWriteback
                 "only simple rows are resized, through the native relocate path");
     }
 
-    private static void Relocate(PackfileImage image, PackfileSection data, int headerAt, int hadAt,
-                                 int had, int count, int stride, int section)
+    private static (int From, int Length) Relocate(PackfileImage image, PackfileSection data, int headerAt,
+                                                   int hadAt, int had, int count, int stride, int section)
     {
         bool local = data.Locals().Any(entry => entry.Source == headerAt);
-        bool global = data.Globals().Any(entry => entry.Source == headerAt) ||
-                      image.Sections.Any(owner => owner.Globals().Any(entry => entry.Source == headerAt));
+        bool global = data.Globals().Any(entry => entry.Source == headerAt);
 
         if (local && global)
             throw new InvalidOperationException(
@@ -254,10 +303,12 @@ internal static class SkeletonMapperWriteback
             if (global) data.SetGlobal(headerAt, section, -1);
             Array.Clear(data.Data, headerAt, 8);
             WriteArrayCount(data, headerAt, 0);
-            return;
+            if (had > 0) Array.Clear(data.Data, hadAt, had * stride);
+            return (0, 0);
         }
 
         int carried = Math.Min(had, count);
+        int from = data.Data.Length;
         data.AlignData(NativeAppend.Alignment);
         int run = data.AppendData(new byte[count * stride]);
         if (carried > 0) Array.Copy(data.Data, hadAt, data.Data, run, carried * stride);
@@ -271,6 +322,9 @@ internal static class SkeletonMapperWriteback
              (entry, at) => (at, entry.Section, entry.Destination));
 
         WriteArrayCount(data, headerAt, count);
+        if (had > 0) Array.Clear(data.Data, hadAt, had * stride);
+
+        return (from, data.Data.Length - from);
 
         void Move<T>(List<T> entries, Action<IEnumerable<T>> write, Func<T, int> sourceOf,
                      Func<T, int, T> moved)
@@ -340,6 +394,85 @@ internal static class SkeletonMapperWriteback
                 $"a value edit reached byte 0x{at:x}, which is outside the field it was meant to write, " +
                 "so nothing was written");
         }
+    }
+
+    private static void RequireStructuralConfined(byte[] before, byte[] after,
+                                                  IReadOnlyList<(int Start, int Length)> allowed,
+                                                  IReadOnlyList<(int Start, int Length)> appended)
+    {
+        if (after.Length < before.Length)
+            throw new InvalidDataException(
+                $"a structural row edit shrank the data section to {after.Length} bytes from {before.Length}");
+
+        for (int at = 0; at < before.Length; at++)
+        {
+            if (after[at] == before[at]) continue;
+            if (allowed.Any(range => at >= range.Start && at < range.Start + range.Length)) continue;
+
+            throw new InvalidDataException(
+                $"a structural row edit reached byte 0x{at:x}, which is outside the row run, the array " +
+                "header and the fields it owns, so nothing was written");
+        }
+
+        for (int at = before.Length; at < after.Length; at++)
+            if (!appended.Any(range => at >= range.Start && at < range.Start + range.Length))
+                throw new InvalidDataException(
+                    $"a structural row edit wrote byte 0x{at:x} outside the run it appended, so nothing was written");
+    }
+
+    private static void RequireOtherInstancesIntact(byte[] before, byte[] after,
+                                                    IReadOnlyList<PackfileObjects.Instance> instances,
+                                                    IReadOnlySet<int> edited)
+    {
+        foreach (var instance in instances)
+        {
+            if (edited.Contains(instance.Offset)) continue;
+
+            int? size = HavokClassTypes.Shipped[instance.ClassName]?.Size;
+            if (size is not int span || span <= 0) continue;
+            if (instance.Offset < 0 || instance.Offset + span > before.Length) continue;
+
+            for (int i = 0; i < span; i++)
+            {
+                int at = instance.Offset + i;
+                if (before[at] == after[at]) continue;
+
+                throw new InvalidDataException(
+                    $"a structural row edit reached byte 0x{at:x} inside {instance.ClassName} at " +
+                    $"0x{instance.Offset:x}, which is another object instance, so nothing was written");
+            }
+        }
+    }
+
+    private static void RequireFixupsConfined(
+        IReadOnlyList<(int Source, int Destination)> localsBefore,
+        IReadOnlyList<(int Source, int Section, int Destination)> globalsBefore,
+        IReadOnlyList<(int Source, int Destination)> localsAfter,
+        IReadOnlyList<(int Source, int Section, int Destination)> globalsAfter,
+        IReadOnlyList<int> headers)
+    {
+        RequireSameFixups(localsBefore.Where(entry => !headers.Contains(entry.Source)),
+                          localsAfter.Where(entry => !headers.Contains(entry.Source)), "local");
+        RequireSameFixups(globalsBefore.Where(entry => !headers.Contains(entry.Source)),
+                          globalsAfter.Where(entry => !headers.Contains(entry.Source)), "global");
+    }
+
+    private static void RequireSameFixups<T>(IEnumerable<T> before, IEnumerable<T> after, string which)
+    {
+        var remaining = after.ToList();
+        foreach (T entry in before)
+        {
+            if (remaining.Remove(entry)) continue;
+
+            throw new InvalidDataException(
+                $"a structural row edit rewrote the {which} fixup {entry}, which it does not own, " +
+                "so nothing was written");
+        }
+
+        if (remaining.Count > 0)
+            throw new InvalidDataException(
+                $"a structural row edit added the {which} fixup {remaining[0]}, which it does not own, " +
+                "so nothing was written");
     }
 
     private static void Verify(byte[] produced, IReadOnlyList<SkeletonMapperNode> nodes)

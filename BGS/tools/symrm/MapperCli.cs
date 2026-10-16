@@ -12,21 +12,56 @@ public static partial class Program
 {
     private static int Mapper(string[] argv)
     {
-        if (argv.Length < 2) { Usage(); return 1; }
-
-        string target = Path.GetFullPath(argv[1]);
+        string? target = null;
         bool recompute = false;
+        bool force = false;
         string? outPath = null;
         string? dataFolder = null;
 
-        for (int i = 2; i < argv.Length; i++)
+        for (int i = 1; i < argv.Length; i++)
         {
-            if (argv[i] == "--recompute") { recompute = true; continue; }
-            if (argv[i] == "--out" && i + 1 < argv.Length) { outPath = Path.GetFullPath(argv[++i]); continue; }
-            if (argv[i] == "--data" && i + 1 < argv.Length) { dataFolder = Path.GetFullPath(argv[++i]); continue; }
+            string flag = argv[i];
+
+            if (!flag.StartsWith("-", StringComparison.Ordinal))
+            {
+                if (target != null)
+                    return MapperUsage($"this command reads one file, and '{flag}' is a second");
+
+                if (FullPath(flag) is not string file) return MapperUsage($"'{flag}' is not a usable path");
+                target = file;
+                continue;
+            }
+
+            switch (flag)
+            {
+                case "--recompute":
+                    recompute = true;
+                    continue;
+
+                case "--force":
+                    force = true;
+                    continue;
+
+                case "--out":
+                    if (i + 1 >= argv.Length) return MapperUsage("--out needs the file to write");
+                    if (FullPath(argv[++i]) is not string outFile) return MapperUsage("--out is not a usable path");
+                    outPath = outFile;
+                    continue;
+
+                case "--data":
+                    if (i + 1 >= argv.Length) return MapperUsage("--data needs the Data folder to sweep");
+                    if (FullPath(argv[++i]) is not string folder) return MapperUsage("--data is not a usable path");
+                    dataFolder = folder;
+                    continue;
+
+                default:
+                    return MapperUsage($"'{flag}' is not a mapper switch");
+            }
         }
 
-        if (dataFolder != null) return MapperSweep(dataFolder, recompute);
+        if (dataFolder != null) return MapperSweep(dataFolder, recompute, outPath);
+
+        if (target == null) return MapperUsage("mapper needs a file to read, or --data with a Data folder");
 
         byte[] source;
         try { source = InputFilePolicy.ReadHkx(target); }
@@ -36,10 +71,29 @@ public static partial class Program
             return 1;
         }
 
-        return MapperOne(target, source, recompute, outPath);
+        return MapperOne(target, source, recompute, outPath, force);
     }
 
-    private static int MapperOne(string file, byte[] source, bool recompute, string? outPath)
+    private static int MapperUsage(string problem)
+    {
+        Console.Error.WriteLine(problem);
+        Console.Error.WriteLine();
+        Console.Error.WriteLine(SymrmHelp.TryCommand("mapper", out string help)
+            ? help
+            : "symrm mapper <skeleton.hkx> [--recompute] [--out <file>] [--force] [--data <Data folder>]");
+        return 1;
+    }
+
+    private static string? FullPath(string value)
+    {
+        try { return Path.GetFullPath(value); }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private static int MapperOne(string file, byte[] source, bool recompute, string? outPath, bool force)
     {
         SkeletonMapperDocument document;
         try { document = new SkeletonMapperDocument(source); }
@@ -74,13 +128,17 @@ public static partial class Program
                 }
             }
 
+            float extent = MathF.Max(SkeletonExtent(document.Mappers[0].SkeletonA),
+                                     SkeletonExtent(document.Mappers[0].SkeletonB));
             Console.WriteLine($"  recomputed {rows} simple row(s): worst translation error " +
-                              $"{worstTranslation:0.####e+0}, worst rotation error {worstRotation:0.####e+0} rad");
-            Console.WriteLine("  chain rows were left alone: their interior distribution is not reduced to numbers");
+                              $"{worstTranslation:0.####e+0} ({worstTranslation / extent:0.####e+0} of the larger " +
+                              $"skeleton's {extent:0.###} extent), worst rotation error {worstRotation:0.####e+0} rad");
+            Console.WriteLine("  chain rows were left alone, interior and endpoints alike: nothing reduces " +
+                              "their distribution to numbers");
         }
 
         byte[] produced;
-        try { produced = document.Serialize(); }
+        try { produced = document.Dirty ? document.Serialize() : document.ForceRebuild(); }
         catch (Exception error)
         {
             Console.Error.WriteLine($"  refused: {error.Message}");
@@ -93,13 +151,46 @@ public static partial class Program
             : $"  round trip: {source.Length} bytes in, {produced.Length} out, " +
               $"first difference at 0x{firstDifference:x}");
 
-        if (outPath != null)
+        if (outPath == null)
         {
-            File.WriteAllBytes(outPath, produced);
-            Console.WriteLine($"  written to {outPath}");
+            Console.WriteLine(recompute
+                ? "  nothing was written: --recompute reports the error on its own; pass --out <file> to keep it"
+                : "  nothing was written: pass --out <file> to keep the rebuilt file");
+            return 0;
         }
 
+        if (!force)
+        {
+            if (string.Equals(outPath, Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine($"  refused: {outPath} is the file being read; pass --force to overwrite it");
+                return 1;
+            }
+
+            if (File.Exists(outPath))
+            {
+                Console.Error.WriteLine($"  refused: {outPath} already exists; pass --force to overwrite it");
+                return 1;
+            }
+        }
+
+        try { FileSafety.Replace(outPath, produced); }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine($"  cannot write {outPath}: {error.Message}");
+            return 1;
+        }
+
+        Console.WriteLine($"  written to {outPath}");
         return 0;
+    }
+
+    private static float SkeletonExtent(HavokRagdollSkeleton skeleton)
+    {
+        float extent = 0f;
+        foreach (var pose in skeleton.ReferencePose)
+            extent = MathF.Max(extent, pose.Translation.Length());
+        return MathF.Max(extent, 1e-3f);
     }
 
     private static void DescribeMapper(SkeletonMapperNode node)
@@ -132,8 +223,15 @@ public static partial class Program
         return 2f * MathF.Acos(Math.Clamp(MathF.Abs(Quaternion.Dot(first, second)), 0f, 1f));
     }
 
-    private static int MapperSweep(string dataFolder, bool recompute)
+    private static int MapperSweep(string dataFolder, bool recompute, string? outPath)
     {
+        if (outPath != null)
+        {
+            Console.Error.WriteLine($"--out is refused in sweep mode ({outPath}): " +
+                                    "a sweep reads a whole Data folder and writes nothing");
+            return 1;
+        }
+
         if (!Directory.Exists(dataFolder))
         {
             Console.Error.WriteLine($"--data folder not found: {dataFolder}");
@@ -181,11 +279,18 @@ public static partial class Program
                 try
                 {
                     var document = new SkeletonMapperDocument(bytes);
-                    byte[] unedited = document.Serialize();
-                    if (!unedited.AsSpan().SequenceEqual(bytes))
-                        failures.Add($"{entry.Name}: an unedited round trip did not reproduce the file");
-
-                    byteIdentical++;
+                    byte[] rebuilt = document.ForceRebuild();
+                    if (!rebuilt.AsSpan().SequenceEqual(bytes))
+                    {
+                        int at = FirstDifference(bytes, rebuilt);
+                        failures.Add($"{entry.Name}: rebuilding the unedited file was not byte-identical " +
+                                     $"({bytes.Length} bytes in, {rebuilt.Length} out, " +
+                                     $"first difference at 0x{at:x})");
+                    }
+                    else
+                    {
+                        byteIdentical++;
+                    }
 
                     if (recompute)
                         foreach (var node in document.Mappers)
@@ -233,7 +338,7 @@ public static partial class Program
 
         Console.WriteLine($"\n{archives} archive(s): {files} file(s) with an hkaSkeletonMapper, {mappers} mapper(s), " +
                           $"{unreadable} unreadable");
-        Console.WriteLine($"unedited round trip: {byteIdentical} byte-identical, " +
+        Console.WriteLine($"unedited forced rebuild: {byteIdentical} byte-identical, " +
                           $"{files - byteIdentical} did not reproduce their bytes");
         if (recompute)
             Console.WriteLine($"recomputed {recomputed} simple row(s): worst translation error " +
@@ -258,5 +363,4 @@ public static partial class Program
 
         return null;
     }
-
 }

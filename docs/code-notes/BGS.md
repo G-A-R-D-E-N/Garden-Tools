@@ -659,8 +659,12 @@ Measured census and per-fixture evidence: `BGS/docs/research/fo4-skeleton-physic
 ## BGS/src/Hkx/SkeletonMapperDocument.cs — skeleton mapper write-back (#672)
 
 `SkeletonMapperDocument` edits `hkaSkeletonMapper` data and writes it back into the packfile.
-`symrm mapper <file> [--recompute] [--out <file>] [--data <Data folder>]` is its user-facing surface;
-`BGS/tools/tests/SkeletonMapperWritebackTests.cs` covers it (17 tests).
+`symrm mapper <file> [--recompute] [--out <file>] [--force] [--data <Data folder>]` is its user-facing
+surface (`BGS/tools/symrm/MapperCli.cs:Mapper`); `BGS/tools/tests/SkeletonMapperWritebackTests.cs` (18
+tests), `BGS/tools/tests/SkeletonMapperWriterTests.cs` (11) and
+`BGS/tools/tests/SkeletonMapperReaderLeniencyTests.cs` (2) cover it, and
+`BGS/tools/tests/MapperCliTests.cs` (6) covers the command line. `BGS/tools/tests/SkeletonMapperAuthorTests.cs`
+(18) covers the generator's own arithmetic.
 
 **Layout provenance.** The field table below is RE doc 68 §2 (`hkaSkeletonMapperData`, 176 B;
 `hkaSkeletonMapper`, 192 B with `mapping` @ `0x10`; simple row 64 B; chain row 112 B), which doc 63
@@ -675,14 +679,25 @@ chain row `startBoneA`/`endBoneA`/`startBoneB`/`endBoneB` int16 @0/2/4/6,
 `startAFromBTransform` @`0x10`, `endAFromBTransform` @`0x40`). A `hkQsTransform` is 12 lanes with
 translation at lane 0, rotation at lane 4 and scale at lane 8 (doc 63 §1.3).
 
-**Reading.** `SkeletonMapperReader` used to drop everything but the simple rows. It now also reads
-`chainMappings`, `unmappedBones`, `keepUnmappedLocal` and `extractedMotionMapping`, and keeps each
-row's 12 raw lanes in `HavokSkeletonMappingTransform`. That matches the shipped corpus: doc 66 §2.1
-measures chain rows in 25 of 43 forward mappers and doc 66 §2.2 non-empty `unmappedBones` on every
-reverse mapper, and the committed human fixture reads back as 4 chain rows per mapper and 71 unmapped
-bones on the reverse mapper, the figures doc 63 §3 and doc 66 §2.2 report for it. `SimpleMappings`
-(the consumer view the physics extractor uses) is derived from the raw rows, so no existing caller
-changed.
+**Reading, and the two layers of strictness.** `SkeletonMapperReader` used to drop everything but the
+simple rows. It now also reads `chainMappings`, `unmappedBones`, `keepUnmappedLocal` and
+`extractedMotionMapping`, and keeps each row's 12 raw lanes in `HavokSkeletonMappingTransform`. That
+matches the shipped corpus: doc 66 §2.1 measures chain rows in 25 of 43 forward mappers and doc 66 §2.2
+non-empty `unmappedBones` on every reverse mapper, and the committed human fixture reads back as 4 chain
+rows per mapper and 71 unmapped bones on the reverse mapper, the figures doc 63 §3 and doc 66 §2.2
+report for it. `SimpleMappings` (the consumer view the physics extractor uses) is derived from the raw
+rows, so no existing caller changed.
+
+The four added members are **optional for the reader and required for the writer**. A mapper whose chain
+array or unmapped-bone array cannot be located, or whose `keepUnmappedLocal` or
+`extractedMotionMapping` cannot be read, still comes back with its `SimpleMappings` — the unreadable
+member is replaced by its empty/default value and `HavokSkeletonMapper.OptionalMembersRead` is false
+(`SkeletonMapperReader.ReadChains`, `ReadUnmappedBones`, `ReadOptionalMembers`). `HavokPhysicsExtractor`
+therefore keeps the mappings it used to get, which is the whole point: a mapper the extractor can still
+use must not disappear because a member it never reads is unreadable. Everything that *writes* is
+stricter. `SkeletonMapperDocument.Reload` refuses to load such a file at all, and
+`SkeletonMapperWriteback.RequireComplete` refuses the write, because a write-back would rewrite the file
+from a model that has silently lost those rows. Both say which mapper and why.
 
 **Editing, and what is refused.** Simple rows can have their bones or their transform set, be added,
 inserted or removed; chain rows have their four indices and two transforms replaced; `mappingType`
@@ -697,35 +712,115 @@ exact duplicate rows (doc 66 §2.3) and doc 68 §3.5 records that nothing reject
 `allowDuplicatePair: true` writes one while the default refuses it. The **scale and pad lanes are
 never invented**: doc 63 §3 and doc 65 §4.1 leave row scale semantics unresolved, so a recompute
 preserves the stored lanes, the `(translation, rotation)` overload preserves them too, and only a
-caller who passes a whole transform replaces them. Chain rows are never recomputed and cannot be
-added or removed, because the interior distribution and blend weights of a chain run are unresolved
-(doc 67 §2/§4, doc 65 §4.3); replacing the stored endpoints is a byte edit and is allowed.
+caller who passes a whole transform replaces them.
 
-**Write-back, two paths.** A file with no edits returns its own bytes, so an unedited load and save
-is byte-identical by construction. Edits that change no row count are patched straight into the
-`__data__` section at the row's offset and the file is rebuilt from its sections; each written field
-records the byte range it owns, and a diff byte outside every recorded range is refused rather than
-written. Row add/remove goes through the native relocate path, mirroring what `NativeSave.Regrow`
-does for an instance's array: append a 16-byte-aligned run to `__data__`, copy the rows that survive,
-repoint the array's fixup (its local one, or its global one; a header that has both, or neither, is
-refused), move any fixup that pointed inside the old run, write the count at `+8` and `flags|count`
-at `+12`, reorder fixups with `FixupOrder.Reorder` and rebuild. That machinery is reimplemented here
-rather than called through `NativeSave.Apply` because `hkaSkeletonMapperData` is an embedded struct
-inside `hkaSkeletonMapper`: `NativeSave.Resolve` looks an edit's class up among the packfile's
-instances, so a change naming `hkaSkeletonMapperData` has no instance to land on, and
-`NativeSave.Compare` sees only one flattened `mapping.simpleMappings` text field with no byte layout.
-The primitives are the same ones `Apply` uses (`PackfileSection` append/align/fixup setters,
-`FixupOrder`, `PackfileImage.Rebuild`). Shared row storage (another fixup pointing into the rows) is
-refused, as are a non-8-byte layout and a file whose class signatures this build does not describe.
+**Chain rows are never recomputed at all — endpoints included.** There is no chain counterpart to
+`RecomputeSimpleRow`: the only way a chain transform changes is `SetChainRowTransforms`, which stores
+the caller's transform verbatim. The reason is narrower than "the interior is unresolved". The
+doc 63 §2 formula is the *single-bone-pair* value `inverse(modelSpace_A[boneA]) * modelSpace_B[boneB]`,
+and the endpoint of a chain run is not that value for its own bone pair — it is whatever the run's
+distribution puts there (doc 67 §2/§4, doc 65 §4.3). Nothing measures a chain endpoint against
+`Recompute`, so deriving one and writing it would be an invented value with no check behind it; the
+command says so out loud ("chain rows were left alone, interior and endpoints alike") and the
+`Recompute*` entry points never touch `ChainMappings`. Chain rows also cannot be added or removed:
+`WriteChains` calls `RequireResized`, so a chain count that differs from the file's is refused with
+"only simple rows are resized". The `symrm` add-then-remove sweep and the tests only ever resize the
+simple rows.
+
+**Write-back, two paths.** A file with no edits returns its own bytes, so an unedited load and save is
+byte-identical by construction — that shortcut is exactly why an unedited round trip proves nothing
+about the writer. `SkeletonMapperDocument.ForceRebuild` is the honest test: it hands
+`SkeletonMapperWriteback.Write` a no-op change for every mapper (`force: true`), so the whole write path
+runs — storage location, the value pass over every row and chain row, `RequireConfined`,
+`PackfileImage.Rebuild` and the read-back `Verify` — while nothing is meant to change, and the result
+must equal the input byte for byte. `Write` refuses to combine `force` with real edits.
+
+Edits that change no row count are patched straight into the `__data__` section at the row's offset and
+the file is rebuilt from its sections; each written field records the byte range it owns, and a diff
+byte outside every recorded range is refused rather than written. Chain row ranges are recorded per
+field (four 2-byte index ranges plus two 12-lane transform ranges) rather than as one span, so the
+padding between the indices and the transforms is not silently claimed.
+
+Row add/remove goes through the native relocate path, mirroring what `NativeSave.Regrow` does for an
+instance's array: append a 16-byte-aligned run to `__data__`, copy the rows that survive, repoint the
+array's fixup (its local one, or its global one; a header that has both, or neither, is refused), move
+any fixup that pointed inside the old run, write the count at `+8` and `flags|count` at `+12`, reorder
+fixups with `FixupOrder.Reorder` and rebuild. That machinery is reimplemented here rather than called
+through `NativeSave.Apply` because `hkaSkeletonMapperData` is an embedded struct inside
+`hkaSkeletonMapper`: `NativeSave.Resolve` looks an edit's class up among the packfile's instances, so a
+change naming `hkaSkeletonMapperData` has no instance to land on, and `NativeSave.Compare` sees only one
+flattened `mapping.simpleMappings` text field with no byte layout. The primitives are the same ones
+`Apply` uses (`PackfileSection` append/align/fixup setters, `FixupOrder`, `PackfileImage.Rebuild`).
+
+**What the structural path is allowed to touch, and the rules that keep it there.**
+
+- *Shared row storage is checked against the whole old run.* `RequireStorage` is called with the
+  **original** row count before the relocate, so the inspected window is the run as the file holds it —
+  including the rows a shrink is about to drop. Using the smaller (edited) count would have missed a
+  pointer into a dropped row and `Move` would have discarded it silently. After the relocate the same
+  check runs again with the **edited** count against the freshly appended run, so a larger array checks
+  its new storage too. A pointer into either is refused with "shares its row storage with another
+  object". The window is not widened past the run: extending it to the new, larger count walks into the
+  array that legitimately follows the old run and refuses a valid edit, which is how this check first
+  failed on the human fixture.
+- *The global-fixup half of the header check reads only this section.* `Relocate` looks for the header
+  in `data.Globals()`, not in every section's global table. Source offsets are per-section byte spaces,
+  so a global entry in `__classnames__` (or anywhere else) whose source happens to equal this header's
+  offset is a different pointer, and treating it as a second fixup on this header refused a file that
+  only has a local one. `BGS/tools/tests/SkeletonMapperWriterTests.cs:AGlobalFixupInAnotherSectionOnTheSameOffsetIsIgnored`
+  pins that, and `AGlobalFixupHeaderIsRelocated` is the opposite control: a header whose only fixup is a
+  global one in its own section still relocates.
+- *After the rebuild the change is confined.* `RequireStructuralConfined` diffs the new `__data__`
+  against the old one and allows only the array header's pointer slot and its `+8`/`+12` pair, the
+  fields the value pass recorded as its own, the zeroed old run, and the appended region (the alignment
+  padding must be zero there and the rest must be inside the appended run). `RequireOtherInstancesIntact`
+  additionally walks every **other** object instance in the file and refuses if a single byte of it
+  changed, so an unrelated mapper, skeleton or `hknpRagdollData` in the same file cannot be reached.
+  `RequireFixupsConfined` compares the local and global tables as multisets outside the repointed
+  headers: a structural edit may repoint its own header, and nothing else, in either table. Any of the
+  three refusals returns nothing at all.
+- *The orphaned run is zeroed, not reused.* `Relocate` clears the old run's bytes after copying the
+  survivors out of it, so a stale pointer left behind reads as zeros rather than as the dropped rows.
+  The old run stays where it is: each structural save appends a fresh `count * stride` run and never
+  reuses the previous one, so **saving the same structural edit again grows the file by another row
+  run** (plus its alignment padding) every time. That is the price of never moving the objects that
+  other fixups point at, and it is why `symrm mapper --data` reports the byte delta a single added row
+  costs on each rig.
+
 After either path the produced bytes are re-read through `SkeletonMapperReader` and every mapper —
 edited and untouched — must come back equal to the model that was written, or nothing is returned at
-all. `Save` writes through `FileSafety.ReplaceChecked` with the source stamp, like the other
-documents.
+all. `Save` writes through `FileSafety.ReplaceChecked` with the source stamp, like the other documents.
 
-**Measured.** Over the whole Fallout 4 install (7 archives, the 43 rigs and 86 mappers of doc 66
-§1): 43 of 43 mapper-bearing files round-trip byte-identically when unedited, and 43 of 43 survive an
-add-then-remove of a simple row read back through the reader. Recomputing all 1901 shipped simple
-rows gives a worst translation error of `3.31e-4` and a worst rotation error of `6.91e-4` rad; on the
-human skeleton doc 63 measured `3.8e-5` on, the per-row recompute gives `4.72e-5` translation and `0`
-rotation over its 36 rows. The larger corpus figure is the larger rigs' scale, not a different rule.
+**The command line.** `MapperCli.Mapper` parses `--recompute`, `--out`, `--force` and `--data` and
+refuses anything else, or a missing value, with exit 1 and the `mapper` usage text. `--out` is refused
+when it names the file being read or an existing file, unless `--force` is passed; a write always goes
+to a temporary file beside the target and is moved into place (`FileSafety.Replace`), so a failure
+leaves the existing file untouched. `--recompute` on its own prints the error it measured and says that
+nothing was written. `--data` switches to the corpus sweep, which writes nothing anywhere, so `--out`
+is refused outright in that mode rather than ignored. The sweep's unedited check now calls
+`ForceRebuild` and counts a file as byte-identical only when the comparison succeeded, instead of
+counting first and reporting the failure afterwards.
+
+**Measured.** The Fallout 4 install (7 archives, the 43 rigs and 86 mappers of doc 66 §1) was re-run
+through the forced rebuild. **43 of 43 mapper-bearing files come back byte-identical when an unedited
+file is pushed through the writer's full path** — `RequireStorage`, the value pass, `RequireConfined`,
+`PackfileImage.Rebuild` and `Verify` — and the committed human fixture does the same (1 of the 11
+committed fixtures holds a mapper). Before this was measured, the "byte-identical" figure came from
+`Serialize` returning the source clone for an unedited document and said nothing about the writer; the
+number above is the writer's, and `SkeletonMapperWritebackTests.EveryMapperFixtureForcedRebuildIsByteIdenticallyRebuilt`
+is the standing check. 43 of 43 also survive an add-then-remove of a simple row read back through the
+reader. What a **structural** save does *not* reproduce is the fixup-table layout: `FixupOrder.Reorder`
+rewrites the local and global tables in walk order, which on the human fixture moves 104 bytes of the
+global table (the first difference is at `0xa350`, the source field of global entry 100) while leaving
+the XML rendering identical. That is expected, it is inside the "fixup tables" allowance above, and it
+is the reason a structural save is compared by its invariants rather than byte for byte.
+
+Recomputing the shipped simple rows reproduces them to `3.31e-4` translation and `6.91e-4` rad rotation
+worst case over the corpus, and to `4.72e-5` translation and `0` rotation over the human fixture's 36
+rows. The corpus number is larger because the larger rigs are measured in larger units: the human
+fixture's larger skeleton spans 120.5 units and the error there is `3.9e-7` of that span, so the standing
+assertion is **relative to the extent** (`SkeletonMapperWritebackTests.RecomputedRowsMatchTheShippedValues`)
+with rotation bounded separately in radians. A second scale-aware figure lives in the `--recompute`
+output, which prints both the absolute error and its fraction of the extent.
+
 
