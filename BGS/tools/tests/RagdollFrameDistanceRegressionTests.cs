@@ -85,6 +85,7 @@ public sealed class RagdollFrameDistanceRegressionTests
             view.ToggleBodyPinForTest(0);
             Assert.Equal("", view.FrameDistanceText);
             view.ToggleBodyPinForTest(1);
+            Assert.Equal((0, 1), view.FrameDistanceBodies);
             var first = model!.Bodies.Single(body => body.Id == 0);
             var second = model.Bodies.Single(body => body.Id == 1);
             float distance = Vector3.Distance(first.Position, second.Position);

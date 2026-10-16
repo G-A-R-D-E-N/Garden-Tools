@@ -66,6 +66,10 @@ public class GraphRoundTripTests
 
 
 
+    [Fact]
+    public void The_fixture_suite_still_covers_24_patterns() =>
+        GraphFixtures.All.Count().Should().BeGreaterThanOrEqualTo(24);
+
     [Theory]
     [MemberData(nameof(Fixtures))]
     public void Every_fixture_graph_compiles_clean(string name)

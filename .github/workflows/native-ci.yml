@@ -31,7 +31,6 @@ on:
       - "PluginEditTool/docs/**"
       - "PluginEditTool/images/**"
       - "docs/**"
-      - "**/*.md"
   workflow_dispatch:
     inputs:
       lane:

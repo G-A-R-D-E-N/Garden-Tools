@@ -107,4 +107,4 @@ inline std::vector<std::byte> make_plugin(const std::vector<std::string>& master
   return out.bytes;
 }
 
-}  // namespace fo4::test::envnode
+}

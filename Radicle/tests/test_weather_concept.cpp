@@ -703,6 +703,7 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
   std::size_t failed = 0;
   std::vector<std::string> failures;
   const auto fallout_weather_key = fo4::FormKey::parse("0000015E:Fallout4.esm");
+  bool fallout_weather_checked = false;
   for (const auto& path : files) {
     const auto plugin = fo4::read_plugin_file(path);
     for (const auto* record : fo4::collect_records(plugin)) {
@@ -711,6 +712,7 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
       try {
         const auto model = fo4::forms::decode_weather(plugin, record->form_key);
         if (record->form_key == fallout_weather_key) {
+          fallout_weather_checked = true;
           EXPECT_TRUE(model.editor_id.has_value());
           EXPECT_EQ(model.cloud_color_layer_count, 32u);
           EXPECT_TRUE(model.data.size() == 19 || model.data.size() == 20);
@@ -725,6 +727,9 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
   }
   for (std::size_t i = 0; i < failures.size() && i < 20; ++i) {
     ADD_FAILURE() << failures[i];
+  }
+  if (std::any_of(files.begin(), files.end(), [](const auto& file) { return file.filename() == "Fallout4.esm"; })) {
+    EXPECT_TRUE(fallout_weather_checked);
   }
   EXPECT_EQ(failed, 0u) << seen << " WTHR records scanned, " << failed << " failed to decode";
   RecordProperty("WTHR_scanned", static_cast<int>(seen));

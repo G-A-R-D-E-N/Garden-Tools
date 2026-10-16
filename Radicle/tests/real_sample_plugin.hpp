@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace fo4::test {
@@ -39,18 +40,18 @@ Plugin make_sample(const Plugin& master, Pick&& pick, std::size_t bystander_stri
   sample.header = master.header;
   sample.tes4 = master.tes4;
   sample.original_data = master.original_data;
-  std::map<std::string, Group> groups;
   std::size_t other = 0;
-  for (const auto* record : collect_records(master)) {
-    if (!pick(*record) && (bystander_stride == 0 || other++ % bystander_stride != 0)) { continue; }
-    const auto type = record->header.signature.to_string();
-    auto& group = groups[type];
-    for (std::size_t i = 0; i < group.header.label.size(); ++i) {
-      group.header.label[i] = std::byte{static_cast<unsigned char>(type[i])};
+  for (const auto& top : master.groups) {
+    Group group;
+    group.header.label = top.header.label;
+    for (const auto& child : top.children) {
+      const auto* record = std::get_if<Record>(&child);
+      if (record == nullptr) { continue; }
+      if (!pick(*record) && (bystander_stride == 0 || other++ % bystander_stride != 0)) { continue; }
+      group.children.emplace_back(*record);
     }
-    group.children.emplace_back(*record);
+    if (!group.children.empty()) { sample.groups.push_back(std::move(group)); }
   }
-  for (auto& [type, group] : groups) { sample.groups.push_back(std::move(group)); }
   return read_plugin(write_plugin(sample), master.path);
 }
 
