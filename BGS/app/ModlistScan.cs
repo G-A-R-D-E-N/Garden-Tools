@@ -59,8 +59,16 @@ public static class ModlistScan
             PrintLayout(scan!, json);
             Progress("indexing mod archives for characters...");
             int archivesSeen = 0;
-            var characters = scan!.ModHkxPaths("characters",
-                _ => { if (++archivesSeen % 25 == 0) Progress($"  processed {archivesSeen} archive(s)..."); });
+            IReadOnlyList<string> characters;
+            try
+            {
+                characters = scan!.ModHkxPaths("characters",
+                    _ => { if (++archivesSeen % 25 == 0) Progress($"  processed {archivesSeen} archive(s)..."); });
+            }
+            catch (Exception e) when (IsNativeLoadAbort(e))
+            {
+                return Fail(json, "scan-modlist", instance, "native", First(e.Message));
+            }
             Progress($"processed {archivesSeen} archive(s); found {characters.Count} character file(s) to check");
             var findings = new List<ScanFinding>();
             CollectArchiveWarnings(scan, json, findings);
@@ -150,6 +158,10 @@ public static class ModlistScan
                     findings.Add(new ScanFinding("missing-animations", dataRel, source, gone));
                 }
             }
+            catch (Exception e) when (IsNativeLoadAbort(e))
+            {
+                return Fail(json, "scan-modlist", instance, "native", First(e.Message));
+            }
             finally
             {
                 TryDeleteDirectory(temp);
@@ -190,8 +202,16 @@ public static class ModlistScan
             PrintLayout(scan!, json);
             Progress("indexing mod archives for behaviours...");
             int archivesSeen = 0;
-            var behaviours = scan!.ModHkxPaths("behaviors",
-                _ => { if (++archivesSeen % 25 == 0) Progress($"  processed {archivesSeen} archive(s)..."); });
+            IReadOnlyList<string> behaviours;
+            try
+            {
+                behaviours = scan!.ModHkxPaths("behaviors",
+                    _ => { if (++archivesSeen % 25 == 0) Progress($"  processed {archivesSeen} archive(s)..."); });
+            }
+            catch (Exception e) when (IsNativeLoadAbort(e))
+            {
+                return Fail(json, "scan-clips", instance, "native", First(e.Message));
+            }
             Progress($"processed {archivesSeen} archive(s); found {behaviours.Count} behaviour file(s) to check");
             var findings = new List<ScanFinding>();
             CollectArchiveWarnings(scan, json, findings);
@@ -330,6 +350,10 @@ public static class ModlistScan
                     findings.Add(new ScanFinding("missing-clip-animations", dataRel, source, details));
                 }
             }
+            catch (Exception e) when (IsNativeLoadAbort(e))
+            {
+                return Fail(json, "scan-clips", instance, "native", First(e.Message));
+            }
             finally
             {
                 TryDeleteDirectory(temp);
@@ -380,7 +404,7 @@ public static class ModlistScan
                 if (StepDue(++ba2ix, ba2s.Count)) Progress($"  opened {ba2ix}/{ba2s.Count} archive(s)...");
                 Ba2 archive;
                 try { archive = Ba2.Open(ba2path); }
-                catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+                catch (Exception e) when (GameData.IsSkippableArchiveFailure(e))
                 {
                     if (!errorsOnly && !json) Console.WriteLine($"skip     {Rel(root, ba2path)}: {First(e.Message)}");
                     findings.Add(new ScanFinding("skip", Rel(root, ba2path), null, new[] { First(e.Message) }));
@@ -404,7 +428,7 @@ public static class ModlistScan
                             bytes = archive.Read(entry);
                             File.WriteAllBytes(tmp, bytes);
                         }
-                        catch (Exception e)
+                        catch (Exception e) when (!IsNativeLoadAbort(e))
                         {
                             corrupt++;
                             if (!json) Console.WriteLine($"UNREADABLE  {archiveName} :: {entry.Name}: {First(e.Message)}");
@@ -453,6 +477,10 @@ public static class ModlistScan
                 }
                 findings.Add(new ScanFinding("corrupt", relative, "loose", errors));
             }
+        }
+        catch (Exception e) when (IsNativeLoadAbort(e))
+        {
+            return Fail(json, "scan-archives", root, "native", First(e.Message));
         }
         finally
         {
@@ -550,6 +578,9 @@ public static class ModlistScan
 
     private static bool StepDue(int done, int total) =>
         total > 0 && (done == total || done % Math.Max(1, total / 20) == 0);
+
+    internal static bool IsNativeLoadAbort(Exception e) =>
+        e is InvalidDataException && !GameData.IsSkippableArchiveFailure(e);
 
     private static int Fail(bool json, string mode, string target, string kind, string message)
     {
