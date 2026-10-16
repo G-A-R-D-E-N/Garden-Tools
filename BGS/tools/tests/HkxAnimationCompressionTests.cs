@@ -71,7 +71,6 @@ public sealed class HkxAnimationCompressionTests
         Assert.Equal(animationClass, error.AnimationClass);
         Assert.Equal(AnimationCompression.Describe(animationClass), error.Message);
 
-        // Every boundary that already catches NotSupportedException keeps working unchanged.
         Assert.IsAssignableFrom<NotSupportedException>(error);
     }
 

@@ -6,12 +6,6 @@ using Xunit;
 
 namespace BehaviourStudio.Tests;
 
-/// <summary>
-/// The command line used to skip files whose animation class it cannot decode without saying so.
-/// These drive the real entry point so the summary, the named class, the listing and the exit code
-/// are all covered, not a copy of the logic. Console.Out is redirected for the whole class, so the
-/// collection keeps it off the parallel path with every other test that writes to the console.
-/// </summary>
 [Collection("symrm-console")]
 public sealed class SymrmUnsupportedAnimationTests
 {
@@ -60,7 +54,6 @@ public sealed class SymrmUnsupportedAnimationTests
 
             int exit = Run(new[] { "scale", root }, out string stdout);
 
-            // An unsupported class is an expected answer, so the default exit code stays 0.
             Assert.Equal(0, exit);
             Assert.Contains("1 in a class this reader does not decode", stdout, StringComparison.Ordinal);
             Assert.Contains(AnimationCompression.QuantizedClass, stdout, StringComparison.Ordinal);
@@ -101,7 +94,6 @@ public sealed class SymrmUnsupportedAnimationTests
             string file = Path.Combine(animations, "Predictive.hkx");
             File.WriteAllBytes(file, CraftedPackfile.Animation(AnimationCompression.PredictiveClass));
 
-            // Every frames mode answers an unsupported class the same way: report it, then exit 0.
             Assert.Equal(0, Run(new[] { "frames", root }, out string directoryOutput));
             Assert.Contains(AnimationCompression.PredictiveClass, directoryOutput, StringComparison.Ordinal);
             Assert.Contains("has not been changed", directoryOutput, StringComparison.Ordinal);
@@ -143,7 +135,6 @@ public sealed class SymrmUnsupportedAnimationTests
         string root = AnimationsRoot(out string animations);
         try
         {
-            // Not an HKX file at all, so this is a read failure rather than an unsupported class.
             File.WriteAllBytes(Path.Combine(animations, "Broken.hkx"), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
 
             Assert.Equal(1, Run(new[] { "scale", root }, out string scaleOutput));
@@ -179,7 +170,6 @@ public sealed class SymrmUnsupportedAnimationTests
             Assert.Contains("0 in a class this reader does not decode", framesOutput, StringComparison.Ordinal);
             Assert.DoesNotContain("has not been changed", framesOutput, StringComparison.Ordinal);
 
-            // --strict only changes the answer for files that were unsupported or refused.
             Assert.Equal(0, Run(new[] { "scale", root, "--strict" }, out _));
             Assert.Equal(0, Run(new[] { "frames", root, "--strict" }, out _));
         }
@@ -190,7 +180,6 @@ public sealed class SymrmUnsupportedAnimationTests
     }
 }
 
-/// <summary>Keeps every test that redirects the console out of the parallel run.</summary>
 [CollectionDefinition("symrm-console", DisableParallelization = true)]
 public sealed class SymrmConsoleCollection
 {

@@ -4,10 +4,6 @@ using OpenCommonwealth.Services.Hkx;
 
 namespace BehaviourStudio.Tests;
 
-/// <summary>
-/// An in-memory packfile holding one object of a chosen Havok class, so reader refusals and bounds
-/// can be exercised for classes no shipped fixture uses. Shared by the animation tests.
-/// </summary>
 internal sealed class CraftedPackfile
 {
     private readonly PackfileImage _image = new() { Predicates = new byte[16] };
@@ -61,7 +57,6 @@ internal sealed class CraftedPackfile
         return bytes;
     }
 
-    /// <summary>Bytes holding a single object of <paramref name="animationClass"/>.</summary>
     public static byte[] Animation(string animationClass,
                                    Action<CraftedPackfile, NativeAppend.Added>? fill = null)
     {

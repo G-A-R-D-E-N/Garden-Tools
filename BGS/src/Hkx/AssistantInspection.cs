@@ -276,8 +276,6 @@ public sealed class AssistantInspection
         }
         catch (NotSupportedException error)
         {
-            // The reader's refusal is already plain English and names the class or the spline
-            // sub-format, so surface it rather than replacing it with a generic sentence.
             return Failure<AnimationInspection>("unsupported_hkx",
                 string.IsNullOrWhiteSpace(error.Message) ? "animation format is not supported" : Display(error.Message),
                 path, annotationWarning, boneWarning);

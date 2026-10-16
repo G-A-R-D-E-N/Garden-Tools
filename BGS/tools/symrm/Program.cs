@@ -395,8 +395,6 @@ public static class Program
             {
                 try
                 {
-                    // TryReadAnimation still fills AnimationClass when it refuses a class this
-                    // reader does not decode, so the refusal can be named instead of parsed.
                     if (!new HkxBinaryReader().TryReadAnimation(file, out var a))
                     {
                         unsupported++;
@@ -410,8 +408,6 @@ public static class Program
                 }
                 catch (NotSupportedException ex)
                 {
-                    // A refused spline sub-format has no class name to group by, so keep the
-                    // reader's own sentence.
                     refused++;
                     string why = ex.Message;
                     reasons[why] = reasons.GetValueOrDefault(why) + 1;
@@ -430,10 +426,6 @@ public static class Program
             foreach (var kv in classes.OrderByDescending(k => k.Value))
                 Console.WriteLine($"  {kv.Value,5}  {kv.Key}: {AnimationCompression.Describe(kv.Key)}");
             foreach (var kv in reasons.OrderByDescending(k => k.Value)) Console.WriteLine($"  {kv.Value,5}  {kv.Key}");
-            // A class this reader does not decode and a refused spline sub-format are both expected
-            // answers, so by default they are counted and listed without failing the run and only
-            // fail with --strict. A real read failure, a file that decoded to nothing, or a run
-            // where nothing was decoded and nothing was explained all fail either way.
             bool nothingDecoded = read == 0 && unsupported == 0 && refused == 0;
             bool failedRun = threw > 0 || empty > 0 || nothingDecoded ||
                              (strict && (unsupported > 0 || refused > 0));
@@ -449,8 +441,6 @@ public static class Program
             }
             catch (NotSupportedException ex)
             {
-                // Same rule as the directory mode: an unsupported class or a refused spline
-                // sub-format is an expected answer, not a read failure, so only --strict fails.
                 Console.WriteLine($"{Path.GetFileName(target)}: {ex.Message}");
                 return strict ? 1 : 0;
             }
@@ -478,7 +468,6 @@ public static class Program
         }
         catch (NotSupportedException ex)
         {
-            // Same rule as the directory and --digest modes: an expected refusal only fails with --strict.
             Console.WriteLine($"{Path.GetFileName(target)}");
             Console.WriteLine("  " + ex.Message);
             return strict ? 1 : 0;
@@ -665,8 +654,6 @@ public static class Program
             HkxAnimationData a;
             try
             {
-                // TryReadAnimation still fills AnimationClass when it refuses a class this reader
-                // does not decode, so the refusal can be named instead of vanishing.
                 if (!new HkxBinaryReader().TryReadAnimation(file, out a))
                 {
                     unsupported++;
@@ -677,7 +664,6 @@ public static class Program
             }
             catch (NotSupportedException error)
             {
-                // No class name to group by: the reader refused a spline sub-format.
                 refused++;
                 refusals[error.Message] = refusals.GetValueOrDefault(error.Message) + 1;
                 Console.WriteLine($"  unsupported  {Short(file, root),-64} {error.Message}");
@@ -734,10 +720,6 @@ public static class Program
             Console.WriteLine($"  {kv.Value,6} {kv.Key}");
         foreach (var kv in failures.OrderByDescending(k => k.Value))
             Console.WriteLine($"  {kv.Value,6} {kv.Key}");
-        // Files in a class this reader does not decode, and files in a spline sub-format it refuses,
-        // are expected answers: they are counted and listed but only fail the run with --strict. A
-        // real read failure, or a run where nothing was decoded and nothing was explained, always
-        // fails.
         bool nothingDecoded = read == 0 && unsupported == 0 && refused == 0;
         bool failedRun = failed > 0 || nothingDecoded || (strict && (unsupported > 0 || refused > 0));
         return failedRun ? 1 : 0;

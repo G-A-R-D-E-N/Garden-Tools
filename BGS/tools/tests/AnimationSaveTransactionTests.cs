@@ -140,7 +140,6 @@ public sealed class AnimationSaveTransactionTests
         var error = Assert.Throws<NotSupportedException>(() => NativeAnimation.Recompress(
             source, scope.Animation, new SplineEncoder.Options { RotationFormat = format }));
 
-        // The write wording, not the read sentence: an encode refusal happens before any file is touched.
         Assert.Equal(AnimationCompression.DescribeSplineEncodingForWrite(format), error.Message);
     }
 
