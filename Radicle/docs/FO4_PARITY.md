@@ -158,7 +158,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | PMIS | 5951 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 16 | - | 9 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
-| RACE | 11054 | - | 4 | - | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
+| RACE | 11054 | - | 4 | - | 8 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 7 | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -182,7 +182,7 @@ Tier counts: L0 6, L1 0, L2 8, L3 1, L4 132.
 | STAT | 12045 | 3 | 1 | 1 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 8 | 2 | 2 | - | 7 | yes | yes | - | yes | 1 | L4 |
-| TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
+| TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 5 | L0 |
 | TREE | 12134 | 16 | - | 2 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | TXST | 6984 | 13 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |

@@ -103,27 +103,39 @@ TEST(TypedFamiliesRealData, DecodesEveryShippedRecordFamily) {
       {fo4::Signature::from_string("RACE"), "RACE", false,
        [](const fo4::Plugin& p, const fo4::FormKey& k) {
          static_cast<void>(fo4::forms::decode_race(p, k));
-       }},
+       },
+       0,
+       {}},
       {fo4::Signature::from_string("RACE"), "RACE BodyData", false,
        [](const fo4::Plugin& p, const fo4::FormKey& k) {
          static_cast<void>(fo4::forms::decode_race_body_data(p, k));
-       }},
+       },
+       0,
+       {}},
       {fo4::Signature::from_string("ARMO"), "ARMO", false,
        [](const fo4::Plugin& p, const fo4::FormKey& k) {
          static_cast<void>(fo4::forms::decode_armor(p, k));
-       }},
+       },
+       0,
+       {}},
       {fo4::Signature::from_string("ARMA"), "ARMA", false,
        [](const fo4::Plugin& p, const fo4::FormKey& k) {
          static_cast<void>(fo4::forms::decode_armor_addon(p, k));
-       }},
+       },
+       0,
+       {}},
       {fo4::Signature::from_string("EYES"), "EYES", true,
        [](const fo4::Plugin& p, const fo4::FormKey& k) {
          static_cast<void>(fo4::forms::decode_eyes(p, k));
-       }},
+       },
+       0,
+       {}},
       {fo4::Signature::from_string("LVSP"), "LVSP", true,
        [](const fo4::Plugin& p, const fo4::FormKey& k) {
          static_cast<void>(fo4::forms::decode_leveled_spell(p, k));
-       }},
+       },
+       0,
+       {}},
   };
 
   for (const auto& path : masters(dir)) {
