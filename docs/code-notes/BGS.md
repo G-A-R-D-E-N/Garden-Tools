@@ -1258,11 +1258,27 @@ the mesh wireframe) land exactly on the shaded surface.
 optional normals and uvs. Radicle can supply normals and uvs per part later without touching the
 upload path; a part that carries no normals gets area-weighted vertex normals computed from its own
 skinned triangles (`MeshGeometry.ComputeNormals`). Skinning stays where it was,
-`SkinnedMesh.Pose` in CPU linear-blend form, and `MainWindow.UpdateMesh` now builds one
+`SkinnedMesh.Pose` in CPU linear-blend form, and `MainWindow.UpdateMesh` refreshes one reused
 `MeshGeometry` from the same posed vertex arrays that feed the 2D wireframe, so each shape is
-skinned once per frame. The GL control packs positions and normals interleaved, orphans the
-dynamic vertex and index buffers and re-uploads them whenever the geometry version moves. The
-timings on the Overlays status line separate CPU skin plus normals from the GL upload and draw.
+skinned once per frame and nothing on that path is allocated per frame: the part vertex arrays, the
+interleaved pack buffer, the normal scratch array and the 2D segment array are fields sized once by
+the vertex count, `SkinnedMesh.Pose` fills the array it is handed, `MeshGeometry.Refresh` copies
+into its own arrays and only reallocates when the vertex or index count changes, and the `List` to
+`ToArray` copy for the 2D edges is gone. The GL control uploads positions with `BufferSubData` while
+the packed size is unchanged, uploads the index buffer only while the geometry hands it the same
+index array instance (so a new mesh, a vertex count change or an index count change re-uploads it
+and a moving frame does not), and packs positions and normals interleaved into a reused buffer. The Overlays status line
+names the shaded path `Shaded (GL) on <GL_VERSION>` so it cannot be confused with the wireframe
+fallback, and its timings separate CPU skin plus normals from the GL upload and draw.
+
+A `GC.GetAllocatedBytesForCurrentThread` run around `UpdateMesh` on this machine (the technical
+`Stand_to_Walk` clip at frame 12, a larger turret mesh for contrast, headless) measured the
+following before and after: `MaleBody.nif`, one shape, 1523 vertices and 2698 triangles, went from
+627567 to 575 bytes per frame, and `TurretMounted.nif`, 2291 vertices and 2946 triangles, from
+686544 to 575 bytes per frame. The residual 575 bytes do not depend on the mesh: they are the
+viewport scene hand-off through `MainWindow.SyncViewport` plus a fixed bookkeeping cost in the
+refresh. `AnimationPose.At` allocates 22584 bytes per frame on its own and is accounted for
+separately, because it builds the frame's whole pose rather than the mesh.
 
 ### Fallback and overlays
 
@@ -1298,10 +1314,14 @@ the fact that no sibling was found at all.
 ### Rendering mode and the frame pump
 
 The viewport needs a real OpenGL context, and the Windows composition backend only offers one when
-a GL-capable rendering mode is in play. `Program.BuildAvaloniaApp` now asks for
-`Win32RenderingMode.Wgl` first, then `AngleEgl`, then `Software`, so a machine whose ANGLE cannot
-start (a remote desktop session is the common case) still gives the viewport a driver OpenGL
-context, while a machine without either still falls back to software and the 2D wireframe.
+a GL-capable rendering mode is in play. `Program.BuildAvaloniaApp` keeps the default Windows order
+for the whole app, `AngleEgl` then `Wgl` then `Software`, so a build without an override behaves the
+way any Avalonia Windows app does. `BGS_RENDERING=angle|wgl|software` is the opt-in override:
+`Program.RenderingModeOrderFor` moves the named mode to the front and keeps the other two behind it
+as fallbacks, so `BGS_RENDERING=wgl` asks for a driver OpenGL context first (a remote desktop
+session whose ANGLE cannot start is the common case) while a machine without either still falls back
+to software and the 2D wireframe. An unset or unrecognised value leaves the default order alone, and
+`RenderingModeTests` pins the default, each override and the unknown value.
 `Viewport3D` itself draws nothing until `OnOpenGlInit` has run, which Avalonia only calls once the
 compositor can hand out GPU interop for the control's drawing surface.
 
@@ -1312,11 +1332,14 @@ The timings on the Overlays status line are the measured ones for a vanilla huma
 (`MaleBody.nif`, one shape, 2698 triangles) with the character `Stand_to_Walk` clip playing at
 frame 12: CPU skinning plus vertex normals land between 1 and 2.5 ms, the dynamic buffer upload is
 about 0.9 ms and the draw is 0.01 to 0.03 ms on an NVIDIA driver. The captured viewport lives at
-`docs-drafts/bgs-roadmap/ui-shaded-mesh.png` in the roadmap drafts folder.
+`docs-drafts/bgs-roadmap/ui-shaded-mesh.png` in the roadmap drafts folder, the upright re-check at
+`ui-shaded-mesh-fixed.png` and the allocation and context-rebuild re-check at
+`ui-shaded-mesh-fixed2.png` beside it.
 
 ### Skin bone names
 
-`MainWindow.ResolveSkinBoneNames` runs before each shape is bound: a mesh bone named `Chest_skin`
+`MainWindow.ApproximateHelperBoneInterim` runs before each shape is bound: a mesh bone named
+`Chest_skin`
 takes the name of the skeleton bone `Chest` when no bone of the exact name exists. Fallout 4
 character meshes name their skin vertices after the skeleton bone plus `_skin`, and the shipped
 `skeleton.hkx` carries only the plain names, so `MaleBody.nif` dropped from 45 unmatched bones to
@@ -1343,27 +1366,67 @@ every camera in the table: the same point at Z 22 lands at a smaller screen Y th
 the 2D and the GL path. `Viewport3D` keeps `CullFace` disabled, so the Y flip cannot change what is
 visible through triangle winding.
 
+### Rebuilding the GL context
+
+`Viewport3D` keeps every GL identifier, every uniform location and the upload bookkeeping in one
+`ViewportGlState`, and `OnOpenGlDeinit` and `OnOpenGlLost` delete what they can and then reset the
+whole state to zero (uniform locations to -1). A re-created context therefore starts from nothing,
+and `Viewport3D.Build` compiles through `ViewportGlState.EnsureProgram`, which returns the existing
+program only while its id is not zero and otherwise compiles and links again, so a new context can
+never be handed a stale program id. `Viewport3DTests.TheGlStateResetZeroesEveryIdentifierAndLocation`
+and `Viewport3DTests.AZeroProgramIdentifierIsRebuiltInsteadOfReused` pin both halves without a GL
+driver. `_scene` is volatile, so the render call always sees one whole camera and mesh snapshot
+rather than a torn one, and the uploaded vertex count and index array live in the same state that
+the reset clears, so a rebuilt context re-uploads geometry before it draws it.
+
+### Init failures and glGetError
+
+`OnOpenGlInit` now wraps its program and buffer setup in a try/catch and reports the real compile or
+link message through `Fail`, which sets `LastError`, so the Diagnostics panel names the error
+instead of claiming OpenGL failed for an unstated reason. After a successful init the control reads
+`glGetError` once, and it reads it once more after the first draw; the Overlays status line carries
+`Viewport3D.GlErrorNote`, which names the error code and the stage, or says the check was clean, so
+a shader that links but draws nothing is not silent.
+
+Making ANGLE the default exposed a real bug that the WGL-only default had hidden: every shader
+constant began with a newline, so `#version` sat on line 2 and ANGLE's ES compiler refused the
+source with `version directive must occur on the first line of the shader`. That is exactly the
+message the try/catch above now shows in place of an unstated failure, and it is why the default
+order has to be exercised rather than assumed. The eight constants are now written flush against
+the start of their verbatim string, so the viewport draws through ANGLE's `#version 300 es` pair on
+this machine (OpenGL ES 3.0, ANGLE 2.1.1) and through the desktop `#version 330 core` pair under
+`BGS_RENDERING=wgl` (NVIDIA 4.0.0). Both runs report `Shaded (GL)`, and both report a clean
+`glGetError` at init and on the first draw.
+
 ### Full skin weights
 
 `SkinnedMesh.Pose` divides by the full sum of the positive weights. An influence whose bone did not
-match the skeleton contributes the vertex at its rest position for its own weight, taken through
-`SkinnedMesh.Placement` (the `bind * referencePose` of the first matched bone), instead of being
-dropped. Previously `total` counted only the matched weights, so a vertex weighted half to a matched
-bone and half to an unmatched one rode the matched bone completely, and a vertex weighted only to
-unmatched bones was moved rigidly by the first matched bone's motion. The mesh status line now says
-the unmatched bones keep their whole weight, so a vertex weighted only to them holds its rest
-position instead of riding the bones that did match. `Viewport3DTests` covers both cases.
+match the skeleton contributes the vertex through `SkinnedMesh.Placement` for the frame being drawn
+(the `bind * posedTransform` of the first matched bone), instead of being dropped. Taking that
+placement from the reference pose made a travelling clip stretch the mesh: the unmatched share
+stayed behind at the rest spot while the matched share rode the root. The current frame's placement
+puts both shares on the same bone, so the vertex keeps its offset through root motion, and
+`Viewport3DTests.AHalfMatchedVertexTravelsWithThePosedBone` pins that a half-matched vertex moves
+with the frame. Previously `total` counted only the matched weights, so a vertex weighted half to a
+matched bone and half to an unmatched one rode the matched bone completely, and a vertex weighted
+only to unmatched bones was moved rigidly by the first matched bone's motion. A weight that is not
+finite (`NaN` or an infinity) is treated as zero before it is summed, because one such weight would
+otherwise turn the whole vertex into `NaN`; `Viewport3DTests.NonFiniteWeightsAreTreatedAsZero`
+covers it. The mesh status line says the unmatched bones keep their whole weight, so a vertex
+weighted only to them holds this frame's placement instead of riding the bones that did match.
 
 ### Helper bones are an interim approximation
 
-`MainWindow.ResolveSkinBoneNames` still maps a shape bone named `Chest_skin` onto the skeleton bone
-`Chest`, but it is one seam now: `SkinnedMesh.ResolveSkinBoneName` decides, and it only rewrites a
-name when the stripped parent exists in the skeleton. The approximation ignores a helper bone's own
-offset from its parent, and the mesh status line reports how many bones went through it ("helper
-bones approximated by their parent bone"). TODO: a Radicle NIF node-hierarchy ABI is coming that
-will drive the helper bones from `skeleton.nif` / the body NIF properly; it replaces this one seam,
-so the string rewriting stays out of `SkinnedMesh.Bind`, which keeps its exact-name contract, and
-the symrm check that a helper bone does not match is untouched.
+`MainWindow.ApproximateHelperBoneInterim` still maps a shape bone named `Chest_skin` onto the
+skeleton bone `Chest`, but it is one seam now: `SkinnedMesh.ResolveSkinBoneName` decides, and it
+only rewrites a name when the stripped parent exists in the skeleton. The method is named for its
+interim nature so no caller mistakes it for a final mapping, and `.NET` has no compile-time way to
+say that here, so the name carries it. The approximation ignores a helper bone's own offset from its
+parent, and the mesh status line reports how many bones went through it ("helper bones approximated
+by their parent bone"). TODO: a Radicle NIF node-hierarchy ABI is coming that will drive the helper
+bones from `skeleton.nif` / the body NIF properly; it replaces this one seam, so the string
+rewriting stays out of `SkinnedMesh.Bind`, which keeps its exact-name contract, and the symrm check
+that a helper bone does not match is untouched.
 
 ### Overlay defaults with a mesh
 

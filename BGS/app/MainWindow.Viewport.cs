@@ -80,6 +80,13 @@ public partial class MainWindow : Window
         SyncViewport();
     }
 
+    private void UpdateViewportGeometry()
+    {
+        _viewportMesh ??= new MeshGeometry();
+        _viewportMesh.Refresh(_meshParts);
+        SetViewportMesh(_viewportMesh);
+    }
+
     private void SetMeshMode(string mode)
     {
         if (Array.IndexOf(MeshModes, mode) < 0) mode = MeshModeShaded;
@@ -107,7 +114,7 @@ public partial class MainWindow : Window
             MeshModeOff => "Off: no mesh is drawn",
             _ => _viewport switch
             {
-                { GlReady: true } => "Shaded on " + RendererName(),
+                { GlReady: true } => "Shaded (GL) on " + RendererName(),
                 { LastError: { Length: > 0 } error } => "OpenGL failed: " + error,
                 _ => "Shaded requested, but there is no OpenGL here: the 2D wireframe is drawn instead",
             },
@@ -117,6 +124,7 @@ public partial class MainWindow : Window
             ? "no mesh loaded"
             : $"{_viewportMesh.TriangleCount} tris, skin {_meshSkinMilliseconds:F1} ms";
 
-        _meshViewportStatus.Text = mode + "  |  " + mesh;
+        string gl = _viewport is { GlReady: true } ? "  |  " + _viewport.GlErrorNote : "";
+        _meshViewportStatus.Text = mode + "  |  " + mesh + gl;
     }
 }

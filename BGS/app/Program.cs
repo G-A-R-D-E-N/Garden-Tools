@@ -50,6 +50,10 @@ public class App : Application
 
 public static class Program
 {
+    internal const string RenderingPreferenceVariable = "BGS_RENDERING";
+
+    internal static readonly string[] DefaultRenderingModes = { "AngleEgl", "Wgl", "Software" };
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -71,15 +75,37 @@ public static class Program
     {
         var builder = AppBuilder.Configure<App>().UsePlatformDetect();
         if (OperatingSystem.IsWindows())
+        {
+            string[] order = RenderingModeOrderFor(Environment.GetEnvironmentVariable(RenderingPreferenceVariable));
             builder = builder.With(new Win32PlatformOptions
             {
-                RenderingMode = new[]
-                {
-                    Win32RenderingMode.Wgl, Win32RenderingMode.AngleEgl, Win32RenderingMode.Software,
-                },
+                RenderingMode = order.Select(ToRenderingMode).ToArray(),
             });
+        }
         return builder.LogToTrace();
     }
+
+    internal static string[] RenderingModeOrderFor(string? preference)
+    {
+        string wanted = (preference ?? "").Trim();
+        int at = Array.FindIndex(DefaultRenderingModes,
+                                 mode => mode.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+        if (at <= 0) return DefaultRenderingModes;
+
+        var order = new string[DefaultRenderingModes.Length];
+        order[0] = DefaultRenderingModes[at];
+        int next = 1;
+        for (int i = 0; i < DefaultRenderingModes.Length; i++)
+            if (i != at) order[next++] = DefaultRenderingModes[i];
+        return order;
+    }
+
+    private static Win32RenderingMode ToRenderingMode(string name) => name switch
+    {
+        "AngleEgl" => Win32RenderingMode.AngleEgl,
+        "Wgl" => Win32RenderingMode.Wgl,
+        _ => Win32RenderingMode.Software,
+    };
 
     private static int ProbeHavok(string[] args)
     {

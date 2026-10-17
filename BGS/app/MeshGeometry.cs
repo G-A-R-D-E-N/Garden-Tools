@@ -16,16 +16,29 @@ internal sealed class MeshGeometry
 {
     public const int FloatsPerVertex = 6;
 
-    public Vector3[] Positions { get; private init; } = Array.Empty<Vector3>();
-    public Vector3[] Normals { get; private init; } = Array.Empty<Vector3>();
-    public Vector2[]? Uvs { get; private init; }
-    public int[] Indices { get; private init; } = Array.Empty<int>();
+    private Vector3[] _positions = Array.Empty<Vector3>();
+    private Vector3[] _normals = Array.Empty<Vector3>();
+    private Vector2[]? _uvs;
+    private int[] _indices = Array.Empty<int>();
+    private Vector3[] _normalScratch = Array.Empty<Vector3>();
 
-    public int VertexCount => Positions.Length;
-    public int TriangleCount => Indices.Length / 3;
+    public Vector3[] Positions => _positions;
+    public Vector3[] Normals => _normals;
+    public Vector2[]? Uvs => _uvs;
+    public int[] Indices => _indices;
+
+    public int VertexCount => _positions.Length;
+    public int TriangleCount => _indices.Length / 3;
     public int Version { get; set; }
 
     public static MeshGeometry FromParts(IReadOnlyList<MeshPart> parts)
+    {
+        var geometry = new MeshGeometry();
+        geometry.Refresh(parts);
+        return geometry;
+    }
+
+    public void Refresh(IReadOnlyList<MeshPart> parts)
     {
         int vertexCount = 0, indexCount = 0;
         bool anyUvs = parts.Count > 0;
@@ -39,23 +52,25 @@ internal sealed class MeshGeometry
             if (part.Normals == null || part.Normals.Length != part.Positions.Length) allNormals = false;
         }
 
-        var positions = new Vector3[vertexCount];
-        var indices = new int[indexCount];
-        var normals = new Vector3[vertexCount];
-        var uvs = anyUvs ? new Vector2[vertexCount] : null;
+        if (_positions.Length != vertexCount)
+        {
+            _positions = new Vector3[vertexCount];
+            _normals = new Vector3[vertexCount];
+            _normalScratch = new Vector3[vertexCount];
+        }
+        if (_indices.Length != indexCount) _indices = new int[indexCount];
+        if (!anyUvs) _uvs = null;
+        else if (_uvs == null || _uvs.Length != vertexCount) _uvs = new Vector2[vertexCount];
 
         int vertexAt = 0, indexAt = 0;
-        var missing = new List<(int Start, int Count, int[] Indices)>();
         foreach (var part in parts)
         {
-            Array.Copy(part.Positions, 0, positions, vertexAt, part.Positions.Length);
-            for (int i = 0; i < part.Indices.Length; i++) indices[indexAt + i] = part.Indices[i] + vertexAt;
-            if (uvs != null && part.Uvs != null) Array.Copy(part.Uvs, 0, uvs, vertexAt, part.Uvs.Length);
+            Array.Copy(part.Positions, 0, _positions, vertexAt, part.Positions.Length);
+            for (int i = 0; i < part.Indices.Length; i++) _indices[indexAt + i] = part.Indices[i] + vertexAt;
+            if (_uvs != null && part.Uvs != null) Array.Copy(part.Uvs, 0, _uvs, vertexAt, part.Uvs.Length);
 
             if (part.Normals is { } supplied && supplied.Length == part.Positions.Length)
-                Array.Copy(supplied, 0, normals, vertexAt, supplied.Length);
-            else
-                missing.Add((vertexAt, part.Positions.Length, part.Indices));
+                Array.Copy(supplied, 0, _normals, vertexAt, supplied.Length);
 
             vertexAt += part.Positions.Length;
             indexAt += part.Indices.Length;
@@ -63,23 +78,27 @@ internal sealed class MeshGeometry
 
         if (!allNormals)
         {
-            var computed = ComputeNormals(positions, indices);
-            foreach (var (start, count, _) in missing)
-                for (int i = 0; i < count; i++) normals[start + i] = computed[start + i];
+            ComputeNormals(_positions, _indices, _normalScratch);
+            int at = 0;
+            foreach (var part in parts)
+            {
+                if (part.Normals == null || part.Normals.Length != part.Positions.Length)
+                    Array.Copy(_normalScratch, at, _normals, at, part.Positions.Length);
+                at += part.Positions.Length;
+            }
         }
-
-        return new MeshGeometry
-        {
-            Positions = positions,
-            Normals = normals,
-            Indices = indices,
-            Uvs = uvs,
-        };
     }
 
     public static Vector3[] ComputeNormals(Vector3[] positions, int[] indices)
     {
         var normals = new Vector3[positions.Length];
+        ComputeNormals(positions, indices, normals);
+        return normals;
+    }
+
+    public static void ComputeNormals(Vector3[] positions, int[] indices, Vector3[] normals)
+    {
+        Array.Clear(normals);
         for (int t = 0; t + 2 < indices.Length; t += 3)
         {
             int a = indices[t], b = indices[t + 1], c = indices[t + 2];
@@ -98,14 +117,26 @@ internal sealed class MeshGeometry
             float length = normals[i].Length();
             normals[i] = length > 0.000001f ? normals[i] / length : new Vector3(0, 0, 1);
         }
-        return normals;
     }
 
-    public float[] Pack() => PackVertices(Positions, Normals);
+    public float[] Pack()
+    {
+        var packed = new float[Positions.Length * FloatsPerVertex];
+        PackVertices(Positions, Normals, packed);
+        return packed;
+    }
+
+    public void PackInto(float[] packed) => PackVertices(_positions, _normals, packed);
 
     public static float[] PackVertices(Vector3[] positions, Vector3[] normals)
     {
         var packed = new float[positions.Length * FloatsPerVertex];
+        PackVertices(positions, normals, packed);
+        return packed;
+    }
+
+    public static void PackVertices(Vector3[] positions, Vector3[] normals, float[] packed)
+    {
         for (int i = 0; i < positions.Length; i++)
         {
             int at = i * FloatsPerVertex;
@@ -118,6 +149,5 @@ internal sealed class MeshGeometry
             packed[at + 4] = normal.Y;
             packed[at + 5] = normal.Z;
         }
-        return packed;
     }
 }

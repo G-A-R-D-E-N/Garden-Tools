@@ -233,6 +233,12 @@ public partial class MainWindow : Window
     private int _viewportMeshVersion;
     private string _meshMode = MeshModeShaded;
     private double _meshSkinMilliseconds;
+    private readonly List<MeshPart> _meshParts = new();
+    private readonly List<SkinnedMesh.SkinScratch> _meshSkins = new();
+    private (System.Numerics.Vector3 A, System.Numerics.Vector3 B)[] _meshSegments =
+        Array.Empty<(System.Numerics.Vector3, System.Numerics.Vector3)>();
+    private int _meshSegmentCount;
+    private readonly System.Diagnostics.Stopwatch _meshSkinClock = new();
 
     private readonly TextBox _projectSearchText =
         Ux.Field("name, class, event, variable, animation or field", 360);

@@ -217,10 +217,19 @@ public partial class SkeletonView : Control
         v == 0 ? "0.00" : v.ToString("0.00", CultureInfo.InvariantCulture);
 
     private (Vector3 A, Vector3 B)[]? _mesh;
+    private int _meshCount;
 
     public void ShowMesh((Vector3 A, Vector3 B)[]? segments)
     {
         _mesh = segments;
+        _meshCount = segments?.Length ?? 0;
+        InvalidateVisual();
+    }
+
+    public void ShowMesh((Vector3 A, Vector3 B)[]? segments, int count)
+    {
+        _mesh = segments;
+        _meshCount = count;
         InvalidateVisual();
     }
 

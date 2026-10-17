@@ -225,7 +225,7 @@ public sealed class Viewport3DTests
         shape.BoneNames.Add("Middle_skin");
         shape.BoneNames.Add("TipSpur");
 
-        int approximated = MainWindow.ResolveSkinBoneNames(shape, rig);
+        int approximated = MainWindow.ApproximateHelperBoneInterim(shape, rig);
 
         Assert.Equal(1, approximated);
         Assert.Equal("Middle", shape.BoneNames[0]);
@@ -247,7 +247,7 @@ public sealed class Viewport3DTests
     }
 
     [Fact]
-    public void AnUnmatchedBoneKeepsItsWholeWeightShareOfTheRestPosition()
+    public void AnUnmatchedBoneKeepsItsWholeWeightShareOfThisFramesPlacement()
     {
         var (skeleton, pose) = TwoBoneRig();
         var shape = SkinShape(new Vector3(10, 0, 0), ("Middle", 1f), ("Spur_skin", 1f));
@@ -255,9 +255,155 @@ public sealed class Viewport3DTests
 
         var moved = SkinnedMesh.Pose(shape, binding, pose, skeleton);
 
-        Assert.Equal(20, moved[0].X, 3);
+        Assert.Equal(30, moved[0].X, 3);
         Assert.Equal(0, moved[0].Y, 3);
         Assert.Equal(0, moved[0].Z, 3);
+    }
+
+    [Fact]
+    public void AHalfMatchedVertexTravelsWithThePosedBone()
+    {
+        var (skeleton, opening) = TwoBoneRig();
+        var shape = SkinShape(new Vector3(10, 0, 0), ("Middle", 0.5f), ("Spur_skin", 0.5f));
+        var binding = SkinnedMesh.Bind(shape, skeleton);
+
+        var travelled = new AnimationPose.Pose();
+        travelled.Bones.Add(new AnimationPose.Bone(0, "Root", -1, new Vector3(100, 0, 0), Quaternion.Identity));
+        travelled.Bones.Add(new AnimationPose.Bone(1, "Middle", 0, new Vector3(120, 0, 0), Quaternion.Identity));
+
+        var still = SkinnedMesh.Pose(shape, binding, opening, skeleton);
+        var moved = SkinnedMesh.Pose(shape, binding, travelled, skeleton);
+
+        Assert.Equal(30, still[0].X, 3);
+        Assert.Equal(130, moved[0].X, 3);
+        Assert.Equal(100, moved[0].X - still[0].X, 3);
+    }
+
+    [Fact]
+    public void NonFiniteWeightsAreTreatedAsZero()
+    {
+        var (skeleton, pose) = TwoBoneRig();
+        var shape = SkinShape(new Vector3(10, 0, 0), ("Middle", float.PositiveInfinity), ("Spur_skin", 1f));
+        var binding = SkinnedMesh.Bind(shape, skeleton);
+
+        var infinite = SkinnedMesh.Pose(shape, binding, pose, skeleton);
+        shape.BoneWeights[0] = float.NaN;
+        var notANumber = SkinnedMesh.Pose(shape, binding, pose, skeleton);
+
+        Assert.True(float.IsFinite(infinite[0].X));
+        Assert.True(float.IsFinite(notANumber[0].X));
+        Assert.Equal(30, infinite[0].X, 3);
+        Assert.Equal(30, notANumber[0].X, 3);
+    }
+
+    [Fact]
+    public void SkinningFillsAReusedVertexBufferInPlace()
+    {
+        var (skeleton, pose) = TwoBoneRig();
+        var shape = SkinShape(new Vector3(10, 0, 0), ("Middle", 1f));
+        var binding = SkinnedMesh.Bind(shape, skeleton);
+        var scratch = new SkinnedMesh.SkinScratch();
+        var buffer = Array.Empty<Vector3>();
+
+        buffer = SkinnedMesh.Pose(shape, binding, pose, skeleton, buffer, scratch);
+        var first = buffer;
+        buffer = SkinnedMesh.Pose(shape, binding, pose, skeleton, buffer, scratch);
+
+        Assert.Same(first, buffer);
+        Assert.Equal(30, buffer[0].X, 3);
+    }
+
+    [Fact]
+    public void TheGlStateResetZeroesEveryIdentifierAndLocation()
+    {
+        var state = new ViewportGlState
+        {
+            MeshProgram = 3,
+            MeshVao = 4,
+            MeshVbo = 5,
+            MeshEbo = 6,
+            MeshViewProj = 7,
+            MeshModel = 8,
+            MeshKey = 9,
+            MeshFill = 10,
+            MeshBase = 11,
+            LineProgram = 12,
+            GridVao = 13,
+            GridVbo = 14,
+            LineViewProj = 15,
+            LineModel = 16,
+            LineBase = 17,
+            GridVertices = 44,
+            GridExtent = 12.5f,
+            MeshIndexCount = 8094,
+            UploadedVersion = 42,
+            UploadedIndices = new[] { 1, 2, 3 },
+            UploadedVertexFloats = 16188,
+        };
+        Assert.True(state.Ready);
+
+        state.Reset();
+
+        Assert.False(state.Ready);
+        Assert.Equal(0u, state.MeshProgram);
+        Assert.Equal(0u, state.MeshVao);
+        Assert.Equal(0u, state.MeshVbo);
+        Assert.Equal(0u, state.MeshEbo);
+        Assert.Equal(-1, state.MeshViewProj);
+        Assert.Equal(-1, state.MeshModel);
+        Assert.Equal(-1, state.MeshKey);
+        Assert.Equal(-1, state.MeshFill);
+        Assert.Equal(-1, state.MeshBase);
+        Assert.Equal(0u, state.LineProgram);
+        Assert.Equal(0u, state.GridVao);
+        Assert.Equal(0u, state.GridVbo);
+        Assert.Equal(-1, state.LineViewProj);
+        Assert.Equal(-1, state.LineModel);
+        Assert.Equal(-1, state.LineBase);
+        Assert.Equal(0, state.GridVertices);
+        Assert.Equal(0f, state.GridExtent);
+        Assert.Equal(0u, state.MeshIndexCount);
+        Assert.Equal(-1, state.UploadedVersion);
+        Assert.Same(Array.Empty<int>(), state.UploadedIndices);
+        Assert.Equal(-1, state.UploadedVertexFloats);
+    }
+
+    [Fact]
+    public void FramesKeepTheSameIndexArrayButANewMeshDoesNot()
+    {
+        var parts = new List<MeshPart>
+        {
+            new()
+            {
+                Positions = new[] { new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0) },
+                Indices = new[] { 0, 1, 2 },
+            },
+        };
+
+        var geometry = MeshGeometry.FromParts(parts);
+        var uploaded = geometry.Indices;
+        geometry.Refresh(parts);
+        Assert.Same(uploaded, geometry.Indices);
+
+        var state = new ViewportGlState { UploadedIndices = uploaded };
+        Assert.True(ReferenceEquals(geometry.Indices, state.UploadedIndices));
+
+        var second = MeshGeometry.FromParts(parts);
+        Assert.False(ReferenceEquals(second.Indices, state.UploadedIndices));
+    }
+
+    [Fact]
+    public void AZeroProgramIdentifierIsRebuiltInsteadOfReused()
+    {
+        int builds = 0;
+        uint built = ViewportGlState.EnsureProgram(0, () => { builds++; return 21; });
+        uint kept = ViewportGlState.EnsureProgram(built, () => { builds++; return 22; });
+        uint rebuilt = ViewportGlState.EnsureProgram(0, () => { builds++; return 23; });
+
+        Assert.Equal(21u, built);
+        Assert.Equal(21u, kept);
+        Assert.Equal(23u, rebuilt);
+        Assert.Equal(2, builds);
     }
 
     [Fact]

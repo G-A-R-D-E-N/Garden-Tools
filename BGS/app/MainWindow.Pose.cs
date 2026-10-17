@@ -155,10 +155,13 @@ public partial class MainWindow : Window
             var nif = NifFile.Read(path);
             foreach (var shape in NifGeometry.Shapes(nif))
             {
-                approximated += ResolveSkinBoneNames(shape, skeleton);
+                approximated += ApproximateHelperBoneInterim(shape, skeleton);
                 var binding = SkinnedMesh.Bind(shape, skeleton);
                 _meshShapes.Add((shape, binding, SkinnedMesh.Edges(shape)));
-                _meshTriangles.Add(shape.Indices.ToArray());
+                int[] indices = shape.Indices.ToArray();
+                _meshTriangles.Add(indices);
+                _meshParts.Add(new MeshPart { Indices = indices });
+                _meshSkins.Add(new SkinnedMesh.SkinScratch());
             }
         }
         catch (Exception ex)
@@ -191,8 +194,8 @@ public partial class MainWindow : Window
             report += $"   {missing.Count} bone{(missing.Count == 1 ? "" : "s")} did not match this " +
                       $"skeleton: {string.Join(", ", missing.Take(6))}" +
                       (missing.Count > 6 ? ", and more" : "") +
-                      ". Those bones keep their whole weight, so a vertex weighted only to them holds its " +
-                      "rest position instead of riding the bones that did match.";
+                      ". Those bones keep their whole weight, so a vertex weighted only to them follows " +
+                      "this frame's placement of the bones that did match.";
         if (approximated > 0)
             report += $"   {approximated} helper bone{(approximated == 1 ? "" : "s")} approximated by " +
                       "their parent bone.";
@@ -205,7 +208,7 @@ public partial class MainWindow : Window
         return true;
     }
 
-    internal static int ResolveSkinBoneNames(NifShape shape, HkxSkeleton skeleton)
+    internal static int ApproximateHelperBoneInterim(NifShape shape, HkxSkeleton skeleton)
     {
         var known = new HashSet<string>(skeleton.BoneNames, StringComparer.OrdinalIgnoreCase);
         int approximated = 0;
@@ -225,6 +228,9 @@ public partial class MainWindow : Window
     {
         _meshShapes.Clear();
         _meshTriangles.Clear();
+        _meshParts.Clear();
+        _meshSkins.Clear();
+        _meshSegmentCount = 0;
         _meshPath = "";
         _skeleton.ShowMesh(null);
         SetViewportMesh(null);
@@ -239,25 +245,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        var segments = new List<(System.Numerics.Vector3, System.Numerics.Vector3)>();
-        var parts = new List<MeshPart>(_meshShapes.Count);
+        _meshSkinClock.Restart();
+        int segmentAt = 0;
 
         for (int i = 0; i < _meshShapes.Count; i++)
         {
             var (shape, binding, edges) = _meshShapes[i];
-            var posed = SkinnedMesh.Pose(shape, binding, pose, skeleton);
-            foreach (var (from, to) in edges) segments.Add((posed[from], posed[to]));
-            parts.Add(new MeshPart
-            {
-                Positions = posed,
-                Indices = i < _meshTriangles.Count ? _meshTriangles[i] : shape.Indices.ToArray(),
-            });
+            var part = _meshParts[i];
+            part.Positions = SkinnedMesh.Pose(shape, binding, pose, skeleton, part.Positions, _meshSkins[i]);
+
+            if (segmentAt + edges.Count > _meshSegments.Length)
+                Array.Resize(ref _meshSegments, Math.Max(64, (segmentAt + edges.Count) * 2));
+
+            foreach (var (from, to) in edges)
+                _meshSegments[segmentAt++] = (part.Positions[from], part.Positions[to]);
         }
 
-        _meshSkinMilliseconds = clock.Elapsed.TotalMilliseconds;
-        _skeleton.ShowMesh(segments.ToArray());
-        SetViewportMesh(MeshGeometry.FromParts(parts));
+        _meshSegmentCount = segmentAt;
+        _meshSkinMilliseconds = _meshSkinClock.Elapsed.TotalMilliseconds;
+        _skeleton.ShowMesh(_meshSegments, _meshSegmentCount);
+        UpdateViewportGeometry();
     }
 
     private void ClearPose()

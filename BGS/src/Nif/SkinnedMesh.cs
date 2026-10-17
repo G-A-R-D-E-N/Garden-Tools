@@ -27,6 +27,12 @@ public static class SkinnedMesh
               (Unmatched.Count > 6 ? $", and {Unmatched.Count - 6} more" : "");
     }
 
+    public sealed class SkinScratch
+    {
+        public Matrix4x4[] BoneMatrices = Array.Empty<Matrix4x4>();
+        public bool[] BoneUsable = Array.Empty<bool>();
+    }
+
     public static Binding Bind(NifShape shape, HkxSkeleton skeleton)
     {
         var byName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -73,18 +79,32 @@ public static class SkinnedMesh
     }
 
     public static Vector3[] Pose(NifShape shape, Binding binding, AnimationPose.Pose pose,
-                                 HkxSkeleton skeleton)
+                                 HkxSkeleton skeleton) =>
+        Pose(shape, binding, pose, skeleton, Array.Empty<Vector3>(), new SkinScratch());
+
+    public static Vector3[] Pose(NifShape shape, Binding binding, AnimationPose.Pose pose,
+                                 HkxSkeleton skeleton, Vector3[] moved, SkinScratch scratch)
     {
-        var moved = new Vector3[shape.Vertices.Count];
+        int vertexCount = shape.Vertices.Count;
+        if (moved.Length != vertexCount) moved = new Vector3[vertexCount];
+
         if (!shape.IsSkinned || shape.SkinToBone.Count != shape.BoneNames.Count)
         {
-            shape.Vertices.CopyTo(moved);
+            shape.Vertices.CopyTo(moved, 0);
             return moved;
         }
 
-        var boneMatrix = new Matrix4x4[shape.BoneNames.Count];
-        var usable = new bool[shape.BoneNames.Count];
-        for (int b = 0; b < shape.BoneNames.Count; b++)
+        int boneCount = shape.BoneNames.Count;
+        if (scratch.BoneMatrices.Length != boneCount)
+        {
+            scratch.BoneMatrices = new Matrix4x4[boneCount];
+            scratch.BoneUsable = new bool[boneCount];
+        }
+
+        var boneMatrix = scratch.BoneMatrices;
+        var usable = scratch.BoneUsable;
+        Array.Clear(usable);
+        for (int b = 0; b < boneCount; b++)
         {
             int at = binding.ToSkeleton[b];
             if (at < 0 || at >= pose.Bones.Count) continue;
@@ -99,20 +119,19 @@ public static class SkinnedMesh
             usable[b] = true;
         }
 
-        var restFrame = Placement(shape, binding, AnimationPose.ReferencePose(skeleton))
-                        ?? Matrix4x4.Identity;
+        var frame = Placement(shape, binding, pose) ?? Matrix4x4.Identity;
 
         for (int v = 0; v < moved.Length; v++)
         {
             var source = shape.Vertices[v];
-            var resting = Vector3.Transform(source, restFrame);
+            var resting = Vector3.Transform(source, frame);
             var sum = Vector3.Zero;
             float total = 0;
 
             for (int s = 0; s < 4; s++)
             {
                 float weight = shape.BoneWeights[v * 4 + s];
-                if (weight <= 0) continue;
+                if (!float.IsFinite(weight) || weight <= 0) continue;
 
                 total += weight;
 

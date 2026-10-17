@@ -62,12 +62,13 @@ public partial class SkeletonView
                                     Project(_reference.Bones[to].Position));
         }
 
-        if (_mesh is { Length: > 0 } && MeshWireframe)
+        if (_mesh is not null && _meshCount > 0 && MeshWireframe)
         {
             var skin = new StreamGeometry();
             using (var draw = skin.Open())
-                foreach (var (a, b) in _mesh)
+                for (int i = 0; i < _meshCount && i < _mesh.Length; i++)
                 {
+                    var (a, b) = _mesh[i];
                     draw.BeginFigure(Project(a), false);
                     draw.LineTo(Project(b));
                     draw.EndFigure(false);
