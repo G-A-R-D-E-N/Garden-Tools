@@ -45,13 +45,59 @@ public static partial class Smoke
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Shoot(window, playback);
 
+        string posed = PlaybackWithAPosableClip(output);
         CloseForTest(window);
         System.IO.File.Delete(Settings.SettingsPathForTest);
         Settings.SettingsPathForTest = null;
 
         Console.WriteLine(animation);
         Console.WriteLine(playback);
+        Console.WriteLine(posed);
         return 0;
+    }
+
+    private static string PlaybackWithAPosableClip(string output)
+    {
+        string samples = System.IO.Path.Combine(AppContext.BaseDirectory, "samples");
+        string clip = System.IO.Path.Combine(samples, "TurretIdleWeapReady.hkx");
+        string skeleton = System.IO.Path.Combine(samples, "TurretStandingSkeleton.hkx");
+        string target = System.IO.Path.Combine(output, "ui-playback-enabled.png");
+        if (!System.IO.File.Exists(clip) || !System.IO.File.Exists(skeleton)) return target + " (skipped)";
+
+        const string virtualPath = "Meshes/Actors/Turret/Animations/Mounted/Idle_WeapReady.hkx";
+        string root = System.IO.Directory.CreateTempSubdirectory("bgs-shot-pack-").FullName;
+        try
+        {
+            string data = System.IO.Path.Combine(root, "Data");
+            System.IO.Directory.CreateDirectory(data);
+            string archive = System.IO.Path.Combine(data, "Fallout4 - Animations.ba2");
+            WriteArchive(archive, new[]
+            {
+                (virtualPath, System.IO.File.ReadAllBytes(clip)),
+                ("Meshes/Actors/Turret/CharacterAssets/Skeleton.hkx", System.IO.File.ReadAllBytes(skeleton)),
+            });
+            Settings.TrySet("gameDataFolder", data, out _);
+
+            var window = new MainWindow();
+            window.Width = 1280;
+            window.Height = 860;
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.OpenArchiveForTest(archive, virtualPath);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            SelectTab(window, "Playback");
+            window.SelectPlaybackTool(MainWindow.PlaybackOverlaysTool);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Shoot(window, target);
+            CloseForTest(window);
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(root, true); }
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { }
+        }
+        return target;
     }
 
     private static void Shoot(MainWindow window, string path)

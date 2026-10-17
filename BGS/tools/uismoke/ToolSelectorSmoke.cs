@@ -89,6 +89,8 @@ public static class ToolSelectorSmoke
                 Smoke.CheckTrue($"{tool} hides the {other.Tool} panel",
                                 !window.AnimationToolPanelVisible(other.Tool));
             Smoke.CheckTrue($"{tool} shows the {field} box", BoxNamed(window, field));
+            Smoke.CheckTrue($"{tool} captions its panel {tool.ToUpperInvariant()}", CaptionVisible(window, tool));
+            Smoke.CheckTrue($"{tool} panel carries its own automation name", PanelNamed(window, tool));
         }
 
         window.SelectAnimationTool(MainWindow.AnimationTrimTool);
@@ -124,6 +126,8 @@ public static class ToolSelectorSmoke
                 Smoke.CheckTrue($"{tool} hides the {other.Tool} panel",
                                 !window.PlaybackToolPanelVisible(other.Tool));
             Smoke.CheckTrue($"{tool} shows {control}", ControlVisible(window, control));
+            Smoke.CheckTrue($"{tool} captions its panel {tool.ToUpperInvariant()}", CaptionVisible(window, tool));
+            Smoke.CheckTrue($"{tool} panel carries its own automation name", PanelNamed(window, tool));
         }
 
         Smoke.CheckTrue("the transport stays outside the tool panels",
@@ -210,6 +214,13 @@ public static class ToolSelectorSmoke
                             tabs.Bounds.Height > 400);
         }
     }
+
+    private static bool CaptionVisible(MainWindow window, string tool) =>
+        Smoke.Find<TextBlock>(window).Any(block => block.IsEffectivelyVisible &&
+            block.Text == tool.ToUpperInvariant());
+
+    private static bool PanelNamed(MainWindow window, string tool) =>
+        Smoke.Find<Border>(window).Any(border => AutomationProperties.GetName(border) == Ux.ToolPanelName(tool));
 
     private static bool BoxNamed(MainWindow window, string name) =>
         Smoke.Find<TextBox>(window).Any(box => box.IsEffectivelyVisible &&

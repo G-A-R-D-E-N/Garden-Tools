@@ -40,12 +40,7 @@ public partial class MainWindow : Window
         FontSize = 12,
         VerticalAlignment = VerticalAlignment.Center,
     }, "Follow travel");
-    private readonly ComboBox _playbackToolCombo = Ux.Named(
-        new ComboBox
-        {
-            MinWidth = 150, MinHeight = Ux.ControlHeight, Foreground = Ux.CodeBrush, FontSize = 12,
-        },
-        "Playback tool");
+    private readonly ComboBox _playbackToolCombo = Ux.Combo("Playback tool");
     private readonly TextBlock _diagnosticsText = new()
     {
         Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap,
@@ -83,12 +78,13 @@ public partial class MainWindow : Window
             toggle.FontSize = 11;
         }
 
-        Add(PlaybackOverlaysTool, Ux.Panel(PlaybackOverlaysTool, Ux.Wrap(Ux.RowTitle("Overlays"),
+        Add(PlaybackOverlaysTool, Ux.Panel(Ux.ToolPanelName(PlaybackOverlaysTool), Ux.Wrap(Ux.RowTitle("Overlays"),
             _referenceToggle, _travelToggle, _bodiesToggle, _constraintsToggle, _bindingsToggle,
             _physicsSkeletonToggle, _framesToggle, _engineerToggle)));
-        Add(PlaybackSceneTool, Ux.Panel(PlaybackSceneTool, Ux.Wrap(Ux.RowTitle("Scene tools"),
+        Add(PlaybackSceneTool, Ux.Panel(Ux.ToolPanelName(PlaybackSceneTool), Ux.Wrap(Ux.RowTitle("Scene tools"),
             _dropButton, _reloadFromNodeButton, _meshButton, _noMeshButton, _clearFrameDistanceButton)));
-        Add(PlaybackDiagnosticsTool, Ux.Panel(PlaybackDiagnosticsTool, Ux.Wrap(Ux.RowTitle("Diagnostics"),
+        Add(PlaybackDiagnosticsTool, Ux.Panel(Ux.ToolPanelName(PlaybackDiagnosticsTool),
+            Ux.Wrap(Ux.RowTitle("Diagnostics"),
             _copyDiagnosticsButton, _diagnosticsText)));
 
         var top = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
@@ -102,7 +98,7 @@ public partial class MainWindow : Window
         int at = Array.IndexOf(PlaybackToolNames, remembered);
         _playbackToolCombo.SelectedIndex =
             at < 0 ? Array.IndexOf(PlaybackToolNames, PlaybackOverlaysTool) : at;
-        _playbackToolCombo.SelectionChanged += (_, _) => ShowPlaybackTool();
+        _playbackToolCombo.SelectionChanged += (_, _) => ShowPlaybackTool(remember: true);
 
         var host = new StackPanel
         {
@@ -138,11 +134,11 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void ShowPlaybackTool()
+    private void ShowPlaybackTool(bool remember = false)
     {
         string tool = SelectedPlaybackTool;
         foreach (var (name, panel) in _playbackToolPanels) panel.IsVisible = name == tool;
-        Settings.TrySet("playback_tool", tool, out _);
+        if (remember && Settings.Get("playback_tool") != tool) Settings.TrySet("playback_tool", tool, out _);
     }
 
     private void RefreshDiagnosticsPanel()

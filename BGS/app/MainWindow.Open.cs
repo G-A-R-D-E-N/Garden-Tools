@@ -97,6 +97,12 @@ public partial class MainWindow : Window
     }
     private void Load()
     {
+        try { LoadDocument(); }
+        finally { ReleaseScopedGameData(); }
+    }
+
+    private void LoadDocument()
+    {
         string path = (_pathField.Text ?? "").Trim().Trim('"');
         string? virtualPathHint = _pendingVirtualPathHint;
         _pendingVirtualPathHint = null;

@@ -97,14 +97,22 @@ public partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 4,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, ToolGroupGap, 0),
         };
-        row.Children.Add(Ux.RowTitle(title));
+        if (title.Length > 0) row.Children.Add(Ux.RowTitle(title));
         foreach (var control in controls)
         {
             control.VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(control);
         }
         return row;
+    }
+
+    private static Control ToolCount(Control count)
+    {
+        count.VerticalAlignment = VerticalAlignment.Center;
+        count.Margin = new Thickness(10, 0, 0, 0);
+        return count;
     }
 
     private static Control Rows(params (Control Control, bool Fill)[] rows)

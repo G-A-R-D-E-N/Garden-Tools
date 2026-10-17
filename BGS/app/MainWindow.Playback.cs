@@ -396,37 +396,73 @@ public partial class MainWindow : Window
         return _cachedSkeleton;
     }
 
+    private readonly List<GameData> _scopedGameData = new();
+
+    internal static int DataFolderDiscoveriesForTest;
+
     internal HkxSkeleton? ResolveAnimationSkeleton(string animationPath, string? virtualPathHint,
                                                    string? dataFolderHint, string? archiveEntry = null)
     {
         if (_projectChain?.Skeleton is { } fromChain) return fromChain;
-        if (File.Exists(animationPath) && SiblingSkeleton(animationPath) is { } loose) return loose;
 
-        GameData? opened = null;
-        GameData? data = _gameData;
-        if (data == null)
-        {
-            data = opened = DataFolderGameData(dataFolderHint);
-            if (data == null) return null;
-        }
+        bool packedFirst = PackedSiblingFirst(virtualPathHint, animationPath);
+        if (!packedFirst && File.Exists(animationPath) && SiblingSkeleton(animationPath) is { } loose)
+            return loose;
 
-        try
-        {
-            string? entry = archiveEntry ?? PackedAnimationKey(data, animationPath, virtualPathHint);
-            return ArchiveSkeleton(data, entry);
-        }
-        finally { opened?.Dispose(); }
+        string? entry = archiveEntry ?? PackedAnimationKey(_gameData, animationPath, virtualPathHint);
+        HkxSkeleton? packed = _gameData != null
+            ? ArchiveSkeleton(_gameData, entry)
+            : PackedSkeletonFromDataFolders(dataFolderHint, entry);
+        if (packed != null) return packed;
+
+        if (packedFirst && File.Exists(animationPath) && SiblingSkeleton(animationPath) is { } nearby)
+            return nearby;
+        return null;
     }
 
-    private static GameData? DataFolderGameData(string? dataFolderHint)
+    private static bool PackedSiblingFirst(string? virtualPathHint, string animationPath)
     {
+        if (!string.IsNullOrWhiteSpace(virtualPathHint)) return true;
+
+        string root = Path.Combine(Path.GetTempPath(), "BehaviourGraphStudio") + Path.DirectorySeparatorChar;
+        return SafeFullPath(animationPath).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private HkxSkeleton? PackedSkeletonFromDataFolders(string? dataFolderHint, string? entry)
+    {
+        foreach (GameData data in DataFolderCandidates(dataFolderHint))
+        {
+            HkxSkeleton? skeleton = ArchiveSkeleton(data, entry);
+            if (skeleton != null) return skeleton;
+        }
+        return null;
+    }
+
+    private List<GameData> DataFolderCandidates(string? dataFolderHint)
+    {
+        if (_scopedGameData.Count > 0) return _scopedGameData;
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string folder in new[] { dataFolderHint ?? "", Settings.Get("gameDataFolder") })
         {
             if (folder.Length == 0 || !Directory.Exists(folder)) continue;
-            try { return GameData.Discover(folder); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            string full = SafeFullPath(folder);
+            if (full.Length == 0 || !seen.Add(full)) continue;
+            try
+            {
+                GameData discovered = GameData.Discover(full);
+                DataFolderDiscoveriesForTest++;
+                _scopedGameData.Add(discovered);
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { }
         }
-        return null;
+        return _scopedGameData;
+    }
+
+    private void ReleaseScopedGameData()
+    {
+        foreach (GameData data in _scopedGameData) data.Dispose();
+        _scopedGameData.Clear();
     }
 
     private void LoadPoseFromSelection(bool announce)
@@ -496,6 +532,13 @@ public partial class MainWindow : Window
     {
         if (_poseSource == key) return;
 
+        try { LoadPoseBody(hkx, key, label, source, archiveEntry, dataFolderHint); }
+        finally { ReleaseScopedGameData(); }
+    }
+
+    private void LoadPoseBody(byte[] hkx, string key, string label, string source, string? archiveEntry,
+                              string dataFolderHint)
+    {
         Stop();
         bool foreign = !string.Equals(SafeFullPath(_hkxPath), SafeFullPath(key), StringComparison.OrdinalIgnoreCase);
         if (foreign) ClearPhysicsReport();

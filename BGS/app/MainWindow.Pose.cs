@@ -459,6 +459,8 @@ public partial class MainWindow : Window
     public void LoadPoseFrom(string animationPath) => LoadPose(animationPath, Path.GetFileName(animationPath));
     public bool PoseAnimationLoaded => _poseAnimation != null;
     public string PoseSourceForTest => _poseSource;
+
+    public HkxSkeleton? PoseSkeletonForTest => _poseSkeleton;
     public string PoseRefusalForTest => _poseRefusal;
     public bool TransportEnabledForTest => _playButton.IsEnabled;
     public bool PlayButtonEnabledForTest => _playButton.IsEnabled;

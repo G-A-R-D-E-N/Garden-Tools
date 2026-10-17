@@ -51,7 +51,7 @@ public sealed class EditorShell : Grid
     private readonly ScrollViewer _toolbarScroll = new()
     {
         AllowAutoHide = false,
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
         VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
     };
     private readonly StackPanel _tools = new()

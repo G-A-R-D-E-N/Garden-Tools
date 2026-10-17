@@ -3248,7 +3248,3 @@ public static partial class Smoke
     }
 }
 
-public class HeadlessApp : Application
-{
-    public override void Initialize() => Styles.Add(new Avalonia.Themes.Fluent.FluentTheme());
-}

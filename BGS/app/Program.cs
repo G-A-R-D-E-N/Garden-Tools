@@ -10,7 +10,7 @@ namespace BehaviourStudio.App;
 
 public class App : Application
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
+    public override void Initialize() => Ux.Install(this);
 
     public static MainWindow CreateMainWindow()
     {

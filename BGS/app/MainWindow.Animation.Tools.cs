@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     internal const string AnimationLoopTool = "Loop";
 
     internal const double ToolPanelWidth = 1180;
+    private const double ToolGroupGap = 18;
 
     internal static readonly string[] AnimationToolNames =
     {
@@ -24,12 +25,7 @@ public partial class MainWindow : Window
     };
 
     private readonly Button _saveAnimationButton = Ux.Secondary("Save changes");
-    private readonly ComboBox _animationToolCombo = Ux.Named(
-        new ComboBox
-        {
-            MinWidth = 150, MinHeight = Ux.ControlHeight, Foreground = Ux.CodeBrush, FontSize = 12,
-        },
-        "Animation tool");
+    private readonly ComboBox _animationToolCombo = Ux.Combo("Animation tool");
     private readonly Dictionary<string, Border> _animationToolPanels = new(StringComparer.Ordinal);
     private readonly Dictionary<string, StackPanel> _geometryAnswerSlots = new(StringComparer.Ordinal);
 
@@ -68,19 +64,19 @@ public partial class MainWindow : Window
         var retimeSlot = new StackPanel();
         var loopSlot = new StackPanel();
 
-        Add(AnimationFindTool, Ux.Panel(AnimationFindTool, Ux.Wrap(Ux.RowTitle("Find frame"),
+        Add(AnimationFindTool, Ux.Panel(Ux.ToolPanelName(AnimationFindTool), Ux.Wrap(Ux.RowTitle("Find frame"),
             Ux.Labelled(_boneFilter, "Bone or track name"), Ux.Labelled(_fraction, "Time fraction"), aim,
             _fractionAnswer)));
-        Add(AnimationEditTool, Ux.Panel(AnimationEditTool, Ux.Wrap(Ux.RowTitle("Edit selected frame"),
+        Add(AnimationEditTool, Ux.Panel(Ux.ToolPanelName(AnimationEditTool), Ux.Wrap(Ux.RowTitle("Edit frame"),
             Ux.Labelled(_framePosition, "Frame position"), Ux.Labelled(_frameRotation, "Frame rotation"),
             Ux.Labelled(_frameScale, "Frame scale"), apply, _frameEditAnswer)));
-        Add(AnimationTrimTool, Ux.Panel(AnimationTrimTool, Ux.Wrap(Ux.RowTitle("Trim frames"),
+        Add(AnimationTrimTool, Ux.Panel(Ux.ToolPanelName(AnimationTrimTool), Ux.Wrap(Ux.RowTitle("Trim"),
             Ux.Labelled(_trimStart, "First frame"), Ux.Labelled(_trimEnd, "Last frame"),
             geometry.PreviewTrim, geometry.Trim, trimSlot)));
-        Add(AnimationRetimeTool, Ux.Panel(AnimationRetimeTool, Ux.Wrap(Ux.RowTitle("Retime"),
+        Add(AnimationRetimeTool, Ux.Panel(Ux.ToolPanelName(AnimationRetimeTool), Ux.Wrap(Ux.RowTitle("Retime"),
             Ux.Labelled(_retimeSpeed, "Speed ×"), Ux.Labelled(_retimeDuration, "New length (s)"),
             geometry.PreviewRetime, geometry.Retime, retimeSlot)));
-        Add(AnimationLoopTool, Ux.Panel(AnimationLoopTool, Ux.Wrap(Ux.RowTitle("Loop"),
+        Add(AnimationLoopTool, Ux.Panel(Ux.ToolPanelName(AnimationLoopTool), Ux.Wrap(Ux.RowTitle("Loop"),
             Ux.Labelled(_loopBlend, "Blend frames"), geometry.PreviewLoop, geometry.Loop, loopSlot)));
 
         _geometryAnswerSlots[AnimationTrimTool] = trimSlot;
@@ -88,16 +84,16 @@ public partial class MainWindow : Window
         _geometryAnswerSlots[AnimationLoopTool] = loopSlot;
 
         var top = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
-        top.Children.Add(ToolRow("Frame navigation", first, earlier, later, last, _framePage));
+        top.Children.Add(ToolRow("Frame navigation", first, earlier, later, last, ToolCount(_framePage)));
         top.Children.Add(ToolRow("Tool", _animationToolCombo));
-        top.Children.Add(ToolRow("Save", _saveAnimationButton));
+        top.Children.Add(ToolRow("", _saveAnimationButton));
 
         _animationToolCombo.ItemsSource = AnimationToolNames;
         string remembered = Settings.Get("animation_tool");
         int at = Array.IndexOf(AnimationToolNames, remembered);
         _animationToolCombo.SelectedIndex =
             at < 0 ? Array.IndexOf(AnimationToolNames, AnimationEditTool) : at;
-        _animationToolCombo.SelectionChanged += (_, _) => ShowAnimationTool();
+        _animationToolCombo.SelectionChanged += (_, _) => ShowAnimationTool(remember: true);
 
         var host = new StackPanel
         {
@@ -132,7 +128,7 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void ShowAnimationTool()
+    private void ShowAnimationTool(bool remember = false)
     {
         string tool = SelectedAnimationTool;
         foreach (var (name, panel) in _animationToolPanels) panel.IsVisible = name == tool;
@@ -144,15 +140,14 @@ public partial class MainWindow : Window
             slot.Children.Add(_geometryAnswer);
         }
 
-        Settings.TrySet("animation_tool", tool, out _);
+        if (remember && Settings.Get("animation_tool") != tool) Settings.TrySet("animation_tool", tool, out _);
     }
 
     private void RefreshSaveAnimationState()
     {
         bool dirty = _animationEdited && !_readOnly && _animationData != null;
         _saveAnimationButton.IsEnabled = dirty;
-        _saveAnimationButton.Background = dirty ? Ux.AccentBrush : Ux.CardBrush;
-        _saveAnimationButton.Foreground = dirty ? Brushes.White : Ux.MetaBrush;
+        _saveAnimationButton.Classes.Set("primary", dirty);
 
         string why = dirty
             ? "Write the clip on the Animation tab back to " + System.IO.Path.GetFileName(_hkxPath) + "."
@@ -166,6 +161,5 @@ public partial class MainWindow : Window
 
     internal bool SaveAnimationButtonEnabled => _saveAnimationButton.IsEnabled;
 
-    internal bool SaveAnimationButtonIsPrimary =>
-        _saveAnimationButton.Background is ISolidColorBrush brush && brush.Color == Ux.Accent;
+    internal bool SaveAnimationButtonIsPrimary => _saveAnimationButton.Classes.Contains("primary");
 }
