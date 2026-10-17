@@ -845,11 +845,12 @@ output, which prints both the absolute error and its fraction of the extent.
 ## BGS/src/Hkx/RagdollDocument.cs — ragdoll value write-back (#671)
 
 `RagdollDocument` edits the values inside a file's `hknpRagdollData` ragdolls and writes them back into the
-packfile in place. `symrm ragdoll <file> [--set <field>:<index>=<values>] [--out <file>] [--force]
+packfile in place. `symrm ragdoll <file> [--set <field>:<index>=<values>] [--set ragdoll=<i>] [--out <file>] [--force]
 [--allow-shared-material] [--data <folder>]` is its user-facing surface
-(`BGS/tools/symrm/RagdollCli.cs:Ragdoll`), the rig physics tab's masses and joint limits save through it
-(`BGS/app/RigAuthoringWindow.Physics.cs:SaveRagdollValues`), and
-`BGS/tools/tests/RagdollDocumentTests.cs` (`26` tests) covers it. The model and the class-table offset helpers live in `BGS/src/Hkx/RagdollModel.cs`, the
+(`BGS/tools/symrm/RagdollCli.cs:Ragdoll`), the rig physics tab's masses, material friction and joint limits
+save through it (`BGS/app/RigAuthoringWindow.Physics.cs:SaveRagdollValues`), and
+`BGS/tools/tests/RagdollDocumentTests.cs` (`25` tests) with `BGS/tools/tests/RagdollShapeTests.cs` (`13`
+tests) and `BGS/tools/tests/RagdollCliTests.cs` (`8` tests) covers it. The model and the class-table offset helpers live in `BGS/src/Hkx/RagdollModel.cs`, the
 packfile reader in `BGS/src/Hkx/RagdollReader.cs` and the value writer in `BGS/src/Hkx/RagdollWriteback.cs`.
 
 **Layout provenance.** The offsets below come from the Fallout4.exe 1.10.163 class dumps
@@ -870,7 +871,10 @@ An `hkArray<T>` in a 64-bit packfile is a data pointer at the member offset with
 `inverseInertiaLocal` vector4 @32, `centerOfMassWorld` vector4 @48; `hknpBodyCinfo.shape` ptr @0,
 `motionId` u32 @12, `qualityId` u8 @16, `materialId` u16 @18, `collisionFilterInfo` u32 @20;
 `hknpMaterial.dynamicFriction` half @18, `staticFriction` half @20, `restitution` half @22 and
-`isShared` bool @72; `hknpShape.convexRadius` real @20; `hknpCapsuleShape.a` vector4 @80 and `b` @96.
+`isShared` bool @72; `hknpShape.convexRadius` real @20 and `properties` pointer @32;
+`hknpConvexShape.vertices` relarray @48; `hknpConvexPolytopeShape.planes` relarray @64, `faces` relarray @68
+and `indices` relarray @72 (`hknpConvexPolytopeShapeFace` 4 B, `firstIndex` u16 @0, `numIndices` u8 @2,
+`minHalfAngle` u8 @3); `hknpCapsuleShape.a` vector4 @80 and `b` @96.
 A ragdoll constraint's atoms are an embedded struct at @32: `angFriction.maxFrictionTorque` at atoms+256+8,
 `twistLimit` min/max at atoms+272+8 and +12, `coneLimit` at atoms+304+8 and +12, `planesLimit` at
 atoms+336+8 and +12. A limited hinge's atoms are at @32 too, with `angFriction.maxFrictionTorque` at
@@ -879,19 +883,57 @@ neither table has an `hkpPlanesLimitConstraintAtom` class, because `hkpRagdollCo
 is typed `hkpConeLimitConstraintAtom`; its min/max are still the `ConeLimit` atom's, so the code asks the
 class table for the member's own ctype instead of assuming a class name.
 
-**What is editable, and what is refused.** Body mass, centre of mass, material friction and restitution,
-capsule radius and endpoints, and a constraint's twist, plane and cone limits and angular friction. The
-mass is stored as the file's inverse mass and the body's `inverseInertiaLocal` is **scaled by the mass
-ratio** `newInverseMass / oldInverseMass` — that is `oldMass / newMass` — because a rigid body's inertia
-tensor is proportional to its mass while its shape is unchanged; a body whose stored inverse mass is zero
-or non-finite is refused rather than given an inertia that no measurement supports. Friction writes both
-`dynamicFriction` and `staticFriction` (the class table gives one value each, so they move together) and
-restitution writes `restitution`, all at the class's half precision, and the model stores the
-half-rounded value so a write and a read-back compare exactly. A material that more than one body in the
-same ragdoll names, or that the file itself flags `isShared`, is refused unless `allowShared` is passed,
-because the change would reach every body that names it.
+**A capsule is not only `a`, `b` and a radius.** Every one of the `933` capsule shapes on the vanilla install
+carries a non-empty polytope: `7` vertices, `7` planes, `5` faces and `23` indices each, with `0` empty
+arrays anywhere. Those arrays are derived, not incidental. Every one of the `6531` vertices sits at a
+distance `radius / 99 * sqrt(3)` from its nearest endpoint (`a` for `3` of the `7`, `b` for the other `4`),
+the worst absolute error over the whole corpus being `0.00002`, and the component along the segment is
+`radius / 99` to within `0.00004`; `radius / 99` is the same constant for every shape, and the index array is
+a single payload shared by all `933` while the face array has two payloads (`882` and `51` shapes, the same
+split as the `properties` pointer below). What the arrays mean in full — the frame convention that places the
+two boxes, the winding of the `23` indices, the `0.5` in each vertex's `w` lane, each face's `minHalfAngle` —
+is not proven, so this build cannot recompute them from new endpoints. `SetShapeRadius`, `SetCapsuleEndpoints`
+and `RagdollWriteback.WriteShape` therefore refuse capsule geometry on a shape that carries them, naming the
+counts, and `symrm ragdoll --set radius:...` and `--set capsule:...` fail with that message rather than
+writing a radius or an endpoint the polytope no longer matches. Capsule geometry in the shipped game is
+therefore not editable here; that is what the measurement supports, and it is not a limitation that can be
+lifted by ignoring the arrays. `hknpShape.properties` is the other half of the same problem. On the vanilla install `882` of the `933`
+capsules point it at an `hkRefCountedProperties` object and the other `51` point at nothing, and the
+committed fixture, which holds `19` capsules, carries `19` `hkRefCountedProperties` and `19`
+`hknpShapeMassProperties` objects beside them: each capsule's properties pointer resolves to the container,
+with a `hknpShapeMassProperties` object next to it. Whether those objects encode a mass or an inertia
+computed from `a`, `b` and the radius is not established by this measurement, so this build does **not** claim
+they are independent and never reasons about or writes them. The refusal above is what keeps them consistent:
+a shape whose endpoints and radius cannot change cannot have stale properties either. A shape that carries no
+vertices, planes, faces or indices would still have its `a`, `b` and radius written, and its property objects
+would then be the same open question — no vanilla shape exercises that path.
 
-Everything else is refused by construction or by the writer. There is no method that adds or removes a
+**What is editable, and what is refused.** Body mass, centre of mass, material friction and restitution, and
+a constraint's twist, plane and cone limits and angular friction. The mass is stored as the file's inverse
+mass and the body's `inverseInertiaLocal` is **scaled by the mass ratio** `newInverseMass / oldInverseMass` —
+that is `oldMass / newMass` — because a rigid body's inertia tensor is proportional to its mass while its
+shape is unchanged; a body whose stored inverse mass is zero or non-finite is refused rather than given an
+inertia that no measurement supports. `SetMaterialFriction` takes the dynamic and static values separately
+(`symrm ragdoll --set material:<i>=<dynamic>,<static>`; one value sets both) and writes only the lane that
+actually changed, because the model stores the half-rounded value each lane already holds and the writer
+compares field by field; `--set restitution:<i>=<value>` is its own field rather than a second material
+value. A material that more than one body in the same ragdoll names, or that the file itself flags `isShared`,
+is refused unless `allowShared` is passed, because the change would reach every body that names it.
+`SetConstraintLimits` writes **only the twist atom** of a ragdoll constraint (`twistLimit`) or the angular
+limit of a limited hinge (`angLimit`); plane limits are written only by `SetConstraintPlaneLimits` and
+`--set plane:<i>=<min,max>`, and the UI text says the same.
+
+**Cone and plane atoms are written only in the modes the game uses.** All `666` `coneLimit` atoms on the
+vanilla install carry `angleMeasurementMode` `0` and all `666` `planesLimit` atoms (typed
+`hkpConeLimitConstraintAtom` as well) carry mode `1`, with `0` of either using anything else. A cone edit is
+refused unless the stored mode is `0`, and a plane edit unless it is `1`, in the document and again in the
+writer, naming the mode it found; `symrm ragdoll` prints both modes for every constraint it lists. The cone's
+`minAngle` is left exactly as the file has it: all `666` vanilla cones store `-100` there, a sentinel rather
+than an angle, so the editor writes only `maxAngle`. The plane's minimum and maximum are real values in every
+vanilla file and are not mirrored around zero (the distinct `minAngle` values reach `-1.5708` and the distinct
+`maxAngle` values reach `1.5708`), so both are written when that limit is edited.
+
+Everything else is refused by construction or by the writer, capsule geometry outright as above. There is no method that adds or removes a
 body, shape or constraint — the writer separately refuses a model whose array count differs from the
 file's, with "rows are never added or removed" — and no method writes `collisionFilterInfo`, `qualityId`,
 `motionId`, `reservedBodyId`, body flags, position, orientation, `localFrame`, `motionPropertiesId`,
@@ -907,7 +949,10 @@ then refuses the result unless `RequireConfined` finds every changed byte inside
 `PackfileImage.Rebuild` reproduces the file. The fixup order is never rewritten — there is no
 `FixupOrder.Reorder` call and nothing is appended or relocated, because a value edit does not move
 anything — and the produced bytes are re-read through the reader and must match the model, field for
-field, or nothing is returned at all.
+field, or nothing is returned at all. `WriteShape` refuses a shape whose `a`, `b` or radius differs while
+either the model or the file says it carries vertices, planes, faces or indices, so no value write can leave a
+derived array stale, and `RagdollShape.SameAs` compares those four counts as well, so the read-back verify
+would catch a stale array too.
 
 `RagdollDocument.ForceRebuild` is the honest test of that path: it hands the writer a no-op change for
 every ragdoll and every shape, so storage location, the field pass, the confinement checks, the rebuild and
@@ -917,6 +962,29 @@ which is why the forced rebuild, not that shortcut, is what the corpus figure me
 `FileSafety.ReplaceChecked` with the source stamp, like the other documents, so the original is kept as a
 `.bak` and an external change is refused.
 
+**One command, one document.** `symrm ragdoll` selects the ragdoll with `--set ragdoll=<i>`. When the file
+holds exactly one ragdoll the selector is optional; with more than one, an edit that names a row refuses until
+it is given, with the count in the message. Every edit goes into one `RagdollDocument` and the produced bytes
+are read back **once**: `VerifyRagdollEdits` builds a single document and compares every ragdoll's motions,
+materials and constraints and every shape, so a file with several ragdolls is checked in full rather than only
+at index `0`. `--out` equal to the file being read is still refused without `--force`; with `--force` it goes
+through `FileSafety.ReplaceChecked` with the source stamp, exactly like the UI, so the version that was read
+is kept as `<name>.bak` and an external change is refused rather than overwritten. `--data` sweeps a whole
+Data folder the same way and uses the first ragdoll that actually holds the row it edits, reporting skipped
+rows rather than assuming index `0`.
+
+**The window's own paths.** The physics tab writes masses, material friction and joint limits through the
+document's bulk methods `SetBodyMasses` and `SetConstraintLimits(int, IReadOnlyList<RagdollLimitEdit>)`, which
+validate every row before changing anything and report the rows the ragdoll does not hold as `Skipped` instead
+of failing halfway; the window uses the ragdoll its own selector shows, adds a row to the simulation only when
+it was applied, and says how many were skipped. Material friction is its own row with dynamic and static
+fields and an `Allow shared material` box, echoing the half-rounded values stored. `Revert ragdoll values`
+reloads the document's own source bytes (`RagdollDocument.SourceBytes`), clears the simulation masses and
+preview joints and rebuilds the physics preview from those bytes, and its message says the bytes it went back
+to rather than a file on disk it may never have written. Opening another skeleton or skin handles the
+skeleton, the skin and the ragdoll independently: only the document being replaced is saved or dropped, and a
+dirty ragdoll is reverted rather than left half-edited by a dialog that only mentioned the other document.
+
 **Measured.** On the vanilla install (`D:\SteamLibrary\steamapps\common\Fallout 4\Data`, read-only), through
 `GameData` (#696): `7` archives, `41` files carry an `hknpRagdollData` — all `41` with at least one body,
 `950` bodies, `897` limit-bearing constraints and `933` capsule shapes between them — and `154` more
@@ -924,6 +992,21 @@ skeleton-named files carry none, which with the census's `195` gives the same po
 `BGS/docs/research/fo4-skeleton-physics-census.md` reports. **`41 of 41` unedited forced rebuilds were
 byte-identical**, `41 of 41` mass edits and `40 of 41` limit edits read back as edited (one rig carries no
 limit-bearing constraint at all, so there was nothing to edit), `0` unreadable and `0` failures, exit `0`.
+The capsule and cone figures above come from the same sweep: `933` capsule shapes with `7`/`7`/`5`/`23`
+vertices, planes, faces and indices and `6531` checked vertices, `666` cone atoms in mode `0` and `666` plane
+atoms in mode `1`, `666` cones storing `minAngle` `-100`, and `897` limit-bearing constraints (`666` ragdoll
+and `231` limited hinge) between the `41` files.
+
+**Two lanes this build does not touch.** A mass edit writes the first three lanes of `inverseInertiaLocal` and
+leaves the fourth exactly as the file has it: on the vanilla install that lane holds `1` in `939` of the `943`
+motion rows, `0.02262` in three and `0.00759` in one, so it is not a lane this build interprets or rewrites.
+`centerOfMassWorld` is written the same way, three lanes only, and its fourth lane takes `789` distinct values
+across the `943` rows (a first pass saw extremes of `-140.86` and `138.52`), which is padding rather than
+data. Rescaling a mass also leaves `hknpMotionProperties` alone, and the assumption behind that is measured:
+the shipped class has no mass or mass-factor member at all — its members are `isExclusive`, `flags`,
+`gravityFactor`, `timeFactor`, `maxLinearSpeed`, `maxAngularSpeed`, `linearDamping`, `angularDamping`, the two
+solver-stabilization speeds, `maxDistSqrd`, `maxRotSqrd`, `invBlockSize`, the pathing thresholds and the
+deactivation fields — so there is nothing there for a mass change to rescale, and the row is never written.
 Before this was measured the only evidence was the committed human fixture
 (`BGS/tools/tests/fixtures/vanilla/Meshes/Actors/Character/CharacterAssets/skeleton.hkx`: `1` ragdoll,
 `18` bodies, `18` motions, `18` materials, `17` constraints of which `9` are `hkpRagdollConstraintData` and
@@ -938,7 +1021,17 @@ mass-ratio inertia scaling, and every refusal above — including a doctored mod
 and a forced rebuild asked to carry an edit. The rig smoke
 (`BGS/tools/uismoke/RigAuthoringSmoke.cs`) saves a mass and the joint limits through the window's own
 controls, checks the file is untouched until Save, that the `.bak` holds the original, that the values read
-back, and that a refused mass leaves the file alone.
+back, and that a refused mass leaves the file alone. It also checks that saving limits leaves the plane limit
+alone, that the material row stores and echoes the half-rounded values without touching the file, and that
+`Revert ragdoll values` clears the edits, releases the simulation and rebuilds the preview from the reloaded
+bytes. `BGS/tools/tests/RagdollShapeTests.cs` adds the capsule and mode coverage: every capsule in every
+committed fixture carries polytope arrays and refuses a geometry edit, a doctored shape or constraint cannot
+be written by `RagdollWriteback` at all (which is the test that fails if a derived array could be left stale),
+a changed derived count is a different shape, the fixture uses the verified cone and plane modes, an
+unverified mode refuses, and the bulk edits validate everything before they change anything and report skipped
+rows. `BGS/tools/tests/RagdollCliTests.cs` drives the command line: no selector for a single ragdoll, an
+out-of-range selector refused, the selector choosing the ragdoll, the material echo, `restitution:`, a capsule
+edit refused, and `--out` on the source with and without `--force`.
 ## BGS/src/Archive/GameData.cs — shared read-by-entry and precedence API (#696)
 
 The audit behind #696 found BGS features opening `.ba2` files and deciding loose-versus-archive precedence themselves, because `GameData` had no public API for it. The rule now lives in one place: `BGS/src/Archive/GameData.Assets.cs` (a partial `GameData`) exposes `ReadEntry`, `TryReadEntry`, `Read(GameAsset)`, `TryRead(GameAsset, out bytes, out warning)`, `EnumerateWinners`, `EnumerateLoose`, `FromParts`, `DataRelativePath`, `SkeletonBytes`, `SkeletonEntryName`, `TrySkeletonEntry`, `ModlistPath`, `IsSkeletonName`, `IsCharacterAssetPath` and `IsSkeletonPath`, plus the `GameAsset` record, `GameLooseFile` and the `GameAssetOrigin` enum. `GameData` is the game's data tree as the engine sees it: the `Data` folder's loose files plus the `.ba2` archives directly under it — `Discover` indexes top-level archives only, ordered by `plugins.txt` through `OrderByPlugins`, and never walks a subfolder for archives — consulted in load order, with the enabled Mod Organizer 2 roots layered over it (`DiscoverModded`, `Mo2ScanData`). Loose files win over archives, and within the archives the later-loaded archive wins. A project chain declares animation paths relative to its root, which is normally a folder somewhere inside the data tree (for Fallout 4's vanilla character: `Data\Meshes\Actors\Character`); the same path inside an archive appears with that data-relative prefix, so an animation that is not loose can still exist inside e.g. `Fallout4 - Animations.ba2`. `FromParts(dataFolder, archivePaths, modRootsLowToHigh)` builds that same view from strings a caller already resolved (`AnimationIndexRequest.OpenGameData`), de-duplicating both lists with `Path.GetFullPath`. `Mo2ScanData.OpenScanData(folder)` is the one place that answers "is this folder an MO2 instance or a plain Data folder": the census, the mapper sweep and `--scan-index`'s plain-folder fallback all use it, so none of them carries its own `TryOpen`-or-`Discover` rule. Everything there goes through `Ba2` (Radicle.Interop) and `GameData`'s held-open archive cache; no BA2 byte parsing was added. Follow-up work moves the features onto this surface. `GameData` is single-threaded: it carries no synchronisation, and the held-open archives, the mod-loose index and the per-archive lookup are only safe from one thread at a time.

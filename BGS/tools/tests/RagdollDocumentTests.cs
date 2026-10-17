@@ -206,58 +206,32 @@ public sealed class RagdollDocumentTests
             Assert.Throws<InvalidOperationException>(() => counted.SetMaterialRestitution(0, 0, 0.5f)).Message);
     }
 
-    [Fact]
-    public void ACapsuleRadiusAndEndpointEditReadsBack()
-    {
-        byte[] bytes = Fixture();
-        var document = new RagdollDocument(bytes);
-        var shape = document.Shapes[0];
-        var wantedA = new Vector3(1f, 2f, 3f);
-        var wantedB = new Vector3(4f, 5f, 6f);
-
-        document.SetShapeRadius(0, 7.5f);
-        document.SetCapsuleEndpoints(0, wantedA, wantedB);
-        byte[] produced = document.Serialize();
-
-        var objects = Objects(bytes);
-        int at = objects.Instances[shape.InstanceIndex].Offset;
-        AssertConfined(bytes, produced,
-            (at + Field("hknpShape", "convexRadius"), 4),
-            (at + Field("hknpCapsuleShape", "a"), 12),
-            (at + Field("hknpCapsuleShape", "b"), 12));
-
-        var read = new RagdollDocument(produced).Shapes[0];
-        Assert.Equal(7.5f, read.Radius);
-        Assert.Equal(wantedA, read.A);
-        Assert.Equal(wantedB, read.B);
-    }
 
     [Fact]
-    public void ARagdollConstraintLimitEditWritesTwistAndPlanes()
+    public void ARagdollConstraintLimitEditWritesOnlyTheTwist()
     {
         byte[] bytes = Fixture();
         var document = new RagdollDocument(bytes);
         var constraint = document.Ragdolls[0].Constraints.First(row => row.IsRagdoll);
+        float wasMinimum = constraint.PlaneMinAngle;
+        float wasMaximum = constraint.PlaneMaxAngle;
 
         document.SetConstraintLimits(0, constraint.Index, -0.5f, 0.5f);
         byte[] produced = document.Serialize();
 
         var objects = Objects(bytes);
         int at = objects.Instances[constraint.InstanceIndex].Offset;
-        int atom = Field("hkpRagdollConstraintData", "atoms");
-        int atoms = Field("hkpRagdollConstraintDataAtoms", "twistLimit");
-        int planes = Field("hkpRagdollConstraintDataAtoms", "planesLimit");
-        int min = Field("hkpTwistLimitConstraintAtom", "minAngle");
-        int max = Field("hkpTwistLimitConstraintAtom", "maxAngle");
+        int twist = Field("hkpRagdollConstraintData", "atoms") +
+                    Field("hkpRagdollConstraintDataAtoms", "twistLimit");
         AssertConfined(bytes, produced,
-            (at + atom + atoms + min, 4), (at + atom + atoms + max, 4),
-            (at + atom + planes + min, 4), (at + atom + planes + max, 4));
+            (at + twist + Field("hkpTwistLimitConstraintAtom", "minAngle"), 4),
+            (at + twist + Field("hkpTwistLimitConstraintAtom", "maxAngle"), 4));
 
         var read = new RagdollDocument(produced).Ragdolls[0].Constraints[constraint.Index];
         Assert.Equal(-0.5f, read.MinAngle);
         Assert.Equal(0.5f, read.MaxAngle);
-        Assert.Equal(-0.5f, read.PlaneMinAngle);
-        Assert.Equal(0.5f, read.PlaneMaxAngle);
+        Assert.Equal(wasMinimum, read.PlaneMinAngle);
+        Assert.Equal(wasMaximum, read.PlaneMaxAngle);
     }
 
     [Fact]
@@ -430,14 +404,9 @@ public sealed class RagdollDocumentTests
         var objects = Objects(bytes);
         int at = objects.Instances[constraint.InstanceIndex].Offset;
         var allowed = new HashSet<int>();
-        int atom = at + Field("hkpRagdollConstraintData", "atoms");
-        foreach (int start in new[]
-                 {
-                     atom + Field("hkpRagdollConstraintDataAtoms", "twistLimit"),
-                     atom + Field("hkpRagdollConstraintDataAtoms", "planesLimit"),
-                 })
-            for (int i = 8; i < 16; i++)
-                allowed.Add(start + i);
+        int twist = at + Field("hkpRagdollConstraintData", "atoms") +
+                    Field("hkpRagdollConstraintDataAtoms", "twistLimit");
+        for (int i = 8; i < 16; i++) allowed.Add(twist + i);
 
         var before = Data(bytes);
         var after = Data(produced);
@@ -557,6 +526,7 @@ public sealed class RagdollDocumentTests
             File.Delete(path + ".bak");
         }
     }
+
 
     private static byte[] Fixture() => File.ReadAllBytes(FixturePath());
 

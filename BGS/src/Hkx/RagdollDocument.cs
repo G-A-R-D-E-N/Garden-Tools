@@ -80,18 +80,27 @@ public sealed class RagdollDocument
         Motion(node, row.MotionId, row.Index).CenterOfMassWorld = world;
     }
 
-    public void SetMaterialFriction(int ragdoll, int material, float friction, bool allowShared = false)
+    public void SetMaterialFriction(int ragdoll, int material, float friction, bool allowShared = false) =>
+        SetMaterialFriction(ragdoll, material, friction, friction, allowShared);
+
+    public void SetMaterialFriction(int ragdoll, int material, float dynamicFriction, float staticFriction,
+                                    bool allowShared = false)
     {
         var entry = Material(Node(ragdoll), material);
         RequireSharedAllowed(entry, allowShared, "friction");
 
+        entry.DynamicFriction = RequireHalfFriction(dynamicFriction, "dynamic", material);
+        entry.StaticFriction = RequireHalfFriction(staticFriction, "static", material);
+    }
+
+    private static float RequireHalfFriction(float friction, string which, int material)
+    {
         if (!RagdollValues.TryHalf(friction, out float rounded) || rounded < 0f)
             throw new InvalidOperationException(
-                $"a friction of {friction} is not a non-negative number this file can store at half precision, " +
-                $"so material {material} was not changed");
+                $"a {which} friction of {friction} is not a non-negative number this file can store at half " +
+                $"precision, so material {material} was not changed");
 
-        entry.DynamicFriction = rounded;
-        entry.StaticFriction = rounded;
+        return rounded;
     }
 
     public void SetMaterialRestitution(int ragdoll, int material, float restitution, bool allowShared = false)
@@ -114,6 +123,7 @@ public sealed class RagdollDocument
             throw new InvalidOperationException(
                 $"a radius of {radius} is not a positive finite number, so shape {shape} was not changed");
 
+        RequirePolytopeFreeShape(target, shape);
         target.Radius = radius;
     }
 
@@ -124,8 +134,18 @@ public sealed class RagdollDocument
             throw new InvalidOperationException(
                 $"the endpoints for shape {shape} are not finite, so nothing was changed");
 
+        RequirePolytopeFreeShape(target, shape);
         target.A = a;
         target.B = b;
+    }
+
+    private static void RequirePolytopeFreeShape(RagdollShape target, int shape)
+    {
+        if (!target.CarriesPolytopeData) return;
+
+        throw new InvalidOperationException(
+            $"shape {shape} carries {target.PolytopeCounts}, and this build cannot derive those from a, b and " +
+            "the radius, so nothing was changed");
     }
 
     public void SetConstraintLimits(int ragdoll, int constraint, float minAngle, float maxAngle)
@@ -135,11 +155,6 @@ public sealed class RagdollDocument
 
         entry.MinAngle = minAngle;
         entry.MaxAngle = maxAngle;
-        if (entry.IsRagdoll)
-        {
-            entry.PlaneMinAngle = minAngle;
-            entry.PlaneMaxAngle = maxAngle;
-        }
     }
 
     public void SetConstraintConeLimit(int ragdoll, int constraint, float maxAngle)
@@ -153,6 +168,12 @@ public sealed class RagdollDocument
             throw new InvalidOperationException(
                 $"a cone limit of {maxAngle} is not within 0 and pi, so constraint {constraint} was not changed");
 
+        if (!entry.ConeEditable)
+            throw new InvalidOperationException(
+                $"constraint {constraint} stores cone angle measurement mode {entry.ConeAngleMeasurementMode}, " +
+                $"where this build verifies mode {RagdollLayout.VerifiedConeAngleMode}, so the cone limit was " +
+                "not changed");
+
         entry.ConeMaxAngle = maxAngle;
     }
 
@@ -164,6 +185,12 @@ public sealed class RagdollDocument
                 $"constraint {constraint} of ragdoll {ragdoll} is a {entry.ClassName}, which has no plane limit");
 
         RequireOrderedLimits(minAngle, maxAngle, $"planes limit of constraint {constraint}");
+        if (!entry.PlaneEditable)
+            throw new InvalidOperationException(
+                $"constraint {constraint} stores plane angle measurement mode {entry.PlaneAngleMeasurementMode}, " +
+                $"where this build verifies mode {RagdollLayout.VerifiedPlaneAngleMode}, so the plane limit was " +
+                "not changed");
+
         entry.PlaneMinAngle = minAngle;
         entry.PlaneMaxAngle = maxAngle;
     }
@@ -177,6 +204,105 @@ public sealed class RagdollDocument
                 "was not changed");
 
         entry.Friction = friction;
+    }
+
+    public byte[] SourceBytes => (byte[])_source.Clone();
+
+    public RagdollEditOutcome SetBodyMasses(int ragdoll, IReadOnlyList<(int Body, float Mass)> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+
+        var node = Node(ragdoll);
+        var planned = new List<(int Body, int Motion, float InverseMass, Vector3 Inertia)>();
+        var skipped = new List<int>();
+
+        foreach (var (body, mass) in edits)
+        {
+            int motion = body >= 0 && body < node.Bodies.Count ? node.Bodies[body].MotionId : -1;
+            if (motion < 0 || motion >= node.Motions.Count ||
+                !float.IsFinite(node.Motions[motion].InverseMass) || node.Motions[motion].InverseMass <= 0f)
+            {
+                skipped.Add(body);
+                continue;
+            }
+
+            var stored = node.Motions[motion];
+            if (!float.IsFinite(mass) || mass <= 0f)
+                throw new InvalidOperationException(
+                    $"a mass of {mass} is not a positive finite number, so body {body} was not changed");
+
+            float inverseMass = 1f / mass;
+            float ratio = inverseMass / stored.InverseMass;
+            var inertia = stored.InverseInertiaLocal * ratio;
+            if (!RagdollValues.Finite(inertia))
+                throw new InvalidOperationException(
+                    $"scaling body {body}'s inverse inertia by {ratio} leaves a non-finite lane, so nothing was " +
+                    "changed");
+
+            planned.Add((body, motion, inverseMass, inertia));
+        }
+
+        var applied = new List<int>(planned.Count);
+        foreach (var (body, motion, inverseMass, inertia) in planned)
+        {
+            node.Motions[motion].InverseMass = inverseMass;
+            node.Motions[motion].InverseInertiaLocal = inertia;
+            applied.Add(body);
+        }
+
+        return new RagdollEditOutcome(applied, skipped);
+    }
+
+    public RagdollEditOutcome SetConstraintLimits(int ragdoll, IReadOnlyList<RagdollLimitEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+
+        var node = Node(ragdoll);
+        var planned = new List<(int Constraint, float MinAngle, float MaxAngle, float? ConeMaxAngle)>();
+        var skipped = new List<int>();
+
+        foreach (var edit in edits)
+        {
+            if (edit.Constraint < 0 || edit.Constraint >= node.Constraints.Count)
+            {
+                skipped.Add(edit.Constraint);
+                continue;
+            }
+
+            var entry = node.Constraints[edit.Constraint];
+            if (!entry.LimitsEditable)
+            {
+                skipped.Add(edit.Constraint);
+                continue;
+            }
+
+            if (edit.ConeMaxAngle != null && (!entry.IsRagdoll || !entry.ConeEditable))
+            {
+                skipped.Add(edit.Constraint);
+                continue;
+            }
+
+            RequireOrderedLimits(edit.MinAngle, edit.MaxAngle,
+                                 $"{LimitName(entry)} of constraint {edit.Constraint}");
+            if (edit.ConeMaxAngle is float cone && (!float.IsFinite(cone) || cone < 0f || cone > MathF.PI))
+                throw new InvalidOperationException(
+                    $"a cone limit of {cone} is not within 0 and pi, so constraint {edit.Constraint} was not " +
+                    "changed");
+
+            planned.Add((edit.Constraint, edit.MinAngle, edit.MaxAngle, edit.ConeMaxAngle));
+        }
+
+        var applied = new List<int>(planned.Count);
+        foreach (var (constraint, minAngle, maxAngle, coneMaxAngle) in planned)
+        {
+            var entry = node.Constraints[constraint];
+            entry.MinAngle = minAngle;
+            entry.MaxAngle = maxAngle;
+            if (coneMaxAngle is float cone) entry.ConeMaxAngle = cone;
+            applied.Add(constraint);
+        }
+
+        return new RagdollEditOutcome(applied, skipped);
     }
 
     public byte[] Serialize()

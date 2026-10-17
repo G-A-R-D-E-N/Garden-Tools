@@ -277,6 +277,10 @@ internal static class RagdollWriteback
             if (!ragdoll)
                 throw new InvalidOperationException(
                     $"constraint {now.Index} is a {now.ClassName}, which has no cone limit, so nothing was written");
+            if (now.ConeAngleMeasurementMode != RagdollLayout.VerifiedConeAngleMode)
+                throw new InvalidOperationException(
+                    $"constraint {now.Index} stores cone angle measurement mode {now.ConeAngleMeasurementMode}, " +
+                    $"where this build verifies mode {RagdollLayout.VerifiedConeAngleMode}, so nothing was written");
 
             int at = instance.Offset + RagdollLayout.AtomOffset(now.ClassName, AtomsClass(true), "coneLimit",
                                                                 "maxAngle");
@@ -289,6 +293,10 @@ internal static class RagdollWriteback
             if (!ragdoll)
                 throw new InvalidOperationException(
                     $"constraint {now.Index} is a {now.ClassName}, which has no plane limit, so nothing was written");
+            if (now.PlaneAngleMeasurementMode != RagdollLayout.VerifiedPlaneAngleMode)
+                throw new InvalidOperationException(
+                    $"constraint {now.Index} stores plane angle measurement mode {now.PlaneAngleMeasurementMode}, " +
+                    $"where this build verifies mode {RagdollLayout.VerifiedPlaneAngleMode}, so nothing was written");
 
             int minAt = instance.Offset + RagdollLayout.AtomOffset(now.ClassName, AtomsClass(true), "planesLimit",
                                                                    "minAngle");
@@ -308,6 +316,12 @@ internal static class RagdollWriteback
                                    RagdollShape original, List<(int Start, int Length)> ranges)
     {
         var instance = RequireShape(objects, edited);
+        bool geometry = edited.Radius != original.Radius || edited.A != original.A || edited.B != original.B;
+        if (geometry && (edited.CarriesPolytopeData || original.CarriesPolytopeData))
+            throw new InvalidOperationException(
+                $"shape {edited.ObjectId} carries {edited.PolytopeCounts}, and this build cannot derive those " +
+                "from a, b and the radius, so nothing was written");
+
         int radiusAt = RagdollLayout.Field(RagdollLayout.ShapeClass, "convexRadius");
         int aAt = RagdollLayout.Field(RagdollLayout.CapsuleClass, "a");
         int bAt = RagdollLayout.Field(RagdollLayout.CapsuleClass, "b");

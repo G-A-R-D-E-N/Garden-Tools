@@ -45,13 +45,19 @@ public static class SymrmHelp
           "simple row; --data sweeps a whole Data folder instead of one file.",
           "--recompute; --out <file>; --force; --data <folder>",
           "symrm mapper skeleton.hkx --recompute --out recomputed.hkx"),
-        C("ragdoll", "ragdoll <skeleton.hkx> [--set <field>:<index>=<values>] [--out <file>] [--force] " +
-                     "[--allow-shared-material] [--data <Data folder>]",
-          "Read a file's hknpRagdollData ragdolls, edit masses, centres of mass, capsule shapes, material " +
-          "friction and joint limits in place, and rebuild the file through the value writer; --data sweeps " +
-          "a whole Data folder instead of one file.",
-          "--set <edit> (repeatable); --out <file>; --force; --allow-shared-material; --data <folder>",
-          "symrm ragdoll skeleton.hkx --set mass:0=5 --set limit:0=-0.25,0.25 --out edited.hkx"),
+        C("ragdoll", "ragdoll <skeleton.hkx> [--set <field>:<index>=<values>] [--set ragdoll=<i>] [--out <file>] " +
+                     "[--force] [--allow-shared-material] [--data <Data folder>]",
+          "Read a file's hknpRagdollData ragdolls, edit masses, centres of mass, material friction and " +
+          "restitution, and a constraint's twist, cone, plane limits and friction in place, and rebuild the " +
+          "file through the value writer; --data sweeps a whole Data folder instead of one file.",
+          "--set <edit> (repeatable, ragdoll=<i> first selects a ragdoll when the file holds more than one); " +
+          "--set mass:<body>=<mass>; --set com:<body>=<x,y,z>; --set material:<material>=<friction> or " +
+          "<dynamic>,<static>; --set restitution:<material>=<value>; --set limit:<constraint>=<min,max>; " +
+          "--set cone:<constraint>=<max radians>; --set plane:<constraint>=<min,max>; --set " +
+          "friction:<constraint>=<value>; --out <file>; --force; --allow-shared-material; --data <folder>",
+          "symrm ragdoll skeleton.hkx --set mass:0=5 --set limit:0=-0.25,0.25 --set material:0=0.5,0.4 " +
+          "--out edited.hkx"),
+
         C("extract", "extract <archive.ba2> <filter> <output-dir> [extension] [--tree]",
           "Extract matching archive entries, optionally preserving their directory tree.",
           "--tree", "symrm extract Fallout4.ba2 behavior ./out .hkx --tree"),

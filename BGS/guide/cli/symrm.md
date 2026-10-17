@@ -34,7 +34,7 @@ The installed/published executable uses the shorter equivalent `symrm <command> 
 | `skeleton` | Print skeleton bones and reference transforms. |
 | `rig` | Audit rig/skeleton data across one file or a corpus. |
 | `mapper` | Read a file's skeleton mappers, rebuild them, and recompute simple rows. |
-| `ragdoll` | Read a file's ragdolls, edit masses, shapes, materials and joint limits, and rebuild. |
+| `ragdoll` | Read a file's ragdolls, edit masses, materials and joint limits, and rebuild. |
 | `extract` | Extract matching BA2 entries, optionally preserving their directory tree. |
 | `ba2` | Inspect a Bethesda BA2 archive and its entries. |
 | `motion` | Inspect decoded root-motion data. |
@@ -149,6 +149,7 @@ checked against the model — and it reproduces the input byte for byte.
 symrm ragdoll skeleton.hkx                                     # describe + verified rebuild, writes nothing
 symrm ragdoll skeleton.hkx --set mass:0=5 --out edited.hkx     # retune one body and keep the result
 symrm ragdoll skeleton.hkx --set limit:3=-0.5,0.5 --set friction:3=2
+symrm ragdoll multi.hkx --set ragdoll=1 --set material:0=0.4,0.3 --set restitution:0=0.2
 symrm ragdoll --data "/path/to/Data"                           # sweep every ragdoll the game data resolves
 ```
 
@@ -158,17 +159,26 @@ symrm ragdoll --data "/path/to/Data"                           # sweep every rag
 | --- | --- | --- |
 | `mass:<body>=<mass>` | one number, > 0 | the body's `inverseMass` and its `inverseInertiaLocal` scaled by the mass ratio |
 | `com:<body>=<x>,<y>,<z>` | three numbers | the body's motion's `centerOfMassWorld` |
-| `capsule:<shape>=<ax>,<ay>,<az>,<bx>,<by>,<bz>` | six numbers | a capsule's two endpoints |
-| `radius:<shape>=<radius>` | one number, > 0 | the capsule's `hknpShape.convexRadius` |
-| `material:<material>=<friction>[,<restitution>]` | one or two numbers, >= 0 | `dynamicFriction`, `staticFriction` and `restitution` (half precision) |
-| `limit:<constraint>=<min>,<max>` | two numbers in `[-pi, pi]`, ordered | a ragdoll's twist and plane limits, or a limited hinge's angular limit |
+| `capsule:<shape>=<ax>,<ay>,<az>,<bx>,<by>,<bz>` | six numbers | refused: the shape carries polytope arrays this build cannot derive from its endpoints |
+| `radius:<shape>=<radius>` | one number, > 0 | refused for the same reason as `capsule:` |
+| `material:<material>=<dynamic>[,<static>]` | one or two numbers, >= 0 | `dynamicFriction` and, when given, `staticFriction` (half precision); one value sets both, and only the lane that changed is written |
+| `restitution:<material>=<value>` | one number, >= 0 | the material's `restitution` (half precision) |
+| `limit:<constraint>=<min>,<max>` | two numbers in `[-pi, pi]`, ordered | a ragdoll's twist limit only, or a limited hinge's angular limit; planes are not touched |
 | `cone:<constraint>=<max>` | one number in `[0, pi]` | a ragdoll's cone limit |
 | `plane:<constraint>=<min>,<max>` | two numbers in `[-pi, pi]`, ordered | a ragdoll's plane limit alone |
 | `friction:<constraint>=<value>` | one number, >= 0 | the constraint's `angFriction.maxFrictionTorque` |
 
-`body`, `material` and `constraint` index the first ragdoll's rows; `shape` indexes the file's capsule
-shapes. A material shared by more than one body is refused unless `--allow-shared-material` is passed,
-because changing it changes every body that names it.
+`body`, `material` and `constraint` index the selected ragdoll's rows; `shape` indexes the file's capsule
+shapes. `--set ragdoll=<i>` chooses that ragdoll for every edit that follows: it is optional when the file
+holds exactly one ragdoll, and a file with more than one refuses such an edit, naming how many it holds,
+until the selector is given. A material shared by more than one body is refused unless
+`--allow-shared-material` is passed, because changing it changes every body that names it.
+
+Capsule geometry cannot be edited: every capsule in the shipped game carries `7` vertices, `7` planes, `5`
+faces and `23` indices derived from its endpoints and radius, and this build cannot recompute them, so
+`capsule:` and `radius:` are refused rather than writing a shape whose polytope no longer matches. A cone is
+written only when its atom's `angle measurement mode` is the one the game uses (`0`; planes use `1`), and the
+constraint is refused otherwise.
 
 The writer patches only the bytes of the fields it owns and refuses any other byte change, so bodies,
 shapes and constraints are never added or removed, every other object in the file is left untouched, and
@@ -176,8 +186,10 @@ the fixup tables are never reordered. `collisionFilterInfo`, `qualityId`, motion
 positions, orientations, local frames, constraint frames and motors are never written.
 
 - `--out <file>` writes the result. Without `--force`, `symrm` refuses an `--out` that is the file being
-  read or that already exists; with `--force` it overwrites. The write goes to a temporary file beside the
-  target and is then moved into place, so a failure leaves the existing file alone.
+  read or that already exists. With `--force` on another file it overwrites it through a temporary file
+  beside the target, so a failure leaves the existing file alone. When `--out` is the file being read,
+  `--force` saves through the same checked replacement the rig window uses: the version that was read is
+  kept beside it as `<name>.bak` and a file that changed on disk since it was read is refused.
 - `--data <folder>` sweeps a game `Data` folder, or an MO2 instance, the same way the mapper sweep does.
   It reads every `skeleton*.hkx` the game data resolves, requires an unedited forced rebuild to reproduce
   the file byte for byte, then exercises a mass edit and a limit edit and re-reads each from the produced

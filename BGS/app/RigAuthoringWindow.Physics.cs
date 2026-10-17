@@ -33,6 +33,11 @@ public sealed partial class RigAuthoringWindow
     private readonly TextBox _gravity = Ux.Field("gravity", 100);
     private readonly TextBox _ground = Ux.Field("ground Z", 100);
     private readonly TextBox _impulse = Ux.Field("X Y Z impulse", 180);
+    private readonly ComboBox _physicsRagdolls = new() { MinWidth = 200 };
+    private readonly ComboBox _physicsMaterials = new() { MinWidth = 120 };
+    private readonly TextBox _materialDynamic = Ux.Field("dynamic friction", 110);
+    private readonly TextBox _materialStatic = Ux.Field("static friction", 110);
+    private readonly CheckBox _materialShared = new() { Content = "Allow shared material" };
     private readonly ComboBox _jointAxis = new() { ItemsSource = new[] { "X", "Y", "Z" }, SelectedIndex = 0, Width = 70 };
     private readonly ComboBox _jointRef = new() { ItemsSource = new[] { "X", "Y", "Z" }, SelectedIndex = 1, Width = 70 };
     private readonly TextBox _angleMin = Ux.Field("min radians", 100);
@@ -50,6 +55,11 @@ public sealed partial class RigAuthoringWindow
         _gravity.Text = "600";
         _ground.Text = "0";
         _impulse.Text = "0 0 100";
+        _physicsRagdolls.Name = "RagdollSelection";
+        _physicsMaterials.Name = "MaterialSelection";
+        _materialDynamic.Name = "MaterialDynamicFriction";
+        _materialStatic.Name = "MaterialStaticFriction";
+        _materialShared.Name = "MaterialAllowShared";
         _angleMin.Text = "-0.5";
         _angleMax.Text = "0.5";
         _cone.Text = "0.8";
@@ -65,10 +75,14 @@ public sealed partial class RigAuthoringWindow
         panel.Children.Add(Row(Ux.Label("Body"), _physicsBodies, Ux.Label("Simulation mass"), _mass,
             Button("Set body mass", () => Run(() => SetMass(false))), Button("Set all masses", () => Run(() => SetMass(true)))));
         panel.Children.Add(new TextBlock { Text = "Inertia is calculated from each measured collision hull assuming uniform density. Directly connected bodies do not collide; other bodies and the ground do. Saving writes the mass as the file's inverse mass and scales the body's stored inverse inertia by the mass ratio.", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(Row(Ux.Label("Ragdoll"), _physicsRagdolls, Ux.Label("Material"), _physicsMaterials,
+            Ux.Label("Dynamic"), _materialDynamic, Ux.Label("Static"), _materialStatic, _materialShared,
+            Button("Set material friction", () => Run(SetMaterialValues))));
+        panel.Children.Add(new TextBlock { Text = "Material friction writes the dynamic and static values separately at the file's half precision and writes only the field that changed. A material that more than one body names, or that the file flags shared, is refused unless Allow shared material is ticked. Capsule radius and endpoint edits are not offered here: every capsule in the shipped game carries polytope arrays this build cannot derive, so the editor refuses them.", TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(Row(Ux.Label("Joint"), _physicsJoints, Ux.Label("Axis"), _jointAxis, Ux.Label("Reference"), _jointRef));
         panel.Children.Add(Row(Ux.Label("Preview limits (radians)"), _angleMin, _angleMax, Ux.Label("Cone"), _cone,
             Button("Set preview joint", () => Run(() => SetJoints(false))), Button("Set all preview joints", () => Run(() => SetJoints(true)))));
-        panel.Children.Add(new TextBlock { Text = "Choose preview joint limits explicitly. Source joint frames are retained; source angular atoms, motors and mass settings are not imported. Saving writes the twist, plane and cone limits of a ragdoll constraint or the angular limit of a limited hinge; the axes, motors and frames are not written.", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock { Text = "Choose preview joint limits explicitly. Source joint frames are retained; source angular atoms, motors and mass settings are not imported. Saving writes the twist limit of a ragdoll constraint or the angular limit of a limited hinge, and the cone limit of a ragdoll constraint whose cone angle measurement mode is the verified one; plane limits are written only by the command line, and the axes, motors and frames are never written.", TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(Row(Ux.Label("Gravity (file units/s²; reset to edit)"), _gravity, Ux.Label("Ground Z"), _ground,
             Ux.Label("Impulse"), _impulse, Button("Push selected body", () => Run(() => {
                 EnsureSimulation(); float[] impulse = Values(_impulse, 3);
@@ -87,6 +101,8 @@ public sealed partial class RigAuthoringWindow
             if (_physics == null || _physicsBodies.SelectedIndex < 0) return;
             _mass.Text = _masses.TryGetValue(SelectedBody(), out float mass) ? Text(mass) : "";
         };
+        _physicsRagdolls.SelectionChanged += (_, _) => RefreshMaterialChoices();
+        _physicsMaterials.SelectionChanged += (_, _) => LoadMaterialValues();
         return AuthoringPanel(panel, _physicsView);
     }
 
@@ -126,6 +142,7 @@ public sealed partial class RigAuthoringWindow
         _ragdoll = TryOpenRagdoll(path, out string? refusal);
         _ragdollPath = _ragdoll == null ? "" : path;
         _physicsView.ShowMesh(null);
+        RefreshRagdollChoices();
         _masses.Clear(); _previewJoints.Clear();
         _physicsBodies.ItemsSource = model.Bodies.Select(body => $"{body.Id}: {body.Name}").ToArray();
         _physicsBodies.SelectedIndex = 0;
@@ -184,8 +201,94 @@ public sealed partial class RigAuthoringWindow
                 "This ragdoll's values are preview-only: the file holds no hknpRagdollData this build can edit.");
         document.Reload();
         _masses.Clear();
-        ResetPhysics();
-        Say("Ragdoll values reverted to the file on disk; simulation masses were cleared.");
+        _previewJoints.Clear();
+        RebuildPhysicsFromDocument(document);
+        RefreshMaterialChoices();
+        Say("Ragdoll values reverted to the bytes this document was read from; simulation masses and preview " +
+            "joints were cleared and the physics preview was rebuilt from them.");
+    }
+
+    private void RebuildPhysicsFromDocument(RagdollDocument document)
+    {
+        StopPhysics();
+        var model = HavokPhysicsExtractor.TryExtract(document.SourceBytes, out PhysicsLoadReport report);
+        _physicsReport = report;
+        if (model == null || model.Bodies.Count == 0)
+        {
+            _physics = null;
+            Say("The physics preview could not be rebuilt from the reverted bytes: " + report.Summary);
+            return;
+        }
+
+        _physics = model;
+        _physicsView.ShowMesh(null);
+        _physicsBodies.ItemsSource = model.Bodies.Select(body => $"{body.Id}: {body.Name}").ToArray();
+        _physicsBodies.SelectedIndex = 0;
+        _mass.Text = "";
+        _physicsJoints.ItemsSource = model.Constraints.Select(joint => $"{joint.Id}: {joint.Kind}").ToArray();
+        _physicsJoints.SelectedIndex = model.Constraints.Count > 0 ? 0 : -1;
+        _physicsView.SetBodies(model);
+        _physicsView.Frame();
+    }
+
+    private void RefreshRagdollChoices()
+    {
+        _physicsRagdolls.ItemsSource = _ragdoll == null
+            ? Array.Empty<string>()
+            : _ragdoll.Ragdolls.Select((node, index) => $"{index}: ragdoll #{node.ObjectId}").ToArray();
+        _physicsRagdolls.SelectedIndex = _ragdoll is { Ragdolls.Count: > 0 } ? 0 : -1;
+        RefreshMaterialChoices();
+    }
+
+    private void RefreshMaterialChoices()
+    {
+        var node = CurrentRagdoll();
+        _physicsMaterials.ItemsSource = node == null
+            ? Array.Empty<string>()
+            : node.Materials.Select(material => $"{material.Index}").ToArray();
+        _physicsMaterials.SelectedIndex = node is { Materials.Count: > 0 } ? 0 : -1;
+        LoadMaterialValues();
+    }
+
+    private RagdollNode? CurrentRagdoll() =>
+        _ragdoll is { Ragdolls.Count: > 0 } document && _physicsRagdolls.SelectedIndex >= 0
+            ? document.Ragdolls[Math.Min(_physicsRagdolls.SelectedIndex, document.Ragdolls.Count - 1)]
+            : null;
+
+    private int SelectedRagdoll() => CurrentRagdoll() == null
+        ? 0
+        : Math.Min(_physicsRagdolls.SelectedIndex, _ragdoll!.Ragdolls.Count - 1);
+
+    private void LoadMaterialValues()
+    {
+        var node = CurrentRagdoll();
+        if (node == null || _physicsMaterials.SelectedIndex < 0 ||
+            _physicsMaterials.SelectedIndex >= node.Materials.Count)
+            return;
+
+        var material = node.Materials[_physicsMaterials.SelectedIndex];
+        _materialDynamic.Text = Text(material.DynamicFriction);
+        _materialStatic.Text = Text(material.StaticFriction);
+        _materialShared.IsChecked = material.FileSaysShared;
+    }
+
+    private void SetMaterialValues()
+    {
+        var document = _ragdoll;
+        if (document is not { Ragdolls.Count: > 0 })
+            throw new InvalidOperationException(
+                "This ragdoll's values are preview-only: the file holds no hknpRagdollData this build can edit.");
+        if (_physicsMaterials.SelectedIndex < 0) throw new InvalidOperationException("Choose a material.");
+
+        int ragdoll = SelectedRagdoll();
+        int material = _physicsMaterials.SelectedIndex;
+        float dynamic = Values(_materialDynamic, 1)[0];
+        float rest = Values(_materialStatic, 1)[0];
+        document.SetMaterialFriction(ragdoll, material, dynamic, rest, _materialShared.IsChecked == true);
+
+        var stored = document.Ragdolls[ragdoll].Materials[material];
+        Say($"Material {material} set to dynamic {Text(stored.DynamicFriction)} and static " +
+            $"{Text(stored.StaticFriction)} at the file's half precision; save ragdoll values to write it.");
     }
 
     private async Task CopyPhysicsDiagnostics()
@@ -239,24 +342,31 @@ public sealed partial class RigAuthoringWindow
         var model = RequiredPhysics();
         float mass = Values(_mass, 1)[0];
         if (mass < 0.0001f || mass > 100000) throw new ArgumentException("Mass must be between 0.0001 and 100000.");
-        WriteRagdollMasses(model, all, mass);
+        var skipped = WriteRagdollMasses(model, all, mass);
         ResetPhysics();
-        foreach (var body in model.Bodies.Where(body => all || body.Id == SelectedBody())) _masses[body.Id] = mass;
-        Say(_ragdoll == null
-            ? "Simulation mass set. Inertia will be calculated from the collision hull."
-            : "Simulation mass set and stored in the file's inverse mass and inverse inertia. Save ragdoll values to write it.");
-    }
-
-    private void WriteRagdollMasses(HavokRagdollModel model, bool all, float mass)
-    {
-        if (_ragdoll is not { Ragdolls.Count: > 0 } document) return;
-
         foreach (var body in model.Bodies.Where(body => all || body.Id == SelectedBody()))
-        {
-            if (body.Id < 0 || body.Id >= document.Ragdolls[0].Bodies.Count) continue;
-            document.SetBodyMass(0, body.Id, mass);
-        }
+            if (!skipped.Contains(body.Id)) _masses[body.Id] = mass;
+        Say((_ragdoll == null
+                ? "Simulation mass set. Inertia will be calculated from the collision hull."
+                : "Simulation mass set and stored in the file's inverse mass and inverse inertia. Save ragdoll " +
+                  "values to write it.") + SkippedNote("body", skipped));
     }
+
+    private IReadOnlyList<int> WriteRagdollMasses(HavokRagdollModel model, bool all, float mass)
+    {
+        if (_ragdoll is not { Ragdolls.Count: > 0 } document) return Array.Empty<int>();
+
+        var edits = model.Bodies.Where(body => all || body.Id == SelectedBody())
+                                .Select(body => (body.Id, mass))
+                                .ToList();
+        return document.SetBodyMasses(SelectedRagdoll(), edits).Skipped;
+    }
+
+    private static string SkippedNote(string what, IReadOnlyCollection<int> skipped) =>
+        skipped.Count == 0
+            ? ""
+            : $" Skipped {skipped.Count} {what} row(s) this ragdoll does not hold: " +
+              string.Join(", ", skipped.OrderBy(id => id).Take(10));
 
     private void SetJoints(bool all)
     {
@@ -265,33 +375,39 @@ public sealed partial class RigAuthoringWindow
         if (min < -MathF.PI || max > MathF.PI || min > max || cone < 0 || cone > MathF.PI || _jointAxis.SelectedIndex == _jointRef.SelectedIndex)
             throw new ArgumentException("Choose distinct axes and ordered limits within [-pi, pi], with cone between 0 and pi.");
         if (!all && _physicsJoints.SelectedIndex < 0) throw new InvalidOperationException("Choose a joint.");
-        WriteRagdollLimits(model, all, min, max, cone);
+        var skipped = WriteRagdollLimits(model, all, min, max, cone);
         ResetPhysics();
         foreach (var joint in model.Constraints.Where((joint, i) => all || i == _physicsJoints.SelectedIndex))
+        {
+            if (skipped.Contains(joint.Id)) continue;
+
             _previewJoints[joint.Id] = new HavokConstraint { Id = joint.Id, Kind = joint.Kind, BodyA = joint.BodyA, BodyB = joint.BodyB,
                 FrameA = joint.FrameA, FrameB = joint.FrameB, MinAngle = min, MaxAngle = max,
                 TwistMinAngle = min, TwistMaxAngle = max, ConeMaxAngle = cone,
                 LimitAxis = _jointAxis.SelectedIndex, TwistAxis = _jointAxis.SelectedIndex, TwistRefAxis = _jointRef.SelectedIndex,
                 ConeTwistAxis = _jointAxis.SelectedIndex, ConeRefAxis = _jointAxis.SelectedIndex, HasPreviewLimits = true };
-        Say(_ragdoll == null
-            ? "Preview joint settings applied. Source angular atoms are not imported or changed."
-            : "Preview and file joint limits applied. The axes, motors and frames are not written; save ragdoll values to keep the limits.");
+        }
+
+        Say((_ragdoll == null
+                ? "Preview joint settings applied. Source angular atoms are not imported or changed."
+                : "Preview and file joint limits applied. The axes, motors and frames are not written; save " +
+                  "ragdoll values to keep the limits.") + SkippedNote("constraint", skipped));
     }
 
-    private void WriteRagdollLimits(HavokRagdollModel model, bool all, float min, float max, float cone)
+    private IReadOnlyList<int> WriteRagdollLimits(HavokRagdollModel model, bool all, float min, float max, float cone)
     {
-        if (_ragdoll is not { Ragdolls.Count: > 0 } document) return;
+        if (_ragdoll is not { Ragdolls.Count: > 0 } document) return Array.Empty<int>();
 
+        var node = CurrentRagdoll();
+        var edits = new List<RagdollLimitEdit>();
         foreach (var joint in model.Constraints.Where((joint, i) => all || i == _physicsJoints.SelectedIndex))
         {
-            if (joint.Id < 0 || joint.Id >= document.Ragdolls[0].Constraints.Count) continue;
-
-            var row = document.Ragdolls[0].Constraints[joint.Id];
-            if (!row.LimitsEditable) continue;
-
-            document.SetConstraintLimits(0, joint.Id, min, max);
-            if (row.IsRagdoll) document.SetConstraintConeLimit(0, joint.Id, cone);
+            bool coneRow = node != null && joint.Id >= 0 && joint.Id < node.Constraints.Count &&
+                           node.Constraints[joint.Id].IsRagdoll;
+            edits.Add(new RagdollLimitEdit(joint.Id, min, max, coneRow ? cone : null));
         }
+
+        return document.SetConstraintLimits(SelectedRagdoll(), edits).Skipped;
     }
 
     private void EnsureSimulation()

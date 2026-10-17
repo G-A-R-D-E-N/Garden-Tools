@@ -117,6 +117,11 @@ internal static class RigAuthoringSmoke
             var savedLimit = savedRagdoll.Ragdolls[0].Constraints.First(row => row.LimitsEditable);
             Require(savedLimit.MinAngle == -0.5f && savedLimit.MaxAngle == 0.5f,
                     "the saved joint limits must read back from the file");
+            var originalLimit = new RagdollDocument(beforeRagdollEdit).Ragdolls[0].Constraints
+                                    .First(row => row.LimitsEditable);
+            Require(savedLimit.PlaneMinAngle == originalLimit.PlaneMinAngle &&
+                    savedLimit.PlaneMaxAngle == originalLimit.PlaneMaxAngle,
+                    "saving the joint limits must leave the plane limit alone");
             Console.WriteLine($"Ragdoll write-back: {savedRagdoll.Ragdolls[0].Bodies.Count} bodies and " +
                               $"{savedRagdoll.Ragdolls[0].Constraints.Count} joints saved, mass 5.0, " +
                               $"limits {savedLimit.MinAngle}..{savedLimit.MaxAngle} rad.");
@@ -141,6 +146,44 @@ internal static class RigAuthoringSmoke
             disposed = false;
             try { simulation.Advance(1f / 120); } catch (ObjectDisposedException) { disposed = true; }
             Require(disposed, "window close must dispose physics");
+            var materialEditor = new RigAuthoringWindow(owner, selectedTab: 2);
+            materialEditor.Show(owner);
+            Require(materialEditor.OpenPhysics(ragdollPath, out _),
+                    "the ragdoll must reopen for the material and revert checks");
+            Dispatcher.UIThread.RunJobs();
+            var ragdollSelector = Smoke.Find<ComboBox>(materialEditor).Single(box => box.Name == "RagdollSelection");
+            Require(ragdollSelector.ItemCount == 1, "the ragdoll selector must list the file's ragdoll");
+            var materialSelector = Smoke.Find<ComboBox>(materialEditor).Single(box => box.Name == "MaterialSelection");
+            Require(materialSelector.ItemCount == savedRagdoll.Ragdolls[0].Materials.Count,
+                    "the material selector must list every material");
+            Smoke.Find<TextBox>(materialEditor).Single(box => box.Name == "MaterialDynamicFriction").Text = "0.3";
+            Smoke.Find<TextBox>(materialEditor).Single(box => box.Name == "MaterialStaticFriction").Text = "0.7";
+            byte[] beforeMaterial = File.ReadAllBytes(ragdollPath);
+            Click(materialEditor, "Set material friction");
+            Require(materialEditor.PhysicsStatusForTest.Contains("at the file's half precision", StringComparison.Ordinal),
+                    "a material edit must echo the stored half-precision values: " + materialEditor.PhysicsStatusForTest);
+            Require(beforeMaterial.SequenceEqual(File.ReadAllBytes(ragdollPath)),
+                    "a material edit must stay in memory until Save ragdoll values");
+            var storedMaterial = materialEditor.RagdollForTest!.Ragdolls[0].Materials[0];
+            Require(storedMaterial.DynamicFriction == (float)(Half)0.3f &&
+                    storedMaterial.StaticFriction == (float)(Half)0.7f,
+                    "the material edit must store the half-rounded values");
+            Require(materialEditor.RagdollForTest!.Dirty, "a material edit must dirty the ragdoll");
+            Click(materialEditor, "Revert ragdoll values");
+            Require(!materialEditor.RagdollForTest!.Dirty, "revert must clear the ragdoll edits");
+            Require(materialEditor.PhysicsStatusForTest.Contains("bytes this document was read from", StringComparison.Ordinal),
+                    "revert must say which bytes it went back to: " + materialEditor.PhysicsStatusForTest);
+            Require(beforeMaterial.SequenceEqual(File.ReadAllBytes(ragdollPath)), "revert must not write the file");
+            Require(Simulation(materialEditor) == null, "revert must release the simulation");
+            Require(Smoke.Find<TextBox>(materialEditor).Single(box => box.Name == "SimulationMass").Text == "",
+                    "revert must clear the simulation mass");
+            Require(Smoke.Find<ComboBox>(materialEditor).Single(box => box.Name == "MaterialSelection").ItemCount ==
+                    materialEditor.RagdollForTest!.Ragdolls[0].Materials.Count,
+                    "revert must rebuild the material list from the reloaded document");
+            Console.WriteLine("Ragdoll material edit, selector and revert: in-memory edit, half-rounded echo, " +
+                              "accurate revert message and rebuilt preview.");
+            materialEditor.Close();
+            Dispatcher.UIThread.RunJobs();
             DirtyClose(owner, skeletonPath);
             Console.WriteLine("PASS: production rig controls, skeleton/skin undo/save/reopen, configured physics, reset and close disposal.");
         }

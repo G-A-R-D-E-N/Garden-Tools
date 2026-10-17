@@ -169,14 +169,31 @@ public sealed partial class RigAuthoringWindow : Window
             });
             string? path = files.FirstOrDefault()?.TryGetLocalPath();
             if (path == null) return;
-            bool dirty = skeleton ? _skeleton?.Dirty == true : _skin?.Dirty == true;
-            if (dirty || _ragdoll?.Dirty == true)
+            bool targetDirty = skeleton ? _skeleton?.Dirty == true : _skin?.Dirty == true;
+            bool ragdollDirty = _ragdoll?.Dirty == true;
+            if (targetDirty || ragdollDirty)
             {
                 var choice = await new DiscardDialog("open another asset").ShowDialog<DiscardChoice>(this);
                 if (choice == DiscardChoice.Cancel) return;
-                if (choice == DiscardChoice.Save) { if (skeleton) _skeleton!.Save(); else _skin!.Save(); _ragdoll?.Save(); }
-                else if (dirty) { if (skeleton) _skeleton = null; else _skin = null; }
-                else { _ragdoll?.Reload(); }
+
+                if (choice == DiscardChoice.Save)
+                {
+                    if (targetDirty)
+                    {
+                        if (skeleton) _skeleton!.Save(); else _skin!.Save();
+                    }
+
+                    if (ragdollDirty) _ragdoll!.Save();
+                }
+                else
+                {
+                    if (targetDirty)
+                    {
+                        if (skeleton) _skeleton = null; else _skin = null;
+                    }
+
+                    if (ragdollDirty) RevertRagdollValues();
+                }
             }
             if (skeleton) OpenSkeleton(path); else OpenSkin(path);
         }

@@ -152,12 +152,20 @@ internal static class RagdollRead
             constraint.ConeMaxAngle = Atom(objects, data, dataClass, atomsClass, "coneLimit", "maxAngle", objectId, index);
             constraint.PlaneMinAngle = Atom(objects, data, dataClass, atomsClass, "planesLimit", "minAngle", objectId, index);
             constraint.PlaneMaxAngle = Atom(objects, data, dataClass, atomsClass, "planesLimit", "maxAngle", objectId, index);
+            constraint.ConeAngleMeasurementMode = Mode(objects, data, dataClass, atomsClass, "coneLimit");
+            constraint.ConeMinAngle = Atom(objects, data, dataClass, atomsClass, "coneLimit", "minAngle", objectId, index);
+            constraint.PlaneAngleMeasurementMode = Mode(objects, data, dataClass, atomsClass, "planesLimit");
             return;
         }
 
         constraint.MinAngle = Atom(objects, data, dataClass, atomsClass, "angLimit", "minAngle", objectId, index);
         constraint.MaxAngle = Atom(objects, data, dataClass, atomsClass, "angLimit", "maxAngle", objectId, index);
     }
+
+    private static int Mode(PackfileObjects objects, PackfileObjects.Instance data, string dataClass,
+                            string atomsClass, string atomMember) =>
+        objects.ReadNarrowAt(data.Offset +
+                             RagdollLayout.AtomOffset(dataClass, atomsClass, atomMember, "angleMeasurementMode"), 1) ?? -1;
 
     private static float Atom(PackfileObjects objects, PackfileObjects.Instance data, string dataClass,
                               string atomsClass, string atomMember, string member, int objectId, int index) =>
@@ -209,6 +217,17 @@ internal static class RagdollRead
         else
             return null;
 
+        shape.Vertices = PolytopeCount(objects, instance, "vertices", HavokClassTypes.Width("TYPE_VECTOR4"));
+        shape.Planes = PolytopeCount(objects, instance, "planes", HavokClassTypes.Width("TYPE_VECTOR4"));
+        shape.Faces = PolytopeCount(objects, instance, "faces",
+                                    RagdollLayout.Stride(RagdollLayout.PolytopeFaceClass));
+        shape.Indices = PolytopeCount(objects, instance, "indices", HavokClassTypes.Width("TYPE_UINT8"));
         return shape;
     }
+
+    private static int PolytopeCount(PackfileObjects objects, PackfileObjects.Instance instance, string member,
+                                     int width) =>
+        objects.FieldAt(instance, member) is int header
+            ? objects.RelArrayAt(header, width)?.Count ?? 0
+            : 0;
 }

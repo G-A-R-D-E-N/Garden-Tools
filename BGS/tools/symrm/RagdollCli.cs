@@ -89,13 +89,15 @@ public static partial class Program
         Console.Error.WriteLine();
         Console.Error.WriteLine(SymrmHelp.TryCommand("ragdoll", out string help)
             ? help
-            : "symrm ragdoll <skeleton.hkx> [--set <edit>] [--out <file>] [--force] [--data <Data folder>]");
+            : "symrm ragdoll <skeleton.hkx> [--set <edit>] [--set ragdoll=<i>] [--out <file>] [--force] " +
+              "[--data <Data folder>]");
         return 1;
     }
 
     private static int RagdollOne(string file, byte[] source, IReadOnlyList<string> edits, bool allowShared,
                                   string? outPath, bool force)
     {
+        int selected = -1;
         RagdollDocument document;
         try { document = new RagdollDocument(source); }
         catch (Exception error)
@@ -112,8 +114,8 @@ public static partial class Program
         {
             try
             {
-                ApplyRagdollEdit(document, edit, allowShared);
-                Console.WriteLine($"  set {edit}");
+                string? note = ApplyRagdollEdit(document, edit, allowShared, ref selected);
+                Console.WriteLine(note == null ? $"  set {edit}" : $"  set {edit} -> {note}");
             }
             catch (Exception error)
             {
@@ -157,9 +159,12 @@ public static partial class Program
             return 0;
         }
 
+        string sourcePath = Path.GetFullPath(file);
+        bool replacesSource = string.Equals(outPath, sourcePath, StringComparison.OrdinalIgnoreCase);
+
         if (!force)
         {
-            if (string.Equals(outPath, Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
+            if (replacesSource)
             {
                 Console.Error.WriteLine($"  refused: {outPath} is the file being read; pass --force to overwrite it");
                 return 1;
@@ -172,14 +177,20 @@ public static partial class Program
             }
         }
 
-        try { FileSafety.Replace(outPath, produced); }
+        try
+        {
+            if (replacesSource) FileSafety.ReplaceChecked(outPath, produced, DocumentSourceStamp.Capture(source));
+            else FileSafety.Replace(outPath, produced);
+        }
         catch (Exception error)
         {
             Console.Error.WriteLine($"  cannot write {outPath}: {error.Message}");
             return 1;
         }
 
-        Console.WriteLine($"  written to {outPath}");
+        Console.WriteLine(replacesSource
+            ? $"  written to {outPath}; the version that was read is kept as {Path.GetFileName(outPath)}.bak"
+            : $"  written to {outPath}");
         return 0;
     }
 
@@ -200,16 +211,33 @@ public static partial class Program
         foreach (var constraint in document.Ragdolls.SelectMany(node => node.Constraints).Take(20))
             Console.WriteLine($"    constraint {constraint.Index}: {constraint.ClassName}, " +
                               $"limit {constraint.MinAngle:0.#####}..{constraint.MaxAngle:0.#####} rad, " +
-                              $"cone {constraint.ConeMaxAngle:0.#####}, friction {constraint.Friction:0.#####}");
+                              $"cone {constraint.ConeMaxAngle:0.#####} (mode {constraint.ConeAngleMeasurementMode}), " +
+                              $"planes (mode {constraint.PlaneAngleMeasurementMode}), " +
+                              $"friction {constraint.Friction:0.#####}");
 
         foreach (var shape in document.Shapes.Take(20))
             Console.WriteLine($"    shape {shape.InstanceIndex}: {shape.ClassName} #{shape.ObjectId}, " +
                               $"radius {shape.Radius:0.#####}, a ({shape.A.X:0.###} {shape.A.Y:0.###} {shape.A.Z:0.###}), " +
-                              $"b ({shape.B.X:0.###} {shape.B.Y:0.###} {shape.B.Z:0.###})");
+                              $"b ({shape.B.X:0.###} {shape.B.Y:0.###} {shape.B.Z:0.###}), " +
+                              $"polytope {shape.PolytopeCounts}");
     }
 
-    private static void ApplyRagdollEdit(RagdollDocument document, string edit, bool allowShared)
+    private static string? ApplyRagdollEdit(RagdollDocument document, string edit, bool allowShared,
+                                            ref int selected)
     {
+        if (edit.StartsWith("ragdoll=", StringComparison.Ordinal))
+        {
+            if (!int.TryParse(edit["ragdoll=".Length..], NumberStyles.Integer, CultureInfo.InvariantCulture,
+                              out int wanted))
+                throw new InvalidOperationException($"'{edit}' needs a ragdoll index such as ragdoll=0");
+            if (wanted < 0 || wanted >= document.Ragdolls.Count)
+                throw new InvalidOperationException(
+                    $"this file holds {document.Ragdolls.Count} ragdoll(s), so there is no ragdoll {wanted}");
+
+            selected = wanted;
+            return $"ragdoll {wanted} selected";
+        }
+
         int colon = edit.IndexOf(':');
         int equals = edit.IndexOf('=');
         if (colon <= 0 || equals <= colon || equals == edit.Length - 1)
@@ -226,56 +254,99 @@ public static partial class Program
         {
             case "mass":
                 RequireValues(values, 1, edit);
-                document.SetBodyMass(0, index, values[0]);
-                break;
+                document.SetBodyMass(RequireRagdoll(document, ref selected), index, values[0]);
+                return null;
 
             case "com":
                 RequireValues(values, 3, edit);
-                document.SetBodyCenterOfMass(0, index, new Vector3(values[0], values[1], values[2]));
-                break;
+                document.SetBodyCenterOfMass(RequireRagdoll(document, ref selected), index,
+                                             new Vector3(values[0], values[1], values[2]));
+                return null;
 
             case "capsule":
                 RequireValues(values, 6, edit);
                 document.SetCapsuleEndpoints(index, new Vector3(values[0], values[1], values[2]),
                                              new Vector3(values[3], values[4], values[5]));
-                break;
+                return null;
 
             case "radius":
                 RequireValues(values, 1, edit);
                 document.SetShapeRadius(index, values[0]);
-                break;
+                return null;
 
             case "material":
+            {
                 if (values.Length is < 1 or > 2)
-                    throw new InvalidOperationException($"'{edit}' needs <friction> or <friction>,<restitution>");
-                document.SetMaterialFriction(0, index, values[0], allowShared);
-                if (values.Length == 2) document.SetMaterialRestitution(0, index, values[1], allowShared);
-                break;
+                    throw new InvalidOperationException($"'{edit}' needs <friction> or <dynamic>,<static>");
+                int ragdoll = RequireRagdoll(document, ref selected);
+                document.SetMaterialFriction(ragdoll, index, values[0],
+                                             values.Length > 1 ? values[1] : values[0], allowShared);
+                var stored = document.Ragdolls[ragdoll].Materials[index];
+                return $"stored dynamic {Rounded(stored.DynamicFriction)} static {Rounded(stored.StaticFriction)}";
+            }
+
+            case "restitution":
+            {
+                RequireValues(values, 1, edit);
+                int ragdoll = RequireRagdoll(document, ref selected);
+                document.SetMaterialRestitution(ragdoll, index, values[0], allowShared);
+                return $"stored restitution {Rounded(document.Ragdolls[ragdoll].Materials[index].Restitution)}";
+            }
 
             case "limit":
+            {
                 RequireValues(values, 2, edit);
-                document.SetConstraintLimits(0, index, values[0], values[1]);
-                break;
+                int ragdoll = RequireRagdoll(document, ref selected);
+                document.SetConstraintLimits(ragdoll, index, values[0], values[1]);
+                var stored = document.Ragdolls[ragdoll].Constraints[index];
+                return $"stored twist {Rounded(stored.MinAngle)}..{Rounded(stored.MaxAngle)}";
+            }
 
             case "cone":
+            {
                 RequireValues(values, 1, edit);
-                document.SetConstraintConeLimit(0, index, values[0]);
-                break;
+                int ragdoll = RequireRagdoll(document, ref selected);
+                document.SetConstraintConeLimit(ragdoll, index, values[0]);
+                return $"stored cone {Rounded(document.Ragdolls[ragdoll].Constraints[index].ConeMaxAngle)}";
+            }
 
             case "plane":
+            {
                 RequireValues(values, 2, edit);
-                document.SetConstraintPlaneLimits(0, index, values[0], values[1]);
-                break;
+                int ragdoll = RequireRagdoll(document, ref selected);
+                document.SetConstraintPlaneLimits(ragdoll, index, values[0], values[1]);
+                var stored = document.Ragdolls[ragdoll].Constraints[index];
+                return $"stored planes {Rounded(stored.PlaneMinAngle)}..{Rounded(stored.PlaneMaxAngle)}";
+            }
 
             case "friction":
+            {
                 RequireValues(values, 1, edit);
-                document.SetConstraintFriction(0, index, values[0]);
-                break;
+                int ragdoll = RequireRagdoll(document, ref selected);
+                document.SetConstraintFriction(ragdoll, index, values[0]);
+                return $"stored friction {Rounded(document.Ragdolls[ragdoll].Constraints[index].Friction)}";
+            }
 
             default:
                 throw new InvalidOperationException($"'{field}' is not a ragdoll field this command sets");
         }
     }
+
+    private static int RequireRagdoll(RagdollDocument document, ref int selected)
+    {
+        if (selected >= 0) return selected;
+        if (document.Ragdolls.Count == 1)
+        {
+            selected = 0;
+            return 0;
+        }
+
+        throw new InvalidOperationException(
+            $"this file holds {document.Ragdolls.Count} ragdoll(s); pass --set ragdoll=<i> before an edit that " +
+            "names one");
+    }
+
+    private static string Rounded(float value) => value.ToString("0.#####", CultureInfo.InvariantCulture);
 
     private static void RequireValues(float[] values, int count, string edit)
     {
@@ -286,44 +357,29 @@ public static partial class Program
     private static void VerifyRagdollEdits(byte[] produced, RagdollDocument document,
                                            IReadOnlyList<string> edits)
     {
-        var expected = document.Ragdolls[0];
-        var read = new RagdollDocument(produced).Ragdolls[0];
-        var readShapes = new RagdollDocument(produced).Shapes;
+        var reread = new RagdollDocument(produced);
+        if (reread.Ragdolls.Count != document.Ragdolls.Count)
+            throw new InvalidDataException(
+                $"the written file holds {reread.Ragdolls.Count} ragdoll(s) where {document.Ragdolls.Count} " +
+                $"were expected for: {string.Join(", ", edits)}");
 
-        for (int i = 0; i < expected.Motions.Count; i++)
+        for (int i = 0; i < document.Ragdolls.Count; i++)
         {
-            if (expected.Motions[i].InverseMass == read.Motions[i].InverseMass &&
-                expected.Motions[i].InverseInertiaLocal == read.Motions[i].InverseInertiaLocal &&
-                expected.Motions[i].CenterOfMassWorld == read.Motions[i].CenterOfMassWorld)
-                continue;
+            if (document.Ragdolls[i].SameAs(reread.Ragdolls[i])) continue;
 
             throw new InvalidDataException(
-                $"motion {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
+                $"ragdoll #{reread.Ragdolls[i].ObjectId} did not read back as the value that was set for: " +
+                string.Join(", ", edits));
         }
 
-        for (int i = 0; i < expected.Materials.Count; i++)
-        {
-            if (expected.Materials[i].DynamicFriction == read.Materials[i].DynamicFriction &&
-                expected.Materials[i].StaticFriction == read.Materials[i].StaticFriction &&
-                expected.Materials[i].Restitution == read.Materials[i].Restitution)
-                continue;
-
+        if (reread.Shapes.Count != document.Shapes.Count)
             throw new InvalidDataException(
-                $"material {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
-        }
-
-        for (int i = 0; i < expected.Constraints.Count; i++)
-        {
-            if (expected.Constraints[i].SameAs(read.Constraints[i])) continue;
-
-            throw new InvalidDataException(
-                $"constraint {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
-        }
+                $"the written file holds {reread.Shapes.Count} capsule shape(s) where {document.Shapes.Count} " +
+                $"were expected for: {string.Join(", ", edits)}");
 
         for (int i = 0; i < document.Shapes.Count; i++)
         {
-            var shape = document.Shapes[i];
-            if (i < readShapes.Count && shape.SameAs(readShapes[i])) continue;
+            if (document.Shapes[i].SameAs(reread.Shapes[i])) continue;
 
             throw new InvalidDataException(
                 $"shape {i} did not read back as the value that was set for: {string.Join(", ", edits)}");
@@ -440,24 +496,32 @@ public static partial class Program
 
     private static string? SweepMassEdit(RagdollDocument document, string virtualPath, List<string> failures)
     {
-        var node = document.Ragdolls[0];
-        int index = node.Bodies
-                        .Where(body => body.MotionId >= 0 && body.MotionId < node.Motions.Count)
-                        .Where(body => node.Motions[body.MotionId].Mass > 0f &&
-                                       float.IsFinite(node.Motions[body.MotionId].Mass))
-                        .Select(body => body.Index)
-                        .DefaultIfEmpty(-1)
-                        .First();
+        int ragdoll = -1, index = -1;
+        for (int r = 0; r < document.Ragdolls.Count && index < 0; r++)
+        {
+            var node = document.Ragdolls[r];
+            foreach (var candidate in node.Bodies)
+            {
+                if (candidate.MotionId < 0 || candidate.MotionId >= node.Motions.Count) continue;
+                float stored = node.Motions[candidate.MotionId].Mass;
+                if (stored <= 0f || !float.IsFinite(stored)) continue;
+
+                ragdoll = r;
+                index = candidate.Index;
+                break;
+            }
+        }
+
         if (index < 0) return "";
 
-        var body = node.Bodies[index];
-        float mass = node.Motions[body.MotionId].Mass;
+        var picked = document.Ragdolls[ragdoll];
+        float mass = picked.Motions[picked.Bodies[index].MotionId].Mass;
         float wanted = mass * 2f;
         try
         {
-            document.SetBodyMass(0, index, wanted);
+            document.SetBodyMass(ragdoll, index, wanted);
             var reread = new RagdollDocument(document.Serialize());
-            float read = reread.Ragdolls[0].Motions[reread.Ragdolls[0].Bodies[index].MotionId].Mass;
+            float read = reread.Ragdolls[ragdoll].Motions[reread.Ragdolls[ragdoll].Bodies[index].MotionId].Mass;
             if (read != wanted)
                 return $"{virtualPath}: the mass edit read back as {read} where {wanted} was set";
             return null;
@@ -471,18 +535,27 @@ public static partial class Program
 
     private static string? SweepLimitEdit(RagdollDocument document, string virtualPath, List<string> failures)
     {
-        int index = document.Ragdolls.SelectMany(node => node.Constraints)
-                                     .Where(row => row.LimitsEditable)
-                                     .Select(row => row.Index)
-                                     .DefaultIfEmpty(-1)
-                                     .First();
+        int ragdoll = -1, index = -1;
+        for (int r = 0; r < document.Ragdolls.Count && index < 0; r++)
+        {
+            var node = document.Ragdolls[r];
+            for (int i = 0; i < node.Constraints.Count; i++)
+            {
+                if (!node.Constraints[i].LimitsEditable) continue;
+
+                ragdoll = r;
+                index = i;
+                break;
+            }
+        }
+
         if (index < 0) return "";
 
         try
         {
-            document.SetConstraintLimits(0, index, -0.25f, 0.25f);
+            document.SetConstraintLimits(ragdoll, index, -0.25f, 0.25f);
             var reread = new RagdollDocument(document.Serialize());
-            var read = reread.Ragdolls[0].Constraints[index];
+            var read = reread.Ragdolls[ragdoll].Constraints[index];
             if (read.MinAngle != -0.25f || read.MaxAngle != 0.25f)
                 return $"{virtualPath}: the limit edit read back as {read.MinAngle}..{read.MaxAngle} " +
                        "where -0.25..0.25 was set";

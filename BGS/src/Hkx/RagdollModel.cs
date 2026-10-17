@@ -6,6 +6,10 @@ using System.Numerics;
 
 namespace OpenCommonwealth.Services.Hkx;
 
+public sealed record RagdollEditOutcome(IReadOnlyList<int> Applied, IReadOnlyList<int> Skipped);
+
+public sealed record RagdollLimitEdit(int Constraint, float MinAngle, float MaxAngle, float? ConeMaxAngle);
+
 public sealed class RagdollBody
 {
     internal RagdollBody(int index, int motionId, int materialId, int shapeObjectId, string name)
@@ -113,6 +117,19 @@ public sealed class RagdollShape
 
     public float Radius { get; internal set; }
 
+    public int Vertices { get; internal set; }
+
+    public int Planes { get; internal set; }
+
+    public int Faces { get; internal set; }
+
+    public int Indices { get; internal set; }
+
+    public bool CarriesPolytopeData => Vertices > 0 || Planes > 0 || Faces > 0 || Indices > 0;
+
+    public string PolytopeCounts =>
+        $"{Vertices} vertices, {Planes} planes, {Faces} faces and {Indices} indices";
+
     internal RagdollShape Copy()
     {
         var copy = new RagdollShape(InstanceIndex, ObjectId, ClassName)
@@ -120,13 +137,18 @@ public sealed class RagdollShape
             A = A,
             B = B,
             Radius = Radius,
+            Vertices = Vertices,
+            Planes = Planes,
+            Faces = Faces,
+            Indices = Indices,
         };
         return copy;
     }
 
     internal bool SameAs(RagdollShape other) =>
         InstanceIndex == other.InstanceIndex && ObjectId == other.ObjectId && Radius == other.Radius &&
-        A == other.A && B == other.B;
+        A == other.A && B == other.B && Vertices == other.Vertices && Planes == other.Planes &&
+        Faces == other.Faces && Indices == other.Indices;
 }
 
 public sealed class RagdollConstraint
@@ -165,6 +187,18 @@ public sealed class RagdollConstraint
 
     public float PlaneMaxAngle { get; internal set; }
 
+    public int ConeAngleMeasurementMode { get; internal set; }
+
+    public float ConeMinAngle { get; internal set; }
+
+    public int PlaneAngleMeasurementMode { get; internal set; }
+
+    public bool ConeEditable =>
+        IsRagdoll && ConeAngleMeasurementMode == RagdollLayout.VerifiedConeAngleMode;
+
+    public bool PlaneEditable =>
+        IsRagdoll && PlaneAngleMeasurementMode == RagdollLayout.VerifiedPlaneAngleMode;
+
     internal RagdollConstraint Copy()
     {
         var copy = new RagdollConstraint(Index, ObjectId, InstanceIndex, ClassName)
@@ -175,6 +209,9 @@ public sealed class RagdollConstraint
             ConeMaxAngle = ConeMaxAngle,
             PlaneMinAngle = PlaneMinAngle,
             PlaneMaxAngle = PlaneMaxAngle,
+            ConeAngleMeasurementMode = ConeAngleMeasurementMode,
+            ConeMinAngle = ConeMinAngle,
+            PlaneAngleMeasurementMode = PlaneAngleMeasurementMode,
         };
         return copy;
     }
@@ -183,7 +220,9 @@ public sealed class RagdollConstraint
         Index == other.Index && ObjectId == other.ObjectId && InstanceIndex == other.InstanceIndex &&
         ClassName == other.ClassName && Friction == other.Friction && MinAngle == other.MinAngle &&
         MaxAngle == other.MaxAngle && ConeMaxAngle == other.ConeMaxAngle &&
-        PlaneMinAngle == other.PlaneMinAngle && PlaneMaxAngle == other.PlaneMaxAngle;
+        PlaneMinAngle == other.PlaneMinAngle && PlaneMaxAngle == other.PlaneMaxAngle &&
+        ConeAngleMeasurementMode == other.ConeAngleMeasurementMode && ConeMinAngle == other.ConeMinAngle &&
+        PlaneAngleMeasurementMode == other.PlaneAngleMeasurementMode;
 }
 
 public sealed class RagdollNode
@@ -267,6 +306,10 @@ internal static class RagdollLayout
     internal const string LimitedHingeConstraintClass = "hkpLimitedHingeConstraintData";
     internal const string RagdollAtomsClass = "hkpRagdollConstraintDataAtoms";
     internal const string LimitedHingeAtomsClass = "hkpLimitedHingeConstraintDataAtoms";
+
+    internal const int VerifiedConeAngleMode = 0;
+    internal const int VerifiedPlaneAngleMode = 1;
+    internal const string PolytopeFaceClass = "hknpConvexPolytopeShapeFace";
 
     internal static readonly string[] SystemArrays =
     {
