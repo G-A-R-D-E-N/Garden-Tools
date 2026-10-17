@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace fo4 {
 
@@ -31,6 +32,25 @@ enum class ScalarMutationStatus {
   unchanged,
   record_missing,
   subrecord_missing,
+};
+
+enum class CountedArrayMutationStatus {
+  updated,
+  record_missing,
+  index_out_of_range,
+  subrecord_missing,
+};
+
+enum class SubrecordGroupMutationStatus {
+  updated,
+  record_missing,
+  index_out_of_range,
+  subrecord_missing,
+};
+
+struct SubrecordGroupSpan {
+  std::size_t first{0};
+  std::size_t end{0};
 };
 
 enum class ConditionMutationStatus {
@@ -65,19 +85,7 @@ enum class RecordRenumberStatus {
   target_exists,
 };
 
-// Inclusive [min, max] local FormID range this plugin may allocate for its own
-// records, selected by the TES4 SmallFile flag.
-//
-// Light plugins are 0x001..0xFFF. TESFile::AdjustFormIDFileIndex (Fallout4.exe
-// 1.10.163, RVA 0x131f90 -- the symbol dumps say 0x131fa0 and are off by 0x10)
-// rebuilds a light record's runtime FormID as
-//
-//     *id &= 0xFFF;  *id |= 0xFE000000;  *id |= u16 [this+0x372] << 12;
-//
-// so bits 12..23 of the on-disk local are discarded before the slot is OR'd
-// in. A local above 0xFFF does not fail to load -- it silently aliases onto
-// another record, which is why the ceiling has to be enforced here: the engine
-// will never report the violation. See docs/ESL_FORMIDS.md and issue #26.
+// Light plugins cap local IDs at 0xFFF; see docs/code-notes/Radicle.md (local_form_id_range).
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 bool allows_hardcoded_range(const Plugin& plugin);
 
@@ -94,6 +102,8 @@ FormKey create_local_record(Plugin& plugin, Signature signature);
 FormKey create_local_record(Plugin& plugin,
                             Signature signature,
                             std::vector<Subrecord> subrecords);
+
+Group* find_or_create_top_group(Plugin& plugin, Signature signature);
 
 // Deletes the record with its owned child GRUP. Refuses deletion when any
 // schema-proven in-plugin FormLink still targets the record or a record inside
@@ -169,6 +179,31 @@ std::optional<std::size_t> record_field_count(const Plugin& plugin,
                                               const FormKey& record_key,
                                               std::string_view path);
 
+CountedArrayMutationStatus insert_record_counted_element(Plugin& plugin,
+                                                         const FormKey& record_key,
+                                                         const schema::CountedArrayDescriptor& array,
+                                                         std::size_t index);
+
+CountedArrayMutationStatus remove_record_counted_element(Plugin& plugin,
+                                                         const FormKey& record_key,
+                                                         const schema::CountedArrayDescriptor& array,
+                                                         std::size_t index);
+
+std::optional<std::vector<SubrecordGroupSpan>> subrecord_group_spans(
+    const Plugin& plugin,
+    const FormKey& record_key,
+    const schema::SubrecordGroupDescriptor& group);
+
+SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
+                                                           const FormKey& record_key,
+                                                           const schema::SubrecordGroupDescriptor& group,
+                                                           std::size_t index);
+
+SubrecordGroupMutationStatus remove_record_subrecord_group(Plugin& plugin,
+                                                           const FormKey& record_key,
+                                                           const schema::SubrecordGroupDescriptor& group,
+                                                           std::size_t index);
+
 inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
                                   const FormKey& record_key,
                                   std::span<const CtdaCondition> conditions) {
@@ -180,6 +215,7 @@ inline ConditionMutationStatus set_record_conditions(Plugin& plugin,
         record.header.signature == sig_tes4 || record.form_key != record_key) {
       return;
     }
+    require_decodable(record);
     status = ConditionMutationStatus::unchanged;
     const auto window = schema::root_condition_window(record);
     if (window.status == schema::RootConditionStatus::multiple_lists) {

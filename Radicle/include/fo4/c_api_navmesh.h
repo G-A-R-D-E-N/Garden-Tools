@@ -82,10 +82,31 @@ typedef struct radicle_navi {
   void* internal;
 } radicle_navi;
 
+typedef struct radicle_navi_path {
+  const radicle_form_key* navmeshes;
+  size_t navmesh_count;
+} radicle_navi_path;
+
+typedef struct radicle_navi_anchor {
+  radicle_form_key navmesh;
+  uint32_t value;
+} radicle_navi_anchor;
+
+typedef struct radicle_navi_path_list {
+  const radicle_navi_path* paths;
+  size_t path_count;
+  const radicle_navi_anchor* anchors;
+  size_t anchor_count;
+  void* internal;
+} radicle_navi_path_list;
+
 RADICLE_API radicle_status radicle_navmesh_decode(const radicle_env* env, const radicle_record* record, const radicle_navmesh** out_navmesh);
 RADICLE_API void radicle_navmesh_free(const radicle_navmesh* navmesh);
+RADICLE_API radicle_status radicle_navmesh_triangle_edge_is_extra(const radicle_navmesh_triangle* triangle, size_t edge, int32_t* out_is_extra);
 RADICLE_API radicle_status radicle_navi_decode(const radicle_env* env, const radicle_record* record, const radicle_navi** out_navi);
 RADICLE_API void radicle_navi_free(const radicle_navi* navi);
+RADICLE_API radicle_status radicle_navi_path_list_decode(const radicle_env* env, const radicle_record* record, const radicle_navi_path_list** out_list);
+RADICLE_API void radicle_navi_path_list_free(const radicle_navi_path_list* list);
 RADICLE_API radicle_status radicle_plugin_set_navmesh_vertex(radicle_plugin* plugin, radicle_form_key key, size_t index, const radicle_navmesh_vertex* value);
 RADICLE_API radicle_status radicle_plugin_set_navmesh_triangle(radicle_plugin* plugin, radicle_form_key key, size_t index, const radicle_navmesh_triangle* value);
 RADICLE_API radicle_status radicle_plugin_set_navmesh_door(radicle_plugin* plugin, radicle_form_key key, size_t index, const radicle_navmesh_door_link* value);

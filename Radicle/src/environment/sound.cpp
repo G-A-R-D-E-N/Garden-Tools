@@ -2,6 +2,8 @@
 
 #include "record_reader.hpp"
 
+#include <algorithm>
+
 namespace fo4::env {
 namespace {
 
@@ -22,6 +24,41 @@ std::optional<std::string_view> text(const Reader& reader, Signature tag) {
 void links(const Reader& reader, const Subrecord& sub, std::vector<FormKey>& out) {
   if (sub.data.size() % 4 != 0) reader.fail(sub.signature, "must contain complete four-byte links");
   for (std::size_t i = 0; i < sub.data.size(); i += 4) out.push_back(reader.link_at(sub, i));
+}
+
+constexpr std::size_t k_max_sound_depth = 8;
+constexpr std::size_t k_max_sound_visits = 4096;
+constexpr std::size_t k_max_sound_files = 4096;
+
+const RecordRef& linked(const Environment& env, const Record& owner, Signature link,
+                        const std::optional<FormKey>& key) {
+  const auto* target = key ? env.winner(*key) : nullptr;
+  if (target == nullptr) Reader::fail(owner, link, "must link to a loaded sound descriptor");
+  return *target;
+}
+
+void collect_descriptor(const Environment& env, const RecordRef& ref, std::size_t depth,
+                        std::vector<FormKey>& path, std::vector<std::string_view>& out, std::size_t& visits) {
+  const auto& record = *ref.record;
+  if (depth >= k_max_sound_depth) Reader::fail(record, sig("SNDR"), "exceeds the sound descriptor depth limit");
+  if (++visits > k_max_sound_visits) Reader::fail(record, sig("SNDR"), "exceeds the sound descriptor visit limit");
+  if (std::find(path.begin(), path.end(), record.form_key) != path.end()) {
+    Reader::fail(record, sig("SNDR"), "links back to an ancestor descriptor");
+  }
+  path.push_back(record.form_key);
+  const auto data = decode_sound_descriptor(env, ref);
+  if (!data.kind || *data.kind == 0x1EEF540Au) {
+    out.insert(out.end(), data.files.begin(), data.files.end());
+  } else if (*data.kind == 0x54651A43u) {
+    for (const auto& child : data.descriptors) {
+      collect_descriptor(env, linked(env, record, sig("DNAM"), child), depth + 1, path, out, visits);
+    }
+  } else {
+    collect_descriptor(env, linked(env, record, sig("BNAM"), data.base_descriptor), depth + 1, path, out, visits);
+    for (const auto& rate : data.rate_files) out.push_back(rate.file);
+  }
+  if (out.size() > k_max_sound_files) Reader::fail(record, sig("SNDR"), "exceeds the sound file limit");
+  path.pop_back();
 }
 
 }
@@ -155,5 +192,54 @@ FootstepSetData decode_footstep_set(const Environment& env, const RecordRef& ref
   }
   return out;
 }
+
+std::vector<std::string_view> resolve_sound_files(const Environment& env, const RecordRef& ref) {
+  std::vector<std::string_view> out;
+  std::vector<FormKey> path;
+  std::size_t visits = 0;
+  if (ref.record->header.signature == sig("SOUN")) {
+    const auto marker = decode_sound_marker(env, ref);
+    collect_descriptor(env, linked(env, *ref.record, sig("SDSC"), marker.descriptor), 0, path, out, visits);
+  } else {
+    collect_descriptor(env, ref, 0, path, out, visits);
+  }
+  return out;
+}
+
+std::optional<std::size_t> select_rate_file_index(const std::vector<SoundRateFile>& rate_files, std::uint32_t rpm) {
+  std::optional<std::size_t> previous;
+  for (std::size_t i = 0; i < rate_files.size(); ++i) {
+    if (rate_files[i].rpm == 0) continue;
+    if (!previous) {
+      previous = i;
+      if (rpm <= rate_files[i].rpm) return i;
+      continue;
+    }
+    if (rpm <= rate_files[i].rpm) {
+      return rpm - rate_files[*previous].rpm < rate_files[i].rpm - rpm ? *previous : i;
+    }
+    previous = i;
+  }
+  return previous;
+}
+
+std::size_t select_standard_file_index(std::size_t count, std::size_t draw_index,
+                                       std::optional<std::size_t> previous_index) {
+  if (draw_index >= count) throw WorldDecodeError("sound file draw is outside the file list");
+  if (count > 1 && previous_index && draw_index == *previous_index) return (draw_index + 1) % count;
+  return draw_index;
+}
+
+double sound_frequency_factor(std::int8_t frequency_shift) {
+  return std::clamp(1.0 + frequency_shift * 0.01, 0.1, 2.0);
+}
+
+bool sound_is_looping(std::uint8_t loop_control) { return (loop_control & 0x38u) != 0; }
+
+double sound_sidechain_send(std::uint8_t sidechain_control) { return std::clamp(sidechain_control * 0.01, 0.0, 1.0); }
+
+double sound_small_rumble_send(std::uint8_t rumble_control) { return (rumble_control & 0x0Fu) / 15.0; }
+
+double sound_big_rumble_send(std::uint8_t rumble_control) { return (rumble_control >> 4) / 15.0; }
 
 }

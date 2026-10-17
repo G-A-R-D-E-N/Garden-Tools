@@ -1,8 +1,10 @@
+#include "fo4/c_api_env.h"
 #include "fo4/graph/check_errors.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/formlink_slots.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -11,16 +13,20 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <vector>
 
 namespace {
 
 constexpr std::uint32_t k_deleted_flag = 0x20;
+constexpr std::uint32_t k_partial_form_flag = 0x4000;
+constexpr std::uint32_t k_small_file_flag = 0x200;
 
-void write_header(fo4::test::ByteWriter& out, std::string_view master) {
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+void write_header(fo4::test::ByteWriter& out, std::string_view master, std::uint32_t flags = 0) {
+  const auto tes4 = fo4::test::begin_record(out, "TES4", flags, 0);
   fo4::test::ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(1);
@@ -43,6 +49,20 @@ void write_empty_record(fo4::test::ByteWriter& out, std::string_view signature,
                         std::uint32_t form_id, std::uint32_t flags = 0) {
   const auto group = fo4::test::begin_group(out, signature, 0);
   const auto record = fo4::test::begin_record(out, signature, flags, form_id);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+}
+
+void write_record_with_subrecords(fo4::test::ByteWriter& out, std::string_view signature,
+                                  std::uint32_t flags, std::uint32_t form_id,
+                                  std::initializer_list<std::string_view> subrecords) {
+  const auto group = fo4::test::begin_group(out, signature, 0);
+  const auto record = fo4::test::begin_record(out, signature, flags, form_id);
+  for (const auto subrecord : subrecords) {
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    fo4::test::write_subrecord(out, subrecord, data.bytes);
+  }
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
 }
@@ -108,6 +128,21 @@ fo4::Plugin make_expl_plugin(std::uint32_t selector) {
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   return fo4::read_plugin(out.bytes, "Variant.esp");
+}
+
+std::vector<std::byte> duplicate_scalar_bytes() {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "REFR", 0);
+  const auto record = fo4::test::begin_record(out, "REFR", 0, 0x000800);
+  for (const std::uint32_t health : {50u, 75u}) {
+    fo4::test::ByteWriter xhlt;
+    xhlt.u32(health);
+    fo4::test::write_subrecord(out, "XHLT", xhlt.bytes);
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
 }
 
 const fo4::Record* find_record(const fo4::Plugin& plugin, std::string_view signature) {
@@ -207,6 +242,7 @@ TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
   const char* data = std::getenv("FO4_DATA_DIR");
   if (!data) GTEST_SKIP() << "set FO4_DATA_DIR to a Fallout 4 Data folder";
   const std::filesystem::path dir{data};
+  record_game_build(detect_game_build(dir));
   if (!std::filesystem::exists(dir / "Fallout4.esm")) GTEST_SKIP() << "Fallout4.esm not found";
 
   const auto plugin = fo4::read_plugin_file(dir / "Fallout4.esm");
@@ -254,7 +290,7 @@ TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
   const auto record = fo4::test::begin_record(out, "RFGP", 0, 0x000802);
   fo4::test::ByteWriter wnam;
   wnam.u32(0x000900);
-  fo4::test::write_subrecord(out, "RNAM", wnam.bytes);
+  fo4::test::write_subrecord(out, "WNAM", wnam.bytes);
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
@@ -266,6 +302,60 @@ TEST(CheckErrors, UnresolvedLinkInUnprovenSlotIsOnlyAWarning) {
                                                                           : fo4::CheckSeverity::warning)
         << finding.message;
   }
+}
+
+TEST(CheckErrors, MissingBranchStartingTopicIsReportedOnce) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "DLBR", 0);
+  const auto record = fo4::test::begin_record(out, "DLBR", 0, 0x000820);
+  fo4::test::ByteWriter snam;
+  snam.u32(0x000830);
+  fo4::test::write_subrecord(out, "SNAM", snam.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Mod.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = fo4::check_load_order(load_order);
+  const auto snam_findings = std::count_if(findings.begin(), findings.end(),
+                                           [](const fo4::CheckFinding& finding) {
+                                             return finding.subrecord.to_string() == "SNAM";
+                                           });
+  EXPECT_EQ(snam_findings, 1);
+  const auto starting = of_code(findings, fo4::CheckCode::branch_starting_topic_not_dial);
+  ASSERT_EQ(starting.size(), 1u);
+  EXPECT_EQ(starting[0].target, fo4::FormKey::parse("000830:Mod.esp"));
+  EXPECT_TRUE(of_code(findings, fo4::CheckCode::unresolved_link).empty());
+}
+
+namespace {
+fo4::Plugin rfgp_with_reference(const char* name, std::uint32_t rnam) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "RFGP", 0);
+  const auto record = fo4::test::begin_record(out, "RFGP", 0, 0x000840);
+  fo4::test::ByteWriter value;
+  value.u32(rnam);
+  fo4::test::write_subrecord(out, "RNAM", value.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, name);
+}
+}  // namespace
+
+TEST(CheckErrors, MissingGameMasterReferenceGroupTargetIsNotAnError) {
+  const auto plugin = rfgp_with_reference("Fallout4.esm", 0x000850);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link).empty());
+}
+
+TEST(CheckErrors, MissingModReferenceGroupTargetIsStillUnresolved) {
+  const auto plugin = rfgp_with_reference("Mod.esp", 0x000850);
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
+  ASSERT_EQ(unresolved.size(), 1u);
+  EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000850:Mod.esp"));
+  EXPECT_EQ(unresolved[0].severity, fo4::CheckSeverity::error);
 }
 
 TEST(CheckErrors, NoneFormIdIsNotALink) {
@@ -302,12 +392,104 @@ TEST(CheckErrors, VariantFormLinkSlotIsProvenOnlyForSelectedVariant) {
   ASSERT_NE(selected_record, nullptr);
   ASSERT_NE(other_record, nullptr);
 
-  const auto slot = fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 4);
+  const auto slot = fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0, 4);
   ASSERT_TRUE(slot.has_value());
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("LIGH")));
   EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(*slot, fo4::Signature::from_string("KYWD")));
-  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *other_record, subrecord, 4).has_value());
-  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0).has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *other_record, subrecord, 0, 4).has_value());
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *selected_record, subrecord, 0, 0).has_value());
+}
+
+TEST(CheckErrors, RepeatedVariantSubrecordUsesItsOwnSelector) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  const auto group = fo4::test::begin_group(out, "PACK", 0);
+  const auto record = fo4::test::begin_record(out, "PACK", 0, 0x000800);
+  fo4::test::ByteWriter first;
+  first.i32(3);
+  first.u32(0x000801);
+  first.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", first.bytes);
+  fo4::test::ByteWriter second;
+  second.i32(1);
+  second.u32(0x000802);
+  second.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", second.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
+  const auto* pack = find_record(plugin, "PACK");
+  ASSERT_NE(pack, nullptr);
+
+  const auto fields = fo4::schema::formlink_fields(fo4::Signature::from_string("PACK"));
+  const auto ptda = fo4::Signature::from_string("PTDA");
+  const auto first_slot = fo4::schema::formlink_field_at(fields, *pack, ptda, 0, 4);
+  const auto second_slot = fo4::schema::formlink_field_at(fields, *pack, ptda, 1, 4);
+  ASSERT_TRUE(first_slot.has_value());
+  ASSERT_TRUE(second_slot.has_value());
+  EXPECT_EQ(first_slot->label, "TargetKeyword");
+  EXPECT_EQ(second_slot->label, "TargetObject");
+  EXPECT_FALSE(fo4::schema::formlink_field_at(fields, *pack, ptda, 2, 4).has_value());
+}
+
+TEST(CheckErrors, RepeatedVariantSubrecordTargetsAreCheckedPerInstance) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x000800);
+  write_empty_record(out, "MISC", 0x000801);
+  const auto group = fo4::test::begin_group(out, "PACK", 0);
+  const auto record = fo4::test::begin_record(out, "PACK", 0, 0x000802);
+  fo4::test::ByteWriter first;
+  first.i32(3);
+  first.u32(0x000800);
+  first.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", first.bytes);
+  fo4::test::ByteWriter second;
+  second.i32(1);
+  second.u32(0x000801);
+  second.i32(0);
+  fo4::test::write_subrecord(out, "PTDA", second.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "Pack.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order), fo4::CheckCode::wrong_target_type).empty());
+}
+
+TEST(CheckErrors, PreflightFindingCarriesIssueCodeAsDetail) {
+  const auto bytes = duplicate_scalar_bytes();
+  const auto plugin = fo4::read_plugin(bytes, "Dup.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::schema_preflight);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].detail, "duplicate_scalar_subrecord");
+  EXPECT_EQ(findings[0].message.find(" ("), std::string::npos) << findings[0].message;
+}
+
+TEST(CheckErrors, CApiRowEndsWithIssueCode) {
+  const auto root = std::filesystem::temp_directory_path() / "radicle_check_errors_detail";
+  std::filesystem::create_directories(root);
+  const auto path = root / "Dup.esp";
+  const auto bytes = duplicate_scalar_bytes();
+  std::ofstream(path, std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  const auto text = path.u8string();
+  const std::string path_text{text.begin(), text.end()};
+  const char* paths[] = {path_text.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+
+  char** strings = nullptr;
+  size_t count = 0;
+  const auto status = radicle_env_check_errors(env, nullptr, 0, &strings, &count);
+  const std::vector<std::string> rows(strings, strings + count);
+  radicle_free_string_array(strings, count);
+  radicle_env_destroy(env);
+  std::filesystem::remove_all(root);
+
+  ASSERT_EQ(status, RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(rows.size(), 1u);
+  EXPECT_TRUE(rows[0].ends_with(" (duplicate_scalar_subrecord)")) << rows[0];
 }
 
 TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
@@ -323,4 +505,81 @@ TEST(CheckErrors, LowIdsInACustomFirstMasterAreNotTreatedAsHardcoded) {
   const auto unresolved = of_code(fo4::check_load_order(load_order), fo4::CheckCode::unresolved_link);
   ASSERT_EQ(unresolved.size(), 1u);
   EXPECT_EQ(unresolved[0].target, fo4::FormKey::parse("000014:CustomMaster.esm"));
+}
+
+TEST(CheckErrors, DeletedRecordContentIsFlaggedExceptReferenceBaseRecord) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_record_with_subrecords(out, "REFR", k_deleted_flag, 0x000800, {"NAME", "DATA"});
+  write_record_with_subrecords(out, "REFR", k_deleted_flag, 0x000801, {"NAME"});
+  write_record_with_subrecords(out, "KYWD", k_deleted_flag, 0x000802, {"DATA"});
+  const auto plugin = fo4::read_plugin(out.bytes, "Deleted.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::deleted_record_content);
+  ASSERT_EQ(findings.size(), 2u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000800:Deleted.esp"));
+  EXPECT_EQ(findings[0].message, "Record marked as deleted, but contains: DATA");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+  EXPECT_EQ(findings[1].record, fo4::FormKey::parse("000802:Deleted.esp"));
+}
+
+TEST(CheckErrors, PartialFormContentOtherThanEditorIdIsFlagged) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_record_with_subrecords(out, "QUST", k_partial_form_flag, 0x000800, {"EDID", "SCRI"});
+  write_record_with_subrecords(out, "QUST", k_partial_form_flag, 0x000801, {"EDID"});
+  const auto plugin = fo4::read_plugin(out.bytes, "Partial.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::partial_form_content);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000800:Partial.esp"));
+  EXPECT_EQ(findings[0].message, "Record is Partial Form, but contains: SCRI");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrors, PartialDialogueInfoOrderIsNotContentButOtherSubrecordsAre) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_record_with_subrecords(out, "DIAL", k_partial_form_flag, 0x000800, {"EDID", "INOM"});
+  write_record_with_subrecords(out, "DIAL", k_partial_form_flag, 0x000801, {"EDID", "FULL"});
+  const auto plugin = fo4::read_plugin(out.bytes, "PartialDial.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::partial_form_content);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000801:PartialDial.esp"));
+  EXPECT_EQ(findings[0].message, "Record is Partial Form, but contains: FULL");
+}
+
+TEST(CheckErrors, LightPluginObjectIdAboveTwelveBitsIsInvalid) {
+  fo4::test::ByteWriter out;
+  write_header(out, "Base.esm", k_small_file_flag);
+  write_empty_record(out, "KYWD", 0x01000FFF);
+  write_empty_record(out, "KYWD", 0x01001000);
+  const auto plugin = fo4::read_plugin(out.bytes, "Light.esl");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::light_object_id_overflow);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("001000:Light.esl"));
+  EXPECT_EQ(findings[0].message, "ObjectID 001000 is invalid for a light module");
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::error);
+}
+
+TEST(CheckErrors, MasterIndexPastMasterTableIsInternalMismatch) {
+  fo4::test::ByteWriter out;
+  write_header(out, {});
+  write_empty_record(out, "KYWD", 0x01000800);
+  write_empty_record(out, "KYWD", 0x00000801);
+  const auto plugin = fo4::read_plugin(out.bytes, "Stray.esp");
+  const std::vector<const fo4::Plugin*> load_order{&plugin};
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::internal_form_id_mismatch);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000800:Stray.esp"));
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
+}
+
+TEST(CheckErrors, RecordLevelCodeNamesAreStable) {
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::deleted_record_content), "deleted_record_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::partial_form_content), "partial_form_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::light_object_id_overflow), "light_object_id_overflow");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::internal_form_id_mismatch), "internal_form_id_mismatch");
 }

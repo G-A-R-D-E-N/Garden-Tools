@@ -1,9 +1,17 @@
+import type { KeyboardEvent } from 'react';
 import type { ConflictFieldRow, ConflictMatrix } from './backend';
 import { useDialogs } from './useDialogs';
 import type { CompareRow } from './PluginCompareDialog';
 import { errorText } from './errors';
 
 export const back = () => window.chrome?.webview?.hostObjects?.backend;
+
+export const f2Edit = (edit: () => void) => ({
+  tabIndex: -1,
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key === 'F2' && e.target === e.currentTarget) { e.preventDefault(); edit(); }
+  },
+});
 
 export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus, onReload, onPluginsChanged }: {
   matrix: ConflictMatrix;
@@ -41,6 +49,35 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
       setStatus(msg.startsWith('LOSES:') || msg.startsWith('EXISTS:')
         ? `Not copied -- ${msg.slice(msg.indexOf(':') + 1).trim()}` : msg);
       await onReload();
+    } catch (e) { setStatus('Copy failed: ' + errorText(e)); }
+  };
+
+  const copyAsWrapperInto = async (col: number) => {
+    closeMenu();
+    const b = back();
+    if (!b) return;
+    const picked = await askForTarget({
+      title: 'Copy as wrapper into',
+      description: `Copies ${matrix.EditorID || matrix.FormKey} from ${matrix.Plugins[col]} into the plugin you choose as a new record, then overrides ${matrix.FormKey} there as a leveled list whose single entry is that copy.`,
+      confirmLabel: 'Create', defaultTarget: editablePlugins[0] ?? '',
+    });
+    if (!picked) return;
+    const sourceEditorId = matrix.EditorID.toLowerCase();
+    const editorId = await askPrompt({
+      title: 'Copy as wrapper',
+      label: 'EditorID for the wrapped copy',
+      placeholder: 'Leave empty for no EditorID',
+      confirmLabel: 'Create',
+      validate: v => v.trim().toLowerCase() === sourceEditorId && sourceEditorId !== ''
+        ? `The wrapped copy needs an EditorID different from ${matrix.EditorID}.` : null,
+    });
+    if (editorId === null) return;
+    setStatus('Creating wrapper…');
+    try {
+      const msg = await b.CopyAsWrapper(matrix.Plugins[col], matrix.FormKey, picked.target, editorId.trim() || null);
+      setStatus(msg.startsWith('LOSES:') ? `Not copied -- ${msg.slice(6).trim()}` : msg);
+      await onReload();
+      onPluginsChanged?.();
     } catch (e) { setStatus('Copy failed: ' + errorText(e)); }
   };
 
@@ -363,12 +400,12 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     const plug = matrix.Plugins[col];
     setStatus(`Checking ${plug} for errors…`);
     try {
-      const rows: { Code: string; Severity: string; FormKey: string; Message: string }[] =
+      const rows: { Code: string; Detail: string; Severity: string; FormKey: string; Message: string }[] =
         JSON.parse(await b.CheckForErrors(plug, 500));
       const errors = rows.filter(r => r.Severity === 'error').length;
       setStatus(rows.length === 0 ? `No errors found in ${plug}.`
         : `${errors} error(s), ${rows.length - errors} warning(s) in ${plug}:\n`
-          + rows.slice(0, 20).map(r => `${r.Severity} ${r.Code} ${r.FormKey}: ${r.Message}`).join('\n')
+          + rows.slice(0, 20).map(r => `${r.Severity} ${r.Code}${r.Detail ? ' (' + r.Detail + ')' : ''} ${r.FormKey}: ${r.Message}`).join('\n')
           + (rows.length > 20 ? `\n…and ${rows.length - 20} more` : ''));
     } catch (e) { setStatus('Check failed: ' + errorText(e)); }
   };
@@ -498,6 +535,7 @@ export function useRecordActions({ matrix, editablePlugins, closeMenu, setStatus
     lootReport,
     updateOnam,
     copyAsDisabledOverrideInto,
+    copyAsWrapperInto,
     copyText,
     elementAction,
     createSchemaRecord,

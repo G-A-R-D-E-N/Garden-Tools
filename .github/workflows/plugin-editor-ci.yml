@@ -11,6 +11,7 @@ on:
       - "PluginEditTool/Mutagen/**"
       - "PluginEditTool/README.md"
       - "PluginEditTool/docs/MCP_SETUP.md"
+      - "PluginEditTool/native/apps/fo4ide/McpTools.cpp"
       - ".github/workflows/plugin-editor-ci.yml"
   pull_request:
   workflow_dispatch:
@@ -88,7 +89,7 @@ jobs:
           name: plugin-editor-windows-failure
           path: TestResults/**
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
   linux:
     name: Core managed tests (Linux)
@@ -133,4 +134,4 @@ jobs:
           name: plugin-editor-linux-failure
           path: TestResults/**
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3

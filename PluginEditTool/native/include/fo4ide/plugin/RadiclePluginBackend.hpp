@@ -3,14 +3,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
+#include <fo4/archive/assets.hpp>
+#include <fo4/environment/strings.hpp>
 #include <fo4/graph/conflict_graph.hpp>
 #include <fo4/plugin/container.hpp>
 #include <fo4ide/plugin/ConditionFunctions.hpp>
@@ -52,6 +56,7 @@ public:
     Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json& arguments) override;
     Result<nlohmann::json> updateOnam(const nlohmann::json& arguments) override;
     Result<nlohmann::json> copyAsDisabledOverride(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> copyAsWrapper(const nlohmann::json& arguments) override;
     Result<nlohmann::json> compactToEsl(const nlohmann::json& arguments) override;
     Result<nlohmann::json> renumberPluginFormIds(const nlohmann::json& arguments) override;
     Result<nlohmann::json> deepCopyAsOverride(const nlohmann::json& arguments) override;
@@ -67,6 +72,16 @@ public:
     Result<nlohmann::json> getPlacedReferences(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> getPlacedReferencesAtGrid(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> createPlacedObject(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> createInteriorCell(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getLeveledList(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> setLeveledListSettings(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> editLeveledListEntry(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getNpc(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> editNpcEntries(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getFaction(const nlohmann::json& arguments) const override;
+    Result<nlohmann::json> editFactionEntries(const nlohmann::json& arguments) override;
+    Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& arguments) const override;
     Result<nlohmann::json> conditionFunctionParams() const override {
         return nlohmann::json(ConditionFunctions::asJson());
     }
@@ -173,6 +188,10 @@ private:
     // loaded plugins, mirroring WriteService.ResolveFk.
     std::optional<fo4::FormKey> resolveListValue(std::string_view value) const;
     void ensureOwnerMaster(fo4::Plugin& plugin, const fo4::PluginKey& owner) const;
+    Result<fo4::FormKey> copyRecordAsNewLocked(fo4::Plugin& mutated,
+                                               const LoadedPlugin& source,
+                                               const fo4::FormKey& key,
+                                               std::optional<std::string_view> newEditorId) const;
     Result<fo4::FormKey> createProjectileLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createExplosionLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
     Result<fo4::FormKey> createHazardLocked(fo4::Plugin& mutated, const nlohmann::json& payload) const;
@@ -220,11 +239,26 @@ private:
     Result<nlohmann::json> getConditionFunctions() const;
     Result<nlohmann::json> getConditionRunOnTypes() const;
 
+    Result<nlohmann::json> listStringTables(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> getStrings(const nlohmann::json& arguments) const;
+    Result<nlohmann::json> lookupString(const nlohmann::json& arguments) const;
+    Result<std::vector<fo4::env::PluginStringTable>> readStringTables(const LoadedPlugin& loaded,
+                                                                     std::string_view language) const;
+    std::shared_ptr<const fo4::archive::AssetResolver> stringAssets(const LoadedPlugin& loaded) const;
+
     LoadedPlugin* findPlugin(std::string_view name);
     const LoadedPlugin* findPlugin(std::string_view name) const;
     bool isEditable(const LoadedPlugin& plugin) const;
     bool fileUnchangedSinceLoad(const LoadedPlugin& plugin) const;
     std::optional<Error> writeGuard(const LoadedPlugin& plugin) const;
+    Result<bool> stageTypedRecordEdit(std::string_view pluginName,
+                                      const fo4::FormKey& key,
+                                      std::string_view failureCode,
+                                      const std::function<void(fo4::Plugin&)>& edit);
+    Result<const fo4::Plugin*> versionPlugin(std::string_view pluginName,
+                                             const fo4::FormKey& key) const;
+    std::optional<Error> requireReferenceCoverage(const fo4::FormKey& key,
+                                                  std::string_view operation) const;
     std::optional<std::filesystem::path> allowedSavePath(
         const std::filesystem::path& path) const;
     std::optional<std::filesystem::path> allowedLocalizationDirectory(
@@ -239,6 +273,10 @@ private:
     std::uint64_t mutationEpoch_{0};
     fo4::ConflictGraph graph_;
     std::filesystem::path dataDirectory_;
+    using StringArchiveStamp = std::tuple<std::filesystem::path, std::uintmax_t, std::filesystem::file_time_type>;
+    mutable std::mutex stringAssetsMutex_;
+    mutable std::vector<StringArchiveStamp> stringArchives_;
+    mutable std::shared_ptr<const fo4::archive::AssetResolver> stringAssets_;
     std::filesystem::path trustedNewPluginRoot_;
     std::vector<std::filesystem::path> trustedSaveRoots_;
 };

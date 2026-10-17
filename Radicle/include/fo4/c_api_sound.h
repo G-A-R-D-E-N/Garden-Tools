@@ -77,6 +77,12 @@ typedef struct radicle_footstep_set {
   void* internal;
 } radicle_footstep_set;
 
+typedef struct radicle_sound_file_list {
+  const radicle_sound_file* files;
+  size_t file_count;
+  void* internal;
+} radicle_sound_file_list;
+
 RADICLE_API radicle_status radicle_sound_descriptor_decode(const radicle_env* env, const radicle_record* record,
                                                            const radicle_sound_descriptor** out_descriptor);
 RADICLE_API void radicle_sound_descriptor_free(const radicle_sound_descriptor* descriptor);
@@ -90,6 +96,19 @@ RADICLE_API radicle_status radicle_footstep_get_info(const radicle_env* env, con
 RADICLE_API radicle_status radicle_footstep_set_decode(const radicle_env* env, const radicle_record* record,
                                                       const radicle_footstep_set** out_set);
 RADICLE_API void radicle_footstep_set_free(const radicle_footstep_set* set);
+RADICLE_API radicle_status radicle_sound_resolve_files(const radicle_env* env, const radicle_record* record,
+                                                      const radicle_sound_file_list** out_list);
+RADICLE_API void radicle_sound_file_list_free(const radicle_sound_file_list* list);
+RADICLE_API radicle_status radicle_sound_select_rate_file(const radicle_sound_rate_file* rate_files,
+                                                          size_t rate_file_count, uint32_t rpm,
+                                                          int32_t* out_has_index, size_t* out_index);
+RADICLE_API radicle_status radicle_sound_select_standard_file(size_t count, size_t draw_index, int32_t has_previous,
+                                                              size_t previous_index, size_t* out_index);
+RADICLE_API radicle_status radicle_sound_frequency_factor(int8_t frequency_shift, double* out_factor);
+RADICLE_API radicle_status radicle_sound_is_looping(uint8_t loop_control, int32_t* out_looping);
+RADICLE_API radicle_status radicle_sound_sidechain_send(uint8_t sidechain_control, double* out_send);
+RADICLE_API radicle_status radicle_sound_small_rumble_send(uint8_t rumble_control, double* out_send);
+RADICLE_API radicle_status radicle_sound_big_rumble_send(uint8_t rumble_control, double* out_send);
 
 #ifdef __cplusplus
 }

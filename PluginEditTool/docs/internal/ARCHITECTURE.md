@@ -8,7 +8,7 @@ This document describes the shipping C++ architecture. User documentation lives 
 FO4IDE is now one native C++23 process plus a React bundle:
 
 ```text
-React / WebView2 or WebKitGTK
+React in WebView2 (Windows) or a browser tab (Linux)
         |
         | JSON RPC / host-object calls
         v
@@ -27,8 +27,10 @@ The executable target is `fo4ide`, shipped as `FO4RecordEditor.exe` on Windows f
 with existing MO2 launch entries and MCP configurations. `native/apps/fo4ide/main.cpp` owns process
 startup, target registration, the desktop window, HTTP mode, and stdio MCP mode.
 
-The React application lives under `web/src/`. Windows embeds it in WebView2; Linux uses the native
-window implementation backed by WebKitGTK. Packaged builds place `web/dist` beside the executable.
+The React application lives under `web/src/`. Windows embeds it in WebView2. Linux has no embedded
+window (`NativeWindow::available()` is false off Windows): the process serves `web/dist` and the RPC
+endpoint on a loopback port and opens the page in the default browser. Packaged builds place
+`web/dist` beside the executable.
 
 The old `FO4RecordEditor*` C# projects and vendored Mutagen tree are historical implementation/oracle
 material during the rewrite. They are not the backend used by the native host and must not be used as
@@ -37,7 +39,10 @@ a reason to add a new runtime dependency on .NET.
 ## IPC contract
 
 React uses `window.chrome.webview.hostObjects.<target>.<method>(...)`. The native window forwards
-those calls into `RpcDispatcher`, which invokes a registered `fo4ide::rpc::Target`.
+those calls into `RpcDispatcher`, which invokes a registered `fo4ide::rpc::Target`. In a browser tab,
+`web/src/hostbridge.ts` installs the same `hostObjects` surface over `POST /rpc` and the `/events`
+stream, sending the per-run access token (the `t` parameter of the URL the process prints) in the
+`X-FO4IDE-Token` header.
 
 Important targets:
 
@@ -196,8 +201,9 @@ provider stack as part of backend work.
 
 ## MCP
 
-`native/apps/fo4ide/main.cpp` creates the MCP registry and registers native tools backed by the same
-service targets used by the GUI. `fo4ide::mcp::StdioServer` owns the stdio protocol loop.
+`native/apps/fo4ide/main.cpp` creates the MCP registry and `registerNativeMcpTools` in
+`native/apps/fo4ide/McpTools.cpp` fills it with the native tools, backed by the same service targets
+used by the GUI. `fo4ide::mcp::StdioServer` owns the stdio protocol loop.
 
 When adding a tool:
 
@@ -205,7 +211,9 @@ When adding a tool:
 2. register the tool schema in the MCP registry,
 3. dispatch to the same tested native service rather than duplicating logic,
 4. mark/desribe mutation semantics accurately in the tool schema,
-5. add a native test for the underlying operation and, where useful, the MCP dispatcher.
+5. add a native test for the underlying operation and, where useful, the MCP dispatcher,
+6. add the tool to the reference in `docs/MCP_SETUP.md`, which ships to users and must list exactly
+   the registered tools.
 
 The GUI and MCP should converge on one backend operation, not maintain separate implementations.
 
@@ -245,8 +253,11 @@ Windows, and builds/tests the PluginEditTool native host on Linux.
 
 ## Release paths
 
-- `package.ps1`: Windows C++ release zip
-- `publish.bat`: Windows local build/deploy loop for MO2 testing
+- `package.ps1`: Windows C++ release zip. Helper programs are bundled from the `-NiftoolPath`,
+  `-TexconvPath`, `-CkWikiPath`, `-AudioToolsDir` and `-BaseScriptsPath` parameters or their
+  environment variables; an unset one is skipped with a warning.
+- `publish.bat [deploy-folder]`: Windows local build/deploy loop for MO2 testing. The folder can also
+  come from `FO4IDE_DEPLOY_DIR`; with neither, it builds without deploying.
 - `packaging/linux/build-deb.sh`: Linux C++ `.deb`
 
 None of these release paths should invoke `dotnet` after the native cutover.

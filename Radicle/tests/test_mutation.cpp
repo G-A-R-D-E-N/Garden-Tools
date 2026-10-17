@@ -356,6 +356,12 @@ TEST(Mutation, LightPluginRangeStartsAtOneAndStopsAtTwelveBits) {
   EXPECT_EQ(fhi, 0xFFFFFFu);
 }
 
+TEST(Mutation, EslExtensionWithoutLightFlagUsesLightRange) {
+  const auto extension = fo4::read_plugin(make_lifecycle_plugin(0x900, false, true), "Lifecycle.esl");
+  EXPECT_FALSE(extension.header.tes4_flags.is_small_file());
+  EXPECT_EQ(fo4::local_form_id_range(extension), (std::pair<std::uint32_t, std::uint32_t>{0x001u, 0xFFFu}));
+}
+
 TEST(Mutation, LightPluginKeepsTheFullFloorWithoutHedrOneAndAMaster) {
   const auto masterless = fo4::read_plugin(make_lifecycle_plugin(0x900, true), "Lifecycle.esl");
   EXPECT_FALSE(fo4::allows_hardcoded_range(masterless));
@@ -434,4 +440,43 @@ TEST(Mutation, ReserveLocalFormKeyReportsAFullLightPluginAndAnOverflowedNextSepa
   };
   EXPECT_NE(reserveError(0x1000u).find("no local "), std::string::npos);
   EXPECT_NE(reserveError(0x1001u).find("is outside this plugin's local "), std::string::npos);
+}
+
+TEST(Mutation, LightPluginRefusesFfPrefixedHedrNextAboveTheLightCeiling) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF002F1Au, true, true), "Lifecycle.esl");
+  const auto original = fo4::test::original_bytes(plugin);
+  try {
+    static_cast<void>(fo4::create_local_record(plugin, fo4::Signature::from_string("EYES")));
+    ADD_FAILURE() << "create_local_record allocated under a 0xFF-prefixed HEDR next";
+  } catch (const fo4::FormIdError& error) {
+    EXPECT_NE(std::string{error.what()}.find("is outside this plugin's local"), std::string::npos);
+  }
+  EXPECT_EQ(plugin.header.next_form_id, 0xFF002F1Au);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}
+
+TEST(Mutation, FullPluginMasksFfPrefixedHedrNext) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF002F1Au, false), "Lifecycle.esp");
+  const auto key = fo4::create_local_record(plugin, fo4::Signature::from_string("EYES"));
+  EXPECT_EQ(key.local().value(), 0x2F1Au);
+  EXPECT_EQ(plugin.header.next_form_id, 0x2F1Bu);
+}
+
+TEST(Mutation, FullPluginClampsMaskedHedrNextBelowTheFloor) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000001u, false), "Lifecycle.esp");
+  const auto key = fo4::reserve_local_form_key(plugin);
+  EXPECT_EQ(key.local().value(), 0x801u);
+  EXPECT_EQ(plugin.header.next_form_id, 0x802u);
+}
+
+TEST(Mutation, LightPluginMasksFfPrefixedHedrNextInRange) {
+  auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000ABCu, true, true), "Lifecycle.esl");
+  const auto key = fo4::reserve_local_form_key(plugin);
+  EXPECT_EQ(key.local().value(), 0xABCu);
+  EXPECT_EQ(plugin.header.next_form_id, 0xABDu);
+}
+
+TEST(Mutation, LoweredLightNextIgnoresTheFfPrefix) {
+  const auto plugin = fo4::read_plugin(make_lifecycle_plugin(0xFF000ABCu, true, true), "Lifecycle.esl");
+  EXPECT_FALSE(fo4::lowered_light_next_form_id(plugin).has_value());
 }

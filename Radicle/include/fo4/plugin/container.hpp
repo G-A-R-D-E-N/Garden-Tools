@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -43,8 +44,15 @@ struct Record {
   OriginalByteRange original_range{};
   std::vector<std::byte> decompressed_payload{};
   bool compressed{false};
+  bool undecodable{false};
   std::uint32_t uncompressed_size{0};
 };
+
+inline void require_decodable(const Record& record) {
+  if (!record.undecodable) return;
+  throw std::invalid_argument("record " + record.header.signature.to_string() + " " +
+                              record.form_key.to_string() + " is undecodable; edits are refused");
+}
 
 inline bool is_partial_form(const Record& record) {
   const auto signature = record.header.signature.view();

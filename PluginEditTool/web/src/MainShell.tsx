@@ -2,12 +2,13 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import {
   Files, Search, GitCompare, AlertCircle, ScrollText, Box,
   Database, FileBox, X, Zap, Rocket,
-  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow,
+  Link2, Archive as ArchiveIcon, Music, Boxes, Table2, Workflow, Languages,
 } from 'lucide-react';
 import PapyrusPanel from './PapyrusPanel';
 import NifPanel from './NifPanel';
 import MastersPanel from './MastersPanel';
 import ArchivePanel from './ArchivePanel';
+import LocalizationPanel from './LocalizationPanel';
 import AudioPanel from './AudioPanel';
 import CellPanel from './CellPanel';
 import SpreadsheetPanel from './SpreadsheetPanel';
@@ -43,11 +44,14 @@ import ConflictsPanel from './Shell/ConflictsPanel';
 import FavouritesList from './Shell/FavouritesList';
 import { useRecordOpening } from './Shell/useRecordOpening';
 import { useEnvironment } from './Shell/useEnvironment';
-import { useConflictBatch } from './Shell/useConflictBatch';
+import { useCompareSelected, useConflictBatch } from './Shell/useConflictBatch';
+import { modeOf, selectRow, type ConflictSelection, type SelectMode } from './Shell/conflictSelection';
 import type { SearchHit } from './backend';
 import type { RecordTab } from './RecordView';
 import { errorMessage } from './errors';
 import ExplorerTree from './Shell/ExplorerTree';
+
+const hitKey = (h: SearchHit) => `${h.FormKey}|${h.Plugin}`;
 
 export default function MainShell() {
   const [activeTab, setActiveTab] = useState('explorer');
@@ -60,6 +64,7 @@ export default function MainShell() {
   const [showNif, setShowNif] = useState(false);
   const [showMasters, setShowMasters] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [showLocalization, setShowLocalization] = useState(false);
   const [showAudio, setShowAudio] = useState(false);
   const [showCell, setShowCell] = useState(false);
   const [showSpreadsheet, setShowSpreadsheet] = useState(false);
@@ -137,8 +142,19 @@ export default function MainShell() {
   } = useEnvironment({ setErrorStr, setProgress });
 
   const {
-    conflicts, setConflicts, conflictSel, setConflictSel, conflictBusy, loadConflicts, batchCopyAsOverride,
+    conflicts, setConflicts, conflictSel, conflictBusy, batchCopyAsOverride,
+    selectConflict, clearConflictSelection, copyMany,
   } = useConflictBatch({ activeTab, treeMode, setStatus, setErrorStr });
+
+  const loadOrderKey = loadOrderSummary ? JSON.stringify(loadOrderSummary) : '';
+  const [prevLoadOrderKey, setPrevLoadOrderKey] = useState(loadOrderKey);
+  if (prevLoadOrderKey !== loadOrderKey) {
+    setPrevLoadOrderKey(loadOrderKey);
+    if (prevLoadOrderKey) {
+      setConflicts(null);
+      clearConflictSelection();
+    }
+  }
 
   const [favourites, setFavourites] = useState(readFavourites);
   const [favouritesOpen, setFavouritesOpen] = useState(
@@ -263,15 +279,37 @@ export default function MainShell() {
       const back = window.chrome?.webview?.hostObjects?.backend;
       if (!back) return;
       try { setSearchResults(JSON.parse(await back.SearchRecords(q, ''))); }
-      catch { setSearchResults([]); }
+      catch (err) { setSearchResults([]); setErrorStr('Search failed: ' + (errorMessage(err) ?? JSON.stringify(err))); }
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
   const changeSearch = (v: string) => { setSearch(v); if (v.trim().length < 2) setSearchResults(null); };
 
-  useEffect(() => {
-    if (activeTab === 'explorer' && treeMode === 'conflicts' && conflicts === null) loadConflicts();
-  }, [activeTab, treeMode]);
+  const [recSel, setRecSel] = useState<ConflictSelection>({});
+  const [recAnchor, setRecAnchor] = useState<string | null>(null);
+  const [recHits, setRecHits] = useState<Record<string, SearchHit>>({});
+  const { comparing: recComparing, compare: compareRecords } = useCompareSelected();
+  const visibleHits = searchResults ?? [];
+  const visibleKeys = new Set(visibleHits.map(hitKey));
+  const loadedSet = loadOrderSummary?.Plugins ? new Set(loadOrderSummary.Plugins) : null;
+  const recPicked = Object.keys(recSel).filter(k => recSel[k]).map(k => recHits[k])
+    .filter(h => !loadedSet || loadedSet.has(h.Plugin));
+  const recHidden = recPicked.filter(h => !visibleKeys.has(hitKey(h))).length;
+  const recDupes = new Set(recPicked.map(h => h.FormKey)).size !== recPicked.length;
+  const selectHit = (h: SearchHit, mode: SelectMode) => {
+    const next = selectRow(visibleHits.map(hitKey), recSel, recAnchor, hitKey(h), mode);
+    setRecSel(next.sel);
+    setRecAnchor(next.anchor);
+    setRecHits(prev => ({
+      ...Object.fromEntries(visibleHits.filter(v => next.sel[hitKey(v)] && !(hitKey(v) in prev)).map(v => [hitKey(v), v])),
+      ...prev,
+      [hitKey(h)]: h,
+    }));
+  };
+  const clearRecSel = () => { setRecSel({}); setRecAnchor(null); setRecHits({}); };
+  const copyRecs = async () => {
+    if (await copyMany(recPicked.map(h => ({ formKey: h.FormKey, source: h.Plugin, editorId: h.EditorID })))) clearRecSel();
+  };
 
   const handleRefresh = async () => {
     const b = window.chrome?.webview?.hostObjects?.appInterop;
@@ -302,7 +340,7 @@ export default function MainShell() {
     const back = window.chrome?.webview?.hostObjects?.backend;
     if (!back) return [];
     try { return JSON.parse(await back.SearchRecords(q, '')); }
-    catch { return []; }
+    catch (err) { setErrorStr('Search failed: ' + (errorMessage(err) ?? JSON.stringify(err))); return []; }
   }, []);
 
   const closeRecord = () => {
@@ -354,6 +392,9 @@ export default function MainShell() {
           </button>
           <button className={`activity-btn ${showArchive ? 'active' : ''}`} onClick={() => setShowArchive(true)} title="Archive (BA2/BSA browse / extract)">
             <ArchiveIcon size={22} strokeWidth={1.5} />
+          </button>
+          <button className={`activity-btn ${showLocalization ? 'active' : ''}`} onClick={() => setShowLocalization(true)} title="Localization (read-only string tables)">
+            <Languages size={22} strokeWidth={1.5} />
           </button>
           <button className={`activity-btn ${showAudio ? 'active' : ''}`} onClick={() => setShowAudio(true)} title="Audio (convert to/from xWMA, merge/split fuz)">
             <Music size={22} strokeWidth={1.5} />
@@ -451,23 +492,55 @@ export default function MainShell() {
                 ))}
 
               { }
-              {search.trim().length >= 2 && (
-                <div className="sidebar-results">
-                  <div className="sidebar-results-head">
-                    RECORDS {searchResults === null ? '…' : `(${searchResults.length})`}
-                  </div>
-                  {searchResults === null ? (
-                    <div className="sidebar-empty">Searching…</div>
-                  ) : searchResults.length === 0 ? (
-                    <div className="sidebar-empty">No matching records.</div>
-                  ) : (
-                    searchResults.map((h, i) => (
-                      <div key={`${h.Plugin}:${h.FormKey}:${i}`} className="sidebar-result" onClick={() => openHit(h)} title={`${h.FormKey} · ${h.Plugin}`}>
-                        <FileBox size={13} color="#569CD6" />
-                        <span className="sr-id">{h.EditorID || h.FormKey}</span>
-                        <span className="sr-type">{h.Type}</span>
+              {(search.trim().length >= 2 || recPicked.length > 0) && (
+                <div className="sidebar-results" aria-label="Records" tabIndex={0} onKeyDown={e => { if (e.key === 'Escape') clearRecSel(); }}>
+                  {recPicked.length > 0 && (
+                    <div className="conflicts-actions">
+                      <button
+                        className="sidebar-action-btn"
+                        disabled={conflictBusy || recDupes}
+                        title={recDupes ? 'A patch can hold only one version of a record; untick one of the duplicates' : undefined}
+                        onClick={copyRecs}
+                      >
+                        Copy selected as override…
+                      </button>
+                      <button
+                        className="sidebar-action-btn"
+                        disabled={conflictBusy || recComparing || recDupes || recPicked.length !== 2}
+                        title={recDupes ? 'Both selections are the same record; open it to see every plugin\'s version' : recPicked.length === 2 ? 'Open the two selected records in record tabs' : 'Select exactly two records to compare'}
+                        onClick={() => compareRecords(recPicked.map(h => ({ formKey: h.FormKey, plugin: h.Plugin })), openByFormKey)}
+                      >
+                        Compare selected
+                      </button>
+                      <button className="sidebar-action-btn" onClick={clearRecSel}>Clear</button>
+                      <span className="conflicts-selected">{`${recPicked.length} selected (${recHidden} hidden)`}</span>
+                    </div>
+                  )}
+                  {search.trim().length >= 2 && (
+                    <>
+                      <div className="sidebar-results-head">
+                        RECORDS {searchResults === null ? '…' : `(${searchResults.length})`}
                       </div>
-                    ))
+                      {searchResults === null ? (
+                        <div className="sidebar-empty">Searching…</div>
+                      ) : searchResults.length === 0 ? (
+                        <div className="sidebar-empty">No matching records.</div>
+                      ) : (
+                        searchResults.map((h, i) => (
+                          <div
+                            key={`${h.Plugin}:${h.FormKey}:${i}`}
+                            className={`sidebar-result${recSel[hitKey(h)] ? ' selected' : ''}`}
+                            onClick={e => { const mode = modeOf(e); selectHit(h, mode); if (mode === 'plain') void openHit(h); }}
+                            title={`${h.FormKey} · ${h.Plugin}`}
+                          >
+                            <input type="checkbox" aria-label={h.EditorID || h.FormKey} checked={!!recSel[hitKey(h)]} onClick={e => e.stopPropagation()} onChange={() => selectHit(h, 'toggle')} />
+                            <FileBox size={13} color="#569CD6" />
+                            <span className="sr-id">{h.EditorID || h.FormKey}</span>
+                            <span className="sr-type">{h.Type}</span>
+                          </div>
+                        ))
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -480,9 +553,10 @@ export default function MainShell() {
             conflicts={conflicts}
             conflictSel={conflictSel}
             conflictBusy={conflictBusy}
-            onRescan={() => { setConflicts(null); loadConflicts(); }}
+            onRescan={() => setConflicts(null)}
             onBatchCopy={batchCopyAsOverride}
-            onToggle={(key, checked) => setConflictSel(s => ({ ...s, [key]: checked }))}
+            onSelect={selectConflict}
+            onClear={clearConflictSelection}
             onOpen={openByFormKey}
           />
         )}
@@ -627,6 +701,7 @@ export default function MainShell() {
       {showNif && <NifPanel onClose={() => setShowNif(false)} />}
       {showMasters && <MastersPanel onClose={() => setShowMasters(false)} />}
       {showArchive && <ArchivePanel onClose={() => setShowArchive(false)} />}
+      {showLocalization && <LocalizationPanel onClose={() => setShowLocalization(false)} />}
       {showAudio && <AudioPanel onClose={() => setShowAudio(false)} />}
       {showCell && <CellPanel onClose={() => setShowCell(false)} />}
       {showSpreadsheet && <SpreadsheetPanel onClose={() => setShowSpreadsheet(false)} />}

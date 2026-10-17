@@ -10,7 +10,9 @@
 
 #include <exception>
 #include <map>
+#include <optional>
 #include <set>
+#include <string_view>
 #include <utility>
 #include <variant>
 
@@ -19,32 +21,57 @@ namespace {
 
 constexpr Signature k_sig_navm = Signature::from_string("NAVM");
 
-bool same_record(const Record& left, const Record& right) {
-  if (left.header.signature != right.header.signature || left.header.flags != right.header.flags ||
-      left.subrecords.size() != right.subrecords.size()) {
-    return false;
+struct ItmIgnoredSubrecord {
+  std::string_view record;
+  std::string_view subrecord;
+};
+
+constexpr ItmIgnoredSubrecord k_itm_ignored_subrecords[] = {
+    {"TACT", "PNAM"}, {"TACT", "FNAM"}, {"CSTY", "CSMD"}, {"DIAL", "TIFC"}, {"PROJ", "DATA"}, {"PERK", "PRKF"},
+    {"MESG", "INAM"}, {"MATO", "DNAM"}, {"REFR", "XMBP"}, {"WRLD", "NNAM"},
+};
+
+bool is_itm_ignored(const Record& record, const Subrecord& subrecord) {
+  const auto record_signature = record.header.signature.view();
+  const auto subrecord_signature = subrecord.signature.view();
+  for (const auto& ignored : k_itm_ignored_subrecords) {
+    if (ignored.record == record_signature && ignored.subrecord == subrecord_signature) return true;
   }
-  for (std::size_t i = 0; i < left.subrecords.size(); ++i) {
-    if (left.subrecords[i].signature != right.subrecords[i].signature ||
-        left.subrecords[i].data != right.subrecords[i].data) {
+  return false;
+}
+
+std::vector<const Subrecord*> comparable_subrecords(const Record& record) {
+  std::vector<const Subrecord*> out;
+  for (const auto& subrecord : record.subrecords) {
+    if (!is_itm_ignored(record, subrecord)) out.push_back(&subrecord);
+  }
+  return out;
+}
+
+bool same_record(const Record& left, const Record& right) {
+  if (left.header.signature != right.header.signature || left.header.flags != right.header.flags) return false;
+  const auto left_subrecords = comparable_subrecords(left);
+  const auto right_subrecords = comparable_subrecords(right);
+  if (left_subrecords.size() != right_subrecords.size()) return false;
+  for (std::size_t i = 0; i < left_subrecords.size(); ++i) {
+    if (left_subrecords[i]->signature != right_subrecords[i]->signature ||
+        left_subrecords[i]->data != right_subrecords[i]->data) {
       return false;
     }
   }
   return true;
 }
 
-bool previous_normalizes_equal(const Record& current,
-                               const Record& previous,
-                               const Plugin& previous_plugin,
-                               const PluginFormIdContext& previous_context,
-                               const PluginFormIdContext& current_context) {
-  auto normalized = previous;
+std::optional<Record> remapped_into(const Record& record,
+                                    const Plugin& source,
+                                    const PluginFormIdContext& target) {
+  auto normalized = record;
   try {
-    remap_record_form_links(normalized, previous_context, current_context, &previous_plugin);
+    remap_record_form_links(normalized, plugin_form_id_context(source), target, &source);
   } catch (const std::exception&) {
-    return false;
+    return std::nullopt;
   }
-  return same_record(current, normalized);
+  return normalized;
 }
 
 struct ItmScan {
@@ -61,20 +88,45 @@ struct ItmScan {
     return it->second[key];
   }
 
-  const Plugin* identical_previous(const Record& record) {
-    if (record.form_key.owner().empty() || record.form_key.owner() == plugin.key) return nullptr;
-    for (std::size_t index = plugin_index; index-- > 0;) {
-      const auto* earlier = load_order[index];
-      if (earlier == nullptr) continue;
-      const auto* previous = find_record(*earlier, record.form_key);
-      if (previous == nullptr) continue;
-      if (placement_in(index, record.form_key) != placement_in(plugin_index, record.form_key)) return nullptr;
-      return previous_normalizes_equal(record, *previous, *earlier, plugin_form_id_context(*earlier),
-                                       context)
-                 ? earlier
-                 : nullptr;
+  std::optional<std::size_t> owner_index(const FormKey& key) const {
+    for (std::size_t index = 0; index < plugin_index; ++index) {
+      if (load_order[index] != nullptr && load_order[index]->key == key.owner()) return index;
     }
-    return nullptr;
+    return std::nullopt;
+  }
+
+  bool held_after(const FormKey& key) const {
+    for (std::size_t index = plugin_index + 1; index < load_order.size(); ++index) {
+      if (load_order[index] != nullptr && find_record(*load_order[index], key) != nullptr) return true;
+    }
+    return false;
+  }
+
+  bool same_version(const Record& version, std::size_t index, const Record& master, std::size_t master_index) {
+    return placement_in(index, version.form_key) == placement_in(master_index, version.form_key) &&
+           same_record(version, master);
+  }
+
+  const Plugin* identical_previous(const Record& record) {
+    if (record.undecodable || record.form_key.owner().empty() || record.form_key.owner() == plugin.key) {
+      return nullptr;
+    }
+    const auto owner = owner_index(record.form_key);
+    if (!owner) return nullptr;
+    const auto* master = find_record(*load_order[*owner], record.form_key);
+    if (master == nullptr || master->undecodable) return nullptr;
+    const auto master_here = remapped_into(*master, *load_order[*owner], context);
+    if (!master_here || !same_version(record, plugin_index, *master_here, *owner)) return nullptr;
+    if (held_after(record.form_key)) return load_order[*owner];
+    for (std::size_t index = *owner + 1; index < plugin_index; ++index) {
+      if (load_order[index] == nullptr) continue;
+      const auto* holder = find_record(*load_order[index], record.form_key);
+      if (holder == nullptr) continue;
+      if (holder->undecodable) return nullptr;
+      const auto holder_here = remapped_into(*holder, *load_order[index], context);
+      if (!holder_here || !same_version(*holder_here, index, *master_here, *owner)) return nullptr;
+    }
+    return load_order[*owner];
   }
 
   bool scan(const Group& group) {
@@ -133,6 +185,9 @@ std::vector<IdenticalToMaster> find_identical_to_master(std::span<const Plugin* 
 
 std::size_t remove_records(Plugin& plugin, std::span<const FormKey> keys) {
   const std::set<FormKey> wanted(keys.begin(), keys.end());
+  visit_records(plugin, [&](const Record& record) {
+    if (wanted.contains(record.form_key)) require_decodable(record);
+  });
   std::size_t removed = 0;
   std::vector<Group> kept;
   for (auto& group : plugin.groups) {

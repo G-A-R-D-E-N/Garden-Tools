@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Radicle.Interop;
 
 namespace OpenCommonwealth.Services.Archive;
 
@@ -203,7 +204,7 @@ public sealed class GameData : IDisposable
         var (archive, entry) = FindEntry(projectRoot, declared);
         if (entry == null) return null;
         try { return new AnimationRead(archive.Read(entry), Path.GetFileName(archive.Path), entry.Name); }
-        catch (Exception e) when (e is IOException or InvalidDataException) { return null; }
+        catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
     }
 
     private string? DataRelativePath(string fullPath)
@@ -305,7 +306,7 @@ public sealed class GameData : IDisposable
                 if (!entry.Name.StartsWith(assets, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!entry.Name.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase)) continue;
                 try { return Open(archive).Read(entry); }
-                catch (Exception e) when (e is IOException or InvalidDataException) { return null; }
+                catch (Exception e) when (IsSkippableArchiveFailure(e)) { return null; }
             }
         }
         return null;
@@ -358,10 +359,14 @@ public sealed class GameData : IDisposable
         return (null!, null);
     }
 
+    internal static bool IsSkippableArchiveFailure(Exception e) =>
+        (e is IOException or InvalidDataException or UnauthorizedAccessException) &&
+        !(e.InnerException is { } inner && Ba2.IsNativeLoadFailure(inner));
+
     private IEnumerable<Ba2.Entry> Entries(string archivePath)
     {
         try { return Open(archivePath).Entries; }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
             // a texture (DX10) archive or an unreadable file simply holds no animations
             return Array.Empty<Ba2.Entry>();
@@ -477,7 +482,7 @@ public sealed class GameData : IDisposable
             var archive = Open(archivePath);
             foreach (var entry in archive.Entries) names.Add(Normalize(entry.Name));
         }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
             // a texture (DX10) archive or an unreadable file simply holds no animations
         }
@@ -506,7 +511,7 @@ public sealed class GameData : IDisposable
         {
             return false;
         }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
             warning = $"{Path.GetFileName(archivePath)}: {e.Message.Split('\n')[0].Trim()}";
             return false;
@@ -524,14 +529,21 @@ public sealed class GameData : IDisposable
 
     private static List<string> OrderByPlugins(List<string> archives, string pluginsPath)
     {
-        var plugins = File.ReadAllLines(pluginsPath)
-                          .Select(line => line.Trim())
-                          .Where(line => line.Length > 0 && !line.StartsWith('#'))
-                          .Select(line => line.StartsWith('*') ? line[1..] : line)
-                          .Select(Path.GetFileNameWithoutExtension)
-                          .Where(baseName => !string.IsNullOrEmpty(baseName))
-                          .Cast<string>()
-                          .ToList();
+        IReadOnlyList<PluginListEntry> entries;
+        try
+        {
+            entries = LoadOrderFiles.ReadPluginList(pluginsPath);
+        }
+        catch (Exception e) when (e is RadicleException or FormatException or OverflowException || Ba2.IsNativeLoadFailure(e))
+        {
+            return archives;
+        }
+
+        var plugins = entries
+                      .Select(entry => Path.GetFileNameWithoutExtension(entry.Name))
+                      .Where(baseName => !string.IsNullOrEmpty(baseName))
+                      .Cast<string>()
+                      .ToList();
 
         var ordered = new List<string>();
         var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -582,7 +594,7 @@ public sealed class GameData : IDisposable
 
         List<EsPlugin.AnimSet> animSets;
         try { animSets = EsPlugin.RaceAnimationSets(master); }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception e) when (IsSkippableArchiveFailure(e))
         {
             return sets;
         }

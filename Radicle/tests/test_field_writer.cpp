@@ -6,6 +6,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -542,7 +543,8 @@ TEST(FieldWriterResolver, MisalignedArrayIsFlaggedOnlyForTheExpectedPayloadSize)
 TEST(FieldWriterString, SignatureLookupSkipsRepeatedAndStringRows) {
   EXPECT_FALSE(fo4::schema::scalar_descriptor(Signature::from_string("NAME")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(Signature::from_string("HNAM")).has_value());
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(Signature::from_string("XHLT")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(Signature::from_string("XHLT")).has_value());
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(Signature::from_string("COCT")).has_value());
 }
 
 TEST(FieldWriterFormLink, StrideAndDiscriminator) {
@@ -609,6 +611,7 @@ TEST(FieldWriterRealData, RegisteredRaceStringsMatchEveryShippedRace) {
   if (dir == nullptr) {
     GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
   }
+  record_game_build(detect_game_build(dir));
 
   std::size_t races = 0;
   std::size_t biped_names = 0;

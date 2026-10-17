@@ -3,6 +3,7 @@
 #include "fo4/c_api_authoring.h"
 #include "fo4/plugin/navmesh_writer.hpp"
 #include "fo4/plugin/subrecord_authoring.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "fo4/binary/cursor.hpp"
@@ -38,6 +39,17 @@ TEST(NavmeshAuthoring, TypedEditsPatchOnlyTheirBytesAndReparse) {
   const auto untouched = record_original_bytes(read, *find_record(read, test::navmesh_key(0x811)));
   EXPECT_EQ(std::vector<std::byte>(untouched.begin(), untouched.end()), original);
   EXPECT_EQ(set_navmesh_triangle(plugin, test::navmesh_key(), 0, triangle), ScalarMutationStatus::unchanged);
+}
+
+TEST(NavmeshAuthoring, UneditedPluginWithNavmeshAndNaviRecordsWritesBackByteIdentical) {
+  auto plugin = test::navmesh_writer_fixture();
+  ASSERT_NE(find_record(plugin, test::navmesh_key()), nullptr);
+  ASSERT_NE(find_record(plugin, test::navmesh_key(0x801)), nullptr);
+  const auto original = test::original_bytes(plugin);
+  ASSERT_FALSE(original.empty());
+  plugin.original_range.clear();
+  fo4::visit_records(plugin, [](auto& record) { record.original_range.clear(); });
+  EXPECT_EQ(write_plugin(plugin), original);
 }
 
 TEST(NavmeshAuthoring, RefusalsKeepSerializedBytesIdentical) {
@@ -87,6 +99,13 @@ TEST(NavmeshAuthoring, EdgeAndDoorIndicesOutsideTheirArraysRefuseWithoutChanging
   EXPECT_EQ(write_plugin(plugin), before);
   triangle.edges = {0, -1, -1};
   EXPECT_EQ(set_navmesh_triangle(plugin, key, 0, triangle), ScalarMutationStatus::updated);
+}
+
+TEST(NavmeshAuthoring, FlaggedEdgeSlotRefusesMinusOneWithoutChangingBytes) {
+  auto plugin = test::navmesh_writer_fixture(0xFFFF, 0); const auto before = write_plugin(plugin);
+  env::NavmeshTriangle triangle{{2, 1, 0}, {-1, -1, -1}, 6.5f, 0xAA, 0xABCD8012};
+  EXPECT_THROW(set_navmesh_triangle(plugin, test::navmesh_key(), 0, triangle), schema::ScalarError);
+  EXPECT_EQ(write_plugin(plugin), before);
 }
 
 TEST(NavmeshAuthoring, UnchangedDanglingTriangleEdgeIsKeptAndChangedOneRefuses) {

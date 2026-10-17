@@ -28,6 +28,7 @@ function installBackend(setField: () => Promise<string>) {
 beforeEach(() => {
   localStorage.setItem('spreadsheet.plugin', 'Mod.esp');
   localStorage.setItem('spreadsheet.type', 'NPC_');
+  dialogs.confirm.mockClear();
   dialogs.confirm.mockResolvedValue(true);
 });
 
@@ -195,5 +196,14 @@ describe('SpreadsheetPanel unsaved cell edits (GT-089)', () => {
     fireEvent.click(document.querySelector('.papyrus-close')!);
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(dialogs.confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('SpreadsheetPanel plugin list', () => {
+  it('shows a failed plugin list read', async () => {
+    const backend = installBackend(async () => 'Updated.');
+    backend.GetActivePlugins.mockRejectedValue(new Error('plugins offline'));
+    render(<SpreadsheetPanel onClose={() => {}} />);
+    await screen.findByText('Could not list plugins: plugins offline');
   });
 });

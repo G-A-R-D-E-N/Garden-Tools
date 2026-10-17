@@ -3,6 +3,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -515,6 +516,23 @@ TEST(WeatherConcept, MnamExternalMasterInsertionRemaps) {
   EXPECT_EQ(roundtrip.snam[0].sound->to_string(), snam_before);
 }
 
+TEST(WeatherConcept, MnamExtensionOnlyLightMasterInsertion) {
+  auto plugin = fo4::read_plugin(make_weather_plugin(), "WeatherPatch.esp");
+  const auto key = fo4::FormKey::parse("000800:WeatherPatch.esp");
+  const auto spgd_plugin = fo4::read_plugin(make_spgd_only_plugin(0x00000100), "FalloutSpgd.ESL");
+  ASSERT_FALSE(spgd_plugin.header.tes4_flags.is_small_file());
+  const fo4::Plugin* environment[] = {&spgd_plugin};
+  const auto target = fo4::FormKey::parse("000100:FalloutSpgd.ESL");
+
+  EXPECT_TRUE(fo4::forms::set_weather_mnam(plugin, key, target, environment));
+  ASSERT_EQ(plugin.header.masters.size(), 1u);
+  EXPECT_EQ(plugin.header.masters[0].kind, fo4::PluginKind::light);
+  const auto model = fo4::forms::decode_weather(plugin, key);
+  ASSERT_TRUE(model.mnam.has_value());
+  EXPECT_EQ(*model.mnam, target);
+  EXPECT_FALSE(spgd_plugin.header.tes4_flags.is_small_file());
+}
+
 TEST(WeatherConcept, MnamNoOpWhenUnchanged) {
   WeatherPluginOptions options;
   options.include_local_spgd = true;
@@ -679,6 +697,7 @@ TEST(WeatherConcept, RealFallout4EsmDecodesWhenPresent) {
   if (!std::filesystem::exists(path)) {
     GTEST_SKIP() << "Fallout4.esm not found under " << dir;
   }
+  record_game_build(detect_game_build(dir));
   const auto plugin = fo4::read_plugin_file(path);
   const auto key = fo4::FormKey::parse("0000015E:Fallout4.esm");
   const auto model = fo4::forms::decode_weather(plugin, key);
@@ -697,6 +716,8 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
   if (files.empty()) {
     GTEST_SKIP() << "no corpus plugins found under " << dir;
   }
+  const auto build = detect_game_build(dir);
+  record_game_build(build);
   std::size_t seen = 0;
   std::size_t failed = 0;
   std::vector<std::string> failures;
@@ -718,6 +739,8 @@ TEST(WeatherConcept, CorpusDecodeSweepWhenPresent) {
     ADD_FAILURE() << failures[i];
   }
   EXPECT_EQ(failed, 0u) << seen << " WTHR records scanned, " << failed << " failed to decode";
+  RecordProperty("WTHR_scanned", static_cast<int>(seen));
+  if (files.size() == 7 && exact_counts_known(build)) { EXPECT_EQ(seen, 107u); }
   if (seen == 0) {
     GTEST_SKIP() << "no WTHR records found in available corpus plugins";
   }

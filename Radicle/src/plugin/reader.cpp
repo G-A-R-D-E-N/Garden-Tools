@@ -60,10 +60,6 @@ std::vector<std::byte> inflate_record_payload(std::span<const std::byte> compres
     out.resize(*produced);
     return out;
   }
-  if (auto produced = try_inflate(-MAX_WBITS)) {
-    out.resize(*produced);
-    return out;
-  }
   throw parse_error(offset, "zlib inflate failed for compressed record");
 }
 
@@ -154,9 +150,16 @@ Record read_record(binary::Cursor& cursor, const std::vector<std::byte>* owner) 
   }
   binary::Cursor payload_cursor{payload, start_abs + k_record_header_size};
   record.uncompressed_size = payload_cursor.read_u32();
-  const auto compressed = payload_cursor.read_bytes(payload.size() - 4);
-  const auto inflated = inflate_record_payload(compressed, record.uncompressed_size, start_abs);
-  record.subrecords = parse_subrecords(inflated, start_abs + k_record_header_size);
+  try {
+    const auto compressed = payload_cursor.read_bytes(payload.size() - 4);
+    const auto inflated = inflate_record_payload(compressed, record.uncompressed_size, start_abs);
+    record.subrecords = parse_subrecords(inflated, start_abs + k_record_header_size);
+  } catch (const parse_error&) {
+    if (record.header.signature == sig_tes4) {
+      throw;
+    }
+    record.undecodable = true;
+  }
   return record;
 }
 
@@ -407,8 +410,7 @@ std::size_t RecordIndex::FormKeyHash::operator()(const FormKey& form_key) const 
 PluginFormIdContext plugin_form_id_context(const Plugin& plugin) {
   PluginFormIdContext context;
   context.current_plugin = plugin.key;
-  context.current_kind =
-      plugin.header.tes4_flags.is_small_file() ? PluginKind::light : PluginKind::full;
+  context.current_kind = classify_plugin_kind(plugin.header.tes4_flags, plugin.key);
   context.masters.reserve(plugin.header.masters.size());
   for (const auto& master : plugin.header.masters) {
     context.masters.push_back(MasterDescriptor{master.key, master.kind});
@@ -431,8 +433,7 @@ void stamp_master_kinds(Plugin& plugin, std::span<const Plugin> loaded_masters) 
   std::vector<MasterDescriptor> known;
   known.reserve(loaded_masters.size());
   for (const auto& loaded : loaded_masters) {
-    const auto kind =
-        loaded.header.tes4_flags.is_small_file() ? PluginKind::light : PluginKind::full;
+    const auto kind = classify_plugin_kind(loaded.header.tes4_flags, loaded.key);
     known.push_back(MasterDescriptor{loaded.key, kind});
   }
   apply_master_kinds(plugin, known);

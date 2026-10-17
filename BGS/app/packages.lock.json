@@ -358,8 +358,12 @@
       "behaviourgraph.core": {
         "type": "Project",
         "dependencies": {
-          "BepuPhysics": "[2.4.0, )"
+          "BepuPhysics": "[2.4.0, )",
+          "Radicle.Interop": "[1.0.0, )"
         }
+      },
+      "radicle.interop": {
+        "type": "Project"
       }
     },
     "net8.0/linux-x64": {

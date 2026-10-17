@@ -295,6 +295,34 @@ public sealed unsafe class PluginFile : IDisposable
         return found;
     }
 
+    public bool SetSceneScalar(FormKey scene, string path, string value, int index = 0)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(value);
+        var at = Index(index);
+        return Edit(scene, (plugin, s, key) => RadicleNative.PluginSetSceneScalar(plugin, key, path, at, value));
+    }
+
+    public bool SetSceneFormLink(FormKey scene, string path, FormKey target)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return Edit(scene, (plugin, s, key) =>
+        {
+            var native = s.Key(target);
+            return RadicleNative.PluginSetSceneFormlink(plugin, key, path, &native);
+        });
+    }
+
+    public int SceneGroupCount(FormKey scene, ScenePart part)
+    {
+        using var use = Use();
+        using var strings = new NativeStrings();
+        nuint count;
+        return Call.Found(RadicleNative.PluginSceneGroupCount(use.Pointer, strings.Key(scene), part, &count))
+            ? checked((int)count)
+            : throw new KeyNotFoundException($"Record not found: {scene}");
+    }
+
     public int FormLinkListCount(FormKey record, string path) =>
         TryFormLinkListCount(record, path, out var count) ? count : throw new KeyNotFoundException($"Record not found: {record}");
 

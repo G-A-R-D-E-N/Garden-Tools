@@ -10,6 +10,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -33,9 +34,12 @@ protected:
     if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data";
     path_ = std::filesystem::path{dir} / GetParam();
     if (!std::filesystem::exists(path_)) GTEST_SKIP() << "missing official master: " << path_;
+    build_ = detect_game_build(dir);
+    record_game_build(build_);
   }
 
   std::filesystem::path path_;
+  GameBuild build_ = game_build_from_version("");
 };
 
 TEST_P(WaterRealData, DecodesEveryWaterAndPreservesMasterBytes) {
@@ -43,11 +47,21 @@ TEST_P(WaterRealData, DecodesEveryWaterAndPreservesMasterBytes) {
   const auto env = fo4::env::Environment::load(paths);
   std::size_t seen = 0;
   std::map<std::size_t, int> sizes;
+  std::map<std::string, int> populated{{"DNAM", 0}, {"NAM0", 0}, {"NAM1", 0}, {"NAM2", 0}, {"NAM3", 0}, {"NAM4", 0}};
+  const auto nonzero = [](const auto& vec) {
+    return vec && std::any_of(vec->begin(), vec->end(), [](float x) { return x != 0.0f; });
+  };
   for (const auto* ref : env.plugin_records(0)) {
     if (ref->record->header.signature != fo4::Signature::from_string("WATR")) continue;
     SCOPED_TRACE(ref->record->form_key.to_string());
     const auto water = fo4::env::decode_water(env, *ref);
     EXPECT_TRUE(water.visual.has_value());
+    if (water.visual) ++populated["DNAM"];
+    if (nonzero(water.linear_velocity)) ++populated["NAM0"];
+    if (nonzero(water.angular_velocity)) ++populated["NAM1"];
+    for (std::size_t i = 0; i < water.noise_textures.size(); ++i) {
+      if (water.noise_textures[i] && !water.noise_textures[i]->empty()) ++populated["NAM" + std::to_string(i + 2)];
+    }
     for (const auto& sub : ref->record->subrecords) {
       if (sub.signature == fo4::Signature::from_string("DNAM")) ++sizes[sub.data.size()];
     }
@@ -55,6 +69,7 @@ TEST_P(WaterRealData, DecodesEveryWaterAndPreservesMasterBytes) {
   }
   RecordProperty("WATR", static_cast<int>(seen));
   for (const auto& [size, count] : sizes) RecordProperty("DNAM_" + std::to_string(size), count);
+  for (const auto& [name, count] : populated) RecordProperty("populated_" + name, count);
   const auto& plugin = env.plugin(0);
   const auto bytes = fo4::write_plugin(plugin);
   const auto original = fo4::plugin_original_bytes(plugin);
@@ -100,7 +115,8 @@ TEST_P(WaterRealData, MasterHasExpectedWaterCountAndDnamSizes) {
       EXPECT_TRUE(sub.data.size() == 188 || sub.data.size() == 201) << sub.data.size();
     }
   });
-  EXPECT_EQ(count, expected.at(GetParam()));
+  RecordProperty("WATR_master", static_cast<int>(count));
+  if (exact_counts_known(build_)) { EXPECT_EQ(count, expected.at(GetParam())); }
 }
 
 INSTANTIATE_TEST_SUITE_P(

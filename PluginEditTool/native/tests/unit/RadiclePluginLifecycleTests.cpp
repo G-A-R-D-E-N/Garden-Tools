@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -11,6 +12,7 @@
 
 #include <fo4/flags.hpp>
 #include <fo4/forms/eyes.hpp>
+#include <fo4/forms/leveled_list.hpp>
 #include <fo4/forms/leveled_spell.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/text/encoding.hpp>
@@ -143,6 +145,25 @@ nlohmann::json parseStringResult(const fo4ide::Result<nlohmann::json>& result) {
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
     return nlohmann::json::parse(result->get<std::string>());
+}
+
+std::vector<std::byte> readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    REQUIRE(stream.good());
+    const std::vector<char> raw((std::istreambuf_iterator<char>(stream)),
+                                std::istreambuf_iterator<char>());
+    std::vector<std::byte> bytes;
+    bytes.reserve(raw.size());
+    for (const char ch : raw) bytes.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+    return bytes;
+}
+
+void expectNothingPending(fo4ide::plugin::RadiclePluginBackend& backend) {
+    const auto pending = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(pending.has_value());
+    for (const auto& plugin : nlohmann::json::parse(pending->get<std::string>())) {
+        CHECK(plugin.at("Pending") == false);
+    }
 }
 
 }
@@ -354,13 +375,82 @@ TEST_CASE("Native lifecycle creates LVSP with validated initial entries") {
 
     const auto* record = fo4::find_record(disk, key);
     REQUIRE(record != nullptr);
-    REQUIRE(record->subrecords.size() == 6u);
+    REQUIRE(record->subrecords.size() == 7u);
     CHECK(record->subrecords[0].signature == fo4::sig_edid);
-    CHECK(record->subrecords[1].signature.to_string() == "LVLD");
-    CHECK(record->subrecords[2].signature.to_string() == "LVLM");
-    CHECK(record->subrecords[3].signature.to_string() == "LVLF");
-    CHECK(record->subrecords[4].signature.to_string() == "LLCT");
-    CHECK(record->subrecords[5].signature.to_string() == "LVLO");
+    CHECK(record->subrecords[1].signature.to_string() == "OBND");
+    CHECK(record->subrecords[2].signature.to_string() == "LVLD");
+    CHECK(record->subrecords[3].signature.to_string() == "LVLM");
+    CHECK(record->subrecords[4].signature.to_string() == "LVLF");
+    CHECK(record->subrecords[5].signature.to_string() == "LLCT");
+    CHECK(record->subrecords[6].signature.to_string() == "LVLO");
+}
+
+TEST_CASE("Native lifecycle creates LVLI, LVLN and FACT from typed payloads") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MagicMod" / "Patch.esp";
+    writeBytes(pluginPath, makeSpellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MagicMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto item = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLI", nlohmann::json{
+            {"editorId", "CreatedItems"}, {"chanceNone", 20}, {"maxCount", 0}, {"flags", 5}}})));
+    const auto npc = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLN", nlohmann::json{
+            {"editorId", "CreatedNpcs"}, {"chanceNone", 10}, {"maxCount", 1}, {"flags", 4}}})));
+    const auto faction = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "FACT", nlohmann::json{
+            {"editorId", "CreatedFaction"}, {"fullName", "Created Faction"}, {"flags", 0x81}}})));
+    REQUIRE(item.at("formKey") == "000900:Patch.esp");
+    REQUIRE(npc.at("formKey") == "000901:Patch.esp");
+    REQUIRE(faction.at("formKey") == "000902:Patch.esp");
+
+    const auto refused = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLI", nlohmann::json{
+            {"flags", 8}}}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "LeveledListCreateFailed");
+
+    REQUIRE(backend.invoke(
+        "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto disk = fo4::read_plugin_file(pluginPath);
+    CHECK(disk.header.next_form_id == 0x903u);
+
+    const auto itemKey = fo4::FormKey::parse("000900:Patch.esp");
+    const auto* itemRecord = fo4::find_record(disk, itemKey);
+    REQUIRE(itemRecord != nullptr);
+    CHECK(itemRecord->header.signature.to_string() == "LVLI");
+    const auto itemList = fo4::forms::decode_leveled_list(disk, itemKey);
+    CHECK(itemList.chance_none == 20u);
+    CHECK(itemList.max_count == 0u);
+    CHECK(itemList.flags == 5u);
+    CHECK(itemList.entries.empty());
+
+    const auto npcKey = fo4::FormKey::parse("000901:Patch.esp");
+    const auto* npcRecord = fo4::find_record(disk, npcKey);
+    REQUIRE(npcRecord != nullptr);
+    CHECK(npcRecord->header.signature.to_string() == "LVLN");
+    const auto npcList = fo4::forms::decode_leveled_list(disk, npcKey);
+    CHECK(npcList.chance_none == 10u);
+    CHECK(npcList.max_count == 1u);
+    CHECK(npcList.flags == 4u);
+
+    const auto* factionRecord = fo4::find_record(disk, fo4::FormKey::parse("000902:Patch.esp"));
+    REQUIRE(factionRecord != nullptr);
+    CHECK(factionRecord->header.signature.to_string() == "FACT");
+    REQUIRE(factionRecord->subrecords.size() == 5u);
+    CHECK(factionRecord->subrecords[0].signature == fo4::sig_edid);
+    CHECK(factionRecord->subrecords[1].signature.to_string() == "FULL");
+    CHECK(factionRecord->subrecords[2].signature == fo4::sig_data);
+    CHECK(factionRecord->subrecords[2].data == std::vector<std::byte>{
+        std::byte{0x81}, std::byte{0}, std::byte{0}, std::byte{0}});
 }
 
 TEST_CASE("Native lifecycle refuses raw creation without schema preflight") {
@@ -509,4 +599,110 @@ TEST_CASE("Native lifecycle refuses delete and renumber across external referenc
     const auto disk = fo4::read_plugin_file(basePath);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000800:Base.esp")) != nullptr);
     CHECK(fo4::find_record(disk, fo4::FormKey::parse("000950:Base.esp")) == nullptr);
+}
+
+TEST_CASE("Native lifecycle refuses embedded NUL in leveled list and faction text") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MagicMod" / "Patch.esp";
+    writeBytes(pluginPath, makeSpellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MagicMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    const auto before = readBytes(pluginPath);
+
+    const auto list = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLI", nlohmann::json{
+            {"editorId", std::string("Bad\0Id", 6)}, {"chanceNone", 0}, {"maxCount", 0}, {"flags", 0}}}));
+    REQUIRE_FALSE(list.has_value());
+    CHECK(list.error().type == "LeveledListCreateFailed");
+
+    const auto leveledNpc = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLN", nlohmann::json{
+            {"editorId", std::string("Bad\0Id", 6)}, {"chanceNone", 0}, {"maxCount", 0}, {"flags", 0}}}));
+    REQUIRE_FALSE(leveledNpc.has_value());
+    CHECK(leveledNpc.error().type == "LeveledListCreateFailed");
+
+    const auto faction = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "FACT", nlohmann::json{
+            {"editorId", std::string("Bad\0Id", 6)}}}));
+    REQUIRE_FALSE(faction.has_value());
+    CHECK(faction.error().type == "FactionCreateFailed");
+
+    const auto fullName = backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "FACT", nlohmann::json{
+            {"editorId", "OkId"}, {"fullName", std::string("Bad\0Name", 8)}}}));
+    REQUIRE_FALSE(fullName.has_value());
+    CHECK(fullName.error().type == "FactionCreateFailed");
+
+    expectNothingPending(backend);
+    const bool unchanged = readBytes(pluginPath) == before;
+    CHECK(unchanged);
+}
+
+TEST_CASE("Native lifecycle refuses malformed LVLI, LVLN and FACT creation payloads") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto pluginPath = root / "mods" / "MagicMod" / "Patch.esp";
+    writeBytes(pluginPath, makeSpellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Patch.esp", pluginPath, "MagicMod")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    const auto before = readBytes(pluginPath);
+
+    const auto rangeRows = nlohmann::json::array({
+        nlohmann::json{{"editorId", "X"}, {"chanceNone", 256}},
+        nlohmann::json{{"editorId", "X"}, {"chanceNone", -1}},
+        nlohmann::json{{"editorId", "X"}, {"chanceNone", "5"}},
+        nlohmann::json{{"editorId", "X"}, {"chanceNone", 1.5}},
+        nlohmann::json{{"editorId", "X"}, {"maxCount", 300}},
+        nlohmann::json{{"editorId", "X"}, {"flags", 256}}
+    });
+    for (const std::string signature : {"LVLI", "LVLN"}) {
+        for (const auto& payload : rangeRows) {
+            const auto refused = backend.invokeBackend(
+                "CreateRecord", nlohmann::json::array({"Patch.esp", signature, payload}));
+            REQUIRE_FALSE(refused.has_value());
+            CHECK(refused.error().type == "InvalidRecordCreationPayload");
+            CHECK(refused.error().message.find("chanceNone, maxCount, and flags must be 0..255") != std::string::npos);
+        }
+        const auto editor = backend.invokeBackend(
+            "CreateRecord", nlohmann::json::array({"Patch.esp", signature, nlohmann::json{{"editorId", 5}}}));
+        REQUIRE_FALSE(editor.has_value());
+        CHECK(editor.error().type == "InvalidRecordCreationPayload");
+        CHECK(editor.error().message.find("editorId must be a string or null") != std::string::npos);
+    }
+
+    const auto factionRows = nlohmann::json::array({
+        nlohmann::json{{"editorId", 5}},
+        nlohmann::json{{"editorId", "X"}, {"fullName", 5}},
+        nlohmann::json{{"editorId", "X"}, {"flags", 4294967296}},
+        nlohmann::json{{"editorId", "X"}, {"flags", -1}},
+        nlohmann::json{{"editorId", "X"}, {"flags", "1"}}
+    });
+    for (const auto& payload : factionRows) {
+        const auto refused = backend.invokeBackend(
+            "CreateRecord", nlohmann::json::array({"Patch.esp", "FACT", payload}));
+        REQUIRE_FALSE(refused.has_value());
+        CHECK(refused.error().type == "InvalidRecordCreationPayload");
+    }
+
+    expectNothingPending(backend);
+    const bool unchanged = readBytes(pluginPath) == before;
+    CHECK(unchanged);
+
+    const auto item = parseStringResult(backend.invokeBackend(
+        "CreateRecord", nlohmann::json::array({"Patch.esp", "LVLI", nlohmann::json{
+            {"editorId", "Ok"}, {"chanceNone", 0}, {"maxCount", 0}, {"flags", 0}}})));
+    CHECK(item.at("formKey") == "000900:Patch.esp");
 }

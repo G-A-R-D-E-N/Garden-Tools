@@ -1,5 +1,6 @@
 #include "fo4/schema/scalar.hpp"
 
+#include <array>
 #include <charconv>
 #include <algorithm>
 #include <cmath>
@@ -13,9 +14,7 @@
 namespace fo4::schema {
 namespace {
 
-constexpr ScalarFieldDescriptor k_scalar_fields[] = {
 #include "fo4/schema/generated_scalar_fields.inc"
-};
 
 void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
   out.push_back(std::byte{static_cast<std::uint8_t>(value)});
@@ -85,16 +84,17 @@ std::string format_float(float value) {
 }  // namespace
 
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept {
+  const ScalarDescriptor* only = nullptr;
   for (const auto& field : k_scalar_fields) {
-    // Embedded fields share a signature with their neighbours, so a lookup by
-    // signature alone cannot name one of them. See the header.
-    if (field.scalar.embedded || field.scalar.address.repeated ||
-        field.scalar.storage == ScalarStorage::zstring) {
-      continue;
-    }
-    if (field.scalar.subrecord == subrecord) return field.scalar;
+    if (field.scalar.subrecord != subrecord) continue;
+    if (only) return std::nullopt;
+    only = &field.scalar;
   }
-  return std::nullopt;
+  if (!only || only->embedded || only->address.repeated ||
+      only->storage == ScalarStorage::zstring) {
+    return std::nullopt;
+  }
+  return *only;
 }
 
 std::span<const std::byte> scalar_field_bytes(std::span<const std::byte> payload,
@@ -118,6 +118,7 @@ FieldShape scalar_field_shape(const ScalarDescriptor& descriptor) noexcept {
   shape.subrecord = descriptor.subrecord;
   shape.payload_size = descriptor.payload_size;
   shape.minimum_payload_size = descriptor.minimum_payload_size;
+  shape.min_form_version = descriptor.min_form_version;
   shape.whole_payload = !descriptor.embedded;
   shape.offset = descriptor.embedded ? descriptor.offset : std::size_t{0};
   shape.width = scalar_storage_size(descriptor.storage);
@@ -176,6 +177,47 @@ std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept 
   return {k_scalar_fields + first, last - first};
 }
 
+std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
+                                                               std::string_view path) noexcept {
+  for (const auto& array : k_counted_arrays) {
+    if (array.record == record && array.path == path) return array;
+  }
+  return std::nullopt;
+}
+
+bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept {
+  for (const auto& array : k_counted_arrays) {
+    if (array.record == record && array.count_subrecord == subrecord) return true;
+  }
+  return false;
+}
+
+std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature record,
+                                                                   std::string_view path) noexcept {
+  for (const auto& group : k_subrecord_groups) {
+    if (group.record == record && group.path == path) return group;
+  }
+  return std::nullopt;
+}
+
+std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
+                                                                   Signature subrecord) noexcept {
+  for (const auto& group : k_subrecord_groups) {
+    if (group.record != record) continue;
+    for (const auto& member : group.members) {
+      if (member.subrecord == subrecord) return group;
+    }
+  }
+  return std::nullopt;
+}
+
+bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept {
+  for (const auto& group : k_subrecord_groups) {
+    if (group.record == record && group.count_subrecord == subrecord) return true;
+  }
+  return false;
+}
+
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
   switch (storage) {
     case ScalarStorage::u8:
@@ -192,6 +234,22 @@ std::size_t scalar_storage_size(ScalarStorage storage) noexcept {
       return 0;
   }
   return 0;
+}
+
+std::optional<std::string_view> scalar_value_name(const ScalarDescriptor& descriptor,
+                                                  std::int64_t value) noexcept {
+  for (const auto& entry : descriptor.names) {
+    if (entry.value == value) return entry.name;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor,
+                                              std::string_view name) noexcept {
+  for (const auto& entry : descriptor.names) {
+    if (entry.name == name) return entry.value;
+  }
+  return std::nullopt;
 }
 
 std::string decode_scalar(std::span<const std::byte> data,

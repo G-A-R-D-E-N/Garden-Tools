@@ -814,6 +814,30 @@ public unsafe struct Navi
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct NaviPath
+{
+    public IntPtr Navmeshes;
+    public nuint NavmeshCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NaviAnchor
+{
+    public FormKey Navmesh;
+    public uint Value;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NaviPathList
+{
+    public IntPtr Paths;
+    public nuint PathCount;
+    public IntPtr Anchors;
+    public nuint AnchorCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct SoundPlayback
 {
     public sbyte FrequencyShift;
@@ -897,6 +921,14 @@ public unsafe struct FootstepSet
     public fixed uint Counts[5];
     public IntPtr Steps;
     public nuint StepCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SoundFileList
+{
+    public IntPtr Files;
+    public nuint FileCount;
     public IntPtr Internal;
 }
 
@@ -1453,10 +1485,210 @@ public unsafe struct IdleInfo
     public IntPtr Internal;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageProcedureInput
+{
+    public IntPtr TypeName;
+    public nuint SubrecordBegin;
+    public nuint SubrecordEnd;
+    public byte Index;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageProcedureNode
+{
+    public int IsLeaf;
+    public IntPtr Name;
+    public uint ConditionCount;
+    public uint ChildCount;
+    public int HasFlags;
+    public uint Flags;
+    public nuint OpaqueBegin;
+    public nuint OpaqueEnd;
+    public IntPtr Children;
+    public nuint ChildrenCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PackageProcedureTree
+{
+    public int Decoded;
+    public nuint RegionBegin;
+    public nuint RegionEnd;
+    public int HasMarker;
+    public byte Marker;
+    public IntPtr Inputs;
+    public nuint InputCount;
+    public IntPtr Nodes;
+    public nuint NodeCount;
+    public IntPtr Internal;
+}
+
+public enum ScenePart : int
+{
+    Phase = 0,
+    Actor = 1,
+    Action = 2,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueText
+{
+    public NameKind Kind;
+    public IntPtr Text;
+    public uint StringId;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueTopicInfo
+{
+    public int HasData;
+    public byte Flags;
+    public byte Category;
+    public ushort Subtype;
+    public int HasPriority;
+    public float Priority;
+    public int HasInfoCount;
+    public uint InfoCount;
+    public int HasSubtypeName;
+    public fixed byte SubtypeName[4];
+    public FormKey Branch;
+    public FormKey Quest;
+    public FormKey Keyword;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueCondition
+{
+    public byte FlagsByte;
+    public uint ComparisonRaw;
+    public ushort Function;
+    public ushort Unknown2;
+    public int Param1;
+    public int Param2;
+    public uint RunOn;
+    public uint Reference;
+    public int Unknown3;
+    public IntPtr Parameter1String;
+    public IntPtr Parameter2String;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueResponse
+{
+    public FormKey Emotion;
+    public FormKey Sound;
+    public byte Number;
+    public byte Unknown;
+    public ushort InterruptPercent;
+    public int CameraTargetAlias;
+    public int CameraLocationAlias;
+    public DialogueText Text;
+    public FormKey SpeakerIdle;
+    public FormKey ListenerIdle;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct DialogueInfo
+{
+    public int HasData;
+    public ushort Flags;
+    public ushort ResetTimeEncoded;
+    public int HasResetHours;
+    public double ResetHours;
+    public FormKey PreviousTopic;
+    public FormKey PreviousInfo;
+    public FormKey SharedInfo;
+    public FormKey InfoGroup;
+    public FormKey Speaker;
+    public FormKey StartScene;
+    public DialogueText Prompt;
+    public IntPtr Responses;
+    public nuint ResponseCount;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Internal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScenePhase
+{
+    public IntPtr Name;
+    public int HasEditorWidth;
+    public uint EditorWidth;
+    public int HasFlags;
+    public ushort Flags;
+    public int HasQuestStages;
+    public short StartQuestStage;
+    public short CompletionQuestStage;
+    public IntPtr StartConditions;
+    public nuint StartConditionCount;
+    public IntPtr CompletionConditions;
+    public nuint CompletionConditionCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneActor
+{
+    public int Alias;
+    public uint Flags;
+    public uint BehaviorFlags;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScenePayload
+{
+    public fixed byte Signature[5];
+    public IntPtr Bytes;
+    public nuint Size;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneAction
+{
+    public ushort Type;
+    public IntPtr Name;
+    public int HasActorAlias;
+    public int ActorAlias;
+    public int HasIndex;
+    public uint Index;
+    public int HasFlags;
+    public uint Flags;
+    public int HasStartPhase;
+    public uint StartPhase;
+    public int HasEndPhase;
+    public uint EndPhase;
+    public IntPtr Payload;
+    public nuint PayloadCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SceneInfo
+{
+    public int HasFlags;
+    public uint Flags;
+    public FormKey ParentQuest;
+    public IntPtr Phases;
+    public nuint PhaseCount;
+    public IntPtr Actors;
+    public nuint ActorCount;
+    public IntPtr Actions;
+    public nuint ActionCount;
+    public IntPtr Conditions;
+    public nuint ConditionCount;
+    public IntPtr Internal;
+}
+
+public enum OfficialTable : int
+{
+    OgNg = 0,
+    Ae = 1,
+}
+
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 32u;
+    public const uint CompiledAbiVersion = 40u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
@@ -1746,6 +1978,15 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_climate_timing")]
     public static extern Status PluginSetClimateTiming(IntPtr plugin, FormKey key, ClimateTimingEdit* timing);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_climate_moon_phase")]
+    public static extern Status ClimateMoonPhase(byte moons_phase_length, uint days_passed, int* out_has_phase, byte* out_phase);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_climate_volatility_hold_hours")]
+    public static extern Status ClimateVolatilityHoldHours(byte volatility, float multiplier, float duration_min, float duration_max, float* out_hours);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_weather_transition_hours")]
+    public static extern Status WeatherTransitionHours(byte transition_delta, float min_hours, float max_hours, float* out_hours);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_weather_decode")]
     public static extern Status WeatherDecode(IntPtr env, IntPtr record, WeatherInfo** out_weather);
 
@@ -1815,11 +2056,20 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navmesh_free")]
     public static extern void NavmeshFree(Navmesh* navmesh);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navmesh_triangle_edge_is_extra")]
+    public static extern Status NavmeshTriangleEdgeIsExtra(NavmeshTriangle* triangle, nuint edge, int* out_is_extra);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_decode")]
     public static extern Status NaviDecode(IntPtr env, IntPtr record, Navi** out_navi);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_free")]
     public static extern void NaviFree(Navi* navi);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_path_list_decode")]
+    public static extern Status NaviPathListDecode(IntPtr env, IntPtr record, NaviPathList** out_list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_navi_path_list_free")]
+    public static extern void NaviPathListFree(NaviPathList* list);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_navmesh_vertex")]
     public static extern Status PluginSetNavmeshVertex(IntPtr plugin, FormKey key, nuint index, NavmeshVertex* value);
@@ -1853,6 +2103,33 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_footstep_set_free")]
     public static extern void FootstepSetFree(FootstepSet* set);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_resolve_files")]
+    public static extern Status SoundResolveFiles(IntPtr env, IntPtr record, SoundFileList** out_list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_file_list_free")]
+    public static extern void SoundFileListFree(SoundFileList* list);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_select_rate_file")]
+    public static extern Status SoundSelectRateFile(SoundRateFile* rate_files, nuint rate_file_count, uint rpm, int* out_has_index, nuint* out_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_select_standard_file")]
+    public static extern Status SoundSelectStandardFile(nuint count, nuint draw_index, int has_previous, nuint previous_index, nuint* out_index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_frequency_factor")]
+    public static extern Status SoundFrequencyFactor(sbyte frequency_shift, double* out_factor);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_is_looping")]
+    public static extern Status SoundIsLooping(byte loop_control, int* out_looping);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_sidechain_send")]
+    public static extern Status SoundSidechainSend(byte sidechain_control, double* out_send);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_small_rumble_send")]
+    public static extern Status SoundSmallRumbleSend(byte rumble_control, double* out_send);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_sound_big_rumble_send")]
+    public static extern Status SoundBigRumbleSend(byte rumble_control, double* out_send);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_pex_parse")]
     public static extern Status PexParse(byte* bytes, nuint size, IntPtr* out_pex);
@@ -2036,5 +2313,53 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_idle_free")]
     public static extern void IdleFree(IdleInfo* idle);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_procedure_decode")]
+    public static extern Status PackageProcedureDecode(IntPtr env, IntPtr record, PackageProcedureTree** out_tree);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_procedure_free")]
+    public static extern void PackageProcedureFree(PackageProcedureTree* tree);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_location_type_name")]
+    public static extern IntPtr PackageLocationTypeName(int type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_package_target_type_name")]
+    public static extern IntPtr PackageTargetTypeName(int type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dialogue_topic_get_info")]
+    public static extern Status DialogueTopicGetInfo(IntPtr env, IntPtr record, DialogueTopicInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dialogue_info_decode")]
+    public static extern Status DialogueInfoDecode(IntPtr env, IntPtr record, DialogueInfo** out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_dialogue_info_free")]
+    public static extern void DialogueInfoFree(DialogueInfo* info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_scene_decode")]
+    public static extern Status SceneDecode(IntPtr env, IntPtr record, SceneInfo** out_scene);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_scene_free")]
+    public static extern void SceneFree(SceneInfo* scene);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_scene_action_type_name")]
+    public static extern IntPtr SceneActionTypeName(ushort type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_scalar")]
+    public static extern Status PluginSetSceneScalar(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, nuint group_index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_formlink")]
+    public static extern Status PluginSetSceneFormlink(IntPtr plugin, FormKey key, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, FormKey* target);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_scene_group_count")]
+    public static extern Status PluginSceneGroupCount(IntPtr plugin, FormKey key, ScenePart part, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
+    public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_ccc_read")]
+    public static extern Status CccRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_names, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_load_order_assemble")]
+    public static extern Status LoadOrderAssemble([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? data_dir, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? plugin_list_path, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? ccc_path, OfficialTable table, IntPtr** out_rows, nuint* out_row_count, IntPtr** out_findings, nuint* out_finding_count, int* out_failed);
 
 }

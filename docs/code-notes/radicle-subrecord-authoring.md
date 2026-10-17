@@ -59,9 +59,9 @@ inventing schema, and a future per-record registration only needs fields.json.
 
 ## Radicle/src/plugin/subrecord_authoring.cpp:remove_with_rules
 
-Only listed, `editable` signatures. The `occurrence`-th physical subrecord is erased; absent occurrence is `absent`, and a
-count after removal below `minimum` is `below_minimum`. No preflight runs after a removal; count-linked
-repeated entries cannot reach it because they are not `editable`, so removing an LVSP LVLO is refused.
+Only listed, `editable` signatures. The `occurrence`-th physical subrecord is erased; absent occurrence is `absent`,
+and a count after removal below `minimum` is `below_minimum`. The removal then returns `unknown_order` before the erase only when the target is a repeated entry (`maximum > 1`) and some existing subrecord has no rule, as `add_with_rules` does for its own check. DEBR DATA is uncounted and repeated, and each DATA is followed by a MODT with no DEBR rule, so erasing one DATA would leave its MODT attached to the previous entry. A singleton removal cannot orphan a sibling and stays allowed on records with unlisted subrecords; INFO response groups and SCEN groups stay unlisted on purpose. No preflight runs after a removal; count-linked repeated entries are not `editable`,
+so removing an LVSP LVLO is refused.
 
 ## Radicle/src/plugin/subrecord_authoring.cpp:create_with_rules
 

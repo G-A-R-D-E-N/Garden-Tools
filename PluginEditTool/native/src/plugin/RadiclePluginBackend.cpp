@@ -182,6 +182,9 @@ std::optional<std::filesystem::path> RadiclePluginBackend::allowedLocalizationDi
 Result<nlohmann::json> RadiclePluginBackend::invoke(std::string_view operation,
                                                      const nlohmann::json& arguments) {
     if (operation == "environment.LoadMo2") return loadEnvironment(arguments);
+    if (operation == "strings.ListStringTables") return listStringTables(arguments);
+    if (operation == "strings.GetStrings") return getStrings(arguments);
+    if (operation == "strings.LookupString") return lookupString(arguments);
     if (operation == "appInterop.GetPlugins") return getPlugins();
     if (operation == "appInterop.GetChildren") return getChildren(arguments);
     if (operation == "appInterop.OpenRecord") return openRecord(arguments);
@@ -321,8 +324,7 @@ Result<nlohmann::json> RadiclePluginBackend::loadEnvironment(const nlohmann::jso
     for (const auto& item : loaded) {
         knownKinds.push_back({
             item.plugin.key,
-            item.plugin.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
-                                                          : fo4::PluginKind::full,
+            fo4::classify_plugin_kind(item.plugin.header.tes4_flags, item.plugin.key),
         });
     }
     for (auto& item : loaded) {
@@ -526,8 +528,7 @@ Result<nlohmann::json> RadiclePluginBackend::openPlugin(const nlohmann::json& ar
         for (const auto& item : plugins_) {
             knownKinds.push_back({
                 item.plugin.key,
-                item.plugin.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
-                                                              : fo4::PluginKind::full,
+                fo4::classify_plugin_kind(item.plugin.header.tes4_flags, item.plugin.key),
             });
         }
         for (auto& item : plugins_) fo4::apply_master_kinds(item.plugin, knownKinds);

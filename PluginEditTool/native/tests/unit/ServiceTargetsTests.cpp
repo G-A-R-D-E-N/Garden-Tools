@@ -179,16 +179,18 @@ TEST_CASE("CellTarget geometry batch reports not-found meshes and dedupes case-i
 
     auto result = target.invoke(
         "GetGeometryBatch",
-        nlohmann::json::array({R"(["a/b.nif","A/B.NIF","c/d.nif"])"}));
+        nlohmann::json::array({R"(["a/b.nif","A/B.NIF","c/d.nif"," c/d.nif"])"}));
     REQUIRE(result.has_value());
     REQUIRE(result->is_string());
 
     const auto parsed = nlohmann::json::parse(result->get<std::string>());
     CHECK(parsed.at("count") == 2);  // "A/B.NIF" deduped against "a/b.nif"
     const auto& geometry = parsed.at("geometry");
-    REQUIRE(geometry.size() == 2);
+    REQUIRE(geometry.size() == 4);
     CHECK(geometry.at("a/b.nif").at("error") == "Not found (loose or in any indexed archive).");
+    CHECK(geometry.at("A/B.NIF") == geometry.at("a/b.nif"));
     CHECK(geometry.at("c/d.nif").contains("error"));
+    CHECK(geometry.at(" c/d.nif") == geometry.at("c/d.nif"));
 
     const auto progress = nlohmann::json::parse(
         target.invoke("GetGeometryBatchProgress", nlohmann::json::array())->get<std::string>());

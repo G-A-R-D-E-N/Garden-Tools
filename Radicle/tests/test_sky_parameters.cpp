@@ -178,6 +178,39 @@ TEST_F(SkyParametersTest, ConvertsUnsignedTimingAndMoonBoundaries) {
   EXPECT_TRUE(timing->uses_secunda());
 }
 
+TEST_F(SkyParametersTest, MoonPhaseUsesPackedDaysPerPhase) {
+  const auto phase = [](std::uint8_t packed, std::uint32_t days) {
+    return fo4::env::ClimateTiming{.moons_phase_length = packed}.moon_phase(days);
+  };
+  EXPECT_EQ(phase(0x00, 10), std::nullopt);
+  EXPECT_EQ(phase(0x3F, 0), 0);
+  EXPECT_EQ(phase(0x3F, 63), 1);
+  EXPECT_EQ(phase(0x3F, 504), 0);
+  EXPECT_EQ(phase(0x41, 9), 1);
+  EXPECT_EQ(phase(0xC3, 200), 2);
+}
+
+TEST_F(SkyParametersTest, VolatilityHoldHoursUsesTheClampedFormula) {
+  const auto hold = [](std::uint8_t volatility, float multiplier, float min, float max) {
+    return fo4::env::ClimateTiming{.volatility = volatility}.volatility_hold_hours(multiplier, min, max);
+  };
+  EXPECT_FLOAT_EQ(hold(255, 1.0f, 1.0f, 23.0f), 1.0f);
+  EXPECT_FLOAT_EQ(hold(0, 1.0f, 1.0f, 23.0f), 23.0f);
+  EXPECT_NEAR(hold(128, 1.0f, 1.0f, 23.0f), 11.9569f, 1e-4f);
+  EXPECT_FLOAT_EQ(hold(128, 4.0f, 1.0f, 23.0f), 1.0f);
+  EXPECT_FLOAT_EQ(hold(255, 1.0f, 0.0f, 0.0f), 0.1f);
+}
+
+TEST_F(SkyParametersTest, TransitionHoursScalesTheDeltaByte) {
+  EXPECT_NEAR(fo4::env::transition_hours(0, 0.01f, 1.0f), 0.01f, 1e-6f);
+  EXPECT_NEAR(fo4::env::transition_hours(1, 0.01f, 1.0f), 0.013882353f, 1e-6f);
+  EXPECT_NEAR(fo4::env::transition_hours(127, 0.01f, 1.0f), 0.50305885f, 1e-6f);
+  EXPECT_NEAR(fo4::env::transition_hours(128, 0.01f, 1.0f), 0.5069412f, 1e-6f);
+  EXPECT_NEAR(fo4::env::transition_hours(255, 0.01f, 1.0f), 1.0f, 1e-6f);
+  EXPECT_NEAR(fo4::env::transition_hours(255, 0.01f, 3.0f), 3.0f, 1e-6f);
+  EXPECT_NEAR(fo4::env::transition_hours(128, 0.01f, 3.0f), 1.5108628f, 1e-6f);
+}
+
 TEST_F(SkyParametersTest, TimingEditSavesAndReloadsWithoutChangingOtherBytes) {
   write(sequence(6), sequence(20));
   auto plugin = fo4::read_plugin_file(path_);

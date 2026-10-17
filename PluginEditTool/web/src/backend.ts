@@ -37,6 +37,7 @@ export interface Backend {
   LootCleaningReport(plugin: string): Promise<string>;
   UpdateOnam(plugin: string): Promise<string>;
   CopyAsDisabledOverride(sourcePlugin: string, id: string, patchPlugin: string, overwrite: boolean): Promise<string>;
+  CopyAsWrapper(sourcePlugin: string, id: string, patchPlugin: string, editorId: string | null): Promise<string>;
   ComparePluginTo(plugin: string, otherPath: string, formKey?: string): Promise<string>;
   CheckEslEligibility(plugin: string): Promise<string>;
   CleanPlugin(plugin: string): Promise<string>;
@@ -65,6 +66,14 @@ export interface Backend {
   CheckCircularLeveledLists(plugin: string): Promise<string>;
   DeepCopyAsOverride(sourcePlugin: string, id: string, patchPlugin: string, apply: boolean, overwrite: boolean, maxRecords?: number, allowLosing?: boolean): Promise<string>;
   ChangeReferencingRecords(from: string, to: string, patchPlugin: string, apply: boolean): Promise<string>;
+  GetLeveledList(formKey: string): Promise<string | object>;
+  SetLeveledListSettings(plugin: string, formKey: string, chanceNone: number, maxCount: number, flags: number): Promise<string>;
+  EditLeveledListEntry(plugin: string, formKey: string, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
+  GetNpc(formKey: string): Promise<string | object>;
+  EditNpcEntries(plugin: string, formKey: string, list: NpcList, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
+  GetFaction(formKey: string): Promise<string | object>;
+  EditFactionEntries(plugin: string, formKey: string, list: FactionList, op: EntryOp, index: number, value?: Record<string, unknown>): Promise<string>;
+  GetWeaponDamageTypes(formKey: string): Promise<string | object>;
 
 
   GetActivePlugins(): Promise<string>;
@@ -113,6 +122,31 @@ export interface LoadOrderSummary {
   TotalRecords: number; PluginCount: number; Plugins: string[];
 }
 
+export type EntryOp = 'add' | 'set' | 'remove';
+export type NpcList = 'factions' | 'perks' | 'inventory';
+export type FactionList = 'relations' | 'ranks';
+export type LeveledListExtra = { owner: string | null; globalOrRank: number; itemCondition: number };
+export type LeveledListEntry = {
+  level: number; item: string | null; count: number; chanceNone: number; extra: LeveledListExtra | null;
+};
+export type LeveledList = {
+  formKey: string; chanceNone: number; maxCount: number; flags: number;
+  useGlobal: string | null; epicLootChance: string | null; entries: LeveledListEntry[];
+};
+export type NpcFaction = { faction: string | null; rank: number };
+export type NpcPerk = { perk: string | null; rank: number };
+export type NpcInventoryExtra = { owner: string | null; globalOrRank: number; condition: number };
+export type NpcInventoryItem = { item: string | null; count: number; extra: NpcInventoryExtra | null };
+export type NpcRecord = { formKey: string; factions: NpcFaction[]; perks: NpcPerk[]; inventory: NpcInventoryItem[] };
+export type FactionReaction = 'neutral' | 'enemy' | 'ally' | 'friendly';
+export type FactionRelation = { faction: string | null; modifier: number; reaction: FactionReaction };
+export type LocalizedTitle = string | { stringId: number } | { rawId: string } | null;
+export type FactionRank = { number: number; maleTitle: LocalizedTitle; femaleTitle: LocalizedTitle; hasInsignia: boolean };
+export type FactionRecord = { formKey: string; relations: FactionRelation[]; ranks: FactionRank[] };
+export type WeaponDamageType = { type: string | null; amount: number; curveTable: string | null };
+export type WeaponDamageTypes = { formKey: string; damageTypes: WeaponDamageType[] };
+export const TYPED_RECORD_TYPES = ['LVLI', 'LVLN', 'LVSP', 'NPC_', 'FACT', 'WEAP'];
+
 
 export interface Mo2Status {
   loaded: boolean;
@@ -138,6 +172,10 @@ export interface AppInterop {
 }
 
 
+export type ScalarPresentation =
+  | { kind: 'enum'; names: { value: number; name: string }[] }
+  | { kind: 'flags'; names: { bit: number; name: string }[] };
+
 export interface ConflictFieldRow {
   Field: string;
   DisplayLabel: string;
@@ -156,10 +194,11 @@ export interface ConflictFieldRow {
   EnumOptions: string[] | null;
   RefType: string | null;
   RefTypes: string | null;
+  Presentation?: ScalarPresentation;
 }
 
 export interface RefByEntry { Plugin: string; FormKey: string; EditorID: string; Type: string; }
-export interface RecordProblem { Severity: string; Description: string; }
+export interface RecordProblem { Code?: string; Detail?: string; Severity: string; Description: string; }
 export interface SearchHit { FormKey: string; EditorID: string; Type: string; Plugin: string; }
 
 export interface ElementActions {
@@ -358,6 +397,18 @@ export interface MastersHost {
   SetLight(plugin: string, light: boolean): Promise<string>;
   CleanUnused(plugin: string, apply: boolean): Promise<string>;
   SavePlugin(plugin: string): Promise<string>;
+}
+
+export interface StringTableInfo { kind: string; path: string; count: number; }
+export interface StringRow { id: number; text: string; }
+export interface StringsPage { total: number; offset: number; limit: number; rows: StringRow[]; }
+export interface StringLookupRow { kind: string; id: number; text: string; }
+
+export interface StringsHost {
+  ListStringTables(plugin: string, language: string): Promise<string>;
+  GetStrings(plugin: string, language: string, table: string, filter: string,
+             offset: number, limit: number): Promise<string>;
+  LookupString(plugin: string, language: string, id: number): Promise<string>;
 }
 
 
@@ -568,6 +619,7 @@ declare global {
           audio?: AudioHost;
           cell?: CellHost;
           graph?: GraphHost;
+          strings?: StringsHost;
         };
         addEventListener(type: string, listener: (event: MessageEvent) => void): void;
         removeEventListener(type: string, listener: (event: MessageEvent) => void): void;
@@ -602,6 +654,9 @@ export const getAudio = (): AudioHost | undefined =>
 
 export const getCell = (): CellHost | undefined =>
   window.chrome?.webview?.hostObjects?.cell;
+
+export const getStrings = (): StringsHost | undefined =>
+  window.chrome?.webview?.hostObjects?.strings;
 
 export const getGraph = (): GraphHost | undefined =>
   window.chrome?.webview?.hostObjects?.graph;

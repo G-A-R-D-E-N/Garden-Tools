@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -88,6 +89,8 @@ std::size_t begin_group(ByteWriter& out, std::string_view label, std::int32_t gr
 void end_group(ByteWriter& out, std::size_t header_offset);
 
 std::vector<std::byte> make_minimal_plugin();
+std::vector<std::byte> make_tes4_plugin(std::uint32_t flags, float version,
+                                        const std::vector<std::string>& masters);
 std::vector<std::byte> zlib_compress(std::span<const std::byte> data);
 
 }  // namespace fo4::test

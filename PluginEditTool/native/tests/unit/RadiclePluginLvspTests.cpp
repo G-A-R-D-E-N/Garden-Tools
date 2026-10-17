@@ -193,23 +193,27 @@ TEST_CASE("Native SetField edits LVSP entry level count chance and spell") {
         "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[0]\\Level", "25"
     })).has_value());
     REQUIRE(backend.invokeBackend("SetField", nlohmann::json::array({
-        "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[0]\\Count", "3"
+        "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[1]\\Count", "3"
     })).has_value());
     REQUIRE(backend.invokeBackend("SetField", nlohmann::json::array({
-        "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[0]\\ChanceNone", "8"
+        "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[1]\\ChanceNone", "8"
     })).has_value());
     REQUIRE(backend.invokeBackend("SetField", nlohmann::json::array({
-        "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[0]\\Spell", "000810:Patch.esp"
+        "Patch.esp", "000800:Patch.esp", "LVSP\\Entries[1]\\Spell", "000810:Patch.esp"
     })).has_value());
 
     REQUIRE(backend.invoke(
         "backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     const auto list = readList(patchPath);
     REQUIRE(list.entries.size() == 2u);
-    CHECK(list.entries[0].level == 25u);
-    CHECK(list.entries[0].count == 3u);
-    CHECK(list.entries[0].chance_none == 8u);
+    CHECK(list.entries[0].level == 15u);
+    CHECK(list.entries[0].count == 2u);
+    CHECK(list.entries[0].chance_none == 5u);
     CHECK(list.entries[0].spell == fo4::FormKey::parse("000810:Patch.esp"));
+    CHECK(list.entries[1].level == 25u);
+    CHECK(list.entries[1].count == 3u);
+    CHECK(list.entries[1].chance_none == 8u);
+    CHECK(list.entries[1].spell == fo4::FormKey::parse("000810:Patch.esp"));
 }
 
 TEST_CASE("Native LVSP Spell edit refuses non-spell targets without touching disk") {

@@ -268,6 +268,7 @@ Result<nlohmann::json> AppInteropTarget::getMo2Status() const {
         {"overwriteFolder", current->instance.overwriteFolder.string()},
         {"pluginCount", current->plugins.size()},
         {"missingPluginCount", current->missingPlugins.size()},
+        {"warnings", current->warnings},
         {"loadedAtUnixMs", loadedAtMs},
         {"stale", isSnapshotStale(watched)},
         {"staleConfig", isWatchKindStale(watched, WatchKind::config)},

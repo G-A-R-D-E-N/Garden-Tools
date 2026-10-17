@@ -54,13 +54,13 @@ The remaining runtime questions are tracked in
 
 The native environment read functions are in `environment/sound.hpp`; the
 separate `c_api_sound.h` exposes owned descriptor/music/footstep-set arrays and
-fixed marker/footstep views. The generator reads that header and C# copies the
-arrays before releasing their holders. The current ABI is 27 against main ABI 26;
+fixed marker/footstep views, and `radicle_sound_resolve_files` returns an owned file list released by `radicle_sound_file_list_free`. The generator reads that header and C# copies the
+arrays before releasing their holders. The current ABI is 40;
 re-bump it if another ABI PR lands first.
 
 `test_sound_real.cpp` visits every sound-record version through both native
 and C ABI getters, checks native/C value agreement for all exposed fields, then compares untouched serialization with the original
-master bytes. It skips cleanly with game data unset. Native synthetic cases
+master bytes, and each SNDR record slice after a write and reread. It counts SOUN markers whose SDSC resolves in the loaded master but does not give a non-empty path (`SoundMarkerUnresolved`); markers whose SDSC is not in that master are counted separately (`SoundMarkerCrossMaster`). It skips cleanly with game data unset. Native synthetic cases
 exercise union selection, malformed groups, optional tails and reversed
 category ordering; managed getter tests cover all five record families.
 Local and CI results are recorded separately for each published head.
@@ -70,6 +70,47 @@ consumer or marker-to-descriptor conversion path. Record vocabulary and generic
 reference discovery are present; generic Godot audio commands do not consume
 these forms. Its #144 audio runtime must supply that path before the requested
 GardenEngine probe can exercise it.
+
+## Marker-to-file resolution
+
+`resolve_sound_files` (`src/environment/sound.cpp:resolve_sound_files`, C ABI `radicle_sound_resolve_files`) returns the sound file paths that a SOUN marker or SNDR descriptor plays:
+
+- SOUN: follows its SDSC link to the SNDR.
+- Standard (CNAM `1EEF540A`, or no CNAM): the ANAM files in stored order. A descriptor with no ANAM files resolves to an empty list.
+- Compound (`54651A43`): each DNAM child resolved recursively, concatenated in stored order. The Compound's own ANAM and rate blocks are not read.
+- AutoWeapon (`ED157AE3`): the BNAM base descriptor resolved recursively, then its rate files in stored order.
+
+Chains are capped at eight descriptor levels, and a descriptor that reaches one of its own ancestors is a cycle; a child shared by two branches is allowed. A resolve also visits at most 4096 descriptors (`k_max_sound_visits`) and emits at most 4096 files (`k_max_sound_files`), so a wide fan-out cannot blow up. Shipped data peaks at depth 2 and fan-out 10. A missing or unresolved link, a marker without SDSC, a non-SNDR target, an unknown kind, a depth overflow, a visit or file limit overflow or a cycle fails closed: the native call throws `WorldDecodeError`, the C ABI returns a non-OK status with a null list, and no partial list is returned.
+
+Divergences from the runtime, recorded here and not changed in code:
+
+- Compound duplicates: `resolve_sound_files` keeps stored DNAM order and duplicates. The engine collects DNAM children in a set, so duplicates collapse and record order is lost. A caller that needs engine playback must collapse duplicates itself.
+- AutoWeapon zero-rate entries: `resolve_sound_files` still lists the files of INTV 0 entries. The engine drops them at load; `select_rate_file_index` applies that runtime view.
+- Missing CNAM: the stored decoder and `resolve_sound_files` keep the Standard values layout. The RE (#399 comment 7869) reports that an unknown or missing CNAM leaves no runtime implementation.
+- Cycles: Radicle fails closed on descriptor cycles. The RE (#399 comment 9710) reports that the engine has no working cycle guard and recurses.
+
+## Answered RE details (OG 1.10.163)
+
+Recorded from [#399](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/399) comments 7869, 9710 and 9761 and the [#340](https://git.nomadicinteractive.dev/GARDEN/GARDEN-TOOLS/issues/340) comment 7870. AE and NG were compared structurally only.
+
+- CNAM is a u32 equal to the crc32 of the runtime class name (zero seed, no final xor): Standard `1EEF540A`, Compound `54651A43`, AutoWeapon `ED157AE3`. The decoder uses exactly these values.
+- REPT: the RE states that the ninth byte exists only for record versions above 0x70 (its meaning is inferred). The decoder instead keys on payload size (eight or nine bytes) and `test_sound.cpp:LastControlsAndRepeatStackableFollowPayloadSizeNotFormVersion` pins that choice. The version gate is not implemented; the installed fixtures (SOUN `0x23A65B` version 129 with nine bytes, `0x3FBA9` version 112 with eight bytes) agree with both rules, and the full-corpus agreement is not checked here.
+- BNAM: byte 0 is a signed frequency shift with factor `clamp(1 + shift * 0.01, 0.1, 2.0)`. Bytes 4 and 5 are a u16 static attenuation. The field name `attenuation_hundredths` is inferred from PDB accessor naming (7869); comment 9710 reports the engine conversion as millibels, `2000 * log10(clamp(x, 1e-5, 1))`. The stored value stays raw and no converted getter is provided. Byte 1 is frequency variance (±byte/100 jitter) and byte 2 is priority; byte 3 adds a random dB variance when nonzero.
+- LNAM: byte 1 loop bits `0x08`, `0x10`, `0x20` (mask `0x38`), byte 2 sidechain send, byte 3 small rumble (low nibble) and big rumble (high nibble).
+- Alternate (SNAM) substitution at play time, category and output-model effects, and the Envelope Fast/Slow behavior are not implemented.
+
+## Playback helpers
+
+These helpers are deterministic and take the random draw and the chosen rate as inputs; none of them chooses a file on its own or plays anything. The derived values are not stored fields.
+
+- `select_rate_file_index` (C ABI `radicle_sound_select_rate_file`): the AutoWeapon nearest-rate rule. Entries with rate 0 (INTV 0) are skipped and the result is the stored index in the rate list. At or below the first runtime entry returns the first, at or above the last returns the last, and otherwise the nearer neighbor wins with ties going to the higher entry. With no runtime entries it returns no index, and the caller uses the base file. The rule is stated for ascending rates, which every installed fixture has; the RE does not state the order of an unsorted list.
+- `select_standard_file_index` (C ABI `radicle_sound_select_standard_file`): the Standard no-repeat rule with an injected draw in `[0, count)`. If `count > 1` and the draw equals the previous pick, the result is `(draw + 1) % count`; otherwise the draw. A count of one always returns 0. A draw at or above the count is rejected.
+- Derived frequency factor (`sound_frequency_factor`, C ABI `radicle_sound_frequency_factor`): `clamp(1 + shift * 0.01, 0.1, 2.0)` from BNAM byte 0. Shift +127 gives 2.0 and -100 gives 0.1.
+- Derived looping (`sound_is_looping`, C ABI `radicle_sound_is_looping`): true when LNAM byte 1 has any of `0x08`, `0x10` or `0x20`. This is the any-loop test only; the Envelope Fast and Slow bits are not separated.
+- Derived sidechain send (`sound_sidechain_send`, C ABI `radicle_sound_sidechain_send`): LNAM byte 2 times 0.01, clamped to [0, 1].
+- Derived rumble sends (`sound_small_rumble_send` and `sound_big_rumble_send`, C ABI `radicle_sound_small_rumble_send` and `radicle_sound_big_rumble_send`): LNAM byte 3 low and high nibbles, each divided by 15. Nibble 0xF gives 1.0. Per RE 7869 the engine applies rumble sends only when the rumble-enabled flag is set and the value is nonzero; the helpers return only the scaled nibble, and the caller must gate on that flag.
+
+The C# wrappers are `RadicleEnvironment.SelectRateFileIndex`, `SelectStandardFileIndex`, `SoundFrequencyFactor`, `SoundIsLooping`, `SoundSidechainSend`, `SoundSmallRumbleSend` and `SoundBigRumbleSend`.
 
 ## Editing
 
@@ -125,7 +166,7 @@ Exit codes: PASS 0; SKIP 77 when `FO4_DATA_DIR` is unset; FAIL 1, printed as `so
 What each assertion proves, on the first winner of each signature in `Fallout4.esm` that carries the checked link (the probe picks the first record that carries the link, and fails if none does):
 - SNDR: CNAM kind is Standard, Compound or AutoWeapon; only Standard exposes Playback, and its LNAM controls are four bytes.
 - SNDR links: GNAM resolves to SNCT, SNAM to SNDR, ONAM to SOPM, BNAM base and DNAM descriptors to SNDR.
-- SOUN: SDSC resolves to an SNDR that `SoundDescriptor` decodes; a REPT stackable byte is 0..1.
+- SOUN: SDSC resolves to an SNDR that `SoundDescriptor` decodes; `SoundFiles` returns a non-empty path for the marker, printed as `MarkerFile`; a REPT stackable byte is 0..1.
 - MUSC: every non-null TNAM track resolves to MUST.
 - FSTP: a non-null DATA impact set resolves to IPDS.
 

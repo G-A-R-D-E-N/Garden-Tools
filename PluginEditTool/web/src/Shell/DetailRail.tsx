@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Copy, CornerUpRight, Crosshair, Filter, Info, Layers, Star } from 'lucide-react';
 import type { BreadcrumbNode, ConflictMatrix, PluginMatrixRow, RecordDetails } from '../backend';
 import { pluginColorVar } from '../util/pluginColor';
+import { errorText } from '../errors';
 import ConflictDonut from './ConflictDonut';
 import './DetailRail.css';
 
@@ -36,11 +37,12 @@ export default function DetailRail({
           b.GetRecordDetails(formKey), b.GetRecordPluginMatrix(formKey), b.GetContainmentPath(formKey),
         ]);
         if (cancelled) return;
+        setToast('');
         setDetails(JSON.parse(d));
         setPluginRows(JSON.parse(m));
         setPath(JSON.parse(p));
-      } catch {
-        if (!cancelled) { setDetails(null); setPluginRows([]); setPath([]); }
+      } catch (e) {
+        if (!cancelled) { setDetails(null); setPluginRows([]); setPath([]); setToast('Could not load record details: ' + errorText(e)); }
       }
     })();
     return () => { cancelled = true; };

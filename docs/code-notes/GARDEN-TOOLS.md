@@ -831,6 +831,10 @@ Fourth #114 slice, stacked on the placed-reference slice. It covers the LAND, LT
 - the LTEX/TXST chain, including missing links;
 - the C ABI.
 
+## Radicle/src/environment/strings.cpp:load_plugin_string_tables — per-plugin tables without an Environment (#32)
+
+Public entry for callers that hold one `fo4::Plugin` rather than a full load order, such as the PET strings RPC. It shares `resolve_plugin_tables` with `StringTables::load`, so both apply the same rules: the localized flag, case-folded loose names, duplicate-case errors, and archive fallback through `AssetResolver::locate_in_archives`. The strings directories are searched in the order given, and the first loose match wins before any archive is tried. Each returned `PluginStringTable::archive` is empty for loose files and the BA2 file name otherwise. Test: `Radicle/tests/test_environment_strings.cpp:PluginTablesResolveLooseThenArchivesAndSkipNonLocalized`.
+
 ## Radicle/src/environment/strings.cpp:fo4::env::StringTables / string_source — GardenEngine #114 localization
 
 Fifth #114 slice, stacked on the terrain slice. It replaces Mutagen's `StringsFolderLookupOverlay` for loose string files. Reading strings out of BA2 archives waits for the BA2 slice.
@@ -1077,7 +1081,7 @@ The fields, all from xEdit FO4 (pin `9fb016884bec138ea6c7b872cec831537d464c3e`),
 - To keep `form_links.cpp` under the 750-line limit, `visit_link_offsets` reaches the packed and placed layouts through one entry point, `form_link_mixed.cpp:mixed_formid_offsets`.
 
 **Contracts** (moved from source comments when the slice was restacked):
-- `Radicle/include/fo4/forms/placed_reference.hpp:copy_placed_reference_as_override` copies any of the ten placed signatures, recreating its CELL/WRLD containment and adding masters. `set_placed_reference_transform` rejects a missing, duplicate or malformed `DATA` without changing the plugin. `set_placed_reference_scale` inserts `XSCL` directly before `DATA` when absent (xEdit FO4 REFR order), removes it for `nullopt`, and returns false when the record is missing. The older header comments on the first two still say REFR/ACHR.
+- `Radicle/include/fo4/forms/placed_reference.hpp:copy_placed_reference_as_override` copies any of the ten placed signatures, recreating its CELL/WRLD containment and adding masters. `set_placed_reference_transform` rejects a missing, duplicate or malformed `DATA` without changing the plugin. `Radicle/src/forms/placed_reference.cpp:set_placed_reference_transform` also refuses a NaN or infinite position or rotation with `PlacedReferenceError`, without changing the plugin (#657). `set_placed_reference_scale` inserts `XSCL` directly before `DATA` when absent (xEdit FO4 REFR order), removes it for `nullopt`, and returns false when the record is missing. The older header comments on the first two still say REFR/ACHR.
 - `Radicle/include/fo4/plugin/writer.hpp:sort_plugin_masters` reorders masters to follow `load_order`, keeping each master's kind, and throws `FormIdError` when a master is not listed. `make_empty_plugin` writes only TES4, as described above.
 - `Radicle/include/fo4/schema/form_link_mixed.hpp:placed_reference_formid_offsets` gives `nullopt` when the subrecord is not one of the seven listed above.
 - `Radicle/include/fo4/c_api_env.h`:
@@ -1106,7 +1110,7 @@ PluginEditTool's strings are UTF-8 (they come from and go back to JSON), but on 
 
 There are about 270 such conversions across 43 files; the manifest makes all of them UTF-8 instead of patching each. Windows applies `activeCodePage` from Windows 10 version 1903; older Windows ignores it and keeps the previous behaviour. `RadiclePluginBackend.cpp:utf8Path` and `RadiclePluginSeq.cpp:seqUtf8Path` still convert explicitly, which stays correct either way.
 
-A plugin name written to `plugins.txt` in a legacy code page (non-ASCII, not UTF-8) still does not work: before, it matched the file and then failed in `utf8Path` or when returned in JSON (nlohmann `dump()` is strict); now `PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile` reports it in `missingPlugins`. The manifest does not change the console code page or child processes, so output from child tools such as the Papyrus compiler is still in their own code page. `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders` also checks `GetACP() == CP_UTF8` on Windows, so it fails if the test executables stop receiving the manifest. Nothing checks other executables: one added below the `fo4ide_use_utf8_code_page()` call in its directory would miss it, so keep the call last.
+Radicle reads `plugins.txt` names as Windows-1252 (RE-020, #520 c14028; `Radicle/src/loadorder/plugin_list.cpp:parse_plugin_list`), so a Windows-1252 name (for example `Café.esp` with 0xE9) matches its file. A `plugins.txt` written as UTF-8 with non-ASCII names decodes to mojibake, so those plugins land in `missingPlugins` (`PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile`), which is what the engine does. The manifest does not change the console code page or child processes, so output from child tools such as the Papyrus compiler is still in their own code page. `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders` also checks `GetACP() == CP_UTF8` on Windows, so it fails if the test executables stop receiving the manifest. Nothing checks other executables: one added below the `fo4ide_use_utf8_code_page()` call in its directory would miss it, so keep the call last.
 
 Tests: `Mo2ProfileTests.cpp:MO2 profile resolves plugins in non-ANSI mod folders`, `RadicleArchiveBackendTests.cpp:Radicle archive backend extracts into a non-ANSI output folder`, `RadiclePluginSeqTests.cpp:Native CreateSeqFile reports a plugin folder with non-ANSI characters`. All three failed before the manifest on ANSI code page 1252.
 
@@ -1166,7 +1170,7 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 - **`XPRM`:** stored (undoubled) bounds and the type at offset 28. It is written only when present; colors and the unknown float are kept.
 - **`XAPR`:** delay at offset 4 of the n-th entry. Written only when that entry exists.
 - **EditorID and comments:** empty or `nullopt` removes the subrecord, as Mutagen writes nothing for a null string. Embedded NUL is rejected.
-- **Record flags:** the compression and persistent bits are kept. Persistence decides whether the ref sits in the CELL's persistent or temporary child group, and a flag edit must not leave it in the wrong one.
+- **Record flags:** the compression, persistent and Deleted bits are kept (Deleted too because deleting needs the content stripped, #602 D-6). Persistence decides whether the ref sits in the CELL's persistent or temporary child group, and a flag edit must not leave it in the wrong one.
 
 **Masters.** A FormKey whose owner is neither the plugin nor one of its masters throws in C++. The C ABI resolves such owners through the environment:
 - It adds each one as a master with that plugin's full/light kind.
@@ -1183,16 +1187,16 @@ Eighth #114 slice, stacked on the writeback slice. It covers every field `Refere
 **C++ contract (`Radicle/include/fo4/forms/placed_reference.hpp`).** Every `set_placed_reference_*` edit returns false (or `PresentFieldEdit::record_missing`) when the record is absent. It throws `PlacedReferenceError` for a non-placed record, a malformed existing field, or a FormKey whose owner is neither the plugin nor one of its masters; otherwise it leaves every other subrecord untouched.
 - `set_placed_reference_scale`: sets `XSCL`, or removes it for `nullopt`.
 - `set_placed_reference_editor_id`: sets `EDID`, or removes it for an empty id.
-- `set_placed_reference_record_flags`: replaces the header flags; the compression and persistent bits stay as stored.
+- `set_placed_reference_record_flags`: replaces the header flags; the compression, persistent and Deleted bits stay as stored.
 - `set_placed_reference_comments` / `set_placed_reference_location_reference`: set `MNAM` / `XLRL`, or remove them for `nullopt`.
 - `set_placed_reference_ownership`: sets `XOWN` (existing unknown bytes kept) and `XRNK`; a `nullopt` owner removes both and a `nullopt` rank removes `XRNK`.
 - `set_placed_reference_enable_parent`: sets `XESP` {parent, flags} (existing unknown bytes kept), or removes it for `nullopt`.
 - `set_placed_reference_linked_references`: replaces every `XLKR` with the given links in order; a `LinkedReferenceEdit::keyword` of `nullopt` writes a null form ID.
 - `set_placed_reference_teleport`, `set_placed_reference_primitive` and `set_placed_reference_activate_parent_delay` only change a field that already exists, as GardenEngine's writeback does, and return `field_absent` otherwise. Primitive bounds are the stored (undoubled) `XPRM` values that `decode_placed_reference` returns.
-- `Radicle/src/forms/placed_reference_edit.cpp:edit_placed` runs the edit on a copy and commits only when it returns true. `insertion_point` places a new subrecord before the first existing one that xEdit orders after it (`field_rank` uses xEdit FO4 order at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `wbRefRecord(REFR`, `wbRefRecord(ACHR` and `ReferenceRecord` for placed projectiles and hazards; signatures missing from the list are never anchors), and `single` treats a repeated field as malformed. `set_placed_reference_record_flags` keeps persistence (it decides the CELL child group) and compression (how the payload is stored). `set_placed_reference_ownership` follows Mutagen `Ownership.xml` (Owner, Int32 Unknown, NoCrime as a 4-byte bool); xEdit reads the flag from the low byte.
+- `Radicle/src/forms/placed_reference_edit.cpp:edit_placed` runs the edit on a copy and commits only when it returns true. `insertion_point` places a new subrecord before the first existing one that xEdit orders after it (`field_rank` uses xEdit FO4 order at pin `9fb016884bec138ea6c7b872cec831537d464c3e`: `wbRefRecord(REFR`, `wbRefRecord(ACHR` and `ReferenceRecord` for placed projectiles and hazards; signatures missing from the list are never anchors), and `single` treats a repeated field as malformed. `set_placed_reference_record_flags` keeps persistence (it decides the CELL child group) and compression (how the payload is stored) and Deleted (deleting needs the content stripped, #602 D-6). `set_placed_reference_ownership` follows Mutagen `Ownership.xml` (Owner, Int32 Unknown, NoCrime as a 4-byte bool); xEdit reads the flag from the low byte.
 
 **C ABI contract (`Radicle/include/fo4/c_api_env.h:radicle_plugin_set_placed_*`).** Each returns `NOT_FOUND` when the plugin lacks the record and `INVALID_ARGUMENT` for a non-placed record or a malformed field. Edits that take a FormKey add any owner `env` loads as a master and keep masters in `env` load order; an owner `env` does not load is `INVALID_ARGUMENT`. A key whose `plugin` is NULL means "clear"; any other key must be a valid FormKey.
-- `radicle_plugin_set_placed_record_flags` keeps the compression and persistent bits as stored.
+- `radicle_plugin_set_placed_record_flags` keeps the compression, persistent and Deleted bits as stored.
 - `radicle_plugin_set_placed_comments` with `comments == NULL` removes `MNAM`.
 - `radicle_plugin_set_placed_ownership`: a cleared owner removes `XOWN` and `XRNK`; `has_rank == 0` removes `XRNK`.
 - `radicle_plugin_set_placed_linked_refs` replaces all `XLKR` in order; a cleared keyword writes a null form ID.
@@ -1325,7 +1329,7 @@ CTest runs them with `-DRADICLE_CSHARP_TESTS=ON`. The option is off by default s
   - `Write` is atomic: the file at the path is untouched on failure.
   - `CopyPlacedOverride` (Mutagen's `GetOrAddAsOverride`) copies a record version with its CELL/WRLD containment and masters.
   - Null removes `XSCL`; null or empty removes `EDID`.
-  - Record flags keep the compression and persistent bits as stored; a null owner removes ownership and faction rank.
+  - Record flags keep the compression, persistent and Deleted bits as stored; a null owner removes ownership and faction rank.
   - Teleport returns false when the reference or its existing `XTEL` is absent. Primitive takes the stored `XPRM` bounds and returns false when the reference or its existing `XPRM` is absent. The activate-parent delay returns false when the reference or that activate parent is absent.
 - `Radicle.Interop.Tests/AbiLayoutTests.cs` reads `RADICLE_ABI_PROBE`, the built `abi_layout_probe` binary that prints C `sizeof`/`offsetof` lines. `Radicle.Interop.Tests/Fixtures.cs` is a minimal FO4 plugin writer (records and groups laid out as the engine reads them) and builds a GNRL v1 BA2 with stored chunks and a name table. The `EnvironmentTests.cs` fixture `Master.esm` holds STAT 000810 (model), WRLD 000800 with top cell 000801 and exterior cell 000802 (REFR 000803, ACHR 000804, LAND 000805), and interior CELL 000820 with REFR 000821; `Patch.esp` moves REFR 000803.
 - `tools/generate_interop.py`: arrays of pointers become numbered fields, fixed buffers take only primitives, and a handle or C string is already one pointer level. The generated files' headers say edits must go through the generator.
@@ -1346,7 +1350,7 @@ Eleventh #114 slice, stacked on the C# bindings. `Environment::load` parses ever
   - Windows: `GetProcessMemoryInfo` `WorkingSetSize` / `PeakWorkingSetSize`.
   - Linux: current RSS from `/proc/self/statm`, peak from `getrusage` `ru_maxrss` (KB).
   - Peak is process-lifetime. Inside `fo4_tests` it includes whatever earlier tests allocated, so use the standalone tool for clean numbers.
-- **Test.** Gated on `FO4_DATA_DIR`; it skips unless the CI variable `FO4_DATA_DIR_LINUX` or `FO4_DATA_DIR_WINDOWS` is set. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
+- **Test.** Gated on `FO4_DATA_DIR`; it skips unless `FO4_DATA_DIR` is set: CI sets it from the variable `FO4_DATA_DIR_LINUX` on Linux, and the `fo4-data` runner sets it on Windows. It has no thresholds: it only asserts the load succeeds and the counts are non-zero, and reports the figures via `RecordProperty` and stdout.
 - **Limits.** Archives and string tables are opened for `Fallout4.esm` only, so `archives_ms` and `strings_ms` leave out the DLC archives and their string tables even when the DLC masters are loaded (the installed game has no loose `Strings` folder, and each DLC's tables, such as `Strings/DLCRobot_en.STRINGS`, are only inside its `- Main.ba2`); `load_ms` covers every listed plugin. `tests/test_env_bench_real.cpp` reads `FO4_DATA_DIR` with `std::getenv`, so on Windows a Data path outside the ANSI code page makes the test skip; the standalone tool takes wide arguments.
 
 ## Radicle/src/c_api_version.cpp:radicle_abi_version — C ABI generation probe
@@ -1383,7 +1387,7 @@ Not done, because nothing in GardenEngine has failed on memory. The Fallen World
 
 ## Radicle/src/plugin/reader.cpp:read_record — compressed payloads are not retained
 
-Nothing read `Record::decompressed_payload`; every writer only cleared it, because the writer re-emits records from `subrecords` and `record_original_bytes` slices the retained file bytes. `read_record` now inflates into a local buffer, and `parse_subrecords` copies out of it, so no view outlives the buffer. The field stays in `include/fo4/plugin/container.hpp`, because removing it means touching the files over 750 lines that clear it (`placed_reference_copy.cpp`, `formlink_lists.cpp`, `form_links.cpp`).
+Nothing read `Record::decompressed_payload`; every writer only cleared it, because the writer re-emits records from `subrecords` and `record_original_bytes` slices the retained file bytes. `read_record` now inflates into a local buffer, and `parse_subrecords` copies out of it, so no view outlives the buffer. The field stays in `include/fo4/plugin/container.hpp`, because removing it means touching the files that clear it, which were over 750 lines at the time (`placed_reference_copy.cpp`, `formlink_lists.cpp`, `form_links.cpp`).
 
 Proof: `EnvBenchRealData.LoadsOfficialMasters` asserts `payload_bytes == 0`, the full `fo4_tests` suite passes (590 tests), and `RealPluginPreservation.UnmodifiedFallout4MasterIsByteIdentical` passes on real data. On the official masters (Release, 2026-09-28), peak working set fell from 3,097,288 KB to 2,567,404 KB and load time is unchanged at about 4.8–5.0 s.
 
@@ -1431,7 +1435,7 @@ Reads the comparison file read-only and never adds it to `plugins_`, so it canno
 
 ## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RemoveIdenticalToMaster
 
-ITM detection now calls `Radicle/src/plugin/maintenance.cpp:fo4::find_identical_to_master` (#360). The old `previousVersionNormalizesEqual` copied the whole plugin and rescanned every link of the earlier plugin (`copy_record_as_override`) for each candidate record. The Radicle version remaps only the earlier record into the current plugin's master context and compares flags and subrecords in order, with the same verdicts. Detection and removal cover nested records (REFR/ACHR in cell children, INFO in topic children, world children) through `fo4::remove_records`; see `Radicle/docs/code-notes/Radicle.md` on `find_identical_to_master`. The "checked" count is every record with an owner, nested ones included. Main only scanned and erased records directly under top-level groups, so it missed nested ITMs and could report an ITM CELL whose references differ.
+ITM detection now calls `Radicle/src/plugin/maintenance.cpp:fo4::find_identical_to_master` (#360). The old `previousVersionNormalizesEqual` copied the whole plugin and rescanned every link of the earlier plugin (`copy_record_as_override`) for each candidate record. The Radicle version takes the defining owner as the partner, as xEdit does (`Radicle/src/plugin/maintenance.cpp:ItmScan::identical_previous`, `Core/wbImplementation.pas:12140`), not the nearest earlier version. It remaps the owner's record and each intermediate holder into the current plugin's master context, then compares flags and subrecords in order. It is stricter than xEdit in several places; see `Radicle/docs/code-notes/Radicle.md`, section `## ITM comparison (#602 WP-13 D-4)`. Detection and removal cover nested records (REFR/ACHR in cell children, INFO in topic children, world children) through `fo4::remove_records`. The "checked" count is every record with an owner, nested ones included. Main only scanned and erased records directly under top-level groups, so it missed nested ITMs and could report an ITM CELL whose references differ.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginCheck.cpp:RadiclePluginBackend::checkForErrors
 
@@ -1533,11 +1537,9 @@ Main's behaviour before this (traced on `ffd3a341`): `MainShell` holds the field
 
 Tranche 1 clears the lint findings that can be fixed without changing UI behaviour; the react-hooks rendering refactors and the two `react-refresh/only-export-components` findings in `dialogs.tsx` and `Shell/StatusBar.tsx` are left to later tranches. `PluginEditTool/web/eslint.config.js` runs `js.configs.recommended`, `tseslint.configs.recommended`, `reactHooks.configs.flat.recommended` and `reactRefresh.configs.vite` over `src/**/*.{ts,tsx}`.
 
-The empty `catch` bodies are deliberate best-effort paths, and they carry no source comment. `no-empty` treats a block holding a comment as non-empty, so the explanation used to live in the source; it lives here instead, and the three files that need it are named in `eslint.config.js` with `'no-empty': ['error', { allowEmptyCatch: true }]`, which keeps the rule strict everywhere else. What each one swallows:
+The empty `catch` bodies were deliberate best-effort paths, and they carry no source comment. `no-empty` treats a block holding a comment as non-empty, so the explanation lives here instead, and the files that need it are named in `eslint.config.js` with `'no-empty': ['error', { allowEmptyCatch: true }]`, which keeps the rule strict everywhere else. Tranche 1 named three files. The palette search and live validation in `Blueprint/BlueprintPanel.tsx` and the label lookup in `ConditionsEditor.tsx` now report their failures (see "silent catch sites (#41)" below), so one file is left:
 
-- `Blueprint/BlueprintPanel.tsx`: the palette search keeps the previous entries when `SearchRecords` fails, and the next keystroke retries; live validation keeps the last result when `Validate` fails, and the next edit revalidates.
 - `CellPanel.tsx`: the 200 ms `GetGeometryBatchProgress` poll is ignored when it fails; the batch call itself reports the real failure.
-- `ConditionsEditor.tsx`: a failed `ResolveFormKeyLabels` leaves the labels as they are; they are cosmetic and every row keeps its raw FormKey.
 
 `MainShell.tsx:HostMessage` types what the host posts to the page. Only the fields each `Type` reads are declared: `SetStatus.Text`, `SetProgress.Value`, and the `McpLive` fields. A `SetProgress` message without `Value` now sets progress to `null` (hidden) instead of `undefined`, which is what the state's `number | null` says.
 
@@ -1590,6 +1592,37 @@ The PEX parser reads a value for every object variable and struct member, so `ha
 ## Radicle/bindings/csharp/Radicle.Interop/PexCode.cs, Radicle/bindings/csharp/Radicle.Interop/RadicleNative.g.cs
 
 The managed model types and the generated raw structs share names (`PexValue`, `PexFunction`, `PexState`, `PexObjectCode` and others), following `PexHeader` and `PexObjectCounts`. Code inside `Radicle.Interop` resolves to the model type. A consumer outside it that imports both `Radicle.Interop` and `Radicle.Interop.Native` gets CS0104, so it qualifies the raw structs as `Native.X` (as `PexCode.cs:ReadCode` does) or aliases them. Renaming the generated structs would change every existing `Native` type name, so the bindings README documents the rule instead. No GardenEngine file imports both namespaces today.
+
+## Radicle/src/plugin/load_order.cpp:build_runtime_form_id_context
+
+The main integration retains the published flag-or-extension classification in `Radicle/src/forms/weather.cpp:resolve_master_kind` and the caller-supplied resolved-order boundary. `RADICLE_ABI_VERSION` is unchanged because this branch adds no public exports or layouts. `Radicle/CMakeLists.txt:gtest_discover_tests` keeps the portable fixture working directory together with main's generator test; the required native and offline managed CI workflow comes from main. Existing OG/AE evidence remains static; NG byte checks, external limits and live dependency behavior stay open in #28/#389.
+
+## Radicle/src/plugin/reader.cpp:inflate_record_payload, Radicle/tests/test_compression.cpp:OfficialMastersUseZlibAndPreserveBytes
+
+The current-main integration retains the published zlib-framing rejection and physical XXXX preservation tests without changing the decoder. Main supplies the required native and offline managed CI jobs and the field-address generator test. No exports or layouts are added, so `RADICLE_ABI_VERSION` is unchanged. NG window bits, zero-size and malformed-input runtime acceptance, and CK behavior remain open under #391.
+
+## PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:CompactToEslCore / CheckEslEligibilityCore / EslSlots
+
+The legacy Mutagen path (reached through `BackendInterop` and `PluginToolExecutor` compact_to_esl / check_esl_eligibility) follows the native backend's slot rules (`PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:eslSlots`, which uses `Radicle/src/plugin/mutation.cpp:allows_hardcoded_range`), with one stricter condition. `EslSlots` starts at 0x001 only when the HEDR version is at least 1.0, the plugin has a master, and `HasForeignReference` finds a record FormKey or form link whose ModKey is another mod; otherwise it starts at 0x800. The native floor has no cross-mod check, so the legacy floor can be stricter than `eslSlots`. Native IDs below that floor or above 0xFFF are out of range, and the range text and capacity come from those bounds; the old code hard-coded 0x800-0xFFF and missed low IDs. The four methods moved out of `WriteService.cs` because that file is over the line limit.
+
+After a compaction the in-memory HEDR next object ID is the first free in-range ID at or above the last assigned ID + 1 (see `PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:LowerHedrNext` below), so records created before saving never reuse an occupied ID. On save, `save_plugin` keeps Mutagen's default `NextFormIDOption.Iterate`, which writes the highest native ID + 1 (`Mutagen.Bethesda.Core/Plugins/Binary/Translations/ModHeaderWriteLogic.cs:SetNextFormID`); after compaction that is at most 0x1000, so the saved value is always in range. Mutagen's save enforces the cross-mod condition. The vendored Mutagen source (`PluginEditTool/Mutagen/`) has no version string; GitVersion derives it from upstream tags, and the editor last pinned NuGet Mutagen 0.53.1 (`docs/internal/KNOWLEDGE.md`), so the version is unverified. In `PluginEditTool/Mutagen/Mutagen.Bethesda.Core/Plugins/Binary/Translations/ModHeaderWriteLogic.cs:HandleDisallowedLowerFormIDs`, a record whose native ID is below `GameConstants.Fallout4.DefaultHighRangeFormID` (0x800, `PluginEditTool/Mutagen/Mutagen.Bethesda.Core/Plugins/Meta/GameConstants.cs`) throws `LowerFormKeyRangeDisallowedException` unless `_modKeys` is non-empty. `_modKeys` is filled by `AddMasterCollectionActions` in Iterate mode from record FormKeys and form links whose ModKey is neither the plugin's nor null, so a master in the header alone does not allow lower IDs. `save_plugin` uses `MastersListContent = Iterate` and the default `LowerRangeDisallowedHandler` (`PluginEditTool/Mutagen/Mutagen.Bethesda.Core/Plugins/Binary/Parameters/BinaryWriteParameters.cs`, an `AddPlaceholderMasterIfLowerRangeDisallowed` with no ModKey, which throws in that case). The ESL flag is not consulted there. A plugin with a master but no cross-mod links that keeps any record below 0x800 fails save_plugin with "Lower FormKey range was violated", so `EslSlots` keeps such a plugin at 0x800 and above. Test: `PluginEditTool/FO4RecordEditor.Tests/EslPolicyTests.cs:PluginWithMasterButNoCrossModLinks_UsesHighRangeSoMutagenSaveAccepts`; the link-bearing 0x001 case is `PluginWithMasterAndVersionOne_KeepsLowRecordsAndUsesFullRange`.
+
+`PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:SetLightFlagCore` (reached through `MastersInterop.SetLight` and the `set_light_flag` tool) uses the same `EslSlots` bounds. Flagging a plugin light is refused while any native record sits outside them, with "Cannot flag '<name>' light: N native record(s) sit outside <range>. Run compact_to_esl first."; the old code only warned above 0xFFF and had no floor. When every native record is in range and the HEDR next object ID is above 0xFFF and above the highest native ID + 1, it is lowered to the highest native ID + 1 (or `first` with no records) and the message says so, matching the native `Radicle/src/plugin/flags.cpp:set_plugin_light_flag` lowering. The floor is the legacy `EslSlots` floor, not the native one, so the flag agrees with what `save_plugin` accepts. Tests: `PluginEditTool/FO4RecordEditor.Tests/EslPolicyTests.cs` (`SetLight_*`) and `WriteServiceTests.cs:SetLightFlag_RefusesWhenRecordsAreOutOfEslRange`.
+
+`WriteService.Esl.cs:CompactToEslCore` refuses before any mutation when two native records share a FormKey, with "Cannot compact '<plugin>': form ID <key> is shared by N records". Such a pair can come from a loaded plugin. The vendored loader (`PluginEditTool/Mutagen/Mutagen.Bethesda.Core/Plugins/Records/AGroup.cs:Factory`) keeps only the last copy of a duplicate inside one group, but two records of different types with the same ID both reach `EnumerateMajorRecords`. Without the refusal each copy would take a slot and overwrite the `remap` entry, so the slot count would be wrong. All three paths share the helper `PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:SharedFormKey`: `CompactToEslCore`, `CheckEslEligibilityCore` (reports "would BLOCK on compact_to_esl" instead of ELIGIBLE, checked before the already-compatible shortcut as compact does), and `PluginEditTool/FO4RecordEditor.Core/Services/WriteService.XEdit2.cs:RenumberPluginFormIdsCore`, which refuses with "Cannot renumber '<plugin>': form ID <key> is shared by N records" before it builds the remap, so a duplicate can no longer overwrite a remap entry. Tests: `PluginEditTool/FO4RecordEditor.Tests/EslPolicyTests.cs:CompactToEsl_RefusesPluginWhereAFormKeyIsSharedByTwoRecords`, `EslPolicyTests.cs:CheckEsl_ReportsBlockedWhereAFormKeyIsSharedByTwoRecords`, and `EslPolicyTests.cs:RenumberPluginFormIds_RefusesPluginWhereAFormKeyIsSharedByTwoRecords`.
+
+## PluginEditTool/FO4RecordEditor.Core/Services/WriteService.Esl.cs:LowerHedrNext — HEDR next after compaction
+
+`WriteService.Esl.cs:CompactToEslCore` sets the in-memory HEDR next object ID to the first ID at or above the last assigned ID + 1 that no native record occupies, or 0x1000 when the range is full. The native compaction (`Radicle/docs/code-notes/Radicle.md`, `compactToEsl` note) stores the literal last assigned + 1 and relies on `Radicle/src/plugin/mutation.cpp:reserve_local_form_key` to scan past occupied IDs. Mutagen's `PluginEditTool/Mutagen/Mutagen.Bethesda.Core/Plugins/Allocators/SimpleFormKeyAllocator.cs:GetNextFormKey` takes `NextFormID++` with no check, so the C# value is advanced past occupied IDs in advance. The literal value is also what xEdit stores (`source:xEdit xEdit/xeMainForm.pas:13370-13371 @93cc0bc5`, `UpdateNextObjectID`). Example: a masterless plugin with records 0x801 and 0x5000 compacts 0x5000 to 0x800; the old code set next to 0x801, which the 0x801 record already occupies, so the next created record reused its form ID. Save is not affected, because `Iterate` rewrites next on save (see above).
+
+`WriteService.Esl.cs:LowerHedrNext` holds the lowering rule for `CompactToEslCore` (its already-compatible branch) and `SetLightFlagCore`: when next is above 0xFFF and above the highest native ID + 1 (or the floor with no records), next is lowered to that value. The already-compatible branch lowers whether or not the light flag is set, as the native all-in-range branch of `RadiclePluginCompact.cpp:RadiclePluginBackend::compactToEsl` does through `lowered_light_next_form_id`. The 0x001 legacy floor in `WriteService.Esl.cs:EslSlots` is kept per the 2026-10-10 owner decision (Mutagen-safe floor). A full range returns 0x1000: when every ID from the last assigned ID + 1 to 0xFFF is occupied, the loop stops at 0xFFF + 1, which Radicle's `reserve_local_form_key` also reads as a full plugin. The already-compatible lowering invalidates the mod index and notifies listeners, as `SetLightFlagCore` does after a header change. Tests: `PluginEditTool/FO4RecordEditor.Tests/EslPolicyTests.cs:CompactToEsl_InMemoryNextObjectIdSkipsRecordsAlreadyInRange`, `CompactToEsl_FullRangeAfterCompactionSetsNextToTheCeiling` and `CompactToEsl_AlreadyCompatiblePluginLowersOutOfRangeNextObjectId`.
+
+The already-compatible lowering's change notification is pinned by `PluginEditTool/FO4RecordEditor.Tests/EslPolicyTests.cs:CompactToEsl_AlreadyCompatiblePluginLowersOutOfRangeNextObjectId`, which counts exactly one `WriteService.PluginChanged` for the plugin. When nothing is lowered, `EslPolicyTests.cs:CompactToEsl_AlreadyCompatiblePluginWithNoLowerNeededDoesNotNotify` asserts none fires.
+
+Differences from xEdit (`93cc0bc5`) in `WriteService.Esl.cs:CompactToEslCore`, none of them proven against the game yet:
+- xEdit offers compaction only for a file that is neither light nor an update (`xEdit/xeMainForm.pas:13154-13158`). Here an already-light plugin runs the same logic.
+- When nothing needs renumbering, xEdit stops with "Nothing to do" (`xEdit/xeMainForm.pas:13206`) and leaves the HEDR next object ID alone. The already-compatible branch here lowers an out-of-range next. Whether the game or the CK reads that field is open in [RE] GARDEN-TOOLS#479 (Q2, Q3).
+- A record whose object ID is below 0x800 in a plugin without the hardcoded range gets a null file ID in xEdit (`Core/wbImplementation.pas:3590-3600`), so xEdit does not treat it as the plugin's own record and does not renumber it. Here it is counted as native and renumbered. What the engine does with such a record is #479 Q1.
 
 ## PluginEditTool/native/src/plugin/RadiclePluginCompact.cpp:RadiclePluginBackend::compactToEsl (already in range)
 
@@ -1747,37 +1780,20 @@ Known gaps: the flag name `UseGlobal` is rejected as unknown. The C# oracle acce
 
 ## .github/workflows/native-ci.yml — Test steps (real-data tests)
 
-The real-data tests read `FO4_DATA_DIR`. CI sets it from two Forgejo repository variables:
+The real-data tests read `FO4_DATA_DIR`. Linux takes it from a Forgejo repository variable; Windows takes it from the runner:
 
 - `FO4_DATA_DIR_LINUX` feeds the `Test` step of the Linux job `Native (Linux, Debug)`. It is unset today, so that step skips the real-data tests.
-- `FO4_DATA_DIR_WINDOWS` feeds the `Test` step of the Windows job `Native tests (Windows, MSVC)`.
-- `.github/workflows/native-ci.yml:native-windows-tests` `Test (Debug)` clears `FO4_DATA_DIR` (`set FO4_DATA_DIR=`), so the Debug pass runs without game data. It runs only on non-pull_request events.
+- `.github/workflows/native-ci.yml:native-windows-real-data` reads `FO4_DATA_DIR` from the environment of the runner labelled `fo4-data` (its runner config `envs`). No workflow step sets it, and the `Test` step inherits it. The repository variable `FO4_DATA_DIR_WINDOWS` is no longer read; leave it unset so branches from before PR #480 skip the real-data tests.
+- `.github/workflows/native-ci.yml:native-windows-tests` (`self-hosted, Windows, X64`) excludes the real-data suites from its Release `Test` step with `REAL_DATA_TEST_REGEX` (workflow `env`), and sets no `FO4_DATA_DIR`; both of its `Test` steps clear any inherited value, Debug with `set FO4_DATA_DIR=` and Release with `$env:FO4_DATA_DIR = ''`.
 - Why: Debug with data does not finish within the job's 90-minute limit. In run 775, `QuestAuthoringRealData.RewritingUnchangedStagesAndObjectivesIsByteExact` took more than 34 CPU-minutes and 6.9 GB in Debug (289-421 s in Release). The `QuestAliasRealData`, `QuestStagesRealData` and `QuestObjectivesRealData` `DecodesEveryShippedQuest` tests each took about 60 CPU-minutes in Debug (131-320 s in Release). The run was still at test 358 of 1824 when the timeout neared.
-- Release keeps the real-data coverage: the Windows `Test` step runs the real-data tests with the data, except the expensive groups that a pull request does not touch (see below).
 
-On a pull request, the `Select real-data tests` step in `.github/workflows/native-ci.yml:native-windows-tests` decides which expensive real-data groups the Release `Test` step runs. It matches the changed paths (the diff of the base branch tip against `HEAD`, case-insensitive regexes) and writes one `CTEST_EXCLUDE_REGEX` to `GITHUB_ENV` for the groups it skips. A group runs when any changed path matches its trigger. Cheap real-data suites are never skipped, and every real-data suite not in the table below runs on every event.
+The `Check FO4 data folder` step (step id `fo4`) of `native-windows-real-data` reads the runner's `FO4_DATA_DIR` and runs before any build or test step:
 
-| Group | Test suites excluded when skipped | Trigger (changed path matches) |
-| --- | --- | --- |
-| Quest | `QuestAliasRealData`, `QuestStagesRealData`, `QuestObjectivesRealData`, `QuestAuthoringRealData`, `QuestRuntimeReal` | `quest`, `vmad`, `papyrus`, `pex`, `alias`, `condition`, `ctda` |
-| Writeback | `WritebackRealData` | `writeback`, `placed`, `reference`, `refr`, `ref_`, `master`, `environment`, `remap` |
-| SubrecordAuthoring | `SubrecordAuthoringRealData` | `subrecord`, `authoring` |
-| StructPayload | `StructPayloadFormLinksRealData` | `struct`, `payload`, `proj_expl`, `hazd` |
-| TypedFamilies | `TypedFamiliesRealData` | `typed`, `famil`, `armor`, `armo`, `arma`, `race`, `eyes`, `leveled`, `lvsp` |
-
-A core path forces every group to run, and nothing is excluded. The core list is one regex array in the step, and these are its entries: `Radicle/src/binary/` and `Radicle/include/fo4/binary/` (the byte cursor every reader uses); `Radicle/{src,include/fo4}/plugin/` reader, writer, visit, container, tes4, field_writer, mutation, record_edit, flags and onam (the read and write path; onam is the TES4 ONAM rebuild that plugin writes call); `form_?id`, `plugin_key`, `signature`, `error`, `headers`, `fo4` and `flags` (form ID, signature and the umbrella headers); `text/`, `localization/` and `io/` (string encoding, string tables and atomic writes); `environment/strings` (the string-table loader); the shared schema files (`scalar`, `field_address`, `localized_fields`, `form_link*`, `formlink_lists`, `nested_formlink*`, `non_formid_slots`, `preflight`, `record_constraints` and `generated_record_constraints`); `ctda` and `vmad` schema files; every `Radicle/include/fo4/schema/*.inc` table (the generated and hand-maintained data); `Radicle/{src,include/fo4}/forms/proj_expl_hazd` (the constants the mixed form-link decoder uses); `Radicle/schema/` (the `fields.json` input); `Radicle/tools/*codegen*` (the generators for those headers); every `CMakeLists.txt` and `*.cmake` (the build and test list, and the generated-file checks; `Radicle/tests` has no CMakeLists of its own); `.github/workflows/native-ci.yml` and `.github/scripts/` (this CI wiring and the zlib script); and `Radicle/tests/plugin_bytes` (the shared plugin-building test helper).
-
-Why: in run 806, a pull request about CELL water with no quest changes spent 925 s in `QuestObjectivesRealData.DecodesEveryShippedQuest`, and the quest groups together take 15-30 minutes. The owner's measurements are about 148 s for Writeback, 200-240 s for SubrecordAuthoring and 108 s for StructPayload. TypedFamilies has no recorded timing, but the owner reports `DecodesEveryShippedArmorAddon` as very slow.
-
-Pushes to `main`, `workflow_dispatch` and any other non-pull-request event run every real-data test, so a break caused by shared code is still caught right after merge. If the changed files cannot be determined (the fetch or the diff fails, or the diff is empty), the step warns and runs everything. The changed files come from `git diff --name-only --no-renames` (`.github/workflows/native-ci.yml:native-windows-tests`), so a rename lists both the old and the new path. The diff is taken against a depth-1 fetch of the base branch tip, so a shallow checkout can include files that changed on the base branch. That only makes the step run groups more often, never less. The step log prints a RUN or SKIP line per group with the paths that matched, or `core change:` with the path that forced everything.
-
-Each job's `Check FO4 data folder` step runs before its first Test step:
-
-- Unset or empty: prints one line saying the real-data tests will skip. The step passes.
+- Unset or empty: prints a `::notice::` that this runner has no Fallout 4 data configured, writes `has_data=false` to `GITHUB_OUTPUT`, and passes. Every later step is gated on `steps.fo4.outputs.has_data == 'true'` (the `always()` steps on `always() && steps.fo4.outputs.has_data == 'true'`), so the job succeeds with them skipped.
 - Set: requires the seven official masters (`Fallout4.esm`, `DLCRobot.esm`, `DLCworkshop01.esm`, `DLCworkshop02.esm`, `DLCworkshop03.esm`, `DLCCoast.esm`, `DLCNukaWorld.esm`) and at least one `Fallout4 - *.ba2` in the folder root. Missing names are printed and the step exits 1.
-- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files.
+- Valid: prints the path, then the counts of root `*.esm` and `*.ba2` files, and writes `has_data=true`.
 
-`FO4_DATA_DIR_WINDOWS` points at the Steam install's `Fallout 4\Data` folder on the Windows runner. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
+On the `fo4-data` runner, `FO4_DATA_DIR` points at the Steam install's `Fallout 4\Data` folder. `Radicle/tests/test_hedr_count.cpp:official_hedr_samples` parses every `.esl` in that folder root, not only the masters, so Creation Club or mod light plugins placed there are exercised by CI. A folder holding only official files is preferred.
 
 The tests skip when `FO4_DATA_DIR` is unset, or when an expected file is missing or a list is empty. Examples:
 
@@ -1785,7 +1801,7 @@ The tests skip when `FO4_DATA_DIR` is unset, or when an expected file is missing
 - `Radicle/tests/test_ba2_real.cpp:real_data` returns nothing when the variable is unset (line 22) or no archives load (line 26). The BA2 tests skip at lines 46 and 73.
 - `Radicle/tests/test_env_bench_real.cpp:EnvBenchRealData.LoadsOfficialMasters` skips when unset (line 12) and when no masters are found (line 15).
 
-An empty value is not a null `getenv` result, so each Test step unsets `FO4_DATA_DIR` when the variable is empty.
+An empty value is not a null `getenv` result, so the Linux `Test` step unsets `FO4_DATA_DIR` when the variable is empty.
 
 The opt-in suites stay off in CI, because no CI variable sets them:
 
@@ -1796,6 +1812,20 @@ The opt-in suites stay off in CI, because no CI variable sets them:
 - `FO4_SEQ_CORPUS`: `Radicle/tests/test_seq_corpus.cpp:EveryLooseSeqRoundTripsByteIdentically`.
 - `FO4_PAPYRUS_COMPILER` and `FO4_PAPYRUS_ASSEMBLER`: `Radicle/tests/test_pex_oracle.cpp:PexOracle.CompiledFixturesRoundTripByteIdentically` and `PexOracle.AssemblerDisassemblyAgreesWithTheCompiler`.
 - Optional `FO4_PAPYRUS_IMPORTS` and `FO4_PAPYRUS_FLAGS`: passed to the compiler by `Radicle/tests/test_pex_oracle.cpp:optionalArgument`.
+
+## .github/workflows/native-ci.yml:native-windows-real-data (Fallout 4 data job)
+
+The Fallout 4 `Data` folder exists only on the PC, so `native-windows-real-data` runs on `runs-on: [fo4-data]` and runs only the real-data tests. It is not a required check. The assumption is that the PC runner carries the label `fo4-data` alone and has `FO4_DATA_DIR` in its runner config `envs`. That variable reaches every job the runner takes, so only this job may run there. The `fo4-data` label must therefore stay exclusive to that PC, because any other job carrying it would inherit `FO4_DATA_DIR`.
+
+- Build: the Release configure matches `native-windows-tests` (same pinned actions, lane gate and 15-minute Configure timeout), then `cmake --build build\native --target fo4_tests fo4ide_test_sound_semantic_real`. `fo4_tests` holds every FO4-reading Radicle suite (`Radicle/CMakeLists.txt:fo4_tests`). The Catch2 case in `fo4ide_test_sound_semantic_real` is a separate executable (`PluginEditTool/native/tests/CMakeLists.txt`), so it needs its own target. `.NET 8` stays because `RADICLE_CSHARP_TESTS=ON` makes configure need `dotnet`. The `Restore RID consumer` step is not copied because this job runs no managed tests.
+- Selection: `REAL_DATA_TEST_REGEX` (workflow `env`) is the CTest `-R` filter here and the `-E` filter in `native-windows-tests`, so both jobs split one pattern. It matches every suite ending in `RealData`, plus `QuestRuntimeReal`, `QuestConditionCorpus` (a `TEST_P`, named `OfficialMasters/QuestConditionCorpus.*`) and `RealPluginPreservation`, and four named tests in suites that also hold non-data tests: `CheckErrors.VanillaMasterHasNoErrorFindings`, `HedrCount.OfficialMastersAndLightPluginsRebuildTheRecursiveCountWhenPresent`, and the two `WeatherConcept` `*WhenPresent` tests. It also names the suites `BehaviorReal`, `BehaviorWriterReal`, `ClimateWeatherReal`, `ConditionScopesReal`, `NavmeshReal`, `NavmeshWriterReal`, `QuestStructureReal`, `SoundWriterReal`, `VegetationReal` and `VmadWriterOfficial`, the test `NifCorpus.ReadsEveryVanillaNifAndHandlesGeometryTypes`, and the Catch2 case `Official normal and AutoWeapon sounds edit through semantic backend` (matched by its prefix). `RealPlugin.*` reads repository fixtures, so it is not matched. `--no-tests=error` fails the job when nothing matches.
+- Pull requests: `Select real-data tests` writes `CTEST_EXCLUDE_REGEX` (passed as `-E`) for the expensive groups that a pull request does not touch. The groups are Quest, Writeback, SubrecordAuthoring, StructPayload and TypedFamilies; their trigger paths are in the step's `$groups`.
+
+A core path forces every group to run, and nothing is excluded. The core list is one regex array in the step, and these are its entries: `Radicle/src/binary/` and `Radicle/include/fo4/binary/` (the byte cursor every reader uses); `Radicle/{src,include/fo4}/plugin/` reader, writer, visit, container, tes4, field_writer, mutation, record_edit, flags and onam (the read and write path; onam is the TES4 ONAM rebuild that plugin writes call); `form_?id`, `plugin_key`, `signature`, `error`, `headers`, `fo4` and `flags` (form ID, signature and the umbrella headers); `text/`, `localization/` and `io/` (string encoding, string tables and atomic writes); `environment/strings` (the string-table loader); the shared schema files (`scalar`, `field_address`, `localized_fields`, `form_link*`, `formlink_lists`, `nested_formlink*`, `non_formid_slots`, `preflight`, `record_constraints` and `generated_record_constraints`); `ctda` and `vmad` schema files; every `Radicle/include/fo4/schema/*.inc` table (the generated and hand-maintained data); `Radicle/{src,include/fo4}/forms/proj_expl_hazd` (the constants the mixed form-link decoder uses); `Radicle/schema/` (the `fields.json` input); `Radicle/tools/*codegen*` (the generators for those headers); every `CMakeLists.txt` and `*.cmake` (the build and test list, and the generated-file checks; `Radicle/tests` has no CMakeLists of its own); `.github/workflows/native-ci.yml` and `.github/scripts/` (this CI wiring and the zlib script); and `Radicle/tests/plugin_bytes` (the shared plugin-building test helper).
+
+Why: in run 806, a pull request about CELL water with no quest changes spent 925 s in `QuestObjectivesRealData.DecodesEveryShippedQuest`, and the quest groups together take 15-30 minutes. The owner's measurements are about 148 s for Writeback, 200-240 s for SubrecordAuthoring and 108 s for StructPayload. TypedFamilies has no recorded timing, but the owner reports `DecodesEveryShippedArmorAddon` as very slow.
+
+Pushes to `main`, `workflow_dispatch` and any other non-pull-request event run every real-data test, so a break caused by shared code is still caught right after merge. If the changed files cannot be determined (the fetch or the diff fails, or the diff is empty), the step warns and runs everything. The changed files come from `git diff --name-only --no-renames` (`.github/workflows/native-ci.yml:native-windows-real-data`), so a rename lists both the old and the new path. The diff is taken against a depth-1 fetch of the base branch tip, so a shallow checkout can include files that changed on the base branch. That only makes the step run groups more often, never less. The step log prints a RUN or SKIP line per group with the paths that matched, or `core change:` with the path that forced everything.
 
 ## PluginEditTool/native/src/plugin/ConditionCodec.cpp:flagValue — numeric condition flags (GT-157)
 
@@ -1900,3 +1930,452 @@ Rewrites PATH entries under the real Windows profile to the neutral runner host 
 The QUST fragment header is different. `source:xEdit Core/wbDefinitionsFO4.pas:3984-3990 @93cc0bc5` (`wbVMADFragmentedQUST`) wraps Script Data in `wbUnion` with `source:xEdit Core/wbDefinitionsCommon.pas:5866-5876 @93cc0bc5` (`wbScriptFragmentsEmptyScriptDecider`), which picks `wbNull` for an empty ScriptName. So `walk_quest_extra` and `read_quest_vmad_extras` keep the empty-name guard for that header only.
 
 Corpus: 0 of 20,173 vanilla VMADs have an empty-name script entry, so this is a no-op on vanilla. It matters for mod data, where the old skip would misparse what follows. Regression: `Radicle/tests/test_vmad_array_elements.cpp:EmptyNameScriptEntryStillWalksFlagsAndProperties`.
+
+## Radicle/src/schema/localized_fields.cpp:read_localized_string, Radicle/CMakeLists.txt:gtest_discover_tests
+
+The current-main integration retains the flag-boundary and zero-ID tests, portable fixtures, and main's field-address generator test. No localized-string decoder behavior or C ABI declarations change, so `Radicle/include/fo4/c_api.h:RADICLE_ABI_VERSION` is unchanged. NG reader semantics, CK table emission and language ownership, and live transformation acceptance remain open under #390.
+
+## .github/workflows/native-ci.yml:native-linux — failure artifact
+
+`native-linux-failure` keeps only what diagnoses a failed Linux run: the CTest tree (`build/native/Testing/**`, whose `LastTest.log` holds every test's output), the CMake logs (`build/native/**/*.log`, `build/native/CMakeFiles/CMakeConfigureLog.yaml`) and `build/native/CMakeCache.txt`. It no longer uploads `build/native/bin/**`. That directory holds the Debug test and tool executables with debug information, and each upload was 360-470 MB. Compiler and linker errors appear in the step log, so no compiler log file is uploaded. Retention is 3 days. To inspect a failing test binary, rebuild the same commit locally.
+
+## .github/workflows/plugin-editor-ci.yml:windows, linux — failure artifacts
+
+`plugin-editor-windows-failure` and `plugin-editor-linux-failure` upload `TestResults/**` (the TRX logs written by `dotnet test --results-directory ../TestResults`). The TRX files are not expected to be large, so only the retention changed, from 7 to 3 days.
+
+## F4LODGEN removed
+
+Anchored to `README.md` (tool table) and `.github/workflows/native-ci.yml:on.push.paths-ignore`. F4LODGEN was retired on 2026-10-11 and its tree was deleted. The last commit that contains it is 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3; recover files with `git show 06db28942fddd8d6e1f1470d3ef31bc28d57c1a3:F4LODGEN/<path>`. The README tool table row and the native-ci paths-ignore entry `F4LODGEN/**` were removed with it.
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile
+
+MO2 winners are resolved as before: Data, then enabled mods low to high, then the overwrite folder, each overwriting the earlier name. `indexFolder` also records every indexed path in `candidates`, low to high. `winners` is built from `candidates` highest priority first, keeping only the path `resolved` holds for each ASCII-lowercased name. Radicle keeps the first path it sees for each Unicode-folded name, so when two folders ship names that differ only by non-ASCII case (`Ä.esp` and `ä.esp`), the MO2 winner is the one Radicle keeps. Test: `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile keeps the higher-priority winner when names differ only by non-ASCII case`. That test builds both names from code points: no build file passes `/utf-8` and the source has no BOM, so MSVC reads it in the ANSI code page, and raw `Ä` and `ä` in `u"..."` literals became two mis-decoded characters each on the Windows runner. The files then did not match the UTF-8 `plugins.txt` entry, `readProfile` found no `Ä.esp`, and the snapshot held one plugin instead of two (Windows job 22302 of the nomad/dev run at 9c1b3ae6; product behavior was correct). The engine reads `plugins.txt` as code-page bytes (RE-020 (#520 c14028)), and Radicle decodes them as Windows-1252, so the test now writes `Ä` as the byte 0xC4 in `plugins.txt`; UTF-8 bytes would decode to other characters and no longer match. Write non-ASCII test names as code points, as `MO2 profile resolves plugins in non-ANSI mod folders` does. `readProfile` then passes the winner paths to the resolved-files overload of `fo4::loadorder::assemble_load_order` (Radicle `src/loadorder/assemble.cpp`), with `plugins.txt` read by `fo4::loadorder::read_plugin_list` and `Fallout4.ccc` read from the parent of the game Data folder when that file exists. The table is `OfficialTable::ae`. Master-flag files therefore precede non-masters as the engine orders them. Official and ccc names that are not in the winners are skipped by the assembler.
+
+Ceiling: the AE table is the seven OG/NG names plus `DLCDummy10thAnniversary.esm`. On an OG/NG install without that file the result equals the OG/NG result. If the file is present, it is ordered as an official name, which the OG/NG table would not do.
+
+`loadOrder` is `Fallout4.esm` first, then the assembled entries with `checked` set, in assembled order. The assembler does not place `Fallout4.esm` first unless it is an official name, so `readProfile` forces it to the front.
+
+A failed assembly (`assembled.failed`) returns `Error{"Mo2LoadOrderInvalid", ...}` before `loadOrder` is built. The message joins each `missing_master`, `master_too_new` and `hoist_cycle` finding as `<plugin>: <detail>`, separated by `; `. Radicle exceptions from reading or assembling return the same error type. When `readProfile` returns `Mo2LoadOrderInvalid`, `textureRootsForSettings` in `PluginEditTool/native/apps/fo4ide/main.cpp` falls back to the Data folder, so MO2 texture roots are not used until the load order is fixed.
+
+`missingPlugins` lists every active plugins.txt entry the assembly did not check (absent from the winners, zero-byte, unreadable header, or a master absent), plus `Fallout4.esm` when no winner has that name. Names are deduplicated. A `Fallout4.ccc` name that is missing is not reported unless plugins.txt also lists it as active.
+
+Tests in `PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp`: `MO2 profile loads official masters and Creation Club plugins missing from plugins.txt`, `MO2 profile keeps inactive plugin list entries unloaded`, `MO2 profile resolves plugin winners in virtual data priority`, `MO2 profile reports an active plugin whose master is absent`, `MO2 profile refuses a load order when a checked master is missing its own master`. No test covers an unresolved `Fallout4.esm`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RadiclePluginBackend::invokeLegacyBackend — CopyAsNewRecord and CleanPlugin skip undecodable records (GT-230, GT-231)
+
+Top-level `CopyAsNewRecord` calls `fo4::require_decodable` on the source as the first step inside its existing `try`, so the refusal surfaces as `CopyAsNewFailed` before anything is staged. Before this, `copied = *sourceRecord` duplicated an undecodable record with no subrecords, and the next save threw. `CleanPlugin` skips undecodable records: its flag rewrite clears `original_range`, which would make the save throw. Tests: `PluginEditTool/native/tests/unit/RadiclePluginUndecodableMaintenanceTests.cpp`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp:RadiclePluginBackend::requireReferenceCoverage — shared coverage probe (GT-234)
+
+The strict re-key probe that `deleteRecord` and `renumberRecord` ran inline is now `requireReferenceCoverage`. Both pass their operation name, and `changeReferencingRecords` (`PluginEditTool/native/src/plugin/RadiclePluginReferenceRemap.cpp:RadiclePluginBackend::changeReferencingRecords`) calls it with "reference remap" before the graph scan. A reference hidden in an undecodable record therefore refuses the whole remap, dry run included, instead of reporting "Repointed N of N". The error is `ReferenceCoverageIncomplete` with the message "Cannot prove <operation> safety while scanning <plugin>: <error>". Test: `PluginEditTool/native/tests/unit/RadiclePluginReferenceRemapTests.cpp` (`ChangeReferencingRecords refuses while a loaded plugin has an undecodable record`).
+
+## PluginEditTool/package.ps1:NiftoolPath - bundled tools come from parameters, not machine paths
+
+`package.ps1` used to copy NifTool, Texconv, the Creation Kit wiki, the audio helpers and the base Papyrus sources from fixed locations that exist only on the author's machine, so it packaged nothing useful anywhere else. Each source is now a parameter that defaults to an environment variable: `-NiftoolPath` (`NIFTOOL_PATH`, a file), `-TexconvPath` (`TEXCONV_PATH`, a file), `-CkWikiPath` (`CK_WIKI_PATH`, a folder), `-AudioToolsDir` (`FO4IDE_AUDIO_TOOLS_DIR`, a folder) and `-BaseScriptsPath` (`FO4IDE_BASE_SCRIPTS_DIR`, a folder, read only with `-IncludeBaseScripts`). The first three variables are the ones `Locator::resolve` reads at run time (`PluginEditTool/native/src/tools/ToolLocator.cpp`), so a machine that already runs the host packages the same tools; the last two exist only for packaging. A source that is unset or missing is skipped with a warning that names the parameter, and the package still builds. The tool is then found at run time in the locator's order: environment variable, saved setting, `tools\` beside the executable, PATH.
+
+The staged file names are fixed in the script instead of copied from the source file: `tools\niftool\niftool.exe` and `tools\texconv\Texconvx64.exe` are exactly what `Locator::resolve` probes under `tools\`, so a source file with another name is still found. `tools\ckwiki\fallout4`, `tools\audio` and `tools\papyrus\Base` mirror the locator and `Locator::papyrusBaseImports` the same way, so if a staged path changes, change the locator and `package.ps1` together. The Bethesda base scripts stay opt-in (`-IncludeBaseScripts`) and the script warns that the build must not be redistributed. Ceiling: the script checks that a path exists and is the right kind (file or folder), not that it holds the right tool.
+
+## PluginEditTool/publish.bat:DEPLOY - the deploy folder is an argument or FO4IDE_DEPLOY_DIR
+
+`publish.bat` used to copy the build into a Mod Organizer 2 `Tools` folder fixed to one machine. The folder now comes from the first argument, then from `FO4IDE_DEPLOY_DIR`. With neither, the script builds and prints the executable path, and the copy step is skipped with a message rather than an error. A folder that is given but missing is still only a warning, because the build itself succeeded. The copy puts `FO4RecordEditor.exe` in the folder and mirrors `web\dist` to `web\dist` beside it, which is where `webRootFromArgs` looks by default (`PluginEditTool/native/apps/fo4ide/main.cpp:webRootFromArgs`), so change both together. Inside the parenthesized deploy block the `echo` lines read the folder with delayed expansion (`!DEPLOY!`), so a folder name that contains `)` cannot end the block early; the `exist` and `copy` arguments are quoted for the same reason.
+
+## PluginEditTool/packaging/linux/fo4recordeditor.desktop:StartupNotify - there is no Linux window to match
+
+The launcher entry no longer sets `StartupWMClass=FO4RecordEditor.Server` and now sets `StartupNotify=false`. That class named the window of the old .NET server. The native host has no window on Linux: `NativeWindow::available()` is false off Windows (`PluginEditTool/native/src/platform/NativeWindow.cpp`), so `fo4recordeditor` serves the UI on a loopback port and opens the default browser, and no window of this program can carry that class. The Desktop Entry specification keeps `StartupNotify=false` for programs that show no window of their own; with `true` a desktop shell can show its busy indicator until it times out. `Mutagen` also left `Keywords`, since the product no longer uses it. If a native Linux window is added, set `StartupWMClass` to the class that window uses and turn `StartupNotify` back on. Ceiling: the entry has not been tried on a Linux desktop for this change.
+
+## PluginEditTool/packaging/linux/build-deb.sh:Depends - no WebKit or GTK dependency
+
+The control file listed `libwebkit2gtk-4.1-0` and `libgtk-3-0` as hard dependencies and the description called the interface a WebKitGTK window. Neither is true of the native host. `NativeWindow::available()` is false off Windows (`PluginEditTool/native/src/platform/NativeWindow.cpp`), nothing under `PluginEditTool/native` links GTK or WebKit, the HTTP server is built without OpenSSL (`PluginEditTool/native/cmake/Dependencies.cmake`), and the CMake files request no system library other than zlib and Threads (`PluginEditTool/native/CMakeLists.txt`). `Depends` is now `libc6 (>= 2.34), libgcc-s1, libstdc++6, zlib1g`; `zenity` (file pickers) and `wine` stay `Recommends`. The description now says the UI is served on a loopback port and opened in the default browser, which is what `docs/internal/RUNNING_ON_LINUX.md` describes. Ceiling: the list comes from the CMake link lines and the code, not from `dpkg-shlibdeps` on a built binary, and the package has not been built or installed on a Linux desktop for this change. Compare against `dpkg-shlibdeps` the next time the package is built.
+
+## PluginEditTool/FO4RecordEditor.Tests/ShippedDocsTests.cs:ToolNames - the docs guard reads the native tool list
+
+`ToolNames` used to take the tool list from the C# server (`PluginToolExecutor.ToolDefinitions()`, the 109 tools the old `docs/MCP_SETUP.md` stated). The shipped host is the native one, whose 35 tools are added by `registerNativeMcpTools` and `registerPluginTools` in `PluginEditTool/native/apps/fo4ide/McpTools.cpp`, so `docs/MCP_SETUP.md` now documents those 35 and the guard reads the same file. `ToolNames` matches the two registration shapes that file uses today, `add("name", ...)` and `.name = "name"`, and keeps the distinct names. Without the change the required `plugin-editor-ci.yml` Windows job would fail on the new reference, which states 35 tools against the C# registry's 109 and does not name the C#-only tools. The other three checks are unchanged: the stated count must equal the registered count in `README.md` and `docs/MCP_SETUP.md`, every registered name must appear in `docs/MCP_SETUP.md`, and `ping` must not be presented as a tool. Ceiling: a tool added through a third registration shape is missed silently unless no tool uses a known shape (then `names.Should().NotBeEmpty` fails), so change the pattern together with the registration helper in `McpTools.cpp`. When the C# projects are removed, move these checks to the native test target.
+
+## PluginEditTool/native/src/papyrus/AnalysisService.cpp:papyrusBaseImports - two base-root lists, one shared environment variable
+
+The docs (`PluginEditTool/docs/internal/PAPYRUS.md`, `PluginEditTool/docs/internal/RUNNING_ON_LINUX.md`) describe the base-script roots the native Papyrus code searches, and there are two lists. `papyrusBaseImports` in `PluginEditTool/native/src/papyrus/AnalysisService.cpp` serves the built-in compiler, the analysis service and the graph tools, and reads only `PAPYRUS_BASE_IMPORTS` (existing folders, split on `;`, de-duplicated without regard to case). `Locator::papyrusBaseImports` in `PluginEditTool/native/src/tools/ToolLocator.cpp` adds the saved setting, `tools\papyrus\F4SE`, `tools\papyrus\Base` and the `Scripts\Source` folders of the Fallout 4 install, and `PapyrusTarget.cpp` uses it only to build the import list for the Creation Kit compiler. So the base scripts that `package.ps1 -IncludeBaseScripts` stages under `tools\papyrus\Base` help the Creation Kit route and not the built-in one. The separator is `;` on every OS because both functions split on it. Open: the saved `PapyrusBaseImports` setting, and the Settings wording in the built-in engine's "no base-script root" message, suggest that the built-in compiler honors the setting, but `papyrusBaseImports` never reads it. The docs change documents the behavior as it is; making the built-in list honor the setting is a native source change for another lane.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — shared typed write path (#287 P1)
+
+Used by the leveled list, NPC_ and FACT edits. It takes the write lock on the named plugin, applies `writeGuard`, and refuses a record that is not in that plugin with `RecordNotFound`, or a record whose header has the deleted flag with `RecordDeleted`, before any Radicle call. The Radicle edit runs on a copy of the plugin, and only a clean return stages it. A Radicle exception becomes `<Family>WriteFailed` with the Radicle message, so a refused edit leaves the loaded plugin and its saved bytes unchanged. Tests: `PluginEditTool/native/tests/unit/RadiclePluginTypedRecordsTests.cpp` and `PluginEditTool/native/tests/unit/RadiclePluginLeveledTests.cpp`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:winningPlugin — read versus edit target
+
+Reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) decode the winning version, the last loaded plugin that holds the FormKey. Edits change only the named plugin, which must already hold the record; an edit never creates an override in another plugin.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::editNpcEntries — list, op and index contract
+
+`list` is `factions`, `perks` or `inventory`; `op` is `add`, `set` or `remove`. `add` appends and ignores `index`; `set` and `remove` need a non-negative `index`. Radicle throws `NpcError` for an out-of-range index, which surfaces as `NpcWriteFailed`. Test: `Native NPC faction set refuses an out-of-range index and leaves the plugin bytes unchanged`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::editFactionEntries — rank set keeps titles and insignia
+
+A rank `set` starts from the existing rank, so a title omitted from the value is kept, and `null` clears it. The rank's insignia is never read into the value, only reported as `hasInsignia`, so a set cannot drop it. Titles are written by shape: a string sets inline text, `null` clears the title, and `{"stringId": n}` sets the localized string ID `n` (`titleOf`). A `{"rawId": "<hex>"}` value is the read-back form of a localized title whose payload is not four bytes; on a rank `set` it keeps the existing title, and on `add` it is refused with `InvalidFactionEntry`, so add never leaves a title empty. Radicle's `require_string_form` refuses a shape that does not match the plugin's localized flag, reported as `FactionWriteFailed`, so a mismatch is never silently changed. Tests: `Native FACT localized rank set and add keep a string ID title through save and re-read`, `Native FACT rank add refuses a rawId title and leaves the plugin bytes unchanged`, `Native FACT rank add refuses a string ID title on a non-localized plugin and leaves the plugin bytes unchanged`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::getWeaponDamageTypes — read-only
+
+WEAP has no edit method. `curveTable` is `null` for a DAMA entry below form version 152, the Radicle `k_weapon_damage_curve_form_version` threshold. Refusal test: `Native WEAP damage read refuses a non-WEAP record and leaves the plugin bytes unchanged`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — set replaces the whole entry
+
+`set` rewrites the LVLO and its COED together, so a value without `extra` removes the entry's COED, except the LVLO reserved bytes, which are kept. `add` inserts at `index`, and `remove` ignores `value`. Radicle throws `LeveledListError` for an out-of-range index, reported as `LeveledListWriteFailed`. Round-trip test: `Native leveled list entry edit round-trips through save and re-read`.
+
+## PluginEditTool/web/src/recordActions.ts:f2Edit, PluginEditTool/web/src/RecordView.tsx:RecordView — F2 edits the focused cell (#41)
+
+`RecordContextMenu` printed F2 beside "Edit value" and nothing handled the key. `RecordView` owns the record grid and the editor state, so the key is wired there. `recordActions.ts:f2Edit(edit)` returns `tabIndex: -1` and an `onKeyDown` that calls `edit()` on F2. `RecordView` spreads it on the four cells that can start an edit, each with the call it already makes: the value cells in the grid and in the Conflicts matrix call `startEdit(row, col)` for their own column (the double-click and the menu item make that call), and the property-name cells call `startEdit(row, winnerCol)`, the column their context menu targets. `startEdit` keeps every guard (parent rows, backend-refused cells, `Ref` fields opening the picker), so F2 on a cell that cannot be edited does nothing, as a double-click does.
+
+The handler ignores events whose target is not the cell itself, so F2 pressed inside an open editor input or select does not restart the edit. Focus comes from a click: `tabIndex={-1}` makes a cell focusable by mouse without putting every cell in the Tab order, and a right-click focuses it too, so F2 works while the context menu is open (`startEdit` closes the menu). `RecordView.css:.rv-grid td:focus` draws an inset accent outline so the target cell is visible. The grid has no arrow-key cell navigation, so the flow is: click a cell, press F2. A window-level F2 listener was rejected because it would also fire behind the record picker, the dialogs and the other tabs, with no cell to target; removing the label was rejected because the cells are already a natural focus target.
+
+`RecordView.tsx` was 754 lines, over the 750-line guard, so six blank lines left behind by earlier comment removals went first. Every other edit there is line-neutral, and the file is now 748 lines. Tests: `RecordView.semantic.test.tsx` presses F2 on a value cell and expects the inline editor, and presses F2 on a backend-refused cell and expects none.
+
+## PluginEditTool/web/src/ConditionsEditor.tsx:ConditionsEditor, PluginEditTool/web/eslint.config.js — read failures reach the error line (#41)
+
+A failed `ResolveFormKeyLabels` fell into an empty `catch`, so rows kept raw form keys with no sign the lookup had failed. The load effect's four reads now report through the editor's existing `error` line (`.ce-error`, the line `Could not read conditions` and `Save failed` already use): `ResolveFormKeyLabels` ("Could not resolve record names") and the three metadata tables, `GetConditionFunctions`, `GetConditionRunOnTypes` and `GetConditionFunctionParams`, whose fallbacks (an empty list, `Subject`, an empty table) were silent too and left an empty function dropdown unexplained. They call `setError(prev => prev || message)`: the first failure wins, so a secondary failure never overwrites the conditions-read message, and Save still clears the line. `eslint.config.js` now applies `'no-empty': ['error', { allowEmptyCatch: true }]` to `src/CellPanel.tsx` only, the one file with an empty catch left. Tests: `ConditionsEditor.test.tsx` rejects `ResolveFormKeyLabels` and `GetConditionFunctions` and expects each message.
+
+## PluginEditTool/web/src — silent catch sites (#41)
+
+The 115 lines that `grep -rn catch PluginEditTool/web/src` matches outside test files were read: 109 `catch` clauses and 6 promise `.catch(` handlers. 31 handled a failure without reporting it. 17 of those now report through the channel their component already uses for backend errors, and 14 stay silent on purpose. No new toast or banner was added.
+
+F2 in the Conflicts matrix now opens the editor. `RecordView.tsx:RecordView` renders `renderEditor(r, ci)` in the matrix value cell when that cell is the edited one, the same condition and call the main grid uses, so F2 or a double-click there shows the input instead of only the stored value.
+
+Reported:
+
+| Site | Channel |
+| --- | --- |
+| `ConditionsEditor.tsx:ConditionsEditor` load effect, four reads | `error` line, first failure wins |
+| `Blueprint/BlueprintPanel.tsx:BlueprintPanel` palette search, live validation | `status`, as `Error: <message>` like its other graph calls; the result of a superseded request is ignored |
+| `CellPanel.tsx:checkPlugins` | `status`, `Could not list plugins` |
+| `CellPanel.tsx:CellPanel` cell search, worldspace search | `status`, `Could not search cells` / `Could not search worldspaces` |
+| `MainShell.tsx:MainShell` sidebar search effect, `commandSearch` | `errorStr` banner, `Search failed: <message>`, in the `errorMessage(err) ?? JSON.stringify(err)` form its neighbors use |
+| `MastersPanel.tsx:MastersPanel` plugin list | `error`, `Could not list plugins`; the rejected call had no handler before, and only a parse failure was caught |
+| `RecordPicker.tsx:RecordPicker` search | the results note reads `Search failed: <message>` instead of `No matches.` |
+| `RecordView.tsx:RecordView` context-menu effect (editable plugins, element actions) | `status`, `Could not list editable plugins` / `Could not read element actions` |
+| `Shell/DetailRail.tsx:DetailRail` details load | the rail's `toast`, `Could not load record details`; the next successful load clears it |
+| `SpreadsheetPanel.tsx:SpreadsheetPanel` plugin list | `error`, `Could not list plugins` |
+
+Silent on purpose:
+
+| Site | Why |
+| --- | --- |
+| `ArchivePanel.tsx:ArchivePanel` `packSources` initializer, `favourites.ts:readFavourites` | stored JSON that no longer parses falls back to an empty list |
+| `hostbridge.ts:takeToken` | `sessionStorage` can be unavailable; the token from the URL still works for this load |
+| `hostbridge.ts:install` message dispatch | a host message that is not JSON is passed on as a string by design |
+| `hostbridge.ts:pumpEvents` | the event stream reconnects every second; reporting each failed attempt would flood the UI |
+| `ChatPanel.tsx:copy` | optional clipboard write; the Copied label just does not show |
+| `MainShell.tsx:handleRejection` | the fallback inside the unhandled-rejection reporter; its result is the report |
+| `CellPanel.tsx:loadTexture` | misses are counted by `CellViewport` and shown as the missing-texture bar and the log line |
+| `NifPanel.tsx:loadTexture` | optional texture; the viewport falls back to the untextured material |
+| `CellPanel.tsx` geometry progress poll | advisory 200 ms poll; the batch call reports the real failure. It is the one empty catch left |
+| `Shell/useEnvironment.ts:parseMo2Status`, `refreshMo2Status`, the status tick | a polled, best-effort MO2 chip that hides when unavailable; reporting every poll would repeat the same message |
+| `Workspace/WorkspaceHeader.tsx:WorkspaceHeader` breadcrumb | decorative; record opening and the detail rail report backend failures |
+
+Tests reject the host call and expect the message in `ConditionsEditor.test.tsx`, `Blueprint/BlueprintPanel.test.tsx`, `CellPanel.searchError.test.tsx`, `MainShellBridge.test.tsx`, `MastersPanel.test.tsx`, `RecordPicker.test.tsx`, `RecordView.semantic.test.tsx`, `Shell/DetailRail.test.tsx` and `SpreadsheetPanel.test.tsx`. The `CellPanel.tsx` plugin-count and worldspace catches, the `MainShell.tsx` command-palette search and the `RecordView.tsx` element-actions catch have the same shape as the tested ones and no test of their own.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch, PluginEditTool/web/src/MainShell.css:.sidebar-error-text — every batch failure is listed (#39)
+
+`CopyAsOverrideMany` returns `failures: [{ formKey, source, reason }]`, and the status line showed only `failures[0].reason`, so a batch with five failures hid four. When `failed > 0` the hook now sends the whole list to the sidebar error banner (`setErrorStr`, the channel `loadConflicts` and the environment reload already use): a first line `N of M records could not be copied into <patch>:` and then one line per failure, `<form key> (<EditorID>): <reason>`. The EditorID comes from the selected conflict rows (`picked`), because the failure rows do not carry it. A failure whose form key is not in the selection prints the bare form key, and a failure without a reason prints "no reason given". The status line keeps the `Copied ok/total into <patch>.` prefix that `overrideConfirmation.test.tsx` matches and now says `N failed -- see the error list.` in place of the first reason. `.sidebar-error-text` gained `white-space: pre-line` so the newlines render, and `max-height: 40vh` with `overflow-y: auto` so a long list scrolls inside the banner instead of pushing the tree out of view; the banner's other messages are single-line and unchanged. The banner shows on the explorer tab only, which is where the batch copy runs from. Test: `MainShellBridge.test.tsx` (`lists every failed record with its reason`). The banner is cleared at the start of each batch. A failure with an empty form key prints `unknown record`. If `failed > 0` but `failures` is empty, the banner shows `(no details returned)`. Test: `overrideConfirmation.test.tsx` (`clears the batch error when a later batch succeeds`).
+
+## .github/workflows/pet-web-ci.yml:web — web lint, build and tests (#77)
+
+No workflow built or tested `PluginEditTool/web`: `native-ci.yml` ignores that path on main pushes and its pull-request run only builds the native code, and the native build reads `web/dist` without producing it. `pet-web-ci.yml` runs on pull requests and main pushes that touch `PluginEditTool/web/**` or the workflow itself, on the `[self-hosted, Linux, X64, garden]` runner, with the checkout pin and concurrency group shape the other workflows use (a newer push cancels a pull-request run; main runs always finish). Work-branch pushes are not a trigger, as in `bgs-ci.yml` and `native-ci.yml`, so one pull-request commit takes one runner slot.
+
+No other workflow installs Node, so the job uses `actions/setup-node` v6.5.0, pinned by commit hash like the other actions and fetched by full GitHub URL as `setup-dotnet` is, with Node 22 (vite 8, vitest 4 and eslint 10 need 20.19 or newer) and the npm cache keyed on `PluginEditTool/web/package-lock.json`. Steps: `npm ci`, `npm run lint`, `npm run build` and `npm test`. The build script is `tsc -b && vite build`, so it covers the type-check and also proves the bundle builds, and the test script is already `vitest run`, so `-- --run` would only repeat the flag. The three checks run with `if: (success() || failure()) && steps.install.outcome == 'success'`, so a failed `npm ci` skips them. One run reports lint, build and test results together. The ESLint, `tsc` and vitest results for this change come from the first run of this job.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:primaryModelPath — type-aware placed model (#285)
+
+Placed-reference models and SCOL member models now come from Radicle's `fo4::env::primary_model_path` (`Radicle/src/environment/placed.cpp:primary_model_path`) instead of the first raw `MODL` of every base. Per that function, only an allowlisted set of base types yields a model, ARMO yields `MOD2` then `MOD4`, and SCOL yields nothing (SCOL members come from `scolParts`). PWAT is not a Fallout 4 record. Against xEdit FO4 `sigBaseObjects`, only SCOL loses its MODL, and its parts render through `scolParts`. Extend Radicle's list with proof rather than re-adding raw `MODL` reads. The allowlist and ARMO rule were read from that source; they were not checked against game data here. Test: `Native cell takes each placed base's model from its type-aware primary model` in `PluginEditTool/native/tests/unit/RadiclePluginCellTests.cpp`; the SCOL empty-model check is a behavior change; the ARMO case is the one that fails without the fix.
+
+## PluginEditTool/native/src/app/ServiceTargets.cpp:CellTarget::geometryBatch — case and whitespace spellings (#285)
+
+Requested model paths are still deduplicated case-insensitively after trimming, so each unique mesh is resolved and run through `niftool` once. The result map is now keyed by every requested spelling, which matches the exact `modelPath` lookups in `PluginEditTool/web/src/CellViewport.tsx` (`goodGeo`). Before, only the first-seen spelling was keyed, so a second spelling of the same mesh (for example `Meshes\\X.nif` and `meshes\\x.nif`) had no entry and its references fell through to markers. Test: `CellTarget geometry batch reports not-found meshes and dedupes case-insensitively` in `PluginEditTool/native/tests/unit/ServiceTargetsTests.cpp`, which fails on the old map size and on `geometry.at("A/B.NIF")`.
+
+## PluginEditTool/native/tests/unit/RadiclePluginCellTests.cpp:typedCellPlugin — fixture layout (#285)
+
+`writeModelBase` and `typedCellPlugin` repeat the record and group calls of `basePlugin()` and `sourcePlugin()` in the same file, which CI already runs. The fixture covers ARMO (`MOD2`, placed reference 0x816, the case that fails without the fix) and CONT (`MODL`, empty, 0x814, `Container`).
+
+## PluginEditTool/web/src/CellPanel.tsx:CellPanel — SCOL layer geometry
+
+`typeGroups` takes a SCOL reference's layer geometry from the first `scolParts` model whose geometry loaded, because a SCOL's own `modelPath` is empty. Other references keep their own `modelPath` geometry.
+
+## PluginEditTool/native/src/assets/TextureResolver.cpp:TextureResolver::resolveNif — NIF lookup not changed (#285)
+
+NIF lookup is PET's own: `ensureRootScanned` indexes every `.ba2` under a root, and `scanAndLookup` takes the first alphabetical archive through `try_emplace`. Radicle's `fo4::archive::AssetResolver::locate` (`Radicle/include/fo4/archive/assets.hpp`) uses load order instead. The two differ in which copy of a mesh wins, not in whether a mesh is found, so this was not changed for #285. Still unproven: whether a given vanilla NIF fails in `NifService::geometry` or has no renderable shapes, and the GardenEngine comparison for one exact reference. Radicle's `normalize_asset_path` also strips a leading `data` component, which PET's `norm` does not; no MODL seen here starts with it.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:editLeveledListEntry — set keeps reserved bytes
+
+A `set` decodes the entries of the plugin being mutated and copies `reserved_before_form_id` and `reserved_tail` from the entry at the same position onto the replacement before `set_leveled_list_entry` writes it. The entry JSON has no field for those bytes, so without the copy a `set` would zero them. A `set` past the end of the list gets no copy and is refused by the writer as before.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:leveledEntryFromJson — COED owner optional
+
+`extra.owner` follows the NPC path in RadiclePluginTypedRecords.cpp:npcInventoryFromJson. A missing or null owner is an empty FormKey, a present value is parsed with `formKeyArgument`, and a non-string value fails as `FormKeyMissing`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:winningPlugin — deleted winner refused
+
+`winningPlugin` walks plugins from the last load-order entry and returns the first plugin holding the key. If that record has the deleted flag it returns `RecordDeleted`, as RadiclePluginCell.cpp does for placed-reference edits. Not-found is now `RecordNotFound` from the same helper, so the typed read callers no longer repeat it.
+
+## PluginEditTool/native/src/plugin/RadiclePluginSupport.hpp:formKeyArgument — empty text
+
+Empty text returns `FormKeyMissing`, the code RadiclePluginReadApi.cpp:formKeyArgument uses, instead of a parse error.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:titleJson — localized faction titles
+
+A rank title with no inline text but a string ID is emitted as `{"stringId": id}`, and a localized payload that is not four bytes as `{"rawId": "<hex>"}` (`hexText`). `validTitle` accepts both shapes, and `rawIdTitle` makes a rank `set` keep the existing title when sent one. `rawIdTitle` accepts only an object whose sole key is a string `rawId`; on `add` it is refused with `InvalidFactionEntry` (`editFactionEntries`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginLifecycle.cpp:createRecord — LVLI, LVLN and FACT payloads
+
+`createRecord` accepts LVLI and LVLN through `fo4::forms::create_leveled_list`, with `editorId`, `chanceNone`, `maxCount` and `flags` (each 0..255). It accepts FACT through `fo4::forms::create_faction`, with `editorId`, `fullName` and a u32 `flags`. A list payload takes no entries: entries are added afterwards with the leveled list entry edit in RadiclePluginLeveled.cpp. Creator errors map to `LeveledListCreateFailed` and `FactionCreateFailed`. LVSP was already accepted through `create_leveled_spell`, so its branch is unchanged. `LeveledSpellError` is an alias of `LeveledListError`, so the catch for it now picks its code from the signature. Every other raw signature is still refused with `RecordCreationRequiresSchema`.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:TypedRecordPanel — one panel per family
+
+RecordView shows the Typed Fields tab only for `TYPED_RECORD_TYPES` (backend.ts). The panel dispatches on `matrix.Type`: LVLI, LVLN and LVSP get settings and an entries table; NPC_ gets factions, perks and inventory; FACT gets relations and ranks; WEAP gets damage types with no edit controls. The panel stays in one file, well under 750 lines.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — read keyed by record, refresh after edit
+
+Reads come from the winning version (the native `Get*` reads, e.g. `GetLeveledList` in `PluginBackendTarget.cpp`), while edits go to `plugin`, the plugin the record was opened from. So when `plugin !== matrix.Winner`, `TypedRecordPanel` is read-only: the edit controls are hidden, the settings inputs are disabled, and a note names the winner. Loaded data carries the FormKey it was read for, so a different record never offers the previous record's rows as the base of an edit. A successful edit clears the error, shows the native message and calls `onChanged` (RecordView's reload). That reload replaces the matrix object, which re-runs the read effect (deps `formKey`, `matrix`, `read`), so the rows also refresh after outside writes. After an edit, rows refresh only when that conflict-matrix reload replaces the matrix; if the reload fails, the panel keeps the old rows until the next successful reload. `busy` is true from the start of an edit until `onChanged` resolves and disables the action buttons. A failed edit shows `errorText(e)` after the "... edit failed:" prefix in a `role="alert"` error and does not refresh.
+
+## PluginEditTool/web/src/TypedRecordPanel.tsx:ListEditor — set keeps fields the form does not show
+
+Set sends `{...rows[index], ...typed fields}`. Fields the form does not show (LVLI `extra`, NPC inventory `extra`, FACT rank titles and `hasInsignia`) therefore round-trip from the read. A FACT rank `{rawId}` title is passed back unchanged, which the native `rawIdTitle` rule keeps on set. Add sends only the typed fields. A blank numeric field becomes NaN, which JSON turns into null, so the native integer check refuses it instead of writing 0.
+
+## PluginEditTool/web/src/backend.ts:EditLeveledListEntry — value is an object, not a JSON string
+
+`value` is passed as a JS object. The native handlers read `support::argumentAt(arguments, n)` as JSON (`leveledEntryFromJson`, `npcFactionFromJson` and the other typed-record parsers), the same way `CreateRecord` takes `payload`. The index is required for every LVLI op because `editLeveledListEntry` rejects a missing index first. For NPC and FACT, `editNpcEntries` and `editFactionEntries` only require it for set and remove.
+
+## PluginEditTool/web/src/backend.ts:TYPED_RECORD_TYPES — read types are type aliases
+
+The typed-record read shapes are `type` aliases, not interfaces, so `ListEditor` rows typed `Record<string, unknown>[]` accept them without an index signature. The Edit methods return the native success message as a string, as the other Backend methods do.
+
+## PluginEditTool/web/src/RecordView.tsx:RecordView — Typed Fields tab
+
+The tab is added only for typed record types. The multi-line `backend` type import was joined onto one line to keep RecordView.tsx at 750 lines.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::readStringTables — resolved through Radicle (#32)
+
+Calls `fo4::env::load_plugin_string_tables` with `<plugin dir>/Strings` first and `<data dir>/Strings` second, plus the archive resolver from `stringAssets`. Radicle decides what counts: loose names match case-insensitively (`Strings/mod_EN.strings` is found for language `EN`; only the file name is case-folded), a loose file wins over an archive entry, archives are searched for `strings/<stem>_<lang>.<ext>`, and a plugin without the localized flag has no tables. A parse failure fails the call with `StringTableInvalid`. `ListStringTables` adds `source` per table: `loose`, or the BA2 file name (`Radicle/src/environment/strings.cpp:load_plugin_string_tables`). The other RPCs keep their shape. Limits: only the plugin's own folder and the data directory are searched, not other MO2 mod folders, because the backend receives `setDataDirectory` and not the MO2 asset roots; unsaved staged quest localization is not reflected. Changes from the earlier loose-only reader: loose tables are no longer rejected when they are symlinks, because Radicle's directory listing follows links; and a non-localized plugin lists no tables even if `Strings` files sit beside it, as the game ignores them.
+
+Loose tables reached through a symlink are listed here, but the quest localization loader (`PluginEditTool/native/src/plugin/RadiclePluginQuestLocalized.cpp`) refuses symlinks because it writes tables back.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::stringAssets — archive cache (#32)
+
+Opens an `AssetResolver` over the BA2 files that `fo4::archive::archive_load_order` picks, with no INI archive list: the data directory's archives for all loaded plugin names, then the archives beside the loaded plugin for that plugin name. A folder archive with the same file name, compared case-folded with `fo4::text::equals_folded`, replaces the data directory copy and takes precedence, as loose files in the plugin folder do. When the plugin folder is the data directory (`std::filesystem::equivalent`), the folder scan is skipped, since the data directory scan already covers it. The `<stem> - *.ba2` rule covers the vanilla `Fallout4 - *.ba2` and DLC archives; an archive named only in `Fallout4.ini` `sResourceArchive2List` is not found. An archive that fails to open is skipped, so one corrupt or locked BA2 does not fail every strings call. The resolver is cached by each archive's path, size and last write time, and reopened when any of them changes, because opening every archive table of contents on each RPC would be too slow. `readStringTables` builds it only when a localized plugin lacks a loose table.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:RadiclePluginBackend::getStrings — paging (#32)
+
+`limit` defaults to 200 and is clamped to 1..1000; `offset` is clamped to 0..1000000. The filter matches the text case-insensitively (ASCII) or the decimal ID as a substring.
+
+## PluginEditTool/native/src/plugin/RadiclePluginStrings.cpp:displayText — text encoding (#32)
+
+English tables are CP1252, the encoding `encodeLocalizedText` writes. Other languages are UTF-8; bytes that are not valid UTF-8 are decoded as CP1252 so the JSON dump cannot throw.
+
+## PluginEditTool/native/apps/fo4ide/main.cpp:main — strings target (#32)
+
+`strings` is registered as a `PluginBackendTarget` namespace, so `strings.<Method>` falls through to the backend operations `strings.ListStringTables`, `strings.GetStrings` and `strings.LookupString`. All three take the backend read lock and never write.
+
+## PluginEditTool/web/src/LocalizationPanel.tsx:LocalizationPanel — read-only view (#32)
+
+Plugin choices come from `appInterop.GetPlugins`, which lists every loaded plugin, so base-game masters can be browsed (`masters.GetPlugins` only lists editable ones). Each table and page load is a separate call guarded by a sequence number, so a late reply for an earlier plugin, table or page cannot replace the current one. The `strings` host object exists only in the native HTTP bridge (`hostbridge.ts` HOST_OBJECTS); without it the panel shows the unavailable message.
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:TEST_CASE — compile differential gate (#78 C12)
+
+Port of `PluginEditTool/FO4RecordEditor.Core.Tests/PapyrusDifferentialTests.cs`. Pairs come from `.pex` files under the `FO4RE_PEX_CORPUS` roots (falling back to `FO4_PEX_CORPUS`), each paired with its `.psc` by `sourceFor`, which mirrors the C# `SourceFor` (`Source/User`, then `Source`, with a leading `Compiled` directory skipped). A pair is kept only when the `.pex` header is Fallout 4 (magic, format 3.9, game id 2) and its file name is first seen, as in C# `Pairs`.
+
+The compile matches C# `PapyrusCompiler.CompileFile` through `fo4ide::papyrus::compileScript`, with `RootsFor` as the import roots plus `FO4RE_PSC_ROOTS`. `FO4RE_PEX_RELEASE=1` turns off debug-only and beta-only code, as the C# `EmitDebugOnlyCode`/`EmitBetaOnlyCode` switches do. Debug info stays on (default, as in C#).
+
+The comparison is the object-level one of C# `PexComparer.FirstDifference`: parent, states and functions, then properties. C# also compares property `Get`/`Set` handlers; the C++ adds that step in `handlerDifference`. The C# does not compare header fields (timestamps, user, computer, source name) or debug info, so this port does not either.
+
+Refusals group by the first error diagnostic code, and differences by class (`differenceClass`). The threshold is 95% identical of compiled pairs, with at least one compiled, as in C#.
+
+## PluginEditTool/native/tests/helpers/CorpusRoots.hpp:rootsFromEnv — root list separator
+
+Root lists split on `;` on Windows and `:` elsewhere, matching C# `Path.PathSeparator`. `rootListSeparator` owns that choice for both `PapyrusCorpusTests.cpp` and `PapyrusDifferentialTests.cpp`. `enumerateFiles` replaces the corpus-local `enumeratePsc` with an extension argument, so the `.pex` walk shares its symlink and sort rules.
+
+## PluginEditTool/native/tests/helpers/PexComparer.hpp:functionDifference — shared per-function comparison
+
+The per-function comparison that `firstDifference` used inline is now `functionDifference`, so the differential test can compare property handlers with the same rules. Messages from `firstDifference` are unchanged except that the `Name: ` prefix is added by the caller.
+
+## PluginEditTool/native/src/plugin/RadiclePluginAnalysis.cpp:RadiclePluginBackend::getProblems — stable row codes (#31)
+
+Every per-record problem row carries a `Code`, a `Detail`, a `Severity` and a `Description`. `Detail` carries the same value as `CheckFinding::detail` (read from `PreflightIssue::code`): the preflight issue's `code` string (for example `duplicate_scalar_subrecord`) for `schema_preflight` rows, and empty for `unresolved_link` rows. The codes are Radicle's `fo4::check_code_name` names, the same strings the whole-plugin Check for Errors path emits, so one code means one thing in both views. Each row source maps to one code, so no PET-local code was needed:
+
+- `unresolved_link` (`fo4::CheckCode::unresolved_link`): a FormLink whose target has no winning record, emitted as `critical` with the `Missing <sig> FormLink target` description.
+- `schema_preflight` (`fo4::CheckCode::schema_preflight`): every `fo4::schema::preflight_record` issue, whether `critical` (error) or `warning`, with `Detail` set to the issue's `code` string.
+
+`PluginEditTool/native/tests/unit/RadiclePluginBackendTests.cpp:Radicle plugin backend reports dangling FormLinks` and `PluginEditTool/native/tests/unit/RadiclePluginPreflightTests.cpp:GetProblems reports duplicate schema scalar storage as critical` pin the two codes. The web side is `PluginEditTool/web/src/ProblemsList.tsx:ProblemsList`, which shows the code on each row and filters by it; `RecordView.tsx` renders it in the Problems drawer. `RecordProblem.Code` in `PluginEditTool/web/src/backend.ts` is an optional `string` (the legacy Mutagen backend omits it), so a new code needs no web type change.
+
+## PluginEditTool/native/tests/unit/Mo2ProfileTests.cpp:MO2 profile assembles an OG-style install from the official DLC masters alone
+
+Covers `Mo2Profile.cpp:readProfile` for an OG-style install: Fallout4.esm and the six official DLC masters, no Creation Club plugins, no `Fallout4.ccc`, one active user plugin. `readProfile` always passes `OfficialTable::ae`, so this checks the AE table against OG data. Radicle's `load_order_files.hpp` has `OfficialTable { og_ng, ae }` and no NG-specific table: `og_ng` is the first seven AE names (`Radicle/src/loadorder/assemble.cpp:official_names`, `DLCUltraHighResolution.esm` included), and LOAD_ORDER_FILES.md says NG shares it. So an NG case would repeat this one and is not added. `assemble.cpp:assemble_load_order` skips absent official names silently, with no finding and no failure. The AE-only `DLCDummy10thAnniversary.esm` and the absent `DLCUltraHighResolution.esm` therefore do not change the result. The AE table only differs from `og_ng` when `DLCDummy10thAnniversary.esm` is present, which an OG install does not ship. Not built or run locally (CI only). The partial-DLC case (`Mo2ProfileTests.cpp` second OG test) lists only `DLCRobot.esm` and `DLCCoast.esm` in plugins.txt with `DLCworkshop01`-`03` and no `DLCNukaWorld.esm` on disk, and expects the official masters present on disk to load in AE official order without any plugins.txt entry for them.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCopyAsWrapper.cpp:RadiclePluginBackend::copyAsWrapper — xEdit wrapper flow (#362)
+
+Arguments are `[sourcePlugin, formKey, targetPlugin, editorId|null]`. The source plugin is needed to find the record, as in CopyAsOverride. Only LVLI, LVLN and LVSP are accepted (`WrapperUnsupportedType`). xEdit's menu test at `xeMainForm.pas:14660-14669` also lists LVLB, LVLC, LVLP and LVSC; this port keeps the three types in the brief. The EDID is compared with `support::asciiLower`, as xEdit's `SameText` at `xeMainForm.pas:2612` does, and empty is accepted (`xeMainForm.pas:2610-2611`). The op takes one write lock and `writeGuard` on the target, as the other writers do. The copy goes through `RadiclePluginBackend::copyRecordAsNewLocked` with the EDID set exactly as given, with no DUP fallback (`xeMainForm.pas:2745-2750`). `fo4::copy_record_as_override` runs with overwrite off (`xeMainForm.pas:2753`), and `already_exists` is reused only when the target's override equals the source's record, EDID aside; xEdit reuses it unconditionally (`wbImplementation.pas:17030-17047`), a deviation recorded in the GT-287 entry below. The `LOSES:` check from copy as override runs before any write. `fo4::forms::reset_leveled_list` then keeps only the header and writes OBND, LVLD 0, LVLF 0 and LLCT 0; this follows the required-member reset at `wbImplementation.pas:9404-9407`. One entry at level 1 and count 1 points at the copy (`xeMainForm.pas:2757-2768`). The override then takes the picked source record's EDID, or none if the source has none (`xeMainForm.pas:2769`). The success text starts with `Copied ` so `finishAutoCreatedTarget` keeps an auto-created target. The flow is described in `PluginEditTool/docs/xedit-copy-workflows.md`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCopyAsWrapper.cpp:RadiclePluginBackend::copyAsWrapper — existing target override refusal (GT-287)
+
+When the target already overrides the key, `fo4::copy_record_as_override` with overwrite off returns `already_exists` and leaves the target's record alone. `fo4::forms::reset_leveled_list` then replaces every subrecord of that override with the source's, so entries the user added in the target were lost. GT-287 refuses before any mutation with `WrapperTargetOverrideDiffers` when source and target are different plugins (compared by the resolved `LoadedPlugin`, as `findPlugin` resolves names) and the target's record differs from the source's. Wrap from the target plugin itself to keep its entries. Before the compare, the target record is re-encoded into the source plugin's form ID context with `fo4::remap_record_form_links`, using `plugin_form_id_context` of the target as the old context and of the source as the new one. Form ID fields are encoded against each plugin's own master list, so an override copied from the source can differ in raw bytes only because its master list differs. A record that cannot be encoded in the source context, or is undecodable, counts as differing and is refused. "Differs" then means the record signature, or the subrecords' signatures or data bytes in order, differ after every EDID subrecord is skipped on both sides (`sameRecordContent`). EDID is ignored because the wrapper always rewrites the override's EDID to the source's (`set_record_editor_id`), so an EDID-only difference loses nothing. A source with no EDID is the exception: `reset_leveled_list` drops the target's EDID and nothing rewrites it. An equal override (EDID aside) is still reused. Reusing only an equal override is a deliberate deviation from xEdit, which reuses any existing override unconditionally (`wbImplementation.pas:17030-17047`); the refusal keeps the target's entries, which `reset_leveled_list` would otherwise replace. When source and target are the same plugin, the old behaviour stays. The status switch covers every `fo4::RecordCopyStatus` value: `inserted` and `already_exists` continue, `source_missing` and `source_containment_unsupported` keep their codes, and `replaced` (not reachable with overwrite off) is an error. Tests: `PluginEditTool/native/tests/unit/RadiclePluginCopyAsWrapperTests.cpp` "Native CopyAsWrapper refuses a target override that differs and keeps its entries", "Native CopyAsWrapper gives an existing override the source EDID" (EDID-only difference is reused) and "Native CopyAsWrapper refuses an EDID-changed override that also has an extra entry", and "Native CopyAsWrapper reuses a target override whose master list differs from the source" (the master-order case that the re-encode fixes).
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:RadiclePluginBackend::copyRecordAsNewLocked — shared plain-record copy (#362)
+
+The plain-record branch of `CopyAsNewRecord` moved here so `copyAsWrapper` uses the same copy. It checks decodability, adds the masters that the source's form links need, allocates a local record, copies the record and remaps its form links. The EDID is set only when the caller passes a value. `CopyAsNewRecord` passes nothing when there is no EDID to write, so its output is unchanged. `copyAsWrapper` always passes its EDID, so an empty one writes a 1-byte EDID (a lone NUL) on the copy rather than omitting it.
+
+## PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke — CopyAsWrapper dispatch (#362)
+
+`CopyAsWrapper` takes the same target handling as `CopyAsNewRecord`: `ensureWriteTarget` creates a missing target, then `finishAutoCreatedTarget` rolls it back if the op fails. It calls `copyAsWrapper` directly, as `CopyAsDisabledOverride` does.
+
+## PluginEditTool/web/src/RecordContextMenu.tsx:wrapperTypes — Copy as wrapper menu gate (#362)
+
+The set is LVLI, LVLN and LVSP, the three types the native `copyAsWrapper` accepts (`WrapperUnsupportedType` is still the authority). xEdit's menu test (`xeMainForm.pas:14660-14669`) also lists LVLB, LVLC, LVLP and LVSC; this port does not offer them.
+
+## PluginEditTool/web/src/recordActions.ts:useRecordActions — copyAsWrapperInto (#362)
+
+Two steps: the target chooser (`askForTarget`), then the EDID prompt (`askPrompt`, label "EditorID for the wrapped copy"). The prompt's `validate` refuses an EDID equal to the source EDID, compared case-insensitively, so the dialog cannot confirm it (`xeMainForm.pas:2612-2616`). Empty input is sent as `null`, and canceling the prompt stops the copy. The chooser's `extraField` is not used because it requires a non-empty value. Errors go through `errorText`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:RadiclePluginBackend::createPlacedObject — create_placed_object (#182)
+
+Argument order is `[plugin, cell, baseObject, x, y, z, rotX, rotY, rotZ, persistent, initially_disabled]`, which is the order the MCP tool sends (`McpTools.cpp` `create_placed_object`, `RpcTool` fills missing optional arguments with null). Rotations are radians and default to 0. `persistent` defaults to true, matching the managed tool's default, and a non-boolean value falls back to true. `cell` must be owned by this plugin; the managed editor's `GetOrAddAsOverride` path from the load order is not ported, so a master cell fails with `PlacedReferenceCreateFailed`. `initially_disabled` (index 10, default false) sets the `0x800` record flag, as `Radicle/src/forms/placed_reference_create.cpp:create_placed_reference` does. The map-marker arguments of the managed tool are not ported. Tests: `tests/unit/RadiclePluginExteriorCellTests.cpp` TEST_CASE "PluginEditTool places a REFR in a CELL the plugin owns". Not built or run locally (CI only).
+
+## PluginEditTool/native/src/plugin/RadiclePluginCell.cpp:RadiclePluginBackend::createInteriorCell — create_interior_cell
+
+Takes `[plugin, editorId]`, which is the order the `create_interior_cell` MCP tool sends (`McpTools.cpp` `CreateInteriorCell`, with `editor_id` mapped to position 1). The op locks the plugin for writing, runs `Radicle/src/forms/cell_create.cpp:create_interior_cell` on a copy, and stages the copy only on success. It returns `{"ok", "plugin", "formKey"}` as a JSON string, the same shape `createPlacedObject` returns. An empty plugin or editor ID fails with `InteriorCellArgumentsMissing`. A Radicle refusal (empty or duplicate editor ID) fails with `InteriorCellCreateFailed`. The record rules are in `Radicle/docs/code-notes/Radicle.md` under `Radicle/src/forms/cell_create.cpp:create_interior_cell`. Not built or run locally (CI only).
+
+## PluginEditTool/native/apps/fo4ide/McpTools.cpp:registerPluginTools — number and boolean arguments
+
+The `add` lambda validated only string, object and integer arguments, so a float or boolean field would be refused as "must be number". It now also accepts `number` (any JSON number) and `boolean`. `create_placed_object` is the first tool to use them. `create_interior_cell` is registered (`CreateInteriorCell`); its record and grouping rules are in `Radicle/docs/code-notes/Radicle.md` under `Radicle/src/forms/cell_create.cpp:create_interior_cell`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginFields.cpp:scalarPresentationJson — enum and flag names for PET (#287)
+
+Returns `{"kind", "names"}` only for a schema field whose presentation is `enumeration` or `flags`, and `null` for every other field, so callers add the key only when a field has names. Enum names are `{"value", "name"}` as authored in fields.json. Flag names are `{"bit", "name"}`; the descriptor stores the single-bit mask, and the bit index is recovered with `std::countr_zero`. Lookup is by record signature plus path, so a path shared by two records resolves per record.
+
+## PluginEditTool/native/src/plugin/RadiclePluginReadApi.cpp:RadiclePluginBackend::getRecordsGrid — presentations map (#287)
+
+The grid JSON gains a top-level `presentations` object keyed by column path, holding the `scalarPresentationJson` value for each enum or flags column. Rows are unchanged, so cells stay the raw decimal integers that `SetField` writes back. The key is only correct for non-repeated columns, where the column path equals the schema path. No enum or flags row in fields.json is repeated today; a repeated one would need index mapping.
+
+## PluginEditTool/native/src/plugin/RadiclePluginQueries.cpp:RadiclePluginBackend::getConflictMatrix — row Presentation key (#287)
+
+Each semantic row gets a `Presentation` key only when `scalarPresentationJson` returns one for its path. The row's `Values` stay raw so diffing, filtering and the integer write path are unchanged; names are a display and picker concern on the web side.
+
+## PluginEditTool/web/src/scalarPresentation.ts:scalarLabel — label for enum and flag cells (#287)
+
+Shows the enum name, or the comma-joined names of set flag bits. Bits no name covers, and enum values no name covers, show as hex. Non-integer raw text (for example `<opaque>` or an empty absent cell) passes through unchanged. `flagIsSet` and `setFlag` use `Math.floor` and powers of two rather than bitwise operators, so a `u32` bit 31 stays exact in JavaScript numbers.
+
+## PluginEditTool/web/src/ScalarEditor.tsx:ScalarEditor — record view enum and flag editor (#287)
+
+Enum edits use a `<select>` that commits on change, so the write is the picked integer. Flag edits use a checkbox list that keeps unknown bits: `setFlag` changes only the toggled bit, and Save commits the combined integer. Cancel discards the edit. `ScalarText` and `ScalarCell` are the display used by RecordView and by the spreadsheet cell.
+
+## PluginEditTool/web/src/SpreadsheetPanel.tsx:SpreadsheetPanel — enum and flag cells (#287)
+
+A column with a `presentations` entry renders `ScalarCell` (a `<select>` for enums, a `<details>` checkbox list for flags) instead of the plain text `<input>`. Its edits feed the same `edits` map and `SetField` call as text cells, so saves still send integers.
+
+## PluginEditTool/web/src/RecordView.tsx:RecordView — scalar display and editing (#287)
+
+Scalar rows render through `ScalarText` and open `ScalarEditor` on edit. The file sits near the 750-line cap, so the presentation logic lives in `ScalarEditor.tsx` and RecordView only wires it in.
+
+## PluginEditTool/web/src/Shell/conflictSelection.ts:selectRow — Ctrl, Shift and plain clicks (#39)
+
+The selection is a `Record<string, boolean>` keyed by FormKey, the same map the batch copy already reads, so Ctrl and Shift only change how it is written. `plain` replaces it with the clicked row, `toggle` flips one row, and `range` replaces it with the inclusive span from the anchor. The anchor is the row of the last `plain` or `toggle` click and does not move on a `range` click, so repeated Shift clicks pivot on the same row. With no anchor, or an anchor that is no longer listed, a range click selects only the clicked row.
+
+## PluginEditTool/web/src/Shell/conflictSelection.ts:pruneSelection — stability across reloads (#39)
+
+Selection is not derived from the visible rows, so it survives re-renders. Keys are dropped only in `useConflictBatch.ts:useConflictBatch` `loadConflicts`, which runs after the explicit Rescan returns, and only keys missing from the new list go. The sidebar Refresh button does not reload the conflict list, so it does not prune. The conflict list has no filter or paging, so there is no filter path to be stable across.
+
+## PluginEditTool/web/src/Shell/ConflictsPanel.tsx:ConflictsPanel — multi-select, count, copy and compare (#39)
+
+The Conflicts sidebar is the only flat, FormKey-keyed record list with a native batch flow (`CopyAsOverrideMany` through `useConflictBatch.ts:useConflictBatch` `batchCopyAsOverride`), so the multi-select lives there. Rows are `role="option"` in a `role="listbox"` with `aria-multiselectable`. Checkbox clicks stop propagation so they toggle without resetting the others. The `conflict-id` click opens the record only without a modifier. Escape on the panel clears the selection. Copy is disabled at zero selected and Compare at any count other than two, each with a `title`. Compare opens the two records one after the other, because `useRecordOpening.ts:useRecordOpening` `openByFormKey` drops a result when a newer open starts, so two calls in the same tick would keep only the second record. No record-versus-record compare view exists: `PluginCompareDialog.tsx` compares one FormKey across two plugins, and `ConflictsView.tsx` shows one record's per-plugin matrix. So the two records open in record tabs, and the second is active.
+
+## PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx:conflict list selection — MainShell harness (#39)
+
+The tests drive the real `MainShell` in conflicts mode with the same backend stub as `overrideConfirmation.test.tsx`, so the copy args are asserted at the `CopyAsOverrideMany` call. Not run locally (CI only).
+
+## PluginEditTool/native/src/plugin/RadiclePluginFields.cpp:semanticFieldCells — strided rows and the `\Count` column (counted arrays)
+
+A strided or repeated scalar row (including the REFR `WaterCurrentVelocities` members, stride 16) emits one `<path>\Count` cell, and that cell is the field's column; `<path>[i]` cells appear only for present elements. With the source subrecord absent the count is `0` and read-only, the same as CLMT `WeatherChance` and LTEX `Grasses` (pinned by RadiclePluginClimateSemanticTests.cpp and RadiclePluginVegetationSemanticTests.cpp). Not run locally (CI only).
+
+## PluginEditTool/web/src/MainShell.tsx:MainShell — RECORDS multi-select (#39)
+
+The RECORDS search list uses the Conflicts selection model (`conflictSelection.ts:selectRow`, `modeOf`), keyed per row by `MainShell.tsx:hitKey` (FormKey and Plugin, see GT-288 below). The copy source is the `Plugin` of the selected row's hit, which `recHits` holds under `hitKey`. Selected hits are cached in `recHits` as they are picked, because a hit that drops out of the current search has no other source for the `Plugin` and `EditorID` that copy and compare need. The count's hidden figure is the selected hits that are absent from the current `searchResults`. While `loadOrderSummary.Plugins` is known, picks whose `Plugin` is not in it are dropped from the picked list, the count, copy and compare; a null summary keeps all picks. The state lives in `MainShell` rather than a child panel: the sidebar list is conditional on the query and would otherwise unmount and lose the selection when the query drops below two characters. The list stays in `MainShell` because the file is still under the 750-line limit. A plain click selects only the clicked hit and opens it, which replaces the hidden selections as well, matching the Conflicts list. Ctrl, Shift and Ctrl+Shift do not open. Escape on the list and the Clear button empty the selection. The bar also shows when the query is below two characters, so a selection stays visible and can be copied or cleared.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch — copyMany shared by Conflicts and RECORDS (#39)
+
+`copyMany` holds the whole batch flow: the target picker, the overwrite and load-order confirmations, the per-item failure list and the status line. Each caller maps its own rows to `CopyPick` items. Conflicts use `Winner` as the source plugin, and RECORDS use the hit's `Plugin`, which is the plugin the record was found in, so `CopyAsOverrideMany` reads it from there. `copyMany` returns true only when the batch finished with no failures. The caller clears its selection on that result and keeps it on a cancel, an error, or a partial failure, as the Conflicts list always did.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useCompareSelected — sequential compare (#39)
+
+The compare helper is shared by the Conflicts list and RECORDS. It opens the records one after another with `await` for the same reason as the Conflicts note above: `useRecordOpening.ts:openByFormKey` drops a result superseded by a newer open. `comparing` disables the button while the opens run.
+
+## PluginEditTool/web/src/Shell/conflictSelection.ts:modeOf — modifier keys to select mode (#39)
+
+Moved out of `ConflictsPanel.tsx` so the Conflicts and RECORDS lists map modifier keys the same way. It takes only the three modifier flags, so it works on a React mouse event without importing React.
+
+## PluginEditTool/web/src/MainShellBridge.test.tsx:sidebar record multi-select — MainShell harness (#39)
+
+The RECORDS tests drive the real `MainShell` through the existing `stubBridge`. `GetConflictMatrix` is stubbed with the same fields the Conflicts harness uses, so a plain click that opens a record renders it. The copy test asserts the `CopyAsOverrideMany` arguments, including a record that is hidden when the batch starts. Not run locally (CI only).
+
+## BGS/app/Settings.cs:Settings.WriteAll — retry on transient Windows file locks
+
+The CI job "BGS build and test (win-x64)" failed intermittently in the uismoke step. `SettingsRetentionSmoke.Run` saves the settings file many times in a row, and `File.Move(tempPath, finalPath, overwrite: true)` threw "Access to the path is denied." while another process (antivirus or the indexer) held the file. `Settings.WriteAll` now retries the temp write and the move up to five attempts, sleeping 50 ms times the attempt number between tries. It retries only an `UnauthorizedAccessException` or a Windows sharing or lock violation (the HRESULT low word is 32 or 33). Other `IOException`s, such as a missing directory, are not retried. The final failure still propagates to `Settings.TryMutate`, which reports it as before. Real users with antivirus can hit the same lock. Covered by `SettingsTests.SaveRetriesWhileTheSettingsFileIsLocked`, which holds the target with `FileShare.None` for 100 ms (Windows only). Not run locally (CI only).
+## PluginEditTool/web/src/TypedRecordPanel.tsx:useTypedRecord — object or JSON-string reads (#504 audit F1)
+
+The native typed-record reads (`GetLeveledList`, `GetNpc`, `GetFaction`, `GetWeaponDamageTypes`) return JSON objects. The RPC path does not stringify them: `PluginEditTool/native/src/rpc/RpcDispatcher.cpp:Response::toJson` puts `value` through as is, `PluginEditTool/native/src/app/PluginBackendTarget.cpp:PluginBackendTarget::invoke` calls the backend methods directly, and `PluginEditTool/web/src/hostbridge.ts:call` returns `body.value`. The hook now parses only when the bridge hands back a string, so both shapes work. The edit callbacks are unchanged because the native edit methods return plain message strings. `TypedRecordPanel.leveled.test.tsx` covers the object shape.
+
+## PluginEditTool/web/src/MainShell.tsx:selectHit — RECORDS cached source per FormKey (#504 audit F2)
+
+`recHits` is keyed by `hitKey` (FormKey and Plugin, GT-288). Every selection used to re-cache all visible hits, so a later search that showed the same FormKey from another plugin replaced the source that Copy and Compare read. Now only newly selected visible hits are added, existing entries win, and the clicked row replaces its own key. Covered by `PluginEditTool/web/src/MainShell.recordSources.test.tsx`.
+
+## PluginEditTool/web/src/MainShell.tsx:hitKey — RECORDS selection key per plugin row (GT-288, residual of GT-257)
+
+`SearchRecords` returns one hit per plugin version, so the same FormKey can appear several times in one result. Keying the RECORDS selection by FormKey alone made the duplicate rows share one checkbox state, so a second version could not be picked, "Compare selected" could never see two versions, and Copy used whichever version was cached first. `hitKey` is `FormKey|Plugin`, which is unique per row. It is used for `recSel`, `recAnchor`, `recHits`, the visible-key set that drives the hidden count, the `selectRow` order and the row's selected class and checkbox. The two duplicate rows can be selected separately. While the picks repeat a FormKey, `recDupes` disables "Compare selected" and "Copy selected as override…": Compare would open one record tab for both versions because tabs are keyed by FormKey (`Shell/useRecordOpening.ts:putRecord`), and the native batch reports the second item as "duplicate FormKey in batch" (`RadiclePluginBatchMutation.cpp`). Copy and Compare still read `h.FormKey` and `h.Plugin` from the hit. The Conflicts list is not changed; its rows are unique per FormKey. Tests: `PluginEditTool/web/src/MainShell.recordSources.test.tsx` (`selects the same FormKey from two plugins as separate rows and disables Compare and Copy for them`, `copies the plugin of the same-FormKey row that was ticked`).
+
+## PluginEditTool/web/src/MainShell.tsx:MainShell — conflict list reset on load-order change (#504 audit F3)
+
+The Conflicts list and its selection are reset during render when the load-order summary content changes from a previous value, the same summary `loadedSet` uses. The first summary after startup does not reset, so a list loaded before the summary arrives is kept. The render-phase form follows `prevOpenKey` in this file. A reset inside a `useEffect` would call setState synchronously, which the react-hooks rules reject. Rescan now only clears the list.
+
+## PluginEditTool/web/src/Shell/useConflictBatch.ts:useConflictBatch — reload when the list is cleared (#504 audit F3)
+
+The load effect depends on `conflicts` as well as the tab and tree mode. A cleared list in the Conflicts tab therefore reloads on its own, which is why Rescan no longer calls `loadConflicts` directly and does not double-fetch. Covered by the load-order reload test in `PluginEditTool/web/src/Shell/ConflictsPanel.test.tsx`.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMaintenance.cpp:invokeLegacyBackend — CleanPlugin skipped count (#504 audit F4)
+
+Deleted records that cannot be decoded are still left untouched, now counted. The status appends ", skipped N undecodable" only when N is above zero. The C# `CleanPluginCore` in `PluginEditTool/FO4RecordEditor.Core/Services/WriteService.cs` has its own wording and was not changed. The existing test in `PluginEditTool/native/tests/unit/RadiclePluginUndecodableMaintenanceTests.cpp` asserts the full message.
+
+## PluginEditTool/native/tests/unit/PapyrusDifferentialTests.cpp:Compiled output matches the Creation Kit instruction for instruction — empty corpus is a SKIP (#504 audit F5)
+
+The compile-differential gate is local only. CI does not set `FO4RE_PEX_CORPUS`, so the test reports SKIP there. A variable pointing at a folder with no `.psc`/`.pex` pairs now also reports SKIP instead of passing silently. `PluginEditTool/docs/internal/PAPYRUS.md` describes the same gate.
+
+## BGS/src/Archive/GameData.cs:GameData.IsSkippableArchiveFailure — archive listing catch filter (#504 audit F6)
+
+`Entries` and `Names` share one predicate. An `IOException`, `InvalidDataException` or `UnauthorizedAccessException` whose inner exception is a Radicle ABI mismatch, or another native load failure, propagates instead of being read as an empty archive. Driving `GameData` itself needs the native Radicle library to open a real archive, and no seam injects the failure, so `BGS/tools/tests/Ba2RadicleTests.cs` calls the predicate directly.
+
+## .github/workflows/native-ci.yml:native-windows-tests — MSVC setup and pinned zlib in .github/scripts
+
+GT-253 moved the MSVC/Ninja/ccache setup and the pinned zlib fetch out of `native-ci.yml` to keep the workflow under the 750-line limit. `native-windows-tests` and `native-windows-real-data` both call `.github/scripts/setup-msvc-ccache.ps1` and `.github/scripts/pinned-zlib-windows.ps1` through `powershell -File`, so each script runs in its own process and `exit` codes still fail the step. The setup script starts with `$ErrorActionPreference = 'stop'`, the line the runner prepends to inline PowerShell. `-ExecutionPolicy Bypass` keeps the file call working on hosts whose default policy is Restricted. The `GITHUB_ENV` and `GITHUB_PATH` writes reach later steps as before.
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::versionPlugin — typed reads by plugin (#504 audit2 GT-256)
+
+`getNpc`, `getFaction` and `getLeveledList` take an optional plugin name at argument index 1. With no name they read the winning version, as before, so the web bridge calls are unchanged. With a name they read that plugin's version. `editNpcEntries`, `editFactionEntries` and `editLeveledListEntry` already edit the named plugin's version, so the index a caller reads from a named version is the index the edit applies to. The MCP `get_npc`, `get_faction` and `get_leveled_list` entries expose the optional `plugin` argument. A named plugin that lacks the record, or has it deleted, returns the same codes as the edit path (`RecordNotFound`, `RecordDeleted`).
+
+## PluginEditTool/native/src/plugin/RadiclePluginTypedRecords.cpp:RadiclePluginBackend::stageTypedRecordEdit — no-change edits stage nothing (#504 audit2 GT-277)
+
+The function returns `true` when it staged a mutation and `false` when the subrecords of the edited record are unchanged. The FACT setters return `void`, so the NPC and leveled setters' `bool` results alone would not cover FACT. The comparison covers all three families the same way: an edit that rewrites identical bytes is reported as "No change" and does not mark the plugin Pending or rebuild the graph.
+
+## PluginEditTool/native/src/plugin/RadiclePluginLeveled.cpp:RadiclePluginBackend::editLeveledListEntry — LVSP entries take no extra (#504 audit2 GT-264)
+
+In xEdit an LVSP entry is the LVLO struct only (`Core/wbDefinitionsFO4.pas:10033-10050`, `Core/wbDefinitionsCommon.pas:8788-8810`). COED is defined on LVLN and LVLI only (`Core/wbDefinitionsFO4.pas:10001`). The Radicle entry writer accepts `extra` (COED) for every leveled list type, so this path refuses `extra` on an LVSP record inside the staged edit, before the mutation is kept. The refusal is raised as a `LeveledListError` and surfaces as `LeveledListWriteFailed`. Radicle is being fixed separately.
+
+## PluginEditTool/native/src/plugin/RadiclePluginMasters.cpp:incompleteUsageReason — CleanUnusedMasters refusal names the blocking records (#504 audit2 GT-272)
+
+`fo4::MasterUsage` carries counts only. The refusal lists the undecodable records by signature and FormKey, and reports the VMAD count only when that count is non-zero, so a refusal caused by an undecodable record no longer reads "0 record(s) carry VMAD data".
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — plugins.txt names compare with the Radicle fold (#504 audit2 GT-268)
+
+`isChecked` compares `fo4::PluginKey` values, which fold Unicode the same way the load-order assembler does. ASCII-only folding made `*ä.esp` unchecked when the file on disk is `Ä.esp`. The other name lookups in this function (`resolved`, `pluginPathIndex`) still fold ASCII only and are not changed here.
+
+## PluginEditTool/native/src/mo2/Mo2Profile.cpp:readProfile — assembly findings reach the status (#504 audit2 GT-266)
+
+Findings were read only when assembly failed. A successful assembly now copies every finding into `ProfileSnapshot::warnings`, and `AppInteropTarget::getMo2Status` returns them as `warnings`, which the reload result also returns. A plugins.txt line with a control character, such as a TAB, is still not loaded, because the game does not trim names, and the status now names its line.
+
+## PluginEditTool/publish.bat — missing deploy folder is a failure (#504 audit2 GT-280)
+
+A deploy folder that does not exist now exits with code 1 and prints no success message. Running without any deploy folder still builds and skips the copy.
+
+## PluginEditTool/FO4RecordEditor.Tests/LooseModReleaseTests.cs:LooseModReleaseTests — mod-index cache state is reset per test
+
+`ReleaseLooseMod_DropsTheModIndexBeforeDisposing` failed once on the Windows managed job (run 12197, job 25991) at its precondition: the entry `SeedModIndexForTest` had just stored was already gone. The test assembly disables parallelization (`AssemblyConfig.cs`), so this was not a parallel race. No code removes that plugin name, so the entry can only go through `MutagenLoader.EvictModIndexLru` or a full cache clear. A freshly stored index has the newest `LastAccess`, so eviction removes it only when the cache is over its caps and every other cached entry is in `EditableMods`, which means another test left lowered caps or cached `EditableMods` entries behind. xUnit runs test collections in a random order on every run (collection UniqueIDs are fresh GUIDs), so state leaked by another test can hit this test on one run and not the next. The class now joins the `MutagenLoaderCache` collection. Its constructor sets the caps to their defaults (64 indexes, 500_000 records) and empties the mod-index cache and `EditableMods`, and `Dispose` restores the caps captured at construction and clears both again. The leaking test was not identified.

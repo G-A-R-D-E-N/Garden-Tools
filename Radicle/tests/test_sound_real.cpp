@@ -1,12 +1,15 @@
 #include "fo4/c_api_sound.h"
 #include "fo4/environment/sound.hpp"
+#include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/text/encoding.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <map>
 
@@ -32,9 +35,20 @@ void expect_text(std::optional<std::string_view> native, const char* abi) {
   }
 }
 
-TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesBytes) {
+bool same_subrecords(const fo4::Record& left, const fo4::Record& right) {
+  return left.header.flags.value() == right.header.flags.value() &&
+         left.header.form_version == right.header.form_version && left.compressed == right.compressed &&
+         left.subrecords.size() == right.subrecords.size() &&
+         std::equal(left.subrecords.begin(), left.subrecords.end(), right.subrecords.begin(),
+                    [](const fo4::Subrecord& a, const fo4::Subrecord& b) {
+                      return a.signature == b.signature && a.extended_size == b.extended_size && a.data == b.data;
+                    });
+}
+
+TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesSubrecords) {
   const auto* dir = std::getenv("FO4_DATA_DIR");
   if (!dir) { GTEST_SKIP() << "set FO4_DATA_DIR to installed Fallout 4 data"; }
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / GetParam();
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
   const std::filesystem::path paths[] = {path};
@@ -136,8 +150,38 @@ TEST_P(SoundRealData, DecodesEverySoundRecordThroughNativeAndAbiAndPreservesByte
   }
   radicle_free_record_array(records); radicle_env_destroy(abi);
   for (const auto& [type, total] : totals) RecordProperty(type, total);
-  const auto& plugin = env.plugin(0); const auto bytes = fo4::write_plugin(plugin); const auto original = fo4::plugin_original_bytes(plugin);
-  ASSERT_EQ(bytes.size(), original.size()); EXPECT_EQ(std::memcmp(bytes.data(), original.data(), bytes.size()), 0);
+  int unresolved = 0;
+  int cross_master = 0;
+  for (const auto* ref : native_records) {
+    if (ref->record->header.signature.to_string() != "SOUN") continue;
+    const auto marker = fo4::env::decode_sound_marker(env, *ref);
+    if (!marker.descriptor) continue;
+    if (env.winner(*marker.descriptor) == nullptr) { ++cross_master; continue; }
+    try {
+      const auto files = fo4::env::resolve_sound_files(env, *ref);
+      if (std::none_of(files.begin(), files.end(), [](std::string_view file) { return !file.empty(); })) ++unresolved;
+    } catch (const fo4::env::WorldDecodeError&) {
+      ++unresolved;
+    }
+  }
+  RecordProperty("SoundMarkerUnresolved", unresolved);
+  RecordProperty("SoundMarkerCrossMaster", cross_master);
+  EXPECT_EQ(unresolved, 0);
+  auto plugin = env.plugin(0);
+  plugin.original_range.clear();
+  fo4::visit_records(plugin, [](auto& record) {
+    if (record.header.signature != fo4::sig_tes4) record.original_range.clear();
+  });
+  const auto bytes = fo4::write_plugin(plugin);
+  const auto reread = fo4::read_plugin(bytes, plugin.path);
+  const fo4::RecordIndex index(reread);
+  for (const auto* ref : native_records) {
+    if (ref->record->header.signature == fo4::sig_tes4) continue;
+    SCOPED_TRACE(ref->record->form_key.to_string());
+    const auto* after = index.find(ref->record->form_key);
+    ASSERT_NE(after, nullptr);
+    EXPECT_TRUE(same_subrecords(*after, *ref->record));
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(OfficialMasters, SoundRealData,

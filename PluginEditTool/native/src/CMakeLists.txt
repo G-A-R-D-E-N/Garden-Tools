@@ -31,6 +31,7 @@ add_library(
     plugin/RadiclePluginQuestExisting.cpp
     plugin/RadiclePluginQuestExistingExtras.cpp
     plugin/RadiclePluginQuestLocalized.cpp
+    plugin/RadiclePluginStrings.cpp
     plugin/RadiclePluginElement.cpp
     plugin/RadiclePluginMaintenance.cpp
     plugin/RadiclePluginCompact.cpp
@@ -42,12 +43,14 @@ add_library(
     plugin/RadiclePluginSeq.cpp
     plugin/RadiclePluginCompare.cpp
     plugin/RadiclePluginDisabledOverride.cpp
+    plugin/RadiclePluginCopyAsWrapper.cpp
     plugin/RadiclePluginCheck.cpp
     plugin/RadiclePluginBatchMutation.cpp
     plugin/RadiclePluginMasterMutation.cpp
     plugin/RadiclePluginReadApi.cpp
     plugin/RadiclePluginEsl.cpp
     plugin/RadiclePluginCell.cpp
+    plugin/RadiclePluginTypedRecords.cpp
     plugin/ConditionCodec.cpp
     plugin/ConditionFunctions.cpp
 )
@@ -103,7 +106,7 @@ fo4ide_enable_warnings(fo4ide_window)
 fo4ide_enable_sanitizers(fo4ide_window)
 
 add_library(fo4ide_mo2 mo2/Mo2Profile.cpp)
-target_link_libraries(fo4ide_mo2 PUBLIC fo4ide_core)
+target_link_libraries(fo4ide_mo2 PUBLIC fo4ide_core fo4)
 fo4ide_enable_warnings(fo4ide_mo2)
 fo4ide_enable_sanitizers(fo4ide_mo2)
 

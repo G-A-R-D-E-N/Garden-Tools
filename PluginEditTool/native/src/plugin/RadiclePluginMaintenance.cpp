@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -81,8 +82,7 @@ fo4::Record* mutableRecord(fo4::Plugin& plugin, const fo4::FormKey& key) {
 fo4::PluginKind maintenanceOwnerKind(const fo4::Plugin& source,
                                      const fo4::PluginKey& owner) {
     if (owner == source.key) {
-        return source.header.tes4_flags.is_small_file() ? fo4::PluginKind::light
-                                                       : fo4::PluginKind::full;
+        return fo4::classify_plugin_kind(source.header.tes4_flags, source.key);
     }
     for (const auto& master : source.header.masters) {
         if (master.key == owner) return master.kind;
@@ -96,6 +96,71 @@ bool maintenanceHasMaster(const fo4::Plugin& plugin, const fo4::PluginKey& owner
 }
 
 }  // namespace
+
+Result<fo4::FormKey> RadiclePluginBackend::copyRecordAsNewLocked(
+    fo4::Plugin& mutated,
+    const LoadedPlugin& source,
+    const fo4::FormKey& key,
+    std::optional<std::string_view> newEditorId) const {
+    const auto* sourceRecord = topLevelRecord(source.plugin, key);
+    if (sourceRecord == nullptr) {
+        return std::unexpected(Error{
+            "RecordNotFound",
+            "Record is not present in " + source.name + ": " + key.to_string()
+        });
+    }
+    fo4::require_decodable(*sourceRecord);
+
+    std::set<fo4::PluginKey> requiredOwners;
+    for (const auto& link : fo4::collect_form_links(source.plugin)) {
+        if (link.record != key || link.key.owner().empty()) continue;
+        requiredOwners.insert(link.key.owner());
+    }
+
+    std::vector<fo4::MasterDescriptor> masters;
+    masters.reserve(mutated.header.masters.size() + requiredOwners.size());
+    for (const auto& master : mutated.header.masters) {
+        masters.push_back({master.key, master.kind});
+    }
+    bool addedMaster = false;
+    for (const auto& owner : requiredOwners) {
+        if (owner == mutated.key || maintenanceHasMaster(mutated, owner)) continue;
+        masters.push_back({owner, maintenanceOwnerKind(source.plugin, owner)});
+        addedMaster = true;
+    }
+    if (addedMaster) {
+        mutated = fo4::remap_plugin_masters(std::move(mutated), std::move(masters));
+    }
+
+    const auto newKey = fo4::create_local_record(mutated, sourceRecord->header.signature);
+    auto copied = *sourceRecord;
+    const auto sourceContext = fo4::plugin_form_id_context(source.plugin);
+    const auto destinationContext = fo4::plugin_form_id_context(mutated);
+    copied.form_key = newKey;
+    copied.header.form_id = fo4::encode_plugin_form_id(newKey, destinationContext);
+    fo4::remap_record_form_links(copied, sourceContext, destinationContext);
+    copied.original_range.clear();
+    copied.decompressed_payload.clear();
+    copied.header.data_size = 0;
+    copied.uncompressed_size = 0;
+
+    auto* allocated = mutableRecord(mutated, newKey);
+    if (allocated == nullptr) {
+        return std::unexpected(Error{
+            "CopyAsNewAllocationFailed",
+            "Allocated record disappeared before duplication"
+        });
+    }
+    *allocated = std::move(copied);
+
+    if (newEditorId.has_value() && !fo4::set_record_editor_id(mutated, newKey, *newEditorId)) {
+        return std::unexpected(Error{
+            "CopyAsNewEditorIdFailed",
+            "Could not set EditorID on the duplicated record"
+        });
+    }
+    return newKey;
+}
 
 Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
     std::string_view method,
@@ -261,64 +326,19 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
 
         try {
             auto mutated = target->plugin;
-            std::set<fo4::PluginKey> requiredOwners;
-            for (const auto& link : fo4::collect_form_links(source->plugin)) {
-                if (link.record != sourceKey || link.key.owner().empty()) continue;
-                requiredOwners.insert(link.key.owner());
-            }
-
-            std::vector<fo4::MasterDescriptor> masters;
-            masters.reserve(mutated.header.masters.size() + requiredOwners.size());
-            for (const auto& master : mutated.header.masters) {
-                masters.push_back({master.key, master.kind});
-            }
-            bool addedMaster = false;
-            for (const auto& owner : requiredOwners) {
-                if (owner == mutated.key || maintenanceHasMaster(mutated, owner)) continue;
-                masters.push_back({owner, maintenanceOwnerKind(source->plugin, owner)});
-                addedMaster = true;
-            }
-            if (addedMaster) {
-                mutated = fo4::remap_plugin_masters(std::move(mutated), std::move(masters));
-            }
-
-            const auto newKey = fo4::create_local_record(mutated, sourceRecord->header.signature);
-            auto copied = *sourceRecord;
-            const auto sourceContext = fo4::plugin_form_id_context(source->plugin);
-            const auto destinationContext = fo4::plugin_form_id_context(mutated);
-            copied.form_key = newKey;
-            copied.header.form_id = fo4::encode_plugin_form_id(newKey, destinationContext);
-            fo4::remap_record_form_links(copied, sourceContext, destinationContext);
-            copied.original_range.clear();
-            copied.decompressed_payload.clear();
-            copied.header.data_size = 0;
-            copied.uncompressed_size = 0;
-
-            auto* allocated = mutableRecord(mutated, newKey);
-            if (allocated == nullptr) {
-                return std::unexpected(Error{
-                    "CopyAsNewAllocationFailed",
-                    "Allocated record disappeared before duplication"
-                });
-            }
-            *allocated = std::move(copied);
-
-            const auto originalEditorId = editorId(*allocated);
+            const auto originalEditorId = editorId(*sourceRecord);
             const auto newEditorId = !requestedEditorId.empty()
                 ? requestedEditorId
                 : (originalEditorId.empty() ? std::string{} : originalEditorId + "DUP");
-            if (!newEditorId.empty() &&
-                !fo4::set_record_editor_id(mutated, newKey, newEditorId)) {
-                return std::unexpected(Error{
-                    "CopyAsNewEditorIdFailed",
-                    "Could not set EditorID on the duplicated record"
-                });
-            }
+            const auto newKey = copyRecordAsNewLocked(
+                mutated, *source, sourceKey,
+                newEditorId.empty() ? std::nullopt : std::optional<std::string_view>{newEditorId});
+            if (!newKey) return std::unexpected(newKey.error());
 
             stagePluginMutationLocked(*target, std::move(mutated));
             return nlohmann::json(
                 "Copied " + sourceKey.to_string() + " into " + targetPluginName +
-                " as NEW record " + newKey.to_string() +
+                " as NEW record " + newKey->to_string() +
                 (newEditorId.empty() ? std::string{} : " ('" + newEditorId + "')."));
         } catch (const std::exception& error) {
             return std::unexpected(Error{"CopyAsNewFailed", error.what()});
@@ -341,8 +361,15 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
         try {
             auto mutated = loaded->plugin;
             std::size_t undeleted = 0;
+            std::size_t skipped = 0;
             fo4::visit_records(mutated, [&](fo4::Record& record) {
-                if (record.header.signature == fo4::sig_tes4 || !record.header.flags.is_deleted()) return;
+                if (record.header.signature == fo4::sig_tes4 || !record.header.flags.is_deleted()) {
+                    return;
+                }
+                if (record.undecodable) {
+                    ++skipped;
+                    return;
+                }
                 const auto bits = (record.header.flags.value() & ~fo4::RecordFlags::deleted) |
                                   kInitiallyDisabled;
                 record.header.flags = fo4::RecordFlags{bits};
@@ -352,14 +379,18 @@ Result<nlohmann::json> RadiclePluginBackend::invokeLegacyBackend(
                 record.uncompressed_size = 0;
                 ++undeleted;
             });
+            const auto skippedNote = skipped == 0
+                ? std::string{}
+                : ", skipped " + std::to_string(skipped) + " undecodable";
             if (undeleted == 0) {
-                return nlohmann::json("Cleaned " + pluginName + ": undeleted + disabled 0 record(s).");
+                return nlohmann::json(
+                    "Cleaned " + pluginName + ": undeleted + disabled 0 record(s)" + skippedNote + ".");
             }
             mutated.original_range.clear();
             stagePluginMutationLocked(*loaded, std::move(mutated));
             return nlohmann::json(
                 "Cleaned " + pluginName + ": undeleted + disabled " +
-                std::to_string(undeleted) + " record(s).");
+                std::to_string(undeleted) + " record(s)" + skippedNote + ".");
         } catch (const std::exception& error) {
             return std::unexpected(Error{"CleanPluginFailed", error.what()});
         }

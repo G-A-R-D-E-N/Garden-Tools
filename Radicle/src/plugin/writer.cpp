@@ -103,6 +103,11 @@ void write_record(ByteWriter& out, const Plugin& plugin, const Record& record) {
     out.raw(original);
     return;
   }
+  if (record.undecodable) {
+    throw std::invalid_argument("undecodable record " + record.header.signature.to_string() + " " +
+                                record.form_key.to_string() +
+                                " has no original bytes; it cannot be written");
+  }
 
   const auto header_offset = out.bytes.size();
   out.sig(record.header.signature);
@@ -320,11 +325,11 @@ std::vector<std::byte> write_plugin(const Plugin& plugin) {
     return {original.begin(), original.end()};
   }
 
-  // Clean plugins return the original source range above. Once a master-flagged plugin is
+  // Clean plugins return the original source range above. Once a master plugin is
   // dirty, rebuild ONAM from the current hierarchy before serialization so
   // stale temporary-override metadata cannot survive a mutation.
   auto prepared = plugin;
-  if (prepared.header.tes4_flags.is_master()) {
+  if (is_master_plugin(prepared.header.tes4_flags, prepared.key)) {
     rebuild_tes4_onam(prepared, true);
   }
 
@@ -371,8 +376,17 @@ void write_plugin_file(const Plugin& plugin, const std::filesystem::path& path) 
 
 Plugin remap_plugin_masters(Plugin plugin, std::vector<MasterDescriptor> new_masters) {
   assign_record_form_keys(plugin);
-  if (plugin.header.tes4_flags.is_small_file() && new_masters.empty() &&
-      allows_hardcoded_range(plugin)) {
+  std::vector<const Record*> undecodable;
+  for (const auto* record : collect_records(plugin)) {
+    if (record->undecodable) undecodable.push_back(record);
+  }
+  if (!undecodable.empty()) {
+    throw std::invalid_argument("cannot remap masters: " + std::to_string(undecodable.size()) +
+                                " undecodable record(s), first is " +
+                                undecodable.front()->form_key.to_string());
+  }
+  if (classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == PluginKind::light &&
+      new_masters.empty() && allows_hardcoded_range(plugin)) {
     std::size_t stranded = 0;
     for (const auto* record : collect_records(plugin)) {
       if (record->header.signature == sig_tes4 || record->form_key.owner() != plugin.key) continue;

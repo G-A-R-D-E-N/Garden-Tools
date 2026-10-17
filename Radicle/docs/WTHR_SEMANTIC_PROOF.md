@@ -77,10 +77,14 @@ Not FormIDs: `DALC`, `VNAM`, `WNAM`, `NAM1`, cloud speed/color/alpha blobs, `LNA
 - Exact named color-channel mapping inside `NAM0` beyond array shape
 - `LNAM` 4-byte payload meaning
 - `NAM4` float[32] meaning (present on most records)
-- `DATA` flag bit names beyond commonlib `WeatherDataFlags` / Mutagen `Weather.Flag` (cite before exposing UI enums)
 - Full DLC load-order remapped FormID proof (needs plugin reader remap, not a flat FormID map)
 - `ONAM` (Mutagen lists it; **not observed** in this corpus)
 - Cloud texture layers 16..29 rarity / engine `numCloudLayers` interaction beyond disabled-bits
+
+## Partial
+
+- `DATA` flag byte (offset 11): stored raw. Bit names are not asserted from schema annotations or commonlib `WeatherDataFlags` / Mutagen `Weather.Flag`; no enum is exposed until cited. Source: `Radicle/docs/CLIMATE_WEATHER.md` (offset table row 11; lines 38-39).
+- `DATA` transition delta (offset 3): stored as u8. RE-010 on #520 comment 13142 (static analysis of OG 1.10.163) gives the compiled defaults fWeatherTransMax 1.0, fWeatherTransMin 0.01 and fWeatherTransAccel 4.0. The shipped Fallout4.esm on OG, NG and AE all override fWeatherTransMax to 3.0 and fWeatherTransAccel to 16.0. Every matching GMST overwrites the setting in load order, so the last one wins. With the Sky accelerate flag (bit 3) set, `pct = (pct - base) * (fWeatherTransAccel + 1.0) + base`, recomputed each frame: 5x with the compiled default, 17x with the shipped Fallout4.esm on every release. `transition_hours` computes the unaccelerated duration from caller-supplied bounds. Still open: live in-engine observation of the transition length at DATA[3] = 0 and 255 and of the effect of the game-setting values. Source: `Radicle/docs/CLIMATE_WEATHER.md` (offset table row 3; accelerated transition and GMST paragraphs).
 
 ## Radicle status before this issue
 
@@ -114,13 +118,7 @@ Cloud texture string edits are also low-risk but are not FormLink remap exercise
 
 ## Implementation status (this branch)
 
-Shipped under concept-level names pending rename gate:
-
-- Radicle/include/fo4/forms/weather_concept.hpp
-- Radicle/src/forms/weather_concept.cpp
-- Radicle/tests/test_weather_concept.cpp
-
-API status string: CONCEPT-LEVEL / RE-VERIFIED after f4-re-mcp confirmation of TESWeather::Load and related symbols (private notes under Radicle/docs/re-private/). CommonLib dual-mapped IDs for Load / InitItemImpl / MakeDefault / GetImageSpace land in a separate PR on commonlib_NonVR.
+The read-only model is `forms::Weather` (struct `Weather` in `Radicle/include/fo4/forms/weather.hpp`), decoded by `decode_weather` in `Radicle/src/forms/weather.cpp`. `Radicle/include/fo4/forms/weather_concept.hpp` is an include shim for that header. The API status string is `k_weather_api_status` in `weather.hpp`. Tests: `Radicle/tests/test_weather_concept.cpp`.
 
 Proven surfaces: read-only decode for corpus-proven slots; MNAM mutation acceptance including external-master remap via remap_plugin_masters; WTHR-aware FormLink visitation. Not in this PR: #84 UI, #285 CELL geometry, additional mutation families beyond MNAM.
 

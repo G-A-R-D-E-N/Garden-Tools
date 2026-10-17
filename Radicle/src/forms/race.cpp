@@ -4,6 +4,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/schema/preflight.hpp"
+#include "../plugin/record_edit.hpp"
 
 #include <algorithm>
 #include <array>
@@ -97,16 +98,7 @@ schema::LocalizedString required_localized(const Plugin& plugin,
 }
 
 
-Record* find_mutable_record(Plugin& plugin, const FormKey& key) {
-  Record* found = nullptr;
-  visit_records(plugin, [&](Record& record) {
-    if (found == nullptr && record.header.signature != sig_tes4 &&
-        record.form_key == key) {
-      found = &record;
-    }
-  });
-  return found;
-}
+using fo4::detail::find_mutable_record;
 
 const Subrecord* unique_subrecord(const Record& record,
                                   Signature signature,

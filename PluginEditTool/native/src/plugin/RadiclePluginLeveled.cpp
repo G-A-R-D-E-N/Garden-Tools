@@ -5,12 +5,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include <fo4/forms/leveled_list.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/schema/form_links.hpp>
 #include <fo4/signature.hpp>
@@ -56,6 +58,74 @@ std::string cycleIdentity(const std::vector<fo4::FormKey>& cycle) {
         out += key.to_string();
     }
     return out;
+}
+
+constexpr const char* k_invalid_entry =
+    "Leveled list entry needs level, item, count and chanceNone within range; extra needs owner, globalOrRank and itemCondition";
+
+nlohmann::json leveledEntryJson(const fo4::forms::LeveledListEntry& entry) {
+    nlohmann::json result{
+        {"level", entry.level},
+        {"item", support::formKeyJson(entry.item)},
+        {"count", entry.count},
+        {"chanceNone", entry.chance_none},
+        {"extra", nullptr}
+    };
+    if (entry.extra.has_value()) {
+        result["extra"] = {
+            {"owner", support::formKeyJson(entry.extra->owner)},
+            {"globalOrRank", entry.extra->global_or_rank},
+            {"itemCondition", entry.extra->item_condition}
+        };
+    }
+    return result;
+}
+
+nlohmann::json leveledListJson(const fo4::forms::LeveledList& list) {
+    nlohmann::json entries = nlohmann::json::array();
+    for (const auto& entry : list.entries) entries.push_back(leveledEntryJson(entry));
+    return {
+        {"formKey", list.key.to_string()},
+        {"chanceNone", list.chance_none},
+        {"maxCount", list.max_count},
+        {"flags", list.flags},
+        {"useGlobal", list.use_global ? support::formKeyJson(*list.use_global) : nlohmann::json(nullptr)},
+        {"epicLootChance", list.epic_loot_chance ? support::formKeyJson(*list.epic_loot_chance) : nlohmann::json(nullptr)},
+        {"entries", std::move(entries)}
+    };
+}
+
+Result<fo4::forms::LeveledListEntry> leveledEntryFromJson(const nlohmann::json& value) {
+    const auto level = support::integerField<std::uint16_t>(value, "level");
+    const auto count = support::integerField<std::uint16_t>(value, "count");
+    const auto chanceNone = support::integerField<std::uint8_t>(value, "chanceNone");
+    const auto item = support::formKeyArgument(support::stringField(value, "item"));
+    if (!level || !count || !chanceNone || !item) {
+        return std::unexpected(Error{"InvalidLeveledListEntry", k_invalid_entry});
+    }
+
+    fo4::forms::LeveledListEntry entry;
+    entry.level = *level;
+    entry.item = *item;
+    entry.count = *count;
+    entry.chance_none = *chanceNone;
+    if (value.contains("extra") && !value.at("extra").is_null()) {
+        const auto& extra = value.at("extra");
+        fo4::FormKey owner{};
+        if (extra.contains("owner") && !extra.at("owner").is_null()) {
+            const auto parsed = support::formKeyArgument(support::stringField(extra, "owner"));
+            if (!parsed) return std::unexpected(parsed.error());
+            owner = *parsed;
+        }
+        const auto globalOrRank = support::integerField<std::uint32_t>(extra, "globalOrRank");
+        if (!globalOrRank || !extra.contains("itemCondition") ||
+            !extra.at("itemCondition").is_number()) {
+            return std::unexpected(Error{"InvalidLeveledListEntry", k_invalid_entry});
+        }
+        entry.extra = fo4::forms::LeveledListExtraData{
+            owner, *globalOrRank, extra.at("itemCondition").get<float>()};
+    }
+    return entry;
 }
 
 }  // namespace
@@ -186,6 +256,100 @@ Result<nlohmann::json> RadiclePluginBackend::checkCircularLeveledLists(
         report += "\nReport capped at " + std::to_string(limit) + " cycle(s).";
     }
     return nlohmann::json(std::move(report));
+}
+
+Result<nlohmann::json> RadiclePluginBackend::getLeveledList(const nlohmann::json& arguments) const {
+    const auto key = support::formKeyArgument(support::stringArgument(arguments, 0));
+    if (!key) return std::unexpected(key.error());
+
+    OpLock lock(*this, OpLock::Mode::Read);
+    const auto version = versionPlugin(support::stringArgument(arguments, 1), *key);
+    if (!version) return std::unexpected(version.error());
+    const auto* source = *version;
+    try {
+        return leveledListJson(fo4::forms::decode_leveled_list(*source, *key));
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"LeveledListReadFailed", error.what()});
+    }
+}
+
+Result<nlohmann::json> RadiclePluginBackend::setLeveledListSettings(const nlohmann::json& arguments) {
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto key = support::formKeyArgument(support::stringArgument(arguments, 1));
+    const auto chanceNone = support::integerArgument<std::uint8_t>(arguments, 2);
+    const auto maxCount = support::integerArgument<std::uint8_t>(arguments, 3);
+    const auto flags = support::integerArgument<std::uint8_t>(arguments, 4);
+    if (!key) return std::unexpected(key.error());
+    if (!chanceNone || !maxCount || !flags) {
+        return std::unexpected(Error{
+            "InvalidLeveledListSettings",
+            "chanceNone, maxCount and flags must be integers from 0 to 255"
+        });
+    }
+
+    const auto staged = stageTypedRecordEdit(
+        pluginName, *key, "LeveledListWriteFailed", [&](fo4::Plugin& mutated) {
+            fo4::forms::set_leveled_list_settings(mutated, *key, *chanceNone, *maxCount, *flags);
+        });
+    if (!staged) return std::unexpected(staged.error());
+    if (!*staged) return nlohmann::json("No change for leveled list settings of " + key->to_string() + " in " + pluginName + ".");
+    return nlohmann::json("Updated leveled list settings for " + key->to_string() + " in " + pluginName + ".");
+}
+
+Result<nlohmann::json> RadiclePluginBackend::editLeveledListEntry(const nlohmann::json& arguments) {
+    const auto pluginName = support::stringArgument(arguments, 0);
+    const auto key = support::formKeyArgument(support::stringArgument(arguments, 1));
+    const auto op = support::stringArgument(arguments, 2);
+    const auto index = support::integerArgument<std::uint32_t>(arguments, 3);
+    if (!key) return std::unexpected(key.error());
+    if (op != "add" && op != "set" && op != "remove") {
+        return std::unexpected(Error{
+            "InvalidLeveledListOperation",
+            "Leveled list entry operation must be add, set or remove"
+        });
+    }
+    if (!index) {
+        return std::unexpected(Error{"InvalidLeveledListEntry", "Leveled list entry index must be a non-negative integer"});
+    }
+
+    std::optional<fo4::forms::LeveledListEntry> entry;
+    if (op != "remove") {
+        auto parsed = leveledEntryFromJson(support::argumentAt(arguments, 4));
+        if (!parsed) return std::unexpected(parsed.error());
+        entry = std::move(*parsed);
+    }
+
+    const auto staged = stageTypedRecordEdit(
+        pluginName, *key, "LeveledListWriteFailed", [&](fo4::Plugin& mutated) {
+            if (op != "remove" && entry->extra.has_value() &&
+                fo4::find_record(mutated, *key)->header.signature == fo4::Signature::from_string("LVSP")) {
+                throw fo4::forms::LeveledListError(
+                    "LVSP entries take only LVLO; extra (COED) is not allowed on LVSP");
+            }
+            const auto position = static_cast<std::size_t>(*index);
+            if (op == "add") {
+                fo4::forms::insert_leveled_list_entry(mutated, *key, position, *entry);
+            } else if (op == "set") {
+                auto replacement = *entry;
+                const auto existing = fo4::forms::decode_leveled_list(mutated, *key).entries;
+                if (position < existing.size()) {
+                    replacement.reserved_before_form_id = existing[position].reserved_before_form_id;
+                    replacement.reserved_tail = existing[position].reserved_tail;
+                }
+                fo4::forms::set_leveled_list_entry(mutated, *key, position, replacement);
+            } else {
+                fo4::forms::remove_leveled_list_entry(mutated, *key, position);
+            }
+        });
+    if (!staged) return std::unexpected(staged.error());
+    if (!*staged) {
+        return nlohmann::json(
+            "No change for leveled list entry " + std::to_string(*index) + " in " + key->to_string() +
+            " in " + pluginName + ".");
+    }
+    return nlohmann::json(
+        "Updated leveled list entry " + std::to_string(*index) + " in " + key->to_string() +
+        " in " + pluginName + ".");
 }
 
 }  // namespace fo4ide::plugin

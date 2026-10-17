@@ -109,6 +109,9 @@ QuestStages decode_quest_stages_record(const Plugin& plugin,
       } catch (const std::exception& error) {
         throw QuestError(error.what());
       }
+      if (entry->log_text->raw_id.has_value()) {
+        throw QuestError("QUST CNAM is localized and must be exactly four bytes");
+      }
     } else if (subrecord.signature == k_nam2) {
       if (entry->note.has_value()) {
         throw QuestError("QUST log entry contains duplicate NAM2 subrecords");
@@ -239,6 +242,7 @@ Record* mutable_quest(Plugin& plugin, const FormKey& quest) {
   if (found == nullptr) {
     throw QuestError("QUST record " + quest.to_string() + " was not found");
   }
+  require_decodable(*found);
   return found;
 }
 

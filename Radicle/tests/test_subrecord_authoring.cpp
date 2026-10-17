@@ -4,6 +4,7 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "plugin_bytes.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -140,7 +141,7 @@ fo4::Plugin fixture() {
              {"ARMO", 0x804, {{"EDID", zstr("Plain")}, {"DATA", filled(12, 0)}}},
              {"MISC", 0x805, {{"EDID", zstr("Misc")}}},
              {"LVSP", 0x806,
-              {{"EDID", zstr("List")}, {"LVLD", filled(1, 0)}, {"LVLM", filled(1, 0)},
+              {{"EDID", zstr("List")}, {"OBND", filled(12, 0)}, {"LVLD", filled(1, 0)}, {"LVLM", filled(1, 0)},
                {"LVLF", filled(1, 0)}, {"LLCT", filled(1, 1)}, {"LVLO", filled(12, 5)}}}}),
       k_plugin);
   fo4::assign_record_form_keys(plugin);
@@ -353,6 +354,28 @@ TEST(SubrecordAuthoring, CoupledEntriesAreNeverAddedOrRemoved) {
             fo4::RecordCreateStatus::not_authorable);
 }
 
+TEST(SubrecordAuthoring, CountSubrecordsStayCoupledToTheirEntries) {
+  auto plugin = fo4::read_plugin(
+      build({{"NPC_", 0x800, {{"EDID", zstr("Npc")}, {"KSIZ", filled(4, 1)}, {"KWDA", filled(4, 2)}}},
+             {"LVLI", 0x801, {{"EDID", zstr("List")}, {"LLCT", filled(1, 1)}, {"LVLO", filled(12, 0)}}}}),
+      k_plugin);
+  fo4::assign_record_form_keys(plugin);
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("KSIZ"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x801), sig("LLCT"), 0),
+            fo4::SubrecordRemoveStatus::not_authorable);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+
+  const auto npc = fo4::schema::record_authoring_constraint(sig("NPC_"));
+  ASSERT_TRUE(npc.has_value());
+  const auto rules = fo4::schema::authoring_subrecords(*npc);
+  const auto nam7 = std::find_if(rules.begin(), rules.end(),
+                                 [](const auto& rule) { return rule.signature == sig("NAM7"); });
+  ASSERT_NE(nam7, rules.end());
+  EXPECT_EQ(nam7->minimum, 0);
+}
+
 TEST(SubrecordAuthoring, GeneratedSchemaMarksSiblingOwnersCoupled) {
   const std::pair<const char*, std::vector<std::string>> expected[] = {
       {"ARMA", {"MOD2", "MOD3", "MOD4", "MOD5"}},
@@ -433,7 +456,7 @@ TEST(SubrecordAuthoring, CreatesRecordsFromGeneratedDefaultsInAuthoringOrder) {
 
   const auto spell_list = fo4::create_record(plugin, sig("LVSP"), "NewList");
   ASSERT_EQ(spell_list.status, fo4::RecordCreateStatus::created);
-  EXPECT_EQ(order(plugin, 0x902), (std::vector<std::string>{"EDID", "LVLD", "LVLM", "LVLF", "LLCT"}));
+  EXPECT_EQ(order(plugin, 0x902), (std::vector<std::string>{"EDID", "OBND", "LVLD", "LVLM", "LVLF", "LLCT"}));
 
   for (const auto& created : {armor.key, addon.key, spell_list.key}) {
     EXPECT_TRUE(authoring_clean(plugin, created));
@@ -441,7 +464,7 @@ TEST(SubrecordAuthoring, CreatesRecordsFromGeneratedDefaultsInAuthoringOrder) {
   const auto reloaded = reload(plugin);
   EXPECT_EQ(reloaded.header.next_form_id, 0x903u);
   EXPECT_EQ(order(reloaded, 0x900), (std::vector<std::string>{"EDID", "DATA"}));
-  EXPECT_EQ(order(reloaded, 0x902), (std::vector<std::string>{"EDID", "LVLD", "LVLM", "LVLF", "LLCT"}));
+  EXPECT_EQ(order(reloaded, 0x902), (std::vector<std::string>{"EDID", "OBND", "LVLD", "LVLM", "LVLF", "LLCT"}));
   for (const auto& created : {armor.key, addon.key, spell_list.key}) {
     EXPECT_TRUE(authoring_clean(reloaded, created));
   }
@@ -496,9 +519,80 @@ TEST(SubrecordAuthoring, RefusesDefaultFieldsInLocalizedPlugins) {
   EXPECT_EQ(fo4::create_record(plugin, sig("ARMO"), "X").status, fo4::RecordCreateStatus::created);
 }
 
+TEST(SubrecordAuthoring, CreatesRecordsWhoseRequiredSubrecordsHaveAuthoredDefaults) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+  struct Case {
+    const char* record;
+    const char* editor_id;
+    std::vector<std::string> order;
+    std::vector<std::pair<std::string, std::size_t>> sizes;
+  };
+  const std::vector<Case> cases{
+      {"NPC_", "NewNpc", {"EDID", "OBND", "ACBS", "RNAM", "AIDT", "CNAM", "DATA", "NAM5", "NAM6", "NAM8"},
+       {{"RNAM", 4}, {"CNAM", 4}, {"DATA", 0}, {"NAM5", 2}, {"NAM6", 4}, {"NAM8", 4}}},
+      {"ADDN", "", {"DATA", "DNAM"}, {{"DATA", 4}, {"DNAM", 4}}},
+      {"MESG", "", {"DESC", "INAM", "DNAM"}, {{"DESC", 1}, {"INAM", 4}, {"DNAM", 4}}},
+      {"LSCR", "", {"DESC"}, {{"DESC", 1}}},
+      {"IMAD", "NewImad", {"EDID", "DNAM", "TNAM", "NAM3"}, {{"DNAM", 252}, {"TNAM", 40}, {"NAM3", 40}}},
+      {"DOBJ", "", {"DNAM"}, {{"DNAM", 8}}},
+      {"DEBR", "", {"DATA"}, {{"DATA", 3}}},
+  };
+  std::uint32_t local = 0x900;
+  for (const auto& test : cases) {
+    const auto created = fo4::create_record(plugin, sig(test.record), test.editor_id);
+    ASSERT_EQ(created.status, fo4::RecordCreateStatus::created) << test.record;
+    EXPECT_EQ(created.key, key(local)) << test.record;
+    ++local;
+  }
+  const auto reloaded = reload(plugin);
+  local = 0x900;
+  for (const auto& test : cases) {
+    for (const auto* target : {static_cast<const fo4::Plugin*>(&plugin), &reloaded}) {
+      EXPECT_EQ(order(*target, local), test.order) << test.record;
+      for (const auto& [name, size] : test.sizes) {
+        const auto* sub = find_sub(*target, local, name.c_str());
+        ASSERT_NE(sub, nullptr) << test.record << " " << name;
+        EXPECT_EQ(sub->data.size(), size) << test.record << " " << name;
+      }
+      EXPECT_TRUE(authoring_clean(*target, key(local))) << test.record;
+    }
+    ++local;
+  }
+}
+
+TEST(SubrecordAuthoring, LocalizedDescriptionsStillRefuseCreateDefaults) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+  plugin.header.tes4_flags = fo4::RecordFlags{plugin.header.tes4_flags.value() | fo4::RecordFlags::localized};
+  EXPECT_EQ(fo4::create_record(plugin, sig("LSCR"), "").status, fo4::RecordCreateStatus::no_default);
+  EXPECT_EQ(fo4::create_record(plugin, sig("MESG"), "").status, fo4::RecordCreateStatus::no_default);
+  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}
+
+TEST(SubrecordAuthoring, RemoveRefusesDebrDataWhoseModelTextureHasNoRule) {
+  auto plugin = fo4::read_plugin(
+      build({{"DEBR", 0x800,
+              {{"EDID", zstr("Gen")}, {"DATA", filled(3, 0)}, {"MODT", filled(4, 1)}, {"DATA", filled(3, 0)},
+               {"MODT", filled(4, 2)}}},
+             {"DEBR", 0x801, {{"EDID", zstr("Two")}, {"DATA", filled(3, 0)}, {"DATA", filled(3, 0)}}}}),
+      k_plugin);
+  fo4::assign_record_form_keys(plugin);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x800), sig("DATA"), 1),
+            fo4::SubrecordRemoveStatus::unknown_order);
+  EXPECT_EQ(order(plugin, 0x800), (std::vector<std::string>{"EDID", "DATA", "MODT", "DATA", "MODT"}));
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x801), sig("DATA"), 1), fo4::SubrecordRemoveStatus::removed);
+  EXPECT_EQ(order(plugin, 0x801), (std::vector<std::string>{"EDID", "DATA"}));
+}
+
+TEST(SubrecordAuthoring, HazdCreateStaysNotAuthorableWhileModelIsCoupled) {
+  auto plugin = fo4::read_plugin(build({}), k_plugin);
+  EXPECT_EQ(fo4::create_record(plugin, sig("HAZD"), "Gen").status, fo4::RecordCreateStatus::not_authorable);
+  EXPECT_EQ(plugin.header.next_form_id, 0x900u);
+}
+
 TEST(SubrecordAuthoringRealData, AddRemoveKeepEveryShippedRecordConsistent) {
   const char* dir = std::getenv("FO4_DATA_DIR");
   if (dir == nullptr) GTEST_SKIP() << "set FO4_DATA_DIR to the Fallout 4 Data folder to run this";
+  record_game_build(detect_game_build(dir));
   const auto path = std::filesystem::path{dir} / "Fallout4.esm";
   if (!std::filesystem::exists(path)) GTEST_SKIP() << "Fallout4.esm not found";
 

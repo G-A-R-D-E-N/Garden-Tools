@@ -143,6 +143,7 @@ std::optional<bool> edit_placed(Plugin& plugin, const FormKey& reference, Edit&&
   if (!is_placed_reference_signature(target->header.signature)) {
     throw PlacedReferenceError("expected a placed-reference record");
   }
+  require_decodable(*target);
   if (!edit(next, *target)) return false;
   invalidate(*target);
   next.original_range.clear();
@@ -198,7 +199,7 @@ bool set_placed_reference_editor_id(Plugin& plugin, const FormKey& reference, st
 
 bool set_placed_reference_record_flags(Plugin& plugin, const FormKey& reference, std::uint32_t flags) {
   return simple(plugin, reference, [&](Plugin&, Record& record) {
-    constexpr auto kept = RecordFlags::compressed | RecordFlags::persistent;
+    constexpr auto kept = RecordFlags::compressed | RecordFlags::persistent | RecordFlags::deleted;
     record.header.flags = RecordFlags{(flags & ~kept) | (record.header.flags.value() & kept)};
   });
 }

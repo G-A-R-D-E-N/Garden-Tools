@@ -236,6 +236,19 @@ typedef struct radicle_climate_timing_edit {
 RADICLE_API radicle_status radicle_plugin_set_climate_timing(radicle_plugin* plugin,
                                                              radicle_form_key key,
                                                              const radicle_climate_timing_edit* timing);
+RADICLE_API radicle_status radicle_climate_moon_phase(uint8_t moons_phase_length,
+                                                      uint32_t days_passed,
+                                                      int32_t* out_has_phase,
+                                                      uint8_t* out_phase);
+RADICLE_API radicle_status radicle_climate_volatility_hold_hours(uint8_t volatility,
+                                                                 float multiplier,
+                                                                 float duration_min,
+                                                                 float duration_max,
+                                                                 float* out_hours);
+RADICLE_API radicle_status radicle_weather_transition_hours(uint8_t transition_delta,
+                                                            float min_hours,
+                                                            float max_hours,
+                                                            float* out_hours);
 RADICLE_API radicle_status radicle_weather_decode(const radicle_env* env,
                                                   const radicle_record* record,
                                                   radicle_weather_info** out_weather);

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Table2, X, RefreshCw, Save } from 'lucide-react';
-import { getBackend, type RecordTypeEntry } from './backend';
+import { getBackend, type RecordTypeEntry, type ScalarPresentation } from './backend';
+import { ScalarCell } from './ScalarEditor';
+import { errorText } from './errors';
 import { useDialogs } from './useDialogs';
 import './PapyrusPanel.css';
 import './SpreadsheetPanel.css';
@@ -9,7 +11,10 @@ const LS = (k: string, d: string) => localStorage.getItem('spreadsheet.' + k) ??
 const setLS = (k: string, v: string) => localStorage.setItem('spreadsheet.' + k, v);
 
 interface GridRow { formKey: string; editorId: string; cells: string[]; editable?: boolean[]; }
-interface GridData { columns: string[]; rows: GridRow[]; total: number; offset: number; error?: string; }
+interface GridData {
+  columns: string[]; rows: GridRow[]; total: number; offset: number; error?: string;
+  presentations?: Record<string, ScalarPresentation>;
+}
 
 export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
   const backend = getBackend();
@@ -46,10 +51,11 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
           .filter((name): name is string => typeof name === 'string' && name.length > 0);
         if (cancelled) return;
         setPlugins(names);
-      } catch {
+      } catch (e) {
         if (!cancelled && plugins.length === 0) {
           setPlugins([]);
         }
+        if (!cancelled) setError('Could not list plugins: ' + errorText(e));
       }
     })();
     return () => { cancelled = true; };
@@ -216,15 +222,22 @@ export default function SpreadsheetPanel({ onClose }: { onClose: () => void }) {
                       const key = cellKey(row.formKey, col);
                       const dirty = edits.has(key);
                       const canEdit = row.editable?.[i] ?? true;
+                      const presentation = grid.presentations?.[col];
+                      const value = dirty ? edits.get(key)! : row.cells[i];
                       return (
                         <td key={col} className={dirty ? 'spreadsheet-dirty' : ''}>
-                          <input
-                            className="spreadsheet-cell-input"
-                            value={dirty ? edits.get(key)! : row.cells[i]}
-                            disabled={!canEdit}
-                            title={canEdit ? undefined : 'Read-only'}
-                            onChange={e => onEdit(row.formKey, col, e.target.value)}
-                          />
+                          {presentation ? (
+                            <ScalarCell presentation={presentation} value={value} disabled={!canEdit}
+                              onValue={next => onEdit(row.formKey, col, next)} />
+                          ) : (
+                            <input
+                              className="spreadsheet-cell-input"
+                              value={value}
+                              disabled={!canEdit}
+                              title={canEdit ? undefined : 'Read-only'}
+                              onChange={e => onEdit(row.formKey, col, e.target.value)}
+                            />
+                          )}
                         </td>
                       );
                     })}

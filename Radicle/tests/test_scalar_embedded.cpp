@@ -10,12 +10,15 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>
 
+#include <bit>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -44,6 +47,120 @@ fo4::schema::ScalarFieldDescriptor field(std::string_view path) {
   const auto descriptor = fo4::schema::scalar_field_descriptor(path);
   EXPECT_TRUE(descriptor.has_value()) << path << " is not in the scalar schema";
   return *descriptor;
+}
+
+std::vector<std::byte> expl_plugin_at(std::uint16_t form_version, std::size_t data_size = 84) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x801);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "EXPL", 0);
+  const auto record = fo4::test::begin_record(out, "EXPL", 0, 0x00000800, form_version);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
+  fo4::test::ByteWriter data;
+  for (int i = 0; i < 6; ++i) data.u32(0);
+  data.f32(500.0F);
+  data.f32(10.0F);
+  data.f32(300.0F);
+  data.f32(1024.0F);
+  data.f32(0.0F);
+  data.f32(0.3F);
+  data.u32(1);
+  data.u32(3);
+  data.f32(0.0F);
+  data.u32(2);
+  for (int i = 0; i < 5; ++i) data.u32(0);
+  std::vector<std::byte> payload = data.bytes;
+  payload.resize(data_size);
+  fo4::test::write_subrecord(out, "DATA", payload);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+bool exposed(const fo4::Plugin& plugin, const fo4::FormKey& key,
+             const fo4::schema::ScalarFieldDescriptor& descriptor) {
+  const auto* record = fo4::find_record(plugin, key);
+  if (record == nullptr) return false;
+  const auto slots = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(descriptor.scalar), descriptor.scalar.address);
+  return slots.slots.size() == 1 && slots.slots[0].valid;
+}
+
+std::vector<std::byte> one_subrecord_plugin(std::string_view signature, std::string_view subrecord,
+                                            std::uint16_t form_version,
+                                            const std::vector<std::byte>& payload) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(2);
+  hedr.u32(0x801);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, signature, 0);
+  const auto record = fo4::test::begin_record(out, signature, 0, 0x00000800, form_version);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
+  fo4::test::write_subrecord(out, subrecord, payload);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+std::vector<std::byte> imad_dnam(std::size_t size) {
+  fo4::test::ByteWriter data;
+  for (int i = 0; i < 60; ++i) data.u32(0);
+  data.u32(3);
+  data.u32(7);
+  data.u32(9);
+  data.bytes.resize(size);
+  return data.bytes;
+}
+
+std::vector<std::byte> ench_enit(std::size_t size) {
+  fo4::test::ByteWriter data;
+  data.i32(50);
+  data.u32(1);
+  data.u32(2);
+  data.u32(9);
+  data.u32(1);
+  data.u32(6);
+  data.f32(0.5F);
+  data.u32(0);
+  data.u32(0);
+  data.bytes.resize(size);
+  return data.bytes;
+}
+
+std::vector<std::byte> ench_with_flst_plugin(std::size_t enit_size) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(3);
+  hedr.u32(0x802);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+
+  const auto ench_group = fo4::test::begin_group(out, "ENCH", 0);
+  const auto ench = fo4::test::begin_record(out, "ENCH", 0, 0x00000800, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
+  fo4::test::write_subrecord(out, "ENIT", ench_enit(enit_size));
+  fo4::test::end_record(out, ench);
+  fo4::test::end_group(out, ench_group);
+
+  const auto flst_group = fo4::test::begin_group(out, "FLST", 0);
+  const auto flst = fo4::test::begin_record(out, "FLST", 0, 0x00000801, 131);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"LegacyList\0", 11});
+  fo4::test::end_record(out, flst);
+  fo4::test::end_group(out, flst_group);
+  return out.bytes;
 }
 
 }  // namespace
@@ -254,7 +371,242 @@ TEST(ScalarEmbedded, TreatsAFieldPastATruncatedPayloadAsAbsent) {
 TEST(ScalarEmbedded, SignatureOnlyLookupSkipsEmbeddedFields) {
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DNAM")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("DATA")).has_value());
-  // Whole-payload fields still resolve.
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
-  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("VNAM")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("VNAM")).has_value());
+  // XHLT and XSCL also name placed-reference variant rows, so they are ambiguous.
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XHLT")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("XSCL")).has_value());
+  // A signature only one whole-payload row names still resolves.
+  EXPECT_TRUE(fo4::schema::scalar_descriptor(fo4::Signature::from_string("COCT")).has_value());
+}
+
+TEST(ScalarEmbedded, ReadsWeaponDnamAtMeasuredOffsetsAndTreatsAShortPayloadAsAbsent) {
+  std::vector<std::byte> dnam(132, std::byte{0});
+  const auto put = [&dnam](std::size_t offset, std::uint32_t value, std::size_t width) {
+    for (std::size_t i = 0; i < width; ++i) {
+      dnam[offset + i] = std::byte{static_cast<std::uint8_t>(value >> (8 * i))};
+    }
+  };
+  put(4, std::bit_cast<std::uint32_t>(1000.0F), 4);
+  put(36, 2, 4);
+  put(52, 30, 2);
+  put(54, 7, 1);
+  put(124, 3, 4);
+
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto group = fo4::test::begin_group(out, "WEAP", 0);
+  const auto weap = fo4::test::begin_record(out, "WEAP", 0, 0x800);
+  fo4::test::write_subrecord(out, "DNAM", dnam);
+  fo4::test::end_record(out, weap);
+  fo4::test::end_group(out, group);
+
+  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey{fo4::PluginKey::from_filename("Patch.esp"), fo4::LocalFormId{0x800}};
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto* sub = find_subrecord(*record, "DNAM");
+  ASSERT_NE(sub, nullptr);
+
+  const auto read = [&](std::string_view path) {
+    const auto descriptor = field(path);
+    return fo4::schema::decode_scalar(
+        fo4::schema::scalar_field_bytes(sub->data, descriptor.scalar), descriptor.scalar);
+  };
+  EXPECT_EQ(read("WEAP\\Speed"), "1000");
+  EXPECT_EQ(read("WEAP\\OnHit"), "2");
+  EXPECT_EQ(read("WEAP\\Capacity"), "30");
+  EXPECT_EQ(read("WEAP\\AnimationType"), "7");
+  EXPECT_EQ(read("WEAP\\Stagger"), "3");
+
+  const std::vector<std::byte> short_dnam(60, std::byte{0});
+  EXPECT_TRUE(fo4::schema::scalar_field_bytes(short_dnam, field("WEAP\\Stagger").scalar).empty());
+}
+
+TEST(ScalarEmbedded, InnerRadiusIsGatedByFormVersion97) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  const auto inner = field("EXPL\\InnerRadius");
+  EXPECT_EQ(inner.scalar.min_form_version, 97);
+
+  auto old_plugin = fo4::read_plugin(expl_plugin_at(96), "Legacy.esp");
+  const auto* old_record = fo4::find_record(old_plugin, key);
+  ASSERT_NE(old_record, nullptr);
+  const auto before = find_subrecord(*old_record, "DATA")->data;
+  EXPECT_FALSE(exposed(old_plugin, key, inner));
+  EXPECT_EQ(fo4::set_record_scalar(old_plugin, key, inner, "400"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  const auto* old_after = fo4::find_record(old_plugin, key);
+  ASSERT_NE(old_after, nullptr);
+  EXPECT_EQ(find_subrecord(*old_after, "DATA")->data, before);
+
+  auto new_plugin = fo4::read_plugin(expl_plugin_at(97), "Legacy.esp");
+  EXPECT_TRUE(exposed(new_plugin, key, inner));
+  ASSERT_EQ(fo4::set_record_scalar(new_plugin, key, inner, "400"),
+            fo4::ScalarMutationStatus::updated);
+  const auto* new_record = fo4::find_record(new_plugin, key);
+  ASSERT_NE(new_record, nullptr);
+  const auto& data = find_subrecord(*new_record, "DATA")->data;
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(data, inner.scalar), inner.scalar),
+            "400");
+}
+
+TEST(ScalarEmbedded, ExplDataFullLayoutReadsAndWritesLaterMembersFrom112) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  auto pre_spawn = fo4::read_plugin(expl_plugin_at(111), "Legacy.esp");
+  EXPECT_TRUE(exposed(pre_spawn, key, field("EXPL\\StaggerMagnitude")));
+  EXPECT_FALSE(exposed(pre_spawn, key, field("EXPL\\ProjectileCount")));
+  EXPECT_EQ(fo4::set_record_scalar(pre_spawn, key, field("EXPL\\ProjectileCount"), "7"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  auto plugin = fo4::read_plugin(expl_plugin_at(112), "Legacy.esp");
+  const auto read = [&plugin, &key](std::string_view path) {
+    const auto* record = fo4::find_record(plugin, key);
+    const auto descriptor = field(path);
+    return fo4::schema::decode_scalar(
+        fo4::schema::scalar_field_bytes(find_subrecord(*record, "DATA")->data, descriptor.scalar),
+        descriptor.scalar);
+  };
+  EXPECT_EQ(read("EXPL\\InnerRadius"), "300");
+  EXPECT_EQ(read("EXPL\\OuterRadius"), "1024");
+  EXPECT_EQ(read("EXPL\\Flags"), "1");
+  EXPECT_EQ(read("EXPL\\SoundLevel"), "3");
+  EXPECT_EQ(read("EXPL\\StaggerMagnitude"), "2");
+  EXPECT_EQ(read("EXPL\\ProjectileCount"), "0");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, field("EXPL\\ProjectileCount"), "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(read("EXPL\\ProjectileCount"), "7");
+  EXPECT_EQ(read("EXPL\\Flags"), "1");
+  EXPECT_EQ(read("EXPL\\InnerRadius"), "300");
+}
+
+TEST(ScalarEmbedded, ExplDataOlderLayoutsHideGatedMembersWithoutMutation) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  const auto check = [&key](std::uint16_t version, std::size_t size) {
+    auto plugin = fo4::read_plugin(expl_plugin_at(version, size), "Legacy.esp");
+    const auto* record = fo4::find_record(plugin, key);
+    ASSERT_NE(record, nullptr);
+    const auto before = find_subrecord(*record, "DATA")->data;
+    for (const std::string_view path : {"EXPL\\InnerRadius", "EXPL\\Flags", "EXPL\\StaggerMagnitude",
+                                        "EXPL\\ProjectileCount"}) {
+      const auto descriptor = field(path);
+      EXPECT_FALSE(exposed(plugin, key, descriptor)) << path << " at form version " << version;
+      EXPECT_EQ(fo4::set_record_scalar(plugin, key, descriptor, "9"),
+                fo4::ScalarMutationStatus::subrecord_missing)
+          << path << " at form version " << version;
+    }
+    EXPECT_TRUE(exposed(plugin, key, field("EXPL\\Force")));
+    record = fo4::find_record(plugin, key);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(find_subrecord(*record, "DATA")->data, before);
+  };
+  check(69, 52);
+  check(90, 56);
+  check(96, 60);
+}
+
+TEST(ScalarEmbedded, ExplData64BytesFrom97ExposesStaggerButNotSpawnRows) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  auto plugin = fo4::read_plugin(expl_plugin_at(100, 64), "Legacy.esp");
+  EXPECT_TRUE(exposed(plugin, key, field("EXPL\\PlacedObjectFadeDelay")));
+  EXPECT_TRUE(exposed(plugin, key, field("EXPL\\StaggerMagnitude")));
+  EXPECT_FALSE(exposed(plugin, key, field("EXPL\\SpawnProjectileVectorX")));
+  EXPECT_FALSE(exposed(plugin, key, field("EXPL\\ProjectileCount")));
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, field("EXPL\\StaggerMagnitude"), "3"),
+            fo4::ScalarMutationStatus::updated);
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto stagger = field("EXPL\\StaggerMagnitude");
+  EXPECT_EQ(fo4::schema::decode_scalar(
+                fo4::schema::scalar_field_bytes(find_subrecord(*record, "DATA")->data, stagger.scalar),
+                stagger.scalar),
+            "3");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, field("EXPL\\SpawnProjectileVectorX"), "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+}
+
+TEST(ScalarEmbedded, ImageAdapterVignetteRowsAreGatedByFormVersion116) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  const auto radius = field("IMAD\\VignetteRadius");
+  const auto strength = field("IMAD\\VignetteStrength");
+  EXPECT_EQ(radius.scalar.min_form_version, 116);
+  EXPECT_EQ(strength.scalar.min_form_version, 116);
+
+  auto old_plugin =
+      fo4::read_plugin(one_subrecord_plugin("IMAD", "DNAM", 113, imad_dnam(244)), "Legacy.esp");
+  const auto* old_record = fo4::find_record(old_plugin, key);
+  ASSERT_NE(old_record, nullptr);
+  const auto before = find_subrecord(*old_record, "DNAM")->data;
+  EXPECT_FALSE(exposed(old_plugin, key, radius));
+  EXPECT_FALSE(exposed(old_plugin, key, strength));
+  EXPECT_TRUE(exposed(old_plugin, key, field("IMAD\\MotionBlurStrength")));
+  EXPECT_EQ(fo4::set_record_scalar(old_plugin, key, radius, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(old_plugin, key, strength, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  const auto* old_after = fo4::find_record(old_plugin, key);
+  ASSERT_NE(old_after, nullptr);
+  EXPECT_EQ(find_subrecord(*old_after, "DNAM")->data, before);
+
+  auto plugin =
+      fo4::read_plugin(one_subrecord_plugin("IMAD", "DNAM", 116, imad_dnam(252)), "Legacy.esp");
+  EXPECT_TRUE(exposed(plugin, key, radius));
+  EXPECT_TRUE(exposed(plugin, key, strength));
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, radius, "11"), fo4::ScalarMutationStatus::updated);
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto& data = find_subrecord(*record, "DNAM")->data;
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(data, radius.scalar),
+                                       radius.scalar),
+            "11");
+  EXPECT_EQ(fo4::schema::decode_scalar(fo4::schema::scalar_field_bytes(data, strength.scalar),
+                                       strength.scalar),
+            "9");
+  EXPECT_EQ(fo4::schema::decode_scalar(
+                fo4::schema::scalar_field_bytes(data, field("IMAD\\MotionBlurStrength").scalar),
+                field("IMAD\\MotionBlurStrength").scalar),
+            "3");
+}
+
+TEST(ScalarEmbedded, EnchEnitShortFormsReadOnlyTheMembersXEditReadsCleanly) {
+  const auto key = fo4::FormKey::parse("000800:Legacy.esp");
+  const auto base = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ENCH"),
+                                                           "ENCH\\BaseEnchantment");
+  const auto worn = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ENCH"),
+                                                           "ENCH\\WornRestrictions");
+  ASSERT_TRUE(base.has_value());
+  ASSERT_TRUE(worn.has_value());
+
+  const auto list = fo4::FormKey::parse("000801:Legacy.esp");
+  const auto expect_size_error = [](auto&& write) {
+    try {
+      static_cast<void>(write());
+      ADD_FAILURE() << "expected a FormLinkFieldError";
+    } catch (const fo4::schema::FormLinkFieldError& error) {
+      EXPECT_NE(std::string(error.what()).find("unexpected payload size"), std::string::npos)
+          << error.what();
+    }
+  };
+
+  auto short_form = fo4::read_plugin(ench_with_flst_plugin(28), "Legacy.esp");
+  EXPECT_TRUE(exposed(short_form, key, field("ENCH\\Cost")));
+  EXPECT_TRUE(exposed(short_form, key, field("ENCH\\ChargeTime")));
+  EXPECT_EQ(fo4::set_record_scalar(short_form, key, field("ENCH\\Cost"), "75"),
+            fo4::ScalarMutationStatus::updated);
+  expect_size_error([&] { return fo4::set_record_formlink_field(short_form, key, *base, key); });
+
+  auto mid_form = fo4::read_plugin(ench_with_flst_plugin(32), "Legacy.esp");
+  EXPECT_EQ(fo4::set_record_formlink_field(mid_form, key, *base, key),
+            fo4::FormLinkFieldMutationStatus::updated);
+  expect_size_error([&] { return fo4::set_record_formlink_field(mid_form, key, *worn, list); });
+
+  auto full_form = fo4::read_plugin(ench_with_flst_plugin(36), "Legacy.esp");
+  EXPECT_EQ(fo4::set_record_formlink_field(full_form, key, *worn, list),
+            fo4::FormLinkFieldMutationStatus::updated);
 }

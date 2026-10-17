@@ -62,8 +62,8 @@ bool containsInsensitive(std::string_view value, std::string_view needle) {
 }
 
 std::string pluginKind(const fo4::Plugin& plugin) {
-    if (plugin.header.tes4_flags.is_small_file()) return "light";
-    if (plugin.header.tes4_flags.is_master()) return "master";
+    if (fo4::classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == fo4::PluginKind::light) return "light";
+    if (fo4::is_master_plugin(plugin.header.tes4_flags, plugin.key)) return "master";
     return "plugin";
 }
 
@@ -262,6 +262,7 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
 
     auto columns = gridColumns(signature, maxEntries);
     std::vector<std::vector<SemanticFieldCell>> semanticRows;
+    nlohmann::json presentations = nlohmann::json::object();
     if (signature.size() == 4 && signature != "EYES" && signature != "LVSP") {
         columns = nlohmann::json::array({"EDID"});
         for (std::size_t index = begin; index < end; ++index) {
@@ -273,6 +274,12 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
                 }
             }
             semanticRows.push_back(std::move(*projected));
+        }
+        const auto recordSignature = fo4::Signature::from_string(signature);
+        for (const auto& column : columns) {
+            const auto path = column.get<std::string>();
+            auto presentation = scalarPresentationJson(recordSignature, path);
+            if (!presentation.is_null()) presentations[path] = std::move(presentation);
         }
     }
     nlohmann::json rows = nlohmann::json::array();
@@ -360,7 +367,8 @@ Result<nlohmann::json> RadiclePluginBackend::getRecordsGrid(
         {"columns", columns},
         {"rows", std::move(rows)},
         {"total", matching.size()},
-        {"offset", begin}
+        {"offset", begin},
+        {"presentations", std::move(presentations)}
     }.dump());
 }
 

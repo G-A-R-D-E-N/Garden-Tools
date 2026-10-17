@@ -76,7 +76,9 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
                     const std::string_view type(field.type);
                     const bool valid = (type == "string" && value->is_string()) ||
                                        (type == "object" && value->is_object()) ||
-                                       (type == "integer" && value->is_number_integer());
+                                       (type == "integer" && value->is_number_integer()) ||
+                                       (type == "number" && value->is_number()) ||
+                                       (type == "boolean" && value->is_boolean());
                     if (!valid) return ToolResult{std::string(field.name) + " must be " + field.type, true};
                 }
                 return bridge->call(args);
@@ -89,8 +91,19 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"path", "string"}})) return false;
     if (!add("create_plugin", "Create an empty ESP in the trusted MO2 overwrite folder; later edits require save_plugin", "backend", "CreatePlugin",
              {{"plugin", "string"}})) return false;
-    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, HAZD, LVSP, PROJ, RACE. Payload fields are validated by the native backend", "backend", "CreateRecord",
+    if (!add("create_record", "Create a typed record in memory. Supported types: ARMA, ARMO, CELL, EXPL, EYES, FACT, HAZD, LVLI, LVLN, LVSP, PROJ, RACE. Payload fields are validated by the native backend", "backend", "CreateRecord",
              {{"plugin", "string"}, {"type", "string"}, {"payload", "object"}})) return false;
+    if (!add("create_placed_object",
+             "Create a placed reference (REFR) over a base object in a CELL this plugin owns and return its formKey. cell and baseObject are FormKeys. The CELL must be owned by this plugin. In an exterior CELL the reference must be non-persistent and positioned inside the CELL's grid. persistent defaults to true (persistent list), false puts it in the temporary list. initially_disabled defaults to false. Rotations are in radians and default to 0",
+             "backend", "CreatePlacedObject",
+             {{"plugin", "string"}, {"cell", "string"}, {"baseObject", "string"},
+              {"x", "number"}, {"y", "number"}, {"z", "number"},
+              {"rotX", "number", true}, {"rotY", "number", true}, {"rotZ", "number", true},
+              {"persistent", "boolean", true}, {"initially_disabled", "boolean", true}})) return false;
+    if (!add("create_interior_cell",
+             "Create an interior CELL in this plugin with the given editor ID and return its formKey. Refused when the editor ID is empty or matches a CELL in this plugin, ignoring ASCII case",
+             "backend", "CreateInteriorCell",
+             {{"plugin", "string"}, {"editor_id", "string"}})) return false;
     if (!add("get_record", "Get record fields and plugin versions by FormKey, including pending edits", "backend", "GetConflictMatrix",
              {{"form_key", "string"}})) return false;
     if (!add("get_record_fields", "Get the field paths and values for one plugin's record version", "backend", "GetRecordTree",
@@ -116,6 +129,22 @@ bool registerPluginTools(fo4ide::mcp::Registry& registry,
              {{"plugin", "string"}})) return false;
     if (!add("list_masters", "List a plugin's declared masters", "masters", "List",
              {{"plugin", "string"}})) return false;
+    if (!add("get_leveled_list", "Get a leveled list (LVLI, LVLN or LVSP) by FormKey: chance none, max count, flags, use global and entries from the winning version, or from plugin's version when plugin is given. edit_leveled_list_entry indexes the named plugin's version", "backend", "GetLeveledList",
+             {{"form_key", "string"}, {"plugin", "string", true}})) return false;
+    if (!add("set_leveled_list_settings", "Set a leveled list's chance none, max count and flags bytes (0-255) in memory. Call save_plugin to persist", "backend", "SetLeveledListSettings",
+             {{"plugin", "string"}, {"form_key", "string"}, {"chance_none", "integer"}, {"max_count", "integer"}, {"flags", "integer"}})) return false;
+    if (!add("edit_leveled_list_entry", "Add (insert at index), set or remove one leveled list entry in memory. value is {level, item, count, chanceNone, extra}; required for add and set. index is into the named plugin's version of the list. Call save_plugin to persist", "backend", "EditLeveledListEntry",
+             {{"plugin", "string"}, {"form_key", "string"}, {"op", "string"}, {"index", "integer"}, {"value", "object", true}})) return false;
+    if (!add("get_npc", "Get an NPC_ record's factions, perks and inventory by FormKey from the winning version, or from plugin's version when plugin is given. edit_npc_entries indexes the named plugin's version", "backend", "GetNpc",
+             {{"form_key", "string"}, {"plugin", "string", true}})) return false;
+    if (!add("edit_npc_entries", "Add, set or remove one NPC_ entry in memory. list is factions, perks or inventory; index is required for set and remove and indexes the named plugin's version; value is required for add and set. Call save_plugin to persist", "backend", "EditNpcEntries",
+             {{"plugin", "string"}, {"form_key", "string"}, {"list", "string"}, {"op", "string"}, {"index", "integer", true}, {"value", "object", true}})) return false;
+    if (!add("get_faction", "Get a FACT record's relations and ranks by FormKey from the winning version, or from plugin's version when plugin is given. edit_faction_entries indexes the named plugin's version", "backend", "GetFaction",
+             {{"form_key", "string"}, {"plugin", "string", true}})) return false;
+    if (!add("edit_faction_entries", "Add, set or remove one FACT relation or rank in memory. list is relations or ranks; index is required for set and remove and indexes the named plugin's version; value is required for add and set. Call save_plugin to persist", "backend", "EditFactionEntries",
+             {{"plugin", "string"}, {"form_key", "string"}, {"list", "string"}, {"op", "string"}, {"index", "integer", true}, {"value", "object", true}})) return false;
+    if (!add("get_weapon_damage_types", "Get a WEAP record's damage types by FormKey from the winning version (read-only)", "backend", "GetWeaponDamageTypes",
+             {{"form_key", "string"}})) return false;
     return true;
 }
 

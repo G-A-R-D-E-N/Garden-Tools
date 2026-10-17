@@ -6,6 +6,7 @@
 #include "fo4/signature.hpp"
 
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -104,7 +105,7 @@ float read_scale(const Record& record) {
   const auto* scale = unique_subrecord(record, k_xscl);
   if (scale == nullptr) return 1.0f;
   if (scale->data.size() != 4) {
-    throw PlacedReferenceError("REFR/ACHR XSCL must be exactly 4 bytes");
+    throw PlacedReferenceError("placed reference XSCL must be exactly 4 bytes");
   }
   return read_f32_le(scale->data, 0);
 }
@@ -113,7 +114,7 @@ std::optional<FormKey> read_base(const Plugin& plugin, const Record& record) {
   const auto* name = unique_subrecord(record, k_name);
   if (name == nullptr) return std::nullopt;
   if (name->data.size() != 4) {
-    throw PlacedReferenceError("REFR/ACHR NAME must be exactly 4 bytes");
+    throw PlacedReferenceError("placed reference NAME must be exactly 4 bytes");
   }
   const RawFormId raw{read_u32_le(name->data, 0)};
   if (raw.is_null()) return std::nullopt;
@@ -173,17 +174,14 @@ std::optional<PlacedReferenceView> decode_placed_reference(
     const Plugin& plugin,
     const Record& record,
     bool persistent) {
-  PlacedReferenceKind kind;
-  if (record.header.signature == k_refr) {
-    kind = PlacedReferenceKind::object;
-  } else if (record.header.signature == k_achr) {
-    kind = PlacedReferenceKind::npc;
-  } else {
-    return std::nullopt;
-  }
+  if (!is_placed_reference_signature(record.header.signature)) return std::nullopt;
+  const auto kind = record.header.signature == k_refr ? PlacedReferenceKind::object
+                    : record.header.signature == k_achr ? PlacedReferenceKind::npc
+                                                        : PlacedReferenceKind::variant;
 
+  const auto deleted = record.header.flags.is_deleted();
   const auto* data = unique_subrecord(record, k_data);
-  if (data == nullptr) {
+  if (data == nullptr && !deleted) {
     throw PlacedReferenceError(
         record.header.signature.to_string() + " is missing required DATA position/rotation");
   }
@@ -193,10 +191,10 @@ std::optional<PlacedReferenceView> decode_placed_reference(
       .kind = kind,
       .base = read_base(plugin, record),
       .editor_id = read_zstring(unique_subrecord(record, sig_edid)),
-      .transform = read_transform(*data),
+      .transform = data != nullptr ? read_transform(*data) : PositionRotation{},
       .scale = read_scale(record),
       .persistent = persistent,
-      .deleted = record.header.flags.is_deleted(),
+      .deleted = deleted,
   };
 }
 
@@ -234,6 +232,11 @@ bool set_placed_reference_transform(
   if (target == nullptr) return false;
   if (!is_placed_reference_signature(target->header.signature)) {
     throw PlacedReferenceError("transform mutation requires a placed-reference record");
+  }
+  require_decodable(*target);
+  if (!std::isfinite(transform.x) || !std::isfinite(transform.y) || !std::isfinite(transform.z) ||
+      !std::isfinite(transform.rx) || !std::isfinite(transform.ry) || !std::isfinite(transform.rz)) {
+    throw PlacedReferenceError("placed-reference values must be finite");
   }
 
   auto* data = unique_subrecord(*target, k_data);

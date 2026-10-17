@@ -16,11 +16,13 @@ The first machine-readable authoring schema is active under `schema/fallout4/fie
 
 BA2 support covers `BTDX/GNRL` general resources and `BTDX/DX10` textures at versions 1, 7 and 8: list/read, stored and zlib-compressed chunks, path lookup, write/read round trips, and texture extraction that prepends a reconstructed DDS header to `.dds` entries whose payload does not already start with `DDS ` (other entries are returned as stored). PluginEditTool's native Archive panel uses the Radicle reader and rejects any non-empty GNRL or DX10 archive without a string table. Synthetic coverage is supplemented by installed-data tests for six named version/content combinations, which skip unless `FO4_DATA_DIR` is set; see `docs/BA2.md` for measured corpus scope and remaining opaque metadata.
 
+Load order files: `plugins.txt`/`loadorder.txt` and `Fallout4.ccc` parsing, and assembly of the loaded-file list (stage order, master hoist, checked state and findings) through `fo4::loadorder`, the `radicle_plugin_list_read`, `radicle_ccc_read` and `radicle_load_order_assemble` exports, and `Radicle.Interop.LoadOrderFiles`. The OG and AE official tables are verified statically; NG 1.10.984 is verified statically against the unpacked image (same assembly as AE with the 7-name official table; GARDEN-TOOLS #520 comment 13470, RE-006). See `docs/LOAD_ORDER_FILES.md`.
+
 Localized string-table support now covers `.STRINGS`, `.DLSTRINGS`, and `.ILSTRINGS`: strict header/offset validation, raw text-byte preservation, lookup, deduplication, and deterministic writing. Automatic resolution of 4-byte localized plugin fields remains deliberately separate until TES4 bit 7 semantics are settled or the caller supplies an explicit localization context.
 
 Material files (`.bgsm` / `.bgem`) read and write byte-identically across the BGSM and BGEM version gates through `fo4/material/material_file.hpp`, the `radicle_material_file_*` C ABI and the `Radicle.Interop.MaterialFile` wrapper; see `docs/MATERIALS.md`.
 
-Still incomplete: broad typed/schema-driven record authoring, safe ESL compaction, remaining mixed-layout FormID surfaces such as NAVM/NAVI, plugin-field integration with localized string tables, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
+Still incomplete: broad typed/schema-driven record authoring, safe ESL compaction, NAVM/NAVI cover, waypoint and NG layout (the stored read surface and indexed geometry edits are in `docs/NAVM_NAVI.md`), plugin-field integration with localized string tables, and the unresolved writer/reverse-engineering questions tracked in the roadmap.
 
 ## Build
 

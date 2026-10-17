@@ -14,6 +14,7 @@ enum class RecordPlacement {
   quest_children,
   topic_children,
   cell_children,
+  cell_reference_children,
 };
 
 struct SubrecordAuthoringConstraint {
@@ -25,7 +26,7 @@ struct SubrecordAuthoringConstraint {
   bool uncounted{false};
   bool coupled{false};
 
-  constexpr bool has_default() const noexcept { return default_data != nullptr && default_size != 0; }
+  constexpr bool has_default() const noexcept { return default_data != nullptr; }
   std::span<const std::uint8_t> default_bytes() const noexcept {
     return {default_data, static_cast<std::size_t>(default_size)};
   }

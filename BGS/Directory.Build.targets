@@ -1,0 +1,8 @@
+<Project>
+  <ItemGroup Condition="Exists('$(RadicleNativeDir)/$(RadicleNativeFileName)')">
+    <None Include="$(RadicleNativeDir)/$(RadicleNativeFileName)" Link="$(RadicleNativeFileName)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+  <Target Name="WarnMissingRadicleNative" BeforeTargets="BeforeBuild" Condition="!Exists('$(RadicleNativeDir)/$(RadicleNativeFileName)')">
+    <Warning Text="Radicle native library $(RadicleNativeFileName) was not found in $(RadicleNativeDir). Set RadicleNativeDir to the folder that holds it; BA2 reads fail at runtime without it." />
+  </Target>
+</Project>

@@ -383,6 +383,13 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
             return finishAutoCreatedTarget(
                 backend_, *ensured, backend_.invokeLegacyBackend(method, normalizedArgs), "Copied ");
         }
+        if (method == "CopyAsWrapper") {
+            auto ensured = ensureWriteTarget(backend_, args, 2);
+            if (!ensured) return std::unexpected(ensured.error());
+            auto normalizedArgs = withTargetName(args, 2, ensured->name);
+            return finishAutoCreatedTarget(
+                backend_, *ensured, backend_.copyAsWrapper(normalizedArgs), "Copied ");
+        }
         if (method == "ResolveFormKeyLabels") return resolveFormKeyLabels(backend_, args);
         if (method == "GetRecordTree") return legacyRecordTree(backend_, args);
         if (method == "GetConditionFunctionParams") return backend_.conditionFunctionParams();
@@ -473,6 +480,16 @@ Result<nlohmann::json> PluginBackendTarget::invoke(std::string_view method,
             return finishAutoCreatedTarget(
                 backend_, *ensured, backend_.createMergedPatch(normalizedArgs), "Merged patch ");
         }
+        if (method == "GetLeveledList") return backend_.getLeveledList(args);
+        if (method == "SetLeveledListSettings") return backend_.setLeveledListSettings(args);
+        if (method == "EditLeveledListEntry") return backend_.editLeveledListEntry(args);
+        if (method == "GetNpc") return backend_.getNpc(args);
+        if (method == "EditNpcEntries") return backend_.editNpcEntries(args);
+        if (method == "GetFaction") return backend_.getFaction(args);
+        if (method == "EditFactionEntries") return backend_.editFactionEntries(args);
+        if (method == "GetWeaponDamageTypes") return backend_.getWeaponDamageTypes(args);
+        if (method == "CreatePlacedObject") return backend_.createPlacedObject(args);
+        if (method == "CreateInteriorCell") return backend_.createInteriorCell(args);
         return backend_.invokeLegacyBackend(method, args);
     }
     if (targetNamespace_ == "masters" && method == "CleanUnused") return backend_.cleanUnusedMasters(args);

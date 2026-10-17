@@ -1515,8 +1515,7 @@ public static class Smoke
         StaleResultsDoNotPaintAnotherRevision();
         StaleResultsDoNotPaintAnotherDocument();
         SaveBlocksWithTheDetail();
-        SettingsWriteFailureLeavesExistingFileUntouched();
-        ConcurrentSettingsWritesPreserveAllValues();
+        SettingsRetentionSmoke.WriteChecks();
         ExternalSourceChangeBlocksSave();
         TempDirectoryKeysIncludeTheFullSourcePath();
         NonFiniteFrameInputIsRefused();
@@ -2061,32 +2060,6 @@ public static class Smoke
         CheckTrue("a clean close never asks for save, discard or cancel", !asked);
     }
 
-    private static void ConcurrentSettingsWritesPreserveAllValues()
-    {
-        Console.WriteLine("\nconcurrent settings writes preserve every preference");
-        string root = Directory.CreateTempSubdirectory("bgs-settings-concurrent").FullName;
-        string path = Path.Combine(root, "settings.cfg");
-        try
-        {
-            Settings.SettingsPathForTest = path;
-            Settings.ReadAllLinesForTest = File.ReadAllLines;
-            System.Threading.Tasks.Parallel.For(0, 16, i => Settings.Set("key" + i, i.ToString()));
-
-            var lines = File.ReadAllLines(path);
-            Check("all concurrent settings writes survive", 16, lines.Length);
-            CheckTrue("every concurrent key is present",
-                      Enumerable.Range(0, 16).All(i => lines.Contains($"key{i}={i}")));
-            Check("unique staging leaves no temp files", 0,
-                  Directory.EnumerateFiles(root, "*.tmp").Count());
-        }
-        finally
-        {
-            Settings.SettingsPathForTest = null;
-            Settings.ReadAllLinesForTest = File.ReadAllLines;
-            Directory.Delete(root, true);
-        }
-    }
-
     private static void ExternalSourceChangeBlocksSave()
     {
         Console.WriteLine("\nan external source change blocks a stale save");
@@ -2111,39 +2084,6 @@ public static class Smoke
                   window.StatusForTest.Contains("changed on disk", StringComparison.OrdinalIgnoreCase));
         CheckTrue("the stale document remains dirty", window.IsDirty);
         CloseForTest(window);
-    }
-
-    private static void SettingsWriteFailureLeavesExistingFileUntouched()
-    {
-        Console.WriteLine("\na failed settings write leaves the existing file untouched");
-        string root = Directory.CreateTempSubdirectory("bgs-settings-failure").FullName;
-        try
-        {
-            string final = Path.Combine(root, "settings.cfg");
-            File.WriteAllText(final, "old=value\n");
-
-            string blocked = Path.Combine(root, "blocked");
-            File.WriteAllText(blocked, "not a directory");
-            string temp = Path.Combine(blocked, "settings.cfg.tmp");
-
-            bool refused = false;
-            try
-            {
-                Settings.WriteAll(temp, final,
-                    new Dictionary<string, string>(StringComparer.Ordinal) { ["new"] = "value" });
-            }
-            catch (IOException)
-            {
-                refused = true;
-            }
-
-            CheckTrue("the settings write failure is surfaced", refused);
-            Check("the previous settings file is not replaced", "old=value\n", File.ReadAllText(final));
-        }
-        finally
-        {
-            Directory.Delete(root, true);
-        }
     }
 
     private static void TempDirectoryKeysIncludeTheFullSourcePath()
@@ -2778,11 +2718,10 @@ public static class Smoke
 
         for (int i = 0; i < entries.Length; i++)
         {
-            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
             writer.Write((ulong)offsets[i]);
             writer.Write(0u);
-            writer.Write((uint)entries[i].Payload.Length);
-            writer.Write(0u);
+            writer.Write((uint)entries[i].Payload.Length); writer.Write(0xBAADF00Du);
         }
 
         foreach (var entry in entries) writer.Write(entry.Payload);

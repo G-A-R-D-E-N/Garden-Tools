@@ -34,7 +34,25 @@ it('does not open an editor for a backend-refused cell', () => {
   const opaque = { ...matrix, Rows: [{ ...field('RACE\\BipedObjectNames[1]', 'Semantic', '<opaque>'), Editable: [false] }] };
   render(<DialogProvider><RecordView matrix={opaque} plugin="W0.esp" onReload={async () => {}} /></DialogProvider>);
   fireEvent.doubleClick(screen.getByText('<opaque>'));
+  fireEvent.keyDown(screen.getByText('<opaque>'), { key: 'F2' });
   expect(screen.queryByDisplayValue('<opaque>')).toBeNull();
+});
+
+it('starts the same inline edit from F2 on a focused value cell', () => {
+  render(<DialogProvider><RecordView matrix={matrix} plugin="W0.esp" onReload={async () => {}} /></DialogProvider>);
+  fireEvent.keyDown(screen.getByText('second'), { key: 'F2' });
+  expect(screen.getByDisplayValue('second')).toBeTruthy();
+});
+
+it('reports a failed context-menu lookup in the toolbar status', async () => {
+  vi.stubGlobal('chrome', { webview: { hostObjects: { backend: {
+    GetEditablePlugins: vi.fn(async () => { throw new Error('plugin list offline'); }),
+    GetContainmentPath: vi.fn(async () => '[]'),
+    DescribeElement: vi.fn(async () => '{}'),
+  } } } });
+  render(<DialogProvider><RecordView matrix={matrix} plugin="W0.esp" onReload={async () => {}} /></DialogProvider>);
+  fireEvent.contextMenu(screen.getByText('second'));
+  expect(await screen.findByText('Could not list editable plugins: plugin list offline')).toBeTruthy();
 });
 
 it('offers schema actions only when permitted and submits schema creation', async () => {

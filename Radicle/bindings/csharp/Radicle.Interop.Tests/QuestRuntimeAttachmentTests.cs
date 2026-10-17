@@ -183,6 +183,23 @@ public class QuestRuntimeAttachmentTests
     }
 
     [Fact]
+    public void Utf8AndInvalidBytesSurviveTheRowMapping()
+    {
+        var textBytes = new byte[] { 0x43, 0x61, 0x66, 0xC3, 0xA9, 0xFF };
+        var properties = new[]
+        {
+            new QuestRuntimePropertyEntry(QuestPropertyOwner.Script, -1, "QF_A", "Label", 2, 0,
+                new QuestRuntimeValue { Text = Encoding.Latin1.GetString(textBytes) }),
+        };
+
+        var data = QuestRuntime.DecodeRows(Array.Empty<string>(), properties, Quest);
+        var value = Assert.Single(data.ScriptProperties).Value;
+
+        Assert.True(textBytes.AsSpan().SequenceEqual(value.TextBytes!));
+        Assert.Equal("Café", Encoding.UTF8.GetString(value.TextBytes!, 0, textBytes.Length - 1));
+    }
+
+    [Fact]
     public void ValuesSurviveTheRowMapping()
     {
         var properties = new[]

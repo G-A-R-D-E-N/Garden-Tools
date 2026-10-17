@@ -1,4 +1,6 @@
+#include "fo4/c_api_behavior.h"
 #include "fo4/environment/behavior.hpp"
+#include "fo4/environment/package_procedure.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "plugin_bytes.hpp"
 
@@ -7,6 +9,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 
 namespace {
 
@@ -15,6 +18,7 @@ struct Rec { std::string signature; std::uint32_t id; std::vector<Sub> subs; };
 std::vector<std::byte> words(std::initializer_list<std::uint32_t> values) {
   fo4::test::ByteWriter b; for (const auto value : values) b.u32(value); return b.bytes;
 }
+std::vector<std::byte> one(std::uint8_t value) { return {std::byte{value}}; }
 std::vector<std::byte> text(const char* value) { fo4::test::ByteWriter b; b.raw(value); b.u8(0); return b.bytes; }
 std::vector<std::byte> floats(std::size_t count) {
   fo4::test::ByteWriter b; for (std::size_t i = 0; i < count; ++i) b.f32(static_cast<float>(i) + 0.5f); return b.bytes;
@@ -151,6 +155,175 @@ TEST_F(BehaviorRead, AbsentFieldsRemainAbsentAndMalformedSizesFailClosed) {
   const auto bad = load(); EXPECT_THROW(fo4::env::decode_package(bad, record(bad)), fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::decode_combat_style(bad, record(bad, 0x801)), fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::decode_idle(bad, record(bad, 0x802)), fo4::env::WorldDecodeError);
+}
+
+TEST_F(BehaviorRead, ProcedureTreeDecodesNestedContainersAndLeafPayloadRanges) {
+  write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Sequence")}, {"CITC", words({0})}, {"PRCB", words({2, 5})},
+    {"ANAM", text("Procedure")}, {"CITC", words({1})}, {"CTDA", condition(14)}, {"PNAM", text("Travel")}, {"FNAM", words({1})},
+    {"PKC2", one(3)}, {"ANAM", text("Stacked")}, {"CITC", words({0})}, {"PRCB", words({1, 0})}, {"ANAM", text("Procedure")},
+    {"CITC", words({0})}, {"PNAM", text("Sandbox")}, {"POBA", {}}, {"POEA", {}}, {"POCA", {}}}}});
+  const auto env = load(); const auto tree = fo4::env::decode_package_procedure(*record(env).record);
+  EXPECT_TRUE(tree.decoded); EXPECT_EQ(tree.region_begin, 1u); EXPECT_EQ(tree.region_end, 16u);
+  EXPECT_TRUE(tree.inputs.empty()); EXPECT_FALSE(tree.marker); ASSERT_EQ(tree.nodes.size(), 4u);
+  const auto& root_node = tree.nodes[0];
+  EXPECT_EQ(root_node.kind, fo4::env::PackageProcedureKind::container); EXPECT_EQ(root_node.name, "Sequence");
+  EXPECT_EQ(root_node.child_count, 2u); EXPECT_EQ(root_node.flags, 5u); EXPECT_EQ(root_node.children, (std::vector<std::size_t>{1, 2}));
+  const auto& travel = tree.nodes[1];
+  EXPECT_EQ(travel.kind, fo4::env::PackageProcedureKind::leaf); EXPECT_EQ(travel.name, "Travel"); EXPECT_EQ(travel.condition_count, 1u);
+  EXPECT_FALSE(travel.flags); EXPECT_EQ(travel.opaque_begin, 8u); EXPECT_EQ(travel.opaque_end, 10u);
+  EXPECT_EQ(tree.nodes[2].name, "Stacked"); EXPECT_EQ(tree.nodes[2].flags, 0u); EXPECT_EQ(tree.nodes[2].children, (std::vector<std::size_t>{3}));
+  EXPECT_EQ(tree.nodes[3].name, "Sandbox"); EXPECT_EQ(tree.nodes[3].opaque_begin, 16u); EXPECT_EQ(tree.nodes[3].opaque_end, 16u);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+}
+
+TEST_F(BehaviorRead, ProcedureSimultaneousReadsFlagOverrideAfterItsChildren) {
+  write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Simultaneous")}, {"CITC", words({0})}, {"PRCB", words({1, 0})},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Follow")}, {"PFO2", std::vector<std::byte>(16)}, {"POBA", {}}}}});
+  const auto env = load(); const auto tree = fo4::env::decode_package_procedure(*record(env).record);
+  EXPECT_TRUE(tree.decoded); EXPECT_EQ(tree.region_end, 8u); ASSERT_EQ(tree.nodes.size(), 2u);
+  EXPECT_EQ(tree.nodes[0].name, "Simultaneous"); EXPECT_EQ(tree.nodes[0].children, (std::vector<std::size_t>{1}));
+  EXPECT_EQ(tree.nodes[1].name, "Follow"); EXPECT_EQ(tree.nodes[1].opaque_begin, 7u); EXPECT_EQ(tree.nodes[1].opaque_end, 7u);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+}
+
+TEST_F(BehaviorRead, ProcedureLeafCountsEveryConditionAndItsOperands) {
+  write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Procedure")}, {"CITC", words({2})}, {"CTDA", condition(14)},
+    {"CIS1", text("operand")}, {"CTDA", condition(15)}, {"CIS2", text("second")}, {"PNAM", text("Sit")}, {"POBA", {}}}}});
+  const auto env = load(); const auto tree = fo4::env::decode_package_procedure(*record(env).record);
+  EXPECT_TRUE(tree.decoded); EXPECT_EQ(tree.region_end, 8u); ASSERT_EQ(tree.nodes.size(), 1u);
+  EXPECT_EQ(tree.nodes[0].condition_count, 2u); EXPECT_EQ(tree.nodes[0].name, "Sit");
+}
+
+TEST_F(BehaviorRead, ProcedureTreeFallsBackToOneOpaqueRegionForUnknownNamesAndTruncatedCounters) {
+  write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Sprint")}, {"CITC", words({0})}, {"POBA", {}}}},
+    {"PACK", 0x801, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Dance")}, {"POBA", {}}}},
+    {"PACK", 0x802, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Sequence")}, {"CITC", words({0})}, {"PRCB", words({1})}, {"POBA", {}}}}});
+  const auto env = load();
+  const std::pair<std::uint32_t, std::size_t> cases[] = {{0x800, 3}, {0x801, 4}, {0x802, 4}};
+  for (const auto& [id, end] : cases) {
+    const auto tree = fo4::env::decode_package_procedure(*record(env, id).record);
+    EXPECT_FALSE(tree.decoded) << std::hex << id; EXPECT_TRUE(tree.nodes.empty()); EXPECT_TRUE(tree.inputs.empty());
+    EXPECT_EQ(tree.region_begin, 1u); EXPECT_EQ(tree.region_end, end);
+  }
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+}
+
+TEST_F(BehaviorRead, ProcedureFlagOverrideAfterLeafInsideSequenceIsOptional) {
+  write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Sequence")}, {"CITC", words({0})}, {"PRCB", words({2, 0})},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Travel")}, {"PFO2", std::vector<std::byte>(16)},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Sit")}, {"POBA", {}}}}});
+  const auto env = load(); const auto tree = fo4::env::decode_package_procedure(*record(env).record);
+  EXPECT_TRUE(tree.decoded); EXPECT_EQ(tree.region_end, 11u); ASSERT_EQ(tree.nodes.size(), 3u);
+  EXPECT_EQ(tree.nodes[0].children, (std::vector<std::size_t>{1, 2}));
+  EXPECT_EQ(tree.nodes[1].name, "Travel"); EXPECT_EQ(tree.nodes[1].opaque_begin, 7u); EXPECT_EQ(tree.nodes[1].opaque_end, 7u);
+  EXPECT_EQ(tree.nodes[2].name, "Sit"); EXPECT_EQ(tree.nodes[2].opaque_begin, 11u); EXPECT_EQ(tree.nodes[2].opaque_end, 11u);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+}
+
+TEST_F(BehaviorRead, ProcedureSimultaneousWithoutFlagOverrideDecodes) {
+  write({{"PACK", 0x800, {{"PKCU", words({0, 0, 9})}, {"ANAM", text("Simultaneous")}, {"CITC", words({0})}, {"PRCB", words({2, 0})},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("UseWeapon")},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Travel")}, {"POBA", {}}}}});
+  const auto env = load(); const auto tree = fo4::env::decode_package_procedure(*record(env).record);
+  EXPECT_TRUE(tree.decoded); EXPECT_EQ(tree.region_end, 10u); ASSERT_EQ(tree.nodes.size(), 3u);
+  EXPECT_EQ(tree.nodes[0].name, "Simultaneous"); EXPECT_EQ(tree.nodes[0].children, (std::vector<std::size_t>{1, 2}));
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+}
+
+TEST_F(BehaviorRead, ProcedureDataInputsKeepPreTreeIndexesAndTheTrailingNameTable) {
+  const auto inputs = std::vector<Sub>{{"PKCU", words({2, 0, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})}, {"ANAM", text("Bool")},
+    {"CNAM", one(1)}, {"UNAM", one(0)}, {"UNAM", one(1)}};
+  const auto tree = std::vector<Sub>{{"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Sit")}};
+  const auto table = std::vector<Sub>{{"UNAM", one(0)}, {"BNAM", text("Target")}, {"PNAM", words({1})}, {"UNAM", one(1)}, {"POBA", {}}};
+  auto with_marker = inputs; with_marker.push_back({"XNAM", one(7)});
+  with_marker.insert(with_marker.end(), tree.begin(), tree.end()); with_marker.insert(with_marker.end(), table.begin(), table.end());
+  auto without_marker = inputs; without_marker.insert(without_marker.end(), tree.begin(), tree.end());
+  without_marker.insert(without_marker.end(), table.begin(), table.end());
+  const std::vector<Sub> older = {{"PKCU", words({2, 0, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})}, {"ANAM", text("Bool")},
+    {"CNAM", one(1)}, {"UNAM", one(0)}, {"BNAM", text("Target")}, {"PNAM", words({1})}, {"UNAM", one(1)},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Sit")}, {"POBA", {}}};
+  const auto mismatched = std::vector<Sub>{{"PKCU", words({2, 0, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})}, {"ANAM", text("Bool")},
+    {"CNAM", one(1)}, {"UNAM", one(0)}, {"POBA", {}}};
+  write({{"PACK", 0x800, with_marker}, {"PACK", 0x801, without_marker}, {"PACK", 0x802, mismatched}, {"PACK", 0x803, older}});
+  const auto env = load();
+  const auto marked = fo4::env::decode_package_procedure(*record(env, 0x800).record);
+  EXPECT_TRUE(marked.decoded); ASSERT_EQ(marked.inputs.size(), 2u);
+  EXPECT_EQ(marked.inputs[0].type_name, "Int"); EXPECT_EQ(marked.inputs[0].subrecord_begin, 1u); EXPECT_EQ(marked.inputs[0].subrecord_end, 3u); EXPECT_EQ(marked.inputs[0].index, 0);
+  EXPECT_EQ(marked.inputs[1].type_name, "Bool"); EXPECT_EQ(marked.inputs[1].subrecord_begin, 3u); EXPECT_EQ(marked.inputs[1].subrecord_end, 5u); EXPECT_EQ(marked.inputs[1].index, 1);
+  EXPECT_EQ(marked.marker, 7u); EXPECT_EQ(marked.region_end, 15u); ASSERT_EQ(marked.nodes.size(), 1u); EXPECT_EQ(marked.nodes[0].name, "Sit");
+  const auto unmarked = fo4::env::decode_package_procedure(*record(env, 0x801).record);
+  EXPECT_TRUE(unmarked.decoded); EXPECT_EQ(unmarked.inputs.size(), 2u); EXPECT_FALSE(unmarked.marker); EXPECT_EQ(unmarked.region_end, 14u);
+  const auto bad = fo4::env::decode_package_procedure(*record(env, 0x802).record);
+  EXPECT_FALSE(bad.decoded); EXPECT_TRUE(bad.inputs.empty()); EXPECT_EQ(bad.region_end, 6u);
+  const auto old = fo4::env::decode_package_procedure(*record(env, 0x803).record);
+  EXPECT_TRUE(old.decoded); ASSERT_EQ(old.inputs.size(), 2u); EXPECT_EQ(old.inputs[1].index, 1); EXPECT_EQ(old.region_end, 12u);
+  EXPECT_EQ(fo4::write_plugin(env.plugin(0)), fo4::test::original_bytes(env.plugin(0)));
+}
+
+TEST_F(BehaviorRead, ProcedureCAbiExposesFlatNodesInputsAndNameTables) {
+  write({{"PACK", 0x800, {{"PKCU", words({1, 0, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})}, {"UNAM", one(0)},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Travel")}, {"POBA", {}}}}});
+  const auto path_text = path.string(); const char* paths[] = {path_text.c_str()}; radicle_env* raw_env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_env), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(raw_env, radicle_env_destroy);
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(raw_env, radicle_form_key{"Behavior.esm", 0x800}, &record), RADICLE_STATUS_OK);
+  const radicle_package_procedure_tree* raw_tree = nullptr;
+  ASSERT_EQ(radicle_package_procedure_decode(raw_env, record, &raw_tree), RADICLE_STATUS_OK);
+  const std::unique_ptr<const radicle_package_procedure_tree, decltype(&radicle_package_procedure_free)> tree(raw_tree, radicle_package_procedure_free);
+  EXPECT_EQ(tree->decoded, 1); EXPECT_EQ(tree->region_begin, 1u); EXPECT_EQ(tree->region_end, 7u); EXPECT_EQ(tree->has_marker, 0);
+  ASSERT_EQ(tree->input_count, 1u); EXPECT_STREQ(tree->inputs[0].type_name, "Int"); EXPECT_EQ(tree->inputs[0].subrecord_end, 3u); EXPECT_EQ(tree->inputs[0].index, 0);
+  ASSERT_EQ(tree->node_count, 1u); EXPECT_EQ(tree->nodes[0].is_leaf, 1); EXPECT_STREQ(tree->nodes[0].name, "Travel");
+  EXPECT_EQ(tree->nodes[0].opaque_begin, 7u); EXPECT_EQ(tree->nodes[0].opaque_end, 7u); EXPECT_EQ(tree->nodes[0].children_count, 0u);
+  EXPECT_STREQ(radicle_package_location_type_name(0), "near reference"); EXPECT_EQ(radicle_package_location_type_name(15), nullptr);
+  EXPECT_STREQ(radicle_package_target_type_name(8), "alias collection item"); EXPECT_EQ(radicle_package_target_type_name(-1), nullptr);
+}
+
+TEST_F(BehaviorRead, ProcedureCAbiRefusesANonPackRecordLikePackDecode) {
+  write({{"IDLE", 0x800, {{"PKCU", words({1, 0, 9})}, {"ANAM", text("Procedure")}}}});
+  const auto path_text = path.string(); const char* paths[] = {path_text.c_str()}; radicle_env* raw_env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_env), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(raw_env, radicle_env_destroy);
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(raw_env, radicle_form_key{"Behavior.esm", 0x800}, &record), RADICLE_STATUS_OK);
+  const radicle_package_info* package = nullptr;
+  EXPECT_EQ(radicle_package_decode(raw_env, record, &package), RADICLE_STATUS_PARSE_ERROR);
+  radicle_package_procedure_tree sentinel{};
+  const radicle_package_procedure_tree* tree = &sentinel;
+  EXPECT_EQ(radicle_package_procedure_decode(raw_env, record, &tree), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(tree, nullptr);
+}
+
+TEST_F(BehaviorRead, ProcedureCAbiRefusesForeignEnvironmentAndNullArguments) {
+  write({{"PACK", 0x800, {{"PKCU", words({1, 0, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})}, {"UNAM", one(0)},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Travel")}, {"POBA", {}}}}});
+  const auto path_text = path.string(); const char* paths[] = {path_text.c_str()};
+  radicle_env* raw_env = nullptr; radicle_env* raw_other = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_env), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_other), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(raw_env, radicle_env_destroy);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> other(raw_other, radicle_env_destroy);
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(raw_env, radicle_form_key{"Behavior.esm", 0x800}, &record), RADICLE_STATUS_OK);
+  radicle_package_procedure_tree sentinel{};
+  const radicle_package_procedure_tree* tree = &sentinel;
+  EXPECT_EQ(radicle_package_procedure_decode(raw_other, record, &tree), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(tree, nullptr);
+  EXPECT_EQ(radicle_package_procedure_decode(nullptr, record, &tree), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_package_procedure_decode(raw_env, nullptr, &tree), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_package_procedure_decode(raw_env, record, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_package_procedure_free(nullptr);
+  const radicle_package_procedure_tree* raw_tree = nullptr;
+  ASSERT_EQ(radicle_package_procedure_decode(raw_env, record, &raw_tree), RADICLE_STATUS_OK);
+  const std::unique_ptr<const radicle_package_procedure_tree, decltype(&radicle_package_procedure_free)> decoded(raw_tree, radicle_package_procedure_free);
+  EXPECT_EQ(decoded->node_count, 1u);
+}
+
+TEST(PackageProcedure, ExpectedInputCountsMatchTheVerifiedLeaves) {
+  EXPECT_EQ(fo4::env::expected_input_count("Travel"), 8u); EXPECT_EQ(fo4::env::expected_input_count("Sandbox"), 16u);
+  EXPECT_EQ(fo4::env::expected_input_count("Sit"), 1u); EXPECT_EQ(fo4::env::expected_input_count("Sleep"), 1u);
+  EXPECT_EQ(fo4::env::expected_input_count("Follow"), 6u); EXPECT_EQ(fo4::env::expected_input_count("Wait"), 2u);
+  EXPECT_EQ(fo4::env::expected_input_count("Say"), 5u); EXPECT_FALSE(fo4::env::expected_input_count("Eat"));
 }
 
 }

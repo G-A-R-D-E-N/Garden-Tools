@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Text;
+using Radicle.Interop;
+using Radicle.Interop.Native;
 
 namespace OpenCommonwealth.Services.Archive;
 
 public sealed class Ba2 : IDisposable
 {
-    public sealed record Entry(int Index, string Name, long Offset, uint Packed, uint Unpacked)
+    public sealed record Entry(int Index, string Name, uint Unpacked)
     {
 
         public string Folder => Name.Contains('/') ? Name[..Name.LastIndexOf('/')] : "";
@@ -18,19 +18,17 @@ public sealed class Ba2 : IDisposable
         public override string ToString() => $"{Name} ({Unpacked} bytes)";
     }
 
-    private readonly FileStream _stream;
-    private readonly BinaryReader _reader;
+    private readonly Ba2Archive _archive;
 
     public string Path { get; }
     public uint Version { get; }
     public IReadOnlyList<Entry> Entries { get; }
 
-    private Ba2(string path, uint version, FileStream stream, BinaryReader reader, List<Entry> entries)
+    private Ba2(string path, uint version, Ba2Archive archive, List<Entry> entries)
     {
         Path = path;
         Version = version;
-        _stream = stream;
-        _reader = reader;
+        _archive = archive;
         Entries = entries;
     }
 
@@ -40,91 +38,66 @@ public sealed class Ba2 : IDisposable
     public static Ba2 Open(string archivePath)
     {
         OpenCountForTest++;
-        var stream = File.OpenRead(archivePath);
-        var reader = new BinaryReader(stream);
+        string name = System.IO.Path.GetFileName(archivePath);
+        if (!File.Exists(archivePath)) throw new FileNotFoundException($"{name} was not found", archivePath);
+        Ba2Archive? archive = null;
         try
         {
-        string magic = new(reader.ReadChars(4));
-        uint version = reader.ReadUInt32();
-        string kind = new(reader.ReadChars(4));
-        uint count = reader.ReadUInt32();
-        ulong nameTableOffset = reader.ReadUInt64();
+            archive = Ba2Archive.Open(archivePath);
+            if (archive.Kind != Ba2Kind.General)
+                throw new InvalidDataException(
+                    $"{name} is a DX10 archive, not GNRL. Textures are stored differently and nothing " +
+                    "here reads them.");
+            int count = archive.Count;
+            if (count > 0 && !archive.HasNameTable)
+                throw new InvalidDataException($"{name} has no name table, so its files cannot be named");
 
-        string name = System.IO.Path.GetFileName(archivePath);
-        if (magic != "BTDX")
-            throw new InvalidDataException($"{name} is not a BA2");
-        if (kind != "GNRL")
-            throw new InvalidDataException(
-                $"{name} is a {kind} archive, not GNRL. Textures are stored differently and nothing " +
-                "here reads them.");
-        if (count > 1_000_000)
-            throw new InvalidDataException($"{name} declares an implausible number of files");
-        long nameTable = (long)nameTableOffset;
-        if (nameTable < 0 || nameTable > stream.Length)
-            throw new InvalidDataException($"{name} has a name table outside the file");
+            var entries = new List<Entry>(count);
+            for (int i = 0; i < count; i++)
+            {
+                Ba2Entry native = archive.Entry(i);
+                string entryName = native.Path.Replace('\\', '/');
+                if (HasRootedComponent(entryName))
+                    throw new InvalidDataException($"{name} contains a rooted archive path: {entryName}");
+                if (entryName.Contains(':'))
+                    throw new InvalidDataException($"{name} contains an archive path with a colon: {entryName}");
+                if (native.UnpackedSize > uint.MaxValue)
+                    throw new InvalidDataException($"{name} entry {entryName} is larger than 4 GiB");
+                entries.Add(new Entry(i, entryName, (uint)native.UnpackedSize));
+            }
 
-        var offsets = new ulong[count];
-        var packed = new uint[count];
-        var unpacked = new uint[count];
-        for (int i = 0; i < count; i++)
-        {
-            reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32(); reader.ReadUInt32();
-            offsets[i] = reader.ReadUInt64();
-            packed[i] = reader.ReadUInt32();
-            unpacked[i] = reader.ReadUInt32();
-            reader.ReadUInt32();
+            return new Ba2(archivePath, archive.Version, archive, entries);
         }
-
-        stream.Position = nameTable;
-        var entries = new List<Entry>((int)count);
-        for (int i = 0; i < count; i++)
+        catch (RadicleException e)
         {
-            ushort length = reader.ReadUInt16();
-            if ((long)length > stream.Length - stream.Position)
-                throw new InvalidDataException($"{name} has a name table that runs past the end of the file");
-            string entryName = Encoding.UTF8.GetString(reader.ReadBytes(length)).Replace('\\', '/');
-            if (HasRootedComponent(entryName))
-                throw new InvalidDataException($"{name} contains a rooted archive path: {entryName}");
-            if (entryName.Contains(':'))
-                throw new InvalidDataException($"{name} contains an archive path with a colon: {entryName}");
-            entries.Add(new Entry(i, entryName, (long)offsets[i], packed[i], unpacked[i]));
+            archive?.Dispose();
+            throw new InvalidDataException(e.Message, e);
         }
-
-        foreach (var entry in entries)
+        catch (Exception e) when (IsNativeLoadFailure(e))
         {
-            long needed = entry.Packed != 0 ? entry.Packed : entry.Unpacked;
-            if (entry.Offset < 0 || needed < 0 || needed > stream.Length - entry.Offset)
-                throw new InvalidDataException($"{entry.Name} points outside the archive");
-        }
-
-        return new Ba2(archivePath, version, stream, reader, entries);
+            archive?.Dispose();
+            throw NativeLoadFailure(e);
         }
         catch
         {
-            reader.Dispose();
+            archive?.Dispose();
             throw;
         }
     }
 
     public byte[] Read(Entry entry)
     {
-        long wanted = entry.Packed != 0 ? entry.Packed : entry.Unpacked;
-        if (wanted < 0 || wanted > _stream.Length - entry.Offset)
-            throw new InvalidDataException($"{entry.Name} points outside the archive");
-        if (wanted > 1 << 30)
-            throw new InvalidDataException($"{entry.Name} declares an implausible packed size");
-
-        _stream.Position = entry.Offset;
-        var raw = new byte[wanted];
-        int got = 0;
-        while (got < wanted)
-        {
-            int n = _reader.Read(raw, got, (int)(wanted - got));
-            if (n == 0) throw new InvalidDataException($"{entry.Name} is truncated");
-            got += n;
-        }
-        return entry.Packed != 0 ? Inflate(raw, entry.Unpacked) : raw;
+        try { return _archive.Extract(entry.Index); }
+        catch (RadicleException e) { throw new InvalidDataException(e.Message, e); }
+        catch (Exception e) when (IsNativeLoadFailure(e)) { throw NativeLoadFailure(e); }
     }
+
+    internal static bool IsNativeLoadFailure(Exception e) =>
+        e is DllNotFoundException or BadImageFormatException or EntryPointNotFoundException or TypeInitializationException
+            or RadicleAbiMismatchException || e.InnerException is RadicleAbiMismatchException;
+
+    private static InvalidDataException NativeLoadFailure(Exception e) =>
+        new InvalidDataException("the Radicle native library could not be loaded: " + e.Message, e);
 
     public IEnumerable<Entry> Matching(string query, string extension = "")
     {
@@ -140,11 +113,7 @@ public sealed class Ba2 : IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        _reader.Dispose();
-        _stream.Dispose();
-    }
+    public void Dispose() => _archive.Dispose();
 
     public static string FlatFileName(string name) =>
         name.Replace('/', '_').Replace('\\', '_').Replace(':', '_');
@@ -204,31 +173,6 @@ public sealed class Ba2 : IDisposable
         foreach (string part in name.Split('/', StringSplitOptions.RemoveEmptyEntries))
             if (part.Length >= 2 && char.IsAsciiLetter(part[0]) && part[1] == ':') return true;
         return false;
-    }
-
-    private static byte[] Inflate(byte[] compressed, uint expectedUnpacked)
-    {
-        if (expectedUnpacked > 512 * 1024 * 1024)
-            throw new InvalidDataException($"an entry declares an implausible unpacked size");
-
-        using var input = new MemoryStream(compressed);
-        using var zlib = new ZLibStream(input, CompressionMode.Decompress);
-        var output = new byte[expectedUnpacked];
-        int got = 0;
-        while (got < expectedUnpacked)
-        {
-            int n = zlib.Read(output, got, (int)(expectedUnpacked - got));
-            if (n == 0) break;
-            got += n;
-        }
-
-        if (zlib.ReadByte() >= 0)
-            throw new InvalidDataException(
-                $"a stored file expands beyond its declared {expectedUnpacked} bytes");
-        if (got != expectedUnpacked)
-            throw new InvalidDataException(
-                $"a stored file ends before its declared {expectedUnpacked} bytes");
-        return output;
     }
 
     private static void RefuseLinkedComponents(string root, string target, string entryName)

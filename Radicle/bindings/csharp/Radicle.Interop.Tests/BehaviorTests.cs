@@ -90,4 +90,41 @@ public class BehaviorTests
         Assert.Null(idle.Previous); Assert.Equal("graph.hkx", idle.BehaviorGraph); Assert.Equal("event", idle.AnimationEvent); Assert.Equal("animation.hkx", idle.AnimationFile);
         var c = Assert.Single(idle.Conditions); Assert.Equal((ushort)14, c.Function); Assert.Equal(-7, c.Param1); Assert.Equal("operand", c.Parameter1String);
     }
+
+    [Fact]
+    public void PackageProcedureGetterCopiesInputsNodesLeafRangesAndNameTables()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Behavior.esm", Build(1, Array.Empty<string>(), Top("PACK", new Rec("PACK", 0x800, new[] {
+            ("PKCU", U32(2, 0, 9)), ("ANAM", Z("Int")), ("CNAM", U32(5)), ("ANAM", Z("Bool")), ("CNAM", new byte[] { 1 }),
+            ("UNAM", new byte[] { 0 }), ("UNAM", new byte[] { 1 }), ("XNAM", new byte[] { 7 }),
+            ("ANAM", Z("Sequence")), ("CITC", U32(1)), ("CTDA", Condition(14)), ("PRCB", U32(1, 0)), ("ANAM", Z("Procedure")),
+            ("CITC", U32(0)), ("PNAM", Z("Travel")), ("FNAM", U32(1)), ("UNAM", new byte[] { 0 }), ("BNAM", Z("Target")),
+            ("PNAM", U32(1)), ("POBA", Array.Empty<byte>()) }))));
+        PackageProcedureTree tree;
+        using (var env = RadicleEnvironment.Load(new[] { path })) tree = env.PackageProcedure(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
+        Assert.True(tree.Decoded); Assert.Equal((nuint)1, tree.RegionBegin); Assert.Equal((nuint)19, tree.RegionEnd); Assert.Equal((byte)7, tree.Marker);
+        Assert.Equal(2, tree.Inputs.Count); Assert.Equal("Int", tree.Inputs[0].TypeName); Assert.Equal((nuint)1, tree.Inputs[0].SubrecordBegin);
+        Assert.Equal((nuint)3, tree.Inputs[0].SubrecordEnd); Assert.Equal((byte)0, tree.Inputs[0].Index);
+        Assert.Equal("Bool", tree.Inputs[1].TypeName); Assert.Equal((byte)1, tree.Inputs[1].Index);
+        Assert.Equal(2, tree.Nodes.Count);
+        Assert.False(tree.Nodes[0].IsLeaf); Assert.Equal("Sequence", tree.Nodes[0].Name); Assert.Equal(1u, tree.Nodes[0].ConditionCount);
+        Assert.Equal(1u, tree.Nodes[0].ChildCount); Assert.Equal(0u, tree.Nodes[0].Flags); Assert.Equal(new nuint[] { 1 }, tree.Nodes[0].Children);
+        Assert.True(tree.Nodes[1].IsLeaf); Assert.Equal("Travel", tree.Nodes[1].Name); Assert.Null(tree.Nodes[1].Flags);
+        Assert.Equal((nuint)15, tree.Nodes[1].OpaqueBegin); Assert.Equal((nuint)16, tree.Nodes[1].OpaqueEnd);
+        Assert.Equal("near reference", RadicleEnvironment.PackageLocationTypeName(0)); Assert.Null(RadicleEnvironment.PackageLocationTypeName(15));
+        Assert.Equal("alias collection item", RadicleEnvironment.PackageTargetTypeName(8)); Assert.Null(RadicleEnvironment.PackageTargetTypeName(9));
+    }
+
+    [Fact]
+    public void PackageProcedureFallsBackToOneOpaqueRegionForUnregisteredLeafNames()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Behavior.esm", Build(1, Array.Empty<string>(), Top("PACK", new Rec("PACK", 0x800, new[] {
+            ("PKCU", U32(0, 0, 9)), ("ANAM", Z("Procedure")), ("CITC", U32(0)), ("PNAM", Z("Dance")), ("POBA", Array.Empty<byte>()) }))));
+        PackageProcedureTree tree;
+        using (var env = RadicleEnvironment.Load(new[] { path })) tree = env.PackageProcedure(env.Winner(new FormKey("Behavior.esm", 0x800))!.Value);
+        Assert.False(tree.Decoded); Assert.Empty(tree.Inputs); Assert.Empty(tree.Nodes); Assert.Null(tree.Marker);
+        Assert.Equal((nuint)1, tree.RegionBegin); Assert.Equal((nuint)4, tree.RegionEnd);
+    }
 }

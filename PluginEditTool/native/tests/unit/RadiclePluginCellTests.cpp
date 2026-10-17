@@ -155,6 +155,70 @@ std::vector<std::byte> sourcePlugin() {
     return out.bytes;
 }
 
+void writeModelBase(fo4::test::ByteWriter& out,
+                    std::string_view type,
+                    std::uint32_t formId,
+                    std::string_view subrecord,
+                    std::string model) {
+    const auto top = fo4::test::begin_group(out, type, 0);
+    const auto record = fo4::test::begin_record(out, type, 0, formId);
+    if (!model.empty()) {
+        model.push_back('\0');
+        fo4::test::write_subrecord(out, subrecord, std::string_view{model});
+    }
+    fo4::test::end_record(out, record);
+    fo4::test::end_group(out, top);
+}
+
+std::vector<std::byte> typedCellPlugin() {
+    fo4::test::ByteWriter out;
+    writeHeader(out, {});
+    writeModelBase(out, "STAT", 0x00000810u, "MODL", "Meshes\\StatFixture.nif");
+    writeModelBase(out, "MSTT", 0x00000811u, "MODL", "Meshes\\MsttFixture.nif");
+    writeModelBase(out, "FURN", 0x00000812u, "MODL", "Meshes\\FurnFixture.nif");
+    writeModelBase(out, "ACTI", 0x00000813u, "MODL", "Meshes\\ActiFixture.nif");
+    writeModelBase(out, "CONT", 0x00000814u, "MODL", "");
+    writeModelBase(out, "SCOL", 0x00000815u, "MODL", "Meshes\\ScolFixture.nif");
+    writeModelBase(out, "ARMO", 0x00000816u, "MOD2", "Armor\\ArmoFixture.nif");
+
+    const auto top = fo4::test::begin_group(out, "CELL", 0);
+    const auto block = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_block);
+    const auto subblock = beginGroupRaw(out, 0, fo4::GroupType::interior_cell_subblock);
+    const auto cell = fo4::test::begin_record(out, "CELL", 0, 0x00000800u);
+    const std::vector<std::byte> cellData{std::byte{1}, std::byte{0}};
+    fo4::test::write_subrecord(out, "DATA", cellData);
+    fo4::test::end_record(out, cell);
+
+    const auto children = beginGroupRaw(out, 0x00000800u, fo4::GroupType::cell_children);
+    const auto temporary = beginGroupRaw(
+        out, 0x00000800u, fo4::GroupType::cell_temporary_children);
+    for (std::uint32_t base = 0x00000810u; base <= 0x00000816u; ++base) {
+        const auto reference = fo4::test::begin_record(out, "REFR", 0, base + 0x10u);
+        fo4::test::ByteWriter name;
+        name.u32(base);
+        fo4::test::write_subrecord(out, "NAME", name.bytes);
+        fo4::test::ByteWriter transform;
+        for (int index = 0; index < 6; ++index) {
+            transform.f32(0.0f);
+        }
+        fo4::test::write_subrecord(out, "DATA", transform.bytes);
+        fo4::test::end_record(out, reference);
+    }
+    const auto hazard = fo4::test::begin_record(out, "PHZD", 0, 0x00000830u);
+    fo4::test::ByteWriter hazardTransform;
+    for (int index = 0; index < 6; ++index) {
+        hazardTransform.f32(0.0f);
+    }
+    fo4::test::write_subrecord(out, "DATA", hazardTransform.bytes);
+    fo4::test::end_record(out, hazard);
+    endGroupRaw(out, temporary);
+    endGroupRaw(out, children);
+    endGroupRaw(out, subblock);
+    endGroupRaw(out, block);
+    fo4::test::end_group(out, top);
+    return out.bytes;
+}
+
 std::vector<std::byte> patchPlugin() {
     fo4::test::ByteWriter out;
     writeHeader(out, {"Other.esm"});
@@ -262,4 +326,36 @@ TEST_CASE("Native cell transform creates a nested override before moving the ref
     REQUIRE(view.at("references").size() == 1);
     CHECK(view.at("references")[0].at("formKey") == "000801:Base.esm");
     CHECK(view.at("references")[0].at("position").at("x") == 100.0f);
+}
+
+TEST_CASE("Native cell takes each placed base's model from its type-aware primary model") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto basePath = root / "Base.esm";
+    writeBytes(basePath, typedCellPlugin());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({pluginEntry("Base.esm", basePath)})}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto view = parseStringResult(
+        backend.getPlacedReferences(nlohmann::json::array({"000800:Base.esm"})));
+    const auto& refs = view.at("references");
+    REQUIRE(refs.size() == 8);
+    CHECK(refs[0].at("baseType") == "Static");
+    CHECK(refs[0].at("modelPath") == "Meshes\\StatFixture.nif");
+    CHECK(refs[1].at("baseType") == "MovableStatic");
+    CHECK(refs[1].at("modelPath") == "Meshes\\MsttFixture.nif");
+    CHECK(refs[2].at("baseType") == "Furniture");
+    CHECK(refs[2].at("modelPath") == "Meshes\\FurnFixture.nif");
+    CHECK(refs[3].at("baseType") == "Activator");
+    CHECK(refs[3].at("modelPath") == "Meshes\\ActiFixture.nif");
+    CHECK(refs[4].at("baseType") == "Container");
+    CHECK(refs[4].at("modelPath") == "");
+    CHECK(refs[5].at("baseType") == "StaticCollection");
+    CHECK(refs[5].at("modelPath") == "");
+    CHECK(refs[6].at("modelPath") == "Armor\\ArmoFixture.nif");
+    CHECK(refs[7].at("recordType") == "PlacedTrap");
 }

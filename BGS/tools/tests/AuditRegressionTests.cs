@@ -352,11 +352,11 @@ public sealed class AuditRegressionTests
         writer.Write((uint)0);
         writer.Write((uint)0);
         writer.Write((uint)0);
-        writer.Write((uint)0);
+        writer.Write((uint)0x00100100);
         writer.Write(dataOffset);
         writer.Write((uint)0);
         writer.Write((uint)payload.Length);
-        writer.Write((uint)0);
+        writer.Write(0xBAADF00Du);
         writer.Write((ushort)name.Length);
         writer.Write(name);
         writer.Write(payload);

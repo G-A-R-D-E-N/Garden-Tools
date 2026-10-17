@@ -23,6 +23,7 @@ public:
 enum class PlacedReferenceKind {
   object,
   npc,
+  variant,
 };
 
 enum class PlacedReferenceCopyStatus {
@@ -52,16 +53,15 @@ struct PlacedReferenceView {
   bool deleted{false};
 };
 
-// Decodes the stable shared REFR/ACHR surfaces used by the cell viewer:
-// NAME (base form), DATA (P3 position + P3 rotation), optional XSCL, EDID and
-// the major-record deleted flag. Other placed-record families are intentionally
-// excluded until their on-disk contract is proven independently.
+// Decodes the shared placed-reference surfaces (REFR, ACHR, and the PARW, PBAR,
+// PBEA, PCON, PFLA, PGRE, PHZD, PMIS variants): NAME (base form), DATA (P3
+// position + P3 rotation), optional XSCL, EDID and the major-record deleted flag.
 std::optional<PlacedReferenceView> decode_placed_reference(
     const Plugin& plugin,
     const Record& record,
     bool persistent = false);
 
-// Returns REFR/ACHR records from the CELL's persistent and temporary child
+// Returns REFR, ACHR and variant records from the CELL's persistent and temporary child
 // groups. The CELL child-group label is resolved through the plugin's own
 // FormID context, so master-owned cell overrides are handled correctly.
 std::vector<PlacedReferenceView> placed_references_for_cell(
@@ -124,6 +124,27 @@ bool set_placed_reference_transform(
     Plugin& plugin,
     const FormKey& reference,
     const PositionRotation& transform);
+
+enum class PlacedReferenceMoveStatus {
+  moved,
+  relocated,
+  reference_missing,
+  target_cell_missing,
+};
+
+PlacedReferenceMoveStatus move_placed_reference(Plugin& plugin,
+                                                const FormKey& reference,
+                                                const PositionRotation& transform);
+
+struct PlacedReferenceCreation {
+  FormKey cell;
+  FormKey base;
+  PositionRotation transform{};
+  bool persistent{true};
+  bool initially_disabled{false};
+};
+
+FormKey create_placed_reference(Plugin& plugin, const PlacedReferenceCreation& creation);
 
 
 bool set_placed_reference_scale(Plugin& plugin, const FormKey& reference, std::optional<float> scale);

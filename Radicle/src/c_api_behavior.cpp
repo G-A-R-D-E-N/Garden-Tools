@@ -1,10 +1,13 @@
 #include "c_api_env_internal.hpp"
 #include "fo4/c_api_behavior.h"
 #include "fo4/environment/behavior.hpp"
+#include "fo4/environment/package_procedure.hpp"
 #include "fo4/text/encoding.hpp"
 
 #include <deque>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -32,6 +35,13 @@ struct PackageHolder {
   std::vector<radicle_form_key> idle_animations;
 };
 struct IdleHolder { radicle_idle_info view{}; ConditionStorage conditions; };
+struct ProcedureTreeHolder {
+  radicle_package_procedure_tree view{};
+  std::deque<std::string> names;
+  std::vector<radicle_package_procedure_input> inputs;
+  std::vector<radicle_package_procedure_node> nodes;
+  std::vector<std::vector<std::size_t>> children;
+};
 
 radicle_status invalid() { return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record and output required"); }
 
@@ -132,6 +142,54 @@ radicle_status radicle_idle_decode(const radicle_env* env, const radicle_record*
 
 void radicle_idle_free(const radicle_idle_info* idle) {
   if (idle) delete static_cast<IdleHolder*>(idle->internal);
+}
+
+radicle_status radicle_package_procedure_decode(const radicle_env* env, const radicle_record* record,
+                                                const radicle_package_procedure_tree** out_tree) {
+  clear_error();
+  if (!env || !record || !out_tree) return invalid();
+  *out_tree = nullptr;
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
+  if (to_ref(record)->record->header.signature != fo4::Signature::from_string("PACK")) {
+    return fail(RADICLE_STATUS_PARSE_ERROR, "expected a PACK record");
+  }
+  return guarded("unknown exception while decoding PACK procedure tree", [&] {
+    const auto t = fo4::env::decode_package_procedure(*to_ref(record)->record);
+    auto h = std::make_unique<ProcedureTreeHolder>(); auto& v = h->view;
+    v.decoded = t.decoded; v.region_begin = t.region_begin; v.region_end = t.region_end;
+    if (t.marker) { v.has_marker = 1; v.marker = *t.marker; }
+    for (const auto& input : t.inputs) {
+      h->names.push_back(input.type_name);
+      h->inputs.push_back({h->names.back().c_str(), input.subrecord_begin, input.subrecord_end, input.index});
+    }
+    for (const auto& node : t.nodes) {
+      h->names.push_back(node.name);
+      h->nodes.push_back({node.kind == fo4::env::PackageProcedureKind::leaf, h->names.back().c_str(), node.condition_count,
+          node.child_count, node.flags.has_value(), node.flags.value_or(0), node.opaque_begin, node.opaque_end, nullptr,
+          node.children.size()});
+      h->children.push_back(node.children);
+    }
+    for (std::size_t i = 0; i < h->nodes.size(); ++i) h->nodes[i].children = h->children[i].data();
+    v.inputs = h->inputs.data(); v.input_count = h->inputs.size();
+    v.nodes = h->nodes.data(); v.node_count = h->nodes.size(); v.internal = h.get();
+    *out_tree = &h.release()->view; return RADICLE_STATUS_OK;
+  });
+}
+
+void radicle_package_procedure_free(const radicle_package_procedure_tree* tree) {
+  if (tree) delete static_cast<ProcedureTreeHolder*>(tree->internal);
+}
+
+const char* radicle_package_location_type_name(int32_t type) {
+  if (type < 0 || type > static_cast<int32_t>(fo4::env::PackageLocationType::alias_collection_item)) return nullptr;
+  return fo4::env::package_location_type_name(static_cast<fo4::env::PackageLocationType>(type));
+}
+
+const char* radicle_package_target_type_name(int32_t type) {
+  if (type < 0 || type > static_cast<int32_t>(fo4::env::PackageTargetType::alias_collection_item)) return nullptr;
+  return fo4::env::package_target_type_name(static_cast<fo4::env::PackageTargetType>(type));
 }
 
 }

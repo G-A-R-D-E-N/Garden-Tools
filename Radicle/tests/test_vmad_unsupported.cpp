@@ -150,6 +150,26 @@ fo4::test::ByteWriter object_word_vmad(std::uint16_t format, std::uint16_t word)
   return vmad;
 }
 
+fo4::test::ByteWriter quest_alias_word_vmad(std::uint16_t format, std::uint16_t word) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(format);
+  vmad.u16(0);
+  vmad.u8(0);
+  vmad.u16(0);
+  vmad.u16(0);
+  vmad.u16(1);
+  if (format == 2) vmad.u16(word);
+  if (format == 1) vmad.u32(0x0200009A);
+  vmad.u16(3);
+  if (format == 1) vmad.u16(word);
+  if (format == 2) vmad.u32(0x0200009A);
+  vmad.u16(0xFFFF);
+  vmad.u16(format);
+  vmad.u16(0);
+  return vmad;
+}
+
 }
 
 TEST(Vmad, UnexposedScalarObjectWordsStopTheTypedReader) {
@@ -413,4 +433,149 @@ TEST(Vmad, EmptyVariableArrayDoesNotPermitUnknownTailOrTruncatedCountRemap) {
     EXPECT_TRUE(fo4::vmad_coverage(truncated, record->header.signature).failed);
     EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(truncated, record->header.signature).has_value());
   }
+}
+
+TEST(Vmad, QuestAliasUnusedWordsStopTheScanPath) {
+  for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
+    for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
+      SCOPED_TRACE("format=" + std::to_string(format) + " word=" + std::to_string(word));
+      const auto vmad = quest_alias_word_vmad(format, word);
+      const auto coverage = fo4::vmad_coverage(vmad.bytes, fo4::sig_qust);
+      EXPECT_EQ(coverage.unsupported, word != 0);
+      EXPECT_EQ(coverage.complete(), word == 0);
+      const auto offsets = fo4::vmad_formid_offsets_for_remap(vmad.bytes, fo4::sig_qust);
+      EXPECT_EQ(offsets.has_value(), word == 0);
+      if (word == 0) {
+        ASSERT_TRUE(offsets.has_value());
+        ASSERT_EQ(offsets->size(), 1u);
+        EXPECT_EQ((*offsets)[0], vmad.bytes.size() - (format == 2 ? 10u : 14u));
+      }
+    }
+  }
+}
+
+TEST(Vmad, QuestAliasUnusedWordsStopTheTypedReader) {
+  for (const auto format : {std::uint16_t{1}, std::uint16_t{2}}) {
+    for (const auto word : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{0xFFFF}}) {
+      SCOPED_TRACE("format=" + std::to_string(format) + " word=" + std::to_string(word));
+      const auto vmad = quest_alias_word_vmad(format, word);
+      const auto extras = fo4::read_quest_vmad_extras(
+          std::span<const std::byte>(vmad.bytes).subspan(6), static_cast<std::int16_t>(format));
+      EXPECT_EQ(extras.unsupported, word != 0);
+      if (word == 0) {
+        EXPECT_TRUE(extras.fully_consumed);
+        ASSERT_EQ(extras.aliases.size(), 1u);
+        EXPECT_EQ(extras.aliases[0].alias_id, 3);
+      }
+    }
+  }
+}
+
+TEST(Vmad, VariablePropertyStopsTheScriptAndLeavesFollowingBytesUninterpreted) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "VariableScript");
+  vmad.u8(0);
+  vmad.u16(3);
+  wstring(vmad, "Before");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(7);
+  wstring(vmad, "Dynamic");
+  vmad.u8(6);
+  vmad.u8(1);
+  wstring(vmad, "After");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(9);
+  const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_TRUE(scripts.unsupported);
+  EXPECT_EQ(scripts.trailing_bytes, 0u);
+  ASSERT_EQ(scripts.scripts.size(), 1u);
+  ASSERT_EQ(scripts.scripts[0].properties.size(), 1u);
+  EXPECT_EQ(scripts.scripts[0].properties[0].name, "Before");
+  EXPECT_EQ(scripts.scripts[0].properties[0].integer, 7);
+  const auto refr = fo4::Signature::from_string("REFR");
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, refr).unsupported);
+  EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(vmad.bytes, refr).has_value());
+}
+
+TEST(Vmad, VariablePropertyRefusesTheWholeVmadIncludingLaterScriptsAndTail) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(2);
+  wstring(vmad, "FirstScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "Dynamic");
+  vmad.u8(6);
+  vmad.u8(1);
+  wstring(vmad, "SecondScript");
+  vmad.u8(0);
+  vmad.u16(1);
+  wstring(vmad, "Target");
+  vmad.u8(1);
+  vmad.u8(1);
+  object_v2(vmad, 0x0200009A);
+  vmad.u8(0xAB);
+  vmad.u8(0xCD);
+  const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_TRUE(scripts.unsupported);
+  ASSERT_EQ(scripts.scripts.size(), 1u);
+  EXPECT_EQ(scripts.scripts[0].name, "FirstScript");
+  EXPECT_TRUE(scripts.scripts[0].properties.empty());
+  const auto refr = fo4::Signature::from_string("REFR");
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, refr).unsupported);
+  EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(vmad.bytes, refr).has_value());
+
+  auto out = plugin_with_masters();
+  const auto group = fo4::test::begin_group(out, "ACTI", 0);
+  const auto record = fo4::test::begin_record(out, "ACTI", 0, 0x03000800);
+  fo4::test::write_subrecord(out, "VMAD", vmad.bytes);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  const auto plugin = fo4::read_plugin(out.bytes, "VariablePatch.esp");
+  EXPECT_THROW(
+      {
+        fo4::remap_plugin_masters(
+            plugin,
+            {fo4::PluginKey::from_filename("Fallout4.esm"),
+             fo4::PluginKey::from_filename("KeepMe.esm")});
+      },
+      fo4::FormIdError);
+  EXPECT_EQ(fo4::write_plugin(plugin), out.bytes);
+}
+
+TEST(Vmad, EmptyVariableArrayThenTailParsesTheTailAsTrailingBytes) {
+  fo4::test::ByteWriter vmad;
+  vmad.u16(5);
+  vmad.u16(2);
+  vmad.u16(1);
+  wstring(vmad, "VariableScript");
+  vmad.u8(0);
+  vmad.u16(2);
+  wstring(vmad, "Before");
+  vmad.u8(3);
+  vmad.u8(1);
+  vmad.u32(7);
+  wstring(vmad, "Empty");
+  vmad.u8(16);
+  vmad.u8(1);
+  vmad.u32(0);
+  vmad.u8(0xEF);
+  vmad.u8(0x01);
+  const auto scripts = fo4::read_vmad_scripts(vmad.bytes);
+  EXPECT_FALSE(scripts.unsupported);
+  EXPECT_EQ(scripts.trailing_bytes, 2u);
+  ASSERT_EQ(scripts.scripts.size(), 1u);
+  ASSERT_EQ(scripts.scripts[0].properties.size(), 2u);
+  EXPECT_EQ(scripts.scripts[0].properties[0].integer, 7);
+  EXPECT_EQ(scripts.scripts[0].properties[1].type, 16);
+  EXPECT_EQ(scripts.scripts[0].properties[1].element_count, 0u);
+  const auto actor = fo4::Signature::from_string("ACTI");
+  EXPECT_TRUE(fo4::vmad_coverage(vmad.bytes, actor).trailing_data);
+  EXPECT_FALSE(fo4::vmad_formid_offsets_for_remap(vmad.bytes, actor).has_value());
 }

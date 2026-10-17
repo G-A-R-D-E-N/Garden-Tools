@@ -47,7 +47,8 @@ The format was established by requiring byte-identical reconstruction of real fi
 transcribing a specification:
 
 - The `.pex` writer and reader were built as a pair and held to byte identity. Corpus sweeps are
-  opt-in on `FO4RE_PEX_CORPUS` and no-op when the variable is unset, so a bare checkout stays green.
+  opt-in on `FO4RE_PEX_CORPUS` (the C# and native suites) or `FO4_PEX_CORPUS` (Radicle's gate), and
+  no-op when unset, so a bare checkout stays green.
   The recorded round trip is 5,976 files found, 4,581 read, 4,581 byte-identical, 0 differing
   (`PluginEditTool/docs/internal/PAPYRUS.md`, "What is measured, and how").
 - Public Papyrus documentation was used where it could settle a language or statement fact. Documented

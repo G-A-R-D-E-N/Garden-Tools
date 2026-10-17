@@ -120,4 +120,28 @@ TEST_F(VegetationRead, PresentGrassDataUsesZeroFilledPrefixAndTreeKeepsOtherLeng
   }
 }
 
+TEST_F(VegetationRead, WaterFilterIsActiveOnlyForModesUpToFive) {
+  fo4::env::GrassData grass;
+  for (const std::uint32_t mode : {0u, 1u, 2u, 3u, 4u, 5u}) {
+    grass.water_type = mode;
+    EXPECT_TRUE(grass.water_filter_active()) << mode;
+  }
+  for (const std::uint32_t mode : {6u, 7u, 0x80000000u, 0xFFFFFFFFu}) {
+    grass.water_type = mode;
+    EXPECT_FALSE(grass.water_filter_active()) << mode;
+  }
+}
+
+TEST_F(VegetationRead, RuntimeLandscapeGrassViewDropsNullLinksAndKeepsStoredOrder) {
+  write({{"LTEX", 0x803, {{"GNAM", words({0x800})}, {"GNAM", words({0})}, {"GNAM", words({0x801})}}}});
+  const auto env = load();
+  const auto stored = fo4::env::decode_landscape_grasses(env, record(env, 0x803));
+  ASSERT_EQ(stored.size(), 3u);
+  const auto view = fo4::env::landscape_grasses_runtime_view(env, record(env, 0x803));
+  ASSERT_EQ(view.size(), 2u);
+  EXPECT_EQ(view[0], stored[0]);
+  EXPECT_EQ(view[1], stored[2]);
+  EXPECT_EQ(view[1].local().value(), 0x801u);
+}
+
 }

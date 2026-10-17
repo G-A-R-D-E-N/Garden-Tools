@@ -53,8 +53,9 @@ Build the native `.deb` with:
 PluginEditTool/packaging/linux/build-deb.sh 1.0.0
 ```
 
-or install a package produced by that script. The Linux desktop uses WebKitGTK and the same C++
-backend as Windows.
+or install a package produced by that script. Linux has no embedded window: `fo4recordeditor` starts
+the same C++ backend, serves the UI on a loopback port and opens it in your default browser. See
+[docs/internal/RUNNING_ON_LINUX.md](docs/internal/RUNNING_ON_LINUX.md).
 
 A few optional helper tools such as texconv, Archive2, PapyrusCompiler, or xWMAEncode may still be
 Windows-only. Wine can be useful for panels that invoke those external programs. Plugin editing,
@@ -89,7 +90,7 @@ like this:
 
 - `--mcp` runs the C++ host headless as a stdio MCP server.
 - `--mo2 <instance>` points it at an MO2 instance and active profile.
-- `--data <folder>` can be used instead for a plain Data-folder setup.
+- Without `--mo2` the server starts empty; the `open_plugin` tool loads a plugin by path.
 
 The editor's AI panel is a handoff panel for this native MCP workflow. Actions such as
 `Ask AI: what breaks?` place their generated prompt there for copying into an MCP-connected client.
@@ -140,6 +141,14 @@ Build prerequisites:
 Build the UI and native host with `publish.bat`, or create a release zip with `package.ps1`.
 Both scripts build C++ with CMake and do not invoke `dotnet`.
 
+`publish.bat [deploy-folder]` also copies the build into that folder (for example an MO2 tools
+folder); the folder can come from `FO4IDE_DEPLOY_DIR` instead, and with neither it only builds.
+`package.ps1` bundles optional helper programs from locations you pass as parameters or environment
+variables: `-NiftoolPath` (`NIFTOOL_PATH`), `-TexconvPath` (`TEXCONV_PATH`), `-CkWikiPath`
+(`CK_WIKI_PATH`), `-AudioToolsDir` (`FO4IDE_AUDIO_TOOLS_DIR`) and, with `-IncludeBaseScripts`,
+`-BaseScriptsPath` (`FO4IDE_BASE_SCRIPTS_DIR`). Any that is unset is skipped with a warning, and the
+package still works without it.
+
 A direct native build is also available:
 
 ```powershell
@@ -150,12 +159,13 @@ cmake --build native/build/release --config Release --target fo4ide
 
 ### Linux
 
-Install a C++23 toolchain, CMake/Ninja, Python 3, Node/npm, and WebKitGTK development packages,
-then run `packaging/linux/build-deb.sh` or configure `native/` directly with CMake.
+Install a C++23 toolchain, CMake/Ninja, Python 3 and Node/npm (plus `dpkg-deb` and `fakeroot` for the
+`.deb`), then run `packaging/linux/build-deb.sh` or configure `native/` directly with CMake. No GTK or
+WebKit packages are needed.
 
 For architecture and plugin-format work, start at
 [docs/internal/README.md](docs/internal/README.md) and
-[docs/internal/KNOWLEDGE.md](docs/internal/KNOWLEDGE.md).
+[docs/internal/ARCHITECTURE.md](docs/internal/ARCHITECTURE.md).
 
 ## License
 

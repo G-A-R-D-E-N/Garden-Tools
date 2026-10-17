@@ -4,10 +4,12 @@ setlocal EnableExtensions EnableDelayedExpansion
 REM Builds and deploys the native C++ FO4RecordEditor host.
 REM Requires Visual Studio 2022 C++ tools, CMake, Python 3, Node/npm, and internet
 REM access for pinned CMake FetchContent dependencies. No .NET SDK/runtime is used.
+REM Usage: publish.bat [deploy-folder]. The folder can also come from FO4IDE_DEPLOY_DIR; with neither, the build is made but not copied anywhere.
 
 set "ROOT=%~dp0"
 set "NATIVE_BUILD=%ROOT%native\build\publish-win-x64"
-set "DEPLOY=E:\Modlists\Fallen World Alpha 2\Tools\FO4Editor"
+set "DEPLOY=%~1"
+if not defined DEPLOY set "DEPLOY=%FO4IDE_DEPLOY_DIR%"
 
 pushd "%ROOT%"
 
@@ -68,11 +70,13 @@ if not defined NATIVE_EXE (
 
 echo Native executable: !NATIVE_EXE!
 
-if exist "%DEPLOY%\" (
-  echo Deploying to MO2 Tools folder: %DEPLOY%
+if not defined DEPLOY (
+  echo No deploy folder given; skipping the deploy step. Pass one as the first argument or set FO4IDE_DEPLOY_DIR.
+) else if exist "%DEPLOY%\" (
+  echo Deploying to MO2 Tools folder: !DEPLOY!
   copy /Y "!NATIVE_EXE!" "%DEPLOY%\FO4RecordEditor.exe" >nul
   if errorlevel 1 (
-    echo Failed to copy FO4RecordEditor.exe to %DEPLOY%.
+    echo Failed to copy FO4RecordEditor.exe to !DEPLOY!.
     popd
     exit /b 1
   )
@@ -86,7 +90,9 @@ if exist "%DEPLOY%\" (
     exit /b 1
   )
 ) else (
-  echo WARNING: deploy folder does not exist: %DEPLOY%
+  echo Deploy folder does not exist: !DEPLOY!
+  popd
+  exit /b 1
 )
 
 echo.
@@ -94,7 +100,7 @@ echo ============================================================
 echo Native FO4RecordEditor published successfully.
 echo Executable: !NATIVE_EXE!
 echo No .NET runtime is required.
-echo Launch from MO2: %DEPLOY%\FO4RecordEditor.exe
+if defined DEPLOY if exist "%DEPLOY%\" echo Launch from MO2: "%DEPLOY%\FO4RecordEditor.exe"
 echo ============================================================
 
 popd

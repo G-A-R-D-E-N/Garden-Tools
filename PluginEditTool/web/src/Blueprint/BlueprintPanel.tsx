@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Search, X, XCircle } from 'lucide-react';
 import { getGraph } from '../backend';
+import { errorText } from '../errors';
 import type { BpDiagnostic, BpDocument, BpNodeDef, BpPaletteEntry } from './graphModel';
 import { emptyDocument, newId, pinKey } from './graphModel';
 import { useGraphClipboard } from './clipboard';
@@ -74,12 +75,13 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
     const timer = setTimeout(async () => {
       try {
         const raw = await graph.SearchPalette('any', search, '', 60);
-        if (mine !== searchSeq.current || raw.startsWith('Error:')) return;
+        if (mine !== searchSeq.current) return;
+        if (raw.startsWith('Error:')) { setStatus(raw); return; }
         const parsed = JSON.parse(raw) as { entries: BpPaletteEntry[]; total: number };
         setEntries(parsed.entries);
         setTotal(parsed.total);
-      } catch {
-
+      } catch (e) {
+        if (mine === searchSeq.current) setStatus('Error: ' + errorText(e));
       }
     }, 200);
     return () => clearTimeout(timer);
@@ -95,11 +97,12 @@ export default function BlueprintPanel({ onClose }: { onClose: () => void }) {
     const timer = setTimeout(async () => {
       try {
         const raw = await graph.ValidateGraph(JSON.stringify(doc));
-        if (mine !== validateSeq.current || raw.startsWith('Error:')) return;
+        if (mine !== validateSeq.current) return;
+        if (raw.startsWith('Error:')) { setStatus(raw); return; }
         setValidation(JSON.parse(raw));
         setValidatedDoc(doc);
-      } catch {
-
+      } catch (e) {
+        if (mine === validateSeq.current) setStatus('Error: ' + errorText(e));
       }
     }, 600);
     return () => clearTimeout(timer);

@@ -1,5 +1,6 @@
 #include "fo4/graph/check_errors.hpp"
 
+#include "check_errors_records.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -8,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string_view>
 #include <map>
 #include <optional>
@@ -20,6 +22,12 @@ namespace {
 constexpr Signature k_sig_lvli = Signature::from_string("LVLI");
 constexpr Signature k_sig_lvln = Signature::from_string("LVLN");
 constexpr Signature k_sig_lvsp = Signature::from_string("LVSP");
+constexpr Signature k_sig_info = Signature::from_string("INFO");
+constexpr Signature k_sig_dial = Signature::from_string("DIAL");
+constexpr Signature k_sig_dlbr = Signature::from_string("DLBR");
+constexpr Signature k_sig_snam = Signature::from_string("SNAM");
+constexpr Signature k_sig_rfgp = Signature::from_string("RFGP");
+constexpr Signature k_sig_rnam = Signature::from_string("RNAM");
 
 struct WinnerInfo {
   Signature signature{};
@@ -51,9 +59,10 @@ struct SlotTargets {
 
 std::optional<SlotTargets> slot_targets(const Record& record,
                                         Signature subrecord,
+                                        std::size_t ordinal,
                                         std::size_t offset) {
   if (const auto field = schema::formlink_field_at(schema::formlink_fields(record.header.signature),
-                                                   record, subrecord, offset)) {
+                                                   record, subrecord, ordinal, offset)) {
     return SlotTargets{false, schema::formlink_field_targets(*field)};
   }
   for (const auto& list : schema::k_generated_formlink_lists) {
@@ -116,13 +125,21 @@ void check_links(const Plugin& plugin,
     const auto owner = records.find(hit.record);
     const auto slot = owner == records.end()
                           ? std::nullopt
-                          : slot_targets(*owner->second, hit.subrecord, hit.offset);
+                          : slot_targets(*owner->second, hit.subrecord, hit.subrecord_ordinal, hit.offset);
     const auto target = winners.find(hit.key);
     if (target == winners.end() && hit.key.owner() == game_master &&
         hit.key.local().value() < k_first_non_hardcoded_id) {
       continue;
     }
     if (target == winners.end()) {
+      if (hit.subrecord == k_sig_snam && owner != records.end() &&
+          owner->second->header.signature == k_sig_dlbr) {
+        continue;
+      }
+      if (hit.subrecord == k_sig_rnam && hit.key.owner() == game_master && owner != records.end() &&
+          owner->second->header.signature == k_sig_rfgp) {
+        continue;
+      }
       finding.code = CheckCode::unresolved_link;
       finding.severity = slot ? CheckSeverity::error : CheckSeverity::warning;
       finding.message = hit.subrecord.to_string() + " target " + hit.key.to_string() +
@@ -163,8 +180,97 @@ void check_preflight(const Plugin& plugin, FindingSink& sink) {
                                                                           : CheckSeverity::warning;
     finding.plugin = plugin.key;
     finding.record = issue.record;
-    finding.message = issue.path + ": " + issue.message + " (" + issue.code + ")";
+    finding.message = issue.path + ": " + issue.message;
+    finding.detail = issue.code;
     sink.add(std::move(finding));
+  }
+}
+
+using InfoTopics = std::map<FormKey, std::optional<FormKey>>;
+
+std::optional<FormKey> resolved_or_empty(RawFormId raw, const PluginFormIdContext& context) {
+  if (raw.is_null() || raw.is_created()) return FormKey{};
+  try {
+    return resolve_plugin_form_id(raw, context);
+  } catch (const FormIdError&) {
+    return std::nullopt;
+  }
+}
+
+std::optional<FormKey> stored_form_link(const Record& record, Signature subrecord,
+                                        const PluginFormIdContext& context) {
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature != subrecord) continue;
+    if (sub.data.size() != 4) return std::nullopt;
+    std::uint32_t value = 0;
+    std::memcpy(&value, sub.data.data(), sizeof(value));
+    const RawFormId raw{value};
+    if (raw.is_null()) return std::nullopt;
+    return resolved_or_empty(raw, context);
+  }
+  return std::nullopt;
+}
+
+void add_info_topics(const Group& group, const PluginFormIdContext& context, InfoTopics& out) {
+  std::optional<FormKey> topic;
+  if (group.header.group_type == static_cast<std::int32_t>(GroupType::topic_children)) {
+    topic = resolved_or_empty(RawFormId{group.header.label_as_u32()}, context);
+  }
+  for (const auto& child : group.children) {
+    if (const auto* record = std::get_if<Record>(&child)) {
+      if (record->header.signature == k_sig_info) out.try_emplace(record->form_key, topic);
+    } else {
+      add_info_topics(std::get<Group>(child), context, out);
+    }
+  }
+}
+
+InfoTopics info_topics(const Plugin& plugin) {
+  const auto context = plugin_form_id_context(plugin);
+  InfoTopics out;
+  for (const auto& group : plugin.groups) add_info_topics(group, context, out);
+  return out;
+}
+
+void check_dialogue_links(const Plugin& plugin,
+                          const std::map<FormKey, WinnerInfo>& winners,
+                          FindingSink& sink) {
+  const auto context = plugin_form_id_context(plugin);
+  const auto topics = info_topics(plugin);
+  const auto is_loaded = [&](const FormKey& key, Signature signature) {
+    const auto found = winners.find(key);
+    return found != winners.end() && found->second.signature == signature;
+  };
+  const auto add = [&](const Record& record, CheckCode code, CheckSeverity severity,
+                       Signature subrecord, const FormKey& target, std::string message) {
+    CheckFinding finding;
+    finding.code = code;
+    finding.severity = severity;
+    finding.plugin = plugin.key;
+    finding.record = record.form_key;
+    finding.subrecord = subrecord;
+    finding.target = target;
+    finding.message = std::move(message);
+    sink.add(std::move(finding));
+  };
+
+  for (const auto* record : collect_first_records(plugin)) {
+    if (record->header.signature == k_sig_dlbr) {
+      const auto start = stored_form_link(*record, k_sig_snam, context);
+      if (start && !is_loaded(*start, k_sig_dial)) {
+        add(*record, CheckCode::branch_starting_topic_not_dial, CheckSeverity::error, k_sig_snam,
+            *start, "SNAM target " + start->to_string() + " is not a loaded DIAL");
+      }
+      continue;
+    }
+    if (record->header.signature != k_sig_info) continue;
+    const auto topic = topics.find(record->form_key);
+    if (topic == topics.end()) continue;
+    if (topic->second && !is_loaded(*topic->second, k_sig_dial)) {
+      add(*record, CheckCode::topic_children_not_dial, CheckSeverity::warning, Signature{},
+          *topic->second,
+          "INFO topic children label " + topic->second->to_string() + " is not a loaded DIAL");
+    }
   }
 }
 
@@ -178,6 +284,12 @@ std::string_view check_code_name(CheckCode code) noexcept {
     case CheckCode::deleted_target: return "deleted_target";
     case CheckCode::circular_leveled_list: return "circular_leveled_list";
     case CheckCode::schema_preflight: return "schema_preflight";
+    case CheckCode::branch_starting_topic_not_dial: return "branch_starting_topic_not_dial";
+    case CheckCode::topic_children_not_dial: return "topic_children_not_dial";
+    case CheckCode::deleted_record_content: return "deleted_record_content";
+    case CheckCode::partial_form_content: return "partial_form_content";
+    case CheckCode::light_object_id_overflow: return "light_object_id_overflow";
+    case CheckCode::internal_form_id_mismatch: return "internal_form_id_mismatch";
   }
   return "unknown";
 }
@@ -260,7 +372,9 @@ std::vector<CheckFinding> check_load_order(std::span<const Plugin* const> load_o
       records.try_emplace(record->form_key, record);
     }
     check_links(*plugin, records, winners, game_master, sink);
+    check_dialogue_links(*plugin, winners, sink);
     check_preflight(*plugin, sink);
+    for (auto& finding : check_record_levels(*plugin)) sink.add(std::move(finding));
   }
 
   for (const auto& cycle : find_leveled_list_cycles(load_order)) {

@@ -2,7 +2,6 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using FluentAssertions;
-using FO4RecordEditor.Services;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -34,9 +33,16 @@ public class ShippedDocsTests
             $"Could not locate the repo root above {AppContext.BaseDirectory}.");
     }
 
-    private static string[] ToolNames() => PluginToolExecutor.ToolDefinitions()
-        .Select(t => (string)t.GetType().GetProperty("name")!.GetValue(t)!)
-        .ToArray();
+    private static string[] ToolNames()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "native", "apps", "fo4ide", "McpTools.cpp"));
+        var names = Regex.Matches(source, @"\badd\(\s*\{?\s*""([a-z0-9_]+)""|\.name = ""([a-z0-9_]+)""")
+            .Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value)
+            .Distinct()
+            .ToArray();
+        names.Should().NotBeEmpty("McpTools.cpp should register the native tools");
+        return names;
+    }
 
     [Theory]
     [InlineData("README.md", false)]

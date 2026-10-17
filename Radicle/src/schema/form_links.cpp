@@ -2,6 +2,7 @@
 
 #include "non_formid_slots.hpp"
 #include "fo4/schema/form_link_mixed.hpp"
+#include "fo4/schema/form_link_schema.hpp"
 
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
@@ -35,66 +36,7 @@ constexpr StructuredFormIdSlot k_structured_formids[] = {
 #include "fo4/schema/structured_formids.inc"
 };
 
-constexpr auto k_navm = Signature::from_string("NAVM");
-constexpr auto k_mnam = Signature::from_string("MNAM");
-constexpr auto k_qust = Signature::from_string("QUST");
-constexpr auto k_race = Signature::from_string("RACE");
-constexpr auto k_info = Signature::from_string("INFO");
-constexpr auto k_edid = Signature::from_string("EDID");
-constexpr auto k_obts = Signature::from_string("OBTS");
-constexpr auto k_sraf = Signature::from_string("SRAF");
-constexpr auto k_alco = Signature::from_string("ALCO");
-constexpr auto k_alfr = Signature::from_string("ALFR");
-constexpr auto k_alla = Signature::from_string("ALLA");
-constexpr auto k_anam = Signature::from_string("ANAM");
-constexpr auto k_cnam = Signature::from_string("CNAM");
-constexpr auto k_dnam = Signature::from_string("DNAM");
-constexpr auto k_fnam = Signature::from_string("FNAM");
-constexpr auto k_nam2 = Signature::from_string("NAM2");
-constexpr auto k_nnam = Signature::from_string("NNAM");
-constexpr auto k_snam = Signature::from_string("SNAM");
-constexpr auto k_npc_ = Signature::from_string("NPC_");
-constexpr auto k_fact = Signature::from_string("FACT");
-constexpr auto k_tpic = Signature::from_string("TPIC");
-constexpr auto k_pnam = Signature::from_string("PNAM");
-constexpr auto k_gnam = Signature::from_string("GNAM");
-constexpr auto k_trda = Signature::from_string("TRDA");
-constexpr auto k_lnam = Signature::from_string("LNAM");
-constexpr auto k_tsce = Signature::from_string("TSCE");
-constexpr auto k_onam = Signature::from_string("ONAM");
-constexpr auto k_modq = Signature::from_string("MODQ");
-constexpr auto k_enam = Signature::from_string("ENAM");
-constexpr auto k_iovr = Signature::from_string("IOVR");
-constexpr auto k_nam0 = Signature::from_string("NAM0");
-constexpr auto k_nam1 = Signature::from_string("NAM1");
-constexpr auto k_nam3 = Signature::from_string("NAM3");
-constexpr auto k_nam4 = Signature::from_string("NAM4");
-constexpr auto k_nam9 = Signature::from_string("NAM9");
-constexpr auto k_tnam = Signature::from_string("TNAM");
-constexpr auto k_inam = Signature::from_string("INAM");
-constexpr auto k_rnam = Signature::from_string("RNAM");
-constexpr auto k_intv = Signature::from_string("INTV");
-constexpr auto k_alfa = Signature::from_string("ALFA");
-constexpr auto k_gree = Signature::from_string("GREE");
-constexpr auto k_tiqs = Signature::from_string("TIQS");
-constexpr auto k_incc = Signature::from_string("INCC");
-constexpr auto k_wzmd = Signature::from_string("WZMD");
-constexpr auto k_cis1 = Signature::from_string("CIS1");
-constexpr auto k_cis2 = Signature::from_string("CIS2");
-constexpr auto k_wthr = Signature::from_string("WTHR");
-constexpr auto k_imsp = Signature::from_string("IMSP");
-constexpr auto k_wgdr = Signature::from_string("WGDR");
-constexpr auto k_unam = Signature::from_string("UNAM");
-constexpr auto k_vnam = Signature::from_string("VNAM");
-constexpr auto k_wnam = Signature::from_string("WNAM");
-constexpr auto k_dalc = Signature::from_string("DALC");
-constexpr auto k_jnam = Signature::from_string("JNAM");
-constexpr auto k_qnam = Signature::from_string("QNAM");
-constexpr auto k_data = Signature::from_string("DATA");
-constexpr auto k_clmt = Signature::from_string("CLMT");
-constexpr auto k_wlst = Signature::from_string("WLST");
-constexpr auto k_ipds = Signature::from_string("IPDS");
-constexpr auto k_dobj = Signature::from_string("DOBJ");
+#include "form_link_signatures.inc"
 
 std::uint32_t read_u32(std::span<const std::byte> data, std::size_t offset) {
   std::uint32_t value = 0;
@@ -182,9 +124,23 @@ bool is_listed_formid_signature(Signature signature) {
   return std::find(begin, end, packed) != end;
 }
 
+bool allowed_unclaimed_payload(Signature record, Signature subrecord) {
+  struct Pair {
+    const char* record;
+    const char* subrecord;
+  };
+  static constexpr Pair k_allowed[] = {
+#include "fo4/schema/unclaimed_link_allowlist.inc"
+  };
+  return std::any_of(std::begin(k_allowed), std::end(k_allowed), [&](const Pair& pair) {
+    return record == Signature::from_string(pair.record) &&
+           subrecord == Signature::from_string(pair.subrecord);
+  });
+}
+
 bool is_formid_array_signature(Signature signature) {
   return signature == sig_kwda || signature == Signature::from_string("SPLO") ||
-         signature == sig_xlkr;
+         signature == sig_xlkr || signature == Signature::from_string("APPR");
 }
 
 bool record_specific_formid_array(const Record& record, const Subrecord& sub) {
@@ -197,23 +153,6 @@ bool navm_vertex_index_signature(const Record& record, const Subrecord& sub) {
   return record.header.signature == k_navm &&
          (sub.signature == k_pnam || sub.signature == k_nnam);
 }
-
-bool qust_non_formid_signature(Signature signature) {
-  // xEdit FO4 QUST reuses several signatures that are FormIDs in other record
-  // types. Within QUST they are scalar/string data and must never be sent
-  // through the global signature-only FormID table:
-  //   DNAM General quest data
-  //   NAM2 stage note
-  //   CNAM stage log-entry text
-  //   FNAM objective/alias flags
-  //   ANAM next alias ID
-  //   NNAM objective text / quest description
-  //   SNAM SWF filename
-  return signature == k_dnam || signature == k_nam2 || signature == k_cnam ||
-         signature == k_fnam || signature == k_anam || signature == k_nnam ||
-         signature == k_snam;
-}
-
 
 bool visit_tagged_formid_slot(const Subrecord& sub, auto&& fn) {
   if (sub.data.size() < 8) {
@@ -303,25 +242,25 @@ bool visit_coed_formids(const Subrecord& sub,
   return true;
 }
 
-void visit_link_offsets(const Record& record, const Subrecord& sub,
+bool visit_link_offsets(const Record& record, const Subrecord& sub,
                         bool strict_remap,
                         const Plugin* type_source,
                         const PluginFormIdContext* context,
                         auto&& fn) {
   if (sub.signature == sig_xxxx) {
-    return;
+    return true;
   }
   if (record.header.signature == k_info) {
     if (sub.signature != sig_vmad && sub.signature != sig_ctda &&
         !info_known_non_formid_signature(sub.signature) &&
         !info_known_link_signature(sub.signature) && sub.signature != k_trda) {
       visit_info_link_offsets(sub, strict_remap, fn);
-      return;
+      return true;
     }
     if (sub.signature == k_trda || info_known_link_signature(sub.signature) ||
         info_known_non_formid_signature(sub.signature)) {
       visit_info_link_offsets(sub, strict_remap, fn);
-      return;
+      return true;
     }
   }
   if (record.header.signature == k_ipds && sub.signature == k_pnam) {
@@ -329,11 +268,11 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       if (strict_remap) {
         throw FormIdError("cannot safely remap malformed IPDS PNAM payload");
       }
-      return;
+      return true;
     }
     fn(0);
     fn(4);
-    return;
+    return true;
   }
   if (record.header.signature == k_dobj && sub.signature == k_dnam) {
     if (sub.data.size() % 8 != 0 ||
@@ -342,25 +281,28 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       if (strict_remap) {
         throw FormIdError("cannot safely remap malformed DOBJ DNAM payload or cardinality");
       }
-      return;
+      return true;
     }
     for (std::size_t offset = 4; offset < sub.data.size(); offset += 8) {
       fn(offset);
     }
-    return;
+    return true;
+  }
+  if (const auto assoc = mgef_assoc_item_formid_offsets(record, sub)) {
+    for (const auto offset : *assoc) fn(offset);
   }
   if (const auto mixed = mixed_formid_offsets(record, sub, strict_remap)) {
     for (const auto offset : *mixed) fn(offset);
-    return;
+    return true;
   }
   if (sub.data.empty()) {
-    return;
+    return true;
   }
   // xEdit FO4 uses SRAF in two incompatible ways: INFO response Camera Path
   // is a FormID, while RACE subgraph SRAF is {u16 role, u16 perspective} and
   // terminates one subgraph. Never interpret the RACE flags as a FormID.
   if (record.header.signature == k_race && sub.signature == k_sraf) {
-    return;
+    return true;
   }
   // QUST has the same signature-reuse problem on a larger scale. Classify the
   // proven QUST-only meanings before consulting the global signature table.
@@ -371,22 +313,22 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   if (record.header.signature == k_qust) {
     if (sub.signature == k_alfr || sub.signature == k_alco) {
       if (sub.data.size() == 4) fn(0);
-      return;
+      return true;
     }
     if (sub.signature == k_alla) {
       if (sub.data.size() % 8 != 0) {
         if (strict_remap) {
           throw FormIdError("cannot safely remap malformed QUST ALLA payload");
         }
-        return;
+        return true;
       }
       for (std::size_t offset = 0; offset < sub.data.size(); offset += 8) {
         fn(offset);
       }
-      return;
+      return true;
     }
-    if (qust_non_formid_signature(sub.signature)) {
-      return;
+    if (schema::qust_non_formid_signature(sub.signature)) {
+      return true;
     }
   }
   if (record.header.signature == k_wthr) {
@@ -400,69 +342,69 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
     if (sig == k_mnam || sig == k_nnam || sig == k_gnam || sig == k_tnam) {
       if (size != 4) {
         fail_malformed("cannot safely remap malformed WTHR FormLink payload");
-        return;
+        return true;
       }
       fn(0);
-      return;
+      return true;
     }
     if (sig == k_imsp) {
       if (size != 16 && size != 32) {
         fail_malformed("cannot safely remap malformed WTHR IMSP payload");
-        return;
+        return true;
       }
       for (std::size_t offset = 0; offset < size; offset += 4) fn(offset);
-      return;
+      return true;
     }
     if (sig == k_wgdr) {
       if (size != 32) {
         fail_malformed("cannot safely remap malformed WTHR WGDR payload");
-        return;
+        return true;
       }
       for (std::size_t offset = 0; offset < size; offset += 4) fn(offset);
-      return;
+      return true;
     }
     if (sig == k_snam) {
       if (size != 8) {
         fail_malformed("cannot safely remap malformed WTHR SNAM payload");
-        return;
+        return true;
       }
       fn(0);
-      return;
+      return true;
     }
     if (sig == k_unam) {
       if (size != 12 && size != 24) {
         fail_malformed("cannot safely remap malformed WTHR UNAM payload");
-        return;
+        return true;
       }
       fn(0);
       fn(8);
-      return;
+      return true;
     }
     if (sig == k_vnam || sig == k_wnam || sig == k_lnam || sig == k_nam1 ||
         sig == k_pnam || sig == k_jnam || sig == k_nam0 || sig == k_nam4 ||
         sig == k_fnam || sig == k_rnam || sig == k_qnam || sig == k_dalc ||
         sig == k_data || sig == k_edid) {
-      return;
+      return true;
     }
     if (is_listed_formid_signature(sig) && size == 4) {
       fail_malformed(
           "cannot safely remap unknown WTHR FormID-listed subrecord");
-      return;
+      return true;
     }
-    return;
+    return true;
   }
   if (record.header.signature == k_clmt && sub.signature == k_wlst) {
     if (sub.data.size() % 12 != 0) {
       if (strict_remap) {
         throw FormIdError("cannot safely remap malformed CLMT WLST payload");
       }
-      return;
+      return true;
     }
     for (std::size_t offset = 0; offset < sub.data.size(); offset += 12) {
       fn(offset);
       fn(offset + 8);
     }
-    return;
+    return true;
   }
   // OBTS is the BGSMod::Template body: a variable-length header whose keyword
   // and include FormIDs sit at offsets derived from two counts, so it cannot
@@ -479,7 +421,7 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
   // and all 7,342 Fallout4.esm include FormIDs resolve to OMOD records.
   if (const auto offsets = struct_payload_formid_offsets(record, sub, strict_remap)) {
     for (const auto offset : *offsets) fn(offset);
-    return;
+    return true;
   }
   if (sub.signature == k_obts) {
     const auto offsets = obts_formid_offsets(sub);
@@ -487,10 +429,10 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
       if (strict_remap) {
         throw FormIdError("cannot safely remap malformed OBTS template payload");
       }
-      return;
+      return true;
     }
     for (const auto offset : *offsets) fn(offset);
-    return;
+    return true;
   }
   if (is_navmesh_mixed_payload(record, sub)) {
     const auto offsets = navmesh_mixed_formid_offsets(record, sub);
@@ -500,51 +442,57 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
             "cannot safely remap malformed NAVM/NAVI mixed FormID payload " +
             sub.signature.to_string());
       }
-      return;
+      return true;
     }
     for (const auto offset : *offsets) fn(offset);
-    return;
+    return true;
   }
   if (record.header.signature == sig_tes4 && sub.signature == sig_onam &&
       sub.data.size() % 4 == 0) {
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);
     }
-    return;
+    return true;
   }
   if (navm_vertex_index_signature(record, sub)) {
-    return;
+    return true;
   }
   if (record_specific_formid_array(record, sub) && sub.data.size() % 4 == 0) {
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);
     }
-    return;
+    return true;
   }
-  if (perk_epfd_is_formid(record, sub)) {
+  if (schema::scene_action_topic_data(record, sub)) {
+    if (sub.data.size() != 4) {
+      if (strict_remap) {
+        throw FormIdError("cannot safely remap malformed SCEN action Topic DATA payload");
+      }
+      return true;
+    }
     fn(0);
-    return;
+    return true;
   }
   if (is_formid_array_signature(sub.signature) && sub.data.size() % 4 == 0) {
     for (std::size_t i = 0; i < sub.data.size(); i += 4) {
       fn(i);
     }
-    return;
+    return true;
   }
   if (is_listed_formid_signature(sub.signature) && sub.data.size() == 4 &&
       !schema::corpus_non_formid_slot(record, sub)) {
     fn(0);
-    return;
+    return true;
   }
   if (visit_tagged_formid_slot(sub, fn)) {
-    return;
+    return true;
   }
   if (sub.signature == sig_coed) {
     visit_coed_formids(sub, strict_remap, type_source, context, fn);
-    return;
+    return true;
   }
   if (visit_structured_slots(sub.signature, sub.data.size(), fn)) {
-    return;
+    return true;
   }
   if (sub.signature == sig_vmad) {
     if (strict_remap) {
@@ -562,11 +510,31 @@ void visit_link_offsets(const Record& record, const Subrecord& sub,
         fn(offset);
       }
     }
-    return;
+    return true;
   }
   for (const auto offset : ctda_formid_offsets(sub)) {
     fn(offset);
   }
+  return sub.signature == sig_ctda;
+}
+
+bool visit_formlink_offsets(const Record& record, const Subrecord& sub,
+                            const schema::SubrecordFormLinkOffsets& schema_offsets,
+                            bool strict_remap, const Plugin* type_source,
+                            const PluginFormIdContext* context, auto&& fn) {
+  const auto index = static_cast<std::size_t>(&sub - record.subrecords.data());
+  if (schema_offsets.empty() || schema_offsets[index].empty()) {
+    return visit_link_offsets(record, sub, strict_remap, type_source, context, fn);
+  }
+  std::vector<std::size_t> offsets;
+  visit_link_offsets(record, sub, strict_remap, type_source, context,
+                     [&](std::size_t offset) { offsets.push_back(offset); });
+  const auto& extra = schema_offsets[index];
+  offsets.insert(offsets.end(), extra.begin(), extra.end());
+  std::sort(offsets.begin(), offsets.end());
+  offsets.erase(std::unique(offsets.begin(), offsets.end()), offsets.end());
+  for (const auto offset : offsets) fn(offset);
+  return true;
 }
 
 void remap_raw(std::span<std::byte> data, std::size_t offset,
@@ -591,14 +559,16 @@ void remap_record_form_links(Record& record,
                              const PluginFormIdContext& old_context,
                              const PluginFormIdContext& new_context,
                              const Plugin* type_source) {
+  require_decodable(record);
   if (record.header.signature == k_info &&
       same_form_id_context(old_context, new_context)) {
     return;
   }
+  const auto schema_offsets = schema::schema_formlink_offsets(record);
   for (auto& sub : record.subrecords) {
     auto bytes = std::span<std::byte>(sub.data);
-    visit_link_offsets(record, sub, true, type_source, &old_context,
-                       [&](std::size_t offset) {
+    visit_formlink_offsets(record, sub, schema_offsets, true, type_source, &old_context,
+                           [&](std::size_t offset) {
       remap_raw(bytes, offset, old_context, new_context);
     });
   }
@@ -606,6 +576,7 @@ void remap_record_form_links(Record& record,
 
 void remap_form_links(Plugin& plugin, const PluginFormIdContext& old_context,
                       const PluginFormIdContext& new_context) {
+  visit_records(plugin, [](const Record& record) { require_decodable(record); });
   visit_records(plugin, [&](Record& record) {
     remap_record_form_links(record, old_context, new_context, &plugin);
   });
@@ -619,10 +590,13 @@ void rekey_form_links(Plugin& plugin,
   bool any_changed = false;
 
   visit_records(next, [&](Record& record) {
+    require_decodable(record);
     bool changed = false;
+    const auto schema_offsets = schema::schema_formlink_offsets(record);
     for (auto& sub : record.subrecords) {
       auto bytes = std::span<std::byte>(sub.data);
-      visit_link_offsets(record, sub, true, &plugin, &context, [&](std::size_t offset) {
+      visit_formlink_offsets(record, sub, schema_offsets, true, &plugin, &context,
+                             [&](std::size_t offset) {
         if (offset + 4 > bytes.size()) return;
         const auto raw = RawFormId{read_u32(bytes, offset)};
         if (raw.is_null() || raw.is_none()) return;
@@ -660,13 +634,15 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
   visit_records(plugin, [&](const Record& record) {
     current_record_incomplete = false;
     std::map<std::uint32_t, std::size_t> ordinals;
+    const auto schema_offsets = schema::schema_formlink_offsets(record);
     for (const auto& sub : record.subrecords) {
       if (sub.signature == sig_vmad &&
           !vmad_coverage(sub.data, record.header.signature).complete()) {
         current_record_incomplete = true;
       }
       const auto ordinal = ordinals[sub.signature.packed()]++;
-      visit_link_offsets(record, sub, false, &plugin, &context, [&](std::size_t offset) {
+      const bool claimed = visit_formlink_offsets(
+          record, sub, schema_offsets, false, &plugin, &context, [&](std::size_t offset) {
         if (offset + 4 > sub.data.size()) {
           return;
         }
@@ -684,6 +660,11 @@ FormLinkCollection collect_form_links_detailed(const Plugin& plugin) {
         }
         hits.push_back(std::move(hit));
       });
+      if (!claimed && sub.data.size() != 4 && is_listed_formid_signature(sub.signature) &&
+          !allowed_unclaimed_payload(record.header.signature, sub.signature)) {
+        result.unclaimed_link_payloads.push_back(
+            UnclaimedLinkPayload{record.form_key, sub.signature, ordinal, sub.data.size()});
+      }
     }
     if (current_record_incomplete) {
       ++result.records_with_incomplete_vmad;

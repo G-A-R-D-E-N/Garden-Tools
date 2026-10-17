@@ -1,3 +1,5 @@
+#include "fo4/archive/assets.hpp"
+#include "fo4/archive/ba2.hpp"
 #include "fo4/c_api_env.h"
 #include "fo4/environment/strings.hpp"
 #include "fo4/localization/strings.hpp"
@@ -9,6 +11,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -118,6 +121,8 @@ protected:
     const auto path = root_ / std::string(name);
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    stream.close();
+    if (!stream) throw std::runtime_error("cannot write " + path.string());
     return path;
   }
 
@@ -182,6 +187,94 @@ TEST_F(StringsEnvironmentTest, ResolvesNamesInTheOwningPluginsTable) {
   EXPECT_FALSE(tables.resolve_name(env, *env.winner(key("Inline.esp", 0x900))).has_value());
 }
 
+TEST_F(StringsEnvironmentTest, PluginTablesResolveLooseThenArchivesAndSkipNonLocalized) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const std::vector<std::filesystem::path> dirs{strings_};
+
+  const auto base = fo4::env::load_plugin_string_tables(dirs, env.plugin(0), "en");
+  ASSERT_EQ(base.size(), 2u);
+  EXPECT_EQ(base[0].source, fo4::env::StringSource::normal);
+  EXPECT_TRUE(base[0].archive.empty());
+  EXPECT_EQ(base[0].path.filename(), "base_EN.strings");
+  EXPECT_EQ(base[1].source, fo4::env::StringSource::dl);
+
+  fo4::archive::Ba2GeneralEntry entry;
+  entry.path = "Strings\\Patch_fr.STRINGS";
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(fo4::localization::write_string_table(
+      table(fo4::localization::StringTableKind::strings, {{0x11, "Patched French"}}))));
+  fo4::archive::Ba2GeneralArchive archive;
+  archive.entries.push_back(std::move(entry));
+  fo4::archive::write_ba2_general_file(archive, root_ / "Patch - Main.ba2");
+  const std::vector<std::filesystem::path> archives{root_ / "Patch - Main.ba2"};
+  const auto assets = fo4::archive::AssetResolver::open(root_, archives);
+
+  const auto french = fo4::env::load_plugin_string_tables(dirs, env.plugin(1), "fr", &assets);
+  ASSERT_EQ(french.size(), 1u);
+  EXPECT_EQ(french[0].archive, "Patch - Main.ba2");
+  EXPECT_EQ(french[0].path.filename(), "Patch_fr.STRINGS");
+  EXPECT_EQ(french[0].table.entries.size(), 1u);
+  EXPECT_TRUE(fo4::env::load_plugin_string_tables(dirs, env.plugin(1), "fr").empty());
+
+  fo4::localization::write_string_table_file(
+      table(fo4::localization::StringTableKind::strings, {{0x10, "Inline"}}), strings_ / "Inline_en.STRINGS");
+  EXPECT_TRUE(fo4::env::load_plugin_string_tables(dirs, env.plugin(2), "en").empty());
+}
+
+TEST_F(StringsEnvironmentTest, PluginTablesPreferTheEarliestDirectoryAndFallBackToLaterOnes) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const auto second = root_ / "Strings2";
+  std::filesystem::create_directories(second);
+  using fo4::localization::StringTableKind;
+  fo4::localization::write_string_table_file(table(StringTableKind::strings, {{0x10, "Second"}}), second / "Base_en.STRINGS");
+  fo4::localization::write_string_table_file(table(StringTableKind::ilstrings, {{0x30, "Only second"}}),
+                                             second / "Base_en.ILSTRINGS");
+
+  const std::vector<std::filesystem::path> strings_first{strings_, second};
+  const auto first = fo4::env::load_plugin_string_tables(strings_first, env.plugin(0), "en");
+  ASSERT_EQ(first.size(), 3u);
+  EXPECT_EQ(first[0].source, fo4::env::StringSource::normal);
+  EXPECT_EQ(first[0].path.parent_path(), strings_);
+  EXPECT_EQ(first[0].table.entries[0].text, bytes_of("Commonwealth"));
+  EXPECT_EQ(first[1].source, fo4::env::StringSource::dl);
+  EXPECT_EQ(first[1].path.parent_path(), strings_);
+  EXPECT_EQ(first[2].source, fo4::env::StringSource::il);
+  EXPECT_EQ(first[2].path.parent_path(), second);
+
+  const std::vector<std::filesystem::path> second_first{second, strings_};
+  const auto reversed = fo4::env::load_plugin_string_tables(second_first, env.plugin(0), "en");
+  ASSERT_EQ(reversed.size(), 3u);
+  EXPECT_EQ(reversed[0].path.parent_path(), second);
+  EXPECT_EQ(reversed[0].table.entries[0].text, bytes_of("Second"));
+  EXPECT_EQ(reversed[1].path.parent_path(), strings_);
+  EXPECT_EQ(reversed[2].path.parent_path(), second);
+}
+
+TEST_F(StringsEnvironmentTest, LooseTableShadowsAnArchiveCopyOfTheSameName) {
+  const auto env = fo4::env::Environment::load(paths_);
+  fo4::archive::Ba2GeneralEntry entry;
+  entry.path = "Strings\\Base_en.STRINGS";
+  entry.chunks.push_back(fo4::archive::make_stored_ba2_chunk(fo4::localization::write_string_table(
+      table(fo4::localization::StringTableKind::strings, {{0x10, "Archived"}}))));
+  fo4::archive::Ba2GeneralArchive archive;
+  archive.entries.push_back(std::move(entry));
+  fo4::archive::write_ba2_general_file(archive, root_ / "Shadow - Main.ba2");
+  const std::vector<std::filesystem::path> archives{root_ / "Shadow - Main.ba2"};
+  const auto assets = fo4::archive::AssetResolver::open(root_, archives);
+
+  const std::vector<std::filesystem::path> loose_dirs{strings_};
+  const auto loose = fo4::env::load_plugin_string_tables(loose_dirs, env.plugin(0), "en", &assets);
+  ASSERT_FALSE(loose.empty());
+  EXPECT_TRUE(loose[0].archive.empty());
+  EXPECT_EQ(loose[0].path.filename(), "base_EN.strings");
+  EXPECT_EQ(loose[0].table.entries[0].text, bytes_of("Commonwealth"));
+
+  const std::vector<std::filesystem::path> none;
+  const auto archived = fo4::env::load_plugin_string_tables(none, env.plugin(0), "en", &assets);
+  ASSERT_EQ(archived.size(), 1u);
+  EXPECT_EQ(archived[0].archive, "Shadow - Main.ba2");
+  EXPECT_EQ(archived[0].table.entries[0].text, bytes_of("Archived"));
+}
+
 TEST_F(StringsEnvironmentTest, MissingDirectoryYieldsNoTables) {
   const auto env = fo4::env::Environment::load(paths_);
   const auto tables = fo4::env::StringTables::load(env, root_ / "Nope", "en");
@@ -196,6 +289,22 @@ TEST_F(StringsEnvironmentTest, RejectsMalformedTablesAndLanguages) {
   write("Strings/Base_en.ILSTRINGS", {std::byte{1}, std::byte{0}});
   EXPECT_THROW(fo4::env::StringTables::load(env, strings_, "en"), fo4::env::EnvironmentError);
   EXPECT_NO_THROW(fo4::env::StringTables::load(env, strings_, "de"));
+}
+
+TEST_F(StringsEnvironmentTest, PluginTablesRejectBadLanguagesAndMalformedTables) {
+  const auto env = fo4::env::Environment::load(paths_);
+  const std::vector<std::filesystem::path> dirs{strings_};
+  for (const auto* language : {"", "../en", "e n"}) {
+    EXPECT_THROW(fo4::env::load_plugin_string_tables(dirs, env.plugin(0), language), fo4::env::EnvironmentError) << language;
+  }
+  write("Strings/Base_en.ILSTRINGS", {std::byte{1}, std::byte{0}});
+  try {
+    fo4::env::load_plugin_string_tables(dirs, env.plugin(0), "en");
+    ADD_FAILURE() << "malformed table loaded";
+  } catch (const fo4::env::EnvironmentError& error) {
+    EXPECT_NE(std::string_view(error.what()).find("malformed string table"), std::string_view::npos);
+  }
+  EXPECT_NO_THROW(fo4::env::load_plugin_string_tables(dirs, env.plugin(0), "de"));
 }
 
 TEST_F(StringsEnvironmentTest, HandlesNonAnsiFileNames) {

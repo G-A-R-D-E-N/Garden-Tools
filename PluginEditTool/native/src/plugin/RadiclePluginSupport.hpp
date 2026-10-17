@@ -7,7 +7,9 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <format>
+#include <limits>
 #include <optional>
 #include <set>
 #include <string>
@@ -42,6 +44,67 @@ inline std::string stringArgument(const nlohmann::json& args, std::size_t index)
     return args[index].get<std::string>();
 }
 
+inline nlohmann::json argumentAt(const nlohmann::json& args, std::size_t index) {
+    return args.is_array() && index < args.size() ? args[index] : nlohmann::json();
+}
+
+template <class T>
+std::optional<T> integerValue(const nlohmann::json& value) {
+    if (!value.is_number_integer()) return std::nullopt;
+    const auto raw = value.get<std::int64_t>();
+    if (raw < static_cast<std::int64_t>(std::numeric_limits<T>::min()) ||
+        raw > static_cast<std::int64_t>(std::numeric_limits<T>::max())) {
+        return std::nullopt;
+    }
+    return static_cast<T>(raw);
+}
+
+template <class T>
+std::optional<T> integerArgument(const nlohmann::json& args, std::size_t index) {
+    if (!args.is_array() || index >= args.size()) return std::nullopt;
+    return integerValue<T>(args[index]);
+}
+
+template <class T>
+std::optional<T> integerField(const nlohmann::json& object, const char* name) {
+    if (!object.is_object() || !object.contains(name)) return std::nullopt;
+    return integerValue<T>(object.at(name));
+}
+
+inline std::string stringField(const nlohmann::json& object, const char* name) {
+    if (!object.is_object() || !object.contains(name) || !object.at(name).is_string()) return {};
+    return object.at(name).get<std::string>();
+}
+
+inline Result<fo4::FormKey> formKeyArgument(std::string_view text) {
+    if (text.empty()) return std::unexpected(Error{"FormKeyMissing", "FormKey is empty"});
+    try {
+        return fo4::FormKey::parse(text);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"InvalidFormKey", error.what()});
+    }
+}
+
+inline nlohmann::json formKeyJson(const fo4::FormKey& key) {
+    return key == fo4::FormKey{} ? nlohmann::json(nullptr) : nlohmann::json(key.to_string());
+}
+
+template <class Plugins>
+Result<const fo4::Plugin*> winningPlugin(const Plugins& plugins, const fo4::FormKey& key) {
+    for (auto it = plugins.rbegin(); it != plugins.rend(); ++it) {
+        const auto* record = fo4::find_record(it->plugin, key);
+        if (record == nullptr) continue;
+        if (record->header.flags.is_deleted()) {
+            return std::unexpected(Error{
+                "RecordDeleted",
+                "The winning version of " + key.to_string() + " is deleted in " + it->name
+            });
+        }
+        return &it->plugin;
+    }
+    return std::unexpected(Error{"RecordNotFound", "Record not found: " + key.to_string()});
+}
+
 inline std::string editorId(const fo4::Record& record) {
     for (const auto& subrecord : record.subrecords) {
         if (subrecord.signature != fo4::sig_edid || subrecord.data.empty()) continue;
@@ -72,6 +135,15 @@ inline std::string asciiLower(std::string_view value) {
     return out;
 }
 
+inline std::string joinNames(const std::vector<std::string>& names) {
+    std::string out;
+    for (const auto& name : names) {
+        if (!out.empty()) out += ", ";
+        out += name;
+    }
+    return out;
+}
+
 inline EslSlots eslSlots(const fo4::Plugin& plugin) {
     fo4::Plugin targetPolicy;
     targetPolicy.header = plugin.header;
@@ -82,7 +154,8 @@ inline EslSlots eslSlots(const fo4::Plugin& plugin) {
 }
 
 inline std::string lightFlagAdvice(const fo4::Plugin& plugin) {
-    return plugin.header.tes4_flags.is_small_file() ? std::string{} : " " + std::string(lightFlagHint);
+    return fo4::classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == fo4::PluginKind::light
+        ? std::string{} : " " + std::string(lightFlagHint);
 }
 
 inline std::vector<EslBlocker> eslCompactionBlockers(const fo4::Plugin& plugin,

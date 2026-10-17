@@ -61,6 +61,12 @@ public:
             "Native copy as disabled override is unavailable for this backend"
         });
     }
+    virtual Result<nlohmann::json> copyAsWrapper(const nlohmann::json&) {
+        return std::unexpected(Error{
+            "CopyAsWrapperUnavailable",
+            "Native copy as wrapper is unavailable for this backend"
+        });
+    }
     virtual Result<nlohmann::json> cleanUnusedMasters(const nlohmann::json&) {
         return std::unexpected(Error{
             "CleanMastersUnavailable",
@@ -187,6 +193,37 @@ public:
     }
     virtual Result<nlohmann::json> setPlacedReferenceTransform(const nlohmann::json&) {
         return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> createPlacedObject(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Placed-reference creation is unavailable"});
+    }
+    virtual Result<nlohmann::json> createInteriorCell(const nlohmann::json&) {
+        return std::unexpected(Error{"CellBackendUnavailable", "Interior-cell creation is unavailable"});
+    }
+
+    virtual Result<nlohmann::json> getLeveledList(const nlohmann::json&) const {
+        return std::unexpected(Error{"LeveledListBackendUnavailable", "Leveled list queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> setLeveledListSettings(const nlohmann::json&) {
+        return std::unexpected(Error{"LeveledListBackendUnavailable", "Leveled list writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> editLeveledListEntry(const nlohmann::json&) {
+        return std::unexpected(Error{"LeveledListBackendUnavailable", "Leveled list writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> getNpc(const nlohmann::json&) const {
+        return std::unexpected(Error{"NpcBackendUnavailable", "NPC queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> editNpcEntries(const nlohmann::json&) {
+        return std::unexpected(Error{"NpcBackendUnavailable", "NPC writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> getFaction(const nlohmann::json&) const {
+        return std::unexpected(Error{"FactionBackendUnavailable", "Faction queries are unavailable"});
+    }
+    virtual Result<nlohmann::json> editFactionEntries(const nlohmann::json&) {
+        return std::unexpected(Error{"FactionBackendUnavailable", "Faction writes are unavailable"});
+    }
+    virtual Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json&) const {
+        return std::unexpected(Error{"WeaponBackendUnavailable", "Weapon queries are unavailable"});
     }
 };
 

@@ -2809,11 +2809,10 @@ public static class Tests
         writer.Write(1u);
         writer.Write((ulong)nameTableAt);
 
-        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
         writer.Write((ulong)headerEnd);
         writer.Write(0u);
-        writer.Write((uint)payload.Length);
-        writer.Write(0u);
+        writer.Write((uint)payload.Length); writer.Write(0xBAADF00Du);
 
         writer.Write(payload);
         var bytes = System.Text.Encoding.UTF8.GetBytes(entryName.Replace('/', '\\'));
@@ -2966,11 +2965,10 @@ public static class Tests
 
         for (int i = 0; i < entries.Length; i++)
         {
-            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
             writer.Write((ulong)offsets[i]);
             writer.Write(0u);
-            writer.Write((uint)entries[i].Payload.Length);
-            writer.Write(0u);
+            writer.Write((uint)entries[i].Payload.Length); writer.Write(0xBAADF00Du);
         }
         foreach (var entry in entries) writer.Write(entry.Payload);
         foreach (var entry in entries)
@@ -5065,11 +5063,10 @@ public static class Tests
 
         void Entry(long at, uint packed, uint unpacked)
         {
-            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+            writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
             writer.Write((ulong)at);
             writer.Write(packed);
-            writer.Write(unpacked);
-            writer.Write(0u);
+            writer.Write(unpacked); writer.Write(0xBAADF00Du);
         }
 
         Entry(firstAt, 0, (uint)plain.Length);
@@ -9496,11 +9493,9 @@ public static class Tests
         writer.Write(1u);
         writer.Write((ulong)nameTableAt);
 
-        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0u);
+        writer.Write(0u); writer.Write(0u); writer.Write(0u); writer.Write(0x00100100u);
         writer.Write((ulong)(offsetOverride ?? headerEnd));
-        writer.Write(packed ? (uint)payload.Length : 0u);
-        writer.Write(declaredUnpacked);
-        writer.Write(0u);
+        writer.Write(packed ? (uint)payload.Length : 0u); writer.Write(declaredUnpacked); writer.Write(0xBAADF00Du);
 
         writer.Write(payload);
         var bytes = System.Text.Encoding.UTF8.GetBytes(name.Replace('/', '\\'));
@@ -9603,8 +9598,7 @@ public static class Tests
         File.WriteAllBytes(path, System.Text.Encoding.ASCII.GetBytes("BTDX"));
         try
         {
-            try { OpenCommonwealth.Services.Archive.Ba2.Open(path); }
-            catch (EndOfStreamException) { }
+            try { OpenCommonwealth.Services.Archive.Ba2.Open(path); } catch (InvalidDataException) { }
 
             using var exclusive = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
             CheckTrue("a malformed archive can be reopened exclusively", exclusive.CanWrite);

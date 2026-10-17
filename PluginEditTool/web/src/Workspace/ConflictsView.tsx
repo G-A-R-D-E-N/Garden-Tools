@@ -3,6 +3,7 @@ import {
   AlertTriangle, ChevronDown, ChevronRight, CheckCircle2, Crown, LayoutGrid, Rows3,
 } from 'lucide-react';
 import type { ConflictFieldRow, ConflictMatrix } from '../backend';
+import { ScalarText } from '../ScalarEditor';
 import { pluginColorVar } from '../util/pluginColor';
 import PluginChip from './PluginChip';
 import './ConflictsView.css';
@@ -215,7 +216,9 @@ function ConflictCard({ row, matrix, baseCol, winnerCol }: {
             <span className="cv-dot" style={{ background: pluginColorVar(basePlugin) }} />
             <span className="cv-side-plugin" title={basePlugin}>{basePlugin}</span>
           </div>
-          <div className="cv-value cv-value-base">{baseValue || <em>not set</em>}</div>
+          <div className="cv-value cv-value-base">
+            {baseValue ? <ScalarText raw={baseValue} presentation={row.Presentation} /> : <em>not set</em>}
+          </div>
         </div>
 
         <div className="cv-side">
@@ -225,7 +228,7 @@ function ConflictCard({ row, matrix, baseCol, winnerCol }: {
             <Crown size={11} className="cv-icon-win" />
           </div>
           <div className={`cv-value ${winValue === baseValue ? 'cv-value-same' : 'cv-value-changed'}`}>
-            {winValue || <em>not set</em>}
+            {winValue ? <ScalarText raw={winValue} presentation={row.Presentation} /> : <em>not set</em>}
           </div>
         </div>
       </div>

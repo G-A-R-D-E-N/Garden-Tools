@@ -2,6 +2,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -30,9 +31,16 @@ public:
     std::string copyAsNewResult{"Copied 000800:Base.esp into target as NEW record 000800:target.esp."};
     std::string deepResult{"Deep-copied 1 of 1 record(s) rooted at 000800:Base.esp into target."};
     std::string remapResult{"Repointed 1 of 1 referencing record(s) from old to new in target."};
+    std::optional<fo4ide::Error> copyAsWrapperError;
+    std::string copyAsWrapperResult{"Copied 000804:Master.esm as wrapper in target; entries moved to NEW record 000805:target.esp ('W')."};
+    mutable std::vector<std::pair<std::string, nlohmann::json>> typedCalls;
 
     fo4ide::plugin::Capabilities capabilities() const noexcept override {
         return {.available = true};
+    }
+
+    fo4ide::Result<nlohmann::json> getLeveledList(const nlohmann::json&) const override {
+        return nlohmann::json("leveled");
     }
 
     fo4ide::Result<nlohmann::json> invoke(
@@ -141,6 +149,55 @@ public:
         invokedBackendArguments = args;
         backendMethods.emplace_back(invokedBackendMethod);
         return nlohmann::json(remapResult);
+    }
+
+    fo4ide::Result<nlohmann::json> copyAsWrapper(const nlohmann::json& args) override {
+        invokedBackendMethod = "CopyAsWrapper";
+        invokedBackendArguments = args;
+        backendMethods.emplace_back("CopyAsWrapper");
+        if (copyAsWrapperError) return std::unexpected(*copyAsWrapperError);
+        return nlohmann::json(copyAsWrapperResult);
+    }
+
+    fo4ide::Result<nlohmann::json> createPlacedObject(const nlohmann::json& args) override {
+        return recordTypedCall("CreatePlacedObject", args);
+    }
+
+    fo4ide::Result<nlohmann::json> createInteriorCell(const nlohmann::json& args) override {
+        return recordTypedCall("CreateInteriorCell", args);
+    }
+
+    fo4ide::Result<nlohmann::json> setLeveledListSettings(const nlohmann::json& args) override {
+        return recordTypedCall("SetLeveledListSettings", args);
+    }
+
+    fo4ide::Result<nlohmann::json> editLeveledListEntry(const nlohmann::json& args) override {
+        return recordTypedCall("EditLeveledListEntry", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getNpc(const nlohmann::json& args) const override {
+        return recordTypedCall("GetNpc", args);
+    }
+
+    fo4ide::Result<nlohmann::json> editNpcEntries(const nlohmann::json& args) override {
+        return recordTypedCall("EditNpcEntries", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getFaction(const nlohmann::json& args) const override {
+        return recordTypedCall("GetFaction", args);
+    }
+
+    fo4ide::Result<nlohmann::json> editFactionEntries(const nlohmann::json& args) override {
+        return recordTypedCall("EditFactionEntries", args);
+    }
+
+    fo4ide::Result<nlohmann::json> getWeaponDamageTypes(const nlohmann::json& args) const override {
+        return recordTypedCall("GetWeaponDamageTypes", args);
+    }
+
+    fo4ide::Result<nlohmann::json> recordTypedCall(std::string_view name, const nlohmann::json& args) const {
+        typedCalls.emplace_back(std::string(name), args);
+        return nlohmann::json(std::string(name));
     }
 
     fo4ide::Result<nlohmann::json> conditionFunctionParams() const override {
@@ -487,6 +544,15 @@ TEST_CASE("Cell GetPlugins reuses the native environment plugin list") {
     CHECK(backend.invokedOperation == "appInterop.GetPlugins");
 }
 
+TEST_CASE("PluginBackendTarget routes GetLeveledList to the native backend") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto result = target.invoke("GetLeveledList", nlohmann::json::array({"000800:Patch.esp"}));
+    REQUIRE(result.has_value());
+    CHECK(*result == "leveled");
+}
+
 TEST_CASE("JSON int helpers refuse or saturate values outside int") {
     using fo4ide::core::jsonInt;
     using fo4ide::core::jsonIntSaturated;
@@ -517,4 +583,97 @@ TEST_CASE("Service number arguments truncate in-range floats and refuse the rest
     CHECK(intNumberArgument(nlohmann::json::array({-2147483648.5}), 0, -1) == -2147483647 - 1);
     CHECK(intNumberArgument(nlohmann::json::array({2147483647.5}), 0, -1) == 2147483647);
     CHECK(intNumberArgument(nlohmann::json::array({2147483648.0}), 0, -1) == -1);
+}
+
+TEST_CASE("CopyAsWrapper creates a missing target before mutation and normalises the extension") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    const auto result = target.invoke(
+        "CopyAsWrapper",
+        nlohmann::json::array({"Master.esm", "000804:Master.esm", "NewWrap", "W"}));
+    REQUIRE(result.has_value());
+    REQUIRE(result->is_string());
+    CHECK(result->get<std::string>().starts_with("Copied "));
+    REQUIRE(backend.createAttempts.size() == 1);
+    CHECK(backend.createAttempts[0] == "NewWrap.esp");
+    CHECK(backend.invokedBackendMethod == "CopyAsWrapper");
+    REQUIRE(backend.invokedBackendArguments.size() >= 3);
+    CHECK(backend.invokedBackendArguments[2] == "NewWrap.esp");
+    CHECK(backend.discardAttempts.empty());
+}
+
+TEST_CASE("CopyAsWrapper removes a newly created target on a non-success result or error and keeps an existing target") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+
+    backend.copyAsWrapperResult = "LOSES: Target.esp loads before Later.esp, which also override 000804:Master.esm.";
+    auto result = target.invoke(
+        "CopyAsWrapper",
+        nlohmann::json::array({"Master.esm", "000804:Master.esm", "FreshWrap.esp", "W"}));
+    REQUIRE(result.has_value());
+    CHECK(*result == backend.copyAsWrapperResult);
+    REQUIRE(backend.discardAttempts.size() == 1);
+    CHECK(backend.discardAttempts[0] == "FreshWrap.esp");
+
+    backend.copyAsWrapperError = fo4ide::Error{"WrapperUnsupportedType", "no"};
+    result = target.invoke(
+        "CopyAsWrapper",
+        nlohmann::json::array({"Master.esm", "000804:Master.esm", "FreshWrap2.esp", "W"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "WrapperUnsupportedType");
+    REQUIRE(backend.discardAttempts.size() == 2);
+    CHECK(backend.discardAttempts[1] == "FreshWrap2.esp");
+
+    result = target.invoke(
+        "CopyAsWrapper",
+        nlohmann::json::array({"Master.esm", "000804:Master.esm", "Patch.esp", "W"}));
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().type == "WrapperUnsupportedType");
+    CHECK(backend.discardAttempts.size() == 2);
+}
+
+TEST_CASE("PluginBackendTarget routes the typed record methods and the strings namespace to the backend") {
+    RoutingBackend backend;
+    fo4ide::app::PluginBackendTarget target(backend, "backend");
+    const auto args = nlohmann::json::array({"Patch.esp", "000800:Patch.esp"});
+    const std::vector<std::string> methods{
+        "SetLeveledListSettings", "EditLeveledListEntry", "GetNpc", "EditNpcEntries", "GetFaction",
+        "EditFactionEntries", "GetWeaponDamageTypes", "CreatePlacedObject", "CreateInteriorCell"};
+    for (const auto& method : methods) {
+        const auto result = target.invoke(method, args);
+        REQUIRE(result.has_value());
+        CHECK(*result == method);
+        REQUIRE_FALSE(backend.typedCalls.empty());
+        CHECK(backend.typedCalls.back().first == method);
+        CHECK(backend.typedCalls.back().second == args);
+    }
+    CHECK(backend.invokedBackendMethod.empty());
+
+    fo4ide::app::PluginBackendTarget strings(backend, "strings");
+    const auto text = strings.invoke("GetStrings", nlohmann::json::array({"Patch.esp", "", "STRINGS", "", 0, 200}));
+    REQUIRE(text.has_value());
+    CHECK(backend.invokedOperation == "strings.GetStrings");
+}
+
+TEST_CASE("IPluginBackend defaults report distinct unavailable errors for the typed record methods") {
+    fo4ide::plugin::NullPluginBackend backend;
+    fo4ide::plugin::IPluginBackend& base = backend;
+    const auto args = nlohmann::json::array();
+    const auto unavailable = [](const fo4ide::Result<nlohmann::json>& result, std::string_view type) {
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == type);
+    };
+
+    unavailable(base.copyAsWrapper(args), "CopyAsWrapperUnavailable");
+    unavailable(base.createPlacedObject(args), "CellBackendUnavailable");
+    unavailable(base.createInteriorCell(args), "CellBackendUnavailable");
+    unavailable(base.getLeveledList(args), "LeveledListBackendUnavailable");
+    unavailable(base.setLeveledListSettings(args), "LeveledListBackendUnavailable");
+    unavailable(base.editLeveledListEntry(args), "LeveledListBackendUnavailable");
+    unavailable(base.getNpc(args), "NpcBackendUnavailable");
+    unavailable(base.editNpcEntries(args), "NpcBackendUnavailable");
+    unavailable(base.getFaction(args), "FactionBackendUnavailable");
+    unavailable(base.editFactionEntries(args), "FactionBackendUnavailable");
+    unavailable(base.getWeaponDamageTypes(args), "WeaponBackendUnavailable");
 }

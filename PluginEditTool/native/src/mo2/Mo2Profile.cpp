@@ -1,11 +1,16 @@
 #include <fo4ide/mo2/Mo2Profile.hpp>
 
+#include <fo4/loadorder/load_order_files.hpp>
+#include <fo4/plugin_key.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace fo4ide::mo2 {
 namespace {
@@ -80,13 +85,15 @@ struct ResolvedPlugin {
 
 void indexFolder(const std::filesystem::path& folder,
                  std::string source,
-                 std::unordered_map<std::string, ResolvedPlugin>& resolved) {
+                 std::unordered_map<std::string, ResolvedPlugin>& resolved,
+                 std::vector<std::filesystem::path>& candidates) {
     std::error_code ec;
     if (!std::filesystem::is_directory(folder, ec)) return;
     for (std::filesystem::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec)) {
         if (!it->is_regular_file(ec) || !pluginExtension(it->path())) continue;
         const auto name = it->path().filename().string();
         resolved.insert_or_assign(lowerAscii(name), ResolvedPlugin{it->path(), source});
+        candidates.push_back(it->path());
     }
 }
 
@@ -188,17 +195,6 @@ Result<ProfileSnapshot> readProfile(const std::filesystem::path& instancePath,
     ProfileSnapshot snapshot;
     snapshot.instance = info;
 
-    for (const auto& line : readLines(pluginsPath)) {
-        if (line.size() < 2 || line.front() != '*') continue;
-        const auto name = trim(line.substr(1));
-        if (!name.empty()) snapshot.loadOrder.push_back(name);
-    }
-
-    const auto hasFallout4 = std::any_of(snapshot.loadOrder.begin(), snapshot.loadOrder.end(), [](const std::string& name) {
-        return lowerAscii(name) == "fallout4.esm";
-    });
-    if (!hasFallout4) snapshot.loadOrder.insert(snapshot.loadOrder.begin(), "Fallout4.esm");
-
     if (std::filesystem::is_regular_file(modlistPath)) {
         std::size_t priority = 0;
         for (const auto& line : readLines(modlistPath)) {
@@ -212,23 +208,78 @@ Result<ProfileSnapshot> readProfile(const std::filesystem::path& instancePath,
     }
 
     std::unordered_map<std::string, ResolvedPlugin> resolved;
-    indexFolder(info.gameDataFolder, "Data", resolved);
+    std::vector<std::filesystem::path> candidates;
+    indexFolder(info.gameDataFolder, "Data", resolved, candidates);
     snapshot.assetRootsLowToHigh.push_back(info.gameDataFolder);
 
     for (auto it = snapshot.enabledModsHighToLow.rbegin(); it != snapshot.enabledModsHighToLow.rend(); ++it) {
-        indexFolder(it->path, it->name, resolved);
+        indexFolder(it->path, it->name, resolved, candidates);
         snapshot.assetRootsLowToHigh.push_back(it->path);
     }
 
-    indexFolder(info.overwriteFolder, "overwrite", resolved);
+    indexFolder(info.overwriteFolder, "overwrite", resolved, candidates);
     snapshot.assetRootsLowToHigh.push_back(info.overwriteFolder);
+
+    fo4::loadorder::PluginList pluginList;
+    std::vector<std::string> cccNames;
+    std::vector<std::filesystem::path> winners;
+    fo4::loadorder::AssembledLoadOrder assembled;
+    try {
+        pluginList = fo4::loadorder::read_plugin_list(pluginsPath);
+        if (!info.gameDataFolder.empty()) {
+            const auto gameRoot = info.gameDataFolder.has_filename() ? info.gameDataFolder.parent_path()
+                                                                     : info.gameDataFolder.parent_path().parent_path();
+            const auto cccPath = gameRoot / "Fallout4.ccc";
+            if (std::filesystem::is_regular_file(cccPath)) cccNames = fo4::loadorder::read_ccc(cccPath);
+        }
+        for (auto it = candidates.rbegin(); it != candidates.rend(); ++it) {
+            if (resolved.at(lowerAscii(it->filename().string())).path == *it) winners.push_back(*it);
+        }
+        assembled = fo4::loadorder::assemble_load_order(winners, pluginList, cccNames, fo4::loadorder::OfficialTable::ae);
+    } catch (const std::exception& error) {
+        return std::unexpected(Error{"Mo2LoadOrderInvalid", error.what()});
+    }
+    if (assembled.failed) {
+        std::string message;
+        for (const auto& finding : assembled.findings) {
+            if (finding.code != "missing_master" && finding.code != "master_too_new" &&
+                finding.code != "hoist_cycle") {
+                continue;
+            }
+            if (!message.empty()) message += "; ";
+            message += finding.plugin + ": " + finding.detail;
+        }
+        return std::unexpected(Error{"Mo2LoadOrderInvalid", message});
+    }
+    for (const auto& finding : assembled.findings) {
+        snapshot.warnings.push_back(finding.plugin.empty() ? finding.detail : finding.plugin + ": " + finding.detail);
+    }
+
+    const auto reportMissing = [&](const std::string& name) {
+        if (std::find(snapshot.missingPlugins.begin(), snapshot.missingPlugins.end(), name) ==
+            snapshot.missingPlugins.end()) {
+            snapshot.missingPlugins.push_back(name);
+        }
+    };
+
+    snapshot.loadOrder.push_back("Fallout4.esm");
+    for (const auto& entry : assembled.entries) {
+        if (entry.checked && lowerAscii(entry.name) != "fallout4.esm") snapshot.loadOrder.push_back(entry.name);
+    }
+    if (!resolved.contains("fallout4.esm")) reportMissing("Fallout4.esm");
+    for (const auto& entry : pluginList.entries) {
+        if (!entry.active) continue;
+        const auto isChecked = std::any_of(assembled.entries.begin(), assembled.entries.end(), [&](const auto& item) {
+            return item.checked && fo4::PluginKey::from_filename(item.name) == fo4::PluginKey::from_filename(entry.name);
+        });
+        if (!isChecked) reportMissing(entry.name);
+    }
 
     snapshot.plugins.reserve(snapshot.loadOrder.size());
     for (const auto& name : snapshot.loadOrder) {
         const auto found = resolved.find(lowerAscii(name));
         if (found == resolved.end()) {
             snapshot.plugins.push_back({name, {}, {}, false});
-            snapshot.missingPlugins.push_back(name);
         } else {
             snapshot.plugins.push_back({name, found->second.path, found->second.source, true});
         }

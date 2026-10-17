@@ -2,16 +2,18 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight, ChevronDown, EyeOff, Link2, AlertTriangle, Crown, Clock, Network, HelpCircle,
 } from 'lucide-react';
-import type {
-  ConflictMatrix, ConflictFieldRow, RefByEntry, RecordProblem, Dependency, HistoryEntry, ElementActions,
-} from './backend';
+import { TYPED_RECORD_TYPES, type ConflictMatrix, type ConflictFieldRow, type RefByEntry, type RecordProblem, type Dependency, type HistoryEntry, type ElementActions } from './backend';
+import { ScalarEditor, ScalarText } from './ScalarEditor';
+import { rawEditable } from './scalarPresentation';
 import RecordPicker from './RecordPicker';
+import TypedRecordPanel from './TypedRecordPanel';
+import ProblemsList from './ProblemsList';
 import ConditionsEditor from './ConditionsEditor';
 import { useDialogs } from './useDialogs';
 import WorkspaceHeader from './Workspace/WorkspaceHeader';
 import { buildActions } from './Workspace/actions';
 import ConflictsView, { type ConflictLayout } from './Workspace/ConflictsView';
-import { back, useRecordActions } from './recordActions';
+import { back, f2Edit, useRecordActions } from './recordActions';
 import RecordContextMenu from './RecordContextMenu';
 import {
   defaultExpanded, resolveStatus, type SeverityFilter, SEVERITY_SETS, LEVEL_BADGES, LEGEND_ROWS, LEGEND_CELLS,
@@ -20,7 +22,7 @@ import {
 import './RecordView.css';
 import { errorText } from './errors';
 
-export type RecordTab = 'grid' | 'fields' | 'conflicts' | 'references' | 'history' | 'dependencies';
+export type RecordTab = 'grid' | 'fields' | 'conflicts' | 'references' | 'history' | 'dependencies' | 'typed';
 
 interface Menu { x: number; y: number; row: ConflictFieldRow; col: number; }
 interface Edit { field: string; col: number; }
@@ -128,7 +130,7 @@ export default function RecordView(
   if (prevFormKey !== matrix.FormKey) {
     setPrevFormKey(matrix.FormKey);
     setRefBy(null); setProblems(null); setCollapsedGroups({});
-    setDeps(null); setHistory(null); setAnchors(null);
+    setDeps(null); setHistory(null); setAnchors(null); setEdit(null);
     setScanErrors({});
   }
 
@@ -138,7 +140,6 @@ export default function RecordView(
     const mine = ++loadSeq.current;
     const live = () => mine === loadSeq.current;
     (async () => {
-
       const fail = (k: string, e: unknown) => {
         if (live()) setScanErrors(prev => ({ ...prev, [k]: e instanceof Error ? e.message : String(e) }));
       };
@@ -188,7 +189,6 @@ export default function RecordView(
       if (r.HasChildren && isCollapsed(r)) collapsedLevels.push(r.Level);
     }
     return out;
-
   }, [matched, ov, filtering]);
 
   const isGenuineConflict = (r: ConflictFieldRow) => {
@@ -200,7 +200,6 @@ export default function RecordView(
 
   const conflictLeafRows = useMemo(
     () => viewRows.filter(isGenuineConflict),
-
     [viewRows]
   );
 
@@ -228,6 +227,7 @@ export default function RecordView(
     setMenu(null);
     if (r.HasChildren || r.Editable?.[col] === false) return;
     if (r.EditKind === 'Ref') { setPicker({ row: r, col }); return; }
+    if (r.Presentation && !rawEditable(r.Values[col] ?? '', r.Presentation)) return;
     setEdit({ field: r.Field, col });
     setEditVal(r.Values[col] ?? '');
   };
@@ -253,13 +253,12 @@ export default function RecordView(
     const live = () => mine === menuSeq.current;
     (async () => {
       try { const raw = await b.GetEditablePlugins(); if (live()) setEditablePlugins(JSON.parse(raw)); }
-      catch { if (live()) setEditablePlugins([]); }
+      catch (e) { if (live()) { setEditablePlugins([]); setStatus('Could not list editable plugins: ' + errorText(e)); } }
       try {
         const raw = await b.DescribeElement(matrix.Plugins[menu.col], matrix.FormKey, menu.row.Field);
         if (live()) setElementActions(JSON.parse(raw));
-      } catch { if (live()) setElementActions(null); }
+      } catch (e) { if (live()) { setElementActions(null); setStatus('Could not read element actions: ' + errorText(e)); } }
     })();
-
   }, [menu]);
 
   const actions = useRecordActions({
@@ -284,10 +283,13 @@ export default function RecordView(
     compactToEsl: () => void compactEsl(winnerCol),
     cleanUdr: () => void cleanPlugin(winnerCol),
     deleteRecord: () => void deleteRecord(winnerCol),
-
   }), [matrix.FormKey, matrix.Winner, editablePlugins]);
 
   const renderEditor = (r: ConflictFieldRow, ci: number) => {
+    if (r.Presentation) {
+      return <ScalarEditor presentation={r.Presentation} value={editVal} onValue={setEditVal}
+        onCommit={v => commitEdit(r, ci, v)} onCancel={() => setEdit(null)} />;
+    }
     if (r.EditKind === 'Bool') {
       return (
         <select className="rv-edit-input" autoFocus value={editVal}
@@ -339,7 +341,7 @@ export default function RecordView(
           <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, r.Differs ? 'rv-diff' : '', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
             <td
               className={`rv-prop-col rv-sticky ${r.HasChildren ? 'rv-expandable' : ''}`}
-              onDoubleClick={() => r.HasChildren && toggle(r)}
+              onDoubleClick={() => r.HasChildren && toggle(r)} {...f2Edit(() => startEdit(r, winnerCol))}
               onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
             >
               <span className="rv-prop-inner" style={{ paddingLeft: r.Level * 14 }}>
@@ -358,11 +360,11 @@ export default function RecordView(
                 <td
                   key={ci}
                   className={`rv-cell rv-c-${st}`}
-                  onDoubleClick={() => !r.HasChildren && startEdit(r, ci)}
+                  onDoubleClick={() => !r.HasChildren && startEdit(r, ci)} {...f2Edit(() => startEdit(r, ci))}
                   onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                 >
                   {st === 'win' && <Crown size={10} className="rv-win-icon" />}
-                  {editing ? renderEditor(r, ci) : r.Values[ci]}
+                  {editing ? renderEditor(r, ci) : <ScalarText raw={r.Values[ci]} presentation={r.Presentation} />}
                 </td>
               );
             })}
@@ -378,7 +380,6 @@ export default function RecordView(
 
   return (
     <div className="rv-container">
-
       <div className="rv-tab-bar">
         <TabBtn id="grid" current={recordTab} set={setRecordTab}>Record View</TabBtn>
         <TabBtn id="fields" current={recordTab} set={setRecordTab} count={matrix.Rows.length}>Field View</TabBtn>
@@ -392,6 +393,7 @@ export default function RecordView(
         <TabBtn id="dependencies" current={recordTab} set={setRecordTab}>
           <Network size={12} /> Dependencies
         </TabBtn>
+        {TYPED_RECORD_TYPES.includes(matrix.Type) && <TabBtn id="typed" current={recordTab} set={setRecordTab}>Typed Fields</TabBtn>}
       </div>
 
       <WorkspaceHeader
@@ -527,22 +529,23 @@ export default function RecordView(
                           {!collapsed && g.rows.map((r, ri) => (
                             <tr key={rowKey(r, ri)} data-flash-seq={flashing(r) ? highlightSeq : undefined} className={[`rv-s-${r.Severity ?? 'none'}`, 'rv-diff', flashing(r) ? 'rv-row-flash' : ''].filter(Boolean).join(' ')}>
                               <td
-                                className="rv-prop-col rv-sticky"
+                                className="rv-prop-col rv-sticky" {...f2Edit(() => startEdit(r, winnerCol))}
                                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: winnerCol }); }}
                               >
                                 <span className="rv-prop-inner">{r.DisplayLabel || r.Field}</span>
                               </td>
                               {visibleCols.map(ci => {
+                                const editing = edit && edit.field === r.Field && edit.col === ci;
                                 const st = resolveStatus(r, ci);
                                 return (
                                   <td
                                     key={ci}
                                     className={`rv-cell rv-c-${st}`}
-                                    onDoubleClick={() => startEdit(r, ci)}
+                                    onDoubleClick={() => startEdit(r, ci)} {...f2Edit(() => startEdit(r, ci))}
                                     onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openMenu({ x: e.clientX, y: e.clientY, row: r, col: ci }); }}
                                   >
                                     {st === 'win' && <Crown size={10} className="rv-win-icon" />}
-                                    {r.Values[ci]}
+                                    {editing ? renderEditor(r, ci) : <ScalarText raw={r.Values[ci]} presentation={r.Presentation} />}
                                   </td>
                                 );
                               })}
@@ -692,6 +695,7 @@ export default function RecordView(
           )}
         </div>
       )}
+      {recordTab === 'typed' && <TypedRecordPanel matrix={matrix} plugin={plugin} onChanged={onReload} />}
 
       <div className={`rv-drawer ${drawerOpen ? 'open' : 'closed'}`}>
         <div className="rv-drawer-tabs">
@@ -705,16 +709,7 @@ export default function RecordView(
         </div>
         {drawerOpen && (
           <div className="rv-drawer-body">
-            {problems === null ? <div className="rv-drawer-note">Checking…</div>
-            : scanErrors.problems ? <div className="rv-drawer-note" style={{ color: '#f44747' }}>
-                Problem check failed (not "no problems"): {scanErrors.problems}</div>
-            : problems.length === 0 ? <div className="rv-drawer-note">No problems found.</div>
-            : problems.map((p, i) => (
-              <div key={i} className="rv-prob-row">
-                <AlertTriangle size={12} className="rv-prob-icon" />
-                <span>{p.Description}</span>
-              </div>
-            ))}
+            <ProblemsList key={matrix.FormKey} problems={problems} error={scanErrors.problems} />
           </div>
         )}
       </div>

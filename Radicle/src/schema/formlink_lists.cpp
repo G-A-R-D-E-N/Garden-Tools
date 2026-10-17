@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -437,19 +438,10 @@ std::optional<FormLinkFieldDescriptor> formlink_field_descriptor(
 
 std::span<const FormLinkFieldDescriptor> formlink_fields(
     Signature record) noexcept {
-  std::size_t first = 0;
-  while (first < std::size(k_generated_formlink_fields) &&
-         k_generated_formlink_fields[first].record != record) {
-    ++first;
-  }
-  if (first == std::size(k_generated_formlink_fields)) return {};
-
-  std::size_t last = first + 1;
-  while (last < std::size(k_generated_formlink_fields) &&
-         k_generated_formlink_fields[last].record == record) {
-    ++last;
-  }
-  return {k_generated_formlink_fields + first, last - first};
+  const auto rows = std::ranges::equal_range(k_generated_formlink_fields, record,
+                                             std::ranges::less{},
+                                             &FormLinkFieldDescriptor::record);
+  return std::span<const FormLinkFieldDescriptor>(rows.begin(), rows.end());
 }
 
 std::span<const Signature> formlink_field_targets(

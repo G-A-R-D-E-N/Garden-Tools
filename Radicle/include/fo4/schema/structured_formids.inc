@@ -8,6 +8,9 @@
 {0x4F4C564Cu, 4, 8},   // LVLO
 // XTEL: destination door FormID at 0, then 6 floats (and optional flags).
 {0x4C455458u, 0, 4},   // XTEL
+{0x4C455458u, 32, 36}, // XTEL transition interior
+{0x52444152u, 0, 4},   // RADR sound model
+{0x574C4958u, 0, 4},   // XILW worldspace
 // XLOC: uint8 lock level, 3 pad, key FormID at 4, flags.
 {0x434F4C58u, 4, 8},   // XLOC
 // XESP: enable-parent FormID at 0, flags at 4.
@@ -28,3 +31,4 @@
 // already covered by formid_subrecords.inc when their payload is four bytes.
 {0x4B435456u, 0, 8},   // VTCK male voice
 {0x4B435456u, 4, 8},   // VTCK female voice
+{0x444B5441u, 8, 12},  // ATKD attack spell

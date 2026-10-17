@@ -188,9 +188,37 @@ TEST(AuthoringPreflight, NestedEyesPlacementFails) {
   EXPECT_TRUE(has_issue(issues, "record_placement_invalid"));
 }
 
+TEST(AuthoringPreflight, CellReferenceVariantAcceptsPersistentAndTemporaryChildren) {
+  for (const auto type : {fo4::GroupType::cell_persistent_children, fo4::GroupType::cell_temporary_children}) {
+    fo4::Plugin plugin;
+    plugin.key = fo4::PluginKey::from_filename("Patch.esp");
+    auto outer = top_group("CELL");
+    fo4::Group children;
+    children.header.group_type = static_cast<std::int32_t>(fo4::GroupType::cell_children);
+    fo4::Group nested;
+    nested.header.group_type = static_cast<std::int32_t>(type);
+    nested.children.emplace_back(authored_record("PHZD", 0x800, {}));
+    children.children.emplace_back(std::move(nested));
+    outer.children.emplace_back(std::move(children));
+    plugin.groups.push_back(std::move(outer));
+
+    const auto issues = fo4::schema::preflight_authoring_record(
+        plugin, fo4::FormKey::parse("000800:Patch.esp"));
+    EXPECT_FALSE(has_issue(issues, "record_placement_invalid")) << static_cast<int>(type);
+  }
+}
+
+TEST(AuthoringPreflight, CellReferenceVariantAtTopLevelFails) {
+  auto plugin = plugin_with_top_record(authored_record("PHZD", 0x800, {}));
+  const auto issues = fo4::schema::preflight_authoring_record(
+      plugin, fo4::FormKey::parse("000800:Patch.esp"));
+  EXPECT_TRUE(has_issue(issues, "record_placement_invalid"));
+}
+
 TEST(AuthoringPreflight, GeneratedLvspCreationShapePassesWithoutOptionalFields) {
-  auto plugin = plugin_with_top_record(authored_record(
-      "LVSP", 0x800, {"LVLD", "LVLM", "LVLF", "LLCT"}));
+  auto record = authored_record("LVSP", 0x800, {"OBND", "LVLD", "LVLM", "LVLF", "LLCT"});
+  record.subrecords.front().data.resize(12);
+  auto plugin = plugin_with_top_record(record);
   const auto key = fo4::FormKey::parse("000800:Patch.esp");
   EXPECT_TRUE(fo4::schema::preflight_authoring_record(plugin, key).empty());
 
@@ -219,4 +247,46 @@ TEST(ListPreflight, PackedKeywordArrayIsChecked4BytesPerElement) {
     flagged = flagged || issue.code == "invalid_formlink_list_storage";
   }
   EXPECT_TRUE(flagged);
+}
+
+TEST(ClimatePreflight, SunWindowSpanningA24HourDayIsFlaggedWithoutReordering) {
+  const auto issues_for = [](std::vector<std::uint8_t> bytes) {
+    fo4::Record record;
+    record.header.signature = fo4::Signature::from_string("CLMT");
+    record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+    fo4::Subrecord timing;
+    timing.signature = fo4::Signature::from_string("TNAM");
+    for (const auto byte : bytes) timing.data.push_back(std::byte{byte});
+    record.subrecords.push_back(std::move(timing));
+    return fo4::schema::preflight_record(record);
+  };
+  const auto sunrise = issues_for({0, 144, 10, 20, 0, 0});
+  ASSERT_EQ(sunrise.size(), 1u);
+  EXPECT_EQ(sunrise[0].code, "climate_sun_window_full_day");
+  EXPECT_EQ(sunrise[0].path, "CLMT\\TNAM");
+  EXPECT_EQ(sunrise[0].severity, fo4::schema::PreflightSeverity::warning);
+  EXPECT_EQ(issues_for({0, 1, 10, 154, 0, 0}).size(), 1u);
+  EXPECT_TRUE(issues_for({0, 143, 10, 20, 0, 0}).empty());
+}
+
+TEST(ClimatePreflight, ReversedOrZeroWidthSunWindowNeverOpensIsFlagged) {
+  const auto issues_for = [](std::vector<std::uint8_t> bytes) {
+    fo4::Record record;
+    record.header.signature = fo4::Signature::from_string("CLMT");
+    record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+    fo4::Subrecord timing;
+    timing.signature = fo4::Signature::from_string("TNAM");
+    for (const auto byte : bytes) timing.data.push_back(std::byte{byte});
+    record.subrecords.push_back(std::move(timing));
+    return fo4::schema::preflight_record(record);
+  };
+  const auto reversed_sunrise = issues_for({60, 10, 20, 30, 0, 0});
+  ASSERT_EQ(reversed_sunrise.size(), 1u);
+  EXPECT_EQ(reversed_sunrise[0].code, "climate_sun_window_never_opens");
+  EXPECT_EQ(reversed_sunrise[0].path, "CLMT\\TNAM");
+  EXPECT_EQ(reversed_sunrise[0].severity, fo4::schema::PreflightSeverity::warning);
+  const auto zero_width_sunset = issues_for({10, 20, 40, 40, 0, 0});
+  ASSERT_EQ(zero_width_sunset.size(), 1u);
+  EXPECT_EQ(zero_width_sunset[0].code, "climate_sun_window_never_opens");
+  EXPECT_TRUE(issues_for({10, 20, 40, 50, 0, 0}).empty());
 }

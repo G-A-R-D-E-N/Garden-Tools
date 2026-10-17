@@ -35,8 +35,7 @@ std::vector<std::byte> zstring(std::string_view value) {
 
 PluginKind owner_kind(const Plugin& source, const PluginKey& owner) {
   if (owner == source.key) {
-    return source.header.tes4_flags.is_small_file() ? PluginKind::light
-                                                   : PluginKind::full;
+    return classify_plugin_kind(source.header.tes4_flags, source.key);
   }
   for (const auto& master : source.header.masters) {
     if (master.key == owner) return master.kind;
@@ -74,29 +73,20 @@ const Group* source_top_group_for_record(const Plugin& source,
 }
 
 using detail::find_mutable_record;
+using detail::require_plugin_decodable;
 
 Record* find_top_level_record(Plugin& plugin, const FormKey& record_key) {
   for (auto& group : plugin.groups) {
     if (group.header.group_type != 0) continue;
     for (auto& child : group.children) {
       auto* record = std::get_if<Record>(&child);
-      if (record != nullptr && record->form_key == record_key) return record;
+      if (record != nullptr && record->form_key == record_key) {
+        require_decodable(*record);
+        return record;
+      }
     }
   }
   return nullptr;
-}
-
-Group* find_or_create_top_group(Plugin& plugin, Signature signature) {
-  for (auto& group : plugin.groups) {
-    if (group.header.group_type == 0 && group.header.top_label() == signature) {
-      return &group;
-    }
-  }
-
-  Group group;
-  group.header = new_top_group_header(signature);
-  plugin.groups.push_back(std::move(group));
-  return &plugin.groups.back();
 }
 
 bool erase_record(Group& group, const FormKey& record_key, std::set<FormKey>& removed) {
@@ -137,6 +127,19 @@ std::set<FormKey> erase_subtree(Plugin& plugin, const FormKey& record_key) {
 
 }  // namespace
 
+Group* find_or_create_top_group(Plugin& plugin, Signature signature) {
+  for (auto& group : plugin.groups) {
+    if (group.header.group_type == 0 && group.header.top_label() == signature) {
+      return &group;
+    }
+  }
+
+  Group group;
+  group.header = new_top_group_header(signature);
+  plugin.groups.push_back(std::move(group));
+  return &plugin.groups.back();
+}
+
 void set_hedr_next_form_id(Plugin& plugin, std::uint32_t next_form_id) {
   Subrecord* hedr = nullptr;
   for (auto& subrecord : plugin.tes4.subrecords) {
@@ -164,7 +167,7 @@ bool allows_hardcoded_range(const Plugin& plugin) {
 }
 
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin) {
-  if (plugin.header.tes4_flags.is_small_file()) {
+  if (classify_plugin_kind(plugin.header.tes4_flags, plugin.key) == PluginKind::light) {
     return {allows_hardcoded_range(plugin) ? k_first_light_local_id : k_first_full_local_id, k_light_local_mask};
   }
   return {k_first_full_local_id, k_full_local_mask};
@@ -179,7 +182,7 @@ std::optional<std::uint32_t> lowered_light_next_form_id(const Plugin& plugin) {
     if (local < lowest || local > k_light_local_mask) return std::nullopt;
     lowered = std::max(lowered, local + 1u);
   }
-  const auto next = plugin.header.next_form_id;
+  const auto next = plugin.header.next_form_id & k_full_local_mask;
   if (next <= k_light_local_mask || next <= lowered) return std::nullopt;
   return lowered;
 }
@@ -194,7 +197,7 @@ FormKey reserve_local_form_key(Plugin& plugin) {
   const auto [lowest, highest] = local_form_id_range(plugin);
   // A light plugin's HEDR nextFormID may legitimately sit below the full-plugin
   // floor, so clamp up to this plugin's own floor rather than rejecting it.
-  auto candidate = std::max(plugin.header.next_form_id, lowest);
+  auto candidate = std::max(plugin.header.next_form_id & k_full_local_mask, lowest);
   if (candidate > highest + 1u) {
     throw FormIdError("HEDR nextFormID is outside this plugin's local FormID range");
   }
@@ -242,6 +245,7 @@ FormKey create_local_record(Plugin& plugin,
 
 RecordDeleteStatus delete_local_record(Plugin& plugin, const FormKey& record_key) {
   if (record_key.owner() != plugin.key) return RecordDeleteStatus::not_local;
+  require_plugin_decodable(plugin, "delete");
 
   auto next = plugin;
   assign_record_form_keys(next);
@@ -292,6 +296,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
   if (record_key.owner() != plugin.key) return RecordRenumberStatus::not_local;
+  require_plugin_decodable(plugin, "renumber");
   const auto [lowest, highest] = local_form_id_range(plugin);
   if (new_local.value() < lowest || new_local.value() > highest) {
     throw FormIdError("new local FormID is outside this plugin's local FormID range");
@@ -330,7 +335,7 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   target->header.data_size = 0;
   target->uncompressed_size = 0;
 
-  if (new_local.value() >= next.header.next_form_id) {
+  if (new_local.value() >= (next.header.next_form_id & k_full_local_mask)) {
     set_hedr_next_form_id(next, new_local.value() + 1u);
   }
   next.original_range.clear();
@@ -366,6 +371,7 @@ bool set_record_editor_id(Plugin& plugin,
       return;
     }
     found = true;
+    require_decodable(record);
 
     for (auto& subrecord : record.subrecords) {
       if (subrecord.signature != sig_edid) continue;
@@ -434,6 +440,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          bool overwrite) {
   const auto* source_record = find_record(source, record_key);
   if (source_record == nullptr) return RecordCopyStatus::source_missing;
+  require_decodable(*source_record);
 
   const bool target_exists = find_record(destination, record_key) != nullptr;
   if (target_exists && !overwrite) return RecordCopyStatus::already_exists;
@@ -496,6 +503,7 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
       if (replaced || record.header.signature == sig_tes4 || record.form_key != record_key) {
         return;
       }
+      require_decodable(record);
       record = copied_record;
       replaced = true;
     });

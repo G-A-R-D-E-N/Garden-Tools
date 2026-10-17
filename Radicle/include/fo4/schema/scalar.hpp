@@ -28,6 +28,14 @@ enum class ScalarStorage {
 enum class ScalarPresentation {
   identity,
   percent_0_100,
+  enumeration,
+  flags,
+};
+
+// Invariant: value is the stored integer for an enumeration row and the single-bit mask (1 << bit) for a flags row.
+struct ScalarName {
+  std::int64_t value{0};
+  std::string_view name;
 };
 
 struct ScalarDescriptor {
@@ -50,6 +58,8 @@ struct ScalarDescriptor {
   std::size_t payload_size{0};
   FieldAddress address{};
   std::size_t minimum_payload_size{0};
+  std::span<const ScalarName> names{};
+  std::uint16_t min_form_version{0};
 };
 
 struct ScalarFieldDescriptor {
@@ -64,10 +74,43 @@ public:
   using std::runtime_error::runtime_error;
 };
 
-// Looks a field up by subrecord signature alone. Only whole-payload fields can
-// be found this way: a signature that carries an embedded struct holds many
-// fields and several records disagree about what it means, so there is no one
-// descriptor to return. Embedded fields are addressed by path instead.
+struct CountedArrayDescriptor {
+  Signature record{};
+  std::string_view path;
+  std::string_view label;
+  Signature subrecord{};
+  Signature count_subrecord{};
+  std::size_t stride{0};
+};
+
+class CountedArrayError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+struct SubrecordGroupMemberDescriptor {
+  Signature subrecord{};
+  bool required{false};
+  bool repeatable{false};
+  std::size_t payload_size{0};
+  std::span<const std::uint8_t> default_payload{};
+};
+
+struct SubrecordGroupDescriptor {
+  Signature record{};
+  std::string_view path;
+  std::string_view label;
+  Signature count_subrecord{};
+  std::span<const SubrecordGroupMemberDescriptor> members{};
+  std::span<const Signature> successors{};
+};
+
+class SubrecordGroupError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+// Resolves a signature only if exactly one schema row names it and that row is whole-payload, non-repeated, non-string; else use record plus path.
 std::optional<ScalarDescriptor> scalar_descriptor(Signature subrecord) noexcept;
 std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     std::string_view path) noexcept;
@@ -75,6 +118,14 @@ std::optional<ScalarFieldDescriptor> scalar_field_descriptor(
     Signature record, std::string_view path) noexcept;
 std::span<const ScalarFieldDescriptor> scalar_fields(Signature record) noexcept;
 std::size_t scalar_storage_size(ScalarStorage storage) noexcept;
+std::optional<CountedArrayDescriptor> counted_array_descriptor(Signature record,
+                                                               std::string_view path) noexcept;
+bool is_counted_array_count_subrecord(Signature record, Signature subrecord) noexcept;
+std::optional<SubrecordGroupDescriptor> subrecord_group_descriptor(Signature record,
+                                                                   std::string_view path) noexcept;
+std::optional<SubrecordGroupDescriptor> subrecord_group_for_member(Signature record,
+                                                                   Signature subrecord) noexcept;
+bool is_subrecord_group_count_subrecord(Signature record, Signature subrecord) noexcept;
 
 // The bytes of one field within a subrecord payload. Empty when an embedded
 // field lies past the end of a legitimately shorter payload -- absent, not
@@ -93,6 +144,11 @@ std::span<const std::byte> scalar_slot_bytes(std::span<const std::byte> payload,
 void patch_scalar_field(std::span<std::byte> payload,
                         const ScalarDescriptor& descriptor,
                         std::span<const std::byte> encoded);
+
+std::optional<std::string_view> scalar_value_name(const ScalarDescriptor& descriptor,
+                                                  std::int64_t value) noexcept;
+std::optional<std::int64_t> scalar_name_value(const ScalarDescriptor& descriptor,
+                                              std::string_view name) noexcept;
 
 std::string decode_scalar(std::span<const std::byte> data,
                           const ScalarDescriptor& descriptor);

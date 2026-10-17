@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/quest/structure.hpp"
+#include "real_data_build.hpp"
 
 #include <gtest/gtest.h>
 
@@ -48,6 +49,10 @@ void same_text(const std::optional<fo4::schema::LocalizedString>& source, const 
     EXPECT_EQ(text.string_id, *source->id);
     EXPECT_EQ(text.bytes, nullptr);
     EXPECT_EQ(text.size, 0u);
+  } else if (source->raw_id) {
+    EXPECT_EQ(text.kind, RADICLE_NAME_MALFORMED);
+    const auto* raw = reinterpret_cast<const std::byte*>(text.bytes);
+    EXPECT_EQ(std::vector<std::byte>(raw, raw + text.size), *source->raw_id);
   } else {
     EXPECT_EQ(text.kind, RADICLE_NAME_INLINE);
     same_bytes(source->text, text.bytes, text.size);
@@ -249,6 +254,7 @@ TEST_P(QuestStructureReal, EveryStoredQuestAgreesAndRoundTrips) {
   if (!directory) {
     GTEST_SKIP() << "set FO4_DATA_DIR to run official-master coverage";
   }
+  record_game_build(detect_game_build(directory));
   const auto path = std::filesystem::path(directory) / GetParam();
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
   const auto plugin = fo4::read_plugin_file(path);

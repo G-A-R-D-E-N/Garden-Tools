@@ -22,7 +22,7 @@ ByteWriter geometry(bool exterior, std::uint32_t version = 15) {
   b.u32(version); b.u32(0x12345678); b.u32(exterior ? 0x810 : 0);
   if (exterior) { b.u16(0xFFFE); b.u16(7); } else b.u32(0x811);
   b.u32(1); b.f32(1.5f); b.f32(-2); b.f32(3);
-  b.u32(1); b.u16(0); b.u16(1); b.u16(2); b.u16(0xFFFF); b.u16(0xFFFE); b.u16(7);
+  b.u32(1); b.u16(0); b.u16(1); b.u16(2); b.u16(0xFFFF); b.u16(0); b.u16(7);
   b.f32(4.5f); b.u8(0xAA); b.u16(0x8012); b.u16(0xABCD);
   b.u32(1); b.u32(0xDEADBEEF); b.u32(0x812); b.u16(0xFFFD); b.u8(2);
   b.u32(1); b.u16(0xFFFB); b.u32(0xABCDEF); b.u32(0x813);
@@ -45,6 +45,28 @@ ByteWriter info(bool island) {
   return b;
 }
 
+ByteWriter extra_edge_geometry(std::uint32_t flags, std::array<std::uint16_t, 3> edges, std::uint32_t extra_count) {
+  ByteWriter b;
+  b.u32(15); b.u32(0x12345678); b.u32(0); b.u32(0x811);
+  b.u32(1); b.f32(1.5f); b.f32(-2); b.f32(3);
+  b.u32(1); b.u16(0); b.u16(1); b.u16(2);
+  for (const auto edge : edges) b.u16(edge);
+  b.f32(4.5f); b.u8(0xAA); b.u32(flags);
+  b.u32(extra_count);
+  for (std::uint32_t i = 0; i < extra_count; ++i) { b.u32(0xDEADBEEF); b.u32(0x812); b.u16(0xFFFD); b.u8(2); }
+  b.u32(0);
+  for (int i = 0; i < 4; ++i) b.u32(0);
+  for (int i = 0; i < 8; ++i) b.f32(0);
+  return b;
+}
+
+ByteWriter navi_paths() {
+  ByteWriter b;
+  b.u32(2); b.u32(2); b.u32(0x800); b.u32(0x810); b.u32(1); b.u32(0x810);
+  b.u32(1); b.u32(0x800); b.u32(7);
+  return b;
+}
+
 class NavmeshRead : public testing::Test {
 protected:
   void SetUp() override {
@@ -53,7 +75,8 @@ protected:
     std::filesystem::create_directories(root); path = root / "Navigation.esm";
   }
   void TearDown() override { std::error_code error; std::filesystem::remove_all(root, error); }
-  void write(const ByteWriter& nvnm, const ByteWriter& nvmi, bool duplicate = false, std::uint16_t form_version = 131) {
+  void write(const ByteWriter& nvnm, const ByteWriter& nvmi, bool duplicate = false, std::uint16_t form_version = 131,
+             const ByteWriter* nvpp = nullptr, std::uint32_t navi_version = 15) {
     ByteWriter out;
     auto r = fo4::test::begin_record(out, "TES4", 1, 0);
     ByteWriter h; h.f32(1); h.u32(2); h.u32(0x900);
@@ -63,8 +86,9 @@ protected:
     if (duplicate) fo4::test::write_subrecord(out, "NVNM", nvnm.bytes);
     fo4::test::end_record(out, r); fo4::test::end_group(out, g);
     g = fo4::test::begin_group(out, "NAVI", 0); r = fo4::test::begin_record(out, "NAVI", 0, 0x801);
-    ByteWriter v; v.u32(15); fo4::test::write_subrecord(out, "NVER", v.bytes);
+    ByteWriter v; v.u32(navi_version); fo4::test::write_subrecord(out, "NVER", v.bytes);
     fo4::test::write_subrecord(out, "NVMI", nvmi.bytes);
+    if (nvpp) fo4::test::write_subrecord(out, "NVPP", nvpp->bytes);
     fo4::test::end_record(out, r); fo4::test::end_group(out, g);
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     file.write(reinterpret_cast<const char*>(out.bytes.data()), static_cast<std::streamsize>(out.bytes.size()));
@@ -173,6 +197,96 @@ TEST_F(NavmeshRead, CAbiDecodeRejectsRecordsFromAnotherEnvironmentWithoutWriting
   EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
   EXPECT_EQ(navi_out, &navi_sentinel);
   radicle_env_destroy(env_b); radicle_env_destroy(env_a);
+}
+
+TEST_F(NavmeshRead, ExtraEdgeFlagIndexesExtraEdgeArray) {
+  write(extra_edge_geometry(0x5, {0, 0xFFFF, 1}, 2), info(false));
+  const auto env = load(); const auto mesh = fo4::env::decode_navmesh(env, record(env, 0x800));
+  ASSERT_TRUE(mesh); ASSERT_EQ(mesh->edges.size(), 2u); ASSERT_EQ(mesh->triangles.size(), 1u);
+  const auto& t = mesh->triangles[0];
+  EXPECT_TRUE(t.edge_is_extra(0)); EXPECT_FALSE(t.edge_is_extra(1)); EXPECT_TRUE(t.edge_is_extra(2));
+  EXPECT_EQ(t.edges[1], -1);
+}
+
+TEST_F(NavmeshRead, FlaggedEdgeIndexPastExtraEdgeCountFailsClosed) {
+  for (const auto& edges : {std::array<std::uint16_t, 3>{1, 0, 0}, std::array<std::uint16_t, 3>{0xFFFF, 0, 0}}) {
+    write(extra_edge_geometry(0x1, edges, 1), info(false)); const auto env = load();
+    EXPECT_THROW(fo4::env::decode_navmesh(env, record(env, 0x800)), fo4::env::WorldDecodeError);
+  }
+}
+
+TEST(NavmeshAbi, TriangleEdgeAccessorReadsFlagBitsAndRefusesOutOfRange) {
+  radicle_navmesh_triangle triangle{};
+  triangle.flags = 0x5;
+  int32_t is_extra = -1;
+  EXPECT_EQ(radicle_navmesh_triangle_edge_is_extra(&triangle, 0, &is_extra), RADICLE_STATUS_OK); EXPECT_EQ(is_extra, 1);
+  EXPECT_EQ(radicle_navmesh_triangle_edge_is_extra(&triangle, 1, &is_extra), RADICLE_STATUS_OK); EXPECT_EQ(is_extra, 0);
+  EXPECT_EQ(radicle_navmesh_triangle_edge_is_extra(&triangle, 3, &is_extra), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_navmesh_triangle_edge_is_extra(nullptr, 0, &is_extra), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_F(NavmeshRead, PathPayloadDecodesListsAndAnchorsAndFailsClosed) {
+  write(geometry(false), info(false)); const auto absent = load();
+  EXPECT_TRUE(fo4::env::decode_navmesh_paths(absent, record(absent, 0x801)).paths.empty());
+  const auto good = navi_paths();
+  auto truncated = good; truncated.bytes.pop_back();
+  auto trailing = good; trailing.bytes.push_back(std::byte{0});
+  write(geometry(false), info(false), false, 131, &good); const auto env = load();
+  const auto decoded = fo4::env::decode_navmesh_paths(env, record(env, 0x801));
+  ASSERT_EQ(decoded.paths.size(), 2u);
+  ASSERT_EQ(decoded.paths[0].size(), 2u); EXPECT_EQ(decoded.paths[0][0].local().value(), 0x800u); EXPECT_EQ(decoded.paths[0][1].local().value(), 0x810u);
+  ASSERT_EQ(decoded.paths[1].size(), 1u); EXPECT_EQ(decoded.paths[1][0].local().value(), 0x810u);
+  ASSERT_EQ(decoded.anchors.size(), 1u);
+  EXPECT_EQ(decoded.anchors[0].first.local().value(), 0x800u); EXPECT_EQ(decoded.anchors[0].second, 7u);
+  const auto name = path.string(); const char* files[] = {name.c_str()}; radicle_env* abi = nullptr;
+  ASSERT_EQ(radicle_env_load(files, 1, &abi), RADICLE_STATUS_OK);
+  const radicle_record* navi = nullptr;
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Navigation.esm", 0x801}, &navi), RADICLE_STATUS_OK);
+  const radicle_navi_path_list* list = nullptr;
+  ASSERT_EQ(radicle_navi_path_list_decode(abi, navi, &list), RADICLE_STATUS_OK);
+  ASSERT_EQ(list->path_count, 2u); EXPECT_EQ(list->paths[0].navmesh_count, 2u); EXPECT_EQ(list->paths[0].navmeshes[1].local_id, 0x810u);
+  ASSERT_EQ(list->anchor_count, 1u); EXPECT_EQ(list->anchors[0].value, 7u);
+  radicle_navi_path_list_free(list); radicle_env_destroy(abi);
+  for (const auto* bad : {&truncated, &trailing}) {
+    write(geometry(false), info(false), false, 131, bad); const auto bad_env = load();
+    EXPECT_THROW(fo4::env::decode_navmesh_paths(bad_env, record(bad_env, 0x801)), fo4::env::WorldDecodeError);
+  }
+}
+
+TEST_F(NavmeshRead, PathListAbiRefusesForeignEnvironmentNullArgumentsAndNonNaviRecords) {
+  const auto good = navi_paths();
+  write(geometry(false), info(false), false, 131, &good);
+  const auto name = path.string(); const char* paths[] = {name.c_str()};
+  radicle_env* env_a = nullptr; radicle_env* env_b = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env_a), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_load(paths, 1, &env_b), RADICLE_STATUS_OK);
+  const radicle_record* navm = nullptr; const radicle_record* navi = nullptr;
+  ASSERT_EQ(radicle_env_winner(env_a, radicle_form_key{"Navigation.esm", 0x800}, &navm), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_winner(env_a, radicle_form_key{"Navigation.esm", 0x801}, &navi), RADICLE_STATUS_OK);
+  const radicle_navi_path_list* list = nullptr;
+  EXPECT_EQ(radicle_navi_path_list_decode(env_b, navi, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  EXPECT_EQ(list, nullptr);
+  EXPECT_EQ(radicle_navi_path_list_decode(nullptr, navi, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_navi_path_list_decode(env_a, nullptr, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_navi_path_list_decode(env_a, navi, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_navi_path_list_decode(env_a, navm, &list), RADICLE_STATUS_PARSE_ERROR);
+  EXPECT_EQ(list, nullptr);
+  radicle_navi_path_list_free(nullptr);
+  radicle_env_destroy(env_b); radicle_env_destroy(env_a);
+}
+
+TEST_F(NavmeshRead, PathPayloadRequiresNaviVersionFifteen) {
+  const auto good = navi_paths();
+  write(geometry(false), info(false), false, 131, &good, 14);
+  const auto env = load();
+  try {
+    fo4::env::decode_navmesh_paths(env, record(env, 0x801));
+    ADD_FAILURE() << "path payload decoded at NVER 14";
+  } catch (const fo4::env::WorldDecodeError& error) {
+    EXPECT_NE(std::string(error.what()).find("version 15 is required"), std::string::npos);
+  }
+  EXPECT_THROW(fo4::env::decode_navmesh_info(env, record(env, 0x801)), fo4::env::WorldDecodeError);
 }
 
 TEST_F(NavmeshRead, LegacyFormVersionIsRejectedWithoutChangingBytes) {

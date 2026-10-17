@@ -121,11 +121,49 @@ typedef struct radicle_idle_info {
   void* internal;
 } radicle_idle_info;
 
+typedef struct radicle_package_procedure_input {
+  const char* type_name;
+  size_t subrecord_begin;
+  size_t subrecord_end;
+  uint8_t index;
+} radicle_package_procedure_input;
+
+typedef struct radicle_package_procedure_node {
+  int32_t is_leaf;
+  const char* name;
+  uint32_t condition_count;
+  uint32_t child_count;
+  int32_t has_flags;
+  uint32_t flags;
+  size_t opaque_begin;
+  size_t opaque_end;
+  const size_t* children;
+  size_t children_count;
+} radicle_package_procedure_node;
+
+typedef struct radicle_package_procedure_tree {
+  int32_t decoded;
+  size_t region_begin;
+  size_t region_end;
+  int32_t has_marker;
+  uint8_t marker;
+  const radicle_package_procedure_input* inputs;
+  size_t input_count;
+  const radicle_package_procedure_node* nodes;
+  size_t node_count;
+  void* internal;
+} radicle_package_procedure_tree;
+
 RADICLE_API radicle_status radicle_package_decode(const radicle_env* env, const radicle_record* record, const radicle_package_info** out_package);
 RADICLE_API void radicle_package_free(const radicle_package_info* package);
 RADICLE_API radicle_status radicle_combat_style_get_info(const radicle_env* env, const radicle_record* record, radicle_combat_style_info* out_info);
 RADICLE_API radicle_status radicle_idle_decode(const radicle_env* env, const radicle_record* record, const radicle_idle_info** out_idle);
 RADICLE_API void radicle_idle_free(const radicle_idle_info* idle);
+RADICLE_API radicle_status radicle_package_procedure_decode(const radicle_env* env, const radicle_record* record,
+                                                            const radicle_package_procedure_tree** out_tree);
+RADICLE_API void radicle_package_procedure_free(const radicle_package_procedure_tree* tree);
+RADICLE_API const char* radicle_package_location_type_name(int32_t type);
+RADICLE_API const char* radicle_package_target_type_name(int32_t type);
 
 #ifdef __cplusplus
 }

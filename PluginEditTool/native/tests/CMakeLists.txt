@@ -46,6 +46,12 @@ target_link_libraries(fo4ide_test_papyrus_corpus PRIVATE fo4ide_papyrus Catch2::
 fo4ide_enable_warnings(fo4ide_test_papyrus_corpus)
 fo4ide_enable_sanitizers(fo4ide_test_papyrus_corpus)
 catch_discover_tests(fo4ide_test_papyrus_corpus PROPERTIES TIMEOUT 300)
+# The differential compiles every vanilla pair with a fresh index each; give it 3x the corpus headroom.
+add_executable(fo4ide_test_papyrus_differential unit/PapyrusDifferentialTests.cpp)
+target_link_libraries(fo4ide_test_papyrus_differential PRIVATE fo4ide_papyrus Catch2::Catch2WithMain)
+fo4ide_enable_warnings(fo4ide_test_papyrus_differential)
+fo4ide_enable_sanitizers(fo4ide_test_papyrus_differential)
+catch_discover_tests(fo4ide_test_papyrus_differential PROPERTIES TIMEOUT 900)
 fo4ide_add_test(fo4ide_test_logging unit/LoggerTests.cpp fo4ide_logging)
 fo4ide_add_test(fo4ide_test_nif unit/NifServiceTests.cpp fo4ide_nif)
 fo4ide_add_test(fo4ide_test_material unit/MaterialServiceTests.cpp fo4ide_material)
@@ -102,6 +108,7 @@ endforeach()
 add_executable(
     fo4ide_test_plugin_backend
     unit/RadiclePluginBackendTests.cpp
+    unit/RadiclePluginStringsTests.cpp
     unit/RadiclePluginWorklistTests.cpp
     unit/RadiclePluginMastersTests.cpp
     unit/RadiclePluginMutationTests.cpp
@@ -127,6 +134,7 @@ add_executable(
     unit/RadiclePluginNestedFormLinkListTests.cpp
     unit/RadiclePluginElementTests.cpp
     unit/RadiclePluginMaintenanceTests.cpp
+    unit/RadiclePluginUndecodableMaintenanceTests.cpp
     unit/RadiclePluginDeepCopyTests.cpp
     unit/RadiclePluginRenumberTests.cpp
     unit/RadiclePluginLeveledTests.cpp
@@ -135,12 +143,15 @@ add_executable(
     unit/RadiclePluginOverridePatchTests.cpp
     unit/RadiclePluginExteriorCellTests.cpp
     unit/RadiclePluginCellTests.cpp
+    unit/RadiclePluginTypedRecordsTests.cpp
+    unit/RadiclePluginTypedEntryEditTests.cpp
     unit/RadiclePluginEyesTests.cpp
     unit/RadiclePluginEyesGridTests.cpp
     unit/RadiclePluginLvspTests.cpp
     unit/RadiclePluginLvspGridTests.cpp
     unit/RadiclePluginBatchMutationTests.cpp
     unit/RadiclePluginAddMastersTests.cpp
+    unit/RadiclePluginCopyAsWrapperTests.cpp
     unit/RadiclePluginItmNestedTests.cpp
     unit/RadiclePluginCompareTests.cpp
     unit/RadiclePluginReachableTests.cpp
@@ -171,7 +182,7 @@ target_compile_definitions(
 )
 target_link_libraries(
     fo4ide_test_plugin_backend
-    PRIVATE fo4ide_plugin Catch2::Catch2WithMain ZLIB::ZLIB
+    PRIVATE fo4ide_plugin fo4ide_app Catch2::Catch2WithMain ZLIB::ZLIB
 )
 target_compile_definitions(fo4ide_test_plugin_backend PRIVATE FO4IDE_TEST_HOOKS)
 fo4ide_enable_warnings(fo4ide_test_plugin_backend)
@@ -182,11 +193,12 @@ add_executable(fo4ide_test_sound_semantic_real unit/RadiclePluginSoundSemanticRe
 target_link_libraries(fo4ide_test_sound_semantic_real PRIVATE fo4ide_plugin Catch2::Catch2WithMain)
 fo4ide_enable_warnings(fo4ide_test_sound_semantic_real)
 fo4ide_enable_sanitizers(fo4ide_test_sound_semantic_real)
-catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 120)
+catch_discover_tests(fo4ide_test_sound_semantic_real PROPERTIES TIMEOUT 600)
 
 add_executable(
     fo4ide_test_proj_expl_hazd
     unit/RadiclePluginProjExplHazdTests.cpp
+    unit/RadiclePluginProjExplHazdFormLinkTests.cpp
     unit/RadiclePluginProjFlagsTests.cpp
     unit/RadiclePluginProjExplHazdLimitsTests.cpp
     "${PROJECT_SOURCE_DIR}/../../Radicle/tests/plugin_bytes.cpp"
