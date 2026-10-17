@@ -73,9 +73,11 @@ public static class LifecycleSmoke
             MultiChatSmoke.Run();
             return Smoke.FailedCount == 0 ? 0 : 1;
         }
+        if (args.Length >= 2 && args[0] == "--toolbar-png") return Smoke.ToolbarPngForTest(args);
         int existing = Smoke.Main(args);
         if (args.Length >= 2 && args[0] == "--png") return existing;
         int geometry = AnimationGeometrySmoke.Run();
+        int tools = ToolSelectorSmoke.Run();
         int workspace = WorkspaceSmoke.Run();
         int animationIndex = AnimationIndexSmoke.Run();
         string lifecycleSettings = Path.Combine(Path.GetTempPath(), $"bgs-lifecycle-{Guid.NewGuid():N}.cfg");
@@ -88,7 +90,8 @@ public static class LifecycleSmoke
             File.Delete(lifecycleSettings);
             Settings.SettingsPathForTest = null;
         }
-        return existing == 0 && workspace == 0 && lifecycle == 0 && geometry == 0 && animationIndex == 0 ? 0 : 1;
+        return existing == 0 && workspace == 0 && lifecycle == 0 && geometry == 0 && tools == 0 &&
+               animationIndex == 0 ? 0 : 1;
     }
 
     private static int RagdollLifecycle()

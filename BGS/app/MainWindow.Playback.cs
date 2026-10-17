@@ -23,65 +23,6 @@ internal readonly record struct RagdollChoice(HavokRagdollModel? Model, PhysicsL
 
 public partial class MainWindow : Window
 {
-    private readonly Button _firstFrameButton = Ux.Secondary("|<");
-    private readonly Button _backFrameButton = Ux.Secondary("<");
-    private readonly Button _forwardFrameButton = Ux.Secondary(">");
-    private readonly Button _lastFrameButton = Ux.Secondary(">|");
-    private readonly Button _fitButton = Ux.Secondary("Fit");
-    private readonly Button _reloadFromNodeButton = Ux.Secondary("From selected node");
-    private readonly Button _meshButton = Ux.Secondary("Mesh...");
-    private readonly Button _noMeshButton = Ux.Secondary("No mesh");
-    private readonly CheckBox _referenceToggle = new CheckBox
-    {
-        Content = "Reference pose",
-        Foreground = Ux.MetaBrush,
-        FontSize = 12,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
-    private readonly CheckBox _travelToggle = new CheckBox
-    {
-        Content = "Follow travel",
-        Foreground = Ux.MetaBrush,
-        FontSize = 12,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
-    private readonly TextBlock _diagnosticsText = new()
-    {
-        Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
-
-    private void RefreshDiagnosticsPanel()
-    {
-        _diagnosticsText.Text = _physicsReportNote is { Length: > 0 } note
-            ? note
-            : "No physics report yet: open a file whose skeleton carries a ragdoll.";
-    }
-
-    private void UpdateTransportState()
-    {
-        bool posable = _poseAnimation != null;
-        bool playable = posable && _playback.CanPlay;
-
-        _playButton.IsEnabled = playable;
-        _firstFrameButton.IsEnabled = posable;
-        _backFrameButton.IsEnabled = posable;
-        _forwardFrameButton.IsEnabled = posable;
-        _lastFrameButton.IsEnabled = posable;
-
-        string why = playable
-            ? "Play or pause this clip."
-            : _poseRefusal.Length > 0
-                ? _poseRefusal
-                : posable
-                    ? "This clip holds a single frame, so there is nothing to play; the step buttons " +
-                      "still move it."
-                    : "Nothing is posable yet. Select a clip, or press From selected node.";
-        ToolTip.SetTip(_playButton, why);
-        foreach (var button in new[] { _firstFrameButton, _backFrameButton, _forwardFrameButton, _lastFrameButton })
-            ToolTip.SetTip(button, posable ? "Step one frame." : why);
-    }
-
     private Control BuildPlaybackTab()
     {
         _playButton.Click += (_, _) => TogglePlay();
@@ -223,19 +164,11 @@ public partial class MainWindow : Window
         _frameDistancePill = Ux.Pill(_frameDistanceStatus);
         _frameDistancePill.IsVisible = false;
 
-        RegisterToolbar("Playback",
-            ToolbarGroup("Playback controls", _playButton, _firstFrameButton, _backFrameButton,
-                _forwardFrameButton, _lastFrameButton, _fitButton),
-            ToolbarGroup("Viewport overlays", _referenceToggle, _travelToggle, _bodiesToggle, _constraintsToggle,
-                _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle),
-            ToolbarGroup("Scene tools", _clearFrameDistanceButton, _dropButton, _reloadFromNodeButton, _meshButton,
-                _noMeshButton, _copyDiagnosticsButton));
+        RegisterToolbar("Playback", PlaybackToolRibbon());
 
         var panel = new Grid();
         panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         panel.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
-        panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
         var summary = Ux.Pill(_playbackSummary);
         summary.Margin = new Thickness(0, 0, 0, Ux.Space);
@@ -246,14 +179,8 @@ public partial class MainWindow : Window
         _playbackViewportHost = Framed(_skeleton);
         _playbackViewportHost.ClipToBounds = true;
         var viewport = WithClipPicker(_playbackViewportHost);
-        Grid.SetRow(viewport, 2);
+        Grid.SetRow(viewport, 1);
         panel.Children.Add(viewport);
-
-        var timeline = Ux.Group("Timeline", _scrub,
-            Ux.Wrap(Ux.Pill(_frameLabel), _scalePill, _frameDistancePill));
-        timeline.Margin = new Thickness(0, Ux.Space, 0, 0);
-        Grid.SetRow(timeline, 3);
-        panel.Children.Add(timeline);
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
                            "the skeleton; use Mesh... to hang a model on it.", Ux.MutedBrush);

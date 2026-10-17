@@ -32,11 +32,11 @@ public sealed partial class RigAuthoringWindow : Window
     private SkinDocument? _skin;
     private readonly ComboBox _rigs = new() { MinWidth = 180 };
     private readonly ComboBox _bones = new() { MinWidth = 230 };
-    private readonly TextBox _boneName = Ux.Field("bone name", 230);
+    private readonly TextBox _boneName = Ux.Field("bone name", 230, "BoneName");
     private readonly TextBox _parent = Ux.Field("parent index", 90);
-    private readonly TextBox _translation = Ux.Field("X Y Z", 230);
-    private readonly TextBox _rotation = Ux.Field("X Y Z W", 230);
-    private readonly TextBox _scale = Ux.Field("X Y Z", 230);
+    private readonly TextBox _translation = Ux.Field("X Y Z", 230, "BoneTranslation");
+    private readonly TextBox _rotation = Ux.Field("X Y Z W", 230, "BoneRotation");
+    private readonly TextBox _scale = Ux.Field("X Y Z", 230, "BoneScale");
     private readonly CheckBox _lockedTranslation = new() { Content = "Lock translation" };
     private readonly SkeletonView _preview = new();
     private bool _closeApproved;

@@ -103,13 +103,15 @@ public partial class MainWindow : Window
     private readonly TextBlock _animationSummary =
         new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _framePage = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
-    private readonly TextBox _boneFilter = Ux.Field("bone", 150);
-    private readonly TextBox _fraction = Ux.Field("0.0 to 1.0", 110);
-    private readonly TextBlock _fractionAnswer = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
-    private readonly TextBox _framePosition = Ux.Field("x, y, z", 170);
-    private readonly TextBox _frameRotation = Ux.Field("x, y, z, w", 210);
-    private readonly TextBox _frameScale = Ux.Field("x, y, z", 150);
-    private readonly TextBlock _frameEditAnswer = new() { Foreground = Ux.MetaBrush, FontSize = 12 };
+    private readonly TextBox _boneFilter = Ux.Field("bone", 150, "Bone or track name");
+    private readonly TextBox _fraction = Ux.Field("0.0 to 1.0", 110, "Time fraction");
+    private readonly TextBlock _fractionAnswer =
+        new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBox _framePosition = Ux.Field("x, y, z", 170, "Frame position");
+    private readonly TextBox _frameRotation = Ux.Field("x, y, z, w", 210, "Frame rotation");
+    private readonly TextBox _frameScale = Ux.Field("x, y, z", 150, "Frame scale");
+    private readonly TextBlock _frameEditAnswer =
+        new() { Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private HkxAnimationData? _animationData;
     private HkxSkeleton? _animationSkeleton;
     private int _frameStart;

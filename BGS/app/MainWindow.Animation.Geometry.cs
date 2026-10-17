@@ -8,11 +8,11 @@ namespace BehaviourStudio.App;
 
 public partial class MainWindow : Window
 {
-    private readonly TextBox _trimStart = Ux.Field("first", 56);
-    private readonly TextBox _trimEnd = Ux.Field("last", 56);
-    private readonly TextBox _retimeSpeed = Ux.Field("x", 56);
-    private readonly TextBox _retimeDuration = Ux.Field("seconds", 78);
-    private readonly TextBox _loopBlend = Ux.Field("blend frames", 74);
+    private readonly TextBox _trimStart = Ux.Field("first", 56, "First frame");
+    private readonly TextBox _trimEnd = Ux.Field("last", 56, "Last frame");
+    private readonly TextBox _retimeSpeed = Ux.Field("x", 56, "Speed ×");
+    private readonly TextBox _retimeDuration = Ux.Field("seconds", 78, "New length (s)");
+    private readonly TextBox _loopBlend = Ux.Field("blend frames", 74, "Blend frames");
     private readonly TextBlock _geometryAnswer = new()
     {
         Foreground = Ux.MetaBrush,

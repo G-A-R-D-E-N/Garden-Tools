@@ -90,6 +90,23 @@ public partial class MainWindow : Window
         return panel;
     }
 
+    private static Control ToolRow(string title, params Control[] controls)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        row.Children.Add(Ux.RowTitle(title));
+        foreach (var control in controls)
+        {
+            control.VerticalAlignment = VerticalAlignment.Center;
+            row.Children.Add(control);
+        }
+        return row;
+    }
+
     private static Control Rows(params (Control Control, bool Fill)[] rows)
     {
         var grid = new Grid();

@@ -19,79 +19,18 @@ namespace BehaviourStudio.App;
 
 public partial class MainWindow : Window
 {
-    private readonly Button _saveAnimationButton = Ux.Secondary("Save changes");
-
     private Control BuildAnimationTab()
     {
-        var earlier = Ux.Secondary("Earlier frames");
-        earlier.Click += (_, _) => PageFrames(-FramesPerPage);
-        var later = Ux.Secondary("Later frames");
-        later.Click += (_, _) => PageFrames(FramesPerPage);
-        var first = Ux.Secondary("First");
-        first.Click += (_, _) => PageFrames(int.MinValue);
-        var last = Ux.Secondary("Last");
-        last.Click += (_, _) => PageFrames(int.MaxValue);
-
         var panel = new DockPanel();
         AddTop(panel, Ux.Pill(_animationSummary));
-        var navigation = ToolbarGroup("Frame navigation", first, earlier, later, last, _framePage);
-
-        var aim = Ux.Secondary("Find frame");
-        aim.Click += (_, _) => AimAtFraction();
-        _fraction.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) AimAtFraction(); };
-        _boneFilter.PropertyChanged += (_, e) =>
-        {
-            if (e.Property == TextBox.TextProperty) ShowAnimationFrames();
-        };
-
-        var find = ToolbarGroup("Find a frame", _boneFilter, _fraction, aim);
-        AddTop(panel, _fractionAnswer);
-
-        var apply = Ux.Secondary("Set frame");
-        apply.Click += (_, _) => SetFrame();
-        _saveAnimationButton.Click += (_, _) => SaveAnimation();
-
-        foreach (var box in new[] { _framePosition, _frameRotation, _frameScale })
-            box.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) SetFrame(); };
 
         _animation.SelectionChanged += ShowSelectedFrame;
 
-        var geometry = GeometryButtons();
-        RegisterToolbar("Animation", navigation, find,
-            ToolbarGroup("Edit selected frame", _framePosition, _frameRotation, _frameScale, apply,
-                _saveAnimationButton),
-            ToolbarGroup("Trim frames", _trimStart, _trimEnd, geometry.PreviewTrim, geometry.Trim),
-            ToolbarGroup("Retime", _retimeSpeed, _retimeDuration, geometry.PreviewRetime, geometry.Retime),
-            ToolbarGroup("Loop", _loopBlend, geometry.PreviewLoop, geometry.Loop));
-        AddTop(panel, _frameEditAnswer);
-        AddTop(panel, _geometryAnswer);
+        RegisterToolbar("Animation", AnimationToolRibbon());
 
         panel.Children.Add(_animation);
-        RefreshSaveAnimationState();
         return panel;
     }
-
-    private void RefreshSaveAnimationState()
-    {
-        bool dirty = _animationEdited && !_readOnly && _animationData != null;
-        _saveAnimationButton.IsEnabled = dirty;
-        _saveAnimationButton.Background = dirty ? Ux.AccentBrush : Ux.CardBrush;
-        _saveAnimationButton.Foreground = dirty ? Brushes.White : Ux.MetaBrush;
-
-        string why = dirty
-            ? "Write the clip on the Animation tab back to " + System.IO.Path.GetFileName(_hkxPath) + "."
-            : _readOnly
-                ? "Not saved: " + _readOnlyWhy
-                : _animationData == null
-                    ? "Open an animation first; this file holds none."
-                    : "No unsaved changes to write.";
-        ToolTip.SetTip(_saveAnimationButton, why);
-    }
-
-    internal bool SaveAnimationButtonEnabled => _saveAnimationButton.IsEnabled;
-
-    internal bool SaveAnimationButtonIsPrimary =>
-        _saveAnimationButton.Background is ISolidColorBrush brush && brush.Color == Ux.Accent;
 
     private void ShowSelectedFrame()
     {

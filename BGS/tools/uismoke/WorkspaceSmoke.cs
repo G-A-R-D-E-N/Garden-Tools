@@ -165,7 +165,7 @@ internal static class WorkspaceSmoke
                 Grid.GetRow(child) == 4 && child.Child is StackPanel));
 
         Smoke.SelectTab(window, "Playback");
-        foreach (string section in new[] { "PLAYBACK CONTROLS", "VIEWPORT OVERLAYS", "SCENE TOOLS", "TIMELINE" })
+        foreach (string section in new[] { "TRANSPORT", "TIMELINE", "TOOL", "OVERLAYS" })
             CheckTrue($"Playback has the {section.ToLowerInvariant()} section",
                 Smoke.Find<TextBlock>(window).Any(text => text.Text == section));
         Smoke.Click(Smoke.Find<Button>(window).Single(button => button.Content?.ToString() == "Play"));
@@ -173,7 +173,7 @@ internal static class WorkspaceSmoke
             window.PlaybackSummary.StartsWith("Nothing loaded to play", StringComparison.Ordinal));
 
         Smoke.SelectTab(window, "Animation");
-        foreach (string section in new[] { "FRAME NAVIGATION", "FIND A FRAME", "EDIT SELECTED FRAME" })
+        foreach (string section in new[] { "FRAME NAVIGATION", "TOOL", "SAVE", "EDIT SELECTED FRAME" })
             CheckTrue($"Animation has the {section.ToLowerInvariant()} section",
                 Smoke.Find<TextBlock>(window).Any(text => text.Text == section));
 

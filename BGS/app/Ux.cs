@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -49,20 +50,42 @@ public static class Ux
     public static readonly IBrush BadBrush = new SolidColorBrush(Bad);
     public static readonly IBrush WarnBrush = new SolidColorBrush(Warn);
 
-    public static TextBox Field(string watermark = "", double minWidth = 0) => new()
+    public static TextBox Field(string watermark = "", double minWidth = 0, string name = "")
     {
-        Watermark = watermark,
-        MinWidth = minWidth,
-        MinHeight = ControlHeight,
-        Background = CardBrush,
-        Foreground = TitleBrush,
-        BorderBrush = BorderBrush,
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(Radius),
-        Padding = new Thickness(8, 5),
-        FontSize = FontBody,
-        VerticalContentAlignment = VerticalAlignment.Center,
-    };
+        var box = new TextBox
+        {
+            Watermark = watermark,
+            MinWidth = minWidth,
+            MinHeight = ControlHeight,
+            Background = CardBrush,
+            Foreground = TitleBrush,
+            BorderBrush = BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Radius),
+            Padding = new Thickness(8, 5),
+            FontSize = FontBody,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        return Named(box, name.Length > 0 ? name : watermark);
+    }
+
+    public static T Named<T>(T control, string name) where T : Control
+    {
+        if (name.Length > 0) AutomationProperties.SetName(control, name);
+        return control;
+    }
+
+    public static Control Labelled(Control field, string label)
+    {
+        var caption = Label(label);
+        caption.Margin = new Thickness(0, 0, 6, 0);
+        AutomationProperties.SetLabeledBy(field, caption);
+        if (AutomationProperties.GetName(field) is not { Length: > 0 }) Named(field, label);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(caption);
+        row.Children.Add(field);
+        return row;
+    }
 
     public static Button Primary(string text) => Style(new Button { Content = text }, AccentBrush, Brushes.White);
 
@@ -84,6 +107,30 @@ public static class Ux
         return button;
     }
 
+    public static TextBlock RowTitle(string text)
+    {
+        var title = SectionTitle(text);
+        title.VerticalAlignment = VerticalAlignment.Center;
+        return title;
+    }
+
+    public static Border Panel(string name, params Control[] rows)
+    {
+        var body = new StackPanel { Spacing = 6 };
+        foreach (var row in rows) body.Children.Add(row);
+        var panel = new Border
+        {
+            Background = CardBrush,
+            BorderBrush = BorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(Radius),
+            Padding = new Thickness(10, 6),
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = body,
+        };
+        return Named(panel, name);
+    }
+
     public static TextBlock SectionTitle(string text) => new()
     {
         Text = text.ToUpperInvariant(),
@@ -98,7 +145,7 @@ public static class Ux
         var body = new StackPanel { Spacing = Space };
         body.Children.Add(SectionTitle(title));
         foreach (var row in rows) body.Children.Add(row);
-        return new Border
+        var group = new Border
         {
             Background = CardBrush,
             BorderBrush = BorderBrush,
@@ -108,6 +155,7 @@ public static class Ux
             VerticalAlignment = VerticalAlignment.Top,
             Child = body,
         };
+        return Named(group, title);
     }
 
     public static WrapPanel Wrap(params Control[] controls)
