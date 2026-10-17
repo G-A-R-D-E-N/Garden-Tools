@@ -247,7 +247,11 @@ std::vector<std::byte> encode_vertex(bool full, std::uint32_t flags, const Vert&
     w.u8(102);
   }
   if ((flags & k_has_skin) != 0) {
-    for (int i = 0; i < 12; ++i) w.u8(0xCD);
+    w.u16(0x3C00);
+    w.u16(0x3800);
+    w.u16(0x3400);
+    w.u16(0);
+    for (std::uint8_t index = 1; index <= 4; ++index) w.u8(index);
   }
   if ((flags & k_has_tail_slot) != 0) w.u32(0xEFU);
   return w.bytes();
@@ -302,7 +306,19 @@ TEST(NifGeometry, DecodesEveryVertexAttributeCombinationAtBothPrecisions) {
       expect_floats(shape.colors,
                     (mask & 16U) ? std::vector<float>{1.0f, 0.0f, 0.2f, 0.4f, 1.0f, 0.0f, 0.2f, 0.4f}
                                  : std::vector<float>{});
-      EXPECT_TRUE(shape.bitangents.empty());
+      const float bitangent_y = 0x11 / 255.0f * 2.0f - 1.0f;
+      const float bitangent_z = 0x22 / 255.0f * 2.0f - 1.0f;
+      expect_floats(shape.bitangents,
+                    (mask & 4U) != 0 && (mask & 8U) != 0
+                        ? std::vector<float>{0.0f, bitangent_y, bitangent_z, 0.0f, bitangent_y, bitangent_z}
+                        : std::vector<float>{});
+      expect_floats(shape.weights, (mask & 32U) != 0
+                                       ? std::vector<float>{1.0f, 0.5f, 0.25f, 0.0f, 1.0f, 0.5f, 0.25f, 0.0f}
+                                       : std::vector<float>{});
+      const std::vector<std::uint8_t> expected_bone_indices =
+          (mask & 32U) != 0 ? std::vector<std::uint8_t>{1, 2, 3, 4, 1, 2, 3, 4}
+                            : std::vector<std::uint8_t>{};
+      EXPECT_EQ(shape.bone_indices, expected_bone_indices);
       EXPECT_EQ(shape.tris, (std::vector<std::uint16_t>{0, 1, 1}));
     }
   }

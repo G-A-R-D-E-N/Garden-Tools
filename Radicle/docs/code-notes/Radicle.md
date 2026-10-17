@@ -2427,3 +2427,65 @@ Skipped on purpose:
 - Radicle/schema/fallout4/fields.json:ENCH\BaseEnchantment: `payload_sizes` went from [36] to [32, 36]. `SetOptionalFrom(8)` (Core/wbDefinitionsFO4.pas:6747) makes only member 8, Worn Restrictions (offset 32), optional. Base Enchantment is member 7 at offset 28 and is required, so the shortest ENIT xEdit reads cleanly is 32 bytes. A 28-byte ENIT is not that form, because the required member runs past the payload (Core/wbImplementation.pas:22588-22603 marks only members from the optional index as missing). What xEdit shows for 28 bytes is not verified, since no xEdit run was made. ENCH\WornRestrictions stays at [36]. A link write on a payload whose size is not in `payload_sizes` throws `schema::FormLinkFieldError` (`Radicle/src/plugin/field_writer.cpp:formlink_slots`, throw at :132) instead of returning `subrecord_missing`, so a 28-byte ENIT throws for both links and a 32-byte ENIT throws for Worn Restrictions. The target-type check in `set_record_formlink_field` (:399) runs before it, so the test writes Worn Restrictions with a local FLST target and checks the message names the payload size. Test: `Radicle/tests/test_scalar_embedded.cpp:EnchEnitShortFormsReadOnlyTheMembersXEditReadsCleanly`.
 - Radicle/tools/record_schema_codegen.py:parse_default: an authoring default is checked against each subrecord's `payload_size` (exact) and now also against the largest `minimum_payload_size` of its rows. Without this, the ENIT default (36 bytes) would no longer be checked once the ENCH scalars moved to `minimum_payload_size` 28. A default shorter than that minimum is rejected.
 - Radicle/tools/schema_codegen.py:main and Radicle/tools/formlink_schema_codegen.py:main regenerated `include/fo4/schema/generated_scalar_fields.inc` and `generated_formlink_lists.inc`. Radicle/tools/parity_matrix.py:main regenerated `docs/FO4_PARITY.md` (IMAD scalar rows 58 to 60).
+
+## NIF geometry, skin and shader C ABI
+
+- Radicle/include/fo4/nif/nif.hpp:Shape: gained `weights`, `bone_indices`, `bones`,
+  `material` and `textures`; `bitangents` is now filled instead of empty. `Bone` holds
+  the name plus the `BSSkinBoneTrans` fields in storage order, and `Shader` holds the
+  property block, its shader type, its name, its texture set reference and the set's
+  slots. `read_shader` and `read_bones` are the two new entry points; `docs/NIF.md`
+  pins both layouts and the evidence for them.
+- Radicle/src/nif/geometry.cpp:read_vertex: the byte layout follows
+  `nif.xml:BSVertexData`, so the two bytes the reader used to skip after a position are
+  Bitangent X (float at full precision, `hfloat` at half precision) and the fourth byte
+  of the normal and tangent fields are Bitangent Y and Z. The bitangent is stored, not
+  reconstructed, and is emitted only when bits 3 and 4 are both set, which keeps it at
+  exactly three floats per vertex. `read_shape` now follows the shader reference and the
+  skin reference; both are range-checked and an out-of-range reference is a
+  `parse_error`, while a reference to a different block type is tolerated the way
+  `NifShape.cs` tolerates it.
+- Radicle/src/nif/shader.cpp:read_shader: reads only `BSLightingShaderProperty` and stops
+  after the texture set reference. The leading u32 is read as `Shader Type` because the
+  shader-type tail follows it, even though `nif.xml`'s version condition for that
+  NiObjectNET field excludes BS 130; the corpus decides, and all 1,111,752
+  material-bearing vanilla shapes read a `.bgsm` name at the offset that implies. The
+  conditional tail is deliberately not read, so no format guess there can fail a file.
+- Radicle/src/nif/skin.cpp:read_bones: `BSSkin::Instance` then `BSSkin::BoneData`, 68
+  bytes per `BSSkinBoneTrans`. The tolerance rules match `NifShape.cs:ReadSkin`: an
+  absent or mistyped data reference, or a bone count that disagrees with it, keeps the
+  names and leaves the transforms at their defaults. Bone names go through a tolerant
+  name lookup equivalent to `NifFile.cs:NameOf`, so a stale node reference yields an
+  empty name instead of a parse error.
+- Radicle/include/fo4/c_api_nif.h and Radicle/src/c_api_nif.cpp: the `radicle_nif_*`
+  surface. A handle is opened from bytes because assets arrive through GameData and the
+  resolver. Shapes are decoded once at open. Empty arrays are `OK` with a NULL pointer
+  and a count of 0, floats come back with `radicle_free_floats`, triangle indices with
+  `radicle_free_triangles`, and every byte array with `radicle_free_bytes`.
+- Radicle/bindings/csharp/Radicle.Interop/NifFile.cs: `NifFile.FromBytes` snapshots every
+  shape into managed arrays and destroys the native handle before it returns, so the
+  wrapper holds no native state and cannot leak. `Radicle.Interop` declares its own
+  `Vector3` record for record payloads, so the geometry types are reached through a
+  `Numerics` namespace alias; the exposed types are `System.Numerics` ones, which is what
+  BGS's `NifShape` uses.
+- Verified: `Radicle/tests/test_c_api_nif.cpp` (six tests over `tests/nif_fixture.hpp`) and
+  `Radicle/tests/test_nif.cpp` cover the fixture, `Radicle/tests/test_nif_corpus.cpp` covers
+  the vanilla corpus (226,454 NIFs, 1,207,017 shapes, 23,595 skinned shapes, 169,498 bones,
+  0 parse failures, every weight count and every bone index in range), and a throwaway
+  harness outside the repository compared BGS's `NifGeometry` against `NifFile.FromBytes`
+  on `MaleBody.nif`, `FemaleBody.nif`, `1stPersonFemaleBody.nif` and `RadRoach.nif`: all 8
+  skinned shapes agree on the skinned verdict, every bone name, every bind matrix, every
+  weight and every bone index.
+
+## DDS pixel decode
+
+- Radicle/src/texture/bcn.cpp is PluginEditTool's bcdec port, moved unchanged apart from
+  its namespace, its two entry points and a thrown `dds_error` instead of a returned one.
+  Radicle/THIRD_PARTY_NOTICES.md carries the attribution. PluginEditTool still holds its
+  own copy; pointing it at `fo4::texture` is the follow-up recorded in that file.
+- Radicle/src/texture/dds_codec.cpp parses the container (legacy FourCC and DX10) and
+  sizes mips; Radicle/src/texture/dds.cpp decodes one mip into RGBA8, unpacks the
+  uncompressed layouts and reconstructs Z for BC5. `docs/TEXTURES.md` lists the formats,
+  the header fields and the evidence.
+- Radicle/include/fo4/c_api_dds.h exposes `radicle_dds_decode_rgba` and `radicle_dds_info`;
+  `DdsImage` is the managed wrapper.

@@ -114,6 +114,11 @@ add_library(fo4
   src/binary/cursor.cpp
   src/nif/nif.cpp
   src/nif/geometry.cpp
+  src/nif/shader.cpp
+  src/nif/skin.cpp
+  src/texture/bcn.cpp
+  src/texture/dds.cpp
+  src/texture/dds_codec.cpp
   src/forms/armor.cpp
   src/forms/armor_edit.cpp
   src/forms/cell.cpp
@@ -247,6 +252,7 @@ fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
 target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp)
 target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
+target_sources(radicle_c PRIVATE src/c_api_nif.cpp src/c_api_dds.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -528,6 +534,8 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_versions_real.cpp
     tests/test_nif.cpp
     tests/test_nif_corpus.cpp
+    tests/test_c_api_nif.cpp
+    tests/test_dds.cpp
     tests/test_environment_writeback.cpp
     tests/test_writeback_real.cpp
     tests/test_environment_ref_fields.cpp

@@ -14,6 +14,8 @@
 #include "fo4/c_api_behavior.h"
 #include "fo4/c_api_dialogue.h"
 #include "fo4/c_api_loadorder.h"
+#include "fo4/c_api_nif.h"
+#include "fo4/c_api_dds.h"
 #include <cstddef>
 #include <cstdio>
 
