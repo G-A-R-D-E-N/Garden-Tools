@@ -110,18 +110,62 @@ public sealed class RagdollCliTests
     }
 
     [Fact]
-    public void ACapsuleGeometryEditIsRefusedByTheCommand()
+    public void ACapsuleGeometryEditIsDerivedByTheCommand()
     {
         using var work = new Work();
         string target = work.Copy("skeleton.hkx");
         string outPath = work.At("capsule.hkx");
+        var document = new RagdollDocument(File.ReadAllBytes(target));
+
+        int index = -1;
+        for (int i = 0; i < document.Shapes.Count; i++)
+            if (document.Shapes[i].ReferencedByBodies <= 1)
+            {
+                index = i;
+                break;
+            }
+
+        Assert.True(index >= 0, "every fixture capsule shape is named by more than one body");
+        float wanted = document.Shapes[index].Radius * 1.4f;
+        var (exit, _, error) = Capture(() => CliEntry.Run(
+            new[] { "ragdoll", target, "--set", $"radius:{index}={wanted}", "--out", outPath },
+            TextWriter.Null, TextWriter.Null));
+
+        _out.WriteLine(error);
+        Assert.Equal(0, exit);
+        Assert.True(File.Exists(outPath));
+        Assert.Equal(wanted, RagdollDocument.Open(outPath).Shapes[index].Radius);
+    }
+
+    [Fact]
+    public void ACapsuleGeometryEditOfASharedShapeIsRefusedByTheCommand()
+    {
+        using var work = new Work();
+        string target = work.Copy("skeleton.hkx");
+        string outPath = work.At("shared.hkx");
+        var document = new RagdollDocument(File.ReadAllBytes(target));
+
+        int index = -1;
+        for (int i = 0; i < document.Shapes.Count; i++)
+            if (document.Shapes[i].ReferencedByBodies > 1)
+            {
+                index = i;
+                break;
+            }
+
+        if (index < 0)
+        {
+            _out.WriteLine("the fixture names no capsule shape from more than one body, so there is nothing to refuse");
+            return;
+        }
 
         var (exit, _, error) = Capture(() => CliEntry.Run(
-            new[] { "ragdoll", target, "--set", "radius:0=5", "--out", outPath }, TextWriter.Null, TextWriter.Null));
+            new[] { "ragdoll", target, "--set", $"radius:{index}=5", "--out", outPath },
+            TextWriter.Null, TextWriter.Null));
 
         Assert.Equal(1, exit);
         _out.WriteLine(error);
-        Assert.Contains("cannot derive", error);
+        Assert.Contains("named by", error);
         Assert.False(File.Exists(outPath));
     }
 

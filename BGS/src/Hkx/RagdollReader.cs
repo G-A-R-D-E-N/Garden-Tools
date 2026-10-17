@@ -217,17 +217,46 @@ internal static class RagdollRead
         else
             return null;
 
-        shape.Vertices = PolytopeCount(objects, instance, "vertices", HavokClassTypes.Width("TYPE_VECTOR4"));
-        shape.Planes = PolytopeCount(objects, instance, "planes", HavokClassTypes.Width("TYPE_VECTOR4"));
-        shape.Faces = PolytopeCount(objects, instance, "faces",
-                                    RagdollLayout.Stride(RagdollLayout.PolytopeFaceClass));
-        shape.Indices = PolytopeCount(objects, instance, "indices", HavokClassTypes.Width("TYPE_UINT8"));
+        int vertexWidth = HavokClassTypes.Width("TYPE_VECTOR4");
+        int faceWidth = RagdollLayout.Stride(RagdollLayout.PolytopeFaceClass);
+        byte[]? vertices = PolytopeBytes(objects, instance, "vertices", vertexWidth);
+        byte[]? planes = PolytopeBytes(objects, instance, "planes", vertexWidth);
+        byte[]? faces = PolytopeBytes(objects, instance, "faces", faceWidth);
+        byte[]? indices = PolytopeBytes(objects, instance, "indices", HavokClassTypes.Width("TYPE_UINT8"));
+        if (vertices == null || planes == null || faces == null || indices == null) return null;
+
+        shape.Vertices = vertices.Length / vertexWidth;
+        shape.Planes = planes.Length / vertexWidth;
+        shape.Faces = faces.Length / faceWidth;
+        shape.Indices = indices.Length;
+
+        byte[]? massProperties = MassProperties(objects, instance);
+        if (shape.CarriesPolytopeData || massProperties != null)
+            shape.Capsule = new RagdollCapsuleData(vertices, planes, faces, indices, massProperties);
         return shape;
     }
 
-    private static int PolytopeCount(PackfileObjects objects, PackfileObjects.Instance instance, string member,
-                                     int width) =>
-        objects.FieldAt(instance, member) is int header
-            ? objects.RelArrayAt(header, width)?.Count ?? 0
-            : 0;
+    private static byte[]? MassProperties(PackfileObjects objects, PackfileObjects.Instance instance)
+    {
+        if (RagdollCapsule.MassPropertiesAt(objects, instance) is not int at) return null;
+        if (at < 0 || at + RagdollCapsule.MassPropertiesWidth > objects.DataLength) return null;
+
+        var bytes = new byte[RagdollCapsule.MassPropertiesWidth];
+        for (int i = 0; i < bytes.Length; i++) bytes[i] = objects.ByteAt(at + i);
+        return bytes;
+    }
+
+    private static byte[]? PolytopeBytes(PackfileObjects objects, PackfileObjects.Instance instance, string member,
+                                         int width)
+    {
+        if (objects.FieldAt(instance, member) is not int header) return null;
+        if (objects.RelArrayAt(header, width) is not { } run) return null;
+
+        int length = run.Count * width;
+        if (length < 0 || run.At < 0 || run.At + length > objects.DataLength) return null;
+
+        var bytes = new byte[length];
+        for (int i = 0; i < length; i++) bytes[i] = objects.ByteAt(run.At + i);
+        return bytes;
+    }
 }

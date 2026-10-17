@@ -266,12 +266,12 @@ public static partial class Program
             case "capsule":
                 RequireValues(values, 6, edit);
                 document.SetCapsuleEndpoints(index, new Vector3(values[0], values[1], values[2]),
-                                             new Vector3(values[3], values[4], values[5]));
+                                             new Vector3(values[3], values[4], values[5]), allowShared);
                 return null;
 
             case "radius":
                 RequireValues(values, 1, edit);
-                document.SetShapeRadius(index, values[0]);
+                document.SetShapeRadius(index, values[0], allowShared);
                 return null;
 
             case "material":
@@ -410,6 +410,10 @@ public static partial class Program
 
         int files = 0, shapes = 0, bodies = 0, constraints = 0, unreadable = 0, noRagdoll = 0, usable = 0;
         int byteIdentical = 0, massOk = 0, massSkipped = 0, limitOk = 0, limitSkipped = 0, failed = 0;
+        int capsuleResized = 0, capsuleShared = 0, capsuleRefused = 0, capsuleHeld = 0, capsuleIdentical = 0;
+        int capsuleFiles = 0;
+        float capsuleWorst = 0f;
+        string? capsuleFirstRefusal = null;
         var failures = new List<string>();
         var archiveSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -465,6 +469,18 @@ public static partial class Program
                 if (limitNote == null) limitOk++;
                 else if (limitNote.Length == 0) limitSkipped++;
                 else failures.Add(limitNote);
+
+                RagdollCapsuleSweep capsuleSweep = SweepCapsuleResize(bytes, asset.VirtualPath);
+                capsuleResized += capsuleSweep.Resized;
+                capsuleShared += capsuleSweep.Shared;
+                capsuleRefused += capsuleSweep.Refused;
+                capsuleHeld += capsuleSweep.Held;
+                capsuleIdentical += capsuleSweep.Identical;
+                if (capsuleSweep.ByteIdentical) capsuleFiles++;
+                if (capsuleSweep.Worst > capsuleWorst) capsuleWorst = capsuleSweep.Worst;
+                if (capsuleFirstRefusal == null && capsuleSweep.Refusal != null)
+                    capsuleFirstRefusal = capsuleSweep.Refusal;
+                if (capsuleSweep.Failure != null) failures.Add(capsuleSweep.Failure);
             }
             catch (Exception error)
             {
@@ -486,6 +502,12 @@ public static partial class Program
                           "(no scalable body)");
         Console.WriteLine($"limit edit round trip: {limitOk} read back as edited, {limitSkipped} skipped " +
                           $"(no editable constraint), {failed} file(s) failed to measure");
+        Console.WriteLine($"capsule resize round trip: {capsuleResized} capsule(s) scaled by 1.1 and back " +
+                          $"({capsuleShared} named by more than one body), {capsuleRefused} refused" +
+                          (capsuleFirstRefusal == null ? "" : $" (first: {capsuleFirstRefusal})") + ", " +
+                          $"{capsuleHeld} read back within 2e-3 of radius/99 ({capsuleIdentical} of them " +
+                          $"byte-identical), {capsuleFiles} file(s) byte-identical, worst vertex difference " +
+                          $"{capsuleWorst:0.#########} of radius/99");
 
         return failures.Count == 0 ? 0 : 1;
     }
@@ -570,4 +592,99 @@ public static partial class Program
 
     private static bool IsRagdollCandidate(string virtualPath) =>
         GameData.IsSkeletonName(virtualPath.Replace('\\', '/'));
+
+    private sealed record RagdollCapsuleSweep(int Resized, int Shared, int Refused, int Held, int Identical,
+                                              bool ByteIdentical, float Worst, string? Refusal, string? Failure);
+
+    private static RagdollCapsuleSweep SweepCapsuleResize(byte[] bytes, string virtualPath)
+    {
+        var origin = new RagdollDocument(bytes);
+        var first = new RagdollDocument(bytes);
+        var stretched = new List<int>();
+        int shared = 0, refused = 0;
+        string? firstRefusal = null;
+
+        for (int i = 0; i < first.Shapes.Count; i++)
+        {
+            var shape = first.Shapes[i];
+            if (!shape.CarriesPolytopeData) continue;
+            if (shape.ReferencedByBodies > 1) shared++;
+
+            try
+            {
+                first.SetCapsuleEndpoints(i, shape.A, shape.A + (shape.B - shape.A) * 1.1f, true);
+                stretched.Add(i);
+            }
+            catch (Exception error) when (error is InvalidOperationException or InvalidDataException)
+            {
+                refused++;
+                firstRefusal ??= $"capsule {i}: {error.Message}";
+            }
+        }
+
+        if (stretched.Count == 0)
+            return new RagdollCapsuleSweep(0, shared, refused, 0, 0, false, 0f, firstRefusal, null);
+
+        var back = new RagdollDocument(first.Serialize());
+        foreach (int i in stretched)
+        {
+            var shape = back.Shapes[i];
+            try
+            {
+                back.SetCapsuleEndpoints(i, shape.A, shape.A + (shape.B - shape.A) / 1.1f, true);
+            }
+            catch (Exception error)
+            {
+                return new RagdollCapsuleSweep(stretched.Count, shared, refused, 0, 0, false, 0f, firstRefusal,
+                                               $"{virtualPath}: capsule {i} was not resized back: {error.Message}");
+            }
+        }
+
+        byte[] restored;
+        try
+        {
+            restored = back.Serialize();
+        }
+        catch (Exception error)
+        {
+            return new RagdollCapsuleSweep(stretched.Count, shared, refused, 0, 0, false, 0f, firstRefusal,
+                                           $"{virtualPath}: the resized file was not written: {error.Message}");
+        }
+
+        var again = new RagdollDocument(restored);
+        int held = 0, identical = 0;
+        float worst = 0f;
+        string? failure = null;
+        foreach (int i in stretched)
+        {
+            if (origin.Shapes[i].Capsule is not { } was || again.Shapes[i].Capsule is not { } now) continue;
+
+            if (RagdollCapsule.SameBytes(was.Vertices, now.Vertices) &&
+                RagdollCapsule.SameBytes(was.Planes, now.Planes))
+                identical++;
+
+            float scale = origin.Shapes[i].Radius / 99f;
+            double difference = 0.0;
+            if (scale > 0f)
+                for (int vertex = 0; vertex < RagdollCapsule.VertexCount; vertex++)
+                    for (int lane = 0; lane < 3; lane++)
+                    {
+                        int at = vertex * RagdollCapsule.VertexWidth + lane * 4;
+                        float before = BitConverter.ToSingle(was.Vertices, at);
+                        float after = BitConverter.ToSingle(now.Vertices, at);
+                        double ratio = Math.Abs(before - after) / scale;
+                        if (ratio > difference) difference = ratio;
+                    }
+
+            if (difference > 2e-3)
+                failure ??= $"{virtualPath}: capsule {i} came back {difference:0.#########} of radius/99 away";
+            else
+                held++;
+            if (difference > worst) worst = (float)difference;
+        }
+
+        bool byteIdentical = restored.AsSpan().SequenceEqual(bytes);
+        return new RagdollCapsuleSweep(stretched.Count, shared, refused, held, identical, byteIdentical, worst,
+                                       firstRefusal, failure);
+    }
 }

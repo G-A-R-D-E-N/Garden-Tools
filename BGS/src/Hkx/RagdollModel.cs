@@ -125,6 +125,10 @@ public sealed class RagdollShape
 
     public int Indices { get; internal set; }
 
+    internal RagdollCapsuleData? Capsule { get; set; }
+
+    internal int ReferencedByBodies { get; set; }
+
     public bool CarriesPolytopeData => Vertices > 0 || Planes > 0 || Faces > 0 || Indices > 0;
 
     public string PolytopeCounts =>
@@ -141,6 +145,8 @@ public sealed class RagdollShape
             Planes = Planes,
             Faces = Faces,
             Indices = Indices,
+            Capsule = Capsule,
+            ReferencedByBodies = ReferencedByBodies,
         };
         return copy;
     }
@@ -148,7 +154,7 @@ public sealed class RagdollShape
     internal bool SameAs(RagdollShape other) =>
         InstanceIndex == other.InstanceIndex && ObjectId == other.ObjectId && Radius == other.Radius &&
         A == other.A && B == other.B && Vertices == other.Vertices && Planes == other.Planes &&
-        Faces == other.Faces && Indices == other.Indices;
+        Faces == other.Faces && Indices == other.Indices && RagdollCapsule.SameData(Capsule, other.Capsule);
 }
 
 public sealed class RagdollConstraint
@@ -310,6 +316,9 @@ internal static class RagdollLayout
     internal const int VerifiedConeAngleMode = 0;
     internal const int VerifiedPlaneAngleMode = 1;
     internal const string PolytopeFaceClass = "hknpConvexPolytopeShapeFace";
+    internal const string MassPropertiesClass = "hknpShapeMassProperties";
+    internal const string RefCountedPropertiesClass = "hkRefCountedProperties";
+    internal const string RefCountedPropertiesEntryClass = "hkRefCountedPropertiesEntry";
 
     internal static readonly string[] SystemArrays =
     {

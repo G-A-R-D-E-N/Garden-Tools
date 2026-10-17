@@ -49,7 +49,7 @@ internal static class RagdollWriteback
         RequireOtherInstancesIntact(before, data.Data, objects.Instances, ranges);
 
         var rebuilt = image.Rebuild();
-        Verify(rebuilt, nodes, shapes);
+        Verify(rebuilt, nodes, shapes, shapeEdits);
         return rebuilt;
     }
 
@@ -317,10 +317,8 @@ internal static class RagdollWriteback
     {
         var instance = RequireShape(objects, edited);
         bool geometry = edited.Radius != original.Radius || edited.A != original.A || edited.B != original.B;
-        if (geometry && (edited.CarriesPolytopeData || original.CarriesPolytopeData))
-            throw new InvalidOperationException(
-                $"shape {edited.ObjectId} carries {edited.PolytopeCounts}, and this build cannot derive those " +
-                "from a, b and the radius, so nothing was written");
+        bool derived = !RagdollCapsule.SameData(edited.Capsule, original.Capsule);
+        if (geometry || derived) RequireDerived(objects, instance, edited, original);
 
         int radiusAt = RagdollLayout.Field(RagdollLayout.ShapeClass, "convexRadius");
         int aAt = RagdollLayout.Field(RagdollLayout.CapsuleClass, "a");
@@ -343,6 +341,95 @@ internal static class RagdollWriteback
             WriteVector(data, instance.Offset + bAt, edited.B);
             ranges.Add((instance.Offset + bAt, 12));
         }
+
+        if (!derived) return;
+
+        WritePayload(objects, instance, "vertices", RagdollCapsule.VertexWidth, RagdollCapsule.VertexCount,
+                     edited.Capsule!.Vertices, original.Capsule!.Vertices, data, ranges);
+        WritePayload(objects, instance, "planes", RagdollCapsule.PlaneWidth, RagdollCapsule.PlaneCount,
+                     edited.Capsule.Planes, original.Capsule.Planes, data, ranges);
+        WriteMassProperties(data, objects, instance, edited, original, ranges);
+    }
+
+    private static void RequireDerived(PackfileObjects objects, PackfileObjects.Instance instance,
+                                       RagdollShape edited, RagdollShape original)
+    {
+        if (original.Capsule is null && edited.Capsule is null)
+        {
+            if (RagdollCapsule.MassPropertiesAt(objects, instance) != null)
+                throw new InvalidOperationException(
+                    $"shape {edited.ObjectId} carries mass properties but no polytope arrays this build can " +
+                    "derive, so nothing was written");
+            return;
+        }
+
+        if (original.Capsule is not { } before || edited.Capsule is not { } after)
+            throw new InvalidOperationException(
+                $"shape {edited.ObjectId} would gain or lose derived capsule arrays, and those are never added " +
+                "or removed, so nothing was written");
+
+        if (!RagdollCapsule.SameBytes(after.Faces, before.Faces) ||
+            !RagdollCapsule.SameBytes(after.Indices, before.Indices))
+            throw new InvalidOperationException(
+                $"shape {edited.ObjectId} would change its faces or indices, which this build never derives, so " +
+                "nothing was written");
+
+        RagdollCapsuleData expected = RagdollCapsule.Derive(before, original.A, original.B, original.Radius,
+                                                           edited.A, edited.B, edited.Radius,
+                                                           $"shape {edited.ObjectId}", "so nothing was written");
+        if (!RagdollCapsule.SameData(expected, after))
+            throw new InvalidOperationException(
+                $"shape {edited.ObjectId} would store derived arrays that a resize of its endpoints and radius " +
+                "does not produce, so nothing was written");
+    }
+
+    private static void WritePayload(PackfileObjects objects, PackfileObjects.Instance instance, string member,
+                                     int width, int count, byte[] produced, byte[] before, byte[] data,
+                                     List<(int Start, int Length)> ranges)
+    {
+        if (RagdollCapsule.SameBytes(produced, before)) return;
+
+        if (produced.Length != count * width || objects.FieldAt(instance, member) is not int header ||
+            objects.RelArrayAt(header, width) is not { } run || run.Count != count || run.At < 0 ||
+            run.At + produced.Length > data.Length)
+            throw new InvalidOperationException(
+                $"shape at 0x{instance.Offset:x} has {member} storage this build cannot write, so nothing was " +
+                "written");
+
+        produced.CopyTo(data, run.At);
+        ranges.Add((run.At, produced.Length));
+    }
+
+    private static void WriteMassProperties(byte[] data, PackfileObjects objects, PackfileObjects.Instance instance,
+                                            RagdollShape edited, RagdollShape original,
+                                            List<(int Start, int Length)> ranges)
+    {
+        byte[]? now = edited.Capsule?.MassProperties;
+        byte[]? was = original.Capsule?.MassProperties;
+        if (RagdollCapsule.SameBytes(now, was)) return;
+
+        if (now is null || was is null || now.Length != RagdollCapsule.MassPropertiesWidth ||
+            was.Length != RagdollCapsule.MassPropertiesWidth ||
+            RagdollCapsule.MassPropertiesAt(objects, instance) is not int at)
+            throw new InvalidOperationException(
+                $"shape {edited.ObjectId} would change mass properties the file does not hold, so nothing was " +
+                "written");
+
+        WriteSlice(data, at, now, was, 0, 8, ranges);
+        WriteSlice(data, at, now, was, 8, 8, ranges);
+        WriteSlice(data, at, now, was, 28, 4, ranges);
+    }
+
+    private static void WriteSlice(byte[] data, int at, byte[] now, byte[] was, int offset, int length,
+                                   List<(int Start, int Length)> ranges)
+    {
+        if (now.AsSpan(offset, length).SequenceEqual(was.AsSpan(offset, length))) return;
+        if (at < 0 || at + offset + length > data.Length)
+            throw new InvalidOperationException(
+                "a mass property field lies outside the data section, so nothing was written");
+
+        now.AsSpan(offset, length).CopyTo(data.AsSpan(at + offset));
+        ranges.Add((at + offset, length));
     }
 
     private static void WriteFloat(byte[] data, int at, float value)
@@ -403,7 +490,8 @@ internal static class RagdollWriteback
         }
     }
 
-    private static void Verify(byte[] produced, IReadOnlyList<RagdollNode> nodes, IReadOnlyList<RagdollShape> shapes)
+    private static void Verify(byte[] produced, IReadOnlyList<RagdollNode> nodes, IReadOnlyList<RagdollShape> shapes,
+                               IReadOnlyList<RagdollShapeChange> shapeChanged)
     {
         PackfileObjects objects;
         try
@@ -457,5 +545,29 @@ internal static class RagdollWriteback
                 throw new InvalidDataException(
                     $"shape {readShapes[i].ObjectId} did not read back as the model that was edited, " +
                     "so nothing was written");
+
+        foreach (var change in shapeChanged)
+        {
+            if (change.Original.Capsule is not { } before) continue;
+            if (change.Edited.A == change.Original.A && change.Edited.B == change.Original.B &&
+                change.Edited.Radius == change.Original.Radius &&
+                RagdollCapsule.SameData(change.Edited.Capsule, change.Original.Capsule))
+                continue;
+
+            var read = readShapes.FirstOrDefault(shape => shape.InstanceIndex == change.Edited.InstanceIndex);
+            if (read is null || read.Capsule is not { } after)
+                throw new InvalidDataException(
+                    $"the written file lost shape {change.Edited.ObjectId}'s derived arrays, so nothing was written");
+
+            RagdollCapsuleData expected = RagdollCapsule.Derive(before, change.Original.A, change.Original.B,
+                                                               change.Original.Radius, change.Edited.A,
+                                                               change.Edited.B, change.Edited.Radius,
+                                                               $"shape {change.Edited.ObjectId}",
+                                                               "so nothing was written");
+            if (!RagdollCapsule.SameData(expected, after))
+                throw new InvalidDataException(
+                    $"the written file's shape {change.Edited.ObjectId} did not read back as the polytope its " +
+                    "endpoints and radius derive, so nothing was written");
+        }
     }
 }

@@ -16,24 +16,26 @@ public sealed class RagdollShapeTests
     public RagdollShapeTests(ITestOutputHelper output) => _out = output;
 
     [Fact]
-    public void ACapsuleEditIsRefusedBecauseTheShapeCarriesPolytopeArrays()
+    public void ACapsuleEditDerivesThePolytopeAndReadsBack()
     {
         var document = new RagdollDocument(Fixture());
         var shape = document.Shapes[0];
         Assert.True(shape.CarriesPolytopeData);
         Assert.True(shape.Vertices > 0 && shape.Planes > 0 && shape.Faces > 0 && shape.Indices > 0);
+        byte[] was = shape.Capsule!.Vertices;
+        float radius = shape.Radius;
 
-        var refused = Assert.Throws<InvalidOperationException>(() => document.SetShapeRadius(0, 7.5f));
-        Assert.Contains("cannot derive", refused.Message);
-        Assert.Contains($"{shape.Vertices} vertices", refused.Message);
+        document.SetShapeRadius(0, radius * 1.3f, true);
+        Assert.True(document.Dirty);
 
-        Assert.Contains("cannot derive", Assert.Throws<InvalidOperationException>(
-            () => document.SetCapsuleEndpoints(0, new Vector3(1f, 2f, 3f), new Vector3(4f, 5f, 6f))).Message);
-        Assert.False(document.Dirty);
+        var read = new RagdollDocument(document.Serialize()).Shapes[0];
+        Assert.Equal(radius * 1.3f, read.Radius);
+        Assert.NotEqual(was, read.Capsule!.Vertices);
+        Assert.True(document.Shapes[0].SameAs(read));
     }
 
     [Fact]
-    public void EveryCapsuleInEveryFixtureCarriesPolytopeArraysAndRefusesGeometryEdits()
+    public void EveryCapsuleInEveryFixtureDerivesItsPolytope()
     {
         int shapes = 0;
         foreach (string file in Directory.GetFiles(FixturesRoot, "*.hkx", SearchOption.AllDirectories)
@@ -46,21 +48,25 @@ public sealed class RagdollShapeTests
             for (int i = 0; i < document.Shapes.Count; i++)
             {
                 shapes++;
-                Assert.True(document.Shapes[i].CarriesPolytopeData,
-                    $"{Path.GetFileName(file)} shape {i} carries no polytope array");
-                Assert.Contains("cannot derive", Assert.Throws<InvalidOperationException>(
-                    () => document.SetShapeRadius(i, 1f)).Message);
-                Assert.Contains("cannot derive", Assert.Throws<InvalidOperationException>(
-                    () => document.SetCapsuleEndpoints(i, Vector3.Zero, Vector3.UnitZ)).Message);
+                var shape = document.Shapes[i];
+                Assert.True(shape.CarriesPolytopeData, $"{Path.GetFileName(file)} shape {i} carries no polytope array");
+                Assert.True(shape.Capsule is not null, $"{Path.GetFileName(file)} shape {i} carries no payload");
+
+                document.SetCapsuleEndpoints(i, shape.A, shape.A + (shape.B - shape.A) * 1.05f, true);
+                Assert.True(document.Dirty);
             }
+
+            var read = new RagdollDocument(document.Serialize());
+            for (int i = 0; i < read.Shapes.Count; i++)
+                Assert.True(document.Shapes[i].SameAs(read.Shapes[i]));
         }
 
-        _out.WriteLine($"{shapes} capsule shape(s) across the fixtures all refuse a geometry edit");
+        _out.WriteLine($"{shapes} capsule shape(s) across the fixtures derive a new polytope and read back");
         Assert.True(shapes > 0, "no capsule shape was found in the fixtures");
     }
 
     [Fact]
-    public void AWriterCannotWriteACapsuleGeometryEditIntoAShapeWithPolytopeArrays()
+    public void AWriterCannotWriteACapsuleGeometryEditThatSkipsTheDerivation()
     {
         byte[] bytes = Fixture();
         var document = new RagdollDocument(bytes);
@@ -68,7 +74,7 @@ public sealed class RagdollShapeTests
         var edited = original.Copy();
         edited.Radius = original.Radius + 1f;
 
-        Assert.Contains("cannot derive", Assert.Throws<InvalidOperationException>(
+        Assert.Contains("does not produce", Assert.Throws<InvalidOperationException>(
             () => RagdollWriteback.Write(bytes, document.Ragdolls, document.Shapes,
                                          Array.Empty<RagdollChange>(),
                                          new[] { new RagdollShapeChange(edited, original) })).Message);

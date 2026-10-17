@@ -116,36 +116,46 @@ public sealed class RagdollDocument
         entry.Restitution = rounded;
     }
 
-    public void SetShapeRadius(int shape, float radius)
+    public void SetShapeRadius(int shape, float radius, bool allowShared = false) =>
+        SetCapsule(shape, Shape(shape).A, Shape(shape).B, radius, allowShared);
+
+    public void SetCapsuleEndpoints(int shape, Vector3 a, Vector3 b, bool allowShared = false) =>
+        SetCapsule(shape, a, b, Shape(shape).Radius, allowShared);
+
+    public void SetCapsule(int shape, Vector3 a, Vector3 b, float radius, bool allowShared = false)
     {
         var target = Shape(shape);
         if (!float.IsFinite(radius) || radius <= 0f)
             throw new InvalidOperationException(
                 $"a radius of {radius} is not a positive finite number, so shape {shape} was not changed");
-
-        RequirePolytopeFreeShape(target, shape);
-        target.Radius = radius;
-    }
-
-    public void SetCapsuleEndpoints(int shape, Vector3 a, Vector3 b)
-    {
-        var target = Shape(shape);
         if (!RagdollValues.Finite(a) || !RagdollValues.Finite(b))
             throw new InvalidOperationException(
                 $"the endpoints for shape {shape} are not finite, so nothing was changed");
+        if (!allowShared && target.ReferencedByBodies > 1)
+            throw new InvalidOperationException(
+                $"shape {shape} is named by {target.ReferencedByBodies} body(ies), so its geometry was not " +
+                "changed; pass allowShared to resize it for every body");
 
-        RequirePolytopeFreeShape(target, shape);
-        target.A = a;
-        target.B = b;
+        ApplyCapsule(target, shape, a, b, radius);
     }
 
-    private static void RequirePolytopeFreeShape(RagdollShape target, int shape)
+    private static void ApplyCapsule(RagdollShape target, int shape, Vector3 a, Vector3 b, float radius)
     {
-        if (!target.CarriesPolytopeData) return;
+        if (target.Capsule is { } data && target.CarriesPolytopeData)
+        {
+            target.Capsule = RagdollCapsule.Derive(data, target.A, target.B, target.Radius, a, b, radius,
+                                                   $"shape {shape}", "so nothing was changed");
+        }
+        else if (target.Capsule?.MassProperties is not null)
+        {
+            throw new InvalidOperationException(
+                $"shape {shape} carries mass properties but no polytope arrays this build can derive, so " +
+                "nothing was changed");
+        }
 
-        throw new InvalidOperationException(
-            $"shape {shape} carries {target.PolytopeCounts}, and this build cannot derive those from a, b and " +
-            "the radius, so nothing was changed");
+        target.Radius = radius;
+        target.A = a;
+        target.B = b;
     }
 
     public void SetConstraintLimits(int ragdoll, int constraint, float minAngle, float maxAngle)
@@ -361,6 +371,16 @@ public sealed class RagdollDocument
         if (_ragdolls.Count == 0)
             throw new InvalidDataException(
                 "This file holds no hknpRagdollData this build can read, so there is nothing to edit.");
+
+        var referenced = new Dictionary<int, int>();
+        foreach (var node in _ragdolls)
+            foreach (var body in node.Bodies)
+                referenced[body.ShapeObjectId] = referenced.TryGetValue(body.ShapeObjectId, out int seen)
+                    ? seen + 1
+                    : 1;
+
+        foreach (var shape in _shapes)
+            shape.ReferencedByBodies = referenced.TryGetValue(shape.ObjectId, out int bodies) ? bodies : 0;
 
         foreach (var node in _ragdolls) _savedRagdolls.Add(node.Copy());
         foreach (var shape in _shapes) _savedShapes.Add(shape.Copy());

@@ -159,8 +159,8 @@ symrm ragdoll --data "/path/to/Data"                           # sweep every rag
 | --- | --- | --- |
 | `mass:<body>=<mass>` | one number, > 0 | the body's `inverseMass` and its `inverseInertiaLocal` scaled by the mass ratio |
 | `com:<body>=<x>,<y>,<z>` | three numbers | the body's motion's `centerOfMassWorld` |
-| `capsule:<shape>=<ax>,<ay>,<az>,<bx>,<by>,<bz>` | six numbers | refused: the shape carries polytope arrays this build cannot derive from its endpoints |
-| `radius:<shape>=<radius>` | one number, > 0 | refused for the same reason as `capsule:` |
+| `capsule:<shape>=<ax>,<ay>,<az>,<bx>,<by>,<bz>` | six numbers | the shape's endpoints, its derived `7` vertices and `7` planes, and its derived mass properties; the direction must not change |
+| `radius:<shape>=<radius>` | one number, > 0 | `convexRadius`, the derived vertices and planes rescaled about the endpoint each vertex belongs to, and the derived mass properties |
 | `material:<material>=<dynamic>[,<static>]` | one or two numbers, >= 0 | `dynamicFriction` and, when given, `staticFriction` (half precision); one value sets both, and only the lane that changed is written |
 | `restitution:<material>=<value>` | one number, >= 0 | the material's `restitution` (half precision) |
 | `limit:<constraint>=<min>,<max>` | two numbers in `[-pi, pi]`, ordered | a ragdoll's twist limit only, or a limited hinge's angular limit; planes are not touched |
@@ -171,14 +171,20 @@ symrm ragdoll --data "/path/to/Data"                           # sweep every rag
 `body`, `material` and `constraint` index the selected ragdoll's rows; `shape` indexes the file's capsule
 shapes. `--set ragdoll=<i>` chooses that ragdoll for every edit that follows: it is optional when the file
 holds exactly one ragdoll, and a file with more than one refuses such an edit, naming how many it holds,
-until the selector is given. A material shared by more than one body is refused unless
-`--allow-shared-material` is passed, because changing it changes every body that names it.
+until the selector is given. A material shared by more than one body, and a capsule shape that more than one
+body names, are refused unless `--allow-shared-material` is passed, because changing either changes every
+body that names it.
 
-Capsule geometry cannot be edited: every capsule in the shipped game carries `7` vertices, `7` planes, `5`
-faces and `23` indices derived from its endpoints and radius, and this build cannot recompute them, so
-`capsule:` and `radius:` are refused rather than writing a shape whose polytope no longer matches. A cone is
-written only when its atom's `angle measurement mode` is the one the game uses (`0`; planes use `1`), and the
-constraint is refused otherwise.
+Every capsule in the shipped game carries `7` vertices, `7` planes, `5` faces and `23` indices derived from
+its endpoints and radius, and `882` of the `933` vanilla capsules also carry a stored volume, centre of mass
+and inertia. `capsule:` and `radius:` re-derive all of them in place as long as the capsule's direction does
+not change (within `1e-6` rad): each vertex moves to the matching endpoint plus `radius/99` times its own
+offset, each plane keeps its normal and takes the `d` its own vertices support, and the volume, centre of
+mass and inertia are re-encoded while the stored mass and the undecoded `majorAxisSpace` are kept. A change
+of direction, a capsule whose stored arrays do not match its endpoints and radius, and a capsule more than
+one body names without `--allow-shared-material` are refused. A cone is written only when its atom's
+`angle measurement mode` is the one the game uses (`0`; planes use `1`), and the constraint is refused
+otherwise.
 
 The writer patches only the bytes of the fields it owns and refuses any other byte change, so bodies,
 shapes and constraints are never added or removed, every other object in the file is left untouched, and
