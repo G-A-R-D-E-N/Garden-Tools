@@ -75,10 +75,10 @@ internal readonly struct ViewportCamera
 
         var projection = Matrix4x4.Identity;
         projection.M11 = (float)(2 / (right - left));
-        projection.M22 = (float)(2 / (top - bottom));
+        projection.M22 = (float)(-2 / (top - bottom));
         projection.M33 = (float)(2 / (far - near));
         projection.M41 = (float)(-(right + left) / (right - left));
-        projection.M42 = (float)(-(top + bottom) / (top - bottom));
+        projection.M42 = (float)((top + bottom) / (top - bottom));
         projection.M43 = (float)(-(far + near) / (far - near));
         projection.M44 = 1;
         return projection;
@@ -91,6 +91,8 @@ internal readonly struct ViewportCamera
     {
         var clip = Vector4.Transform(new Vector4(world, 1f), ViewProjection(width, height));
         double w = Math.Abs(clip.W) < 0.000001 ? 1 : clip.W;
-        return ((clip.X / w + 1) * width / 2, (clip.Y / w + 1) * height / 2);
+        double ndcX = clip.X / w;
+        double ndcY = clip.Y / w;
+        return ((ndcX + 1) * width / 2, (1 - ndcY) * height / 2);
     }
 }

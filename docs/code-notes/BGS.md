@@ -1324,3 +1324,55 @@ character meshes name their skin vertices after the skeleton bone plus `_skin`, 
 and the shaded surface both benefit because they share the binding, and the resolution sits in the
 app's mesh loading step, so `SkinnedMesh.Bind` keeps its exact-name contract and the symrm check
 that a helper bone does not match is untouched. `Viewport3DTests` covers the resolution.
+
+### Upright GL viewport
+
+The orthographic projection now points the GL clip Y axis the same way as the 2D mapping:
+`M22 = -2 / (top - bottom)` and `M42 = (top + bottom) / (top - bottom)`. With the earlier
+`+2 / (top - bottom)` and `-(top + bottom) / (top - bottom)` a larger world Z produced a larger clip
+Y, and because the GL window origin is bottom-left while Avalonia's is top-left, the shaded mesh and
+the GL ground grid rendered upside down against the upright 2D overlays (bones, labels, bodies,
+constraints, frames). The old `Viewport3DTests.GlMatrixAgreesWithTheTwoDimensionalProjection`
+compared `(ndc.y + 1) * height / 2` with the 2D screen Y, so it read the flipped NDC as if it were
+already a top-left window coordinate and passed while the captured image was wrong.
+`ProjectThroughMatrix` now returns final Avalonia window pixels (`x = (ndc.x + 1) * width / 2`,
+`y = (1 - ndc.y) * height / 2`), the agreement test is
+`GlMatrixAndTheTwoDimensionalProjectionAgreeInWindowPixels` and it also pins the window centre with
+pan applied, and `LargerWorldZDrawsHigherOnScreenInBothPaths` asserts the observable directly for
+every camera in the table: the same point at Z 22 lands at a smaller screen Y than at Z -8 in both
+the 2D and the GL path. `Viewport3D` keeps `CullFace` disabled, so the Y flip cannot change what is
+visible through triangle winding.
+
+### Full skin weights
+
+`SkinnedMesh.Pose` divides by the full sum of the positive weights. An influence whose bone did not
+match the skeleton contributes the vertex at its rest position for its own weight, taken through
+`SkinnedMesh.Placement` (the `bind * referencePose` of the first matched bone), instead of being
+dropped. Previously `total` counted only the matched weights, so a vertex weighted half to a matched
+bone and half to an unmatched one rode the matched bone completely, and a vertex weighted only to
+unmatched bones was moved rigidly by the first matched bone's motion. The mesh status line now says
+the unmatched bones keep their whole weight, so a vertex weighted only to them holds its rest
+position instead of riding the bones that did match. `Viewport3DTests` covers both cases.
+
+### Helper bones are an interim approximation
+
+`MainWindow.ResolveSkinBoneNames` still maps a shape bone named `Chest_skin` onto the skeleton bone
+`Chest`, but it is one seam now: `SkinnedMesh.ResolveSkinBoneName` decides, and it only rewrites a
+name when the stripped parent exists in the skeleton. The approximation ignores a helper bone's own
+offset from its parent, and the mesh status line reports how many bones went through it ("helper
+bones approximated by their parent bone"). TODO: a Radicle NIF node-hierarchy ABI is coming that
+will drive the helper bones from `skeleton.nif` / the body NIF properly; it replaces this one seam,
+so the string rewriting stays out of `SkinnedMesh.Bind`, which keeps its exact-name contract, and
+the symrm check that a helper bone does not match is untouched.
+
+### Overlay defaults with a mesh
+
+`MainWindow.TryLoadRagdoll` still enables the ragdoll overlays when a file carries bodies, but when
+a mesh is loaded as well it defaults Bodies, Bone labels, Physics skeleton and Body frames to off,
+so the shaded body is not buried under body boxes, bone labels, the physics skeleton and the frame
+triads; Constraints keeps its old default. `MainWindow.LoadMesh` applies the quieter set too when
+the mesh arrives after the ragdoll. Every one of those toggles records that the user moved it
+(`MarkOverlayChoice`), and `ApplyOverlayDefault` never writes a toggle the user has set, so an
+explicit choice survives the next file. The programmatic writes (`ClearPose`, the Frames-only
+toolbar and the defaults themselves) run under `_overlayDefaultsApplying` so they are not mistaken
+for user choices. The animated bone skeleton itself stays on.

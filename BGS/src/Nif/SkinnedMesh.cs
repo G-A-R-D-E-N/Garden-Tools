@@ -99,12 +99,13 @@ public static class SkinnedMesh
             usable[b] = true;
         }
 
-        var placement = Placement(shape, binding, AnimationPose.ReferencePose(skeleton))
+        var restFrame = Placement(shape, binding, AnimationPose.ReferencePose(skeleton))
                         ?? Matrix4x4.Identity;
 
         for (int v = 0; v < moved.Length; v++)
         {
-            var rest = shape.Vertices[v];
+            var source = shape.Vertices[v];
+            var resting = Vector3.Transform(source, restFrame);
             var sum = Vector3.Zero;
             float total = 0;
 
@@ -113,17 +114,33 @@ public static class SkinnedMesh
                 float weight = shape.BoneWeights[v * 4 + s];
                 if (weight <= 0) continue;
 
-                int b = shape.BoneIndices[v * 4 + s];
-                if (b < 0 || b >= boneMatrix.Length || !usable[b]) continue;
-
-                sum += Vector3.Transform(rest, boneMatrix[b]) * weight;
                 total += weight;
+
+                int b = shape.BoneIndices[v * 4 + s];
+                if (b < 0 || b >= boneMatrix.Length || !usable[b])
+                {
+                    sum += resting * weight;
+                    continue;
+                }
+
+                sum += Vector3.Transform(source, boneMatrix[b]) * weight;
             }
 
-            moved[v] = total > 0.0001f ? sum / total : Vector3.Transform(rest, placement);
+            moved[v] = total > 0.0001f ? sum / total : resting;
         }
 
         return moved;
+    }
+
+    public static string ResolveSkinBoneName(string skinBoneName, Func<string, bool> hasBone)
+    {
+        if (hasBone(skinBoneName)) return skinBoneName;
+
+        int skin = skinBoneName.LastIndexOf("_skin", StringComparison.OrdinalIgnoreCase);
+        if (skin <= 0 || skin != skinBoneName.Length - 5) return skinBoneName;
+
+        string parent = skinBoneName[..skin];
+        return hasBone(parent) ? parent : skinBoneName;
     }
 
     public static Matrix4x4? Placement(NifShape shape, Binding binding, AnimationPose.Pose pose)

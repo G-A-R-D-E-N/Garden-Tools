@@ -66,6 +66,7 @@ public partial class MainWindow : Window
                                       "as a static file-space overlay on the skeleton.");
         _bodiesToggle.IsCheckedChanged += (_, _) =>
         {
+            MarkOverlayChoice(_bodiesToggle);
             _skeleton.ShowBodies = _bodiesToggle.IsChecked == true;
             _skeleton.InvalidateVisual();
         };
@@ -76,6 +77,7 @@ public partial class MainWindow : Window
                                           "the constraint atoms store.");
         _constraintsToggle.IsCheckedChanged += (_, _) =>
         {
+            MarkOverlayChoice(_constraintsToggle);
             _skeleton.ShowConstraints = _constraintsToggle.IsChecked == true;
             _skeleton.InvalidateVisual();
         };
@@ -86,6 +88,7 @@ public partial class MainWindow : Window
                                         "the body-to-bone association.");
         _bindingsToggle.IsCheckedChanged += (_, _) =>
         {
+            MarkOverlayChoice(_bindingsToggle);
             _skeleton.ShowBindings = _bindingsToggle.IsChecked == true;
             _skeleton.InvalidateVisual();
         };
@@ -96,6 +99,7 @@ public partial class MainWindow : Window
                                                "indices into file space.");
         _physicsSkeletonToggle.IsCheckedChanged += (_, _) =>
         {
+            MarkOverlayChoice(_physicsSkeletonToggle);
             _skeleton.ShowPhysicsSkeleton = _physicsSkeletonToggle.IsChecked == true;
             _skeleton.InvalidateVisual();
         };
@@ -106,6 +110,7 @@ public partial class MainWindow : Window
                                       "center of mass (motionCinfos centerOfMassWorld).");
         _framesToggle.IsCheckedChanged += (_, _) =>
         {
+            MarkOverlayChoice(_framesToggle);
             _skeleton.ShowFrames = _framesToggle.IsChecked == true;
             _skeleton.InvalidateVisual();
         };
@@ -120,9 +125,19 @@ public partial class MainWindow : Window
         {
             _skeleton.EngineeringFrames = _engineerToggle.IsChecked == true;
             if (_engineerToggle.IsChecked == true)
-                foreach (var other in new[]
-                         { _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle })
-                    other.IsChecked = false;
+            {
+                _overlayDefaultsApplying = true;
+                try
+                {
+                    foreach (var other in new[]
+                             { _bodiesToggle, _constraintsToggle, _bindingsToggle, _physicsSkeletonToggle })
+                        other.IsChecked = false;
+                }
+                finally
+                {
+                    _overlayDefaultsApplying = false;
+                }
+            }
             _skeleton.InvalidateVisual();
         };
 
@@ -189,6 +204,36 @@ public partial class MainWindow : Window
         return panel;
     }
 
+    private void ApplyOverlayDefault(CheckBox toggle, bool wanted)
+    {
+        if (_overlayChosenByUser.Contains(toggle)) return;
+
+        _overlayDefaultsApplying = true;
+        try
+        {
+            toggle.IsChecked = wanted;
+        }
+        finally
+        {
+            _overlayDefaultsApplying = false;
+        }
+    }
+
+    private void MarkOverlayChoice(CheckBox toggle)
+    {
+        if (!_overlayDefaultsApplying) _overlayChosenByUser.Add(toggle);
+    }
+
+    private void QuietOverlaysForMesh()
+    {
+        if (_ragdoll is not { Bodies.Count: > 0 }) return;
+
+        ApplyOverlayDefault(_bodiesToggle, false);
+        ApplyOverlayDefault(_bindingsToggle, false);
+        ApplyOverlayDefault(_physicsSkeletonToggle, false);
+        ApplyOverlayDefault(_framesToggle, false);
+    }
+
     private void TryLoadRagdoll(string path, string? virtualPathHint = null)
     {
         byte[] raw;
@@ -225,18 +270,19 @@ public partial class MainWindow : Window
         _ragdollSourceName = ragdollSource == null ? null : Path.GetFileName(ragdollSource);
         _physicsReportNote = DescribePhysicsReport(path);
         _copyDiagnosticsButton.IsEnabled = _ragdollReport != null;
+        bool quiet = any && _meshShapes.Count > 0;
         _bodiesToggle.IsEnabled = any;
-        _bodiesToggle.IsChecked = any;
+        ApplyOverlayDefault(_bodiesToggle, any && !quiet);
         _constraintsToggle.IsEnabled = any;
-        _constraintsToggle.IsChecked = any && _ragdoll is { Constraints.Count: > 0 };
+        ApplyOverlayDefault(_constraintsToggle, any && _ragdoll is { Constraints.Count: > 0 });
         bool bindings = any && _ragdoll is { BoneBindings.Count: > 0, Skeleton: { BoneNames.Count: > 0 } };
         _bindingsToggle.IsEnabled = bindings;
-        _bindingsToggle.IsChecked = bindings;
+        ApplyOverlayDefault(_bindingsToggle, bindings && !quiet);
         bool physicsSkeleton = any && _ragdoll is { Skeleton: { ParentIndices.Count: > 0, ReferencePose.Count: > 0 } };
         _physicsSkeletonToggle.IsEnabled = physicsSkeleton;
-        _physicsSkeletonToggle.IsChecked = physicsSkeleton;
+        ApplyOverlayDefault(_physicsSkeletonToggle, physicsSkeleton && !quiet);
         _framesToggle.IsEnabled = any;
-        _framesToggle.IsChecked = any;
+        ApplyOverlayDefault(_framesToggle, any && !quiet);
         _engineerToggle.IsEnabled = any;
         _dropButton.IsEnabled = any;
         if (!any && _skeleton.IsDropped) _skeleton.ClearDrop();

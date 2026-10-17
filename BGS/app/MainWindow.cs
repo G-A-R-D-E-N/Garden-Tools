@@ -174,6 +174,8 @@ public partial class MainWindow : Window
     private string _ragdollReportPath = "";
     private string? _physicsReportNote;
     private readonly Button _copyDiagnosticsButton = Ux.Secondary("Copy diagnostics");
+    private readonly HashSet<CheckBox> _overlayChosenByUser = new();
+    private bool _overlayDefaultsApplying;
     private readonly CheckBox _bodiesToggle = new()
     {
         Content = "Bodies",

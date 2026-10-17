@@ -29,7 +29,7 @@ public sealed class Viewport3DTests
     };
 
     [Fact]
-    public void GlMatrixAgreesWithTheTwoDimensionalProjection()
+    public void GlMatrixAndTheTwoDimensionalProjectionAgreeInWindowPixels()
     {
         const double width = 733, height = 512;
         foreach (var (yaw, pitch, zoom, panX, panY) in Cameras)
@@ -42,6 +42,30 @@ public sealed class Viewport3DTests
                 Assert.True(Math.Abs(flat.X - matrix.X) < 0.01, $"x {flat.X} vs {matrix.X}");
                 Assert.True(Math.Abs(flat.Y - matrix.Y) < 0.01, $"y {flat.Y} vs {matrix.Y}");
             }
+
+            var centre = camera.ProjectThroughMatrix(new Vector3(3, -2, 9), width, height);
+            Assert.True(Math.Abs(centre.X - (width / 2 + panX)) < 0.01, $"centre x {centre.X}");
+            Assert.True(Math.Abs(centre.Y - (height / 2 + panY)) < 0.01, $"centre y {centre.Y}");
+        }
+    }
+
+    [Fact]
+    public void LargerWorldZDrawsHigherOnScreenInBothPaths()
+    {
+        const double width = 640, height = 480;
+        foreach (var (yaw, pitch, zoom, panX, panY) in Cameras)
+        {
+            var camera = new ViewportCamera(yaw, pitch, zoom, panX, panY, new Vector3(1, 2, 3), 30);
+            var low = new Vector3(4, -6, -8);
+            var high = new Vector3(4, -6, 22);
+
+            double flatLow = camera.Project(low, width, height).Y;
+            double flatHigh = camera.Project(high, width, height).Y;
+            double matrixLow = camera.ProjectThroughMatrix(low, width, height).Y;
+            double matrixHigh = camera.ProjectThroughMatrix(high, width, height).Y;
+
+            Assert.True(flatHigh < flatLow, $"flat {flatHigh} should sit above {flatLow}");
+            Assert.True(matrixHigh < matrixLow, $"matrix {matrixHigh} should sit above {matrixLow}");
         }
     }
 
@@ -201,12 +225,82 @@ public sealed class Viewport3DTests
         shape.BoneNames.Add("Middle_skin");
         shape.BoneNames.Add("TipSpur");
 
-        MainWindow.ResolveSkinBoneNames(shape, rig);
+        int approximated = MainWindow.ResolveSkinBoneNames(shape, rig);
 
+        Assert.Equal(1, approximated);
         Assert.Equal("Middle", shape.BoneNames[0]);
         Assert.Equal("TipSpur", shape.BoneNames[1]);
         var binding = SkinnedMesh.Bind(shape, rig);
         Assert.Single(binding.Unmatched);
         Assert.Equal(1, binding.ToSkeleton[0]);
+    }
+
+    [Fact]
+    public void HelperBonesResolveToTheirParentOnlyWhenTheParentExists()
+    {
+        var known = new HashSet<string> { "Root", "Middle" };
+
+        Assert.Equal("Middle", SkinnedMesh.ResolveSkinBoneName("Middle_skin", known.Contains));
+        Assert.Equal("Missing_skin", SkinnedMesh.ResolveSkinBoneName("Missing_skin", known.Contains));
+        Assert.Equal("Middle", SkinnedMesh.ResolveSkinBoneName("Middle", known.Contains));
+        Assert.Equal("Middle_skin_b", SkinnedMesh.ResolveSkinBoneName("Middle_skin_b", known.Contains));
+    }
+
+    [Fact]
+    public void AnUnmatchedBoneKeepsItsWholeWeightShareOfTheRestPosition()
+    {
+        var (skeleton, pose) = TwoBoneRig();
+        var shape = SkinShape(new Vector3(10, 0, 0), ("Middle", 1f), ("Spur_skin", 1f));
+        var binding = SkinnedMesh.Bind(shape, skeleton);
+
+        var moved = SkinnedMesh.Pose(shape, binding, pose, skeleton);
+
+        Assert.Equal(20, moved[0].X, 3);
+        Assert.Equal(0, moved[0].Y, 3);
+        Assert.Equal(0, moved[0].Z, 3);
+    }
+
+    [Fact]
+    public void AVerticeWeightedOnlyToAnUnmatchedBoneHoldsItsRestPosition()
+    {
+        var (skeleton, pose) = TwoBoneRig();
+        var shape = SkinShape(new Vector3(10, 0, 0), ("Spur_skin", 1f));
+        var binding = SkinnedMesh.Bind(shape, skeleton);
+
+        var moved = SkinnedMesh.Pose(shape, binding, pose, skeleton);
+
+        Assert.Equal(10, moved[0].X, 3);
+        Assert.Equal(0, moved[0].Y, 3);
+        Assert.Equal(0, moved[0].Z, 3);
+    }
+
+    private static (HkxSkeleton Skeleton, AnimationPose.Pose Pose) TwoBoneRig()
+    {
+        var skeleton = new HkxSkeleton { Name = "Rig", BoneNames = { "Root", "Middle" } };
+        var pose = new AnimationPose.Pose();
+        pose.Bones.Add(new AnimationPose.Bone(0, "Root", -1, Vector3.Zero, Quaternion.Identity));
+        pose.Bones.Add(new AnimationPose.Bone(1, "Middle", 0, new Vector3(20, 0, 0), Quaternion.Identity));
+        return (skeleton, pose);
+    }
+
+    private static NifShape SkinShape(Vector3 vertex, params (string Bone, float Weight)[] influences)
+    {
+        var shape = new NifShape { Name = "Skin" };
+        shape.Vertices.Add(vertex);
+        for (int slot = 0; slot < 4; slot++)
+        {
+            shape.BoneIndices.Add(0);
+            shape.BoneWeights.Add(0);
+        }
+
+        for (int i = 0; i < influences.Length; i++)
+        {
+            shape.BoneNames.Add(influences[i].Bone);
+            shape.SkinToBone.Add(Matrix4x4.Identity);
+            shape.BoneIndices[i] = i;
+            shape.BoneWeights[i] = influences[i].Weight;
+        }
+
+        return shape;
     }
 }

@@ -149,12 +149,13 @@ public partial class MainWindow : Window
         }
 
         ClearMesh();
+        int approximated = 0;
         try
         {
             var nif = NifFile.Read(path);
             foreach (var shape in NifGeometry.Shapes(nif))
             {
-                ResolveSkinBoneNames(shape, skeleton);
+                approximated += ResolveSkinBoneNames(shape, skeleton);
                 var binding = SkinnedMesh.Bind(shape, skeleton);
                 _meshShapes.Add((shape, binding, SkinnedMesh.Edges(shape)));
                 _meshTriangles.Add(shape.Indices.ToArray());
@@ -190,27 +191,35 @@ public partial class MainWindow : Window
             report += $"   {missing.Count} bone{(missing.Count == 1 ? "" : "s")} did not match this " +
                       $"skeleton: {string.Join(", ", missing.Take(6))}" +
                       (missing.Count > 6 ? ", and more" : "") +
-                      ". Vertices weighted only to those stay at their rest position.";
+                      ". Those bones keep their whole weight, so a vertex weighted only to them holds its " +
+                      "rest position instead of riding the bones that did match.";
+        if (approximated > 0)
+            report += $"   {approximated} helper bone{(approximated == 1 ? "" : "s")} approximated by " +
+                      "their parent bone.";
 
         SetPlaybackSummary(settingsWarning ?? report,
                            settingsWarning == null && missing.Count == 0 ? Ux.MetaBrush : Ux.WarnBrush);
+        QuietOverlaysForMesh();
         ShowFrame(_playback.Frame, stop: false);
         _skeleton.Frame();
         return true;
     }
 
-    internal static void ResolveSkinBoneNames(NifShape shape, HkxSkeleton skeleton)
+    internal static int ResolveSkinBoneNames(NifShape shape, HkxSkeleton skeleton)
     {
         var known = new HashSet<string>(skeleton.BoneNames, StringComparer.OrdinalIgnoreCase);
+        int approximated = 0;
         for (int i = 0; i < shape.BoneNames.Count; i++)
         {
             string name = shape.BoneNames[i];
-            if (known.Contains(name)) continue;
+            string resolved = SkinnedMesh.ResolveSkinBoneName(name, known.Contains);
+            if (resolved == name) continue;
 
-            int skin = name.LastIndexOf("_skin", StringComparison.OrdinalIgnoreCase);
-            if (skin <= 0 || skin != name.Length - 5) continue;
-            if (known.Contains(name[..skin])) shape.BoneNames[i] = name[..skin];
+            shape.BoneNames[i] = resolved;
+            approximated++;
         }
+
+        return approximated;
     }
     private void ClearMesh()
     {
@@ -267,12 +276,20 @@ public partial class MainWindow : Window
         _ragdollSiblingName = null;
         ClearPhysicsReport();
 
-        foreach (var toggle in new[]
-                 { _bodiesToggle, _constraintsToggle, _bindingsToggle,
-                   _physicsSkeletonToggle, _framesToggle, _engineerToggle })
+        _overlayDefaultsApplying = true;
+        try
         {
-            toggle.IsChecked = false;
-            toggle.IsEnabled = false;
+            foreach (var toggle in new[]
+                     { _bodiesToggle, _constraintsToggle, _bindingsToggle,
+                       _physicsSkeletonToggle, _framesToggle, _engineerToggle })
+            {
+                toggle.IsChecked = false;
+                toggle.IsEnabled = false;
+            }
+        }
+        finally
+        {
+            _overlayDefaultsApplying = false;
         }
         _dropButton.IsEnabled = false;
 
