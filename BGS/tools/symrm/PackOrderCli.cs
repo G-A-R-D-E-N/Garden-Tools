@@ -12,9 +12,11 @@ public static partial class Program
     private static int Walk(string[] argv)
     {
         string? dataFolder = null;
+        bool serialize = false;
 
         for (int i = 1; i < argv.Length; i++)
         {
+            if (argv[i] == "--serialize") { serialize = true; continue; }
             if (argv[i] != "--data") continue;
             if (i + 1 >= argv.Length) return PackOrderUsage("--data needs the Data folder to sweep");
             if (FullPath(argv[++i]) is not string folder) return PackOrderUsage("--data is not a usable path");
@@ -25,7 +27,7 @@ public static partial class Program
         {
             if (argv.Length > 1 && !argv[1].StartsWith("-", StringComparison.Ordinal))
                 return PackOrderUsage("--data sweeps a whole Data folder, so it takes no file");
-            return PackOrderSweep(dataFolder);
+            return PackOrderSweep(dataFolder, serialize);
         }
 
         if (argv.Length < 2) { Usage(); return 1; }
@@ -120,7 +122,7 @@ public static partial class Program
     private static bool IsPackfileCandidate(string virtualPath) =>
         virtualPath.EndsWith(".hkx", StringComparison.OrdinalIgnoreCase);
 
-    private static int PackOrderSweep(string dataFolder)
+    private static int PackOrderSweep(string dataFolder, bool serialize)
     {
         if (!Directory.Exists(dataFolder))
         {
@@ -145,7 +147,7 @@ public static partial class Program
 
         int total = 0, files = 0, skipped = 0, unreadable = 0;
         int clean = 0, orderGlobal = 0, orderLocal = 0, orderVirtual = 0, bad = 0;
-        int unchanged = 0, changed = 0, identical = 0;
+        int unchanged = 0, changed = 0, identical = 0, canonicallyIdentical = 0, canonicalBad = 0;
         var failures = new List<string>();
 
         foreach (var asset in candidates)
@@ -196,6 +198,17 @@ public static partial class Program
                 }
             }
 
+            if (serialize)
+            {
+                try
+                {
+                    byte[]? canonical = CanonicalPackfileWriter.Write(PackfileImage.Read(bytes));
+                    if (canonical != null && canonical.AsSpan().SequenceEqual(bytes)) canonicallyIdentical++;
+                    else { canonicalBad++; problem ??= "canonical re-serialization changed the file"; }
+                }
+                catch (Exception error) { canonicalBad++; problem ??= error.Message; }
+            }
+
             if (problem == null) { clean++; continue; }
 
             bad++;
@@ -213,7 +226,11 @@ public static partial class Program
                           $"{changed} changed, {clean} clean, {bad} with a problem");
         Console.WriteLine($"an unedited rebuild reproduced the original file bytes in {identical} " +
                           $"of {files} file(s)");
-        return bad == 0 && unreadable == 0 ? 0 : 1;
+        if (serialize)
+            Console.WriteLine($"canonical re-serialization reproduced the original file bytes in " +
+                              $"{canonicallyIdentical} file(s), {canonicalBad} not");
+
+        return (bad == 0 && unreadable == 0 && canonicalBad == 0) ? 0 : 1;
     }
 
     private static int PackOrderUsage(string message)
