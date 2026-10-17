@@ -59,30 +59,64 @@ public partial class MainWindow : Window
             await browser.ShowDialog(this);
             if (browser.Chosen is not { } entry) return;
 
-            try
+            OpenArchiveEntry(archivePath, archive, entry);
+        }
+    }
+
+    internal bool OpenArchiveForTest(string archivePath, string entryName)
+    {
+        OpenCommonwealth.Services.Archive.Ba2 archive;
+        try { archive = OpenCommonwealth.Services.Archive.Ba2.Open(archivePath); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            SetStatus("That archive could not be read: " + e.Message, Ux.BadBrush);
+            return false;
+        }
+
+        using (archive)
+        {
+            OpenCommonwealth.Services.Archive.Ba2.Entry? entry = archive.Entries.FirstOrDefault(
+                candidate => candidate.Name.Equals(entryName, StringComparison.OrdinalIgnoreCase));
+            if (entry == null)
             {
-
-                string folder = Path.Combine(Path.GetTempPath(), "BehaviourGraphStudio",
-                                             TempDirKey(archivePath));
-                Directory.CreateDirectory(folder);
-
-                string copy = Path.Combine(folder, entry.Name.Replace('/', '_'));
-                File.WriteAllBytes(copy, archive.Read(entry));
-
-                _pathField.Text = copy;
-                Load();
-
-                _readOnly = true;
-                _readOnlyWhy = $"{entry.FileName} came out of {Path.GetFileName(archivePath)}, and " +
-                               "nothing here writes back into an archive. Save a copy somewhere of " +
-                               "your own and open that to edit it.";
-                SetStatus($"Opened {entry.Name} from {Path.GetFileName(archivePath)}, read only. " +
-                          $"The copy is at {copy}", Ux.MetaBrush);
+                SetStatus($"{entryName} is not inside {Path.GetFileName(archivePath)}.", Ux.BadBrush);
+                return false;
             }
-            catch (Exception e)
-            {
-                SetStatus($"Could not open {entry.FileName} from the archive: " + e.Message, Ux.BadBrush);
-            }
+
+            OpenArchiveEntry(archivePath, archive, entry);
+            return true;
+        }
+    }
+
+    private void OpenArchiveEntry(string archivePath, OpenCommonwealth.Services.Archive.Ba2 archive,
+                                  OpenCommonwealth.Services.Archive.Ba2.Entry entry)
+    {
+        try
+        {
+
+            string folder = Path.Combine(Path.GetTempPath(), "BehaviourGraphStudio",
+                                         TempDirKey(archivePath));
+            Directory.CreateDirectory(folder);
+
+            string copy = Path.Combine(folder, entry.Name.Replace('/', '_'));
+            File.WriteAllBytes(copy, archive.Read(entry));
+
+            _pendingVirtualPathHint = entry.Name;
+            _pendingSourceFolder = Path.GetDirectoryName(Path.GetFullPath(archivePath)) ?? "";
+            _pathField.Text = copy;
+            Load();
+
+            _readOnly = true;
+            _readOnlyWhy = $"{entry.FileName} came out of {Path.GetFileName(archivePath)}, and " +
+                           "nothing here writes back into an archive. Save a copy somewhere of " +
+                           "your own and open that to edit it.";
+            RefreshSaveAnimationState();
+            SetStatus($"Opened {entry.Name} from {Path.GetFileName(archivePath)}, read only. " +
+                      $"The copy is at {copy}", Ux.MetaBrush);
+        }
+        catch (Exception e)
+        {
+            SetStatus($"Could not open {entry.FileName} from the archive: " + e.Message, Ux.BadBrush);
         }
     }
 
@@ -194,7 +228,9 @@ public partial class MainWindow : Window
         _poseAnimation = null;
         _poseSkeleton = null;
         _poseSource = "";
+        _poseRefusal = "";
         _playback.Clear();
+        UpdateTransportState();
 
         _ragdoll = null;
         _ragdollSourceName = null;
@@ -313,7 +349,7 @@ public partial class MainWindow : Window
     {
         if (_poseAnimation == null || !_playback.CanPlay)
         {
-            SetPlaybackSummary("Nothing loaded to play. Select a clip, or press From selected node.", Ux.MutedBrush);
+            SetPlaybackSummary(PoseRefusal(), Ux.MutedBrush);
             return;
         }
 
@@ -343,7 +379,12 @@ public partial class MainWindow : Window
         _clock = null;
         _playback.Stop();
         _playButton.Content = "Play";
+        UpdateTransportState();
     }
+
+    internal string PoseRefusal() => _poseRefusal.Length > 0
+        ? _poseRefusal + "  There is nothing posable to play or step."
+        : "Nothing loaded to play. Select a clip, or press From selected node.";
 
     private void ShowFrame(int frame, bool stop)
     {
@@ -416,6 +457,14 @@ public partial class MainWindow : Window
 
     public void ScrubTo(int frame) => ShowFrame(frame, stop: true);
     public void LoadPoseFrom(string animationPath) => LoadPose(animationPath, Path.GetFileName(animationPath));
+    public bool PoseAnimationLoaded => _poseAnimation != null;
+    public string PoseSourceForTest => _poseSource;
+    public string PoseRefusalForTest => _poseRefusal;
+    public bool TransportEnabledForTest => _playButton.IsEnabled;
+    public bool PlayButtonEnabledForTest => _playButton.IsEnabled;
+    public bool StepButtonsEnabledForTest => _forwardFrameButton.IsEnabled;
+    public void PlayForTest() => TogglePlay();
+    public void StepForwardForTest() => ShowFrame(_playback.Frame + 1, stop: true);
     public AnimationPose.Pose? PoseNow =>
         _poseSkeleton == null ? null : AnimationPose.At(_poseSkeleton, _poseAnimation, _playback.Frame);
 

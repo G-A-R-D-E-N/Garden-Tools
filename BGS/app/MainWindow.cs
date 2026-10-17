@@ -117,7 +117,17 @@ public partial class MainWindow : Window
 
     private int _editTrack = -1, _editFrame = -1;
 
-    private bool _animationEdited;
+    private bool _animationEditedField;
+
+    private bool _animationEdited
+    {
+        get => _animationEditedField;
+        set
+        {
+            _animationEditedField = value;
+            RefreshSaveAnimationState();
+        }
+    }
 
     private readonly TextBox _symbolName = Ux.Field("name", 170);
     private readonly TextBox _symbolValue = Ux.Field("value, for a variable", 130);
@@ -152,13 +162,15 @@ public partial class MainWindow : Window
     private RootMotion.Motion _poseMotion = new();
     private bool _followTravel;
     private HavokRagdollModel? _ragdoll;
+    private string _poseRefusal = "";
+    private string _pendingSourceFolder = "";
     private string? _ragdollSourceName;
     private string? _ragdollSourceNote;
 
     private PhysicsLoadReport? _ragdollReport;
     private string _ragdollReportPath = "";
     private string? _physicsReportNote;
-    private Button? _copyDiagnosticsButton;
+    private readonly Button _copyDiagnosticsButton = Ux.Secondary("Copy diagnostics");
     private readonly CheckBox _bodiesToggle = new()
     {
         Content = "Bodies",

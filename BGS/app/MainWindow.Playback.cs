@@ -23,21 +23,68 @@ internal readonly record struct RagdollChoice(HavokRagdollModel? Model, PhysicsL
 
 public partial class MainWindow : Window
 {
+    private readonly Button _firstFrameButton = Ux.Secondary("|<");
+    private readonly Button _backFrameButton = Ux.Secondary("<");
+    private readonly Button _forwardFrameButton = Ux.Secondary(">");
+    private readonly Button _lastFrameButton = Ux.Secondary(">|");
+    private readonly Button _fitButton = Ux.Secondary("Fit");
+    private readonly Button _reloadFromNodeButton = Ux.Secondary("From selected node");
+    private readonly Button _meshButton = Ux.Secondary("Mesh...");
+    private readonly Button _noMeshButton = Ux.Secondary("No mesh");
+    private readonly CheckBox _referenceToggle = new CheckBox
+    {
+        Content = "Reference pose",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+    private readonly CheckBox _travelToggle = new CheckBox
+    {
+        Content = "Follow travel",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+    private readonly TextBlock _diagnosticsText = new()
+    {
+        Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    private void RefreshDiagnosticsPanel()
+    {
+        _diagnosticsText.Text = _physicsReportNote is { Length: > 0 } note
+            ? note
+            : "No physics report yet: open a file whose skeleton carries a ragdoll.";
+    }
+
+    private void UpdateTransportState()
+    {
+        bool posable = _poseAnimation != null;
+        bool playable = posable && _playback.CanPlay;
+
+        _playButton.IsEnabled = playable;
+        _firstFrameButton.IsEnabled = posable;
+        _backFrameButton.IsEnabled = posable;
+        _forwardFrameButton.IsEnabled = posable;
+        _lastFrameButton.IsEnabled = posable;
+
+        string why = playable
+            ? "Play or pause this clip."
+            : _poseRefusal.Length > 0
+                ? _poseRefusal
+                : posable
+                    ? "This clip holds a single frame, so there is nothing to play; the step buttons " +
+                      "still move it."
+                    : "Nothing is posable yet. Select a clip, or press From selected node.";
+        ToolTip.SetTip(_playButton, why);
+        foreach (var button in new[] { _firstFrameButton, _backFrameButton, _forwardFrameButton, _lastFrameButton })
+            ToolTip.SetTip(button, posable ? "Step one frame." : why);
+    }
+
     private Control BuildPlaybackTab()
     {
         _playButton.Click += (_, _) => TogglePlay();
-
-        var first = Ux.Secondary("|<");
-        first.Click += (_, _) => ShowFrame(0, stop: true);
-        var back = Ux.Secondary("<");
-        back.Click += (_, _) => ShowFrame(_playback.Frame - 1, stop: true);
-        var forward = Ux.Secondary(">");
-        forward.Click += (_, _) => ShowFrame(_playback.Frame + 1, stop: true);
-        var last = Ux.Secondary(">|");
-        last.Click += (_, _) => ShowFrame(int.MaxValue, stop: true);
-
-        var fit = Ux.Secondary("Fit");
-        fit.Click += (_, _) => _skeleton.Frame();
 
         _dropButton.IsEnabled = false;
         ToolTip.SetTip(_dropButton, "Release the current ragdoll pose (or the playing frame) and watch a " +
@@ -67,25 +114,10 @@ public partial class MainWindow : Window
             _dropButton.Content = _skeleton.IsDropped ? "Recover" : "Drop";
         };
 
-        var reference = new CheckBox
+        _referenceToggle.IsCheckedChanged += (_, _) =>
         {
-            Content = "Reference pose",
-            Foreground = Ux.MetaBrush,
-            FontSize = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        reference.IsCheckedChanged += (_, _) =>
-        {
-            _skeleton.ShowReference = reference.IsChecked == true;
+            _skeleton.ShowReference = _referenceToggle.IsChecked == true;
             _skeleton.InvalidateVisual();
-        };
-
-        var travel = new CheckBox
-        {
-            Content = "Follow travel",
-            Foreground = Ux.MetaBrush,
-            FontSize = 12,
-            VerticalAlignment = VerticalAlignment.Center,
         };
 
         _bodiesToggle.IsEnabled = false;
@@ -153,24 +185,20 @@ public partial class MainWindow : Window
             _skeleton.InvalidateVisual();
         };
 
-        ToolTip.SetTip(travel, "Move the character along the path the clip carries, instead of " +
-                               "playing it on the spot the way the file stores it.");
-        travel.IsCheckedChanged += (_, _) =>
+        ToolTip.SetTip(_travelToggle, "Move the character along the path the clip carries, instead of " +
+                                      "playing it on the spot the way the file stores it.");
+        _travelToggle.IsCheckedChanged += (_, _) =>
         {
-            _followTravel = travel.IsChecked == true;
+            _followTravel = _travelToggle.IsChecked == true;
             ShowFrame(_playback.Frame, stop: false);
         };
 
-        var reload = Ux.Secondary("From selected node");
-        reload.Click += (_, _) => LoadPoseFromSelection(announce: true);
+        _reloadFromNodeButton.Click += (_, _) => LoadPoseFromSelection(announce: true);
 
-        var mesh = Ux.Secondary("Mesh...");
-        mesh.Click += async (_, _) => await PickMesh();
-        ToolTip.SetTip(mesh, "A .nif to draw on this skeleton");
-        var clearMesh = Ux.Secondary("No mesh");
-        clearMesh.Click += (_, _) => { ClearMesh(); ShowFrame(_playback.Frame, stop: false); };
+        _meshButton.Click += async (_, _) => await PickMesh();
+        ToolTip.SetTip(_meshButton, "A .nif to draw on this skeleton");
+        _noMeshButton.Click += (_, _) => { ClearMesh(); ShowFrame(_playback.Frame, stop: false); };
 
-        _copyDiagnosticsButton = Ux.Secondary("Copy diagnostics");
         ToolTip.SetTip(_copyDiagnosticsButton,
             "Copy why this file's physics loaded or did not: status, findings, class counts, file " +
             "version and pointer size, plus the BGS build. Paste it into a bug report.");
@@ -195,6 +223,14 @@ public partial class MainWindow : Window
         _frameDistancePill = Ux.Pill(_frameDistanceStatus);
         _frameDistancePill.IsVisible = false;
 
+        RegisterToolbar("Playback",
+            ToolbarGroup("Playback controls", _playButton, _firstFrameButton, _backFrameButton,
+                _forwardFrameButton, _lastFrameButton, _fitButton),
+            ToolbarGroup("Viewport overlays", _referenceToggle, _travelToggle, _bodiesToggle, _constraintsToggle,
+                _bindingsToggle, _physicsSkeletonToggle, _framesToggle, _engineerToggle),
+            ToolbarGroup("Scene tools", _clearFrameDistanceButton, _dropButton, _reloadFromNodeButton, _meshButton,
+                _noMeshButton, _copyDiagnosticsButton));
+
         var panel = new Grid();
         panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         panel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
@@ -205,13 +241,6 @@ public partial class MainWindow : Window
         summary.Margin = new Thickness(0, 0, 0, Ux.Space);
         Grid.SetRow(summary, 0);
         panel.Children.Add(summary);
-
-        RegisterToolbar("Playback",
-            ToolbarGroup("Playback controls", _playButton, first, back, forward, last, fit),
-            ToolbarGroup("Viewport overlays", reference, travel, _bodiesToggle, _constraintsToggle, _bindingsToggle,
-                _physicsSkeletonToggle, _framesToggle, _engineerToggle),
-            ToolbarGroup("Scene tools", _clearFrameDistanceButton, _dropButton, reload, mesh, clearMesh,
-                _copyDiagnosticsButton));
 
         _skeleton.ClipToBounds = true;
         _playbackViewportHost = Framed(_skeleton);
@@ -228,6 +257,7 @@ public partial class MainWindow : Window
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
                            "the skeleton; use Mesh... to hang a model on it.", Ux.MutedBrush);
+        UpdateTransportState();
         return panel;
     }
 
@@ -264,7 +294,7 @@ public partial class MainWindow : Window
         bool any = _ragdoll is { Bodies.Count: > 0 };
         _ragdollSourceName = ragdollSource == null ? null : Path.GetFileName(ragdollSource);
         _physicsReportNote = DescribePhysicsReport(path);
-        if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = _ragdollReport != null;
+        _copyDiagnosticsButton.IsEnabled = _ragdollReport != null;
         _bodiesToggle.IsEnabled = any;
         _bodiesToggle.IsChecked = any;
         _constraintsToggle.IsEnabled = any;
@@ -287,6 +317,8 @@ public partial class MainWindow : Window
             ShowPhysicsReport(path);
             return;
         }
+
+        RefreshDiagnosticsPanel();
 
         bool mappings = any && _ragdoll is { Mappings.Count: > 0, AnimationSkeleton: { BoneNames.Count: > 0 } };
         string source = ragdollSource == null
@@ -315,10 +347,9 @@ public partial class MainWindow : Window
 
     internal static string? PackedAnimationKey(GameData? data, string path, string? virtualPathHint)
     {
-        if (data == null) return null;
         if (!string.IsNullOrWhiteSpace(virtualPathHint) && AnimationIndex.IsSafeVirtualPath(virtualPathHint))
             return virtualPathHint.Replace('\\', '/').TrimStart('/');
-        return data.DataRelativePath(path);
+        return data?.DataRelativePath(path);
     }
 
     internal static RagdollChoice ChooseRagdoll(string path, HavokRagdollModel? own, PhysicsLoadReport ownReport,
@@ -355,12 +386,14 @@ public partial class MainWindow : Window
         _ragdollReport = null;
         _ragdollReportPath = "";
         _physicsReportNote = null;
-        if (_copyDiagnosticsButton != null) _copyDiagnosticsButton.IsEnabled = false;
+        _copyDiagnosticsButton.IsEnabled = false;
+        RefreshDiagnosticsPanel();
     }
 
     private void ShowPhysicsReport(string path)
     {
         _physicsReportNote = DescribePhysicsReport(path);
+        RefreshDiagnosticsPanel();
         if (_physicsReportNote is not { Length: > 0 } note) return;
 
         SetPlaybackSummary(note, PhysicsReportBrush());
@@ -426,13 +459,47 @@ public partial class MainWindow : Window
         }
     }
 
-    private HkxSkeleton? PoseSkeleton(string? animationPath = null)
+    private HkxSkeleton? PoseSkeleton(string? animationPath = null, string? archiveEntry = null,
+                                      string? dataFolderHint = null)
     {
         if (_cachedSkeletonFor == _hkxPath && _cachedSkeleton != null) return _cachedSkeleton;
 
         _cachedSkeletonFor = _hkxPath;
-        _cachedSkeleton = _projectChain?.Skeleton ?? SiblingSkeleton(_hkxPath, animationPath);
+        _cachedSkeleton = ResolveAnimationSkeleton(animationPath ?? _hkxPath, null, dataFolderHint, archiveEntry);
         return _cachedSkeleton;
+    }
+
+    internal HkxSkeleton? ResolveAnimationSkeleton(string animationPath, string? virtualPathHint,
+                                                   string? dataFolderHint, string? archiveEntry = null)
+    {
+        if (_projectChain?.Skeleton is { } fromChain) return fromChain;
+        if (File.Exists(animationPath) && SiblingSkeleton(animationPath) is { } loose) return loose;
+
+        GameData? opened = null;
+        GameData? data = _gameData;
+        if (data == null)
+        {
+            data = opened = DataFolderGameData(dataFolderHint);
+            if (data == null) return null;
+        }
+
+        try
+        {
+            string? entry = archiveEntry ?? PackedAnimationKey(data, animationPath, virtualPathHint);
+            return ArchiveSkeleton(data, entry);
+        }
+        finally { opened?.Dispose(); }
+    }
+
+    private static GameData? DataFolderGameData(string? dataFolderHint)
+    {
+        foreach (string folder in new[] { dataFolderHint ?? "", Settings.Get("gameDataFolder") })
+        {
+            if (folder.Length == 0 || !Directory.Exists(folder)) continue;
+            try { return GameData.Discover(folder); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+        return null;
     }
 
     private void LoadPoseFromSelection(bool announce)
@@ -482,7 +549,8 @@ public partial class MainWindow : Window
         LoadPose(packed.Bytes, animation, animation, packed.Source, packed.EntryName);
     }
 
-    private void LoadPose(string animationPath, string label)
+    private void LoadPose(string animationPath, string label, string? virtualPathHint = null,
+                          string? dataFolderHint = null)
     {
         byte[] hkx;
         try { hkx = InputFilePolicy.ReadHkx(animationPath); }
@@ -492,17 +560,19 @@ public partial class MainWindow : Window
             SetPlaybackSummary($"Could not read {label}: {ex.Message.Split('\n')[0]}", Ux.BadBrush);
             return;
         }
-        LoadPose(hkx, animationPath, label, "loose", null);
+        LoadPose(hkx, animationPath, label, "loose",
+                 PackedAnimationKey(_gameData, animationPath, virtualPathHint), dataFolderHint ?? "");
     }
 
-    private void LoadPose(byte[] hkx, string key, string label, string source, string? archiveEntry)
+    private void LoadPose(byte[] hkx, string key, string label, string source, string? archiveEntry,
+                          string dataFolderHint = "")
     {
         if (_poseSource == key) return;
 
         Stop();
         bool foreign = !string.Equals(SafeFullPath(_hkxPath), SafeFullPath(key), StringComparison.OrdinalIgnoreCase);
         if (foreign) ClearPhysicsReport();
-        _poseSkeleton = PoseSkeleton(archiveEntry == null ? key : null) ?? ArchiveSkeleton(archiveEntry);
+        _poseSkeleton = PoseSkeleton(key, archiveEntry, dataFolderHint);
 
         HkxAnimationData animation;
         try
@@ -533,14 +603,17 @@ public partial class MainWindow : Window
             if (_poseSkeleton != null) _skeleton.Show(AnimationPose.ReferencePose(_poseSkeleton));
             _poseAnimation = null;
             _poseSource = "";
+            _poseRefusal = $"{label}: {refusal}";
             _playback.Clear();
             _scrub.Maximum = 0;
             AppendPhysicsNotes();
+            UpdateTransportState();
             return;
         }
 
         _poseAnimation = animation;
         _poseSource = key;
+        _poseRefusal = "";
         _playback.Load(animation.NumFrames, animation.FrameDuration);
 
         try { _poseMotion = RootMotion.Read(hkx); }
@@ -573,13 +646,18 @@ public partial class MainWindow : Window
             $"on {_poseSkeleton.Name}{travelled}{from}", Ux.MetaBrush);
         UpdateFrameLabel();
         AppendPhysicsNotes();
+        UpdateTransportState();
     }
 
-    private HkxSkeleton? ArchiveSkeleton(string? animationEntry)
+    private static HkxSkeleton? ArchiveSkeleton(GameData? data, string? animationEntry)
     {
-        if (_gameData == null || animationEntry == null) return null;
-        var gameData = _gameData;
-        byte[]? bytes = SkeletonBytesOrNull(() => gameData.SkeletonBytes(animationEntry));
+        if (data == null || animationEntry == null) return null;
+        byte[]? bytes;
+        try { bytes = data.SkeletonBytes(animationEntry); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return null;
+        }
         if (bytes == null) return null;
         try { return new HkxBinaryReader().ReadSkeleton(bytes); }
         catch { return null; }

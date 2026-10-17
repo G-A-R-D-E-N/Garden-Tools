@@ -100,6 +100,8 @@ public partial class MainWindow : Window
         string path = (_pathField.Text ?? "").Trim().Trim('"');
         string? virtualPathHint = _pendingVirtualPathHint;
         _pendingVirtualPathHint = null;
+        string? dataFolderHint = _pendingSourceFolder.Length > 0 ? _pendingSourceFolder : null;
+        _pendingSourceFolder = "";
         if (path.Length == 0) { SetSummary("Enter the path to a .hkx file.", Ux.MutedBrush); return; }
         if (!File.Exists(path))
         {
@@ -186,7 +188,7 @@ public partial class MainWindow : Window
 
         TryLoadRagdoll(path, virtualPathHint);
 
-        bool isAnimation = BuildAnimation(path);
+        bool isAnimation = BuildAnimation(path, virtualPathHint, dataFolderHint);
 
         var root = HkxBehaviorParser.ParseBehavior(path);
         if (root == null)
@@ -207,10 +209,11 @@ public partial class MainWindow : Window
 
             if (_animationData != null)
             {
-                LoadPose(path, Path.GetFileName(path));
+                LoadPose(path, Path.GetFileName(path), virtualPathHint, dataFolderHint);
                 FindMeshForFile();
                 AppendPhysicsNotes();
             }
+            RefreshSaveAnimationState();
             return;
         }
 
@@ -272,9 +275,10 @@ public partial class MainWindow : Window
 
         if (_animationData != null)
         {
-            LoadPose(path, Path.GetFileName(path));
+            LoadPose(path, Path.GetFileName(path), virtualPathHint, dataFolderHint);
             AppendPhysicsNotes();
         }
+        RefreshSaveAnimationState();
         if (settingsWarning != null) SetStatus(settingsWarning, Ux.WarnBrush);
     }
 

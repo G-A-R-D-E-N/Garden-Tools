@@ -22,7 +22,10 @@ public partial class MainWindow : Window
 
     private NativeAnimation.Timeline? _animationTimeline;
 
-    private Control[] GeometryToolbarGroups()
+    private sealed record GeometryToolButtons(Button PreviewTrim, Button Trim, Button PreviewRetime, Button Retime,
+                                              Button PreviewLoop, Button Loop);
+
+    private GeometryToolButtons GeometryButtons()
     {
         var previewTrim = Ux.Secondary("Preview trim");
         previewTrim.Click += (_, _) => PreviewTrim();
@@ -45,12 +48,7 @@ public partial class MainWindow : Window
             box.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) ApplyRetime(); };
         _loopBlend.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) ApplyLoop(); };
 
-        return new Control[]
-        {
-            ToolbarGroup("Trim frames", _trimStart, _trimEnd, previewTrim, trim),
-            ToolbarGroup("Retime", _retimeSpeed, _retimeDuration, previewRetime, retime),
-            ToolbarGroup("Loop", _loopBlend, previewLoop, loop),
-        };
+        return new GeometryToolButtons(previewTrim, trim, previewRetime, retime, previewLoop, loop);
     }
 
     private void ResetGeometry()
@@ -264,6 +262,7 @@ public partial class MainWindow : Window
         _animationData = made;
         _animationTimeline = timeline;
         _animationEdited = true;
+        RefreshSaveAnimationState();
         _editTrack = _editFrame = -1;
         _aimedFrame = -1;
         _frameStart = 0;
@@ -275,6 +274,7 @@ public partial class MainWindow : Window
         _frameEditAnswer.Text = "Frame selection cleared: the clip changed shape.";
         _frameEditAnswer.Foreground = Ux.MutedBrush;
         ShowAnimationFrames();
+        RefreshSaveAnimationState();
         Say(said + "   No undo: reopen without saving to go back; a save keeps the original as " +
                    ".bak until the next save replaces it.", Ux.CodeBrush);
     }

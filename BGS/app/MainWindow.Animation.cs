@@ -19,6 +19,8 @@ namespace BehaviourStudio.App;
 
 public partial class MainWindow : Window
 {
+    private readonly Button _saveAnimationButton = Ux.Secondary("Save changes");
+
     private Control BuildAnimationTab()
     {
         var earlier = Ux.Secondary("Earlier frames");
@@ -47,24 +49,49 @@ public partial class MainWindow : Window
 
         var apply = Ux.Secondary("Set frame");
         apply.Click += (_, _) => SetFrame();
-        var write = Ux.Primary("Save changes");
-        write.Click += (_, _) => SaveAnimation();
+        _saveAnimationButton.Click += (_, _) => SaveAnimation();
 
         foreach (var box in new[] { _framePosition, _frameRotation, _frameScale })
             box.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) SetFrame(); };
 
         _animation.SelectionChanged += ShowSelectedFrame;
 
-        var geometry = GeometryToolbarGroups();
+        var geometry = GeometryButtons();
         RegisterToolbar("Animation", navigation, find,
-            ToolbarGroup("Edit selected frame", _framePosition, _frameRotation, _frameScale, apply, write),
-            geometry[0], geometry[1], geometry[2]);
+            ToolbarGroup("Edit selected frame", _framePosition, _frameRotation, _frameScale, apply,
+                _saveAnimationButton),
+            ToolbarGroup("Trim frames", _trimStart, _trimEnd, geometry.PreviewTrim, geometry.Trim),
+            ToolbarGroup("Retime", _retimeSpeed, _retimeDuration, geometry.PreviewRetime, geometry.Retime),
+            ToolbarGroup("Loop", _loopBlend, geometry.PreviewLoop, geometry.Loop));
         AddTop(panel, _frameEditAnswer);
         AddTop(panel, _geometryAnswer);
 
         panel.Children.Add(_animation);
+        RefreshSaveAnimationState();
         return panel;
     }
+
+    private void RefreshSaveAnimationState()
+    {
+        bool dirty = _animationEdited && !_readOnly && _animationData != null;
+        _saveAnimationButton.IsEnabled = dirty;
+        _saveAnimationButton.Background = dirty ? Ux.AccentBrush : Ux.CardBrush;
+        _saveAnimationButton.Foreground = dirty ? Brushes.White : Ux.MetaBrush;
+
+        string why = dirty
+            ? "Write the clip on the Animation tab back to " + System.IO.Path.GetFileName(_hkxPath) + "."
+            : _readOnly
+                ? "Not saved: " + _readOnlyWhy
+                : _animationData == null
+                    ? "Open an animation first; this file holds none."
+                    : "No unsaved changes to write.";
+        ToolTip.SetTip(_saveAnimationButton, why);
+    }
+
+    internal bool SaveAnimationButtonEnabled => _saveAnimationButton.IsEnabled;
+
+    internal bool SaveAnimationButtonIsPrimary =>
+        _saveAnimationButton.Background is ISolidColorBrush brush && brush.Color == Ux.Accent;
 
     private void ShowSelectedFrame()
     {
@@ -240,7 +267,7 @@ public partial class MainWindow : Window
         ShowAnimationFrames();
     }
 
-    private bool BuildAnimation(string path)
+    private bool BuildAnimation(string path, string? virtualPathHint = null, string? dataFolderHint = null)
     {
         _animation.Clear();
         _animationData = null;
@@ -286,10 +313,11 @@ public partial class MainWindow : Window
         }
 
         _animationData = anim;
-        _animationSkeleton = SiblingSkeleton(path);
+        _animationSkeleton = ResolveAnimationSkeleton(path, virtualPathHint, dataFolderHint);
         _frameStart = 0;
         ResetGeometry();
         ShowAnimationFrames();
+        RefreshSaveAnimationState();
         return true;
     }
 
@@ -367,6 +395,8 @@ public partial class MainWindow : Window
         }
 
         string folder = Path.GetDirectoryName(Path.GetFullPath(primaryPath)) ?? "";
+        if (!Directory.Exists(folder)) return null;
+
         foreach (string file in Directory.EnumerateFiles(folder, "*.hkx").OrderBy(f => f))
         {
             if (string.Equals(Path.GetFullPath(file), Path.GetFullPath(primaryPath),
