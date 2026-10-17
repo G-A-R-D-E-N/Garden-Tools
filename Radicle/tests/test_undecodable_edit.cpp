@@ -718,7 +718,7 @@ TEST(UndecodableEdit, FactionAndNpcAddsRefuseUndecodableRecord) {
                std::invalid_argument);
   EXPECT_THROW(static_cast<void>(fo4::forms::add_npc_inventory_item(
                    npc, npc_key,
-                   fo4::forms::NpcInventoryItem{fo4::FormKey::parse("000789:Fallout4.esm"), 1})),
+                   fo4::forms::NpcInventoryItem{fo4::FormKey::parse("000789:Fallout4.esm"), 1, std::nullopt})),
                std::invalid_argument);
   expect_plugin_bytes_unchanged(npc, npc_bytes);
 }
