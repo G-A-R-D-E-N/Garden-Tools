@@ -4,7 +4,6 @@ using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 using BehaviourStudio.App;
 using Xunit;
 
@@ -31,31 +30,51 @@ public sealed class ViewportMeshThreadingTests
         int[] firstIndices = geometry.Indices;
 
         using var stop = new CancellationTokenSource();
-        var producer = Task.Run(() =>
+        int refreshes = 0;
+        var producer = new Thread(() =>
         {
             int at = 0;
-            while (!stop.IsCancellationRequested) geometry.Refresh(frames[at++ % frames.Length]);
-        });
+            while (!stop.IsCancellationRequested)
+            {
+                geometry.Refresh(frames[at++ % frames.Length]);
+                Interlocked.Increment(ref refreshes);
+            }
+        }) { IsBackground = true };
+        producer.Start();
 
         float[] packed = Array.Empty<float>();
-        int torn = 0, checkedFrames = 0;
-        for (int pass = 0; pass < 3000; pass++)
+        int torn = 0, checkedFrames = 0, distinctFrames = 0;
+        float lastFrame = -1;
+        try
         {
-            var snapshotIndices = geometry.PackSnapshot(ref packed);
-            Assert.Same(firstIndices, snapshotIndices);
-            float frame = packed[0];
-            for (int i = 0; i < Vertices; i++)
+            SpinWait.SpinUntil(() => Volatile.Read(ref refreshes) > 0, 5000);
+            for (int pass = 0; pass < 3000; pass++)
             {
-                int at = i * MeshGeometry.FloatsPerVertex;
-                if (packed[at] != frame || packed[at + 2] != frame * 2f) { torn++; break; }
+                var snapshotIndices = geometry.PackSnapshot(ref packed);
+                Assert.Same(firstIndices, snapshotIndices);
+                float frame = packed[0];
+                if (frame != lastFrame) { distinctFrames++; lastFrame = frame; }
+                for (int i = 0; i < Vertices; i++)
+                {
+                    int at = i * MeshGeometry.FloatsPerVertex;
+                    if (packed[at] != frame || packed[at + 1] != frame + i * 0.001f || packed[at + 2] != frame * 2f)
+                    {
+                        torn++;
+                        break;
+                    }
+                }
+                checkedFrames++;
             }
-            checkedFrames++;
+        }
+        finally
+        {
+            stop.Cancel();
+            producer.Join();
         }
 
-        stop.Cancel();
-        producer.Wait();
-
         Assert.Equal(3000, checkedFrames);
+        Assert.True(Volatile.Read(ref refreshes) > 1, "the producer never overlapped the reader");
+        Assert.True(distinctFrames > 1, "the reader only ever saw one frame");
         Assert.Equal(0, torn);
     }
 
