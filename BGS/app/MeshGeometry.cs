@@ -21,6 +21,7 @@ internal sealed class MeshGeometry
     private Vector2[]? _uvs;
     private int[] _indices = Array.Empty<int>();
     private Vector3[] _normalScratch = Array.Empty<Vector3>();
+    private readonly object _sync = new();
 
     public Vector3[] Positions => _positions;
     public Vector3[] Normals => _normals;
@@ -40,6 +41,22 @@ internal sealed class MeshGeometry
 
     public void Refresh(IReadOnlyList<MeshPart> parts)
     {
+        lock (_sync) RefreshLocked(parts);
+    }
+
+    public int[] PackSnapshot(ref float[] packed)
+    {
+        lock (_sync)
+        {
+            int floats = _positions.Length * FloatsPerVertex;
+            if (packed.Length != floats) packed = new float[floats];
+            PackVertices(_positions, _normals, packed);
+            return _indices;
+        }
+    }
+
+    private void RefreshLocked(IReadOnlyList<MeshPart> parts)
+    {
         int vertexCount = 0, indexCount = 0;
         bool anyUvs = parts.Count > 0;
         bool allNormals = parts.Count > 0;
@@ -58,7 +75,9 @@ internal sealed class MeshGeometry
             _normals = new Vector3[vertexCount];
             _normalScratch = new Vector3[vertexCount];
         }
-        if (_indices.Length != indexCount) _indices = new int[indexCount];
+
+        bool sameIndices = SameIndices(parts, _indices, indexCount);
+        if (!sameIndices) _indices = new int[indexCount];
         if (!anyUvs) _uvs = null;
         else if (_uvs == null || _uvs.Length != vertexCount) _uvs = new Vector2[vertexCount];
 
@@ -66,7 +85,8 @@ internal sealed class MeshGeometry
         foreach (var part in parts)
         {
             Array.Copy(part.Positions, 0, _positions, vertexAt, part.Positions.Length);
-            for (int i = 0; i < part.Indices.Length; i++) _indices[indexAt + i] = part.Indices[i] + vertexAt;
+            if (!sameIndices)
+                for (int i = 0; i < part.Indices.Length; i++) _indices[indexAt + i] = part.Indices[i] + vertexAt;
             if (_uvs != null && part.Uvs != null) Array.Copy(part.Uvs, 0, _uvs, vertexAt, part.Uvs.Length);
 
             if (part.Normals is { } supplied && supplied.Length == part.Positions.Length)
@@ -87,6 +107,20 @@ internal sealed class MeshGeometry
                 at += part.Positions.Length;
             }
         }
+    }
+
+    private static bool SameIndices(IReadOnlyList<MeshPart> parts, int[] current, int indexCount)
+    {
+        if (current.Length != indexCount) return false;
+        int vertexAt = 0, indexAt = 0;
+        foreach (var part in parts)
+        {
+            for (int i = 0; i < part.Indices.Length; i++)
+                if (current[indexAt + i] != part.Indices[i] + vertexAt) return false;
+            vertexAt += part.Positions.Length;
+            indexAt += part.Indices.Length;
+        }
+        return true;
     }
 
     public static Vector3[] ComputeNormals(Vector3[] positions, int[] indices)
@@ -121,12 +155,23 @@ internal sealed class MeshGeometry
 
     public float[] Pack()
     {
-        var packed = new float[Positions.Length * FloatsPerVertex];
-        PackVertices(Positions, Normals, packed);
-        return packed;
+        lock (_sync)
+        {
+            var packed = new float[_positions.Length * FloatsPerVertex];
+            PackVertices(_positions, _normals, packed);
+            return packed;
+        }
     }
 
-    public void PackInto(float[] packed) => PackVertices(_positions, _normals, packed);
+    public void PackInto(float[] packed)
+    {
+        lock (_sync)
+        {
+            if (packed.Length < _positions.Length * FloatsPerVertex)
+                throw new ArgumentException("the pack buffer is smaller than the mesh", nameof(packed));
+            PackVertices(_positions, _normals, packed);
+        }
+    }
 
     public static float[] PackVertices(Vector3[] positions, Vector3[] normals)
     {

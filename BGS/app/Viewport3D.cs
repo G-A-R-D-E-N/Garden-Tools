@@ -138,6 +138,7 @@ void main()
     private readonly Avalonia.Threading.DispatcherTimer _pump = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private volatile Scene _scene = new();
     private readonly Stopwatch _clock = new();
+    private readonly Stopwatch _uploadClock = new();
     private bool _firstDrawChecked;
 
     public Viewport3D()
@@ -337,9 +338,9 @@ void main()
             {
                 if (scene.Version != state.UploadedVersion)
                 {
-                    var upload = Stopwatch.StartNew();
+                    _uploadClock.Restart();
                     UploadMesh(api, mesh);
-                    LastUploadMilliseconds = upload.Elapsed.TotalMilliseconds;
+                    LastUploadMilliseconds = _uploadClock.Elapsed.TotalMilliseconds;
                     state.UploadedVersion = scene.Version;
                 }
 
@@ -369,9 +370,7 @@ void main()
 
     private void UploadMesh(GL api, MeshGeometry mesh)
     {
-        int floats = mesh.VertexCount * MeshGeometry.FloatsPerVertex;
-        if (_packed.Length != floats) _packed = new float[floats];
-        mesh.PackInto(_packed);
+        var indices = mesh.PackSnapshot(ref _packed);
 
         api.BindVertexArray(_state.MeshVao);
         api.BindBuffer(BufferTargetARB.ArrayBuffer, _state.MeshVbo);
@@ -385,18 +384,18 @@ void main()
             _state.UploadedVertexFloats = _packed.Length;
         }
 
-        if (ReferenceEquals(mesh.Indices, _state.UploadedIndices)) return;
+        if (ReferenceEquals(indices, _state.UploadedIndices)) return;
 
-        if (_indices.Length != mesh.Indices.Length) _indices = new uint[mesh.Indices.Length];
+        if (_indices.Length != indices.Length) _indices = new uint[indices.Length];
         for (int i = 0; i < _indices.Length; i++)
         {
-            int index = mesh.Indices[i];
+            int index = indices[i];
             _indices[i] = index < 0 ? 0u : (uint)index;
         }
         api.BindBuffer(BufferTargetARB.ElementArrayBuffer, _state.MeshEbo);
         api.BufferData<uint>(BufferTargetARB.ElementArrayBuffer, _indices, BufferUsageARB.DynamicDraw);
         _state.MeshIndexCount = (uint)_indices.Length;
-        _state.UploadedIndices = mesh.Indices;
+        _state.UploadedIndices = indices;
     }
 
     private void EnsureGrid(GL api, double fit)
