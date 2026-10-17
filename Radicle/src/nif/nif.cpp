@@ -249,7 +249,8 @@ NifFile read_nif(std::span<const std::byte> bytes) {
       }
     }
     for (const auto visited : path) walk_state[visited] = 2;
-  }  for (auto& node : nif.nodes_) {
+  }
+  for (auto& node : nif.nodes_) {
     const auto parent = nif.parents_[node.block];
     if (parent >= 0) node.parent = nif.node_of_block_[static_cast<std::size_t>(parent)];
   }
