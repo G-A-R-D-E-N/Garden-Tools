@@ -334,6 +334,114 @@ public sealed class RagdollCapsuleResizeTests
                                          new[] { new RagdollShapeChange(bent, sentinel) })).Message);
     }
 
+    [Fact]
+    public void AShapeSharingAPropertiesContainerNeedsTheShapeFlag()
+    {
+        byte[] patched = RagdollSharedShapeFixture.ShareProperties(Fixture(), out int source, out int repointed);
+        var document = new RagdollDocument(patched);
+        int index = RagdollSharedShapeFixture.ShapeAt(document, source);
+
+        Assert.NotEqual(source, repointed);
+        Assert.Equal(2, document.Shapes[index].ShapesSharingProperties);
+        Assert.Equal(2, document.Shapes[index].ShapesSharingMassProperties);
+        Assert.Equal(2, document.Shapes[RagdollSharedShapeFixture.ShapeAt(document, repointed)].ShapesSharingProperties);
+        Assert.True(document.Shapes[index].ReferencedByBodies <= 1);
+
+        float wanted = document.Shapes[index].Radius * 1.5f;
+        var refused = Assert.Throws<InvalidOperationException>(() => document.SetShapeRadius(index, wanted));
+        Assert.Contains("shares its properties container", refused.Message);
+        Assert.False(document.Dirty);
+
+        document.SetShapeRadius(index, wanted, true);
+        Assert.True(document.Dirty);
+        Assert.Equal(wanted, document.Shapes[index].Radius);
+        _out.WriteLine($"shape {index} shares its container with shape {RagdollSharedShapeFixture.ShapeAt(document, repointed)} and needed " +
+                       $"--allow-shared-shape: {refused.Message}");
+    }
+
+    [Fact]
+    public void ATieInTheOldDirectionKeepsItsSlotWhenTheNewDirectionBreaksIt()
+    {
+        Vector3 a = Vector3.Zero;
+        Vector3 b = new(1f, 1f, 0f);
+        const double mass = 4.0;
+        const float radius = 0.1f;
+        RagdollCapsuleData from = Tied(a, b, radius, mass);
+
+        Vector3 uOld = Vector3.Normalize(b - a);
+        Vector3 uNew = Vector3.Normalize(new Vector3(1f - 4e-7f, 1f, 0f));
+        Assert.Equal(Math.Abs(uOld.X), Math.Abs(uOld.Y));
+        Assert.True(Math.Abs(uNew.Y) > Math.Abs(uNew.X), "the new direction does not break the tie towards y");
+        Assert.True(Vector3.Cross(uOld, uNew).Length() <= RagdollCapsule.DirectionTolerance);
+
+        Vector3 bNew = uNew * (b - a).Length();
+        RagdollCapsuleData derived = RagdollCapsule.Derive(from, a, b, radius, a, bNew, radius, "the shape",
+                                                          "so nothing was changed");
+
+        short laneX = BitConverter.ToInt16(derived.MassProperties!, 8);
+        short laneY = BitConverter.ToInt16(derived.MassProperties!, 10);
+        short laneZ = BitConverter.ToInt16(derived.MassProperties!, 12);
+        Assert.Equal(laneY, laneZ);
+        Assert.NotEqual(laneX, laneY);
+        _out.WriteLine($"a tie on x kept the axial lane in x ({laneX}) while y and z hold the transverse " +
+                       $"value ({laneY}) after the resize turned the direction towards y");
+    }
+
+    private static RagdollCapsuleData Tied(Vector3 a, Vector3 b, float radius, double mass)
+    {
+        Vector3 u = Vector3.Normalize(b - a);
+        Vector3 e1 = Vector3.Normalize(Vector3.Cross(u, Math.Abs(u.X) < 0.9f ? Vector3.UnitX : Vector3.UnitY));
+        Vector3 e2 = Vector3.Cross(u, e1);
+        float scale = radius / (float)RagdollCapsule.VertexSpan;
+        float wanted = scale * MathF.Sqrt(3f);
+
+        var vertices = new byte[RagdollCapsule.VertexCount * RagdollCapsule.VertexWidth];
+        for (int i = 0; i < RagdollCapsule.VertexCount; i++)
+        {
+            double angle = Math.PI * 2.0 * i / RagdollCapsule.VertexCount;
+            Vector3 direction = e1 * (float)Math.Cos(angle) + e2 * (float)Math.Sin(angle);
+            Vector3 vertex = (i < 3 ? a : b) + wanted * direction;
+            int at = i * RagdollCapsule.VertexWidth;
+            BitConverter.GetBytes(vertex.X).CopyTo(vertices, at);
+            BitConverter.GetBytes(vertex.Y).CopyTo(vertices, at + 4);
+            BitConverter.GetBytes(vertex.Z).CopyTo(vertices, at + 8);
+            BitConverter.GetBytes(RagdollCapsule.IndexTag + i).CopyTo(vertices, at + 12);
+        }
+
+        var planes = new byte[RagdollCapsule.PlaneCount * RagdollCapsule.PlaneWidth];
+        for (int i = 0; i < RagdollCapsule.PlaneCount - 1; i++)
+        {
+            double angle = Math.PI * 2.0 * i / 6.0 + 0.3;
+            Vector3 normal = Vector3.Normalize(e1 * (float)Math.Cos(angle) + e2 * (float)Math.Sin(angle));
+            float support = float.NegativeInfinity;
+            for (int v = 0; v < RagdollCapsule.VertexCount; v++)
+            {
+                int at = v * RagdollCapsule.VertexWidth;
+                Vector3 vertex = new(BitConverter.ToSingle(vertices, at), BitConverter.ToSingle(vertices, at + 4),
+                                     BitConverter.ToSingle(vertices, at + 8));
+                support = Math.Max(support, Vector3.Dot(normal, vertex));
+            }
+
+            int planeAt = i * RagdollCapsule.PlaneWidth;
+            BitConverter.GetBytes(normal.X).CopyTo(planes, planeAt);
+            BitConverter.GetBytes(normal.Y).CopyTo(planes, planeAt + 4);
+            BitConverter.GetBytes(normal.Z).CopyTo(planes, planeAt + 8);
+            BitConverter.GetBytes(-support).CopyTo(planes, planeAt + 12);
+        }
+
+        BitConverter.GetBytes(float.MinValue)
+                     .CopyTo(planes, (RagdollCapsule.PlaneCount - 1) * RagdollCapsule.PlaneWidth + 12);
+
+        RagdollCapsule.EncodedMass encoded = RagdollCapsule.Encode(mass, a, b, radius, 0, "the shape",
+                                                                  "so nothing was changed");
+        var properties = new byte[RagdollCapsule.MassPropertiesWidth];
+        for (int i = 0; i < 4; i++) BitConverter.GetBytes((short)encoded.Centre[i]).CopyTo(properties, i * 2);
+        for (int i = 0; i < 4; i++) BitConverter.GetBytes((short)encoded.Inertia[i]).CopyTo(properties, 8 + i * 2);
+        BitConverter.GetBytes((float)mass).CopyTo(properties, 24);
+        BitConverter.GetBytes((float)encoded.Volume).CopyTo(properties, 28);
+
+        return new RagdollCapsuleData(vertices, planes, Faces, Indices, properties);
+    }
     private static RagdollCapsuleData Pair(string vertices, string planes, string properties) =>
         new(Vertices(vertices), Convert.FromHexString(planes), Faces, Indices, Convert.FromHexString(properties));
 

@@ -171,9 +171,11 @@ symrm ragdoll --data "/path/to/Data"                           # sweep every rag
 `body`, `material` and `constraint` index the selected ragdoll's rows; `shape` indexes the file's capsule
 shapes. `--set ragdoll=<i>` chooses that ragdoll for every edit that follows: it is optional when the file
 holds exactly one ragdoll, and a file with more than one refuses such an edit, naming how many it holds,
-until the selector is given. A material shared by more than one body, and a capsule shape that more than one
-body names, are refused unless `--allow-shared-material` is passed, because changing either changes every
-body that names it.
+until the selector is given. A material shared by more than one body is refused unless `--allow-shared-material`
+is passed, because changing it changes every body that names it. A capsule shape is refused unless
+`--allow-shared-shape` is passed when more than one body names it, or when it shares the same
+`hkRefCountedProperties` container or `hknpShapeMassProperties` object with another capsule shape, because
+resizing it would change the mass properties that shape reads.
 
 Every capsule in the shipped game carries `7` vertices, `7` planes, `5` faces and `23` indices derived from
 its endpoints and radius, and `882` of the `933` vanilla capsules also carry a stored volume, centre of mass
@@ -182,7 +184,8 @@ not change (within `1e-6` rad): each vertex moves to the matching endpoint plus 
 offset, each plane keeps its normal and takes the `d` its own vertices support, and the volume, centre of
 mass and inertia are re-encoded while the stored mass and the undecoded `majorAxisSpace` are kept. A change
 of direction, a capsule whose stored arrays do not match its endpoints and radius, and a capsule more than
-one body names without `--allow-shared-material` are refused. A cone is written only when its atom's
+one body names, or whose mass properties another capsule shape shares, without `--allow-shared-shape` are
+refused. A cone is written only when its atom's
 `angle measurement mode` is the one the game uses (`0`; planes use `1`), and the constraint is refused
 otherwise.
 

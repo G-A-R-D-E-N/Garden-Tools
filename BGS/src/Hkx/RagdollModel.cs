@@ -129,6 +129,14 @@ public sealed class RagdollShape
 
     internal int ReferencedByBodies { get; set; }
 
+    internal int PropertiesIndex { get; set; } = -1;
+
+    internal int MassPropertiesIndex { get; set; } = -1;
+
+    internal int ShapesSharingProperties { get; set; }
+
+    internal int ShapesSharingMassProperties { get; set; }
+
     public bool CarriesPolytopeData => Vertices > 0 || Planes > 0 || Faces > 0 || Indices > 0;
 
     public string PolytopeCounts =>
@@ -147,6 +155,10 @@ public sealed class RagdollShape
             Indices = Indices,
             Capsule = Capsule,
             ReferencedByBodies = ReferencedByBodies,
+            PropertiesIndex = PropertiesIndex,
+            MassPropertiesIndex = MassPropertiesIndex,
+            ShapesSharingProperties = ShapesSharingProperties,
+            ShapesSharingMassProperties = ShapesSharingMassProperties,
         };
         return copy;
     }

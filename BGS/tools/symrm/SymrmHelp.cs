@@ -46,7 +46,7 @@ public static class SymrmHelp
           "--recompute; --out <file>; --force; --data <folder>",
           "symrm mapper skeleton.hkx --recompute --out recomputed.hkx"),
         C("ragdoll", "ragdoll <skeleton.hkx> [--set <field>:<index>=<values>] [--set ragdoll=<i>] [--out <file>] " +
-                     "[--force] [--allow-shared-material] [--data <Data folder>]",
+                     "[--force] [--allow-shared-material] [--allow-shared-shape] [--data <Data folder>]",
           "Read a file's hknpRagdollData ragdolls, edit masses, centres of mass, material friction and " +
           "restitution, a constraint's twist, cone, plane limits and friction, and a capsule's endpoints and " +
           "radius while its direction stays the same, re-deriving its vertices, planes and mass properties in " +
@@ -57,8 +57,9 @@ public static class SymrmHelp
           "<dynamic>,<static>; --set restitution:<material>=<value>; --set limit:<constraint>=<min,max>; " +
           "--set cone:<constraint>=<max radians>; --set plane:<constraint>=<min,max>; --set " +
           "friction:<constraint>=<value>; --set capsule:<shape>=<ax,ay,az,bx,by,bz>; --set " +
-          "radius:<shape>=<radius>; --out <file>; --force; --allow-shared-material (a material, or a capsule " +
-          "shape, that more than one body names); --data <folder>",
+          "radius:<shape>=<radius>; --out <file>; --force; --allow-shared-material (a material that more than " +
+          "one body names); --allow-shared-shape (a capsule shape that more than one body names, or whose mass " +
+          "properties another capsule shape shares); --data <folder>",
           "symrm ragdoll skeleton.hkx --set mass:0=5 --set limit:0=-0.25,0.25 --set material:0=0.5,0.4 " +
           "--out edited.hkx"),
 

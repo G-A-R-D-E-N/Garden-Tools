@@ -80,14 +80,14 @@ public sealed class RagdollDocument
         Motion(node, row.MotionId, row.Index).CenterOfMassWorld = world;
     }
 
-    public void SetMaterialFriction(int ragdoll, int material, float friction, bool allowShared = false) =>
-        SetMaterialFriction(ragdoll, material, friction, friction, allowShared);
+    public void SetMaterialFriction(int ragdoll, int material, float friction, bool allowSharedMaterial = false) =>
+        SetMaterialFriction(ragdoll, material, friction, friction, allowSharedMaterial);
 
     public void SetMaterialFriction(int ragdoll, int material, float dynamicFriction, float staticFriction,
-                                    bool allowShared = false)
+                                    bool allowSharedMaterial = false)
     {
         var entry = Material(Node(ragdoll), material);
-        RequireSharedAllowed(entry, allowShared, "friction");
+        RequireSharedAllowed(entry, allowSharedMaterial, "friction");
 
         entry.DynamicFriction = RequireHalfFriction(dynamicFriction, "dynamic", material);
         entry.StaticFriction = RequireHalfFriction(staticFriction, "static", material);
@@ -103,10 +103,10 @@ public sealed class RagdollDocument
         return rounded;
     }
 
-    public void SetMaterialRestitution(int ragdoll, int material, float restitution, bool allowShared = false)
+    public void SetMaterialRestitution(int ragdoll, int material, float restitution, bool allowSharedMaterial = false)
     {
         var entry = Material(Node(ragdoll), material);
-        RequireSharedAllowed(entry, allowShared, "restitution");
+        RequireSharedAllowed(entry, allowSharedMaterial, "restitution");
 
         if (!RagdollValues.TryHalf(restitution, out float rounded) || rounded < 0f)
             throw new InvalidOperationException(
@@ -116,13 +116,13 @@ public sealed class RagdollDocument
         entry.Restitution = rounded;
     }
 
-    public void SetShapeRadius(int shape, float radius, bool allowShared = false) =>
-        SetCapsule(shape, Shape(shape).A, Shape(shape).B, radius, allowShared);
+    public void SetShapeRadius(int shape, float radius, bool allowSharedShape = false) =>
+        SetCapsule(shape, Shape(shape).A, Shape(shape).B, radius, allowSharedShape);
 
-    public void SetCapsuleEndpoints(int shape, Vector3 a, Vector3 b, bool allowShared = false) =>
-        SetCapsule(shape, a, b, Shape(shape).Radius, allowShared);
+    public void SetCapsuleEndpoints(int shape, Vector3 a, Vector3 b, bool allowSharedShape = false) =>
+        SetCapsule(shape, a, b, Shape(shape).Radius, allowSharedShape);
 
-    public void SetCapsule(int shape, Vector3 a, Vector3 b, float radius, bool allowShared = false)
+    public void SetCapsule(int shape, Vector3 a, Vector3 b, float radius, bool allowSharedShape = false)
     {
         var target = Shape(shape);
         if (!float.IsFinite(radius) || radius <= 0f)
@@ -131,10 +131,7 @@ public sealed class RagdollDocument
         if (!RagdollValues.Finite(a) || !RagdollValues.Finite(b))
             throw new InvalidOperationException(
                 $"the endpoints for shape {shape} are not finite, so nothing was changed");
-        if (!allowShared && target.ReferencedByBodies > 1)
-            throw new InvalidOperationException(
-                $"shape {shape} is named by {target.ReferencedByBodies} body(ies), so its geometry was not " +
-                "changed; pass allowShared to resize it for every body");
+        RequireShapeSharedAllowed(target, shape, allowSharedShape);
 
         ApplyCapsule(target, shape, a, b, radius);
     }
@@ -379,8 +376,27 @@ public sealed class RagdollDocument
                     ? seen + 1
                     : 1;
 
+        var containers = new Dictionary<int, int>();
+        var massProperties = new Dictionary<int, int>();
         foreach (var shape in _shapes)
+        {
+            if (shape.PropertiesIndex >= 0)
+                containers[shape.PropertiesIndex] = containers.TryGetValue(shape.PropertiesIndex, out int held)
+                    ? held + 1
+                    : 1;
+            if (shape.MassPropertiesIndex >= 0)
+                massProperties[shape.MassPropertiesIndex] =
+                    massProperties.TryGetValue(shape.MassPropertiesIndex, out int carried) ? carried + 1 : 1;
+        }
+
+        foreach (var shape in _shapes)
+        {
             shape.ReferencedByBodies = referenced.TryGetValue(shape.ObjectId, out int bodies) ? bodies : 0;
+            shape.ShapesSharingProperties =
+                containers.TryGetValue(shape.PropertiesIndex, out int sharing) ? sharing : 0;
+            shape.ShapesSharingMassProperties =
+                massProperties.TryGetValue(shape.MassPropertiesIndex, out int carrying) ? carrying : 0;
+        }
 
         foreach (var node in _ragdolls) _savedRagdolls.Add(node.Copy());
         foreach (var shape in _shapes) _savedShapes.Add(shape.Copy());
@@ -415,13 +431,31 @@ public sealed class RagdollDocument
                 $"the {what} must be finite and ordered within -pi and pi, and {min} to {max} is not");
     }
 
-    private static void RequireSharedAllowed(RagdollMaterial material, bool allowShared, string what)
+    private static void RequireShapeSharedAllowed(RagdollShape shape, int index, bool allowSharedShape)
     {
-        if (allowShared || !material.Shared) return;
+        if (allowSharedShape) return;
+
+        if (shape.ReferencedByBodies > 1)
+            throw new InvalidOperationException(
+                $"shape {index} is named by {shape.ReferencedByBodies} body(ies), so its geometry was not " +
+                "changed; pass allowSharedShape to resize it for every body");
+        if (shape.ShapesSharingProperties > 1)
+            throw new InvalidOperationException(
+                $"shape {index} shares its properties container with {shape.ShapesSharingProperties} capsule " +
+                "shape(s), so its geometry was not changed; pass allowSharedShape to resize it for every shape");
+        if (shape.ShapesSharingMassProperties > 1)
+            throw new InvalidOperationException(
+                $"shape {index} shares its mass properties with {shape.ShapesSharingMassProperties} capsule " +
+                "shape(s), so its geometry was not changed; pass allowSharedShape to resize it for every shape");
+    }
+
+    private static void RequireSharedAllowed(RagdollMaterial material, bool allowSharedMaterial, string what)
+    {
+        if (allowSharedMaterial || !material.Shared) return;
 
         throw new InvalidOperationException(
             $"material {material.Index} is shared by {material.ReferencedByBodies} body(ies), so its {what} " +
-            "was not changed; pass allowShared to change it for every body");
+            "was not changed; pass allowSharedMaterial to change it for every body");
     }
 
     private RagdollNode Node(int ragdoll)

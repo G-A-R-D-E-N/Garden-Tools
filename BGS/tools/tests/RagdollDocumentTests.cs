@@ -197,7 +197,7 @@ public sealed class RagdollDocumentTests
         Assert.Contains("is shared by", refused.Message);
         Assert.Contains("allowShared", refused.Message);
 
-        document.SetMaterialFriction(0, 0, 0.5f, allowShared: true);
+        document.SetMaterialFriction(0, 0, 0.5f, allowSharedMaterial: true);
         Assert.Equal(0.5f, document.Ragdolls[0].Materials[0].DynamicFriction);
 
         var counted = new RagdollDocument(Fixture());

@@ -22,9 +22,9 @@ internal static class RagdollCapsule
     internal const int InertiaWordBase = 14080;
     internal const int ExponentWordStep = 128;
     internal const int ZeroCentreExponent = 60;
-    internal const int CentreTolerance = 4;
+    internal const int CentreTolerance = 1;
     internal const double CentreLimit = 1e-6;
-    internal const int InertiaTolerance = 2;
+    internal const int InertiaTolerance = 1;
     internal const float DirectionTolerance = 1e-6f;
     internal const float VertexScaleTolerance = 1e-3f;
     internal const float PlaneTolerance = 5e-4f;
@@ -44,7 +44,7 @@ internal static class RagdollCapsule
         7, 6, 2, 3, 3, 2, 0, 1, 7, 5, 4, 6, 1, 0, 4, 5, 1, 5, 7, 3, 2, 6, 4,
     };
 
-    private sealed record EncodedMass(double Volume, int CentreExponent, int[] Centre, int InertiaExponent,
+    internal sealed record EncodedMass(double Volume, int CentreExponent, int[] Centre, int InertiaExponent,
                                       int[] Inertia);
 
     internal static RagdollCapsuleData Derive(RagdollCapsuleData old, Vector3 aOld, Vector3 bOld, float radiusOld,
@@ -64,6 +64,7 @@ internal static class RagdollCapsule
         RequireMassProperties(old, aOld, bOld, radiusOld, what, tail);
 
         Vector3 uOld = Unit(bOld - aOld, what, tail);
+        int dominant = Dominant(uOld);
         Vector3 uNew = Unit(bNew - aNew, what, tail);
         if (Vector3.Dot(uOld, uNew) <= 0f || Vector3.Cross(uOld, uNew).Length() > DirectionTolerance)
             throw Refuse(what, tail,
@@ -81,7 +82,7 @@ internal static class RagdollCapsule
             Vector3 to = atB[i] ? bNew : aNew;
             moved[i] = to + scale * (vertex - from);
             WriteVector(vertices, i * VertexWidth, moved[i]);
-            BitConverter.GetBytes(IndexTag + i).CopyTo(vertices, i * VertexWidth + 12);
+            old.Vertices.AsSpan(i * VertexWidth + 12, 4).CopyTo(vertices.AsSpan(i * VertexWidth + 12));
         }
 
         var planes = (byte[])old.Planes.Clone();
@@ -103,7 +104,7 @@ internal static class RagdollCapsule
 
         byte[]? mass = null;
         if (old.MassProperties is { } stored)
-            mass = DeriveMassProperties(stored, BitConverter.ToSingle(stored, 24), aNew, bNew, radiusNew, uNew,
+            mass = DeriveMassProperties(stored, BitConverter.ToSingle(stored, 24), aNew, bNew, radiusNew, dominant,
                                         what, tail);
 
         return new RagdollCapsuleData(vertices, planes, (byte[])old.Faces.Clone(), (byte[])old.Indices.Clone(),
@@ -127,7 +128,9 @@ internal static class RagdollCapsule
         return left.AsSpan().SequenceEqual(right);
     }
 
-    internal static int? MassPropertiesAt(PackfileObjects objects, PackfileObjects.Instance shape)
+    internal readonly record struct MassPropertiesSite(int At, int PropertiesIndex, int MassPropertiesIndex);
+
+    internal static MassPropertiesSite? MassPropertiesSiteAt(PackfileObjects objects, PackfileObjects.Instance shape)
     {
         ArgumentNullException.ThrowIfNull(objects);
         if (objects.FieldAt(shape, "properties") is not int propertiesAt) return null;
@@ -152,9 +155,13 @@ internal static class RagdollCapsule
                 $"{shape.ClassName} at 0x{shape.Offset:x} names " +
                 $"{target?.ClassName ?? "nothing"} where this build reads {RagdollLayout.MassPropertiesClass}");
 
-        return target.Offset +
-               RagdollLayout.Field(RagdollLayout.MassPropertiesClass, "compressedMassProperties");
+        return new MassPropertiesSite(
+            target.Offset + RagdollLayout.Field(RagdollLayout.MassPropertiesClass, "compressedMassProperties"),
+            objects.IndexOf(container), objects.IndexOf(target));
     }
+
+    internal static int? MassPropertiesAt(PackfileObjects objects, PackfileObjects.Instance shape) =>
+        MassPropertiesSiteAt(objects, shape)?.At;
 
     private static bool[] RequireGeometry(RagdollCapsuleData data, Vector3 a, Vector3 b, float radius,
                                           string what, string tail)
@@ -261,7 +268,7 @@ internal static class RagdollCapsule
         if (!(mass > 0.0) || !double.IsFinite(mass))
             throw Refuse(what, tail, $"stores a mass of {mass} that cannot scale an inertia");
 
-        EncodedMass encoded = Encode(mass, a, b, radius, Unit(b - a, what, tail), what, tail);
+        EncodedMass encoded = Encode(mass, a, b, radius, Dominant(Unit(b - a, what, tail)), what, tail);
 
         float storedVolume = BitConverter.ToSingle(stored, 28);
         if (!(storedVolume > 0f) || Math.Abs(storedVolume - encoded.Volume) > VolumeTolerance * encoded.Volume)
@@ -297,9 +304,9 @@ internal static class RagdollCapsule
     }
 
     private static byte[] DeriveMassProperties(byte[] stored, float mass, Vector3 a, Vector3 b, float radius,
-                                               Vector3 u, string what, string tail)
+                                               int dominant, string what, string tail)
     {
-        EncodedMass encoded = Encode(mass, a, b, radius, u, what, tail);
+        EncodedMass encoded = Encode(mass, a, b, radius, dominant, what, tail);
         var produced = (byte[])stored.Clone();
         for (int i = 0; i < 4; i++) BitConverter.GetBytes((short)encoded.Centre[i]).CopyTo(produced, i * 2);
         for (int i = 0; i < 4; i++) BitConverter.GetBytes((short)encoded.Inertia[i]).CopyTo(produced, 8 + i * 2);
@@ -307,7 +314,7 @@ internal static class RagdollCapsule
         return produced;
     }
 
-    private static EncodedMass Encode(double mass, Vector3 a, Vector3 b, float radius, Vector3 u,
+    internal static EncodedMass Encode(double mass, Vector3 a, Vector3 b, float radius, int dominant,
                                       string what, string tail)
     {
         double length = (b - a).Length();
@@ -348,7 +355,6 @@ internal static class RagdollCapsule
 
         int inertiaExponent = InertiaExponent(largest, what, tail);
         double factor3 = 3.0 * Math.Pow(2.0, inertiaExponent);
-        int dominant = Dominant(u);
         var inertia = new int[4];
         for (int i = 0; i < 3; i++) inertia[i] = Quantize(factor3 * (i == dominant ? axial : transverse));
         inertia[3] = Word(InertiaWordBase, inertiaExponent, what, tail, "inertia");

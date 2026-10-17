@@ -170,6 +170,49 @@ public sealed class RagdollCliTests
     }
 
     [Fact]
+    public void AShapeSharedThroughItsMassPropertiesNeedsItsOwnFlag()
+    {
+        using var work = new Work();
+        byte[] patched = RagdollSharedShapeFixture.ShareProperties(
+            File.ReadAllBytes(work.Copy("skeleton.hkx")), out int source, out int repointed);
+        string target = work.At("shared.hkx");
+        File.WriteAllBytes(target, patched);
+
+        var document = new RagdollDocument(patched);
+        int index = RagdollSharedShapeFixture.ShapeAt(document, source);
+        Assert.NotEqual(source, repointed);
+        float wanted = document.Shapes[index].Radius * 1.4f;
+
+        string refusedOut = work.At("refused.hkx");
+        var (refusedExit, _, refusedError) = Capture(() => CliEntry.Run(
+            new[] { "ragdoll", target, "--set", $"radius:{index}={wanted}", "--out", refusedOut },
+            TextWriter.Null, TextWriter.Null));
+        Assert.Equal(1, refusedExit);
+        _out.WriteLine(refusedError);
+        Assert.Contains("shares its properties container", refusedError);
+        Assert.False(File.Exists(refusedOut));
+
+        string materialOut = work.At("material.hkx");
+        var (materialExit, _, materialError) = Capture(() => CliEntry.Run(
+            new[] { "ragdoll", target, "--allow-shared-material", "--set", $"radius:{index}={wanted}",
+                    "--out", materialOut },
+            TextWriter.Null, TextWriter.Null));
+        Assert.Equal(1, materialExit);
+        Assert.Contains("shares its properties container", materialError);
+        Assert.False(File.Exists(materialOut));
+
+        string shapeOut = work.At("shape.hkx");
+        var (shapeExit, _, shapeError) = Capture(() => CliEntry.Run(
+            new[] { "ragdoll", target, "--allow-shared-shape", "--set", $"radius:{index}={wanted}",
+                    "--out", shapeOut },
+            TextWriter.Null, TextWriter.Null));
+        _out.WriteLine(shapeError);
+        Assert.Equal(1, shapeExit);
+        Assert.DoesNotContain("shares its properties container", shapeError);
+        Assert.Contains("did not read back", shapeError);
+        Assert.False(File.Exists(shapeOut));
+    }
+    [Fact]
     public void OverwritingTheSourceWithForceKeepsTheOriginalAsABackup()
     {
         using var work = new Work();

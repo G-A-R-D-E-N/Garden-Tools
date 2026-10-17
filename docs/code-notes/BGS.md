@@ -846,11 +846,11 @@ output, which prints both the absolute error and its fraction of the extent.
 
 `RagdollDocument` edits the values inside a file's `hknpRagdollData` ragdolls and writes them back into the
 packfile in place. `symrm ragdoll <file> [--set <field>:<index>=<values>] [--set ragdoll=<i>] [--out <file>] [--force]
-[--allow-shared-material] [--data <folder>]` is its user-facing surface
+[--allow-shared-material] [--allow-shared-shape] [--data <folder>]` is its user-facing surface
 (`BGS/tools/symrm/RagdollCli.cs:Ragdoll`), the rig physics tab's masses, material friction and joint limits
 save through it (`BGS/app/RigAuthoringWindow.Physics.cs:SaveRagdollValues`), and
 `BGS/tools/tests/RagdollDocumentTests.cs` (25 tests) with `BGS/tools/tests/RagdollShapeTests.cs` (`13`
-tests), `BGS/tools/tests/RagdollCapsuleResizeTests.cs` (`9` tests) and `BGS/tools/tests/RagdollCliTests.cs` (`9` tests)
+tests), `BGS/tools/tests/RagdollCapsuleResizeTests.cs` (`11` tests) and `BGS/tools/tests/RagdollCliTests.cs` (`10` tests)
 covers it. The model and the class-table offset helpers live in `BGS/src/Hkx/RagdollModel.cs`, the
 packfile reader in `BGS/src/Hkx/RagdollReader.cs` and the value writer in `BGS/src/Hkx/RagdollWriteback.cs`.
 
@@ -901,7 +901,7 @@ plus one and whose high 16 bits are the payload's byte offset from the member's 
 it is nearest to (`3` to `a`, `4` to `b`, `933/933`) and sits `convexRadius / 99 * sqrt(3)` from it (worst
 relative error `4.3e-4`). A resize that keeps the direction moves every vertex as
 `v' = newEnd + (s'/s)(v - oldEnd)`, with `s = convexRadius / 99`, `oldEnd` and `newEnd` the endpoint that vertex
-belongs to, and its `w` bits kept. Planes `0-5` keep their normal bits and take `d = -max(n . v')` over the
+belongs to, and its `w` bits copied from the stored vertex instead of recomputed, which the `w`-tag check above has already proven equal. Planes `0-5` keep their normal bits and take `d = -max(n . v')` over the
 transformed vertices; that is the convention vanilla stores (`933/933` within `5.2e-5`, and the opposite sign is
 off by up to `637`). Plane `6` is the sentinel `(0, 0, 0, -3.40282e38)` and is never touched. The `20` face
 bytes and the `23` index bytes are constants (the fourth face byte is `4` in `882` capsules and `128` in the
@@ -923,15 +923,34 @@ kept mass. `inertia_i = clamp(round(K * (mass/V) * I_unit_i))` with `I_unit` a c
 (`axial = 1/2 mc r^2 + 2*(2/5) mh r^2`, `transverse = mc(3r^2+L^2)/12 + 2*(83/320 mh r^2 + mh (L/2 + 3r/8)^2)`,
 `mc = pi r^2 L`, `mh = 2/3 pi r^3`), `K = 3*2^n`, `n = floor(log2(32767/(3*Imax)))` settled so that
 `3*2^n*Imax <= 32767 < 3*2^(n+1)*Imax` with `Imax` the largest scaled `I_unit`, the axial lane in the
-world-dominant-axis slot of `u = norm(b - a)` and the transverse value in the other two, and the `w` lane at
+world-dominant-axis slot of the **old** direction `u = norm(bOld - aOld)`, taken once by the derivation and by
+the check below so that a near-tie cannot flip it between them, and the transverse value in the other two, and the `w` lane at
 `+14` equal to `14080 - 128n`. That reproduces all `882` stored inertias within `1` LSB and all `882` `w` words
 exactly. `centerOfMass_i = clamp(round(mid_i * 2^p))` with `mid = (a + b)/2`, `p = floor(log2(32767/max|mid|))`
 settled the same way, and the `w` lane at `+6` equal to `14208 - 128p`: `877` of `882` within `1` LSB, and the
 `9` exceptions are near-zero centres whose stored lane is off by at most `2.9e-7` in absolute terms - `5` of
 them have `mid == (0,0,0)` exactly and store `w = 6528`, which is `p = 60` and what the encoder writes for a
 zero centre. A stored payload is therefore checked two ways: each exponent word must be the one its geometry
-gives (a word that does not name an exponent is refused), and each lane must be within `4` LSB of the lane that
-geometry gives, or within `1e-6` of the reconstructed value for a near-zero centre.
+gives (a word that does not name an exponent is refused), and each lane must be within `1` LSB of the lane that
+geometry gives, or within `1e-6` of the reconstructed value for a near-zero centre. Re-measured on the same
+corpus after the gates were tightened from `4` and `2` LSB: of the `2646` centre lanes `216` are covered by the
+`1e-6` absolute branch (the near-zero and zero centres above), every remaining centre lane is within `0` LSB, and
+all `2646` inertia lanes are within `1` LSB, so no vanilla capsule depended on the looser gates. The rounding
+mode was checked the same way: `229` lanes (`93` centre, `136` inertia) carry an unrounded value within `0.02` of
+an `x.5` boundary, `223` of them are reproduced by both half-away-from-zero and half-to-even and `6` (near-zero
+centres) by neither, so no lane tells the two modes apart and the encoder keeps
+`Math.Round(value, MidpointRounding.AwayFromZero)`.
+
+**A resize also has to know who else reads the same object.** Three counts gate `SetCapsule`: the bodies that name
+the shape, the capsule shapes that name the same `hkRefCountedProperties` container, and the capsule shapes whose
+chain reaches the same `hknpShapeMassProperties` object. `RagdollReader.ReadShape` records both object indices
+through `RagdollCapsule.MassPropertiesSiteAt` and `RagdollDocument` counts them per file; every vanilla capsule is
+named by exactly `1` body, no container and no mass-properties object is shared, so the counts are `1` across the
+corpus and the refusal path is exercised by tests instead. A resize is refused when any count is above `1` unless
+`--allow-shared-shape` (API `allowSharedShape`) is passed, while `--allow-shared-material` (API
+`allowSharedMaterial`) covers only material friction and restitution. Passing the shape flag only clears that
+gate: the writer still re-reads every shape and refuses a file whose shared mass properties no longer describe
+each shape that names them, which is the honest answer when two shapes of different geometry share one container.
 
 **`majorAxisSpace` is not decoded, and it is kept.** It is a function of the direction, not of the length or the
 radius: all `14,025` parallel same-direction pairs at `<= 1e-7` rad store byte-identical `majorAxisSpace` while
@@ -949,7 +968,7 @@ inertia that no measurement supports. `SetMaterialFriction` takes the dynamic an
 actually changed, because the model stores the half-rounded value each lane already holds and the writer
 compares field by field; `--set restitution:<i>=<value>` is its own field rather than a second material
 value. A material that more than one body in the same ragdoll names, or that the file itself flags `isShared`,
-is refused unless `allowShared` is passed, because the change would reach every body that names it.
+is refused unless `allowSharedMaterial` is passed, because the change would reach every body that names it.
 `SetConstraintLimits` writes **only the twist atom** of a ragdoll constraint (`twistLimit`) or the angular
 limit of a limited hinge (`angLimit`); plane limits are written only by `SetConstraintPlaneLimits` and
 `--set plane:<i>=<min,max>`, and the UI text says the same.
@@ -964,8 +983,8 @@ than an angle, so the editor writes only `maxAngle`. The plane's minimum and max
 vanilla file and are not mirrored around zero (the distinct `minAngle` values reach `-1.5708` and the distinct
 `maxAngle` values reach `1.5708`), so both are written when that limit is edited.
 
-Everything else is refused by construction or by the writer: a capsule whose direction changes, a capsule whose stored polytope or mass properties do not match the rules above, and a capsule shape that more than one body names without `allowShared` that adds or removes a
-body, shape or constraint — the writer separately refuses a model whose array count differs from the
+Everything else is refused by construction or by the writer: a capsule whose direction changes, a capsule whose stored polytope or mass properties do not match the rules above, and a capsule shape that more than one body names, or that shares its properties container or mass properties
+with another capsule shape, without `allowSharedShape`; nothing adds or removes a body, shape or constraint — the writer separately refuses a model whose array count differs from the
 file's, with "rows are never added or removed" — and no method writes `collisionFilterInfo`, `qualityId`,
 `motionId`, `reservedBodyId`, body flags, position, orientation, `localFrame`, `motionPropertiesId`,
 linear or angular velocity, a constraint's frames or its motors. Limits must be finite and ordered within

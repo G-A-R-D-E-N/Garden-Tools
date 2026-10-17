@@ -16,7 +16,8 @@ public static partial class Program
     {
         string? target = null;
         bool force = false;
-        bool allowShared = false;
+        bool allowSharedMaterial = false;
+        bool allowSharedShape = false;
         string? outPath = null;
         string? dataFolder = null;
         var edits = new List<string>();
@@ -42,7 +43,11 @@ public static partial class Program
                     continue;
 
                 case "--allow-shared-material":
-                    allowShared = true;
+                    allowSharedMaterial = true;
+                    continue;
+
+                case "--allow-shared-shape":
+                    allowSharedShape = true;
                     continue;
 
                 case "--set":
@@ -80,7 +85,7 @@ public static partial class Program
             return 1;
         }
 
-        return RagdollOne(target, source, edits, allowShared, outPath, force);
+        return RagdollOne(target, source, edits, allowSharedMaterial, allowSharedShape, outPath, force);
     }
 
     private static int RagdollUsage(string problem)
@@ -94,8 +99,8 @@ public static partial class Program
         return 1;
     }
 
-    private static int RagdollOne(string file, byte[] source, IReadOnlyList<string> edits, bool allowShared,
-                                  string? outPath, bool force)
+    private static int RagdollOne(string file, byte[] source, IReadOnlyList<string> edits,
+                                  bool allowSharedMaterial, bool allowSharedShape, string? outPath, bool force)
     {
         int selected = -1;
         RagdollDocument document;
@@ -114,7 +119,7 @@ public static partial class Program
         {
             try
             {
-                string? note = ApplyRagdollEdit(document, edit, allowShared, ref selected);
+                string? note = ApplyRagdollEdit(document, edit, allowSharedMaterial, allowSharedShape, ref selected);
                 Console.WriteLine(note == null ? $"  set {edit}" : $"  set {edit} -> {note}");
             }
             catch (Exception error)
@@ -222,8 +227,8 @@ public static partial class Program
                               $"polytope {shape.PolytopeCounts}");
     }
 
-    private static string? ApplyRagdollEdit(RagdollDocument document, string edit, bool allowShared,
-                                            ref int selected)
+    private static string? ApplyRagdollEdit(RagdollDocument document, string edit, bool allowSharedMaterial,
+                                            bool allowSharedShape, ref int selected)
     {
         if (edit.StartsWith("ragdoll=", StringComparison.Ordinal))
         {
@@ -266,12 +271,12 @@ public static partial class Program
             case "capsule":
                 RequireValues(values, 6, edit);
                 document.SetCapsuleEndpoints(index, new Vector3(values[0], values[1], values[2]),
-                                             new Vector3(values[3], values[4], values[5]), allowShared);
+                                             new Vector3(values[3], values[4], values[5]), allowSharedShape);
                 return null;
 
             case "radius":
                 RequireValues(values, 1, edit);
-                document.SetShapeRadius(index, values[0], allowShared);
+                document.SetShapeRadius(index, values[0], allowSharedShape);
                 return null;
 
             case "material":
@@ -280,7 +285,7 @@ public static partial class Program
                     throw new InvalidOperationException($"'{edit}' needs <friction> or <dynamic>,<static>");
                 int ragdoll = RequireRagdoll(document, ref selected);
                 document.SetMaterialFriction(ragdoll, index, values[0],
-                                             values.Length > 1 ? values[1] : values[0], allowShared);
+                                             values.Length > 1 ? values[1] : values[0], allowSharedMaterial);
                 var stored = document.Ragdolls[ragdoll].Materials[index];
                 return $"stored dynamic {Rounded(stored.DynamicFriction)} static {Rounded(stored.StaticFriction)}";
             }
@@ -289,7 +294,7 @@ public static partial class Program
             {
                 RequireValues(values, 1, edit);
                 int ragdoll = RequireRagdoll(document, ref selected);
-                document.SetMaterialRestitution(ragdoll, index, values[0], allowShared);
+                document.SetMaterialRestitution(ragdoll, index, values[0], allowSharedMaterial);
                 return $"stored restitution {Rounded(document.Ragdolls[ragdoll].Materials[index].Restitution)}";
             }
 
@@ -503,7 +508,7 @@ public static partial class Program
         Console.WriteLine($"limit edit round trip: {limitOk} read back as edited, {limitSkipped} skipped " +
                           $"(no editable constraint), {failed} file(s) failed to measure");
         Console.WriteLine($"capsule resize round trip: {capsuleResized} capsule(s) scaled by 1.1 and back " +
-                          $"({capsuleShared} named by more than one body), {capsuleRefused} refused" +
+                          $"({capsuleShared} shared by bodies or mass properties), {capsuleRefused} refused" +
                           (capsuleFirstRefusal == null ? "" : $" (first: {capsuleFirstRefusal})") + ", " +
                           $"{capsuleHeld} read back within 2e-3 of radius/99 ({capsuleIdentical} of them " +
                           $"byte-identical), {capsuleFiles} file(s) byte-identical, worst vertex difference " +
@@ -608,7 +613,8 @@ public static partial class Program
         {
             var shape = first.Shapes[i];
             if (!shape.CarriesPolytopeData) continue;
-            if (shape.ReferencedByBodies > 1) shared++;
+            if (shape.ReferencedByBodies > 1 || shape.ShapesSharingProperties > 1 ||
+                shape.ShapesSharingMassProperties > 1) shared++;
 
             try
             {

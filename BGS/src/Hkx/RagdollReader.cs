@@ -230,19 +230,22 @@ internal static class RagdollRead
         shape.Faces = faces.Length / faceWidth;
         shape.Indices = indices.Length;
 
-        byte[]? massProperties = MassProperties(objects, instance);
+        byte[]? massProperties = MassProperties(objects, instance, shape);
         if (shape.CarriesPolytopeData || massProperties != null)
             shape.Capsule = new RagdollCapsuleData(vertices, planes, faces, indices, massProperties);
         return shape;
     }
 
-    private static byte[]? MassProperties(PackfileObjects objects, PackfileObjects.Instance instance)
+    private static byte[]? MassProperties(PackfileObjects objects, PackfileObjects.Instance instance,
+                                          RagdollShape shape)
     {
-        if (RagdollCapsule.MassPropertiesAt(objects, instance) is not int at) return null;
-        if (at < 0 || at + RagdollCapsule.MassPropertiesWidth > objects.DataLength) return null;
+        if (RagdollCapsule.MassPropertiesSiteAt(objects, instance) is not { } site) return null;
+        shape.PropertiesIndex = site.PropertiesIndex;
+        shape.MassPropertiesIndex = site.MassPropertiesIndex;
+        if (site.At < 0 || site.At + RagdollCapsule.MassPropertiesWidth > objects.DataLength) return null;
 
         var bytes = new byte[RagdollCapsule.MassPropertiesWidth];
-        for (int i = 0; i < bytes.Length; i++) bytes[i] = objects.ByteAt(at + i);
+        for (int i = 0; i < bytes.Length; i++) bytes[i] = objects.ByteAt(site.At + i);
         return bytes;
     }
 
