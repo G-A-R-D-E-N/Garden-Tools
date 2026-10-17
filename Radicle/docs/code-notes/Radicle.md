@@ -2489,3 +2489,65 @@ Skipped on purpose:
   the header fields and the evidence.
 - Radicle/include/fo4/c_api_dds.h exposes `radicle_dds_decode_rgba` and `radicle_dds_info`;
   `DdsImage` is the managed wrapper.
+## NIF node hierarchy, stricter skin and DDS edges
+
+- Radicle/include/fo4/nif/nif.hpp:Node and NifFile::nodes: every node block the
+  reader understands is kept once, in block order, with its block index, block type,
+  `NiObjectNET` name, parent as a node-list index (-1 for a root), children as the
+  block indices the file stores, and its local `NiAVObject` transform.
+  `NifFile::node_for_block` maps a block to that list (or -1), and
+  `fo4::nif::shape_parent_node` gives a shape's nearest node ancestor.
+  `Shape` gained `parent_node` and `warning`.
+- Radicle/src/nif/nif.cpp: the node loop that already read the child lists now also
+  fills `nodes_` and the block-to-node map, and resolves each node's parent through
+  it. The prefix is the one `nif.xml` gives BS 130: `NiObjectNET` name, extra-data
+  list, controller; `NiAVObject` flags as a u32 (`#BSVER# #GT# 26`), translation,
+  3x3 rotation, scale, collision reference; then the children list. `Effects` is
+  gated on `#NI_BS_LT_FO4#`, so FO4 has none, which the corpus confirms: all
+  896,993 node blocks of 226,177 vanilla NIFs end exactly at the children list.
+  The sixteen-entry node allowlist is unchanged and now proven by the corpus
+  histogram in `docs/NIF.md`; `BSFurnitureMarkerNode` is the only vanilla block
+  whose name contains `Node` and is not one, and `nif.xml` says why
+  (`inherit="BSFurnitureMarker"`), as does its own bytes.
+- Radicle/include/fo4/c_api_nif.h, Radicle/src/c_api_nif.cpp: `radicle_nif_node_*`
+  (count, block, type, name, parent, children, transform, for-block) plus
+  `radicle_nif_shape_parent_node` and `radicle_nif_shape_warning`, and
+  `radicle_free_node_refs` for the child array. Children are block indices because
+  the file stores those and a child may be a shape; `node_for_block` turns one into
+  a node index when it is a node. The ABI stays 41 (unreleased).
+- Radicle/bindings/csharp/Radicle.Interop/NifFile.cs: `NifNode` with
+  `ParentIndex`/`Parent`, `ChildBlocks` and `Children` (null where a child is not a
+  node), `LocalMatrix` and `WorldMatrix`, `NifShape.ParentNodeIndex`/`ParentNode` and
+  `NifShape.Warning`. `RadicleNative.g.cs` and `abi_layout_probe.cpp` were
+  regenerated; no struct layout changed, so the probe is byte-identical apart from
+  the new function bindings.
+- Radicle/src/nif/geometry.cpp: a `BSLightingShaderProperty` or
+  `BSShaderTextureSet` that does not parse now leaves the material and texture slots
+  empty and records `Shape::warning` instead of failing the file; the geometry, skin
+  and transform still read. A bone index past the end of the skin's bone list is a
+  `parse_error`.
+- Radicle/src/nif/skin.cpp: a `BSSkin::BoneData` whose count disagrees with the
+  skin's bone count is a `parse_error` rather than a silent identity transform. The
+  absent or mistyped data reference keeps names with default transforms, which is
+  what the file holds.
+- Radicle/src/texture/dds_codec.cpp: the DX10 array size and, for a volume texture,
+  the depth are refused above 65535, and `DdsInfo::payload_size` multiplies unsigned
+  with an overflow check, so a header that claims a wrapped byte count is
+  `InvalidDds`.
+- Radicle/src/texture/dds.cpp: `reconstruct_z` is refused with
+  `std::invalid_argument` unless the format is unsigned BC5 (82 or 83). BC5 SNORM,
+  BC1 and the uncompressed layouts no longer get a blue channel built from red and
+  green. `radicle_dds_decode_rgba` maps that to `RADICLE_STATUS_INVALID_ARGUMENT`.
+- Radicle/THIRD_PARTY_NOTICES.md: the full bcdec MIT and Unlicense text, not just a
+  reference.
+- Verified: `Radicle/tests/test_nif.cpp` (node tree, furniture-marker blocks, shader
+  warning, skin count mismatch, bone-index refusal, a skin the indices stay inside),
+  `Radicle/tests/test_c_api_nif.cpp` (the node accessors, the shape's parent node, the
+  warning accessor, out-of-range arguments), `Radicle/tests/test_dds.cpp` (the
+  reconstruct-z refusals, the array and depth bounds, the payload overflow, the C ABI
+  status for a refused reconstruct) and `Radicle/tests/test_nif_corpus.cpp`, which now
+  reads the node tree of all 226,177 vanilla NIFs - 896,993 nodes, every node's
+  parent and child edge consistent, 1,206,190 of 1,206,190 shapes with a node parent,
+  0 parse failures, 0 shape warnings. The managed suite mirrors the fixture and
+  covers the node tree, the composed world matrix and the shader warning in
+  `NifTests`, and the DDS edges in `DdsImageTests`.

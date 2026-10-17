@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <string_view>
 
 namespace fo4::nif {
@@ -106,6 +107,7 @@ Shape read_shape(const NifFile& nif, std::uint32_t block) {
   Shape shape;
   shape.block = block;
   shape.name = header.name;
+  shape.parent_node = shape_parent_node(nif, block);
   shape.skin_ref = cursor.read_i32();
   shape.shader_ref = cursor.read_i32();
   shape.alpha_ref = cursor.read_i32();
@@ -127,9 +129,13 @@ Shape read_shape(const NifFile& nif, std::uint32_t block) {
     throw parse_error(cursor.absolute_offset(), "skin reference is out of range");
   }
   if (shape.shader_ref >= 0) {
-    const auto shader = read_shader(nif, static_cast<std::uint32_t>(shape.shader_ref));
-    shape.material = shader.name;
-    shape.textures = shader.textures;
+    try {
+      const auto shader = read_shader(nif, static_cast<std::uint32_t>(shape.shader_ref));
+      shape.material = shader.name;
+      shape.textures = shader.textures;
+    } catch (const parse_error& error) {
+      shape.warning = std::string{"shader block: "} + error.parse_message();
+    }
   }
 
   if (data_size == 0 || vertex_count == 0 || stride == 0) return shape;
@@ -160,6 +166,13 @@ Shape read_shape(const NifFile& nif, std::uint32_t block) {
 
   if (skinned && shape.skin_ref >= 0) {
     shape.bones = read_bones(nif, static_cast<std::uint32_t>(shape.skin_ref));
+    if (!shape.bones.empty()) {
+      for (const auto index : shape.bone_indices) {
+        if (static_cast<std::size_t>(index) >= shape.bones.size()) {
+          throw parse_error(cursor.absolute_offset(), "bone index is past the end of the skin's bone list");
+        }
+      }
+    }
   }
   return shape;
 }

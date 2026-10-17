@@ -44,7 +44,9 @@ struct DdsInfo {
   DdsFormatInfo format{};
 
   std::uint8_t dxgi_format() const noexcept { return format.dxgi; }
-  /* Sum of every mip's size times the array and depth slices. */
+  /* Sum of every mip's size times the array and depth slices. Throws
+     dds_error("InvalidDds") when that product does not fit a signed 64-bit
+     byte count. */
   std::int64_t payload_size() const;
   std::int64_t mip_size(std::uint32_t mip) const noexcept;
   /* Byte offset of one mip from the first surface, slice 0 only. */
@@ -58,7 +60,8 @@ std::optional<DdsFormatInfo> lookup_format(std::uint8_t dxgi) noexcept;
 std::int64_t mip_size(const DdsFormatInfo& format, int width, int height) noexcept;
 
 /* Parses a DDS container (legacy or DX10). Errors: "InvalidDds",
-   "UnsupportedFormat". */
+   "UnsupportedFormat". The array size and, for a volume texture, the depth are
+   refused above 65535, the 16-bit counts a BA2 entry stores. */
 DdsInfo read_dds(std::span<const std::uint8_t> bytes);
 
 /* Builds a canonical DX10 DDS_HEADER for a given layout (used by tests). */
@@ -79,7 +82,10 @@ std::vector<std::uint8_t> decode_block_format(std::span<const std::uint8_t> surf
 bool is_bc5(std::span<const std::uint8_t> bytes) noexcept;
 
 /* Decodes one mip level of a DDS container into RGBA8. `reconstruct_z`
-   rebuilds the blue channel from red and green, as BC5 normal maps need.
+   rebuilds the blue channel from red and green, which an unsigned BC5 normal
+   map needs. It is refused with std::invalid_argument (the C ABI's
+   RADICLE_STATUS_INVALID_ARGUMENT) for every other format, BC5 SNORM included,
+   because a square root cannot use signed channels.
    Errors: "InvalidDds", "UnsupportedFormat", "TooLarge". */
 std::vector<std::uint8_t> decode_dds_rgba(std::span<const std::uint8_t> bytes,
                                           std::uint32_t mip,

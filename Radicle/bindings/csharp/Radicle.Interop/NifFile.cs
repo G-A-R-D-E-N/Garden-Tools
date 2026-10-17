@@ -5,34 +5,32 @@ using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
 
-// Radicle.Interop declares its own Vector3 record for record payloads, so the geometry
-// types are reached through a namespace alias. They are System.Numerics types, which
-// is what the BGS NifShape uses.
+/* Radicle.Interop declares its own Vector3 record for record payloads, so the
+   geometry types are reached through a namespace alias. They are System.Numerics
+   types, which is what the BGS NifShape uses. */
 using Numerics = System.Numerics;
 
-/// <summary>A bone of a skinned shape: its name and its bind transform.</summary>
+/* A bone of a skinned shape: its name and its bind transform. */
 public sealed class NifBone
 {
-    /// <summary>The referenced node's name, empty when the reference does not resolve.</summary>
+    /* The referenced node's name, empty when the reference does not resolve. */
     public required string Name { get; init; }
 
     public required Numerics.Vector3 BoundsCenter { get; init; }
 
     public required float BoundsRadius { get; init; }
 
-    /// <summary>The nine rotation floats in the order the file stores them.</summary>
+    /* The nine rotation floats in the order the file stores them. */
     public required float[] Rotation { get; init; }
 
     public required Numerics.Vector3 Translation { get; init; }
 
-    /// <summary>Multiplies the rotation, not the translation.</summary>
+    /* Multiplies the rotation, not the translation. */
     public required float Scale { get; init; }
 
-    /// <summary>
-    /// The skin-to-bone matrix: the stored rotation rows scaled by <see cref="Scale"/>,
-    /// with <see cref="Translation"/> in the fourth row. It is the matrix BGS's
-    /// NifGeometry.ReadSkin builds from the same fields.
-    /// </summary>
+    /* The skin-to-bone matrix: the stored rotation rows scaled by Scale, with
+       Translation in the fourth row. It is the matrix BGS's NifGeometry.ReadSkin
+       builds from the same fields. */
     public Numerics.Matrix4x4 BindMatrix => new(
         Rotation[0] * Scale, Rotation[1] * Scale, Rotation[2] * Scale, 0,
         Rotation[3] * Scale, Rotation[4] * Scale, Rotation[5] * Scale, 0,
@@ -40,11 +38,53 @@ public sealed class NifBone
         Translation.X, Translation.Y, Translation.Z, 1);
 }
 
-/// <summary>
-/// One decoded shape. Positions, normals, tangents, bitangents and colours are
-/// per-vertex; UVs are two floats per vertex; weights are four floats per vertex
-/// and bone indices four bytes per vertex.
-/// </summary>
+/* One node of the NIF scene graph. Block is its index in the file's block table,
+   ParentIndex its parent's index in Nodes (-1 for a root), and ChildBlocks the
+   block indices the file stores, which is every child, shapes included. Children
+   holds the same list as nodes, with null where a child is not a node. */
+public sealed class NifNode
+{
+    public required int Block { get; init; }
+
+    public required string Type { get; init; }
+
+    public required string Name { get; init; }
+
+    public required int ParentIndex { get; init; }
+
+    public required int[] ChildBlocks { get; init; }
+
+    public required NifNode?[] Children { get; init; }
+
+    public required Numerics.Vector3 Translation { get; init; }
+
+    /* The nine rotation floats in the order the file stores them. */
+    public required float[] Rotation { get; init; }
+
+    public required float Scale { get; init; }
+
+    public NifNode? Parent { get; internal set; }
+
+    public bool IsRoot => ParentIndex < 0;
+
+    /* The local transform: the stored rotation rows scaled and transposed, so
+       Vector3.Transform applies it as the file's own R * v with the translation
+       added, the composition the native shape_to_global uses. */
+    public Numerics.Matrix4x4 LocalMatrix => new(
+        Rotation[0] * Scale, Rotation[3] * Scale, Rotation[6] * Scale, 0,
+        Rotation[1] * Scale, Rotation[4] * Scale, Rotation[7] * Scale, 0,
+        Rotation[2] * Scale, Rotation[5] * Scale, Rotation[8] * Scale, 0,
+        Translation.X, Translation.Y, Translation.Z, 1);
+
+    /* The node-to-global transform: this node's local transform followed by
+       every ancestor's, so a child's vertices reach the global space the same
+       way NifShape.GlobalTranslation does. */
+    public Numerics.Matrix4x4 WorldMatrix => Parent is { } parent ? LocalMatrix * parent.WorldMatrix : LocalMatrix;
+}
+
+/* One decoded shape. Positions, normals, tangents, bitangents and colours are
+   per-vertex; UVs are two floats per vertex; weights are four floats per vertex
+   and bone indices four bytes per vertex. */
 public sealed class NifShape
 {
     public required string Name { get; init; }
@@ -55,7 +95,7 @@ public sealed class NifShape
 
     public required Numerics.Vector3[] Tangents { get; init; }
 
-    /// <summary>Empty unless the shape stores both normals and tangents.</summary>
+    /* Empty unless the shape stores both normals and tangents. */
     public required Numerics.Vector3[] Bitangents { get; init; }
 
     public required Numerics.Vector2[] Uvs { get; init; }
@@ -64,20 +104,28 @@ public sealed class NifShape
 
     public required ushort[] Triangles { get; init; }
 
-    /// <summary>The shader's material file path: a BGSM or BGEM, or empty.</summary>
+    /* The shader's material file path: a BGSM or BGEM, or empty. */
     public required string Material { get; init; }
 
-    /// <summary>Texture slots in BSShaderTextureSet order: 0 diffuse, 1 normal, 2 glow and so on.</summary>
+    /* Texture slots in BSShaderTextureSet order: 0 diffuse, 1 normal, 2 glow and so on. */
     public required string[] Textures { get; init; }
 
-    /// <summary>Four floats per vertex; empty when the shape is not skinned.</summary>
+    /* Four floats per vertex; empty when the shape is not skinned. */
     public required float[] Weights { get; init; }
 
-    /// <summary>Four bone indices per vertex, indexing <see cref="Bones"/>.</summary>
+    /* Four bone indices per vertex, indexing Bones. */
     public required byte[] BoneIndices { get; init; }
 
-    /// <summary>The bones of the skin instance, in the order the file stores them.</summary>
+    /* The bones of the skin instance, in the order the file stores them. */
     public required NifBone[] Bones { get; init; }
+
+    /* The index in NifFile.Nodes of the shape's nearest node ancestor, or -1. */
+    public required int ParentNodeIndex { get; init; }
+
+    public NifNode? ParentNode { get; internal set; }
+
+    /* Why a part of the shape is empty, or the empty string when it all read. */
+    public required string Warning { get; init; }
 
     public required int SkinReference { get; init; }
 
@@ -85,10 +133,10 @@ public sealed class NifShape
 
     public required int AlphaReference { get; init; }
 
-    /// <summary>The composed shape-to-global translation, with every ancestor applied.</summary>
+    /* The composed shape-to-global translation, with every ancestor applied. */
     public required Numerics.Vector3 GlobalTranslation { get; init; }
 
-    /// <summary>The composed shape-to-global rotation, nine floats in the order the file stores them.</summary>
+    /* The composed shape-to-global rotation, nine floats in the order the file stores them. */
     public required float[] GlobalRotation { get; init; }
 
     public required float GlobalScale { get; init; }
@@ -100,13 +148,18 @@ public sealed class NifShape
     public bool IsSkinned => Weights.Length == Positions.Length * 4 && Bones.Length > 0;
 }
 
-/// <summary>
-/// A read-only NIF. Every shape is decoded into managed arrays while the native
-/// handle is open, so the handle is released before <see cref="FromBytes"/> returns.
-/// </summary>
+/* A read-only NIF. The scene graph and every shape are decoded into managed
+   objects while the native handle is open, so the handle is released before
+   FromBytes returns and no member holds native state. */
 public sealed class NifFile
 {
-    private NifFile(NifShape[] shapes) => Shapes = shapes;
+    private NifFile(NifNode[] nodes, NifShape[] shapes)
+    {
+        Nodes = nodes;
+        Shapes = shapes;
+    }
+
+    public IReadOnlyList<NifNode> Nodes { get; }
 
     public IReadOnlyList<NifShape> Shapes { get; }
 
@@ -120,16 +173,73 @@ public sealed class NifFile
         }
         try
         {
-            nuint count = 0;
-            Call.Check(RadicleNative.NifShapeCount(handle, &count));
-            var shapes = new NifShape[checked((int)count)];
-            for (var index = 0; index < shapes.Length; ++index) shapes[index] = Snapshot(handle, (nuint)index);
-            return new NifFile(shapes);
+            var nodes = ReadNodes(handle);
+            var shapes = ReadShapes(handle, nodes);
+            return new NifFile(nodes, shapes);
         }
         finally
         {
             RadicleNative.NifDestroy(handle);
         }
+    }
+
+    private static unsafe NifNode[] ReadNodes(IntPtr handle)
+    {
+        nuint nodeCount = 0;
+        Call.Check(RadicleNative.NifNodeCount(handle, &nodeCount));
+        var nodes = new NifNode[checked((int)nodeCount)];
+        var childBlocks = new int[nodes.Length][];
+        var translation = stackalloc float[3];
+        var rotation = stackalloc float[9];
+        for (var index = 0; index < nodes.Length; ++index)
+        {
+            uint block = 0;
+            Call.Check(RadicleNative.NifNodeBlock(handle, (nuint)index, &block));
+            int parent = -1;
+            Call.Check(RadicleNative.NifNodeParent(handle, (nuint)index, &parent));
+
+            uint* refs = null;
+            nuint refCount = 0;
+            Call.Check(RadicleNative.NifNodeChildren(handle, (nuint)index, &refs, &refCount));
+            var blocks = Call.TakeNodeRefs(refs, refCount);
+
+            float scale = 0;
+            Call.Check(RadicleNative.NifNodeTransform(handle, (nuint)index, translation, rotation, &scale));
+
+            childBlocks[index] = Array.ConvertAll(blocks, value => checked((int)value));
+            nodes[index] = new NifNode {
+                Block = checked((int)block),
+                Type = ReadText(handle, (nuint)index, RadicleNative.NifNodeType),
+                Name = ReadText(handle, (nuint)index, RadicleNative.NifNodeName),
+                ParentIndex = parent,
+                ChildBlocks = childBlocks[index],
+                Children = new NifNode?[childBlocks[index].Length],
+                Translation = new Numerics.Vector3(translation[0], translation[1], translation[2]),
+                Rotation = Call.Copy<float>((IntPtr)rotation, 9),
+                Scale = scale,
+            };
+        }
+
+        for (var index = 0; index < nodes.Length; ++index)
+        {
+            if (nodes[index].ParentIndex >= 0) nodes[index].Parent = nodes[nodes[index].ParentIndex];
+            for (var slot = 0; slot < nodes[index].ChildBlocks.Length; ++slot)
+            {
+                int child = -1;
+                Call.Check(RadicleNative.NifNodeForBlock(handle, (uint)nodes[index].ChildBlocks[slot], &child));
+                if (child >= 0) nodes[index].Children[slot] = nodes[child];
+            }
+        }
+        return nodes;
+    }
+
+    private static unsafe NifShape[] ReadShapes(IntPtr handle, NifNode[] nodes)
+    {
+        nuint shapeCount = 0;
+        Call.Check(RadicleNative.NifShapeCount(handle, &shapeCount));
+        var shapes = new NifShape[checked((int)shapeCount)];
+        for (var index = 0; index < shapes.Length; ++index) shapes[index] = Snapshot(handle, nodes, (nuint)index);
+        return shapes;
     }
 
     private unsafe delegate Status FloatReader(IntPtr nif, nuint index, float** values, nuint* count);
@@ -236,19 +346,22 @@ public sealed class NifFile
         return textures;
     }
 
-    private static unsafe NifShape Snapshot(IntPtr handle, nuint index)
+    private static unsafe NifShape Snapshot(IntPtr handle, NifNode[] nodes, nuint index)
     {
         int skin = 0;
         int shader = 0;
         int alpha = 0;
         Call.Check(RadicleNative.NifShapeRefs(handle, index, &skin, &shader, &alpha));
 
+        int parentNode = -1;
+        Call.Check(RadicleNative.NifShapeParentNode(handle, index, &parentNode));
+
         var translation = stackalloc float[3];
         var rotation = stackalloc float[9];
         float scale = 0;
         Call.Check(RadicleNative.NifShapeTransform(handle, index, translation, rotation, &scale));
 
-        return new NifShape {
+        var shape = new NifShape {
             Name = ReadText(handle, index, RadicleNative.NifShapeName),
             Positions = ToVectors(ReadFloats(handle, index, RadicleNative.NifShapePositions)),
             Normals = ToVectors(ReadFloats(handle, index, RadicleNative.NifShapeNormals)),
@@ -262,6 +375,8 @@ public sealed class NifFile
             Weights = ReadFloats(handle, index, RadicleNative.NifShapeWeights),
             BoneIndices = ReadBytes(handle, index, RadicleNative.NifShapeBoneIndices),
             Bones = ReadBones(handle, index),
+            ParentNodeIndex = parentNode,
+            Warning = ReadText(handle, index, RadicleNative.NifShapeWarning),
             SkinReference = skin,
             ShaderReference = shader,
             AlphaReference = alpha,
@@ -269,5 +384,7 @@ public sealed class NifFile
             GlobalRotation = Call.Copy<float>((IntPtr)rotation, 9),
             GlobalScale = scale,
         };
+        if (parentNode >= 0) shape.ParentNode = nodes[parentNode];
+        return shape;
     }
 }

@@ -153,7 +153,7 @@ TEST(CapiNif, ReadsSkinWeightsBonesAndBindTransforms) {
   size_t index_count = 0;
   ASSERT_EQ(radicle_nif_shape_bone_indices(nif.get(), 0, &indices, &index_count), RADICLE_STATUS_OK);
   ASSERT_EQ(index_count, 8U);
-  const std::vector<uint8_t> expected_indices{0, 1, 0xFE, 0xFF, 0, 1, 0xFE, 0xFF};
+  const std::vector<uint8_t> expected_indices{0, 0, 0, 0, 0, 0, 0, 0};
   for (std::size_t i = 0; i < expected_indices.size(); ++i) EXPECT_EQ(indices[i], expected_indices[i]);
   radicle_free_bytes(indices);
 
@@ -255,4 +255,114 @@ TEST(CapiNif, RejectsBadInput) {
   EXPECT_EQ(radicle_nif_shape_transform(nif.get(), 0, nullptr, rotation, &scale), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_nif_shape_bone_transform(nif.get(), 0, 5, nullptr, nullptr, nullptr, nullptr, nullptr),
             RADICLE_STATUS_INVALID_ARGUMENT);
+}
+namespace {
+
+std::vector<nif_fixture::Block> bad_shader_blocks() {
+  const std::vector<std::byte> vertices(16, std::byte{0});
+  return {nif_fixture::node_block("NiNode", 0, fo4::nif::Transform{}, {1}),
+          nif_fixture::shape_block("BSTriShape", 0, fo4::nif::Transform{}, nif_fixture::k_full, 16, -1, 2, -1,
+                                   vertices, {0, 0, 0}),
+          nif_fixture::lighting_shader_block(1, -1, 99, 0, 0)};
+}
+
+}  // namespace
+
+TEST(CapiNif, ExposesTheNodeTreeAndTheShapesParentNode) {
+  const auto bytes = nif_fixture::full_nif();
+  Nif nif(bytes);
+  ASSERT_NE(nif.get(), nullptr);
+
+  size_t nodes = 0;
+  ASSERT_EQ(radicle_nif_node_count(nif.get(), &nodes), RADICLE_STATUS_OK);
+  ASSERT_EQ(nodes, 2U);
+
+  uint32_t block = 99;
+  ASSERT_EQ(radicle_nif_node_block(nif.get(), 0, &block), RADICLE_STATUS_OK);
+  EXPECT_EQ(block, 0U);
+  EXPECT_EQ(text_of(nif.get(), 0, radicle_nif_node_type), "NiNode");
+  EXPECT_EQ(text_of(nif.get(), 0, radicle_nif_node_name), "shape");
+  EXPECT_EQ(text_of(nif.get(), 1, radicle_nif_node_name), "RootBone");
+
+  int32_t parent = 99;
+  ASSERT_EQ(radicle_nif_node_parent(nif.get(), 0, &parent), RADICLE_STATUS_OK);
+  EXPECT_EQ(parent, -1);
+  ASSERT_EQ(radicle_nif_node_parent(nif.get(), 1, &parent), RADICLE_STATUS_OK);
+  EXPECT_EQ(parent, -1);
+
+  uint32_t* refs = nullptr;
+  size_t ref_count = 0;
+  ASSERT_EQ(radicle_nif_node_children(nif.get(), 0, &refs, &ref_count), RADICLE_STATUS_OK);
+  ASSERT_EQ(ref_count, 1U);
+  EXPECT_EQ(refs[0], 1U);
+  radicle_free_node_refs(refs);
+
+  ASSERT_EQ(radicle_nif_node_children(nif.get(), 1, &refs, &ref_count), RADICLE_STATUS_OK);
+  EXPECT_EQ(refs, nullptr);
+  EXPECT_EQ(ref_count, 0U);
+
+  float translation[3]{};
+  float rotation[9]{};
+  float scale = 0;
+  ASSERT_EQ(radicle_nif_node_transform(nif.get(), 0, translation, rotation, &scale), RADICLE_STATUS_OK);
+  expect_floats({translation[0], translation[1], translation[2]}, {10.0f, 0.0f, 0.0f});
+  expect_floats(std::vector<float>(rotation, rotation + 9),
+                {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f});
+  EXPECT_FLOAT_EQ(scale, 2.0f);
+
+  int32_t node = 99;
+  ASSERT_EQ(radicle_nif_node_for_block(nif.get(), 0, &node), RADICLE_STATUS_OK);
+  EXPECT_EQ(node, 0);
+  ASSERT_EQ(radicle_nif_node_for_block(nif.get(), 1, &node), RADICLE_STATUS_OK);
+  EXPECT_EQ(node, -1);
+  ASSERT_EQ(radicle_nif_node_for_block(nif.get(), 6, &node), RADICLE_STATUS_OK);
+  EXPECT_EQ(node, 1);
+  ASSERT_EQ(radicle_nif_node_for_block(nif.get(), 9999, &node), RADICLE_STATUS_OK);
+  EXPECT_EQ(node, -1);
+
+  ASSERT_EQ(radicle_nif_shape_parent_node(nif.get(), 0, &node), RADICLE_STATUS_OK);
+  EXPECT_EQ(node, 0);
+
+  EXPECT_EQ(radicle_nif_node_count(nullptr, &nodes), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_node_block(nif.get(), 5, &block), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_node_name(nif.get(), 5, nullptr, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_node_parent(nif.get(), 5, &parent), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_node_children(nif.get(), 5, &refs, &ref_count), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_node_transform(nif.get(), 5, translation, rotation, &scale),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_nif_shape_parent_node(nif.get(), 5, &node), RADICLE_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(CapiNif, ReportsABadShaderBlockAsAShapeWarning) {
+  const auto bytes = nif_fixture::build_nif({"shape", "Root"}, bad_shader_blocks(), {0});
+  Nif nif(bytes);
+  ASSERT_NE(nif.get(), nullptr);
+
+  EXPECT_EQ(text_of(nif.get(), 0, radicle_nif_shape_material), "");
+
+  size_t slots = 99;
+  ASSERT_EQ(radicle_nif_shape_texture_count(nif.get(), 0, &slots), RADICLE_STATUS_OK);
+  EXPECT_EQ(slots, 0U);
+
+  const auto warning = text_of(nif.get(), 0, radicle_nif_shape_warning);
+  EXPECT_NE(warning.find("texture set reference is out of range"), std::string::npos) << warning;
+
+  size_t vertices = 0;
+  ASSERT_EQ(radicle_nif_shape_vertex_count(nif.get(), 0, &vertices), RADICLE_STATUS_OK);
+  EXPECT_EQ(vertices, 1U);
+  uint16_t* triangles = nullptr;
+  size_t triangle_count = 0;
+  ASSERT_EQ(radicle_nif_shape_triangles(nif.get(), 0, &triangles, &triangle_count), RADICLE_STATUS_OK);
+  EXPECT_EQ(triangle_count, 3U);
+  radicle_free_triangles(triangles);
+
+  int32_t node = 99;
+  ASSERT_EQ(radicle_nif_shape_parent_node(nif.get(), 0, &node), RADICLE_STATUS_OK);
+  EXPECT_EQ(node, 0);
+}
+
+TEST(CapiNif, ReportsNoWarningForAHealthyShape) {
+  const auto bytes = nif_fixture::full_nif();
+  Nif nif(bytes);
+  EXPECT_EQ(text_of(nif.get(), 0, radicle_nif_shape_warning), "");
 }

@@ -3,8 +3,10 @@ using System.Collections.Generic;
 
 namespace Radicle.Interop.Tests;
 
-// Mirrors Radicle/tests/nif_fixture.hpp: the smallest NIF that carries every
-// field the C ABI exposes, built from bytes so the binding tests need no game data.
+/* NIF bytes built here, so the binding tests need no game data. FullNif mirrors
+   Radicle/tests/nif_fixture.hpp: the smallest NIF that carries every field the C
+   ABI exposes. The other builders cover the scene graph and a shader block that
+   does not parse. */
 internal static class NifFixtures
 {
     private const uint HasUv = 1U << 1;
@@ -13,6 +15,8 @@ internal static class NifFixtures
     private const uint HasColour = 1U << 5;
     private const uint HasSkin = 1U << 6;
     private const uint Full = 1U << 10;
+
+    private static readonly float[] Identity = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
 
     internal sealed class Writer
     {
@@ -61,11 +65,12 @@ internal static class NifFixtures
 
         public void Append(byte[] bytes) => _bytes.AddRange(bytes);
 
-        public void Transform(float[] translation, float scale)
+        public void Transform(float[] translation, float scale) => Transform(translation, Identity, scale);
+
+        public void Transform(float[] translation, float[] rotation, float scale)
         {
             foreach (var value in translation) F32(value);
-            float[] identity = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
-            foreach (var value in identity) F32(value);
+            foreach (var value in rotation) F32(value);
             F32(scale);
         }
 
@@ -111,29 +116,32 @@ internal static class NifFixtures
         return w.Bytes();
     }
 
-    private static Block Node(string type, int name, byte[] data)
+    private static byte[] NodeBody(int name, float[] translation, float[] rotation, float scale, int[] children)
     {
         var w = new Writer();
         w.I32(name);
         w.U32(0);
         w.I32(-1);
         w.U32(0);
-        w.Transform(new float[] { 0, 0, 0 }, 1.0f);
+        w.Transform(translation, rotation, scale);
         w.I32(-1);
-        w.U32(0);
-        w.Append(data);
-        return new Block(type, w.Bytes());
+        w.U32((uint)children.Length);
+        foreach (var child in children) w.I32(child);
+        return w.Bytes();
     }
 
+    private static Block NodeBlock(string type, int name, float[] translation, float scale, int[] children) =>
+        new(type, NodeBody(name, translation, Identity, scale, children));
+
     private static byte[] ShapeBody(uint flags, int stride, int skin, int shader, int alpha, byte[] vertices,
-        ushort[] triangles)
+        ushort[] triangles, float[] translation)
     {
         var w = new Writer();
         w.I32(0);
         w.U32(0);
         w.I32(-1);
         w.U32(0);
-        w.Transform(new float[] { 7, 8, 9 }, 1.0f);
+        w.Transform(translation, 1.0f);
         w.I32(-1);
         for (var i = 0; i < 4; ++i) w.F32(0);
         w.I32(skin);
@@ -161,15 +169,15 @@ internal static class NifFixtures
         foreach (var value in new byte[] { 0, 255, 128, 0x22 }) w.U8(value);
         foreach (var value in new byte[] { 255, 0, 51, 102 }) w.U8(value);
         foreach (var value in new ushort[] { 0x3C00, 0x3800, 0x3400, 0 }) w.U16(value);
-        foreach (var value in new byte[] { 0, 1, 0xFE, 0xFF }) w.U8(value);
+        foreach (var value in new byte[] { 0, 0, 0, 0 }) w.U8(value);
         return w.Bytes();
     }
 
-    internal static byte[] FullNif()
+    private static byte[] LightingShader(int name, int textureSet)
     {
         var w = new Writer();
         w.U32(1);
-        w.I32(2);
+        w.I32(name);
         w.U32(0);
         w.I32(-1);
         w.U32(0x80400201U);
@@ -178,7 +186,7 @@ internal static class NifFixtures
         w.F32(0);
         w.F32(1);
         w.F32(1);
-        w.I32(5);
+        w.I32(textureSet);
         for (var i = 0; i < 3; ++i) w.F32(0);
         w.F32(1);
         w.I32(-1);
@@ -197,7 +205,12 @@ internal static class NifFixtures
         w.F32(1);
         w.U8(0);
         w.U8(0);
-        var shader = w.Bytes();
+        return w.Bytes();
+    }
+
+    internal static byte[] FullNif()
+    {
+        var shader = LightingShader(2, 5);
 
         var textures = new Writer();
         textures.U32(2);
@@ -226,17 +239,48 @@ internal static class NifFixtures
         var flags = Full | HasUv | HasNormal | HasTangent | HasColour | HasSkin;
         var blocks = new List<Block>
         {
-            Node("NiNode", 0, Array.Empty<byte>()),
-            new("BSTriShape", ShapeBody(flags, 44, 2, 4, -1, vertices.ToArray(), new ushort[] { 0, 1, 1 })),
+            NodeBlock("NiNode", 0, new float[] { 10, 0, 0 }, 2.0f, new[] { 1 }),
+            new("BSTriShape", ShapeBody(flags, 44, 2, 4, -1, vertices.ToArray(), new ushort[] { 0, 1, 1 },
+                new float[] { 7, 8, 9 })),
             new("BSSkin::Instance", skin.Bytes()),
             new("BSSkin::BoneData", boneData.Bytes()),
             new("BSLightingShaderProperty", shader),
             new("BSShaderTextureSet", textures.Bytes()),
-            Node("NiNode", 1, Array.Empty<byte>()),
+            NodeBlock("NiNode", 1, new float[] { 0, 0, 0 }, 1.0f, Array.Empty<int>()),
         };
         return BuildNif(new[]
         {
             "shape", "RootBone", "materials\\body.bgsm", "textures\\body_d.dds", "textures\\body_n.dds",
         }, blocks, new[] { 0 });
+    }
+
+    /* Two nodes and a shape: node 0 is the root, node 1 its child, and the shape
+       hangs off node 1. The rotations are axis swaps, so a composed world matrix
+       differs from any single local one. */
+    internal static byte[] NodeChainNif()
+    {
+        var shape = ShapeBody(Full, 16, -1, -1, -1, new byte[16], new ushort[] { 0, 0, 0 }, new float[] { 7, 8, 9 });
+        var blocks = new List<Block>
+        {
+            new("BSFadeNode", NodeBody(0, new float[] { 1, 2, 3 }, new float[] { 0, -1, 0, 1, 0, 0, 0, 0, 1 }, 2.0f,
+                new[] { 1 })),
+            new("NiNode", NodeBody(1, new float[] { 4, 5, 6 }, Identity, 3.0f, new[] { 2 })),
+            new("BSTriShape", shape),
+        };
+        return BuildNif(new[] { "Root", "Chest", "shape" }, blocks, new[] { 0 });
+    }
+
+    /* A shape whose shader property points its texture set at block 99, which the
+       file does not have. The shader block is refused, the geometry still reads. */
+    internal static byte[] BadShaderNif()
+    {
+        var blocks = new List<Block>
+        {
+            NodeBlock("NiNode", 0, new float[] { 0, 0, 0 }, 1.0f, new[] { 1 }),
+            new("BSTriShape", ShapeBody(Full, 16, -1, 2, -1, new byte[16], new ushort[] { 0, 0, 0 },
+                new float[] { 7, 8, 9 })),
+            new("BSLightingShaderProperty", LightingShader(1, 99)),
+        };
+        return BuildNif(new[] { "Root", "materials\\body.bgsm" }, blocks, new[] { 0 });
     }
 }

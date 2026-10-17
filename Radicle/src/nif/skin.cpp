@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace fo4::nif {
@@ -58,7 +59,11 @@ std::vector<Bone> read_bones(const NifFile& nif, std::uint32_t instance_block) {
 
   auto transforms = detail::block_cursor(nif, static_cast<std::uint32_t>(data));
   const auto count = transforms.read_u32();
-  if (count != bone_count) return bones;
+  if (count != bone_count) {
+    throw parse_error(transforms.absolute_offset(),
+                      "bone data holds " + std::to_string(count) + " transforms for a skin with " +
+                          std::to_string(bone_count) + " bones");
+  }
   if (static_cast<std::size_t>(count) > transforms.remaining() / k_bone_transform_bytes) {
     throw parse_error(transforms.absolute_offset(), "bone transform list runs past the end of its block");
   }

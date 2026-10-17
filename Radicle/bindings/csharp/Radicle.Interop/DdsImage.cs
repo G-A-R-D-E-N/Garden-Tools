@@ -3,13 +3,11 @@ using Radicle.Interop.Native;
 
 namespace Radicle.Interop;
 
-/// <summary>One decoded mip level: RGBA8 pixels, four bytes per pixel.</summary>
+/* One decoded mip level: RGBA8 pixels, four bytes per pixel. */
 public readonly record struct DdsPixels(int Width, int Height, byte[] Rgba);
 
-/// <summary>
-/// A DDS container. The bytes are copied when the image is read, so decoding a
-/// mip later needs no native handle.
-/// </summary>
+/* A DDS container. The bytes are copied when the image is read, so decoding a
+   mip later needs no native handle. */
 public sealed class DdsImage
 {
     private readonly byte[] _bytes;
@@ -25,7 +23,7 @@ public sealed class DdsImage
         IsBc5 = isBc5;
     }
 
-    /// <summary>The DXGI format code: 71 BC1_UNORM, 77 BC3_UNORM, 83 BC5_UNORM, 98 BC7_UNORM and so on.</summary>
+    /* The DXGI format code: 71 BC1_UNORM, 77 BC3_UNORM, 83 BC5_UNORM, 98 BC7_UNORM and so on. */
     public uint Format { get; }
 
     public int MipCount { get; }
@@ -34,10 +32,10 @@ public sealed class DdsImage
 
     public int Height { get; }
 
-    /// <summary>The byte size of every mip together.</summary>
+    /* The byte size of every mip together, every array slice and depth slice included. */
     public long PayloadSize { get; }
 
-    /// <summary>True for the BC5 normal-map layouts, 82, 83 and 84.</summary>
+    /* True for the BC5 normal-map layouts, 82, 83 and 84. */
     public bool IsBc5 { get; }
 
     public static unsafe DdsImage FromBytes(ReadOnlySpan<byte> bytes)
@@ -58,7 +56,8 @@ public sealed class DdsImage
             checked((long)payloadSize), bc5 != 0);
     }
 
-    /// <summary>Decodes one mip level into RGBA8.</summary>
+    /* Decodes one mip level into RGBA8. reconstructZ rebuilds the blue channel of
+       an unsigned BC5 normal map and is refused for every other format. */
     public unsafe DdsPixels DecodePixels(int mip = 0, bool reconstructZ = false)
     {
         if (mip < 0 || mip >= MipCount) throw new ArgumentOutOfRangeException(nameof(mip));
@@ -73,6 +72,6 @@ public sealed class DdsImage
         return new DdsPixels(checked((int)width), checked((int)height), Call.TakeBytes(rgba, (nuint)width * height * 4));
     }
 
-    /// <summary>Decodes one mip level into RGBA8 pixels only.</summary>
+    /* Decodes one mip level into RGBA8 pixels only. */
     public byte[] Decode(int mip = 0, bool reconstructZ = false) => DecodePixels(mip, reconstructZ).Rgba;
 }

@@ -49,6 +49,7 @@ public class NifTests
         var shape = Shape();
         Assert.Equal("materials\\body.bgsm", shape.Material);
         Assert.Equal(new[] { "textures\\body_d.dds", "textures\\body_n.dds" }, shape.Textures);
+        Assert.Equal(string.Empty, shape.Warning);
     }
 
     [Fact]
@@ -57,7 +58,7 @@ public class NifTests
         var shape = Shape();
         Assert.True(shape.IsSkinned);
         Assert.Equal(new[] { 1.0f, 0.5f, 0.25f, 0.0f, 1.0f, 0.5f, 0.25f, 0.0f }, shape.Weights);
-        Assert.Equal(new byte[] { 0, 1, 0xFE, 0xFF, 0, 1, 0xFE, 0xFF }, shape.BoneIndices);
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 }, shape.BoneIndices);
 
         var bone = Assert.Single(shape.Bones);
         Assert.Equal("RootBone", bone.Name);
@@ -82,6 +83,65 @@ public class NifTests
         Assert.Equal(new Vector3(7, 8, 9), shape.GlobalTranslation);
         Assert.Equal(new float[] { 1, 0, 0, 0, 1, 0, 0, 0, 1 }, shape.GlobalRotation);
         Assert.Equal(1.0f, shape.GlobalScale);
+    }
+
+    [Fact]
+    public void ExposesTheNodeTree()
+    {
+        var nif = NifFile.FromBytes(NifFixtures.NodeChainNif());
+        Assert.Equal(2, nif.Nodes.Count);
+
+        var root = nif.Nodes[0];
+        Assert.Equal(0, root.Block);
+        Assert.Equal("BSFadeNode", root.Type);
+        Assert.Equal("Root", root.Name);
+        Assert.True(root.IsRoot);
+        Assert.Null(root.Parent);
+        Assert.Equal(new[] { 1 }, root.ChildBlocks);
+        Assert.Equal(new Vector3(1, 2, 3), root.Translation);
+        Assert.Equal(2.0f, root.Scale);
+
+        var chest = nif.Nodes[1];
+        Assert.Equal("NiNode", chest.Type);
+        Assert.Equal("Chest", chest.Name);
+        Assert.Same(root, chest.Parent);
+        Assert.Equal(0, chest.ParentIndex);
+        Assert.Same(chest, Assert.Single(root.Children));
+        Assert.Equal(3.0f, chest.Scale);
+
+        Assert.Equal(new[] { 2 }, chest.ChildBlocks);
+        Assert.Null(Assert.Single(chest.Children));
+
+        var shape = Assert.Single(nif.Shapes);
+        Assert.Equal(1, shape.ParentNodeIndex);
+        Assert.Same(chest, shape.ParentNode);
+        Assert.Same(root, shape.ParentNode!.Parent);
+    }
+
+    [Fact]
+    public void ComposesTheNodeWorldMatrix()
+    {
+        var nif = NifFile.FromBytes(NifFixtures.NodeChainNif());
+        var chest = nif.Nodes[1];
+        var world = chest.WorldMatrix;
+        Assert.Equal(-9.0f, Vector3.Transform(Vector3.Zero, world).X, 4);
+        Assert.Equal(10.0f, Vector3.Transform(Vector3.Zero, world).Y, 4);
+        Assert.Equal(15.0f, Vector3.Transform(Vector3.Zero, world).Z, 4);
+        Assert.Equal(6.0f, Vector3.TransformNormal(Vector3.UnitX, world).Length(), 4);
+    }
+
+    [Fact]
+    public void ReportsABadShaderBlockAsAWarningAndKeepsTheGeometry()
+    {
+        var nif = NifFile.FromBytes(NifFixtures.BadShaderNif());
+        var shape = Assert.Single(nif.Shapes);
+        Assert.Equal(string.Empty, shape.Material);
+        Assert.Empty(shape.Textures);
+        Assert.Contains("texture set reference is out of range", shape.Warning);
+        Assert.Single(shape.Positions);
+        Assert.Equal(new ushort[] { 0, 0, 0 }, shape.Triangles);
+        Assert.Equal(0, shape.ParentNodeIndex);
+        Assert.Equal("Root", shape.ParentNode!.Name);
     }
 
     private static void ReadEmpty() => NifFile.FromBytes(ReadOnlySpan<byte>.Empty);

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -56,7 +57,6 @@ void expect_dds_error(Fn&& fn, std::string_view type) {
   }
 }
 
-// LSB-first bit writer, as BC7 blocks are packed.
 struct BitWriter {
   std::uint64_t low{};
   std::uint64_t high{};
@@ -233,18 +233,18 @@ TEST(DdsDecoder, DecodesBc1EndToEnd) {
   expect_rgba(pixel_at(decoded, 4, 0, 0), 255, 255, 255, 255);
 }
 
-TEST(DdsDecoder, ReconstructsZForNormalMaps) {
-  std::vector<std::uint8_t> surface;
-  for (int i = 0; i < 16; ++i) {
-    surface.push_back(255);
-    surface.push_back(0);
-    surface.push_back(0);
-    surface.push_back(255);
-  }
+TEST(DdsDecoder, ReconstructsZForUnsignedBc5NormalMaps) {
+  std::vector<std::uint8_t> surface(16, 0);
+  surface[0] = 255;
   std::uint32_t width = 0;
   std::uint32_t height = 0;
-  const auto decoded = fo4::texture::decode_dds_rgba(make_dds(28, surface), 0, true, width, height);
-  EXPECT_EQ(pixel_at(decoded, 4, 0, 0)[2], 128);
+  const auto decoded = fo4::texture::decode_dds_rgba(make_dds(83, surface), 0, true, width, height);
+  EXPECT_EQ(width, 4U);
+  EXPECT_EQ(height, 4U);
+  const auto pixel = pixel_at(decoded, 4, 0, 0);
+  EXPECT_EQ(pixel[0], 255);
+  EXPECT_EQ(pixel[1], 0);
+  EXPECT_EQ(pixel[2], 128);
 }
 
 TEST(DdsDecoder, SelectsTheRequestedMip) {
@@ -323,4 +323,62 @@ TEST(CapiDds, DecodesPixelsAndReportsTheHeader) {
             RADICLE_STATUS_PARSE_ERROR);
   EXPECT_EQ(radicle_dds_info(junk.data(), junk.size(), &format, &mips, &info_width, &info_height, &payload, &bc5),
             RADICLE_STATUS_PARSE_ERROR);
+}
+
+TEST(DdsDecoder, RefusesReconstructZOnEveryFormatButUnsignedBc5) {
+  std::vector<std::uint8_t> bc5(16, 0);
+  bc5[0] = 255;
+  std::vector<std::uint8_t> rgba_surface(64, 200);
+  std::uint32_t width = 0;
+  std::uint32_t height = 0;
+  EXPECT_THROW(fo4::texture::decode_dds_rgba(make_dds(84, bc5), 0, true, width, height), std::invalid_argument);
+  EXPECT_THROW(fo4::texture::decode_dds_rgba(make_dds(71, k_bc1_white), 0, true, width, height),
+               std::invalid_argument);
+  EXPECT_THROW(fo4::texture::decode_dds_rgba(make_dds(28, rgba_surface), 0, true, width, height),
+               std::invalid_argument);
+  EXPECT_NO_THROW(fo4::texture::decode_dds_rgba(make_dds(71, k_bc1_white), 0, false, width, height));
+}
+
+TEST(DdsCodec, RejectsArraySizeAndDepthAboveTheSixteenBitCount) {
+  auto bytes = make_dds(71, k_bc1_white);
+  put_u32(bytes, 140, 0x10000U);
+  expect_dds_error([&] { fo4::texture::read_dds(bytes); }, "InvalidDds");
+
+  const auto format = fo4::texture::lookup_format(71);
+  ASSERT_TRUE(format.has_value());
+  const fo4::texture::DdsInfo info{4, 4, 1, false, 1, 1, 148, *format};
+  auto volume = fo4::texture::build_dds_header(info);
+  put_u32(volume, 112, 0x200000U);
+  put_u32(volume, 24, 0x10000U);
+  expect_dds_error([&] { fo4::texture::read_dds(volume); }, "InvalidDds");
+  put_u32(volume, 24, 0xFFFFU);
+  EXPECT_EQ(fo4::texture::read_dds(volume).depth, 65535);
+}
+
+TEST(DdsCodec, RejectsAPayloadThatOverflowsASixtyFourBitByteCount) {
+  const auto format = fo4::texture::lookup_format(28);
+  ASSERT_TRUE(format.has_value());
+  const fo4::texture::DdsInfo huge{65535, 65535, 255, false, 65535, 65535, 148, *format};
+  expect_dds_error([&] { huge.payload_size(); }, "InvalidDds");
+  const fo4::texture::DdsInfo modest{65535, 65535, 255, false, 4, 1, 148, *format};
+  EXPECT_GT(modest.payload_size(), 0);
+}
+
+TEST(CapiDds, ReportsAReconstructZRefusalAsInvalidArgument) {
+  const auto bc1 = make_dds(71, k_bc1_white);
+  const auto snorm = make_dds(84, k_bc3_opaque_white);
+  const auto unorm = make_dds(83, k_bc3_opaque_white);
+  uint8_t* rgba = nullptr;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  EXPECT_EQ(radicle_dds_decode_rgba(bc1.data(), bc1.size(), 0, 1, &rgba, &width, &height),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(rgba, nullptr);
+  EXPECT_EQ(radicle_dds_decode_rgba(snorm.data(), snorm.size(), 0, 1, &rgba, &width, &height),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(rgba, nullptr);
+  ASSERT_EQ(radicle_dds_decode_rgba(unorm.data(), unorm.size(), 0, 1, &rgba, &width, &height), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  EXPECT_NE(rgba, nullptr);
+  radicle_free_bytes(rgba);
 }

@@ -16,7 +16,6 @@ constexpr std::array<int, 8> kWeight3{0, 9, 18, 27, 37, 46, 55, 64};
 constexpr std::array<int, 16> kWeight4{0, 4, 9, 13, 17, 21, 26, 30,
                                        34, 38, 43, 47, 51, 55, 60, 64};
 
-// BC7 endpoint/partition tables, byte-identical to the C# port.
 constexpr std::string_view kPartitions2Hex =
     "80000101000001010000010100000181" "80000001000000010000000100000081"
     "80010101000101010001010100010181" "80000001000001010000010100010181"
@@ -114,7 +113,6 @@ void set(std::span<std::uint8_t> dst, int slot, int r, int g, int b, int a) {
     dst[slot * 4 + 3] = static_cast<std::uint8_t>(a);
 }
 
-// BC1-style color block: 2 565 endpoints + 16 2-bit indices.
 void colorBlock(std::span<const std::uint8_t> block, std::span<std::uint8_t> texels, bool onlyOpaque) {
     const auto c0 = static_cast<int>(block[0]) | (static_cast<int>(block[1]) << 8);
     const auto c1 = static_cast<int>(block[2]) | (static_cast<int>(block[3]) << 8);
@@ -151,7 +149,6 @@ void colorBlock(std::span<const std::uint8_t> block, std::span<std::uint8_t> tex
     }
 }
 
-// BC4-style single-channel block: 2 8-bit endpoints + 16 3-bit indices.
 void smoothAlpha(std::span<const std::uint8_t> block, std::span<std::uint8_t> values) {
     std::array<std::uint8_t, 8> palette{};
     palette[0] = block[0];
@@ -203,7 +200,6 @@ void bc5(std::span<const std::uint8_t> block, std::span<std::uint8_t> texels) {
     for (int i = 0; i < 16; ++i) set(texels, i, red[i], green[i], 0, 255);
 }
 
-// LSB-first bit reader over a 16-byte BC7 block.
 class BitStream {
 public:
     explicit BitStream(std::span<const std::uint8_t> block) {

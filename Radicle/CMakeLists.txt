@@ -533,6 +533,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ba2_real.cpp
     tests/test_ba2_versions_real.cpp
     tests/test_nif.cpp
+    tests/test_nif_nodes.cpp
     tests/test_nif_corpus.cpp
     tests/test_c_api_nif.cpp
     tests/test_dds.cpp

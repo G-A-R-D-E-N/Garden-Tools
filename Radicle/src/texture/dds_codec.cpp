@@ -4,6 +4,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdio>
+#include <limits>
+#include <string>
 
 namespace fo4::texture {
 namespace {
@@ -16,6 +18,7 @@ constexpr std::uint32_t k_ddpf_luminance = 0x20000;
 constexpr std::uint32_t k_ddpf_alpha_only = 0x2;
 constexpr std::uint32_t k_caps2_cube_map = 0x200;
 constexpr std::uint32_t k_caps2_volume = 0x200000;
+constexpr std::uint32_t k_max_slices = 0xFFFFU;
 
 constexpr int k_legacy_header_size = 128;
 constexpr int k_dx10_header_size = 148;
@@ -81,6 +84,19 @@ std::string hex32(std::uint32_t value) {
   char buffer[9]{};
   std::snprintf(buffer, sizeof buffer, "%08X", value);
   return std::string(buffer);
+}
+
+std::int64_t checked_payload_bytes(std::uint64_t total, std::uint64_t slices) {
+  constexpr auto k_max_int64 = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+  if (total != 0 && slices > std::numeric_limits<std::uint64_t>::max() / total) {
+    throw dds_error{"InvalidDds",
+                    "DDS: the mip total times the array and depth slices overflows a 64-bit byte count."};
+  }
+  const auto bytes = total * slices;
+  if (bytes > k_max_int64) {
+    throw dds_error{"InvalidDds", "DDS: the payload exceeds 2^63 bytes."};
+  }
+  return static_cast<std::int64_t>(bytes);
 }
 
 std::uint8_t legacy_to_dxgi(std::uint32_t pf_flags,
@@ -159,9 +175,17 @@ std::int64_t mip_size(const DdsFormatInfo& format, int width, int height) noexce
 }
 
 std::int64_t DdsInfo::payload_size() const {
-  std::int64_t total = 0;
-  for (int mip = 0; mip < mip_count; ++mip) total += fo4::texture::mip_size(format, width >> mip, height >> mip);
-  return total * array_size * std::max(1, depth);
+  std::uint64_t total = 0;
+  for (int mip = 0; mip < mip_count; ++mip) {
+    const auto level = fo4::texture::mip_size(format, width >> mip, height >> mip);
+    if (level < 0) {
+      throw dds_error{"InvalidDds", "DDS: a mip level has a negative size."};
+    }
+    total += static_cast<std::uint64_t>(level);
+  }
+  const auto arrays = static_cast<std::uint64_t>(std::max(1, array_size));
+  const auto slices = static_cast<std::uint64_t>(std::max(1, depth));
+  return checked_payload_bytes(total, arrays * slices);
 }
 
 std::int64_t DdsInfo::mip_size(std::uint32_t mip) const noexcept {
@@ -189,7 +213,8 @@ DdsInfo read_dds(std::span<const std::uint8_t> bytes) {
 
   const auto height = static_cast<int>(read_u32(bytes, 12));
   const auto width = static_cast<int>(read_u32(bytes, 16));
-  const auto depth = static_cast<int>(read_u32(bytes, 24));
+  const auto raw_depth = read_u32(bytes, 24);
+  const auto depth = static_cast<int>(raw_depth);
   auto mip_count = static_cast<int>(read_u32(bytes, 28));
   const auto caps2 = read_u32(bytes, 112);
 
@@ -220,7 +245,13 @@ DdsInfo read_dds(std::span<const std::uint8_t> bytes) {
     }
     dxgi = static_cast<std::uint8_t>(raw);
     const auto misc_flag = read_u32(bytes, 136);
-    array_size = static_cast<int>(std::max<std::uint32_t>(1, read_u32(bytes, 140)));
+    const auto raw_array_size = read_u32(bytes, 140);
+    if (raw_array_size > k_max_slices) {
+      throw dds_error{"InvalidDds",
+                      "DDS: array size " + std::to_string(raw_array_size) +
+                          " exceeds the 16-bit count a BA2 entry stores."};
+    }
+    array_size = static_cast<int>(std::max<std::uint32_t>(1, raw_array_size));
     if ((misc_flag & 0x4U) != 0) is_cube = true;
     data_offset = k_dx10_header_size;
   } else {
@@ -245,6 +276,11 @@ DdsInfo read_dds(std::span<const std::uint8_t> bytes) {
     throw dds_error{"InvalidDds",
                     "DDS: " + std::to_string(width) + "x" + std::to_string(height) +
                         " exceeds the 16-bit width and height a BA2 entry stores."};
+  }
+  if (is_volume && raw_depth > k_max_slices) {
+    throw dds_error{"InvalidDds",
+                    "DDS: depth " + std::to_string(raw_depth) +
+                        " exceeds the 16-bit count a BA2 entry stores."};
   }
   if (mip_count <= 0) mip_count = 1;
   if (mip_count > 0xFF) {

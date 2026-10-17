@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
 
 namespace fo4::texture {
@@ -28,6 +29,10 @@ bool is_uncompressed(std::uint8_t dxgi) {
     default:
       return false;
   }
+}
+
+bool is_unsigned_bc5(std::uint8_t dxgi) {
+  return dxgi == 82 || dxgi == 83;
 }
 
 void reconstruct_z(std::span<std::uint8_t> rgba) {
@@ -138,6 +143,10 @@ std::vector<std::uint8_t> decode_dds_rgba(std::span<const std::uint8_t> bytes,
                                           std::uint32_t& width,
                                           std::uint32_t& height) {
   const auto info = read_dds(bytes);
+  if (reconstruct_z_value && !is_unsigned_bc5(info.dxgi_format())) {
+    throw std::invalid_argument("DDS: reconstruct_z needs an unsigned BC5 normal map, not " +
+                                std::string(info.format.name) + ".");
+  }
   if (mip >= static_cast<std::uint32_t>(info.mip_count)) {
     throw dds_error{"InvalidDds",
                     "DDS: mip " + std::to_string(mip) + " was requested but the file holds " +

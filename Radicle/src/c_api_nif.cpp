@@ -84,6 +84,21 @@ radicle_status copy_indices(const std::vector<std::uint16_t>& values, uint16_t**
   return RADICLE_STATUS_OK;
 }
 
+radicle_status copy_node_refs(const std::vector<std::uint32_t>& values, uint32_t** out_values, size_t* out_count) {
+  if (!out_values || !out_count) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_values and out_count are required");
+  }
+  *out_values = nullptr;
+  *out_count = 0;
+  if (values.empty()) return RADICLE_STATUS_OK;
+  auto* buffer = static_cast<uint32_t*>(std::malloc(values.size() * sizeof(uint32_t)));
+  if (!buffer) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate NIF node references");
+  std::memcpy(buffer, values.data(), values.size() * sizeof(uint32_t));
+  *out_values = buffer;
+  *out_count = values.size();
+  return RADICLE_STATUS_OK;
+}
+
 radicle_status copy_byte_values(const std::vector<std::uint8_t>& values, uint8_t** out_values, size_t* out_count) {
   if (!out_values || !out_count) {
     return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_values and out_count are required");
@@ -112,6 +127,19 @@ const fo4::nif::Shape* find_shape(const radicle_nif* nif, size_t index, radicle_
   return &nif->shapes[index];
 }
 
+const fo4::nif::Node* find_node(const radicle_nif* nif, size_t index, radicle_status& status) {
+  if (!nif) {
+    status = fail(RADICLE_STATUS_INVALID_ARGUMENT, "nif is required");
+    return nullptr;
+  }
+  if (index >= nif->file.nodes().size()) {
+    status = fail(RADICLE_STATUS_INVALID_ARGUMENT, "node index is out of range");
+    return nullptr;
+  }
+  status = RADICLE_STATUS_OK;
+  return &nif->file.nodes()[index];
+}
+
 }  // namespace
 
 extern "C" {
@@ -135,6 +163,85 @@ radicle_status radicle_nif_read(const uint8_t* bytes, size_t size, radicle_nif**
 void radicle_nif_destroy(radicle_nif* nif) {
   clear_error();
   delete nif;
+}
+
+radicle_status radicle_nif_node_count(const radicle_nif* nif, size_t* out_count) {
+  clear_error();
+  if (!nif || !out_count) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "nif and out_count are required");
+  *out_count = nif->file.nodes().size();
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_node_block(const radicle_nif* nif, size_t index, uint32_t* out_block) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* node = find_node(nif, index, status);
+  if (!node) return status;
+  if (!out_block) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_block is required");
+  *out_block = node->block;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_node_type(const radicle_nif* nif, size_t index, uint8_t** out_bytes, size_t* out_size) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* node = find_node(nif, index, status);
+  if (!node) return status;
+  return copy_bytes(node->type, out_bytes, out_size);
+}
+
+radicle_status radicle_nif_node_name(const radicle_nif* nif, size_t index, uint8_t** out_bytes, size_t* out_size) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* node = find_node(nif, index, status);
+  if (!node) return status;
+  return copy_bytes(node->name, out_bytes, out_size);
+}
+
+radicle_status radicle_nif_node_parent(const radicle_nif* nif, size_t index, int32_t* out_parent) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* node = find_node(nif, index, status);
+  if (!node) return status;
+  if (!out_parent) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_parent is required");
+  *out_parent = node->parent;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_node_children(const radicle_nif* nif,
+                                         size_t index,
+                                         uint32_t** out_values,
+                                         size_t* out_count) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* node = find_node(nif, index, status);
+  if (!node) return status;
+  return copy_node_refs(node->children, out_values, out_count);
+}
+
+radicle_status radicle_nif_node_transform(const radicle_nif* nif,
+                                          size_t index,
+                                          float* out_translation,
+                                          float* out_rotation,
+                                          float* out_scale) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* node = find_node(nif, index, status);
+  if (!node) return status;
+  if (!out_translation || !out_rotation || !out_scale) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_translation, out_rotation and out_scale are required");
+  }
+  std::memcpy(out_translation, node->local.t, sizeof node->local.t);
+  std::memcpy(out_rotation, node->local.r, sizeof node->local.r);
+  *out_scale = node->local.s;
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_node_for_block(const radicle_nif* nif, uint32_t block, int32_t* out_node) {
+  clear_error();
+  if (!nif || !out_node) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "nif and out_node are required");
+  *out_node = nif->file.node_for_block(block);
+  return RADICLE_STATUS_OK;
 }
 
 radicle_status radicle_nif_shape_count(const radicle_nif* nif, size_t* out_count) {
@@ -173,6 +280,16 @@ radicle_status radicle_nif_shape_transform(const radicle_nif* nif,
   });
 }
 
+radicle_status radicle_nif_shape_parent_node(const radicle_nif* nif, size_t index, int32_t* out_node) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* shape = find_shape(nif, index, status);
+  if (!shape) return status;
+  if (!out_node) return fail(RADICLE_STATUS_INVALID_ARGUMENT, "out_node is required");
+  *out_node = shape->parent_node;
+  return RADICLE_STATUS_OK;
+}
+
 radicle_status radicle_nif_shape_refs(const radicle_nif* nif,
                                       size_t index,
                                       int32_t* out_skin_ref,
@@ -189,6 +306,17 @@ radicle_status radicle_nif_shape_refs(const radicle_nif* nif,
   *out_shader_ref = shape->shader_ref;
   *out_alpha_ref = shape->alpha_ref;
   return RADICLE_STATUS_OK;
+}
+
+radicle_status radicle_nif_shape_warning(const radicle_nif* nif,
+                                         size_t index,
+                                         uint8_t** out_bytes,
+                                         size_t* out_size) {
+  clear_error();
+  radicle_status status = RADICLE_STATUS_OK;
+  const auto* shape = find_shape(nif, index, status);
+  if (!shape) return status;
+  return copy_bytes(shape->warning, out_bytes, out_size);
 }
 
 radicle_status radicle_nif_shape_vertex_count(const radicle_nif* nif, size_t index, size_t* out_count) {
@@ -382,6 +510,11 @@ void radicle_free_floats(float* values) {
 }
 
 void radicle_free_triangles(uint16_t* values) {
+  clear_error();
+  std::free(values);
+}
+
+void radicle_free_node_refs(uint32_t* values) {
   clear_error();
   std::free(values);
 }

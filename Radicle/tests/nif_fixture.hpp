@@ -263,10 +263,7 @@ inline Vertex skinned_vertex(float x, float y, float z, std::uint8_t bone) {
   vertex.weights[0] = 0x3C00;
   vertex.weights[1] = 0x3800;
   vertex.weights[2] = 0x3400;
-  vertex.bones[0] = bone;
-  vertex.bones[1] = static_cast<std::uint8_t>(bone + 1);
-  vertex.bones[2] = 0xFE;
-  vertex.bones[3] = 0xFF;
+  for (int i = 0; i < 4; ++i) vertex.bones[i] = bone;
   return vertex;
 }
 

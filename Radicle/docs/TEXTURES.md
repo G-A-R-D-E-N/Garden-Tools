@@ -61,3 +61,39 @@ real mod textures covering every format: BC2, BC3, BC5, BC7 and the uncompressed
 layouts matched exactly, and BC1 and BC4 differed by at most 1 in the rounding of a
 rare interpolated value. That measurement was not repeated here; this module is the
 same decoder, and `tests/test_dds.cpp` pins the formats it covers.
+
+## Format-specific behaviour
+
+- `reconstruct_z` is refused unless the DXGI format is an unsigned BC5 normal map,
+  `BC5_TYPELESS` (82) or `BC5_UNORM` (83). It raises `std::invalid_argument`, which
+  the C ABI maps to `RADICLE_STATUS_INVALID_ARGUMENT`. `BC5_SNORM` (84) is refused
+  too: its channels are signed, and the reconstruction takes a square root of
+  `1 - x*x - y*y`, which only means anything for the unsigned mapping. Every other
+  format, the uncompressed layouts included, is refused as well, so a caller that
+  asks for a reconstructed Z always gets one or an error, never a silent blue
+  channel from an unrelated layout.
+- The container reader refuses an array size above 65535 and, for a volume
+  texture, a depth above 65535: those are the 16-bit counts a BA2 entry stores.
+- `DdsInfo::payload_size()` multiplies unsigned and checks the product, so a
+  header claiming 65535 mips of 65535x65535 times a 65535-slice array is
+  `InvalidDds` instead of a wrapped byte count. The largest accepted payload is
+  bounded by `INT64_MAX`.
+
+## C ABI thread safety
+
+- `radicle_dds_decode_rgba` and `radicle_dds_info` are pure functions of their
+  input bytes: no state is kept between calls, so they are safe from several
+  threads, and two calls never share a buffer.
+- A returned RGBA buffer is owned by the caller and released with
+  `radicle_free_bytes`; it is not read or written by the library after it is
+  returned.
+
+## Ported block layouts
+
+The ported `src/texture/bcn.cpp` keeps two things verbatim because they are fixed
+spec data that cannot be derived: the 64 two-subset and 64 three-subset BC7
+endpoint/partition tables, byte-identical to the C# port in PluginEditTool, and the
+per-mode endpoint bit widths. Its block shapes are the BC ones: a BC1-style colour
+block is two 565 endpoints plus sixteen 2-bit indices, a BC4-style single-channel
+block is two 8-bit endpoints plus sixteen 3-bit indices, and the BC7 path reads and
+writes 16-byte blocks through an LSB-first bit reader and writer.

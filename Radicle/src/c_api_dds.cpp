@@ -53,6 +53,8 @@ radicle_status radicle_dds_decode_rgba(const uint8_t* bytes,
     return RADICLE_STATUS_OK;
   } catch (const fo4::texture::dds_error& error) {
     return map_dds_error(error);
+  } catch (const std::invalid_argument& error) {
+    return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
   } catch (const std::bad_alloc& error) {
     return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
   } catch (const std::exception& error) {

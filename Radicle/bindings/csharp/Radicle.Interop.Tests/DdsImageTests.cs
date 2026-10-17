@@ -11,7 +11,8 @@ public class DdsImageTests
     private static void PutU32(byte[] bytes, int offset, uint value) =>
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(offset, 4), value);
 
-    // Mirrors Radicle's build_dds_header: a canonical DX10 header for one layout.
+    /* A canonical DX10 header for one layout, the same shape Radicle's
+       build_dds_header writes. */
     private static byte[] Dx10Dds(byte dxgi, byte[] surface, int mipCount = 1, int width = 4, int height = 4)
     {
         var bytes = new byte[148];
@@ -33,6 +34,14 @@ public class DdsImageTests
     }
 
     private static byte[] Bc1White() => new byte[] { 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+    private static byte[] Bc5RedGreen()
+    {
+        var block = new byte[] { 255, 0, 0, 0, 0, 0, 0, 0 };
+        var surface = new List<byte>(block);
+        surface.AddRange(block);
+        return surface.ToArray();
+    }
 
     [Fact]
     public void ReportsTheHeader()
@@ -60,13 +69,22 @@ public class DdsImageTests
     [Fact]
     public void DecodesBc5WithReconstructedZ()
     {
-        var bc4 = new byte[] { 255, 0, 0, 0, 0, 0, 0, 0 };
-        var surface = new List<byte>(bc4);
-        surface.AddRange(bc4);
-        var image = DdsImage.FromBytes(Dx10Dds(83, surface.ToArray()));
+        var image = DdsImage.FromBytes(Dx10Dds(83, Bc5RedGreen()));
         Assert.True(image.IsBc5);
         Assert.Equal(new byte[] { 255, 255, 0, 255 }, image.DecodePixels().Rgba[..4]);
         Assert.Equal(new byte[] { 255, 255, 128, 255 }, image.DecodePixels(reconstructZ: true).Rgba[..4]);
+    }
+
+    [Fact]
+    public void RefusesReconstructZOnFormatsOtherThanUnsignedBc5()
+    {
+        var bc1 = DdsImage.FromBytes(Dx10Dds(71, Bc1White()));
+        var bc1Error = Assert.Throws<RadicleException>(() => bc1.DecodePixels(reconstructZ: true));
+        Assert.Equal(Native.Status.InvalidArgument, bc1Error.Status);
+
+        var snorm = DdsImage.FromBytes(Dx10Dds(84, Bc5RedGreen()));
+        var snormError = Assert.Throws<RadicleException>(() => snorm.DecodePixels(reconstructZ: true));
+        Assert.Equal(Native.Status.InvalidArgument, snormError.Status);
     }
 
     [Fact]
@@ -83,6 +101,26 @@ public class DdsImageTests
         var image = DdsImage.FromBytes(Dx10Dds(28, surface));
         Assert.Equal(28U, image.Format);
         Assert.Equal(new byte[] { 0, 16, 32, 48 }, image.Decode()[..4]);
+    }
+
+    [Fact]
+    public void RejectsAnArraySizeAboveTheSixteenBitCount()
+    {
+        var bytes = Dx10Dds(71, Bc1White());
+        PutU32(bytes, 140, 0x10000U);
+        var error = Assert.Throws<RadicleException>(() => DdsImage.FromBytes(bytes));
+        Assert.Equal(Native.Status.ParseError, error.Status);
+    }
+
+    [Fact]
+    public void RejectsAPayloadThatOverflowsASixtyFourBitByteCount()
+    {
+        var bytes = Dx10Dds(28, new byte[64], mipCount: 255, width: 65535, height: 65535);
+        PutU32(bytes, 24, 0xFFFFU);
+        PutU32(bytes, 112, 0x200000U);
+        PutU32(bytes, 140, 0xFFFFU);
+        var error = Assert.Throws<RadicleException>(() => DdsImage.FromBytes(bytes));
+        Assert.Equal(Native.Status.ParseError, error.Status);
     }
 
     [Fact]

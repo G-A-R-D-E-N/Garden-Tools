@@ -298,6 +298,14 @@ internal static unsafe class Call
         if (values != null) RadicleNative.FreeTriangles(values);
         return result;
     }
+
+    public static uint[] TakeNodeRefs(uint* values, nuint count)
+    {
+        var result = new uint[checked((int)count)];
+        if (count != 0) new ReadOnlySpan<uint>(values, result.Length).CopyTo(result);
+        if (values != null) RadicleNative.FreeNodeRefs(values);
+        return result;
+    }
     public static T[] Copy<T>(IntPtr items, nuint count) where T : unmanaged
     {
         var result = new T[checked((int)count)];
