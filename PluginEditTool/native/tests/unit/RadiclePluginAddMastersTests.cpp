@@ -629,6 +629,7 @@ TEST_CASE("Native CheckForErrors reports an unresolved link in the selected plug
         backend.checkForErrors(nlohmann::json::array({"Broken.esp"}))));
     REQUIRE(rows.size() == 1);
     CHECK(rows[0].at("Code") == "unresolved_link");
+    CHECK(rows[0].at("Detail").is_string());
     CHECK(rows[0].at("FormKey") == "000810:Broken.esp");
     CHECK(rows[0].at("Target") == "000999:Broken.esp");
 

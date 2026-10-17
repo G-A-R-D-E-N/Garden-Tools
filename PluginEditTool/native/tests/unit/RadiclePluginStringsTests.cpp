@@ -325,3 +325,120 @@ TEST_CASE("ListStringTables still lists loose tables when a data directory archi
     CHECK(tables[0]["source"] == "loose");
     CHECK(tables[1]["source"] == "loose");
 }
+
+TEST_CASE("String RPC arguments are validated with distinct error types") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    for (const std::string language : {"e n", "../x", "en-US"}) {
+        const auto refused = backend.invoke("strings.ListStringTables",
+                                            nlohmann::json::array({"Patch.esp", language}));
+        REQUIRE_FALSE(refused.has_value());
+        CHECK(refused.error().type == "InvalidStringLanguage");
+    }
+
+    const auto noName = backend.invoke("strings.ListStringTables", nlohmann::json::array({"", "en"}));
+    REQUIRE_FALSE(noName.has_value());
+    CHECK(noName.error().type == "PluginMissing");
+
+    const auto notLoaded = backend.invoke("strings.ListStringTables", nlohmann::json::array({"Missing.esp", ""}));
+    REQUIRE_FALSE(notLoaded.has_value());
+    CHECK(notLoaded.error().type == "PluginNotLoaded");
+
+    const auto absent = backend.invoke("strings.GetStrings", nlohmann::json::array(
+        {"Patch.esp", "", "ILSTRINGS", "", 0, 200}));
+    REQUIRE_FALSE(absent.has_value());
+    CHECK(absent.error().type == "StringTableUnavailable");
+    CHECK(absent.error().message.find("No ILSTRINGS table for Patch.esp in language en") != std::string::npos);
+
+    const auto badIds = nlohmann::json::array({"x", -1, 4294967296, 1.5, nullptr});
+    for (const auto& id : badIds) {
+        const auto refused = backend.invoke("strings.LookupString",
+                                            nlohmann::json::array({"Patch.esp", "", id}));
+        REQUIRE_FALSE(refused.has_value());
+        CHECK(refused.error().type == "InvalidStringId");
+    }
+
+    const auto badLanguage = backend.invoke("strings.LookupString",
+                                            nlohmann::json::array({"Patch.esp", "a b", 7}));
+    REQUIRE_FALSE(badLanguage.has_value());
+    CHECK(badLanguage.error().type == "InvalidStringLanguage");
+}
+
+TEST_CASE("GetStrings clamps offset and limit and falls back on non-integer paging values") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeStrings(root);
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    const auto low = rowsOf(backend, "GetStrings", nlohmann::json::array(
+        {"Patch.esp", "", "STRINGS", "", -5, 0}));
+    CHECK(low["offset"] == 0);
+    CHECK(low["limit"] == 1);
+    CHECK(low["total"] == 5);
+    REQUIRE(low["rows"].size() == 1);
+
+    const auto high = rowsOf(backend, "GetStrings", nlohmann::json::array(
+        {"Patch.esp", "", "STRINGS", "", 2000000, -7}));
+    CHECK(high["offset"] == 1000000);
+    CHECK(high["limit"] == 1);
+    CHECK(high["total"] == 5);
+    CHECK(high["rows"].empty());
+
+    const auto fallback = rowsOf(backend, "GetStrings", nlohmann::json::array(
+        {"Patch.esp", "", "STRINGS", "", 1.5, "9"}));
+    CHECK(fallback["offset"] == 0);
+    CHECK(fallback["limit"] == 200);
+    CHECK(fallback["rows"].size() == 5);
+}
+
+TEST_CASE("String archive cache follows the archive when it changes or disappears") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto data = root / "Data";
+    const auto archive = data / "Patch - Main.ba2";
+    writeArchive(archive, "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Manzana")}}}));
+    fo4ide::plugin::RadiclePluginBackend backend;
+    backend.setDataDirectory(data);
+    loadPlugin(backend, root);
+
+    const auto first = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(first["rows"].size() == 1);
+    CHECK(first["rows"][0]["text"] == "Manzana");
+
+    const auto original = std::filesystem::last_write_time(archive);
+    writeArchive(archive, "Strings\\Patch_es.STRINGS",
+                 fo4::localization::write_string_table(
+                     {StringTableKind::strings, {{10, rawBytes("Pera de agua")}}}));
+    std::filesystem::last_write_time(archive, original + std::chrono::seconds(2));
+    const auto changed = rowsOf(backend, "GetStrings", nlohmann::json::array({"Patch.esp", "es", "STRINGS", "", 0, 200}));
+    REQUIRE(changed["rows"].size() == 1);
+    CHECK(changed["rows"][0]["text"] == "Pera de agua");
+
+    std::filesystem::remove(archive);
+    const auto gone = rowsOf(backend, "ListStringTables", nlohmann::json::array({"Patch.esp", "es"}));
+    CHECK(gone.empty());
+}
+
+TEST_CASE("A corrupt loose string table is reported as StringTableInvalid") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    std::filesystem::create_directories(root / "Strings");
+    {
+        std::ofstream stream(root / "Strings" / "Patch_en.STRINGS", std::ios::binary);
+        stream.write("\xE8\x03\x00\x00\x00\x00\x00\x00", 8);
+    }
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadPlugin(backend, root);
+
+    const auto refused = backend.invoke("strings.ListStringTables", nlohmann::json::array({"Patch.esp", ""}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "StringTableInvalid");
+    CHECK(refused.error().message.starts_with("could not read string tables: "));
+}

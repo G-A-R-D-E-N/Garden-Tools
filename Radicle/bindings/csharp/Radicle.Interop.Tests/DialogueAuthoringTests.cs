@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Radicle.Interop.Native;
 using Xunit;
@@ -164,5 +165,16 @@ public class DialogueAuthoringTests
         Assert.Null(scene.Actions[1].EndPhase);
         Assert.Equal("SNAM", Assert.Single(scene.Actions[1].Payload).Signature);
         Assert.Equal(Quest, scene.ParentQuest);
+    }
+
+    [Fact]
+    public void SceneGroupCountOfAMissingRecordThrowsKeyNotFoundAndWrongTypeIsRefused()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write(Plugin, Source());
+        using var plugin = PluginFile.Read(path);
+
+        Assert.Throws<KeyNotFoundException>(() => plugin.SceneGroupCount(K(0x8FF), ScenePart.Actor));
+        Assert.Equal(Status.InvalidArgument, Refusal(() => plugin.SceneGroupCount(Topic, ScenePart.Actor)));
     }
 }

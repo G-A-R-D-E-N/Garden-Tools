@@ -77,6 +77,22 @@ public class DialogueTests
     }
 
     [Fact]
+    public void ResolveDialogueTextReturnsNullForAbsentAndMalformedAndUtf8ForInline()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.Write("Dialogue.esm", Build(0x81, Array.Empty<string>(), Top("INFO", new Rec("INFO", 0x800,
+            new[] { ("TRDA", Response(1)), ("NAM1", U32(123)), ("RNAM", U32(456)) }))));
+        temp.Write("Dialogue_en.STRINGS", StringsWriter.Table((456, "prompt")));
+        temp.Write("Dialogue_en.ILSTRINGS", U32(1, 13, 123, 0, 9).Concat(Z("response")).ToArray());
+        using var env = RadicleEnvironment.Load(new[] { path }); using var tables = StringTables.Load(env, temp.Path);
+        var record = env.Winner(new FormKey("Dialogue.esm", 0x800))!.Value;
+
+        Assert.Null(tables.ResolveDialogueText(record, "NAM1", new(NameKind.Absent, null, 123)));
+        Assert.Null(tables.ResolveDialogueText(record, "NAM1", new(NameKind.Malformed, null, 123)));
+        Assert.Equal(new byte[] { 0x63, 0x61, 0x66, 0xC3, 0xA9 }, tables.ResolveDialogueText(record, "NAM1", new(NameKind.Inline, "café", 0)));
+    }
+
+    [Fact]
     public void SceneGetterCopiesScopedGroupsAndOpaqueActionPayloads()
     {
         using var temp = new TempDirectory();

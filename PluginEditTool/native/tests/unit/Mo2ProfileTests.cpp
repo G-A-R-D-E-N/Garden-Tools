@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -37,6 +38,14 @@ void writeFile(const std::filesystem::path& path, std::string_view contents = {}
     std::filesystem::create_directories(path.parent_path());
     std::ofstream stream(path, std::ios::binary);
     stream << contents;
+}
+
+std::string withHedrVersion(std::string bytes, std::uint32_t floatBits) {
+    const auto pos = bytes.find("HEDR");
+    for (std::size_t i = 0; i < 4; ++i) {
+        bytes[pos + 6 + i] = static_cast<char>((floatBits >> (8 * i)) & 0xFFu);
+    }
+    return bytes;
 }
 
 }
@@ -370,4 +379,134 @@ TEST_CASE("MO2 profile surfaces a plugins.txt control-character line as a warnin
     CHECK(reported);
     const std::vector<std::string> expected{"Fallout4.esm"};
     CHECK(snapshot->loadOrder == expected);
+}
+
+TEST_CASE("MO2 profile refuses a profile without plugins.txt") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "modlist.txt", "+High\n");
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE_FALSE(snapshot.has_value());
+    CHECK(snapshot.error().type == "Mo2PluginsMissing");
+    CHECK(snapshot.error().message == "plugins.txt not found for profile 'Test'");
+}
+
+TEST_CASE("MO2 profile refuses a load order whose checked plugin has a master with HEDR version above 1.0") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*Example.esp\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(gameData / "Mid.esm", withHedrVersion(minimalPlugin(0x1, "mid"), 0x3FC00000u));
+    writeFile(gameData / "Example.esp", minimalPlugin(0, "example", {"Mid.esm"}));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE_FALSE(snapshot.has_value());
+    CHECK(snapshot.error().type == "Mo2LoadOrderInvalid");
+    CHECK(snapshot.error().message.find("Example.esp: master Mid.esm has HEDR version above 1.0") != std::string::npos);
+}
+
+TEST_CASE("MO2 profile warns and leaves unchecked a plugin with HEDR version above 1.0") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*Big.esp\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(gameData / "Big.esp", withHedrVersion(minimalPlugin(0, "big"), 0x3FC00000u));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    const std::vector<std::string> warnings{"Big.esp: HEDR version is above 1.0; unchecked"};
+    CHECK(snapshot->warnings == warnings);
+    const std::vector<std::string> loadOrder{"Fallout4.esm"};
+    CHECK(snapshot->loadOrder == loadOrder);
+    const std::vector<std::string> missing{"Big.esp"};
+    CHECK(snapshot->missingPlugins == missing);
+}
+
+TEST_CASE("MO2 profile reports a plugin with an unreadable header as a warning") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*Broken.esp\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(gameData / "Broken.esp", "garbage");
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    const std::vector<std::string> warnings{"Broken.esp: unable to read the TES4 record header"};
+    CHECK(snapshot->warnings == warnings);
+    const std::vector<std::string> loadOrder{"Fallout4.esm"};
+    CHECK(snapshot->loadOrder == loadOrder);
+    const std::vector<std::string> missing{"Broken.esp"};
+    CHECK(snapshot->missingPlugins == missing);
+}
+
+TEST_CASE("MO2 profile refuses masters that form a cycle") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*A.esm\n*B.esm\n");
+    writeFile(gameData / "Fallout4.esm", minimalPlugin(0x1, "base"));
+    writeFile(gameData / "A.esm", minimalPlugin(0x1, "a", {"B.esm"}));
+    writeFile(gameData / "B.esm", minimalPlugin(0x1, "b", {"A.esm"}));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE_FALSE(snapshot.has_value());
+    CHECK(snapshot.error().type == "Mo2LoadOrderInvalid");
+    CHECK(snapshot.error().message.find("masters form a cycle") != std::string::npos);
+}
+
+TEST_CASE("MO2 profile reports Fallout4.esm missing when no root has it") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto game = root / "Game";
+    const auto gameData = game / "Data";
+    const auto profile = root / "profiles" / "Test";
+
+    writeFile(root / "ModOrganizer.ini",
+        "selected_profile=Test\n"
+        "gamePath=" + game.string() + "\n");
+    writeFile(profile / "plugins.txt", "*Example.esp\n");
+    writeFile(gameData / "Example.esp", minimalPlugin(0, "example"));
+
+    auto snapshot = fo4ide::mo2::readProfile(root);
+    REQUIRE(snapshot.has_value());
+    const std::vector<std::string> missing{"Fallout4.esm"};
+    CHECK(snapshot->missingPlugins == missing);
+    REQUIRE(snapshot->plugins.size() == 2);
+    CHECK(snapshot->plugins[0].name == "Fallout4.esm");
+    CHECK(snapshot->plugins[0].path.empty());
+    CHECK_FALSE(snapshot->plugins[0].resolved);
 }

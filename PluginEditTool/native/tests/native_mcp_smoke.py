@@ -136,6 +136,50 @@ def main(executable):
                 assert read_record() == "Saved Eyes"
                 assert path.read_bytes() == saved
                 assert listed()["Pending"] is False
+                gap = "NativeMcpGap.esp"
+                call("create_plugin", {"plugin": gap})
+                gap_path = root / "overwrite" / gap
+                gap_base = gap_path.read_bytes()
+                tools = {tool["name"]: tool for tool in rpc("tools/list")["tools"]}
+                for name in ("create_placed_object", "create_interior_cell", "get_leveled_list", "set_leveled_list_settings", "edit_leveled_list_entry", "get_npc", "edit_npc_entries", "get_faction", "edit_faction_entries", "get_weapon_damage_types"):
+                    assert name in tools, f"Missing MCP tool: {name}"
+                placed_schema = tools["create_placed_object"]["inputSchema"]
+                assert placed_schema["properties"]["x"]["type"] == "number", placed_schema
+                assert placed_schema["properties"]["persistent"]["type"] == "boolean", placed_schema
+                assert set(placed_schema["required"]) == {"plugin", "cell", "baseObject", "x", "y", "z"}, placed_schema
+                assert placed_schema["additionalProperties"] is False, placed_schema
+                leveled_schema = tools["set_leveled_list_settings"]["inputSchema"]
+                assert leveled_schema["properties"]["flags"]["type"] == "integer", leveled_schema
+                assert set(leveled_schema["required"]) == {"plugin", "form_key", "chance_none", "max_count", "flags"}, leveled_schema
+                placed_args = {"plugin": gap, "cell": "000800:NativeMcpGap.esp", "baseObject": "000801:NativeMcpGap.esp", "x": 1, "y": 2, "z": 3}
+                assert call("create_placed_object", {"plugin": gap, "cell": "000800:NativeMcpGap.esp", "baseObject": "000801:NativeMcpGap.esp", "x": 1, "y": 2}, failed=True) == "Missing argument: z"
+                assert call("create_placed_object", dict(placed_args, x="1"), failed=True) == "x must be number"
+                assert call("create_placed_object", dict(placed_args, persistent=1), failed=True) == "persistent must be boolean"
+                assert call("create_placed_object", dict(placed_args, foo=1), failed=True) == "Unknown argument: foo"
+                leveled_args = {"plugin": gap, "form_key": "000800:NativeMcpGap.esp", "chance_none": 1, "max_count": 1}
+                assert call("set_leveled_list_settings", dict(leveled_args, flags=1.5), failed=True) == "flags must be integer"
+                assert call("set_leveled_list_settings", dict(leveled_args, flags=256), failed=True).startswith("InvalidLeveledListSettings: ")
+                assert call("create_interior_cell", {"plugin": gap, "editor_id": ""}, failed=True).startswith("InteriorCellArgumentsMissing: ")
+                assert call("edit_leveled_list_entry", {"plugin": gap, "form_key": "000800:NativeMcpGap.esp", "op": "bogus", "index": 0}, failed=True).startswith("InvalidLeveledListOperation: ")
+                assert gap_path.read_bytes() == gap_base
+                outer = json.loads(call("create_record", {"plugin": gap, "type": "LVLI", "payload": {"editorId": "McpGapOuter", "chanceNone": 5, "maxCount": 2, "flags": 1}}))["formKey"]
+                inner = json.loads(call("create_record", {"plugin": gap, "type": "LVLI", "payload": {"editorId": "McpGapInner", "chanceNone": 0, "maxCount": 0, "flags": 0}}))["formKey"]
+                eyes = json.loads(call("create_record", {"plugin": gap, "type": "EYES", "payload": {"editorId": "McpGapEyes", "fullText": "Eyes", "icon": "Textures\\Eyes\\gap.dds"}}))["formKey"]
+                cell = json.loads(call("create_interior_cell", {"plugin": gap, "editor_id": "McpGapRoom"}))["formKey"]
+                assert call("create_interior_cell", {"plugin": gap, "editor_id": "mcpgaproom"}, failed=True).startswith("InteriorCellCreateFailed: ")
+                placed = json.loads(call("create_placed_object", {"plugin": gap, "cell": cell, "baseObject": eyes, "x": 1.5, "y": 2, "z": 3}))
+                assert placed["ok"] is True and placed["formKey"], placed
+                listed_outer = json.loads(call("get_leveled_list", {"form_key": outer}))
+                assert listed_outer["chanceNone"] == 5 and listed_outer["maxCount"] == 2 and listed_outer["flags"] == 1 and listed_outer["entries"] == [], listed_outer
+                call("set_leveled_list_settings", {"plugin": gap, "form_key": outer, "chance_none": 9, "max_count": 3, "flags": 2})
+                call("edit_leveled_list_entry", {"plugin": gap, "form_key": outer, "op": "add", "index": 0, "value": {"level": 1, "item": inner, "count": 1, "chanceNone": 0}})
+                edited = json.loads(call("get_leveled_list", {"form_key": outer}))
+                assert edited["chanceNone"] == 9 and edited["maxCount"] == 3 and edited["flags"] == 2, edited
+                assert edited["entries"][0]["item"] == inner, edited
+                assert gap_path.read_bytes() == gap_base
+                call("save_plugin", {"plugin": gap})
+                assert gap_path.read_bytes() != gap_base
+                assert json.loads(call("get_leveled_list", {"form_key": outer})) == edited
             finally:
                 deadline.cancel()
                 process.stdin.close()

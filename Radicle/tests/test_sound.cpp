@@ -290,6 +290,36 @@ TEST_F(SoundTest, CAbiRejectsACycleAndNullArgumentsWithoutAList) {
   radicle_env_destroy(abi);
 }
 
+TEST_F(SoundTest, CAbiResolveFilesRefusesARecordFromAnotherEnvironment) {
+  write({{"SNDR", 0x800, {{"CNAM", words({0x1EEF540A})}, {"ANAM", text("sound\\one.xwm")}, {"ANAM", text("sound\\two.wav")}}}});
+  const auto name = path.string(); const char* names[] = {name.c_str()};
+  radicle_env* env_a = nullptr; radicle_env* env_b = nullptr;
+  ASSERT_EQ(radicle_env_load(names, 1, &env_a), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_load(names, 1, &env_b), RADICLE_STATUS_OK);
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(env_a, radicle_form_key{"Sound.esm", 0x800}, &handle), RADICLE_STATUS_OK);
+  const radicle_sound_file_list* list = nullptr;
+  EXPECT_EQ(radicle_sound_resolve_files(env_b, handle, &list), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_NE(std::string(radicle_last_error()).find("does not belong"), std::string::npos);
+  EXPECT_EQ(list, nullptr);
+  ASSERT_EQ(radicle_sound_resolve_files(env_a, handle, &list), RADICLE_STATUS_OK);
+  ASSERT_EQ(list->file_count, 2u);
+  radicle_sound_file_list_free(list); radicle_env_destroy(env_b); radicle_env_destroy(env_a);
+}
+
+TEST_F(SoundTest, CAbiResolveFilesOfANonSoundRecordFailsClosedWithoutAList) {
+  write({{"STAT", 0x800, {{"DATA", words({0})}}}});
+  const auto name = path.string(); const char* names[] = {name.c_str()}; radicle_env* abi = nullptr;
+  ASSERT_EQ(radicle_env_load(names, 1, &abi), RADICLE_STATUS_OK);
+  const radicle_record* handle = nullptr;
+  ASSERT_EQ(radicle_env_winner(abi, radicle_form_key{"Sound.esm", 0x800}, &handle), RADICLE_STATUS_OK);
+  const radicle_sound_file_list* list = nullptr;
+  EXPECT_NE(radicle_sound_resolve_files(abi, handle, &list), RADICLE_STATUS_OK);
+  EXPECT_EQ(list, nullptr);
+  EXPECT_FALSE(std::string(radicle_last_error()).empty());
+  radicle_env_destroy(abi);
+}
+
 std::vector<fo4::env::SoundRateFile> rates(std::initializer_list<std::uint32_t> values) {
   std::vector<fo4::env::SoundRateFile> out;
   for (const auto value : values) out.push_back({value, {}});

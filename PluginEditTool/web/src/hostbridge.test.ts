@@ -65,3 +65,24 @@ it('preserves the legacy host objects on app.local', async () => {
   expect(window.chrome?.webview).toBe(legacyWebview);
   expect(fetchStub).not.toHaveBeenCalled();
 });
+
+it('exposes the strings host object over HTTP RPC', async () => {
+  vi.stubGlobal('window', {
+    location: new URL('http://127.0.0.1:49152/#/main'),
+    chrome: undefined,
+  });
+  const fetchRpc = fetchMock({
+    ok: true,
+    json: async () => ({ ok: true, value: '[]' }),
+  });
+  vi.stubGlobal('fetch', fetchRpc);
+
+  await import('./hostbridge');
+
+  expect(await window.chrome?.webview?.hostObjects?.strings?.ListStringTables('Mod.esp', 'en')).toBe('[]');
+  expect(fetchRpc).toHaveBeenCalledWith('/rpc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: 'strings', method: 'ListStringTables', args: ['Mod.esp', 'en'] }),
+  });
+});

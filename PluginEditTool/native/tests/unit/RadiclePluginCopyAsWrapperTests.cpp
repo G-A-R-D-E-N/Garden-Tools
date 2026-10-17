@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <fo4/forms/leveled_list.hpp>
+#include <fo4/plugin/mutation.hpp>
 #include <fo4/plugin/reader.hpp>
 #include <fo4/plugin/writer.hpp>
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
@@ -209,6 +210,27 @@ void saveTarget(fo4ide::plugin::RadiclePluginBackend& backend) {
     REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Target.esp"})).has_value());
 }
 
+std::vector<std::byte> readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    REQUIRE(stream.good());
+    const auto size = stream.tellg();
+    REQUIRE(size >= 0);
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+    stream.seekg(0);
+    if (!bytes.empty()) {
+        stream.read(reinterpret_cast<char*>(bytes.data()),
+                    static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(stream.good());
+    }
+    return bytes;
+}
+
+bool pendingPlugin(fo4ide::plugin::RadiclePluginBackend& backend, std::size_t index) {
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    return nlohmann::json::parse(plugins->get<std::string>()).at(index).at("Pending").get<bool>();
+}
+
 }
 
 TEST_CASE("Native CopyAsWrapper overrides an LVLI and keeps its FormKey and EDID") {
@@ -405,6 +427,111 @@ TEST_CASE("Native CopyAsWrapper gives an existing override the source EDID") {
     REQUIRE(wrapper != nullptr);
     CHECK(editorIdOf(*wrapper) == "MasterList");
 }
+
+TEST_CASE("Native CopyAsWrapper refuses malformed arguments and unknown plugins without staging") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    fo4ide::plugin::RadiclePluginBackend backend;
+    loadWrapperEnvironment(backend, root);
+    const auto before = readBytes(root / "Target.esp");
+
+    const std::vector<std::pair<nlohmann::json, std::string>> refusals{
+        {nlohmann::json::array({"", "000804:Master.esm", "Target.esp", "W"}), "SourcePluginMissing"},
+        {nlohmann::json::array({"Master.esm", "", "Target.esp", "W"}), "FormKeyMissing"},
+        {nlohmann::json::array({"Master.esm", "000804:Master.esm", "", "W"}), "TargetPluginMissing"},
+        {nlohmann::json::array({"Master.esm", "000804:Master.esm", "Target.esp", 5}), "InvalidEditorId"},
+        {nlohmann::json::array({"Master.esm", "000804:Master.esm", "Target.esp", nlohmann::json::object()}), "InvalidEditorId"},
+        {nlohmann::json::array({"Master.esm", "zz", "Target.esp", "W"}), "InvalidFormKey"},
+        {nlohmann::json::array({"Nope.esm", "000804:Master.esm", "Target.esp", "W"}), "SourcePluginNotLoaded"},
+        {nlohmann::json::array({"Master.esm", "000804:Master.esm", "Nope.esp", "W"}), "TargetPluginNotLoaded"},
+        {nlohmann::json::array({"Master.esm", "000899:Master.esm", "Target.esp", "W"}), "RecordNotFound"}
+    };
+    for (const auto& [arguments, type] : refusals) {
+        INFO(type);
+        const auto rejected = backend.copyAsWrapper(arguments);
+        REQUIRE_FALSE(rejected.has_value());
+        CHECK(rejected.error().type == type);
+    }
+    CHECK_FALSE(pendingPlugin(backend, 1));
+    const bool unchanged = readBytes(root / "Target.esp") == before;
+    CHECK(unchanged);
+}
+
+TEST_CASE("Native CopyAsWrapper is refused on a protected target and when the target changed on disk") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+
+    const auto protectedRoot = root / "protected";
+    writeBytes(protectedRoot / "Master.esm", makeWrapperMaster());
+    writeBytes(protectedRoot / "Target.esp", makeWrapperTarget());
+    const auto protectedBefore = readBytes(protectedRoot / "Target.esp");
+    fo4ide::plugin::RadiclePluginBackend protectedBackend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Master.esm", protectedRoot / "Master.esm"),
+            nlohmann::json{
+                {"name", "Target.esp"},
+                {"path", (protectedRoot / "Target.esp").string()},
+                {"source", "data"},
+                {"resolved", true}
+            }
+        })}
+    };
+    REQUIRE(protectedBackend.invoke("environment.LoadMo2", environment).has_value());
+    const auto refused = protectedBackend.copyAsWrapper(nlohmann::json::array(
+        {"Master.esm", "000804:Master.esm", "Target.esp", "WrapList"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "PluginReadOnly");
+    CHECK_FALSE(pendingPlugin(protectedBackend, 1));
+    const bool protectedUnchanged = readBytes(protectedRoot / "Target.esp") == protectedBefore;
+    CHECK(protectedUnchanged);
+
+    const auto changedPath = root / "changed" / "Target.esp";
+    fo4ide::plugin::RadiclePluginBackend changedBackend;
+    loadWrapperEnvironment(changedBackend, root / "changed");
+    const auto loadedTime = std::filesystem::last_write_time(changedPath);
+    writeBytes(changedPath, makeWrapperTarget());
+    std::filesystem::last_write_time(changedPath, loadedTime + std::chrono::seconds(2));
+    const auto changed = changedBackend.copyAsWrapper(nlohmann::json::array(
+        {"Master.esm", "000804:Master.esm", "Target.esp", "WrapList"}));
+    REQUIRE_FALSE(changed.has_value());
+    CHECK(changed.error().type == "PluginChangedOnDisk");
+    CHECK_FALSE(pendingPlugin(changedBackend, 1));
+}
+
+TEST_CASE("Native CopyAsWrapper reports LOSES and stages nothing when a later plugin overrides the record") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    writeBytes(root / "Master.esm", makeWrapperMaster());
+    writeBytes(root / "Target.esp", makeWrapperTarget());
+    auto later = fo4::make_empty_plugin("Later.esp");
+    REQUIRE(fo4::copy_record_as_override(
+        later, fo4::read_plugin_file(root / "Master.esm"), fo4::FormKey::parse("000804:Master.esm"), false) ==
+        fo4::RecordCopyStatus::inserted);
+    fo4::write_plugin_file(later, root / "Later.esp");
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Master.esm", root / "Master.esm"),
+            pluginEntry("Target.esp", root / "Target.esp"),
+            pluginEntry("Later.esp", root / "Later.esp")
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+    const auto recordsBefore = fo4::collect_records(fo4::read_plugin_file(root / "Target.esp")).size();
+
+    const auto message = textResult(backend.copyAsWrapper(nlohmann::json::array(
+        {"Master.esm", "000804:Master.esm", "Target.esp", "WrapList"})));
+    CHECK(message.starts_with("LOSES: Target.esp loads before Later.esp, which also override 000804:Master.esm."));
+    CHECK_FALSE(pendingPlugin(backend, 1));
+
+    saveTarget(backend);
+    const auto reloaded = fo4::read_plugin_file(root / "Target.esp");
+    CHECK(fo4::find_record(reloaded, fo4::FormKey::parse("000804:Master.esm")) == nullptr);
+    CHECK(fo4::collect_records(reloaded).size() == recordsBefore);
+}
+
 
 TEST_CASE("Native CopyAsWrapper refuses an EDID-changed override that also has an extra entry") {
     const auto root = tempRoot();

@@ -480,3 +480,63 @@ TEST_CASE("AppInterop keeps the old snapshot when reload is blocked by pending e
     REQUIRE(loaded.has_value());
     CHECK(snapshotNames(*loaded) == std::vector<std::string>{"Fallout4.esm", "Example.esp", "Second.esp"});
 }
+
+TEST_CASE("AppInterop GetMo2Status exposes load order warnings") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    makeProfile(root);
+    writeFile(root / "Game" / "Fallout4.ccc", "ccGone.esl\n");
+
+    fo4ide::settings::Store store(root / "settings.json");
+    fo4ide::settings::SharedSettings settings;
+    FakePlatform platform;
+    fo4ide::plugin::NullPluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()})).has_value());
+
+    auto status = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(status.has_value());
+    CHECK(status->at("warnings") == nlohmann::json::array({"ccGone.esl: listed in Fallout4.ccc but not in Data"}));
+
+    const auto clean = root / "clean";
+    makeProfile(clean);
+    fo4ide::settings::Store cleanStore(clean / "settings.json");
+    fo4ide::settings::SharedSettings cleanSettings;
+    fo4ide::app::AppInteropTarget cleanTarget(cleanStore, cleanSettings, platform, plugins);
+    REQUIRE(cleanTarget.invoke("OpenMo2Profile", nlohmann::json::array({clean.string()})).has_value());
+
+    auto cleanStatus = cleanTarget.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(cleanStatus.has_value());
+    REQUIRE(cleanStatus->at("warnings").is_array());
+    CHECK(cleanStatus->at("warnings").empty());
+}
+
+TEST_CASE("AppInterop ReloadMo2Profile keeps the loaded profile when the new load order is invalid") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    makeProfile(root);
+
+    fo4ide::settings::Store store(root / "settings.json");
+    fo4ide::settings::SharedSettings settings;
+    FakePlatform platform;
+    FakePluginBackend plugins;
+    fo4ide::app::AppInteropTarget target(store, settings, platform, plugins);
+    REQUIRE(target.invoke("OpenMo2Profile", nlohmann::json::array({root.string()})).has_value());
+    REQUIRE(plugins.loadMo2Calls == 1);
+
+    auto status = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(status.has_value());
+    const auto pluginCount = status->at("pluginCount").get<std::size_t>();
+
+    writeFile(root / "Game" / "Data" / "Mid.esm", minimalPlugin(0x1, "mid", {"Absent.esm"}));
+    writeFile(root / "Game" / "Data" / "Example.esp", minimalPlugin(0, "example", {"Mid.esm"}));
+
+    auto reloaded = target.invoke("ReloadMo2Profile", nlohmann::json::array());
+    REQUIRE_FALSE(reloaded.has_value());
+    CHECK(reloaded.error().type == "Mo2LoadOrderInvalid");
+    CHECK(plugins.loadMo2Calls == 1);
+
+    status = target.invoke("GetMo2Status", nlohmann::json::array());
+    REQUIRE(status.has_value());
+    CHECK(status->at("pluginCount").get<std::size_t>() == pluginCount);
+}

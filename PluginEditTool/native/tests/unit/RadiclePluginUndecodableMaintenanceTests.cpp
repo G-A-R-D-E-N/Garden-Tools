@@ -184,3 +184,58 @@ TEST_CASE("Native CleanUnusedMasters names the undecodable record that blocks it
     undecodableExpectNothingPending(backend);
     CHECK(undecodableReadBytes(path) == before);
 }
+
+TEST_CASE("Native DeleteRecord refuses while a loaded plugin has an undecodable record") {
+    const auto root = undecodableTempRoot();
+    UndecodableCleanup cleanup{root};
+    const auto patchPath = root / "Patch.esp";
+    const auto hiddenPath = root / "Hidden.esp";
+    undecodableWriteBytes(patchPath, undecodableEmptyPatchBytes());
+    undecodableWriteBytes(hiddenPath, undecodableRaceSourceBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    undecodableLoad(backend, nlohmann::json::array({
+        undecodablePluginEntry("Patch.esp", patchPath),
+        undecodablePluginEntry("Hidden.esp", hiddenPath)
+    }));
+    const auto patchBefore = undecodableReadBytes(patchPath);
+    const auto hiddenBefore = undecodableReadBytes(hiddenPath);
+
+    const auto refused = backend.invokeBackend(
+        "DeleteRecord", nlohmann::json::array({"Patch.esp", "000800:Patch.esp"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "ReferenceCoverageIncomplete");
+    CHECK(refused.error().message.find("delete safety") != std::string::npos);
+    CHECK(refused.error().message.find("Hidden.esp") != std::string::npos);
+    undecodableExpectNothingPending(backend);
+    CHECK(undecodableReadBytes(patchPath) == patchBefore);
+    CHECK(undecodableReadBytes(hiddenPath) == hiddenBefore);
+}
+
+TEST_CASE("Native RenumberRecord refuses while a loaded plugin has an undecodable record") {
+    const auto root = undecodableTempRoot();
+    UndecodableCleanup cleanup{root};
+    const auto patchPath = root / "Patch.esp";
+    const auto hiddenPath = root / "Hidden.esp";
+    undecodableWriteBytes(patchPath, undecodableEmptyPatchBytes());
+    undecodableWriteBytes(hiddenPath, undecodableRaceSourceBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    undecodableLoad(backend, nlohmann::json::array({
+        undecodablePluginEntry("Patch.esp", patchPath),
+        undecodablePluginEntry("Hidden.esp", hiddenPath)
+    }));
+    const auto patchBefore = undecodableReadBytes(patchPath);
+    const auto hiddenBefore = undecodableReadBytes(hiddenPath);
+
+    const auto refused = backend.invokeBackend(
+        "RenumberRecord",
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "000801:Patch.esp"}));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "ReferenceCoverageIncomplete");
+    CHECK(refused.error().message.find("renumber safety") != std::string::npos);
+    CHECK(refused.error().message.find("Hidden.esp") != std::string::npos);
+    undecodableExpectNothingPending(backend);
+    CHECK(undecodableReadBytes(patchPath) == patchBefore);
+    CHECK(undecodableReadBytes(hiddenPath) == hiddenBefore);
+}
