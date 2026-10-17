@@ -168,6 +168,7 @@ public partial class MainWindow : Window
     private string _pendingSourceFolder = "";
     private string? _ragdollSourceName;
     private string? _ragdollSourceNote;
+    private string? _ragdollSiblingName;
 
     private PhysicsLoadReport? _ragdollReport;
     private string _ragdollReportPath = "";
@@ -224,6 +225,12 @@ public partial class MainWindow : Window
     private readonly List<(NifShape Shape, SkinnedMesh.Binding Binding, List<(int From, int To)> Edges)>
         _meshShapes = new();
     private string _meshPath = "";
+    private readonly List<int[]> _meshTriangles = new();
+    private Viewport3D? _viewport;
+    private MeshGeometry? _viewportMesh;
+    private int _viewportMeshVersion;
+    private string _meshMode = MeshModeShaded;
+    private double _meshSkinMilliseconds;
 
     private readonly TextBox _projectSearchText =
         Ux.Field("name, class, event, variable, animation or field", 360);

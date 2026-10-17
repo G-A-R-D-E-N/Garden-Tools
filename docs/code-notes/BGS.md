@@ -1226,4 +1226,101 @@ The two ribbons read as one run of words. Every `ToolRow` now keeps an 18 px gap
 
 ## BGS/tools/uismoke/Smoke.SkeletonSibling.cs — two creatures in one extract folder
 
-The new check packs the genuine `TurretIdleWeapReady.hkx` and `TurretStandingSkeleton.hkx` samples into a synthetic archive, copies the clip into the folder the app extracts archive entries into, and lays a second creature's `TurretMountedSkeleton.hkx` beside it. The mounted name sorts first, and the check first proves `MainWindow.SiblingSkeletonPath` picks it, so the resolution checks cannot pass by accident. It then asserts that a hinted resolution and a real `OpenArchiveForTest` open both take the packed standing skeleton, that the Animation tab names it by its bone count, that a hint folder which lacks the entry falls back to the settings game data folder, that `MainWindow.DataFolderDiscoveriesForTest` counts one `GameData.Discover` for the whole open, and that the folder of the archives that open discovered can be deleted again once the window has closed, which it cannot while a lookup still holds them open. It runs in the default uismoke mode from `RagdollLifecycleSmoke.Run`. `BGS/tools/uismoke/Smoke.ToolbarPng.cs` now also renders `ui-playback-enabled.png` beside the two toolbar shots, on the packed turret clip, so the transport and the tool panel are seen enabled as well as out of reach.
+The new check packs the genuine `TurretIdleWeapReady.hkx` and `TurretStandingSkeleton.hkx` samples into a synthetic archive, copies the clip into the folder the app extracts archive entries into, and lays a second creature's `TurretMountedSkeleton.hkx` beside it. The mounted name sorts first, and the check first proves `MainWindow.SiblingSkeletonPath` picks it, so the resolution checks cannot pass by accident. It then asserts that a hinted resolution and a real `OpenArchiveForTest` open both take the packed standing skeleton, that the Animation tab names it by its bone count, that a hint folder which lacks the entry falls back to the settings game data folder, that `MainWindow.DataFolderDiscoveriesForTest` counts one `GameData.Discover` for the whole open, and that the folder of the archives that open discovered can be deleted again once the window has closed, which it cannot while a lookup still holds them open. It runs in the default uismoke mode from `RagdollLifecycleSmoke.Run`. `BGS/tools/uismoke/Smoke.ToolbarPng.cs` now also renders `ui-playback-enabled.png` beside the two toolbar shots, on the packed turret clip, so the transport and the tool panel are seen enabled as well as out of reach.## `BGS/app/Viewport3D.cs` — GPU playback viewport (#668)
+
+The Playback tab can draw the skinned mesh as shaded triangles. `Viewport3D` derives from
+`Avalonia.OpenGL.Controls.OpenGlControlBase` and binds OpenGL through `Silk.NET.OpenGL` 2.23.0,
+loaded from the context Avalonia hands to `OnOpenGlInit` with `GL.GetApi(gl.GetProcAddress)`.
+
+Vertex and fragment programs live as C# string constants in `Viewport3D.cs`, with a desktop
+(`#version 330 core`) and a GLES (`#version 300 es`) variant of each. `OnOpenGlInit` reads
+`GL_VERSION` and picks the pair that matches the context Avalonia created, because the Windows
+backend usually hands out ANGLE's GLES. The shaded program lights the surface with one key and one
+fill Lambert term in world space, leaves culling off, and flips the normal on `gl_FrontFacing` so
+double-sided Fallout 4 shapes light correctly from either side.
+
+### One camera for both renderers
+
+`ViewportCamera` is the single description of the orbit state: yaw, pitch, zoom, pan in pixels,
+centre and fit. `SkeletonView` still owns those fields and exposes them as `CameraState`, so its
+`Project` and the GL matrices are built from the same numbers. `Project` is
+`width / 2 + x * scale + panX`, `height / 2 - up * scale + panY` with
+`scale = min(width, height) / (fit * 2.6) * zoom`, which is orthographic: depth never moves a
+screen position. The GL side therefore uses an orthographic projection too, not a perspective one,
+packed into `ViewportCamera.View()` and `ViewportCamera.Projection()` with pan folded into the
+off-centre bounds and a depth range of `fit * 32` either way. `Viewport3DTests` proves the two
+paths agree on sample points, so the 2D overlays (bones, labels, bodies, constraints, frames and
+the mesh wireframe) land exactly on the shaded surface.
+
+### Mesh upload
+
+`MeshGeometry` and `MeshPart` are the renderer-facing abstraction: positions, triangle indices and
+optional normals and uvs. Radicle can supply normals and uvs per part later without touching the
+upload path; a part that carries no normals gets area-weighted vertex normals computed from its own
+skinned triangles (`MeshGeometry.ComputeNormals`). Skinning stays where it was,
+`SkinnedMesh.Pose` in CPU linear-blend form, and `MainWindow.UpdateMesh` now builds one
+`MeshGeometry` from the same posed vertex arrays that feed the 2D wireframe, so each shape is
+skinned once per frame. The GL control packs positions and normals interleaved, orphans the
+dynamic vertex and index buffers and re-uploads them whenever the geometry version moves. The
+timings on the Overlays status line separate CPU skin plus normals from the GL upload and draw.
+
+### Fallback and overlays
+
+`Viewport3D.GlReady` only turns true after a successful `OnOpenGlInit`. Shaded mode uses the GL
+surface while it is true; when it is not (headless uismoke, no driver, a lost context) the
+`SkeletonView` overlay keeps drawing the existing 2D wireframe, the status line in the Overlays
+panel says so, and the overlay paints its normal card backdrop and ground grid again. The GL layer
+sits under `SkeletonView` in the same grid, and the overlay's backdrop and ground plane are
+switched off only while GL is actually drawing, so nothing double-draws.
+
+The Overlays panel gained "Mesh mode" (Shaded, Wireframe, Off; remembered as
+`playback_mesh_mode`) and a "Mesh wireframe" overlay toggle (remembered as
+`playback_mesh_wireframe`) that draws the 2D edges over the shaded surface. The Mesh... picker
+stayed in Scene tools. `MeshViewportSmoke` runs headless and asserts the fallback is chosen, that
+the status line explains it, and that Wireframe and Off mode behave.
+
+### Skinning cost
+
+A vanilla human body plus a walk clip loads its shaded geometry in about a millisecond of CPU skin
+plus normal work per frame on this machine, well under the display refresh, so the mesh path keeps
+the CPU linear-blend skinning from `SkinnedMesh` and uploads the result. GPU skinning (bone
+matrices as a uniform array with weights and indices as vertex attributes) was not added here: the
+body arrives as several shapes with separate bindings, so the uniform-array path would need its own
+per-shape attribute buffers kept in step with the CPU path, which the measured cost does not
+justify yet.
+
+### Sibling note for animations
+
+The classifier's "This file holds no skeleton and therefore no ragdoll" line is written for
+skeleton files. `MainWindow.NoteAnimationRagdoll` now replaces that status for animation files with
+where the ragdoll could have come from: the skeleton sibling that was found but carries none, or
+the fact that no sibling was found at all.
+### Rendering mode and the frame pump
+
+The viewport needs a real OpenGL context, and the Windows composition backend only offers one when
+a GL-capable rendering mode is in play. `Program.BuildAvaloniaApp` now asks for
+`Win32RenderingMode.Wgl` first, then `AngleEgl`, then `Software`, so a machine whose ANGLE cannot
+start (a remote desktop session is the common case) still gives the viewport a driver OpenGL
+context, while a machine without either still falls back to software and the 2D wireframe.
+`Viewport3D` itself draws nothing until `OnOpenGlInit` has run, which Avalonia only calls once the
+compositor can hand out GPU interop for the control's drawing surface.
+
+Frames are requested with `RequestNextFrameRendering`. A 100 ms `DispatcherTimer` in the control
+keeps asking while the viewport is visible, which repaints the surface after a resize and keeps the
+upload and draw timings on the status line fresh; the scene setter itself also requests a frame.
+The timings on the Overlays status line are the measured ones for a vanilla human body
+(`MaleBody.nif`, one shape, 2698 triangles) with the character `Stand_to_Walk` clip playing at
+frame 12: CPU skinning plus vertex normals land between 1 and 2.5 ms, the dynamic buffer upload is
+about 0.9 ms and the draw is 0.01 to 0.03 ms on an NVIDIA driver. The captured viewport lives at
+`docs-drafts/bgs-roadmap/ui-shaded-mesh.png` in the roadmap drafts folder.
+
+### Skin bone names
+
+`MainWindow.ResolveSkinBoneNames` runs before each shape is bound: a mesh bone named `Chest_skin`
+takes the name of the skeleton bone `Chest` when no bone of the exact name exists. Fallout 4
+character meshes name their skin vertices after the skeleton bone plus `_skin`, and the shipped
+`skeleton.hkx` carries only the plain names, so `MaleBody.nif` dropped from 45 unmatched bones to
+22 (the rest are fat, breast and belly bones the skeleton does not carry at all). The 2D wireframe
+and the shaded surface both benefit because they share the binding, and the resolution sits in the
+app's mesh loading step, so `SkinnedMesh.Bind` keeps its exact-name contract and the symrm check
+that a helper bone does not match is untouched. `Viewport3DTests` covers the resolution.

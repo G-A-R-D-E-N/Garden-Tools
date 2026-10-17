@@ -23,6 +23,17 @@ public partial class SkeletonView : Control
     private double _pitch;
     private double _zoom = 1;
     private Point _pan;
+    internal event Action? CameraChanged;
+
+    internal bool MeshWireframe { get; set; } = true;
+    internal bool DrawBackdrop { get; set; } = true;
+    internal bool DrawGroundPlane { get; set; } = true;
+
+    internal ViewportCamera CameraState =>
+        new ViewportCamera(_yaw, _pitch, _zoom, _pan.X, _pan.Y, _centre, _fit);
+
+    internal void NotifyCameraChanged() => CameraChanged?.Invoke();
+
     private Point _lastPointer;
     private Point _pressAt;
     private bool _orbiting;
@@ -221,6 +232,7 @@ public partial class SkeletonView : Control
         {
             _centre = pose.Centre;
             _fit = pose.Radius;
+            NotifyCameraChanged();
         }
         UpdatePhysicsPose();
         NotifyFrameDistance();
@@ -261,6 +273,7 @@ public partial class SkeletonView : Control
         _pitch = 0;
         _zoom = 1;
         _pan = default;
+        NotifyCameraChanged();
         NotifyFrameDistance();
         InvalidateVisual();
     }
@@ -274,6 +287,7 @@ public partial class SkeletonView : Control
         UpdatePhysicsPose();
         FitBodies();
         NotifyFrameDistance();
+        NotifyCameraChanged();
         InvalidateVisual();
     }
 
@@ -361,6 +375,7 @@ public partial class SkeletonView : Control
     {
         _zoom = 1;
         _pan = default;
+        NotifyCameraChanged();
         if (EngineeringFrames)
         {
             var bounds = BodyBounds(current: true);
@@ -385,6 +400,7 @@ public partial class SkeletonView : Control
             var size = max - min;
             _fit = Math.Max(0.001f, Math.Max(size.X, Math.Max(size.Y, size.Z)) * 0.5f);
         }
+        NotifyCameraChanged();
         InvalidateVisual();
     }
 

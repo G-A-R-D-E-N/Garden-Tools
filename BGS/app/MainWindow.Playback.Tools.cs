@@ -41,6 +41,18 @@ public partial class MainWindow : Window
         VerticalAlignment = VerticalAlignment.Center,
     }, "Follow travel");
     private readonly ComboBox _playbackToolCombo = Ux.Combo("Playback tool");
+    private readonly ComboBox _meshModeCombo = Ux.Combo("Mesh mode", 110);
+    private readonly CheckBox _meshWireframeToggle = Ux.Named(new CheckBox
+    {
+        Content = "Mesh wireframe",
+        Foreground = Ux.MetaBrush,
+        FontSize = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    }, "Mesh wireframe");
+    private readonly TextBlock _meshViewportStatus = new()
+    {
+        Foreground = Ux.MetaBrush, FontSize = 11, TextWrapping = TextWrapping.Wrap, MaxWidth = 360,
+    };
     private readonly TextBlock _diagnosticsText = new()
     {
         Foreground = Ux.MetaBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap,
@@ -70,7 +82,7 @@ public partial class MainWindow : Window
         foreach (var toggle in new[]
                  {
                      _referenceToggle, _travelToggle, _bodiesToggle, _constraintsToggle, _bindingsToggle,
-                     _physicsSkeletonToggle, _framesToggle, _engineerToggle,
+                     _physicsSkeletonToggle, _framesToggle, _engineerToggle, _meshWireframeToggle,
                  })
         {
             toggle.Padding = new Thickness(0, 0, 4, 0);
@@ -78,14 +90,30 @@ public partial class MainWindow : Window
             toggle.FontSize = 11;
         }
 
+        _meshModeCombo.ItemsSource = MeshModes;
+        string savedMeshMode = Settings.Get("playback_mesh_mode");
+        int savedMeshAt = Array.IndexOf(MeshModes, savedMeshMode);
+        _meshMode = savedMeshAt < 0 ? MeshModeShaded : MeshModes[savedMeshAt];
+        _meshModeCombo.SelectedIndex = savedMeshAt < 0 ? 0 : savedMeshAt;
+        _meshModeCombo.SelectionChanged += (_, _) =>
+            SetMeshMode(_meshModeCombo.SelectedItem as string ?? MeshModeShaded);
+        _meshWireframeToggle.IsChecked = Settings.Get("playback_mesh_wireframe") == "1";
+        _meshWireframeToggle.IsCheckedChanged += (_, _) =>
+        {
+            Settings.TrySet("playback_mesh_wireframe",
+                            _meshWireframeToggle.IsChecked == true ? "1" : "0", out _);
+            SyncViewport();
+        };
+
         Add(PlaybackOverlaysTool, Ux.Panel(Ux.ToolPanelName(PlaybackOverlaysTool), Ux.Wrap(Ux.RowTitle("Overlays"),
             _referenceToggle, _travelToggle, _bodiesToggle, _constraintsToggle, _bindingsToggle,
-            _physicsSkeletonToggle, _framesToggle, _engineerToggle)));
+            _physicsSkeletonToggle, _framesToggle, _engineerToggle, _meshModeCombo, _meshWireframeToggle)));
         Add(PlaybackSceneTool, Ux.Panel(Ux.ToolPanelName(PlaybackSceneTool), Ux.Wrap(Ux.RowTitle("Scene tools"),
             _dropButton, _reloadFromNodeButton, _meshButton, _noMeshButton, _clearFrameDistanceButton)));
         Add(PlaybackDiagnosticsTool, Ux.Panel(Ux.ToolPanelName(PlaybackDiagnosticsTool),
             Ux.Wrap(Ux.RowTitle("Diagnostics"),
-            _copyDiagnosticsButton, _diagnosticsText)));
+            _copyDiagnosticsButton, _diagnosticsText),
+            Ux.Wrap(_meshViewportStatus)));
 
         var top = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
         top.Children.Add(ToolRow("Transport", _playButton, _firstFrameButton, _backFrameButton,

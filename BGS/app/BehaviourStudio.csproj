@@ -9,6 +9,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
@@ -29,6 +30,7 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../src/BehaviourGraph.Core.csproj" />

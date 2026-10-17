@@ -154,8 +154,10 @@ public partial class MainWindow : Window
             var nif = NifFile.Read(path);
             foreach (var shape in NifGeometry.Shapes(nif))
             {
+                ResolveSkinBoneNames(shape, skeleton);
                 var binding = SkinnedMesh.Bind(shape, skeleton);
                 _meshShapes.Add((shape, binding, SkinnedMesh.Edges(shape)));
+                _meshTriangles.Add(shape.Indices.ToArray());
             }
         }
         catch (Exception ex)
@@ -197,29 +199,56 @@ public partial class MainWindow : Window
         return true;
     }
 
+    internal static void ResolveSkinBoneNames(NifShape shape, HkxSkeleton skeleton)
+    {
+        var known = new HashSet<string>(skeleton.BoneNames, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < shape.BoneNames.Count; i++)
+        {
+            string name = shape.BoneNames[i];
+            if (known.Contains(name)) continue;
+
+            int skin = name.LastIndexOf("_skin", StringComparison.OrdinalIgnoreCase);
+            if (skin <= 0 || skin != name.Length - 5) continue;
+            if (known.Contains(name[..skin])) shape.BoneNames[i] = name[..skin];
+        }
+    }
     private void ClearMesh()
     {
         _meshShapes.Clear();
+        _meshTriangles.Clear();
         _meshPath = "";
         _skeleton.ShowMesh(null);
+        SetViewportMesh(null);
     }
 
     private void UpdateMesh(AnimationPose.Pose pose, HkxSkeleton skeleton)
     {
-        if (_meshShapes.Count == 0) { _skeleton.ShowMesh(null); return; }
-
-        int total = _meshShapes.Sum(m => m.Edges.Count);
-        var segments = new (System.Numerics.Vector3, System.Numerics.Vector3)[total];
-
-        int at = 0;
-        foreach (var (shape, binding, edges) in _meshShapes)
+        if (_meshShapes.Count == 0)
         {
-            var posed = SkinnedMesh.Pose(shape, binding, pose, skeleton);
-            foreach (var (from, to) in edges)
-                segments[at++] = (posed[from], posed[to]);
+            _skeleton.ShowMesh(null);
+            SetViewportMesh(null);
+            return;
         }
 
-        _skeleton.ShowMesh(segments);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var segments = new List<(System.Numerics.Vector3, System.Numerics.Vector3)>();
+        var parts = new List<MeshPart>(_meshShapes.Count);
+
+        for (int i = 0; i < _meshShapes.Count; i++)
+        {
+            var (shape, binding, edges) = _meshShapes[i];
+            var posed = SkinnedMesh.Pose(shape, binding, pose, skeleton);
+            foreach (var (from, to) in edges) segments.Add((posed[from], posed[to]));
+            parts.Add(new MeshPart
+            {
+                Positions = posed,
+                Indices = i < _meshTriangles.Count ? _meshTriangles[i] : shape.Indices.ToArray(),
+            });
+        }
+
+        _meshSkinMilliseconds = clock.Elapsed.TotalMilliseconds;
+        _skeleton.ShowMesh(segments.ToArray());
+        SetViewportMesh(MeshGeometry.FromParts(parts));
     }
 
     private void ClearPose()
@@ -235,6 +264,7 @@ public partial class MainWindow : Window
         _ragdoll = null;
         _ragdollSourceName = null;
         _ragdollSourceNote = null;
+        _ragdollSiblingName = null;
         ClearPhysicsReport();
 
         foreach (var toggle in new[]

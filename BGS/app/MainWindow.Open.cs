@@ -195,6 +195,7 @@ public partial class MainWindow : Window
         TryLoadRagdoll(path, virtualPathHint);
 
         bool isAnimation = BuildAnimation(path, virtualPathHint, dataFolderHint);
+        if (isAnimation) NoteAnimationRagdoll();
 
         var root = HkxBehaviorParser.ParseBehavior(path);
         if (root == null)

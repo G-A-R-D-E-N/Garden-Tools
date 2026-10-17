@@ -176,11 +176,12 @@ public partial class MainWindow : Window
         panel.Children.Add(summary);
 
         _skeleton.ClipToBounds = true;
-        _playbackViewportHost = Framed(_skeleton);
+        _playbackViewportHost = Framed(ViewportLayers());
         _playbackViewportHost.ClipToBounds = true;
         var viewport = WithClipPicker(_playbackViewportHost);
         Grid.SetRow(viewport, 1);
         panel.Children.Add(viewport);
+        SyncViewport();
 
         SetPlaybackSummary("Open a behaviour and select a clip to see what it plays. That animates " +
                            "the skeleton; use Mesh... to hang a model on it.", Ux.MutedBrush);
@@ -206,6 +207,8 @@ public partial class MainWindow : Window
             packedAnimation = PackedAnimationKey(_gameData, path, virtualPathHint);
             if (packedAnimation != null) sibling = _gameData.SkeletonEntryName(packedAnimation);
         }
+
+        _ragdollSiblingName = sibling == null ? null : Path.GetFileName(sibling);
 
         var choice = ChooseRagdoll(path, own, ownReport, sibling, key =>
         {
@@ -306,6 +309,19 @@ public partial class MainWindow : Window
             return new RagdollChoice(null, siblingReport, sibling, null);
 
         return choice;
+    }
+
+    private void NoteAnimationRagdoll()
+    {
+        if (_ragdollReport is not { Status: PhysicsLoadStatus.SkeletonOnly }) return;
+        if (_ragdollReport.ClassCounts.ContainsKey(PhysicsLoadReport.SkeletonClass)) return;
+
+        _physicsReportNote = _ragdollSiblingName == null
+            ? "This animation file holds no ragdoll of its own, and no skeleton sibling supplied one; " +
+              "Fallout 4 keeps a ragdoll as hknpRagdollData inside a skeleton file."
+            : $"This animation file holds no ragdoll of its own; its skeleton sibling {_ragdollSiblingName} " +
+              "was found but carries none. Fallout 4 keeps a ragdoll as hknpRagdollData inside a skeleton file.";
+        RefreshDiagnosticsPanel();
     }
 
     private void ClearPhysicsReport()

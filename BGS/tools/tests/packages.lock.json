@@ -197,6 +197,16 @@
         "resolved": "18.10.1",
         "contentHash": "tV7tCyp/t+DuwQugLkCeUN7NBFFB4fEGRPr0gkMQ2nQgAvQQjmGlZZi1dsLzbyoe/A0mbnKybmkIh8qhT9p4Zw=="
       },
+      "Microsoft.CSharp": {
+        "type": "Transitive",
+        "resolved": "4.7.0",
+        "contentHash": "pTj+D3uJWyN3My70i2Hqo+OXixq3Os2D1nJ2x92FFo6sk8fYS1m1WLNTs0Dc1uPaViH0YvEEwvzddQ7y4rhXmA=="
+      },
+      "Microsoft.DotNet.PlatformAbstractions": {
+        "type": "Transitive",
+        "resolved": "3.1.6",
+        "contentHash": "jek4XYaQ/PGUwDKKhwR8K47Uh1189PFzMeLqO83mXrXQVIpARZCcfuDedH50YDTepBkfijCZN5U/vZi++erxtg=="
+      },
       "Microsoft.Extensions.AI.Abstractions": {
         "type": "Transitive",
         "resolved": "10.10.0",
@@ -314,6 +324,15 @@
         "type": "Transitive",
         "resolved": "10.0.12",
         "contentHash": "9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw=="
+      },
+      "Microsoft.Extensions.DependencyModel": {
+        "type": "Transitive",
+        "resolved": "9.0.9",
+        "contentHash": "fNGvKct2De8ghm0Bpfq0iWthtzIWabgOTi+gJhNOPhNJIowXNEUE2eZNW/zNCzrHVA3PXg2yZ+3cWZndC2IqYA==",
+        "dependencies": {
+          "System.Text.Encodings.Web": "9.0.9",
+          "System.Text.Json": "9.0.9"
+        }
       },
       "Microsoft.Extensions.Diagnostics": {
         "type": "Transitive",
@@ -550,6 +569,33 @@
           "System.Net.ServerSentEvents": "10.0.2"
         }
       },
+      "Silk.NET.Core": {
+        "type": "Transitive",
+        "resolved": "2.23.0",
+        "contentHash": "D7AT/nnwlB+4RZ84XY8QNGBZMJI5z9l4CSSETIJ1wCfRJzRt/341y3MRZ4HbnFz4r/IGaWOEZr86iE+0/65yyQ==",
+        "dependencies": {
+          "Microsoft.CSharp": "4.7.0",
+          "Microsoft.DotNet.PlatformAbstractions": "3.1.6",
+          "Microsoft.Extensions.DependencyModel": "9.0.9",
+          "System.Memory": "4.6.3",
+          "System.Numerics.Vectors": "4.6.1",
+          "System.Runtime.CompilerServices.Unsafe": "6.1.2"
+        }
+      },
+      "Silk.NET.Maths": {
+        "type": "Transitive",
+        "resolved": "2.23.0",
+        "contentHash": "r8PdIVzME8EH0qAgbmRPO87I4GfgR2j8TofT7EMuRJDf1QluoQwnVypDoFJjQ2ZBSRsGYk5unYxxogI05Ogsmw=="
+      },
+      "Silk.NET.OpenGL": {
+        "type": "Transitive",
+        "resolved": "2.23.0",
+        "contentHash": "CIakUoUqiAyRPykMk54tr1M1XpbJrT/iw12T85HDQcuRCFlBa1cxbX7v3FmtznKO5eM89esfmGNCgqDaKBiWfg==",
+        "dependencies": {
+          "Silk.NET.Core": "2.23.0",
+          "Silk.NET.Maths": "2.23.0"
+        }
+      },
       "SkiaSharp": {
         "type": "Transitive",
         "resolved": "3.119.4",
@@ -607,6 +653,11 @@
         "resolved": "10.0.12",
         "contentHash": "5e8M112rzbW5xKNXKipNFoTgM330QS6S6+UA6CaDyr/KDrow8bzfvOPFA4S05QC3n/m096oj+pfttvme6I0YyA=="
       },
+      "System.Memory": {
+        "type": "Transitive",
+        "resolved": "4.6.3",
+        "contentHash": "qdcDOgnFZY40+Q9876JUHnlHu7bosOHX8XISRoH94fwk6hgaeQGSgfZd8srWRZNt5bV9ZW2TljcegDNxsf+96A=="
+      },
       "System.Memory.Data": {
         "type": "Transitive",
         "resolved": "10.0.3",
@@ -619,6 +670,16 @@
         "type": "Transitive",
         "resolved": "10.0.10",
         "contentHash": "1m3dGOl5YI9VhOE+MPCSII+WXZcyYVr5D/UbBifOUxkrx2npczhWjdl0PYZ1tMGygVce1mIfUDhdM1LBiEQFNw=="
+      },
+      "System.Numerics.Vectors": {
+        "type": "Transitive",
+        "resolved": "4.6.1",
+        "contentHash": "sQxefTnhagrhoq2ReR0D/6K0zJcr9Hrd6kikeXsA1I8kOCboTavcUC4r7TSfpKFeE163uMuxZcyfO1mGO3EN8Q=="
+      },
+      "System.Runtime.CompilerServices.Unsafe": {
+        "type": "Transitive",
+        "resolved": "6.1.2",
+        "contentHash": "2hBr6zdbIBTDE3EhK7NSVNdX58uTK6iHW/P/Axmm9sl1xoGSLqDvMtpecn226TNwHByFokYwJmt/aQQNlO5CRw=="
       },
       "System.Text.Encodings.Web": {
         "type": "Transitive",
@@ -705,7 +766,8 @@
           "Avalonia.Desktop": "[12.1.2, )",
           "Avalonia.Themes.Fluent": "[12.1.2, )",
           "BehaviourGraph.Core": "[1.0.0, )",
-          "Microsoft.Extensions.AI.OpenAI": "[10.10.0, )"
+          "Microsoft.Extensions.AI.OpenAI": "[10.10.0, )",
+          "Silk.NET.OpenGL": "[2.23.0, )"
         }
       },
       "radicle.interop": {
