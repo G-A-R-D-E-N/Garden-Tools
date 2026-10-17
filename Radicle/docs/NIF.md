@@ -399,7 +399,7 @@ the block count, so a wrong node type cannot silently produce a fake child edge.
 
 ### The node-type allowlist
 
-`src/nif/nif.cpp:k_node_types` is the same sixteen names as before, and the
+`src/nif/nif.cpp:k_node_types` is the same fifteen names as before, and the
 vanilla corpus now proves it covers everything that has an `NiNode`-shaped
 prefix. Histogram over 226,177 NIFs (Fallout 4 1.10.163, `FO4_DATA_DIR` set to
 the stock Data folder): `NiNode` 893,570, `BSValueNode` 1,783, `NiBillboardNode`
@@ -487,10 +487,18 @@ warning, so no shipped file has a shader block this reader cannot follow.
 ## Parity-pending status
 
 - Item 3 (node-type allowlist): settled by the corpus histogram above. The
-  sixteen names are the node types vanilla data uses; `BSFurnitureMarkerNode` is
+  fifteen names are the node types vanilla data uses; `BSFurnitureMarkerNode` is
   deliberately outside the list, with its raw layout as evidence.
 - Item 4 (`NiBillboardNode` mode as a u16 after the children list): still the
   reader's reading; 709 vanilla billboard nodes parse with it, and the corpus
   reads their children without a single failure.
 - Item 20 (a shape with a zero data size, vertex count or stride yields an empty
   shape): unchanged.
+
+## Node graph safety
+
+The fifteen NiNode-derived types in `src/nif/nif.cpp:k_node_types` are NiNode, BSFadeNode, BSMultiBoundNode, BSOrderedNode, BSLeafAnimNode, BSTreeNode, NiBillboardNode, NiSwitchNode, NiLODNode, BSValueNode, BSRangeNode, BSDebrisNode, BSBlastNode, BSDamageStage and NiSortAdjustNode; the vanilla corpus uses ten of them.
+
+`read_nif` refuses a file whose parent links form a loop, including a node that lists itself as its own child, with the parse_error `node parent chain contains a cycle`. The check walks each block's parent chain once with a three-state marker, so it is linear in the block count and never recurses; a 10,000-deep acyclic chain reads (`NifNodes.ReadsAVeryDeepAcyclicChain`). The managed `NifNode.WorldMatrix` composes its ancestors in a loop capped at the node count rather than by recursion, so a deep tree cannot overflow the stack and a loop that reached it anyway would throw instead of hanging.
+
+A skinned shape whose skin instance lists no bones keeps its geometry, but its per-vertex weights and bone indices are dropped and the shape warning says `the skin lists no bones, so its weights were dropped`: indices with nothing to index are never handed to a consumer. Eight vanilla skinned shapes have no resolvable bone list.

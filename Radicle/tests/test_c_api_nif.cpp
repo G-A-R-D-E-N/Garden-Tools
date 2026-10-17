@@ -69,7 +69,7 @@ void expect_floats(const std::vector<float>& actual, const std::vector<float>& e
 const float k_signed_0x11 = 0x11 / 255.0f * 2.0f - 1.0f;
 const float k_signed_0x22 = 0x22 / 255.0f * 2.0f - 1.0f;
 
-}  // namespace
+}
 
 TEST(CapiNif, ReadsEveryShapeField) {
   const auto bytes = nif_fixture::full_nif();
@@ -266,7 +266,7 @@ std::vector<nif_fixture::Block> bad_shader_blocks() {
           nif_fixture::lighting_shader_block(1, -1, 99, 0, 0)};
 }
 
-}  // namespace
+}
 
 TEST(CapiNif, ExposesTheNodeTreeAndTheShapesParentNode) {
   const auto bytes = nif_fixture::full_nif();

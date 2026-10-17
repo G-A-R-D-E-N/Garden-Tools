@@ -378,7 +378,7 @@ void bc7(std::span<const std::uint8_t> block, std::span<std::uint8_t> texels) {
     }
 }
 
-}  // namespace
+}
 
 bool can_decode_block_format(std::uint8_t dxgi) noexcept {
     switch (dxgi) {
@@ -444,4 +444,4 @@ std::vector<std::uint8_t> decode_block_format(std::span<const std::uint8_t> surf
     return rgba;
 }
 
-}  // namespace fo4::texture
+}

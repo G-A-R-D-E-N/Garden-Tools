@@ -166,6 +166,12 @@ Shape read_shape(const NifFile& nif, std::uint32_t block) {
 
   if (skinned && shape.skin_ref >= 0) {
     shape.bones = read_bones(nif, static_cast<std::uint32_t>(shape.skin_ref));
+    if (shape.bones.empty() && !shape.bone_indices.empty()) {
+      shape.weights.clear();
+      shape.bone_indices.clear();
+      const std::string note = "the skin lists no bones, so its weights were dropped";
+      shape.warning = shape.warning.empty() ? note : shape.warning + "; " + note;
+    }
     if (!shape.bones.empty()) {
       for (const auto index : shape.bone_indices) {
         if (static_cast<std::size_t>(index) >= shape.bones.size()) {

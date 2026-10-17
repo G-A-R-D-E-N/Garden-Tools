@@ -20,9 +20,6 @@ struct BlockInfo {
   std::size_t size;
 };
 
-/* One node block in the scene graph: its block index, its block type, its
-   NiObjectNET name, its parent and children as the file stores them (block
-   indices; parent is -1 for every root) and its local NiAVObject transform. */
 struct Node {
   std::uint32_t block{0};
   std::string type;
@@ -43,9 +40,7 @@ public:
   const std::vector<std::uint32_t>& roots() const noexcept { return roots_; }
   const std::vector<std::uint32_t>& children(std::uint32_t block) const { return children_.at(block); }
   std::int32_t parent(std::uint32_t block) const { return parents_.at(block); }
-  /* Every node block, in block order. */
   const std::vector<Node>& nodes() const noexcept { return nodes_; }
-  /* The node list index of a block, or -1 when the block is not a node. */
   std::int32_t node_for_block(std::uint32_t block) const noexcept {
     return block < node_of_block_.size() ? node_of_block_[block] : -1;
   }
@@ -104,7 +99,6 @@ struct Shape {
   std::int32_t alpha_ref{-1};
   std::string material;
   std::vector<std::string> textures;
-  /* Why a part of the shape was left empty, or empty when every part read. */
   std::string warning;
 };
 
@@ -112,19 +106,10 @@ std::vector<Shape> read_shapes(const NifFile& nif);
 Transform shape_to_global(const NifFile& nif, std::uint32_t block);
 std::int32_t billboard_mode(const NifFile& nif, std::uint32_t block);
 
-/* The node list index of the nearest ancestor node of a block, or -1 when the
-   block has no node ancestor. */
 std::int32_t shape_parent_node(const NifFile& nif, std::uint32_t block);
 
-/* Reads a BSLightingShaderProperty block: its NiObjectNET name (the BGSM or
-   BGEM path when the material is a file) and its BSShaderTextureSet slots. */
 Shader read_shader(const NifFile& nif, std::uint32_t block);
 
-/* Reads a BSSkin::Instance block and its BSSkin::BoneData: one entry per bone,
-   named from the referenced node, with the bind transform from the data block.
-   A data reference that is absent or names another block type leaves the
-   transforms at their defaults; a data block whose count disagrees with the
-   skin's bone count is a parse_error. */
 std::vector<Bone> read_bones(const NifFile& nif, std::uint32_t instance_block);
 
 }  // namespace fo4::nif

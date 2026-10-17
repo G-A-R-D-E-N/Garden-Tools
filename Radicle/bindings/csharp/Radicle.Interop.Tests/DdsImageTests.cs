@@ -11,8 +11,6 @@ public class DdsImageTests
     private static void PutU32(byte[] bytes, int offset, uint value) =>
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(offset, 4), value);
 
-    /* A canonical DX10 header for one layout, the same shape Radicle's
-       build_dds_header writes. */
     private static byte[] Dx10Dds(byte dxgi, byte[] surface, int mipCount = 1, int width = 4, int height = 4)
     {
         var bytes = new byte[148];

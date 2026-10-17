@@ -131,6 +131,20 @@ public class NifTests
     }
 
     [Fact]
+    public void ComposesAVeryDeepChainWithoutRecursion()
+    {
+        var nif = NifFile.FromBytes(NifFixtures.DeepChainNif(10000));
+        var world = nif.Nodes[^1].WorldMatrix;
+        Assert.Equal(10000.0f, Vector3.Transform(Vector3.Zero, world).X, 1);
+    }
+
+    [Fact]
+    public void RejectsANodeThatIsItsOwnParent()
+    {
+        var error = Assert.Throws<RadicleException>(() => NifFile.FromBytes(NifFixtures.SelfParentNif()));
+        Assert.Contains("cycle", error.Message);
+    }
+    [Fact]
     public void ReportsABadShaderBlockAsAWarningAndKeepsTheGeometry()
     {
         var nif = NifFile.FromBytes(NifFixtures.BadShaderNif());

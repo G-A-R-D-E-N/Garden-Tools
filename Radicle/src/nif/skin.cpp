@@ -33,7 +33,7 @@ void read_bone_transform(binary::Cursor& cursor, Bone& bone) {
   bone.scale = cursor.read_f32();
 }
 
-}  // namespace
+}
 
 std::vector<Bone> read_bones(const NifFile& nif, std::uint32_t instance_block) {
   const auto& info = nif.blocks().at(instance_block);
@@ -71,4 +71,4 @@ std::vector<Bone> read_bones(const NifFile& nif, std::uint32_t instance_block) {
   return bones;
 }
 
-}  // namespace fo4::nif
+}

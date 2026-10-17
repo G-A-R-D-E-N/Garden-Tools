@@ -19,7 +19,7 @@ radicle_status map_dds_error(const fo4::texture::dds_error& error) {
   return fail(status, error.what());
 }
 
-}  // namespace
+}
 
 extern "C" {
 
@@ -105,4 +105,4 @@ radicle_status radicle_dds_info(const uint8_t* bytes,
   }
 }
 
-}  // extern "C"
+}

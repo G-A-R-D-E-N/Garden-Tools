@@ -156,7 +156,7 @@ std::uint8_t legacy_to_dxgi(std::uint32_t pf_flags,
                       " carry no format this decoder recognises."};
 }
 
-}  // namespace
+}
 
 std::optional<DdsFormatInfo> lookup_format(std::uint8_t dxgi) noexcept {
   for (const auto& format : k_formats) {
@@ -317,4 +317,4 @@ std::vector<std::uint8_t> build_dds_header(const DdsInfo& info) {
   return bytes;
 }
 
-}  // namespace fo4::texture
+}

@@ -126,7 +126,7 @@ void unpack(std::span<const std::uint8_t> surface,
   }
 }
 
-}  // namespace
+}
 
 bool is_bc5(std::span<const std::uint8_t> bytes) noexcept {
   try {
@@ -187,4 +187,4 @@ std::vector<std::uint8_t> decode_dds_rgba(std::span<const std::uint8_t> bytes,
   return rgba;
 }
 
-}  // namespace fo4::texture
+}

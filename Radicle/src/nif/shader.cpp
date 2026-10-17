@@ -51,7 +51,7 @@ std::vector<std::string> read_textures(const NifFile& nif, std::uint32_t block) 
   return textures;
 }
 
-}  // namespace
+}
 
 Shader read_shader(const NifFile& nif, std::uint32_t block) {
   const auto& info = nif.blocks().at(block);
@@ -80,4 +80,4 @@ Shader read_shader(const NifFile& nif, std::uint32_t block) {
   return shader;
 }
 
-}  // namespace fo4::nif
+}

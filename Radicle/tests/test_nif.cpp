@@ -233,13 +233,12 @@ TEST(NifNodes, BillboardParentReportsMode) {
 }
 
 TEST(NifNodes, ParentCycleThrowsParseError) {
-  const auto nif = fo4::nif::read_nif(build_nif(
+  const auto bytes = build_nif(
       {"node"},
       {node_block("BSMultiBoundNode", Transform{}, {}, root_trailer()), node_block("NiNode", Transform{}, {2}),
        node_block("NiNode", Transform{}, {1, 3}), triangle_block("BSTriShape", Transform{})},
-      {0}));
-  expect_parse_error([&] { fo4::nif::shape_to_global(nif, 3); }, "parent chain contains a cycle");
-  expect_parse_error([&] { fo4::nif::billboard_mode(nif, 3); }, "parent chain contains a cycle");
+      {0});
+  expect_parse_error([&] { fo4::nif::read_nif(bytes); }, "node parent chain contains a cycle");
 }
 
 TEST(NifFile, EveryTruncatedPrefixThrowsParseError) {

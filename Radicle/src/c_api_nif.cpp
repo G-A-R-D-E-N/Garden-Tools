@@ -140,7 +140,7 @@ const fo4::nif::Node* find_node(const radicle_nif* nif, size_t index, radicle_st
   return &nif->file.nodes()[index];
 }
 
-}  // namespace
+}
 
 extern "C" {
 
@@ -519,4 +519,4 @@ void radicle_free_node_refs(uint32_t* values) {
   std::free(values);
 }
 
-}  // extern "C"
+}

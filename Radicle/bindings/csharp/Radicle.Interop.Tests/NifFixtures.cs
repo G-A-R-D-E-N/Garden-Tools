@@ -3,10 +3,6 @@ using System.Collections.Generic;
 
 namespace Radicle.Interop.Tests;
 
-/* NIF bytes built here, so the binding tests need no game data. FullNif mirrors
-   Radicle/tests/nif_fixture.hpp: the smallest NIF that carries every field the C
-   ABI exposes. The other builders cover the scene graph and a shader block that
-   does not parse. */
 internal static class NifFixtures
 {
     private const uint HasUv = 1U << 1;
@@ -254,9 +250,6 @@ internal static class NifFixtures
         }, blocks, new[] { 0 });
     }
 
-    /* Two nodes and a shape: node 0 is the root, node 1 its child, and the shape
-       hangs off node 1. The rotations are axis swaps, so a composed world matrix
-       differs from any single local one. */
     internal static byte[] NodeChainNif()
     {
         var shape = ShapeBody(Full, 16, -1, -1, -1, new byte[16], new ushort[] { 0, 0, 0 }, new float[] { 7, 8, 9 });
@@ -270,8 +263,22 @@ internal static class NifFixtures
         return BuildNif(new[] { "Root", "Chest", "shape" }, blocks, new[] { 0 });
     }
 
-    /* A shape whose shader property points its texture set at block 99, which the
-       file does not have. The shader block is refused, the geometry still reads. */
+    internal static byte[] DeepChainNif(int depth)
+    {
+        var blocks = new List<Block>(depth);
+        for (int i = 0; i < depth; i++)
+        {
+            var children = i + 1 < depth ? new[] { i + 1 } : Array.Empty<int>();
+            blocks.Add(new("NiNode", NodeBody(-1, new float[] { 1, 0, 0 }, Identity, 1.0f, children)));
+        }
+        return BuildNif(Array.Empty<string>(), blocks, new[] { 0 });
+    }
+
+    internal static byte[] SelfParentNif()
+    {
+        var blocks = new List<Block> { new("NiNode", NodeBody(-1, new float[] { 0, 0, 0 }, Identity, 1.0f, new[] { 0 })) };
+        return BuildNif(Array.Empty<string>(), blocks, new[] { 0 });
+    }
     internal static byte[] BadShaderNif()
     {
         var blocks = new List<Block>

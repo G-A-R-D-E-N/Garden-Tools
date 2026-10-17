@@ -233,7 +233,23 @@ NifFile read_nif(std::span<const std::byte> bytes) {
     nif.node_of_block_[i] = static_cast<std::int32_t>(nif.nodes_.size());
     nif.nodes_.push_back(std::move(node));
   }
-  for (auto& node : nif.nodes_) {
+  std::vector<std::uint8_t> walk_state(blocks_count, 0);
+  std::vector<std::size_t> path;
+  for (std::size_t start = 0; start < blocks_count; ++start) {
+    path.clear();
+    std::size_t current = start;
+    while (walk_state[current] == 0) {
+      walk_state[current] = 1;
+      path.push_back(current);
+      const auto parent = nif.parents_[current];
+      if (parent < 0) break;
+      current = static_cast<std::size_t>(parent);
+      if (walk_state[current] == 1) {
+        throw parse_error(nif.blocks_[start].offset, "node parent chain contains a cycle");
+      }
+    }
+    for (const auto visited : path) walk_state[visited] = 2;
+  }  for (auto& node : nif.nodes_) {
     const auto parent = nif.parents_[node.block];
     if (parent >= 0) node.parent = nif.node_of_block_[static_cast<std::size_t>(parent)];
   }

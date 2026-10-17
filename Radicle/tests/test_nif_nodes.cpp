@@ -138,3 +138,40 @@ TEST(NifSkin, ReadsABoneListTheVertexIndicesStayInside) {
   EXPECT_EQ(shapes[0].bone_indices, (std::vector<std::uint8_t>{1, 2, 3, 4, 1, 2, 3, 4}));
   EXPECT_TRUE(shapes[0].warning.empty());
 }
+TEST(NifNodes, RejectsANodeThatIsItsOwnChild) {
+  const auto bytes = build_nif({"node"}, {node_block("NiNode", Transform{}, {0}, root_trailer())}, {0});
+  expect_parse_error([&] { fo4::nif::read_nif(bytes); }, "node parent chain contains a cycle");
+}
+
+TEST(NifNodes, RejectsTwoNodesThatParentEachOther) {
+  const auto bytes = build_nif(
+      {"node"}, {node_block("NiNode", Transform{}, {1}, root_trailer()), node_block("NiNode", Transform{}, {0})}, {0});
+  expect_parse_error([&] { fo4::nif::read_nif(bytes); }, "node parent chain contains a cycle");
+}
+
+TEST(NifNodes, ReadsAVeryDeepAcyclicChain) {
+  constexpr std::int32_t depth = 10000;
+  std::vector<Block> blocks;
+  blocks.reserve(depth);
+  for (std::int32_t i = 0; i < depth; ++i) {
+    const std::vector<std::int32_t> children = i + 1 < depth ? std::vector<std::int32_t>{i + 1} : std::vector<std::int32_t>{};
+    blocks.push_back(node_block("NiNode", Transform{}, children, i == 0 ? root_trailer() : std::vector<std::byte>{}));
+  }
+  const auto nif = fo4::nif::read_nif(build_nif({"node"}, blocks, {0}));
+  ASSERT_EQ(nif.nodes().size(), static_cast<std::size_t>(depth));
+  EXPECT_EQ(nif.nodes().back().parent, depth - 2);
+}
+
+TEST(NifSkin, DropsTheWeightsOfASkinThatListsNoBones) {
+  const auto nif = fo4::nif::read_nif(build_nif(
+      {"shape"},
+      {shape_with_refs("BSTriShape", 0, Transform{}, k_has_skin, 20, 1, -1, -1, skinned_vertices(2), {}),
+       skin_instance_block(2, {}), bone_data_block(0)},
+      {0}));
+  const auto shapes = fo4::nif::read_shapes(nif);
+  ASSERT_EQ(shapes.size(), 1U);
+  EXPECT_TRUE(shapes[0].bones.empty());
+  EXPECT_TRUE(shapes[0].weights.empty());
+  EXPECT_TRUE(shapes[0].bone_indices.empty());
+  EXPECT_NE(shapes[0].warning.find("lists no bones"), std::string::npos);
+}

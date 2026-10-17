@@ -103,7 +103,7 @@ const std::vector<std::uint8_t> k_bc1_transparent{0x00, 0x00, 0xFF, 0xFF, 0xFF, 
 const std::vector<std::uint8_t> k_bc3_opaque_white{255, 0, 0, 0, 0, 0, 0, 0,
                                                    0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-}  // namespace
+}
 
 TEST(DdsCodec, ReadsLegacyAndDx10Headers) {
   const auto legacy = fo4::texture::read_dds(legacy_dds(0x31545844U));

@@ -15,4 +15,5 @@ task_plan.md
 findings.md
 progress.md
 
-docs/re-private/*.json
+docs/re-private/*.json/
+*.pyc

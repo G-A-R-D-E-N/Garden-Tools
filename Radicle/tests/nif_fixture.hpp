@@ -166,9 +166,6 @@ inline Block texture_set_block(const std::vector<std::string>& textures) {
   return Block{"BSShaderTextureSet", w.bytes()};
 }
 
-/* The FO4 BS 130 BSLightingShaderProperty layout: NiObjectNET (shader type,
-   name, extra data, controller) then the shader flags, UVs, texture set,
-   material scalars, wetness, and the shader-type tail. */
 inline Block lighting_shader_block(std::uint32_t shader_type, std::int32_t name, std::int32_t texture_set,
                                    std::uint32_t flags1, std::uint32_t flags2) {
   Writer w;
@@ -267,8 +264,6 @@ inline Vertex skinned_vertex(float x, float y, float z, std::uint8_t bone) {
   return vertex;
 }
 
-/* Two vertices, one triangle, a material path, two texture slots and one bone:
-   the smallest NIF that exercises every field the C ABI exposes. */
 inline std::vector<std::byte> full_nif() {
   const std::uint32_t flags = k_full | k_has_uv | k_has_normal | k_has_tangent | k_has_colour | k_has_skin;
   const std::size_t stride = 44;
@@ -307,4 +302,4 @@ inline std::vector<std::byte> full_nif() {
                    blocks, {0});
 }
 
-}  // namespace nif_fixture
+}
