@@ -153,7 +153,7 @@ TEST(MswpRows, ReadsOneColorIndexPerSubstitution) {
   EXPECT_EQ(subrecord_at(reread, "CNAM", 1), real(0.25f));
 }
 
-TEST(MswpRows, WritesOnePairAndLeavesItsNeighboursUntouched) {
+TEST(MswpRows, WritesOnePairAndLeavesItsNeighborsUntouched) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto record = fo4::FormKey::parse(k_key);
 
