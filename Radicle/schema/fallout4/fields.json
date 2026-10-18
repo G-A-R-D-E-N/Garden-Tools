@@ -7026,7 +7026,8 @@
       "signature": "LENS",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 65535}]},
       "fields": [
-        {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+        {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "LENS\\FadeDistanceRadiusScale", "label": "Fade distance radius scale", "kind": "scalar", "subrecord": "DNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
       ],
       "localized_subrecords": []
     },
@@ -22300,7 +22301,10 @@
           }
         ]
       },
-      "fields": [],
+      "fields": [
+        {"path": "SCCO\\CoordinateX", "label": "Coordinate X", "kind": "scalar", "subrecord": "XNAM", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "repeated": true, "insertion": "existing_only"},
+        {"path": "SCCO\\CoordinateY", "label": "Coordinate Y", "kind": "scalar", "subrecord": "XNAM", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "repeated": true, "insertion": "existing_only"}
+      ],
       "formlink_fields": [
         {
           "path": "SCCO\\Quest",
@@ -22311,6 +22315,21 @@
             "QUST"
           ],
           "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCCO\\Scene",
+          "label": "Scene",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "SCEN"
+          ],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [
+            4
+          ],
           "insertion": "existing_only"
         }
       ],
