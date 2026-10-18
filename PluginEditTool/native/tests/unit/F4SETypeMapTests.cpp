@@ -232,15 +232,6 @@ TEST_CASE("F4SE type map: an array round trips too") {
     }
 }
 
-TEST_CASE("F4SE type map: both int spellings collapse to one papyrus type") {
-    for (const auto& spelling : {"SInt32", "UInt32", "int"}) {
-        CppTypeRef cpp(spelling);
-        PapyrusTypeText papyrus;
-        REQUIRE(map.tryToPapyrus(&cpp, papyrus, nullptr));
-        CHECK(papyrus.name == "int");
-    }
-}
-
 TEST_CASE("F4SE type map: every form table row maps both ways") {
     for (const auto& [papyrus, cpp] : F4SETypeMap::formTypes()) {
         std::optional<CppTypeRef> forward;

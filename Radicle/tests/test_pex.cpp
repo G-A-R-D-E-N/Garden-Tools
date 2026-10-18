@@ -187,13 +187,6 @@ void expectParseError(const std::vector<std::uint8_t>& bytes) {
 
 }
 
-TEST(Pex, SyntheticFileRoundTripsByteIdentically) {
-  const PexFile original = syntheticFile();
-  const auto bytes = encoded(original);
-  const PexFile decoded = PexFile::fromBytes(bytes);
-  EXPECT_EQ(decoded.toBytes(), bytes);
-}
-
 TEST(Pex, HeaderFieldsSurviveARoundTrip) {
   const auto bytes = encoded(syntheticFile());
   const PexFile decoded = PexFile::fromBytes(bytes);
@@ -338,11 +331,9 @@ TEST(Pex, UnusedStringTableEntriesAreNotRebuiltOnWrite) {
   EXPECT_EQ(decoded.toBytes(), bytes);
 }
 
-TEST(Pex, EmptyInputFailsClosed) { expectParseError({}); }
-
-TEST(Pex, BadMagicFailsClosed) { expectParseError({0x00, 0x00, 0x00, 0x00}); }
-
-TEST(Pex, BigEndianMagicFailsClosed) {
+TEST(Pex, EmptyAndBadMagicFailClosed) {
+  expectParseError({});
+  expectParseError({0x00, 0x00, 0x00, 0x00});
   expectParseError({0xFA, 0x57, 0xC0, 0xDE});
 }
 

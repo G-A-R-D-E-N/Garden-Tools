@@ -12,7 +12,7 @@ using fo4::seq::SeqFile;
 
 namespace {
 
-std::vector<std::uint8_t> bytes(std::initializer_list<std::uint32_t> values) {
+std::vector<std::uint8_t> bytes(const std::vector<std::uint32_t>& values) {
   std::vector<std::uint8_t> out;
   for (const auto value : values) {
     out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
@@ -25,22 +25,26 @@ std::vector<std::uint8_t> bytes(std::initializer_list<std::uint32_t> values) {
 
 }
 
-TEST(Seq, SingleEntryRoundTripsByteIdentically) {
-  const auto input = bytes({0x07000800u});
-  const SeqFile file = SeqFile::fromBytes(input);
-  ASSERT_EQ(file.entries.size(), 1u);
-  EXPECT_EQ(file.entries[0].value(), 0x07000800u);
-  EXPECT_EQ(file.toBytes(), input);
-}
-
-TEST(Seq, EntriesKeepFileOrder) {
-  const auto input = bytes({0x07000800u, 0x07000802u, 0x07000803u});
-  const SeqFile file = SeqFile::fromBytes(input);
-  ASSERT_EQ(file.entries.size(), 3u);
-  EXPECT_EQ(file.entries[0].value(), 0x07000800u);
-  EXPECT_EQ(file.entries[1].value(), 0x07000802u);
-  EXPECT_EQ(file.entries[2].value(), 0x07000803u);
-  EXPECT_EQ(file.toBytes(), input);
+TEST(Seq, EntriesRoundTripInFileOrder) {
+  const std::vector<std::vector<std::uint32_t>> rows{
+      {0x07000800u},
+      {0x07000800u, 0x07000802u, 0x07000803u},
+      {0x00000010u, 0x0000000Fu, 0x00000001u},
+      {0x07000800u, 0x07000800u},
+      {0x00000000u},
+  };
+  for (const auto& values : rows) {
+    SCOPED_TRACE(values.front());
+    const auto input = bytes(values);
+    const SeqFile file = SeqFile::fromBytes(input);
+    ASSERT_EQ(file.entries.size(), values.size());
+    for (std::size_t i = 0; i < values.size(); ++i) {
+      EXPECT_EQ(file.entries[i].value(), values[i]);
+      EXPECT_EQ(file.entries[i].local_24(), values[i] & 0x00FFFFFFu);
+      EXPECT_EQ(file.entries[i].is_null(), values[i] == 0u);
+    }
+    EXPECT_EQ(file.toBytes(), input);
+  }
 }
 
 TEST(Seq, EntriesAreRawRuntimeFormIds) {
@@ -53,23 +57,6 @@ TEST(Seq, EntriesAreRawRuntimeFormIds) {
   EXPECT_EQ(file.entries[2].index_byte(), 0xFF);
   EXPECT_TRUE(file.entries[2].is_created());
   EXPECT_TRUE(file.entries[3].is_none());
-}
-
-TEST(Seq, DescendingEntriesArePreserved) {
-  const auto input = bytes({0x00000010u, 0x0000000Fu, 0x00000001u});
-  const SeqFile file = SeqFile::fromBytes(input);
-  ASSERT_EQ(file.entries.size(), 3u);
-  EXPECT_EQ(file.entries[0].local_24(), 0x10u);
-  EXPECT_EQ(file.entries[2].local_24(), 0x01u);
-  EXPECT_EQ(file.toBytes(), input);
-}
-
-TEST(Seq, DuplicateEntriesArePreserved) {
-  const auto input = bytes({0x07000800u, 0x07000800u});
-  const SeqFile file = SeqFile::fromBytes(input);
-  ASSERT_EQ(file.entries.size(), 2u);
-  EXPECT_EQ(file.entries[0].value(), file.entries[1].value());
-  EXPECT_EQ(file.toBytes(), input);
 }
 
 TEST(Seq, EmptyInputIsAnEmptyList) {
@@ -88,12 +75,4 @@ TEST(Seq, PartialEntryFailsClosed) {
       EXPECT_EQ(error.offset(), size);
     }
   }
-}
-
-TEST(Seq, RejectsNothingElse) {
-  const auto input = bytes({0x00000000u});
-  const SeqFile file = SeqFile::fromBytes(input);
-  ASSERT_EQ(file.entries.size(), 1u);
-  EXPECT_TRUE(file.entries[0].is_null());
-  EXPECT_EQ(file.toBytes(), input);
 }

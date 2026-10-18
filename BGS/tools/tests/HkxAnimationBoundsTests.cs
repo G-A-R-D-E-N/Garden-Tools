@@ -206,7 +206,7 @@ public sealed class HkxAnimationBoundsTests
     public void ValidAnimationFixtureStillParses()
     {
         var animation = new HkxBinaryReader().ReadAnimation(
-            Fixture("Meshes/Actors/RadRoach/Animations/TurnLeft90.hkx"));
+            TestFixtures.Path("Meshes/Actors/RadRoach/Animations/TurnLeft90.hkx"));
 
         Assert.NotEmpty(animation.AnimationClass);
         Assert.NotEmpty(animation.Tracks);
@@ -228,9 +228,6 @@ public sealed class HkxAnimationBoundsTests
         contentAbs = dataStart + animation.Offset;
         return bytes;
     }
-
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla", relative.Replace('/', Path.DirectorySeparatorChar));
 
     private sealed class CraftedPackfile
     {

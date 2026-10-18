@@ -1,8 +1,11 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <tuple>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <fo4ide/app/ServiceTargets.hpp>
 #include <fo4ide/papyrus/AnalysisService.hpp>
@@ -190,66 +193,31 @@ TEST_CASE("PapyrusStaging reports an unstageable namespace part as an error, not
     CHECK_FALSE(std::filesystem::exists(staging));
 }
 
-TEST_CASE("PapyrusStaging refuses a ScriptName with a wildcard or query character and creates nothing") {
+TEST_CASE("PapyrusStaging refuses an unsafe ScriptName and writes nothing outside staging") {
+    const std::vector<std::tuple<std::string, std::string, std::string>> rows = {
+        {"ScriptName A:B?:C", "", "unsafe namespace part"},
+        {"ScriptName ..:..:Evil", "../Evil.psc", "Refused to compile"},
+        {"ScriptName A:..:B", "", "Refused to compile"},
+        {"ScriptName MyMod:/fo4ide_gt086_escape:Evil", "/fo4ide_gt086_escape/Evil.psc", "Refused to compile"},
+    };
+    const auto& [scriptLine, escapeText, fragment] =
+        rows[GENERATE(std::size_t{0}, std::size_t{1}, std::size_t{2}, std::size_t{3})];
     const auto root = tempRoot();
     Cleanup cleanup{root};
-    const auto source = root / "src" / "Query.psc";
-    touch(source, "ScriptName A:B?:C\nFunction Ping()\nEndFunction\n");
+    const auto source = root / "src" / "Evil.psc";
+    touch(source, scriptLine + "\nFunction Ping()\nEndFunction\n");
     const auto staging = root / "staging";
+    const bool hasEscape = !escapeText.empty();
+    const auto escaped = hasEscape ? root / escapeText : std::filesystem::path{};
 
     const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
+    const bool escapedWritten = hasEscape && std::filesystem::exists(escaped);
+    std::error_code ec;
+    if (hasEscape) std::filesystem::remove(escaped, ec);
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().type == "UnsafeScriptName");
-    CHECK(result.error().message.find("unsafe namespace part") != std::string::npos);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses a ScriptName that climbs out with ..") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, "ScriptName ..:..:Evil\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    const auto escaped = root.parent_path() / "Evil.psc";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    const bool escapedWritten = std::filesystem::exists(escaped);
-    std::error_code ec;
-    std::filesystem::remove(escaped, ec);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(escapedWritten);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses a ScriptName with a parent part in the middle") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, "ScriptName A:..:B\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(std::filesystem::exists(staging));
-}
-
-TEST_CASE("PapyrusStaging refuses a ScriptName with a rooted part") {
-    const auto root = tempRoot();
-    Cleanup cleanup{root};
-    const auto source = root / "src" / "Evil.psc";
-    touch(source, "ScriptName MyMod:/fo4ide_gt086_escape:Evil\nFunction Ping()\nEndFunction\n");
-    const auto staging = root / "staging";
-    const auto escaped = std::filesystem::path("/fo4ide_gt086_escape") / "Evil.psc";
-
-    const auto result = fo4ide::app::stageNamespacedScripts({source}, staging);
-    const bool escapedWritten = std::filesystem::exists(escaped);
-    std::error_code ec;
-    std::filesystem::remove(escaped, ec);
-    REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().message.find("Refused to compile") != std::string::npos);
-    CHECK_FALSE(escapedWritten);
+    CHECK(result.error().message.find(fragment) != std::string::npos);
+    if (hasEscape) CHECK_FALSE(escapedWritten);
     CHECK_FALSE(std::filesystem::exists(staging));
 }
 

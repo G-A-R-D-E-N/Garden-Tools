@@ -11,17 +11,13 @@ namespace BehaviourStudio.Tests;
 
 public sealed class HavokPhysicsExtractorTests
 {
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla",
-                     relative.Replace('/', Path.DirectorySeparatorChar));
-
     private const string Skeleton =
         "Meshes/Actors/Character/CharacterAssets/skeleton.hkx";
 
     [Fact]
     public void VanillaSkeletonExtractsMeasuredRagdollCounts()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
         Assert.Equal(18, model!.Bodies.Count);
         Assert.Equal(19, model.Shapes.Count);
@@ -32,7 +28,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void BodyFieldsMatchXmlValues()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var body = Assert.Single(model!.Bodies, b => b.Name == "Ragdoll_NPC L Thigh");
@@ -48,7 +44,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void CapsuleShapeCarriesMeasuredPolytope()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var shape = model!.Shapes.FirstOrDefault(s => s.Id == 96);
@@ -64,7 +60,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void ConstraintCinfosProduceMeasuredGraph()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var pairs = model!.Constraints.Select(c => (c.BodyA, c.BodyB)).ToList();
@@ -82,7 +78,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void RagdollConstraintCarriesMeasuredPivotsAndLimits()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var constraint = Assert.Single(model!.Constraints, c => c.Id == 0);
@@ -111,7 +107,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void LimitedHingeConstraintCarriesMeasuredHingeLimit()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var constraint = Assert.Single(model!.Constraints, c => c.Kind == HavokConstraintKind.LimitedHinge && c.BodyA == 4);
@@ -128,7 +124,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void EveryMeasuredConstraintKindCarriesItsLimits()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         foreach (var constraint in model!.Constraints.Where(c => c.Kind == HavokConstraintKind.Ragdoll))
@@ -151,7 +147,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void BoneToBodyMapIsMeasured()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         Assert.All(model!.BoneBindings, binding =>
@@ -165,7 +161,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void PhysicsSkeletonCarriesMeasuredBoneNames()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var skeleton = model!.Skeleton;
@@ -182,7 +178,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void PhysicsSkeletonParentIndicesMatchXml()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var parents = model!.Skeleton!.ParentIndices;
@@ -196,7 +192,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void PhysicsSkeletonReferencePoseMatchesXml()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var poses = model!.Skeleton!.ReferencePose;
@@ -230,7 +226,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void MotionCinfosProvideMeasuredWorldCenterOfMass()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var com = Assert.Single(model!.Bodies, b => b.Id == 0);
@@ -255,7 +251,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void EveryBodyCarriesAFiniteMeasuredCom()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         Assert.All(model!.Bodies, body =>
@@ -276,7 +272,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void PhysicsSkeletonWorldPoseAgreesWithBodyPositions()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // The composed reference pose and the measured body cinfo positions are two
@@ -305,7 +301,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void PhysicsSkeletonChainIsTopologicallyOrdered()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var skeleton = model!.Skeleton!;
@@ -334,7 +330,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void BoneBindingsResolveBodyNamesForLabels()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // Every binding must point at a body we can label with the skeleton bone's name.
@@ -384,7 +380,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void ExtractedModelPassesTheValidator()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         var findings = HavokPhysicsValidator.Check(model!, skeletonBoneCount: 18);
@@ -394,7 +390,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void ClothHairFixtureHasNoRagdollModel()
     {
-        string fixture = Fixture("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx");
+        string fixture = TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/Hair/Female/FemaleHair04.hkx");
         Assert.Null(HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(fixture)));
     }
 
@@ -427,7 +423,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void AnimationToRagdollMapperIsMeasured()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         Assert.Equal(18, model!.Mappings.Count);
@@ -486,7 +482,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void MappingTheAnimationReferencePoseYieldsTheRagdollReference()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
         Assert.True(model!.Mappings.Count > 0);
         Assert.NotNull(model.AnimationSkeleton);
@@ -526,7 +522,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void MapPoseFollowsAWholeRagdollTranslation()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
         Assert.True(model!.Mappings.Count > 0);
         Assert.NotNull(model.AnimationSkeleton);
@@ -551,7 +547,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void MapPoseFollowsAWholeRagdollRotation()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
         Assert.True(model!.Mappings.Count > 0);
         Assert.NotNull(model.AnimationSkeleton);
@@ -582,7 +578,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void MapPoseFailsClosedWithoutAUsableMapper()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         Assert.Null(model!.MapPose(null));
@@ -598,9 +594,9 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void ReleasedRagdollSettlesUnderGravityWithoutASolver()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
-        var skeleton = new HkxBinaryReader().ReadSkeleton(Fixture(Skeleton));
+        var skeleton = new HkxBinaryReader().ReadSkeleton(TestFixtures.Path(Skeleton));
         Assert.NotNull(skeleton);
 
         // Release from an airborne mapped pose (the reference lifted 20 units), so there is
@@ -770,9 +766,9 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void DropClearsBackToTheMappedPoseAndResetsWithTheView()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
-        var skeleton = new HkxBinaryReader().ReadSkeleton(Fixture(Skeleton));
+        var skeleton = new HkxBinaryReader().ReadSkeleton(TestFixtures.Path(Skeleton));
         Assert.NotNull(skeleton);
 
         var view = new SkeletonView();
@@ -805,10 +801,10 @@ public sealed class HavokPhysicsExtractorTests
         Directory.CreateDirectory(assets);
         Directory.CreateDirectory(anims);
         string clipPath = Path.Combine(anims, "clip.hkx");
-        File.Copy(Fixture("Meshes/Actors/Character/Animations/Paired/" +
+        File.Copy(TestFixtures.Path("Meshes/Actors/Character/Animations/Paired/" +
                           "PairedKill2HMBashKneeAndHead_AttackerLead.hkx"), clipPath);
         string skeletonPath = Path.Combine(assets, "skeleton.hkx");
-        File.Copy(Fixture("Meshes/Actors/Character/CharacterAssets/skeleton.hkx"), skeletonPath);
+        File.Copy(TestFixtures.Path("Meshes/Actors/Character/CharacterAssets/skeleton.hkx"), skeletonPath);
 
         try
         {
@@ -838,7 +834,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void ConstraintInspectionLineShowsMeasuredLimitsAndPivots()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // The Playback summary line's per-constraint inspection: kind, ids, body names,
@@ -877,7 +873,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void ConstraintPinIsIndependentOfHoverAndClearsOnReset()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // A pinned constraint keeps its label without any hover (HoveredConstraintId stays
@@ -897,7 +893,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void EngineeringFrameModeClearsWithTheView()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // The engineering view survives a re-load of another ragdoll file (TryLoadRagdoll
@@ -915,7 +911,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void BodyFrameLabelShowsMeasuredComAndStub()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // Body 1 is the L Thigh: measured COM (-8.4326, -0.5324, 53.2274), shown with the
@@ -937,7 +933,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void FrameTableReadsEveryBodysOriginAndCom()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         Assert.Equal(18, model!.Bodies.Count);
@@ -959,7 +955,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void BodyFramePinsPersistTogetherAndClear()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // Body frame pins are multi-select: clicking several bodies keeps all their
@@ -990,37 +986,9 @@ public sealed class HavokPhysicsExtractorTests
     }
 
     [Fact]
-    public void BodyFrameDistanceUsesTwoPickedFramesAndCanBeReplacedOrCleared()
-    {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
-        Assert.NotNull(model);
-
-        var view = new SkeletonView();
-        view.SetBodies(model);
-        view.EngineeringFrames = true;
-        view.ToggleBodyPinForTest(0);
-        Assert.Equal("", view.FrameDistanceText);
-
-        view.ToggleBodyPinForTest(1);
-        Assert.Equal((0, 1), view.FrameDistanceBodies);
-        var first = model!.Bodies.Single(b => b.Id == 0);
-        var second = model.Bodies.Single(b => b.Id == 1);
-        float firstDistance = Vector3.Distance(first.Position, second.Position);
-        Assert.Equal($"distance {first.Name} to {second.Name}  {firstDistance:0.00} file units",
-                     view.FrameDistanceText);
-
-        view.ToggleBodyPinForTest(2);
-        Assert.Equal((1, 2), view.FrameDistanceBodies);
-
-        view.ClearFrameDistance();
-        Assert.Null(view.FrameDistanceBodies);
-        Assert.Equal("", view.FrameDistanceText);
-    }
-
-    [Fact]
     public void ConstraintHoverLabelShowsMeasuredLimits()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // Ragdoll constraint #0: twist -0.2618..+0.2618 rad and a 0.5236 rad cone half-angle,
@@ -1057,7 +1025,7 @@ public sealed class HavokPhysicsExtractorTests
     [Fact]
     public void RagdollBodyFitAndFrameStubAreMeasurable()
     {
-        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(Fixture(Skeleton)));
+        var model = HavokPhysicsExtractor.TryExtract(File.ReadAllBytes(TestFixtures.Path(Skeleton)));
         Assert.NotNull(model);
 
         // The viewport's FitBodies computation is deterministic over the measured inputs

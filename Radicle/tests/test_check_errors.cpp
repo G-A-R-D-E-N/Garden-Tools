@@ -236,6 +236,14 @@ TEST(CheckErrors, CodeNamesAreStable) {
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::wrong_target_type), "wrong_target_type");
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::circular_leveled_list), "circular_leveled_list");
   EXPECT_EQ(fo4::check_severity_name(fo4::CheckSeverity::warning), "warning");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::branch_starting_topic_not_dial),
+            "branch_starting_topic_not_dial");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::topic_children_not_dial),
+            "topic_children_not_dial");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::deleted_record_content), "deleted_record_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::partial_form_content), "partial_form_content");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::light_object_id_overflow), "light_object_id_overflow");
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::internal_form_id_mismatch), "internal_form_id_mismatch");
 }
 
 TEST(CheckErrors, VanillaMasterHasNoErrorFindings) {
@@ -575,11 +583,4 @@ TEST(CheckErrors, MasterIndexPastMasterTableIsInternalMismatch) {
   ASSERT_EQ(findings.size(), 1u);
   EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000800:Stray.esp"));
   EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
-}
-
-TEST(CheckErrors, RecordLevelCodeNamesAreStable) {
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::deleted_record_content), "deleted_record_content");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::partial_form_content), "partial_form_content");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::light_object_id_overflow), "light_object_id_overflow");
-  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::internal_form_id_mismatch), "internal_form_id_mismatch");
 }

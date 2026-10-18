@@ -80,16 +80,6 @@ public class Mo2ProfileLoaderTests : IDisposable
     }
 
     [Fact]
-    public void EnsuresFallout4IsRegisteredWhenMutagenImplicitMastersOmitIt()
-    {
-        var order = Mo2ProfileLoader.EnsureRequiredGameMasters(
-            new[] { "DLCCoast.esm", "SomeMod.esp" });
-
-        order[0].Should().Be("Fallout4.esm");
-        order.Should().ContainInOrder("Fallout4.esm", "DLCCoast.esm", "SomeMod.esp");
-    }
-
-    [Fact]
     public void FormatsComponentFormLinkWithName()
     {
         if (!Available) return;

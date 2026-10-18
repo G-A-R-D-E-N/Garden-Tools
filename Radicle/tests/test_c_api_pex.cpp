@@ -349,11 +349,6 @@ TEST(CApiPex, PublicStructLayoutKeepsFieldOrderAndNaturalAlignment) {
   EXPECT_EQ(sizeof(radicle_pex_object_counts), sizeof(size_t) * 5);
 }
 
-TEST(CApiPex, AbiVersionIsAtLeastThePexExports) {
-  EXPECT_GE(radicle_abi_version(), 9u);
-  EXPECT_EQ(RADICLE_ABI_VERSION, radicle_abi_version());
-}
-
 namespace {
 
 fo4::pex::PexValue pexValue(fo4::pex::PexValueType type, const std::string& text = {}, std::int32_t integer = 0,

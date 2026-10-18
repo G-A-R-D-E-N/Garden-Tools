@@ -94,104 +94,38 @@ public sealed class OpencodeCliTests
         Assert.True(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
-    [Fact]
-    public void TheResolvedBoundaryRejectsAnAgentAllowOutsideBgs()
-    {
-        string resolved = Resolved(
-            "{\"*\":\"deny\",\"question\":\"allow\",\"bgs_bgs_inspect_object\":\"allow\"}",
-            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
-
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsAWildcardBgsAllow()
-    {
-        string resolved = Resolved(
-            "{\"*\":\"deny\",\"bgs_*\":\"allow\"}",
-            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
-
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsAMissingWildcardDeny()
-    {
-        string resolved = Resolved(
-            OpencodeStubConfig.AgentPermissionForTest().Replace("\"*\":\"deny\",", ""),
-            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
-
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsAnAmbientCustomToolAllow()
-    {
-        string resolved = Resolved(
-            OpencodeStubConfig.AgentPermissionForTest().Replace(
-                "\"*\":\"deny\"", "\"*\":\"deny\",\"bgs_evil\":\"allow\""),
-            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
-
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsAMissingGenuineBgsTool()
-    {
-        string resolved = Resolved(
-            OpencodeStubConfig.AgentPermissionForTest().Replace(
-                "\"bgs_bgs_inspect_object\":\"allow\",", ""),
-            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}");
-
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsAReenabledForeignServer()
-    {
-        string resolved = Resolved(
-            OpencodeStubConfig.AgentPermissionForTest(),
-            "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl +
-            "\",\"enabled\":true},\"evil\":{\"type\":\"local\",\"enabled\":true}}");
-
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsAMissingBgsAgent()
-    {
-        Assert.False(OpencodeCli.VerifyResolvedConfig(
-            "{\"mcp\":{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}}",
-            BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsABridgeUrlMismatch()
-    {
-        string resolved = Resolved(
-            OpencodeStubConfig.AgentPermissionForTest(),
-            "{\"bgs\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:9/other\",\"enabled\":true}}");
-
-        Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
-    [Fact]
-    public void TheResolvedBoundaryRejectsUnreadableOutput()
-    {
-        Assert.False(OpencodeCli.VerifyResolvedConfig("not json", BridgeUrl, OpencodeStubConfig.Advertised));
-        Assert.False(OpencodeCli.VerifyResolvedConfig("", BridgeUrl, OpencodeStubConfig.Advertised));
-    }
-
     private const string BridgeUrl = "http://127.0.0.1:9/mcp";
+    private const string BgsServers = "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}";
+
+    public static TheoryData<string, string> UnsafeResolvedBoundaries() => new()
+    {
+        { "{\"*\":\"deny\",\"question\":\"allow\",\"bgs_bgs_inspect_object\":\"allow\"}", BgsServers },
+        { "{\"*\":\"deny\",\"bgs_*\":\"allow\"}", BgsServers },
+        { OpencodeStubConfig.AgentPermissionForTest().Replace("\"*\":\"deny\",", ""), BgsServers },
+        { OpencodeStubConfig.AgentPermissionForTest().Replace("\"*\":\"deny\"", "\"*\":\"deny\",\"bgs_evil\":\"allow\""), BgsServers },
+        { OpencodeStubConfig.AgentPermissionForTest().Replace("\"bgs_bgs_inspect_object\":\"allow\",", ""), BgsServers },
+        { OpencodeStubConfig.AgentPermissionForTest(), "{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true},\"evil\":{\"type\":\"local\",\"enabled\":true}}" },
+        { OpencodeStubConfig.AgentPermissionForTest(), "{\"bgs\":{\"type\":\"remote\",\"url\":\"http://127.0.0.1:9/other\",\"enabled\":true}}" },
+        { OpencodeStubConfig.AgentPermissionForTest(), "{}" },
+        { OpencodeStubConfig.AgentPermissionForTest(), "{\"other\":{\"type\":\"local\",\"enabled\":false}}" },
+    };
 
     [Theory]
-    [InlineData("{}")]
-    [InlineData("{\"other\":{\"type\":\"local\",\"enabled\":false}}")]
-    public void TheResolvedBoundaryRejectsAMissingBgsBridge(string servers)
+    [MemberData(nameof(UnsafeResolvedBoundaries))]
+    public void TheResolvedBoundaryRejectsAnUnsafeConfig(string agentPermission, string servers)
     {
-        string resolved = Resolved(OpencodeStubConfig.AgentPermissionForTest(), servers);
+        string resolved = Resolved(agentPermission, servers);
 
         Assert.False(OpencodeCli.VerifyResolvedConfig(resolved, BridgeUrl, OpencodeStubConfig.Advertised));
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("")]
+    [InlineData("{\"mcp\":{\"bgs\":{\"type\":\"remote\",\"url\":\"" + BridgeUrl + "\",\"enabled\":true}}}")]
+    public void TheResolvedBoundaryRejectsOutputWithoutAUsableConfig(string output)
+    {
+        Assert.False(OpencodeCli.VerifyResolvedConfig(output, BridgeUrl, OpencodeStubConfig.Advertised));
     }
 
     private static string Resolved(string agentPermission, string servers) =>

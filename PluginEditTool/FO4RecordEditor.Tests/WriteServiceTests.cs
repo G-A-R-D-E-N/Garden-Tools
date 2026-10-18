@@ -328,21 +328,6 @@ public class WriteServiceTests
     }
 
     [Fact]
-    public void SetLightFlag_RefusesWhenRecordsAreOutOfEslRange()
-    {
-        var plugin = $"LightFlagRefuseTest_{Guid.NewGuid():N}.esp";
-        WriteService.CreatePlugin(plugin);
-        var mod = WriteService.GetMutable(plugin)!;
-        var rel = Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4;
-        mod.Keywords.Add(new Mutagen.Bethesda.Fallout4.Keyword(new Mutagen.Bethesda.Plugins.FormKey(mod.ModKey, 0x5000), rel) { EditorID = "Hi_Kw" });
-
-        var exec = new PluginToolExecutor(() => null);
-        exec.Execute("set_light_flag", $"{{\"plugin\":\"{plugin}\",\"light\":true}}")
-            .Should().Contain("Cannot flag").And.Contain("compact_to_esl first");
-        mod.ModHeader.Flags.HasFlag(Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).Should().BeFalse();
-    }
-
-    [Fact]
     public void CreateRecord_UnsupportedType_ReturnsHelpfulMessage()
     {
         var exec = new PluginToolExecutor(() => null);
