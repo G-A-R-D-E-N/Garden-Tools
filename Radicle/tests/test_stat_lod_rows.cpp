@@ -49,7 +49,7 @@ Bytes make_plugin(std::span<const std::byte> payload) {
   ByteWriter out;
   out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
   const auto group = fo4::test::begin_group(out, "STAT", 0);
-  const auto record = fo4::test::begin_record(out, "STAT", 0, 0x800);
+  const auto record = fo4::test::begin_record(out, "STAT", 0, 0x01000800u);
   fo4::test::write_subrecord(out, "EDID", zstr("RadicleLod"));
   fo4::test::write_subrecord(out, "MNAM", payload);
   fo4::test::end_record(out, record);

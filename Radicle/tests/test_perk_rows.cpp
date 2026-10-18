@@ -55,9 +55,11 @@ std::uint32_t raw_at(const Bytes& data, std::size_t offset) {
 
 void append_record(ByteWriter& out, std::string_view signature, std::uint32_t form_id,
                    std::string_view editor_id) {
+  const auto group = fo4::test::begin_group(out, signature, 0);
   const auto record = fo4::test::begin_record(out, signature, 0, form_id);
   fo4::test::write_subrecord(out, "EDID", zstr(editor_id));
   fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
 }
 
 Bytes perk_data() {

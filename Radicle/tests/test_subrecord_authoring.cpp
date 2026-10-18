@@ -273,7 +273,7 @@ TEST(SubrecordAuthoring, RemovesPhysicalOccurrenceAndEnforcesTheMinimum) {
             fo4::SubrecordRemoveStatus::not_authorable);
   EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x8FF), sig("DESC"), 0),
             fo4::SubrecordRemoveStatus::record_missing);
-  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x805), sig("KWDA"), 0),
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, key(0x805), sig("FULL"), 0),
             fo4::SubrecordRemoveStatus::absent);
 
   const auto reloaded = reload(plugin);

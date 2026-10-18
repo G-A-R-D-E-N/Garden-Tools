@@ -74,7 +74,7 @@ Bytes make_plugin() {
   fo4::test::end_record(out, tes4);
 
   const auto group = fo4::test::begin_group(out, "ACTI", 0);
-  const auto acti = fo4::test::begin_record(out, "ACTI", 0, 0x000A01);
+  const auto acti = fo4::test::begin_record(out, "ACTI", 0, 0x02000A01);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Radicle\0", 8});
   fo4::test::write_subrecord(out, "DEST", dest_payload(1500, 2, 1));
 
@@ -102,19 +102,19 @@ Bytes make_plugin() {
   fo4::test::write_subrecord(out, "DSTF", Bytes{});
   fo4::test::end_record(out, acti);
 
-  const auto bare = fo4::test::begin_record(out, "ACTI", 0, 0x000A04);
+  const auto bare = fo4::test::begin_record(out, "ACTI", 0, 0x02000A04);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Bare\0", 5});
   fo4::test::end_record(out, bare);
   fo4::test::end_group(out, group);
 
   const auto door_group = fo4::test::begin_group(out, "DOOR", 0);
-  const auto door = fo4::test::begin_record(out, "DOOR", 0, 0x000A02);
+  const auto door = fo4::test::begin_record(out, "DOOR", 0, 0x02000A02);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Plain\0", 6});
   fo4::test::end_record(out, door);
   fo4::test::end_group(out, door_group);
 
   const auto stat_group = fo4::test::begin_group(out, "STAT", 0);
-  const auto stat = fo4::test::begin_record(out, "STAT", 0, 0x000A03);
+  const auto stat = fo4::test::begin_record(out, "STAT", 0, 0x02000A03);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Prop\0", 5});
   fo4::test::end_record(out, stat);
   fo4::test::end_group(out, stat_group);
@@ -134,7 +134,7 @@ Bytes make_proj_plugin() {
   fo4::test::end_record(out, tes4);
 
   const auto group = fo4::test::begin_group(out, "PROJ", 0);
-  const auto staged = fo4::test::begin_record(out, "PROJ", 0, 0x000C01);
+  const auto staged = fo4::test::begin_record(out, "PROJ", 0, 0x01000C01);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Shot\0", 5});
   fo4::test::write_subrecord(out, "OBND", Bytes(12));
   fo4::test::write_subrecord(out, "MODL", std::string_view{"p.nif\0", 6});
@@ -150,7 +150,7 @@ Bytes make_proj_plugin() {
   fo4::test::write_subrecord(out, "VNAM", Bytes(4));
   fo4::test::end_record(out, staged);
 
-  const auto doubled = fo4::test::begin_record(out, "PROJ", 0, 0x000C02);
+  const auto doubled = fo4::test::begin_record(out, "PROJ", 0, 0x01000C02);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Twice\0", 6});
   fo4::test::write_subrecord(out, "OBND", Bytes(12));
   fo4::test::write_subrecord(out, "MODL", std::string_view{"p.nif\0", 6});
@@ -179,13 +179,13 @@ Bytes make_authoring_plugin() {
   fo4::test::end_record(out, tes4);
 
   const auto group = fo4::test::begin_group(out, "ARMO", 0);
-  const auto one = fo4::test::begin_record(out, "ARMO", 0, 0x000B01);
+  const auto one = fo4::test::begin_record(out, "ARMO", 0, 0x01000B01);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"One\0", 4});
   fo4::test::write_subrecord(out, "DEST", dest_payload(100, 1, 0));
   fo4::test::write_subrecord(out, "DATA", Bytes(12));
   fo4::test::end_record(out, one);
 
-  const auto two = fo4::test::begin_record(out, "ARMO", 0, 0x000B02);
+  const auto two = fo4::test::begin_record(out, "ARMO", 0, 0x01000B02);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Two\0", 4});
   fo4::test::write_subrecord(out, "DEST", dest_payload(100, 1, 0));
   fo4::test::write_subrecord(out, "DEST", dest_payload(50, 1, 0));

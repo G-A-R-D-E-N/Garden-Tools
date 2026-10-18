@@ -37,7 +37,7 @@ std::vector<std::byte> make_plugin() {
   ByteWriter out;
   out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
   const auto group = fo4::test::begin_group(out, "MSWP", 0);
-  const auto record = fo4::test::begin_record(out, "MSWP", 0, 0x800);
+  const auto record = fo4::test::begin_record(out, "MSWP", 0, 0x01000800u);
   fo4::test::write_subrecord(out, "EDID", zstr("RadicleSwap"));
   fo4::test::write_subrecord(out, "FNAM", zstr("Props"));
   fo4::test::write_subrecord(out, "BNAM", zstr("Props\\Box.BGSM"));
@@ -54,7 +54,7 @@ std::vector<std::byte> make_two_index_plugin() {
   ByteWriter out;
   out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
   const auto group = fo4::test::begin_group(out, "MSWP", 0);
-  const auto record = fo4::test::begin_record(out, "MSWP", 0, 0x800);
+  const auto record = fo4::test::begin_record(out, "MSWP", 0, 0x01000800u);
   fo4::test::write_subrecord(out, "EDID", zstr("TwoIndexes"));
   fo4::test::write_subrecord(out, "BNAM", zstr("Props\\Box.BGSM"));
   fo4::test::write_subrecord(out, "SNAM", zstr("Props\\BoxRust.BGSM"));

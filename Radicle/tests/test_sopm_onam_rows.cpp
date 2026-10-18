@@ -39,7 +39,7 @@ std::vector<std::byte> make_plugin() {
   ByteWriter out;
   out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
   const auto group = fo4::test::begin_group(out, "SOPM", 0);
-  const auto record = fo4::test::begin_record(out, "SOPM", 0, 0x803);
+  const auto record = fo4::test::begin_record(out, "SOPM", 0, 0x01000803u);
   fo4::test::write_subrecord(out, "EDID", zstr("RadicleOutput"));
   fo4::test::write_subrecord(out, "MNAM", channels({1, 0, 0, 0}));
   fo4::test::write_subrecord(out, "VNAM", channels({0x9c, 0xff}));

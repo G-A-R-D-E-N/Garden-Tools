@@ -117,10 +117,8 @@ void write_actor(fo4::test::ByteWriter& out, std::uint32_t local, std::size_t lo
   fo4::test::write_subrecord(out, "XHLT", u32_bytes(60));
   ByteWriter lock;
   lock.bytes.assign(lock_bytes, std::byte{0});
-  if (lock_bytes >= 4) {
-    lock.patch_u32(0, 50);
-    lock.patch_u32(4, 0x00000A30u);
-  }
+  if (lock_bytes >= 4) lock.patch_u32(0, 50);
+  if (lock_bytes >= 8) lock.patch_u32(4, 0x00000A30u);
   if (lock_bytes >= 9) lock.bytes[8] = std::byte{0x04};
   fo4::test::write_subrecord(out, "XLOC", lock.bytes);
   fo4::test::write_subrecord(out, "XEZN", u32_bytes(0x00000A10u));

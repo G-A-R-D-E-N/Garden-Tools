@@ -40,7 +40,7 @@ Bytes make_plugin(std::initializer_list<std::uint32_t> counts) {
   ByteWriter out;
   out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
   const auto group = fo4::test::begin_group(out, "FSTS", 0);
-  const auto record = fo4::test::begin_record(out, "FSTS", 0, 0x800);
+  const auto record = fo4::test::begin_record(out, "FSTS", 0, 0x01000800u);
   fo4::test::write_subrecord(out, "EDID", zstr("RadicleSteps"));
   fo4::test::write_subrecord(out, "XCNT", words(counts));
   fo4::test::write_subrecord(out, "DATA", words({0x815, 0x814, 0x812, 0x813, 0x811}));

@@ -165,10 +165,10 @@ TEST(NpcFurnAttachSlots, RowsDeclareAttachParentSlotsAndActorSounds) {
 TEST(NpcFurnAttachSlots, EmptyAttachParentSlotsAnchorsAfterItsPredecessor) {
   auto plugin = fo4::read_plugin(make_plugin().bytes, "Patch.esp");
   const auto updated = fo4::schema::FormLinkListMutationStatus::updated;
-  const auto npc = fo4::FormKey::parse("02000800:Patch.esp");
-  const auto furn = fo4::FormKey::parse("02000900:Patch.esp");
-  const auto keyword = fo4::FormKey::parse("02000A30:Patch.esp");
-  const auto keyword2 = fo4::FormKey::parse("02000A31:Patch.esp");
+  const auto npc = fo4::FormKey::parse("000800:Patch.esp");
+  const auto furn = fo4::FormKey::parse("000900:Patch.esp");
+  const auto keyword = fo4::FormKey::parse("000A30:Patch.esp");
+  const auto keyword2 = fo4::FormKey::parse("000A31:Patch.esp");
 
   const auto npc_appr = list_row("NPC_", "NPC_\\AttachParentSlots");
   const auto furn_appr = list_row("FURN", "FURN\\AttachParentSlots");
@@ -176,77 +176,77 @@ TEST(NpcFurnAttachSlots, EmptyAttachParentSlotsAnchorsAfterItsPredecessor) {
   EXPECT_EQ(fo4::schema::record_formlink_list_size(plugin, furn, furn_appr), 0u);
 
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, npc, npc_appr, 0, keyword), updated);
-  EXPECT_EQ(signature_list(plugin, "02000800:Patch.esp"), "EDID,KWDA,APPR,DATA");
-  EXPECT_EQ(payloads_of(plugin, "02000800:Patch.esp", "APPR"), u32_bytes(0x02000A30u));
+  EXPECT_EQ(signature_list(plugin, "000800:Patch.esp"), "EDID,KWDA,APPR,DATA");
+  EXPECT_EQ(payloads_of(plugin, "000800:Patch.esp", "APPR"), u32_bytes(0x02000A30u));
 
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, furn, furn_appr, 0, keyword2),
             updated);
-  EXPECT_EQ(signature_list(plugin, "02000900:Patch.esp"), "EDID,XMRK,APPR");
+  EXPECT_EQ(signature_list(plugin, "000900:Patch.esp"), "EDID,XMRK,APPR");
 
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, npc, npc_appr, 1, keyword2), updated);
   EXPECT_EQ(fo4::schema::record_formlink_list_size(plugin, npc, npc_appr), 2u);
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, npc, npc_appr, 3, keyword2),
             fo4::schema::FormLinkListMutationStatus::index_out_of_range);
   EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, npc, npc_appr, 0,
-                                                             fo4::FormKey::parse("02000A40:Patch.esp")),
+                                                             fo4::FormKey::parse("000A40:Patch.esp")),
             fo4::schema::FormLinkListMutationStatus::target_type_mismatch);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  EXPECT_EQ(payloads_of(reread, "02000800:Patch.esp", "APPR"), u32_words({0x02000A30u, 0x02000A31u}));
-  EXPECT_EQ(payloads_of(reread, "02000900:Patch.esp", "APPR"), u32_bytes(0x02000A31u));
+  EXPECT_EQ(payloads_of(reread, "000800:Patch.esp", "APPR"), u32_words({0x02000A30u, 0x02000A31u}));
+  EXPECT_EQ(payloads_of(reread, "000900:Patch.esp", "APPR"), u32_bytes(0x02000A31u));
   EXPECT_EQ(fo4::schema::record_formlink_list_size(reread, npc, npc_appr), 2u);
 
   EXPECT_EQ(fo4::schema::remove_record_formlink_list_element(plugin, npc, npc_appr, 0), updated);
-  EXPECT_EQ(payloads_of(plugin, "02000800:Patch.esp", "APPR"), u32_bytes(0x02000A31u));
+  EXPECT_EQ(payloads_of(plugin, "000800:Patch.esp", "APPR"), u32_bytes(0x02000A31u));
 }
 
 TEST(NpcFurnAttachSlots, ExistingAttachParentSlotsIsReadAndRetargeted) {
   auto plugin = fo4::read_plugin(make_plugin().bytes, "Patch.esp");
-  const auto npc = fo4::FormKey::parse("02000801:Patch.esp");
+  const auto npc = fo4::FormKey::parse("000801:Patch.esp");
   const auto appr = list_row("NPC_", "NPC_\\AttachParentSlots");
   const auto values = fo4::schema::record_formlink_list_values(plugin, npc, appr);
   ASSERT_TRUE(values.has_value());
   ASSERT_EQ(values->size(), 2u);
-  EXPECT_EQ((*values)[0], fo4::FormKey::parse("02000A30:Patch.esp"));
-  EXPECT_EQ((*values)[1], fo4::FormKey::parse("02000A31:Patch.esp"));
+  EXPECT_EQ((*values)[0], fo4::FormKey::parse("000A30:Patch.esp"));
+  EXPECT_EQ((*values)[1], fo4::FormKey::parse("000A31:Patch.esp"));
 
   EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, npc, appr, 1, fo4::FormKey::parse(
-                "02000A30:Patch.esp")),
+                "000A30:Patch.esp")),
             fo4::schema::FormLinkListMutationStatus::updated);
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto after = fo4::schema::record_formlink_list_values(reread, npc, appr);
   ASSERT_TRUE(after.has_value());
   ASSERT_EQ(after->size(), 2u);
-  EXPECT_EQ((*after)[1], fo4::FormKey::parse("02000A30:Patch.esp"));
-  EXPECT_EQ((*after)[0], fo4::FormKey::parse("02000A30:Patch.esp"));
+  EXPECT_EQ((*after)[1], fo4::FormKey::parse("000A30:Patch.esp"));
+  EXPECT_EQ((*after)[0], fo4::FormKey::parse("000A30:Patch.esp"));
 }
 
 TEST(NpcFurnAttachSlots, ActorSoundPairsAreReadAndRetargetedIndependently) {
   auto plugin = fo4::read_plugin(make_plugin().bytes, "Patch.esp");
-  const auto npc = fo4::FormKey::parse("02000802:Patch.esp");
+  const auto npc = fo4::FormKey::parse("000802:Patch.esp");
   const auto keyword = formlink_row("NPC_\\ActorSoundKeyword");
   const auto sound = formlink_row("NPC_\\ActorSoundSound");
-  const auto target = fo4::FormKey::parse("02000A40:Patch.esp");
+  const auto target = fo4::FormKey::parse("000A40:Patch.esp");
 
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc, keyword, 1, fo4::FormKey::parse(
-                "02000A31:Patch.esp")),
+                "000A31:Patch.esp")),
             fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc, sound, 0, target),
             fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc, sound, 2, target),
             fo4::FormLinkFieldMutationStatus::subrecord_missing);
   EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc, sound, 1, fo4::FormKey::parse(
-                   "02000A30:Patch.esp")),
+                   "000A30:Patch.esp")),
                fo4::schema::FormLinkFieldError);
 
   EXPECT_EQ(fo4::set_record_scalar(plugin, npc, scalar_row("NPC_\\ActorSoundsFinalize"), 0, "1"),
             fo4::ScalarMutationStatus::updated);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  EXPECT_EQ(signature_list(reread, "02000802:Patch.esp"), "EDID,CS2K,CS2D,CS2K,CS2D,CS2F");
-  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2K", 0), u32_bytes(0x00000A30u));
-  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2K", 1), u32_bytes(0x02000A31u));
-  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2D", 0), u32_bytes(0x02000A40u));
-  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2D", 1), u32_bytes(0x00000A41u));
-  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2F"), Bytes{std::byte{1}});
+  EXPECT_EQ(signature_list(reread, "000802:Patch.esp"), "EDID,CS2K,CS2D,CS2K,CS2D,CS2F");
+  EXPECT_EQ(payloads_of(reread, "000802:Patch.esp", "CS2K", 0), u32_bytes(0x00000A30u));
+  EXPECT_EQ(payloads_of(reread, "000802:Patch.esp", "CS2K", 1), u32_bytes(0x02000A31u));
+  EXPECT_EQ(payloads_of(reread, "000802:Patch.esp", "CS2D", 0), u32_bytes(0x02000A40u));
+  EXPECT_EQ(payloads_of(reread, "000802:Patch.esp", "CS2D", 1), u32_bytes(0x00000A41u));
+  EXPECT_EQ(payloads_of(reread, "000802:Patch.esp", "CS2F"), Bytes{std::byte{1}});
 }
