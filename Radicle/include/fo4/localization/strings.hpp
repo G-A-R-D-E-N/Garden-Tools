@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 namespace fo4::localization {
@@ -41,5 +42,8 @@ void write_string_table_file(const LocalizedStringTable& table,
 
 const LocalizedStringEntry* find_string(const LocalizedStringTable& table,
                                         std::uint32_t id) noexcept;
+
+std::uint32_t next_string_id(const LocalizedStringTable& table) noexcept;
+std::uint32_t add_string(LocalizedStringTable& table, std::string_view text);
 
 }  // namespace fo4::localization

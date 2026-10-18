@@ -159,6 +159,7 @@ add_library(fo4
   src/forms/weapon.cpp
   src/io/atomic_write.cpp
   src/localization/strings.cpp
+  src/plugin/localized_writes.cpp
   src/plugin/tes4.cpp
   src/plugin/reader.cpp
   src/plugin/master_kinds.cpp
@@ -423,6 +424,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_proj_expl_hazd_reencode_real.cpp
     tests/test_scalar_embedded.cpp
     tests/test_field_writer.cpp
+    tests/test_localized_value_writes.cpp
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp

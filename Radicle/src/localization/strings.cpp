@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace fo4::localization {
@@ -272,6 +273,29 @@ const LocalizedStringEntry* find_string(const LocalizedStringTable& table,
   const auto it = std::find_if(table.entries.begin(), table.entries.end(),
                                [id](const auto& entry) { return entry.id == id; });
   return it == table.entries.end() ? nullptr : &*it;
+}
+
+std::uint32_t next_string_id(const LocalizedStringTable& table) noexcept {
+  std::uint32_t next = 1;
+  for (const auto& entry : table.entries) {
+    if (entry.id == std::numeric_limits<std::uint32_t>::max()) return 0;
+    if (entry.id >= next) next = entry.id + 1;
+  }
+  return next;
+}
+
+std::uint32_t add_string(LocalizedStringTable& table, std::string_view text) {
+  if (text.empty()) return 0;
+  std::vector<std::byte> encoded;
+  encoded.reserve(text.size());
+  for (const char ch : text) {
+    encoded.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  }
+  validate_text_bytes(encoded);
+  const auto id = next_string_id(table);
+  if (id == 0) throw StringTableError("localized string table has no free ID");
+  table.entries.push_back({id, std::move(encoded)});
+  return id;
 }
 
 }  // namespace fo4::localization

@@ -19,6 +19,10 @@
 
 namespace fo4 {
 
+namespace localization {
+struct LocalizedStringTable;
+}
+
 enum class RecordCopyStatus {
   inserted,
   replaced,
@@ -85,6 +89,24 @@ enum class RecordRenumberStatus {
   not_local,
   target_exists,
 };
+
+enum class LocalizedValueStatus {
+  updated,
+  unchanged,
+  record_missing,
+  subrecord_missing,
+  field_not_localized,
+  plugin_not_localized,
+  payload_not_an_id,
+  empty_text,
+};
+
+LocalizedValueStatus add_record_localized_string(Plugin& plugin,
+                                                 const FormKey& record_key,
+                                                 Signature subrecord_signature,
+                                                 std::size_t index,
+                                                 std::string_view text,
+                                                 localization::LocalizedStringTable& table);
 
 // Light plugins cap local IDs at 0xFFF; see docs/code-notes/Radicle.md (local_form_id_range).
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
