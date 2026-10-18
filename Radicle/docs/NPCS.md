@@ -119,6 +119,8 @@ Edit rules:
 | NPC_\HeadPart | PNAM | HDPT | FO4:10417 |
 | NPC_\Spell | SPLO | SPEL, LVSP | FO4:10372; wbSPLO FO4:3284 |
 | NPC_\AttackSpell | ATKD | SPEL | FO4:4077, nullable |
+| NPC_\ActorSoundKeyword | CS2K | KYWD | FO4:10434; wbActorSounds Common:8399-8414 |
+| NPC_\ActorSoundSound | CS2D | SNDR | FO4:10434 |
 | NPC_\TemplateActorTraits, Stats, Factions, SpellList, AIData, AIPackages, ModelAnimation, BaseData, Inventory, Script, DefaultPackageList, AttackData, Keywords | TPTA | BMMO, LVLN, NPC_ | FO4:10353; wbNPCTemplateActorEntry Common:8274, nullable |
 
 `NPC_\AttackSpell` is a single 4-byte link at offset 8 inside the 44-byte ATKD payload, and the thirteen `NPC_\TemplateActor*` rows are the thirteen 4-byte links of the 52-byte TPTA payload at offsets 0 to 48, in xEdit member order (`wbNPCTemplateActorEntry` order: Traits, Stats, Factions, Spell List, AI Data, AI Packages, Model/Animation, Base Data, Inventory, Script, Def Package List, Attack Data, Keywords). All fourteen are `nullable: true` and `insertion: existing_only`.
@@ -126,6 +128,12 @@ Edit rules:
 `AttackSpell` is `repeated: true` with `payload_sizes: [44]`, because xEdit wraps ATKD in `wbAttackData` (`wxRStructSK([1], 'Attack', [ATKD, ATKE])`) and the NPC_ member is `wbRArrayS('Attacks', wbAttackData)` (FO4:10377), so a record may carry several ATKD subrecords. The ten ATKD scalars above are `repeated: true` with `payload_size: 44` for the same reason: index 0 is the first attack, index 1 the second, and an index past the last ATKD reports `subrecord_missing`. Because the payload must be exactly 44 bytes, a truncated ATKD exposes no member at all.
 
 These are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nullable: false` and `insertion: existing_only`: each link of the list is read and written by index through the generic FormLink field path, and a write leaves the other links byte-identical. The SPLO count SPCT is not rowed and not maintained, as with `RACE\ActorEffects`. Adding and removing links is not offered; these rows replace no typed list.
+
+`NPC_\ActorSoundKeyword` and `NPC_\ActorSoundSound` are the two links of xEdit's `wbActorSounds` pair: one CS2K keyword and one CS2D sound per sound group. The CS2H group count is not rowed, for the same reason as SPCT, and xEdit's CS2E end marker is empty.
+
+`NPC_\AttachParentSlots` is a typed list in the same shape as `RACE\AttachParentSlots`: a `packed_array` over the APPR subrecord, targets KYWD, `nullable: false` and `mutation: appendable`, so elements can be appended, set and removed. It is the only list NPC_ declares, so its first element is anchored against the declared predecessors (`KWDA` and the rest of the subrecords xEdit orders before APPR, FO4:10404) and appends at the end of the record when none of them is present.
+
+`NPC_\ActorSoundsFinalize` is the whole 1-byte CS2F payload (xEdit `wbByteArray(CS2F, 'Finalize', 1)`, FO4:10436), `repeated: true` because one CS2F follows each sound group.
 
 ## Not covered
 
@@ -137,13 +145,13 @@ These are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nul
 | FO4:10370-10383 | RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR | FormIDs, not scalars. |
 | FO4:10371 | SPCT count | Count with no typed owner; a generic write would desync it from SPLO. The SPLO links themselves are rowed (see Link rows). |
 | FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | Properties (xEdit `wbPRPS`, `Core/wbDefinitionsFO4.pas:10394` at pin 93cc0bc5), an array of 8-byte `wbObjectProperty` entries (`:5266-5272`). Modeled by `NPC_\PropertyActorValue` (link to AVIF, nullable, offset 0, stride 8) and `NPC_\PropertyValue` (f32, offset 4, stride 8) in `Radicle/schema/fallout4/fields.json`, both existing_only. FTYP and NTRM are form IDs; PKID is a repeated form ID list. |
-| FO4:10403-10404 | KWDA/KSIZ keywords, APPR | Covered by the keyword FormLink tables. |
-| FO4:10405 | Object template OBTE/OBTF/OBTS/STOP | Combination struct; not modeled. |
+| FO4:10403-10404 | KWDA/KSIZ keywords | Covered by the keyword FormLink tables. APPR is rowed as `NPC_\AttachParentSlots`. |
+| FO4:10405 | Object template OBTE/OBTF/OBTS/STOP | `Core/wbDefinitionsFO4.pas:5520-5529` (pin 93cc0bc5): OBTE is the combination count, OBTF and STOP are empty markers, and each OBTS combination is a `wbStruct` whose keyword, include and property arrays carry their own counts, so its payload length varies. Walking the NPC_ groups of Fallout4.esm measured OBTE 4 bytes, OBTF 0, STOP 0 and OBTS lengths from 18 to 186 bytes, confirming the OBTS payload is not a fixed width. |
 | FO4:10406-10408 | CNAM, FULL, SHRT | CNAM is a FormID. FULL and SHRT are localized strings; NPC_ is not in `localized_subrecords`, so localization is unchanged. |
 | FO4:10409 | DATA | Empty marker subrecord; authoring only. |
 | FO4:10417-10421 | PNAM head parts, HCLF, BCLF, ZNAM, GNAM | FormIDs or a repeated FormID list. |
 | FO4:10422 | NAM5 | Unknown bytes of no fixed width. |
-| FO4:10432-10436 | CS2H count, CS2K/CS2D sound pairs, CS2E, CS2F | Count and list members are not modeled; CS2H has no typed owner, as with SPCT. |
+| FO4:10432-10436 | CS2H count, CS2E | Count and end marker are not modeled; CS2H has no typed owner, as with SPCT. |
 | FO4:10438-10444 | CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST | FormIDs. |
 | FO4:10446-10447 | MSDK, MSDV | Morph arrays of variable length. |
 | FO4:10459 | TEND offset 4 | Unused byte of `wbByteColors`. |

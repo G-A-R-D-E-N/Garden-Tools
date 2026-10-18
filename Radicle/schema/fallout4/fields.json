@@ -24902,6 +24902,18 @@
           }
         ]
       },
+      "formlink_lists": [
+        {
+          "path": "FURN\\AttachParentSlots",
+          "label": "Attach parent slots",
+          "subrecord": "APPR",
+          "targets": ["KYWD"],
+          "nullable": false,
+          "storage": "packed_array",
+          "mutation": "appendable",
+          "anchor_predecessors": ["XMRK", "NAM1", "WBDT", "MNAM", "COCT", "CTDA", "CITC", "FNAM", "ATTX", "WNAM", "PNAM", "FTYP", "NTRM", "KWDA", "KSIZ", "DEST", "MODF", "MODS", "MODC", "MODT", "MODL", "FULL", "PTRN", "OBND", "VMAD", "EDID"]
+        }
+      ],
       "fields": [
         {
           "path": "FURN\\BoundMinX",
@@ -28397,6 +28409,18 @@
           }
         ]
       },
+      "formlink_lists": [
+        {
+          "path": "NPC_\\AttachParentSlots",
+          "label": "Attach parent slots",
+          "subrecord": "APPR",
+          "targets": ["KYWD"],
+          "nullable": false,
+          "storage": "packed_array",
+          "mutation": "appendable",
+          "anchor_predecessors": ["KWDA", "KSIZ", "PKID", "AIDT", "CNTO", "COCT", "NTRM", "FTYP", "PRPS", "PRKR", "PRKZ", "RCLR", "FCPL", "ECOR", "GWOR", "OCOR", "SPOR", "ATKD", "ATKR", "ANAM", "WNAM", "DEST", "SPLO", "SPCT", "RNAM", "TPTA", "LTPC", "LTPT", "TPLT", "VTCK", "INAM", "SNAM", "ACBS", "STCP", "PTRN", "OBND", "VMAD", "EDID"]
+        }
+      ],
       "fields": [
         {
           "path": "NPC_\\ConfigurationFlags",
@@ -29222,6 +29246,18 @@
           "insertion": "existing_only"
         },
         {
+          "path": "NPC_\\ActorSoundsFinalize",
+          "label": "Actor sounds finalize",
+          "kind": "scalar",
+          "subrecord": "CS2F",
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
           "path": "NPC_\\FaceMorphPositionX",
           "label": "Face morph position X",
           "kind": "scalar",
@@ -29777,7 +29813,9 @@
         {"path": "NPC_\\TemplateActorDefaultPackageList", "label": "Template actor default package list", "subrecord": "TPTA", "offset": 40, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
         {"path": "NPC_\\TemplateActorAttackData", "label": "Template actor attack data", "subrecord": "TPTA", "offset": 44, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
         {"path": "NPC_\\TemplateActorKeywords", "label": "Template actor keywords", "subrecord": "TPTA", "offset": 48, "targets": ["BMMO", "LVLN", "NPC_"], "nullable": true, "insertion": "existing_only"},
-        {"path": "NPC_\\AttackSpell", "label": "Attack spell", "subrecord": "ATKD", "offset": 8, "targets": ["SPEL"], "nullable": true, "repeated": true, "payload_sizes": [44], "insertion": "existing_only"}
+        {"path": "NPC_\\AttackSpell", "label": "Attack spell", "subrecord": "ATKD", "offset": 8, "targets": ["SPEL"], "nullable": true, "repeated": true, "payload_sizes": [44], "insertion": "existing_only"},
+        {"path": "NPC_\\ActorSoundKeyword", "label": "Actor sound keyword", "subrecord": "CS2K", "offset": 0, "targets": ["KYWD"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"},
+        {"path": "NPC_\\ActorSoundSound", "label": "Actor sound", "subrecord": "CS2D", "offset": 0, "targets": ["SNDR"], "nullable": false, "repeated": true, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "SHRT", "ATTX"]
     }

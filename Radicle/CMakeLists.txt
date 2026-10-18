@@ -615,6 +615,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_npc_template_actor_rows.cpp
     tests/test_npc_attack_data_rows.cpp
     tests/test_npc_face_tint_rows.cpp
+    tests/test_npc_furn_attach_slots.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp
