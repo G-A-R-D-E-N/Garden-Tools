@@ -399,3 +399,278 @@ TEST_CASE("Native leveled spell list refuses extra COED entries and leaves the p
     const bool unchanged = leveledReadBytes(path) == before;
     CHECK(unchanged);
 }
+
+TEST_CASE("Native SetLeveledListSettings writes chance none, max count and flags and round-trips through save") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const auto settings = backend.setLeveledListSettings(
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", 20, 3, 2}));
+    REQUIRE(settings.has_value());
+    CHECK(settings->get<std::string>() == "Updated leveled list settings for 000800:Patch.esp in Patch.esp.");
+
+    const auto list = backend.getLeveledList(nlohmann::json::array({"000800:Patch.esp"}));
+    REQUIRE(list.has_value());
+    CHECK(list->at("chanceNone") == 20);
+    CHECK(list->at("maxCount") == 3);
+    CHECK(list->at("flags") == 2);
+    REQUIRE(list->at("entries").size() == 1);
+    CHECK(list->at("entries")[0].at("item") == "000801:Patch.esp");
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto decoded = fo4::forms::decode_leveled_list(fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    CHECK(decoded.chance_none == 20);
+    CHECK(decoded.max_count == 3);
+    CHECK(decoded.flags == 2);
+    REQUIRE(decoded.entries.size() == 1);
+    CHECK(decoded.entries[0].item == fo4::FormKey::parse("000801:Patch.esp"));
+    CHECK(decoded.entries[0].extra.has_value());
+}
+
+TEST_CASE("Native SetLeveledListSettings refuses out-of-range and non-integer values without staging") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes());
+    const auto before = leveledReadBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const std::vector<nlohmann::json> badValues{256, -1, 1.5, "7", nullptr, 18446744073709551615ULL};
+    for (std::size_t position = 2; position <= 4; ++position) {
+        for (const auto& bad : badValues) {
+            nlohmann::json args = nlohmann::json::array({"Patch.esp", "000800:Patch.esp", 1, 1, 1});
+            args[position] = bad;
+            const auto refused = backend.setLeveledListSettings(args);
+            REQUIRE_FALSE(refused.has_value());
+            CHECK(refused.error().type == "InvalidLeveledListSettings");
+        }
+    }
+
+    const auto shortArgs = backend.setLeveledListSettings(
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", 1, 1}));
+    REQUIRE_FALSE(shortArgs.has_value());
+    CHECK(shortArgs.error().type == "InvalidLeveledListSettings");
+
+    const auto badKey = backend.setLeveledListSettings(nlohmann::json::array({"Patch.esp", "zz", 1, 1, 1}));
+    REQUIRE_FALSE(badKey.has_value());
+    CHECK(badKey.error().type == "InvalidFormKey");
+
+    const auto emptyKey = backend.setLeveledListSettings(nlohmann::json::array({"Patch.esp", "", 1, 1, 1}));
+    REQUIRE_FALSE(emptyKey.has_value());
+    CHECK(emptyKey.error().type == "FormKeyMissing");
+
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    CHECK(nlohmann::json::parse(plugins->get<std::string>()).at(0).at("Pending") == false);
+    const bool unchanged = leveledReadBytes(path) == before;
+    CHECK(unchanged);
+}
+
+TEST_CASE("Native SetLeveledListSettings with unchanged values reports no change and stages nothing") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes());
+    const auto before = leveledReadBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const auto same = backend.setLeveledListSettings(
+        nlohmann::json::array({"Patch.esp", "000800:Patch.esp", 10, 2, 1}));
+    REQUIRE(same.has_value());
+    CHECK(same->get<std::string>() == "No change for leveled list settings of 000800:Patch.esp in Patch.esp.");
+
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    CHECK(nlohmann::json::parse(plugins->get<std::string>()).at(0).at("Pending") == false);
+    const bool unchanged = leveledReadBytes(path) == before;
+    CHECK(unchanged);
+}
+
+TEST_CASE("Native leveled list entry add writes entries in level order and refuses an index past the end") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes());
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const auto first = backend.editLeveledListEntry(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "add", 0,
+        nlohmann::json{{"level", 3}, {"item", "000802:Patch.esp"}, {"count", 4}, {"chanceNone", 7}}
+    }));
+    REQUIRE(first.has_value());
+    CHECK(first->get<std::string>() == "Updated leveled list entry 0 in 000800:Patch.esp in Patch.esp.");
+
+    const auto appended = backend.editLeveledListEntry(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "add", 2,
+        nlohmann::json{{"level", 5}, {"item", "000802:Patch.esp"}, {"count", 1}, {"chanceNone", 0}}
+    }));
+    REQUIRE(appended.has_value());
+
+    const auto refused = backend.editLeveledListEntry(nlohmann::json::array({
+        "Patch.esp", "000800:Patch.esp", "add", 4,
+        nlohmann::json{{"level", 6}, {"item", "000802:Patch.esp"}, {"count", 1}, {"chanceNone", 0}}
+    }));
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().type == "LeveledListWriteFailed");
+
+    REQUIRE(backend.invoke("backend.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
+    const auto decoded = fo4::forms::decode_leveled_list(fo4::read_plugin_file(path), fo4::FormKey::parse("000800:Patch.esp"));
+    REQUIRE(decoded.entries.size() == 3);
+    CHECK(decoded.entries[0].level == 1);
+    CHECK(decoded.entries[0].item == fo4::FormKey::parse("000801:Patch.esp"));
+    CHECK(decoded.entries[0].extra.has_value());
+    CHECK(decoded.entries[1].level == 3);
+    CHECK(decoded.entries[1].item == fo4::FormKey::parse("000802:Patch.esp"));
+    CHECK(decoded.entries[1].count == 4);
+    CHECK(decoded.entries[1].chance_none == 7);
+    CHECK_FALSE(decoded.entries[1].extra.has_value());
+    CHECK(decoded.entries[2].level == 5);
+    CHECK(decoded.entries[2].item == fo4::FormKey::parse("000802:Patch.esp"));
+    CHECK_FALSE(decoded.entries[2].extra.has_value());
+}
+
+TEST_CASE("Native leveled list entry edit refuses malformed operations and values without staging") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes());
+    const auto before = leveledReadBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const nlohmann::json valid{{"level", 1}, {"item", "000802:Patch.esp"}, {"count", 1}, {"chanceNone", 0}};
+    const auto with = [&](const char* field, const nlohmann::json& value) {
+        auto entry = valid;
+        entry[field] = value;
+        return entry;
+    };
+    const auto editArgs = [](const char* op, const nlohmann::json& index, const nlohmann::json& entry) {
+        return nlohmann::json::array({"Patch.esp", "000800:Patch.esp", op, index, entry});
+    };
+    const auto refuses = [&](const nlohmann::json& args, const char* type) {
+        const auto result = backend.editLeveledListEntry(args);
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == type);
+    };
+
+    refuses(editArgs("insert", 0, valid), "InvalidLeveledListOperation");
+    refuses(editArgs("set", nullptr, valid), "InvalidLeveledListEntry");
+    refuses(editArgs("set", -1, valid), "InvalidLeveledListEntry");
+    refuses(editArgs("set", 1.5, valid), "InvalidLeveledListEntry");
+    refuses(editArgs("set", "0", valid), "InvalidLeveledListEntry");
+    refuses(editArgs("set", 4294967296, valid), "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, nullptr), "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, nlohmann::json{{"level", 1}, {"count", 1}, {"chanceNone", 0}}), "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, with("item", "zz")), "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, with("chanceNone", 256)), "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, with("level", 65536)), "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, with("count", -1)), "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, with("extra", nlohmann::json{{"owner", "000800:Patch.esp"}, {"itemCondition", 1.0}})),
+            "InvalidLeveledListEntry");
+    refuses(editArgs("add", 0, with("extra", nlohmann::json{{"owner", "zz"}, {"globalOrRank", 0}, {"itemCondition", 1.0}})),
+            "InvalidFormKey");
+    refuses(editArgs("add", 0, with("extra", nlohmann::json{{"owner", "000800:Patch.esp"}, {"globalOrRank", 0}, {"itemCondition", "1.0"}})),
+            "InvalidLeveledListEntry");
+    refuses(nlohmann::json::array({"Patch.esp", "zz", "add", 0, valid}), "InvalidFormKey");
+
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    CHECK(nlohmann::json::parse(plugins->get<std::string>()).at(0).at("Pending") == false);
+    const bool unchanged = leveledReadBytes(path) == before;
+    CHECK(unchanged);
+}
+
+TEST_CASE("Native leveled list reads and edits report distinct errors for bad targets") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes());
+    const auto before = leveledReadBytes(path);
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    REQUIRE(backend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+
+    const auto expectError = [](const auto& result, const char* type) {
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().type == type);
+    };
+    const auto key = nlohmann::json("000800:Patch.esp");
+    expectError(backend.getLeveledList(nlohmann::json::array({"zz"})), "InvalidFormKey");
+    expectError(backend.getLeveledList(nlohmann::json::array({""})), "FormKeyMissing");
+    expectError(backend.getLeveledList(nlohmann::json::array({"000899:Patch.esp"})), "RecordNotFound");
+    expectError(backend.getLeveledList(nlohmann::json::array({"000800:Patch.esp", "Nope.esp"})), "PluginNotLoaded");
+    expectError(backend.getLeveledList(nlohmann::json::array({"000802:Patch.esp"})), "LeveledListReadFailed");
+    expectError(backend.setLeveledListSettings(nlohmann::json::array({"", key, 1, 1, 1})), "PluginMissing");
+    expectError(backend.setLeveledListSettings(nlohmann::json::array({"Nope.esp", key, 1, 1, 1})), "PluginNotLoaded");
+    expectError(backend.setLeveledListSettings(nlohmann::json::array({"Patch.esp", "000899:Patch.esp", 1, 1, 1})), "RecordNotFound");
+    expectError(backend.setLeveledListSettings(nlohmann::json::array({"Patch.esp", "000802:Patch.esp", 1, 1, 1})), "LeveledListWriteFailed");
+
+    const auto plugins = backend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(plugins.has_value());
+    CHECK(nlohmann::json::parse(plugins->get<std::string>()).at(0).at("Pending") == false);
+    const bool unchanged = leveledReadBytes(path) == before;
+    CHECK(unchanged);
+}
+
+TEST_CASE("Native leveled list edits are refused on a protected plugin and when the file changed on disk") {
+    const auto root = leveledTempRoot();
+    LeveledCleanup cleanup{root};
+    const auto path = root / "Patch.esp";
+    leveledWriteBytes(path, settledLeveledBytes());
+    const auto before = leveledReadBytes(path);
+    const auto removeArgs = nlohmann::json::array({"Patch.esp", "000800:Patch.esp", "remove", 0, nullptr});
+    const auto settings = nlohmann::json::array({"Patch.esp", "000800:Patch.esp", 1, 1, 1});
+
+    fo4ide::plugin::RadiclePluginBackend protectedBackend;
+    const nlohmann::json protectedEnvironment{
+        {"plugins", nlohmann::json::array({
+            nlohmann::json{
+                {"name", "Patch.esp"},
+                {"path", path.string()},
+                {"source", "data"},
+                {"resolved", true}
+            }
+        })}
+    };
+    REQUIRE(protectedBackend.invoke("environment.LoadMo2", protectedEnvironment).has_value());
+
+    const auto removed = protectedBackend.editLeveledListEntry(removeArgs);
+    REQUIRE_FALSE(removed.has_value());
+    CHECK(removed.error().type == "PluginReadOnly");
+    const auto protectedSettings = protectedBackend.setLeveledListSettings(settings);
+    REQUIRE_FALSE(protectedSettings.has_value());
+    CHECK(protectedSettings.error().type == "PluginReadOnly");
+    const auto protectedPlugins = protectedBackend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(protectedPlugins.has_value());
+    CHECK(nlohmann::json::parse(protectedPlugins->get<std::string>()).at(0).at("Pending") == false);
+    const bool protectedUnchanged = leveledReadBytes(path) == before;
+    CHECK(protectedUnchanged);
+
+    fo4ide::plugin::RadiclePluginBackend changedBackend;
+    REQUIRE(changedBackend.invoke("environment.LoadMo2", leveledEnvironment(path)).has_value());
+    const auto loadedTime = std::filesystem::last_write_time(path);
+    leveledWriteBytes(path, circularLeveledBytes());
+    std::filesystem::last_write_time(path, loadedTime + std::chrono::seconds(2));
+
+    const auto changedRemoved = changedBackend.editLeveledListEntry(removeArgs);
+    REQUIRE_FALSE(changedRemoved.has_value());
+    CHECK(changedRemoved.error().type == "PluginChangedOnDisk");
+    const auto changedSettings = changedBackend.setLeveledListSettings(settings);
+    REQUIRE_FALSE(changedSettings.has_value());
+    CHECK(changedSettings.error().type == "PluginChangedOnDisk");
+    const auto changedPlugins = changedBackend.invoke("appInterop.GetPlugins", nlohmann::json::array());
+    REQUIRE(changedPlugins.has_value());
+    CHECK(nlohmann::json::parse(changedPlugins->get<std::string>()).at(0).at("Pending") == false);
+}

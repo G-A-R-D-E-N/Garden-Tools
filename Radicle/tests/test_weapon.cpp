@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -22,7 +23,8 @@ std::vector<std::byte> words(std::initializer_list<std::uint32_t> values) {
   return out.bytes;
 }
 
-fo4::Plugin weapon_plugin(std::uint16_t form_version, const std::vector<std::byte>& dama) {
+fo4::Plugin weapon_plugin(std::uint16_t form_version, const std::vector<std::byte>& dama,
+                          std::string_view record_signature = "WEAP", int dama_count = 1) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
@@ -31,9 +33,9 @@ fo4::Plugin weapon_plugin(std::uint16_t form_version, const std::vector<std::byt
   hedr.u32(0x800);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::end_record(out, tes4);
-  const auto group = fo4::test::begin_group(out, "WEAP", 0);
-  const auto weap = fo4::test::begin_record(out, "WEAP", 0, 0x800, form_version);
-  fo4::test::write_subrecord(out, "DAMA", dama);
+  const auto group = fo4::test::begin_group(out, record_signature, 0);
+  const auto weap = fo4::test::begin_record(out, record_signature, 0, 0x800, form_version);
+  for (int index = 0; index < dama_count; ++index) fo4::test::write_subrecord(out, "DAMA", dama);
   fo4::test::end_record(out, weap);
   fo4::test::end_group(out, group);
   return fo4::read_plugin(out.bytes, "Patch.esp");
@@ -76,5 +78,26 @@ TEST(WeaponDamageTypes, AnAbsentDamaSubrecordIsAnEmptyList) {
 TEST(WeaponDamageTypes, RejectsAKeyWithNoWeaponRecord) {
   const auto plugin = weapon_plugin(131, words({0x801, 50}));
   EXPECT_THROW(static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x999))),
+               fo4::forms::WeaponError);
+}
+
+TEST(WeaponDamageTypes, RejectsTwoDamaSubrecords) {
+  const auto plugin = weapon_plugin(131, words({0x801, 50}), "WEAP", 2);
+  EXPECT_THROW(static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800))),
+               fo4::forms::WeaponError);
+}
+
+TEST(WeaponDamageTypes, Version151StillReadsEightByteEntries) {
+  const auto plugin = weapon_plugin(151, words({0x801, 50, 0x802, 7}));
+  const auto types = fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800));
+  ASSERT_EQ(types.size(), 2u);
+  EXPECT_EQ(types[1].amount, 7u);
+  EXPECT_EQ(types[0].curve_table, fo4::FormKey{});
+  EXPECT_EQ(types[1].curve_table, fo4::FormKey{});
+}
+
+TEST(WeaponDamageTypes, RejectsAKeyThatIsNotAWeapon) {
+  const auto plugin = weapon_plugin(131, words({0x801, 50}), "MISC");
+  EXPECT_THROW(static_cast<void>(fo4::forms::decode_weapon_damage_types(plugin, plugin_key(0x800))),
                fo4::forms::WeaponError);
 }

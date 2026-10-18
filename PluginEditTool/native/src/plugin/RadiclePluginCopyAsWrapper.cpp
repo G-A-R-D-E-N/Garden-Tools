@@ -1,15 +1,52 @@
 #include <fo4ide/plugin/RadiclePluginBackend.hpp>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "RadiclePluginSupport.hpp"
 
 #include <fo4/forms/leveled_list.hpp>
 #include <fo4/plugin/mutation.hpp>
+#include <fo4/plugin/reader.hpp>
+#include <fo4/schema/form_links.hpp>
 
 namespace fo4ide::plugin {
+
+namespace {
+
+bool sameRecordContent(const fo4::Record& left, const fo4::Record& right) {
+    const auto withoutEditorId = [](const fo4::Record& record) {
+        std::vector<const fo4::Subrecord*> kept;
+        for (const auto& subrecord : record.subrecords) {
+            if (subrecord.signature != fo4::sig_edid) kept.push_back(&subrecord);
+        }
+        return kept;
+    };
+    const auto a = withoutEditorId(left);
+    const auto b = withoutEditorId(right);
+    return left.header.signature == right.header.signature && a.size() == b.size() &&
+           std::equal(a.begin(), a.end(), b.begin(),
+                      [](const fo4::Subrecord* x, const fo4::Subrecord* y) {
+                          return x->signature == y->signature && x->data == y->data;
+                      });
+}
+
+bool sameOverrideContent(const fo4::Plugin& targetPlugin, const fo4::Record& targetRecord,
+                         const fo4::Plugin& sourcePlugin, const fo4::Record& sourceRecord) {
+    auto remapped = targetRecord;
+    try {
+        fo4::remap_record_form_links(remapped, fo4::plugin_form_id_context(targetPlugin),
+                                     fo4::plugin_form_id_context(sourcePlugin), &targetPlugin);
+    } catch (const std::exception&) {
+        return false;
+    }
+    return sameRecordContent(remapped, sourceRecord);
+}
+
+}  // namespace
 
 Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json& arguments) {
     const auto sourceName = support::stringArgument(arguments, 0);
@@ -85,6 +122,16 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
             ", which also override " + formKeyText + ". The copied override will not win "
             "until " + target->name + " loads after them.");
     }
+    const auto* targetRecord = fo4::find_record(target->plugin, key);
+    if (source != target && targetRecord != nullptr &&
+        !sameOverrideContent(target->plugin, *targetRecord, source->plugin, *sourceRecord)) {
+        return std::unexpected(Error{
+            "WrapperTargetOverrideDiffers",
+            targetName + " already overrides " + formKeyText +
+                " with different content; wrap from " + targetName +
+                " instead so its entries are kept"
+        });
+    }
 
     if (support::topLevelRecord(source->plugin, key) == nullptr) {
         return std::unexpected(Error{
@@ -100,18 +147,26 @@ Result<nlohmann::json> RadiclePluginBackend::copyAsWrapper(const nlohmann::json&
         if (!copiedKey) return std::unexpected(copiedKey.error());
 
         const auto status = fo4::copy_record_as_override(mutated, source->plugin, key, false);
-        if (status == fo4::RecordCopyStatus::source_missing) {
-            return std::unexpected(Error{
-                "RecordNotFound",
-                "Record is not present in " + sourceName + ": " + formKeyText
-            });
-        }
-        if (status == fo4::RecordCopyStatus::source_containment_unsupported) {
-            return std::unexpected(Error{
-                "RecordContainmentUnsupported",
-                "Cannot insert this record without reproducing its nested source GRUP hierarchy: " +
-                    formKeyText
-            });
+        switch (status) {
+            case fo4::RecordCopyStatus::source_missing:
+                return std::unexpected(Error{
+                    "RecordNotFound",
+                    "Record is not present in " + sourceName + ": " + formKeyText
+                });
+            case fo4::RecordCopyStatus::source_containment_unsupported:
+                return std::unexpected(Error{
+                    "RecordContainmentUnsupported",
+                    "Cannot insert this record without reproducing its nested source GRUP hierarchy: " +
+                        formKeyText
+                });
+            case fo4::RecordCopyStatus::inserted:
+            case fo4::RecordCopyStatus::already_exists:
+                break;
+            case fo4::RecordCopyStatus::replaced:
+                return std::unexpected(Error{
+                    "CopyWrapperFailed",
+                    "Unexpected replaced copy status for wrapper " + formKeyText
+                });
         }
         if (!fo4::forms::reset_leveled_list(mutated, key)) {
             return std::unexpected(Error{

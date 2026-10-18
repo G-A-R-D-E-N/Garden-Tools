@@ -294,6 +294,31 @@ TEST_F(BehaviorRead, ProcedureCAbiRefusesANonPackRecordLikePackDecode) {
   EXPECT_EQ(tree, nullptr);
 }
 
+TEST_F(BehaviorRead, ProcedureCAbiRefusesForeignEnvironmentAndNullArguments) {
+  write({{"PACK", 0x800, {{"PKCU", words({1, 0, 9})}, {"ANAM", text("Int")}, {"CNAM", words({5})}, {"UNAM", one(0)},
+    {"ANAM", text("Procedure")}, {"CITC", words({0})}, {"PNAM", text("Travel")}, {"POBA", {}}}}});
+  const auto path_text = path.string(); const char* paths[] = {path_text.c_str()};
+  radicle_env* raw_env = nullptr; radicle_env* raw_other = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_env), RADICLE_STATUS_OK);
+  ASSERT_EQ(radicle_env_load(paths, 1, &raw_other), RADICLE_STATUS_OK);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> env(raw_env, radicle_env_destroy);
+  const std::unique_ptr<radicle_env, decltype(&radicle_env_destroy)> other(raw_other, radicle_env_destroy);
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(raw_env, radicle_form_key{"Behavior.esm", 0x800}, &record), RADICLE_STATUS_OK);
+  radicle_package_procedure_tree sentinel{};
+  const radicle_package_procedure_tree* tree = &sentinel;
+  EXPECT_EQ(radicle_package_procedure_decode(raw_other, record, &tree), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(tree, nullptr);
+  EXPECT_EQ(radicle_package_procedure_decode(nullptr, record, &tree), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_package_procedure_decode(raw_env, nullptr, &tree), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_package_procedure_decode(raw_env, record, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  radicle_package_procedure_free(nullptr);
+  const radicle_package_procedure_tree* raw_tree = nullptr;
+  ASSERT_EQ(radicle_package_procedure_decode(raw_env, record, &raw_tree), RADICLE_STATUS_OK);
+  const std::unique_ptr<const radicle_package_procedure_tree, decltype(&radicle_package_procedure_free)> decoded(raw_tree, radicle_package_procedure_free);
+  EXPECT_EQ(decoded->node_count, 1u);
+}
+
 TEST(PackageProcedure, ExpectedInputCountsMatchTheVerifiedLeaves) {
   EXPECT_EQ(fo4::env::expected_input_count("Travel"), 8u); EXPECT_EQ(fo4::env::expected_input_count("Sandbox"), 16u);
   EXPECT_EQ(fo4::env::expected_input_count("Sit"), 1u); EXPECT_EQ(fo4::env::expected_input_count("Sleep"), 1u);

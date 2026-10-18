@@ -187,6 +187,9 @@ jobs:
           --output publish-check -p:DebugType=none -p:DebugSymbols=false
           -p:BuildCommit=${{ env.BUILD_COMMIT }}
 
+      - name: Test package script
+        run: ${{ matrix.python }} -I -B -m unittest discover -s tools/ci -p "test_package.py"
+
       - name: Verify package identity and remove symbols
         run: >
           ${{ matrix.python }} tools/ci/package.py publish-check

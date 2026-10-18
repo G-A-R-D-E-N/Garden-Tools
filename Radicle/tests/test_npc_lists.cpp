@@ -561,3 +561,23 @@ TEST(NpcLists, RefusesMissingRecordsOutOfRangeIndexesAndNullEntries) {
   EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), fo4::forms::NpcFaction{}), NpcError);
   EXPECT_THROW(fo4::forms::add_npc_inventory_item(plugin, key(), fo4::forms::NpcInventoryItem{}), NpcError);
 }
+
+TEST(NpcLists, DuplicateCountSubrecordsFailClosed) {
+  auto perks = base();
+  perks.insert(perks.begin() + 6, Entry{"PRKZ", u32_value(2)});
+  EXPECT_THROW(fo4::forms::decode_npc_perks(read_npc(perks), key()), NpcError);
+
+  auto inventory = base();
+  inventory.insert(inventory.begin() + 9, Entry{"COCT", u32_value(2)});
+  EXPECT_THROW(fo4::forms::decode_npc_inventory(read_npc(inventory), key()), NpcError);
+}
+
+TEST(NpcLists, SplitSnamRunRefusesAddAndLeavesBytesUnchanged) {
+  auto entries = base();
+  entries.insert(entries.begin() + 13, Entry{"SNAM", snam(0x00000123, 2)});
+  auto plugin = read_npc(entries);
+  const auto original = fo4::test::original_bytes(plugin);
+  EXPECT_THROW(fo4::forms::add_npc_faction(plugin, key(), {fo4::FormKey::parse("000124:Fallout4.esm"), 1}),
+               NpcError);
+  EXPECT_EQ(fo4::test::original_bytes(plugin), original);
+}

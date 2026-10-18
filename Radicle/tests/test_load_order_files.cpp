@@ -21,6 +21,7 @@ using fo4::test::TempDataDir;
 
 constexpr std::uint32_t k_master = 0x1;
 constexpr std::uint32_t k_light = 0x200;
+constexpr std::size_t k_record_header_size = 24;
 
 std::vector<std::string> names_of(const AssembledLoadOrder& order) {
   std::vector<std::string> names;
@@ -44,6 +45,14 @@ bool has_finding_detail(const AssembledLoadOrder& order, const std::string& code
   return std::any_of(order.findings.begin(), order.findings.end(), [&](const auto& finding) {
     return finding.code == code && finding.detail.find(text) != std::string::npos;
   });
+}
+
+std::vector<std::byte> with_tes4_data_size(std::uint32_t size) {
+  auto bytes = make_tes4_plugin(0, 1.0f, {});
+  for (std::size_t i = 0; i < 4; ++i) {
+    bytes[4 + i] = std::byte{static_cast<std::uint8_t>(size >> (8 * i))};
+  }
+  return bytes;
 }
 
 }  // namespace
@@ -506,6 +515,43 @@ TEST(LoadOrderFiles, UnreadableHeaderIsReportedAndDropped) {
   const auto order = fo4::loadorder::assemble_load_order(data.path(), PluginList{}, {}, OfficialTable::og_ng);
   EXPECT_EQ(names_of(order), (std::vector<std::string>{"Mod.esp"}));
   EXPECT_TRUE(has_finding(order, "unreadable_header", "Junk.esp"));
+}
+
+TEST(LoadOrderFiles, Tes4DataSizeAboveSixteenMiBIsReportedAndDropped) {
+  TempDataDir data;
+  data.write("Huge.esp", with_tes4_data_size(16u * 1024u * 1024u + 1), 1);
+  data.write("Mod.esp", make_tes4_plugin(0, 1.0f, {}), 2);
+
+  const auto order = fo4::loadorder::assemble_load_order(data.path(), PluginList{}, {}, OfficialTable::og_ng);
+  EXPECT_EQ(names_of(order), (std::vector<std::string>{"Mod.esp"}));
+  EXPECT_TRUE(has_finding(order, "unreadable_header", "Huge.esp"));
+  EXPECT_TRUE(has_finding_detail(order, "unreadable_header", "exceeds 16 MiB"));
+  EXPECT_FALSE(order.failed);
+}
+
+TEST(LoadOrderFiles, Tes4DataSizePastEndOfFileIsReportedAndDropped) {
+  TempDataDir data;
+  const auto remaining = static_cast<std::uint32_t>(make_tes4_plugin(0, 1.0f, {}).size() - k_record_header_size);
+  data.write("Short.esp", with_tes4_data_size(remaining + 1), 1);
+  data.write("Mod.esp", make_tes4_plugin(0, 1.0f, {}), 2);
+
+  const auto order = fo4::loadorder::assemble_load_order(data.path(), PluginList{}, {}, OfficialTable::og_ng);
+  EXPECT_EQ(names_of(order), (std::vector<std::string>{"Mod.esp"}));
+  EXPECT_TRUE(has_finding(order, "unreadable_header", "Short.esp"));
+  EXPECT_TRUE(has_finding_detail(order, "unreadable_header", "overruns the file"));
+  EXPECT_FALSE(order.failed);
+}
+
+TEST(LoadOrderFiles, Tes4DataSizeExactlySixteenMiBIsNotTreatedAsTooLarge) {
+  TempDataDir data;
+  data.write("Edge.esp", with_tes4_data_size(16u * 1024u * 1024u), 1);
+  data.write("Mod.esp", make_tes4_plugin(0, 1.0f, {}), 2);
+
+  const auto order = fo4::loadorder::assemble_load_order(data.path(), PluginList{}, {}, OfficialTable::og_ng);
+  EXPECT_EQ(names_of(order), (std::vector<std::string>{"Mod.esp"}));
+  EXPECT_TRUE(has_finding(order, "unreadable_header", "Edge.esp"));
+  EXPECT_TRUE(has_finding_detail(order, "unreadable_header", "overruns the file"));
+  EXPECT_FALSE(has_finding_detail(order, "unreadable_header", "exceeds"));
 }
 
 TEST(LoadOrderFiles, MutualMasterCycleIsReportedInsteadOfLooping) {

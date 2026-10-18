@@ -254,3 +254,65 @@ TEST_CASE("Masters light toggle is in memory until Save Plugin persists it") {
     REQUIRE(backend.invoke("masters.SavePlugin", nlohmann::json::array({"Patch.esp"})).has_value());
     CHECK_FALSE(fo4::read_plugin_file(patch).header.tes4_flags.is_small_file());
 }
+
+TEST_CASE("Native plugin kind follows the filename when the TES4 flags are clear") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto lightPath = root / "Light.esl";
+    const auto basePath = root / "Base.esm";
+    const auto plainPath = root / "Plain.esp";
+    const auto userPath = root / "User.esp";
+    writeBytes(lightPath, fo4::test::make_tes4_plugin(0, 1.0f, {}));
+    writeBytes(basePath, fo4::test::make_tes4_plugin(0, 1.0f, {}));
+    writeBytes(plainPath, fo4::test::make_tes4_plugin(0, 1.0f, {}));
+    writeBytes(userPath, fo4::test::make_tes4_plugin(0, 1.0f, {"Light.esl"}));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Light.esl", lightPath),
+            pluginEntry("Base.esm", basePath),
+            pluginEntry("Plain.esp", plainPath),
+            pluginEntry("User.esp", userPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto active = parseStringResult(backend.invoke("backend.GetActivePlugins", nlohmann::json::array()));
+    REQUIRE(active.size() == 4);
+    const std::vector<std::string> kinds{"light", "master", "plugin", "plugin"};
+    for (std::size_t index = 0; index < kinds.size(); ++index) {
+        CHECK(active.at(index).at("Kind") == kinds[index]);
+    }
+
+    const auto light = parseStringResult(backend.invoke("masters.List", nlohmann::json::array({"Light.esl"})));
+    CHECK(light.at("light") == true);
+    const auto plain = parseStringResult(backend.invoke("masters.List", nlohmann::json::array({"Plain.esp"})));
+    CHECK(plain.at("light") == false);
+    const auto user = parseStringResult(backend.invoke("masters.List", nlohmann::json::array({"User.esp"})));
+    REQUIRE(user.at("masters").size() == 1);
+    CHECK(user.at("masters")[0].at("kind") == "light");
+}
+
+TEST_CASE("Native UpdateOnam treats a filename .esm without the master flag as a master") {
+    const auto root = tempRoot();
+    Cleanup cleanup{root};
+    const auto flaglessPath = root / "Flagless.esm";
+    const auto plainPath = root / "Plain.esp";
+    writeBytes(flaglessPath, fo4::test::make_tes4_plugin(0, 1.0f, {}));
+    writeBytes(plainPath, fo4::test::make_tes4_plugin(0, 1.0f, {}));
+
+    fo4ide::plugin::RadiclePluginBackend backend;
+    const nlohmann::json environment{
+        {"plugins", nlohmann::json::array({
+            pluginEntry("Flagless.esm", flaglessPath),
+            pluginEntry("Plain.esp", plainPath)
+        })}
+    };
+    REQUIRE(backend.invoke("environment.LoadMo2", environment).has_value());
+
+    const auto plain = textResult(backend.updateOnam(nlohmann::json::array({"Plain.esp"})));
+    CHECK(plain == "Plain.esp is not master-flagged; the game ignores ONAM there.");
+    const auto flagless = textResult(backend.updateOnam(nlohmann::json::array({"Flagless.esm"})));
+    CHECK(flagless == "ONAM in Flagless.esm is already up to date.");
+}

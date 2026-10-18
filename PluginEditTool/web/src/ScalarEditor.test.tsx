@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScalarPresentation } from './backend';
 import { ScalarCell, ScalarEditor, ScalarText } from './ScalarEditor';
-import { flagIsSet, scalarLabel, setFlag } from './scalarPresentation';
+import { flagIsSet, rawEditable, scalarLabel, setFlag } from './scalarPresentation';
 
 const crimeArrest: ScalarPresentation = {
   kind: 'enum', names: [{ value: 0, name: 'False' }, { value: 1, name: 'True' }],
@@ -57,6 +57,27 @@ describe('flag bits', () => {
   it('sets and reads bit 31 without going negative', () => {
     expect(setFlag(0, 31, true)).toBe(2147483648);
     expect(flagIsSet(2147483648, 31)).toBe(true);
+  });
+
+  it('clears a flag bit, ignores a no-op change and reads bits above 31', () => {
+    expect(setFlag(3, 0, false)).toBe(2);
+    expect(setFlag(2, 0, false)).toBe(2);
+    expect(setFlag(2, 0, true)).toBe(3);
+    expect(setFlag(2147483649, 31, false)).toBe(1);
+    expect(scalarLabel(String(2 ** 40), { kind: 'flags', names: [{ bit: 40, name: 'Big' }] })).toBe('Big');
+  });
+});
+
+describe('rawEditable', () => {
+  it('accepts signed integers for enums and unsigned for flags', () => {
+    expect(rawEditable('5', crimeArrest)).toBe(true);
+    expect(rawEditable('-5', crimeArrest)).toBe(true);
+    expect(rawEditable('1.5', crimeArrest)).toBe(false);
+    expect(rawEditable('', crimeArrest)).toBe(false);
+    expect(rawEditable('0x10', crimeArrest)).toBe(false);
+    expect(rawEditable(' 1', crimeArrest)).toBe(false);
+    expect(rawEditable('5', flags)).toBe(true);
+    expect(rawEditable('-5', flags)).toBe(false);
   });
 });
 

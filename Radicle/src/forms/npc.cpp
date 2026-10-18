@@ -348,6 +348,7 @@ std::vector<NpcFaction> decode_npc_factions(const Plugin& plugin, const FormKey&
 }
 
 bool add_npc_faction(Plugin& plugin, const FormKey& key, const NpcFaction& value) {
+  require_editable(plugin, key);
   require_local_target(plugin, value.faction, k_fact, "SNAM faction");
   auto entries = decode_npc_factions(plugin, key);
   entries.push_back(value);
@@ -394,6 +395,7 @@ std::vector<NpcPerk> decode_npc_perks(const Plugin& plugin, const FormKey& key) 
 }
 
 bool add_npc_perk(Plugin& plugin, const FormKey& key, const NpcPerk& value) {
+  require_editable(plugin, key);
   require_local_target(plugin, value.perk, k_perk, "PRKR perk");
   auto entries = decode_npc_perks(plugin, key);
   entries.push_back(value);
@@ -459,6 +461,7 @@ void require_inventory_target(const Plugin& plugin, const NpcInventoryItem& valu
 }
 
 bool add_npc_inventory_item(Plugin& plugin, const FormKey& key, const NpcInventoryItem& value) {
+  require_editable(plugin, key);
   require_inventory_target(plugin, value);
   auto entries = decode_npc_inventory(plugin, key);
   entries.push_back(value);
