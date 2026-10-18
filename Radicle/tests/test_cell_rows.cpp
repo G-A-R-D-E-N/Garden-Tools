@@ -116,6 +116,13 @@ Bytes u32_bytes(std::uint32_t value) {
   return out.bytes;
 }
 
+Bytes link_pair(std::uint32_t first, std::uint32_t second) {
+  ByteWriter out;
+  out.u32(first);
+  out.u32(second);
+  return out.bytes;
+}
+
 Bytes i32_bytes(std::int32_t value) {
   ByteWriter out;
   out.i32(value);
@@ -258,8 +265,8 @@ std::vector<std::byte> make_plugin() {
        {"RVIS", u32_bytes(0x00000A2A)},
        {"VISI", u16_bytes(0x1234)},
        {"PCMB", u16_bytes(0xABCD)},
-       {"XCLR", u32_bytes(0x00000A30)},
-       {"XCLR", u32_bytes(0x00000A31)}});
+       {"XCLR", link_pair(0x00000A30, 0x00000A31)},
+       {"XPRI", link_pair(0x00000A50, 0x00000A51)}});
   return out.bytes;
 }
 
@@ -394,12 +401,12 @@ TEST(CellRows, LinkRowsNameTheirSubrecordsOffsetsPayloadsAndTargets) {
   EXPECT_FALSE(owner->nullable);
 }
 
-TEST(CellRows, RegionsListIsPerSubrecordAndAppendable) {
+TEST(CellRows, RegionsAndPreVisReferenceListsArePackedAndAppendable) {
   const auto list = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("CELL"),
                                                           "CELL\\Regions");
   ASSERT_TRUE(list.has_value());
   EXPECT_EQ(list->subrecord, fo4::Signature::from_string("XCLR"));
-  EXPECT_EQ(list->storage, fo4::schema::FormLinkListStorage::per_subrecord);
+  EXPECT_EQ(list->storage, fo4::schema::FormLinkListStorage::packed_array);
   EXPECT_TRUE(list->can_insert);
   EXPECT_FALSE(list->nullable);
   EXPECT_FALSE(list->wildcard_target);
@@ -412,6 +419,21 @@ TEST(CellRows, RegionsListIsPerSubrecordAndAppendable) {
       fo4::Signature::from_string("CELL"), "Regions");
   ASSERT_TRUE(by_field.has_value());
   EXPECT_EQ(by_field->path, list->path);
+
+  const auto previs = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("CELL"),
+                                                            "CELL\\PreVisReferences");
+  ASSERT_TRUE(previs.has_value());
+  EXPECT_EQ(previs->subrecord, fo4::Signature::from_string("XPRI"));
+  EXPECT_EQ(previs->storage, fo4::schema::FormLinkListStorage::packed_array);
+  EXPECT_TRUE(previs->can_insert);
+  EXPECT_FALSE(previs->nullable);
+  EXPECT_EQ(fo4::schema::formlink_list_targets(*previs).size(), 9u);
+  EXPECT_TRUE(fo4::schema::formlink_list_target_allowed(*previs,
+                                                        fo4::Signature::from_string("PCON")));
+  EXPECT_TRUE(fo4::schema::formlink_list_target_allowed(*previs,
+                                                        fo4::Signature::from_string("PGRE")));
+  EXPECT_FALSE(fo4::schema::formlink_list_target_allowed(*previs,
+                                                         fo4::Signature::from_string("REGN")));
 }
 
 TEST(CellRows, ReadsScalarsLinksAndRegionsFromThePlugin) {
@@ -477,6 +499,20 @@ TEST(CellRows, ReadsScalarsLinksAndRegionsFromThePlugin) {
   ASSERT_EQ(values->size(), 2u);
   EXPECT_EQ((*values)[0], fo4::FormKey::parse("000A30:Patch.esp"));
   EXPECT_EQ((*values)[1], fo4::FormKey::parse("000A31:Patch.esp"));
+
+  const auto previs = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("CELL"),
+                                                            "CELL\\PreVisReferences");
+  ASSERT_TRUE(previs.has_value());
+  const auto previs_size = fo4::schema::record_formlink_list_size(plugin, fo4::FormKey::parse(key),
+                                                                  *previs);
+  ASSERT_TRUE(previs_size.has_value());
+  EXPECT_EQ(*previs_size, 2u);
+  const auto previs_values = fo4::schema::record_formlink_list_values(
+      plugin, fo4::FormKey::parse(key), *previs);
+  ASSERT_TRUE(previs_values.has_value());
+  ASSERT_EQ(previs_values->size(), 2u);
+  EXPECT_EQ((*previs_values)[0], fo4::FormKey::parse("000A50:Patch.esp"));
+  EXPECT_EQ((*previs_values)[1], fo4::FormKey::parse("000A51:Patch.esp"));
 }
 
 TEST(CellRows, ShortPayloadsHideRowsInsteadOfReportingThem) {
@@ -562,6 +598,19 @@ TEST(CellRows, WritesScalarsAndLinksThenRereads) {
                                                           fo4::FormKey::parse("000A42:Patch.esp")),
             fo4::schema::FormLinkListMutationStatus::updated);
 
+  const auto previs = fo4::schema::formlink_list_descriptor(fo4::Signature::from_string("CELL"),
+                                                            "CELL\\PreVisReferences");
+  ASSERT_TRUE(previs.has_value());
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key, *previs, 2,
+                                                          fo4::FormKey::parse("000A52:Patch.esp")),
+            fo4::schema::FormLinkListMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::schema::set_record_formlink_list_element(plugin, key, *previs, 0,
+                                                          fo4::FormKey::parse("000A52:Patch.esp")),
+            fo4::schema::FormLinkListMutationStatus::updated);
+  EXPECT_EQ(fo4::schema::insert_record_formlink_list_element(plugin, key, *previs, 2,
+                                                             fo4::FormKey::parse("000A53:Patch.esp")),
+            fo4::schema::FormLinkListMutationStatus::updated);
+
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto reread_key = "000C10:Patch.esp";
   EXPECT_EQ(sub_bytes(reread, reread_key, "DATA"), u16_bytes(0x0003));
@@ -572,7 +621,12 @@ TEST(CellRows, WritesScalarsAndLinksThenRereads) {
   EXPECT_EQ(sub_bytes(reread, reread_key, "XWEM"), text_bytes("other.dds"));
   EXPECT_EQ(sub_bytes(reread, reread_key, "XEZN"), u32_bytes(0x02000A40));
   EXPECT_EQ(sub_bytes(reread, reread_key, "XILL"), u32_bytes(0x02000A41));
-  EXPECT_EQ(sub_bytes(reread, reread_key, "XCLR"), u32_bytes(0x00000A30));
+  EXPECT_EQ(sub_bytes(reread, reread_key, "XCLR"), link_pair(0x00000A30, 0x02000A42));
+  ByteWriter expected_previs;
+  expected_previs.u32(0x02000A52);
+  expected_previs.u32(0x00000A51);
+  expected_previs.u32(0x02000A53);
+  EXPECT_EQ(sub_bytes(reread, reread_key, "XPRI"), expected_previs.bytes);
   EXPECT_EQ(sub_bytes(reread, reread_key, "XCLC"), grid_bytes(true));
   EXPECT_EQ(scalar_bytes(reread, reread_key, "CELL\\LightingFogNear"), floats({128.0f}));
   EXPECT_EQ(scalar_bytes(reread, reread_key, "CELL\\WaterCurrentVelocityZ"), floats({9.5f}));
@@ -584,6 +638,13 @@ TEST(CellRows, WritesScalarsAndLinksThenRereads) {
   ASSERT_EQ(values->size(), 2u);
   EXPECT_EQ((*values)[0], fo4::FormKey::parse("000A30:Patch.esp"));
   EXPECT_EQ((*values)[1], fo4::FormKey::parse("000A42:Patch.esp"));
+
+  const auto reread_previs = fo4::schema::record_formlink_list_values(reread, key, *previs);
+  ASSERT_TRUE(reread_previs.has_value());
+  ASSERT_EQ(reread_previs->size(), 3u);
+  EXPECT_EQ((*reread_previs)[0], fo4::FormKey::parse("000A52:Patch.esp"));
+  EXPECT_EQ((*reread_previs)[1], fo4::FormKey::parse("000A51:Patch.esp"));
+  EXPECT_EQ((*reread_previs)[2], fo4::FormKey::parse("000A53:Patch.esp"));
 }
 
 TEST(CellRows, WritesLightingBytesWithoutTouchingTheirNeighbors) {

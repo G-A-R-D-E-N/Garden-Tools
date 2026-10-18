@@ -65,7 +65,7 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | BPTD | 7693 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | CAMS | 7880 | 16 | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | 34 | 1 | 13 | 1 | 1 | - | - | forms/cell, environment/world | yes | 1 | L4 |
+| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | - | - | forms/cell, environment/world | yes | 1 | L4 |
 | CLAS | 6102 | 2 | 1 | 1 | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |

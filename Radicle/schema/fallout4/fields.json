@@ -19901,7 +19901,8 @@
         {"path": "CELL\\InPreVisFileOf", "label": "In PreVis file of", "subrecord": "RVIS", "offset": 0, "payload_sizes": [4], "targets": ["CELL"], "nullable": true, "insertion": "existing_only"}
       ],
       "formlink_lists": [
-        {"path": "CELL\\Regions", "label": "Regions", "field_alias": "Regions", "subrecord": "XCLR", "targets": ["REGN"], "nullable": false, "mutation": "appendable"}
+        {"path": "CELL\\Regions", "label": "Regions", "field_alias": "Regions", "subrecord": "XCLR", "storage": "packed_array", "targets": ["REGN"], "nullable": false, "mutation": "appendable"},
+        {"path": "CELL\\PreVisReferences", "label": "PreVis references", "subrecord": "XPRI", "storage": "packed_array", "targets": ["REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "mutation": "appendable"}
       ],
       "localized_subrecords": [
         "FULL"
