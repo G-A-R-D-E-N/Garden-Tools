@@ -79,10 +79,10 @@ TEST_P(MaterialImpactRecordsReal, EveryBatchRecordMatchesItsAuthoringAndDecodesE
     }
     for (const auto& field : fo4::schema::scalar_fields(signature)) {
       const auto scoped = fo4::behavior_field_candidates(record, field.scalar.subrecord);
-      for (std::size_t index = 0; index < record.subrecords.size(); ++index) {
-        const auto& subrecord = record.subrecords[index];
+      for (std::size_t position = 0; position < record.subrecords.size(); ++position) {
+        const auto& subrecord = record.subrecords[position];
         if (subrecord.signature != field.scalar.subrecord) continue;
-        if (scoped && std::find(scoped->begin(), scoped->end(), index) == scoped->end()) continue;
+        if (scoped && std::find(scoped->begin(), scoped->end(), position) == scoped->end()) continue;
         const auto& scalar = field.scalar;
         if (scalar.payload_size != 0 &&
             (scalar.minimum_payload_size != 0 ? subrecord.data.size() < scalar.minimum_payload_size
