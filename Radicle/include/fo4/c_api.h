@@ -89,6 +89,8 @@ RADICLE_API radicle_status radicle_plugin_set_author(radicle_plugin* plugin, con
 RADICLE_API radicle_status radicle_plugin_set_description(radicle_plugin* plugin,
                                                            const char* description);
 RADICLE_API radicle_status radicle_plugin_set_master_flag(radicle_plugin* plugin, int32_t master);
+RADICLE_API radicle_status radicle_plugin_set_localized_flag(radicle_plugin* plugin,
+                                                             int32_t localized);
 
 RADICLE_API radicle_status radicle_plugin_collect_form_keys(
     const radicle_plugin* plugin,

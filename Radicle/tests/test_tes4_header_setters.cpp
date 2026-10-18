@@ -156,6 +156,36 @@ TEST(Tes4Header, MasterFlagSetAndClearKeepsSmallFile) {
   EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
 }
 
+TEST(Tes4Header, LocalizedFlagSetClearAndIndependentOfMaster) {
+  auto plugin = fo4::read_plugin(make_tes4(0x200, false), "Flagged.esp");
+  plugin = fo4::set_plugin_localized_flag(std::move(plugin), true);
+  EXPECT_TRUE(plugin.header.tes4_flags.is_localized());
+  EXPECT_TRUE(plugin.tes4.header.flags.is_localized());
+  EXPECT_TRUE(plugin.header.tes4_flags.is_small_file());
+
+  plugin = fo4::set_plugin_localized_flag(std::move(plugin), true);
+  EXPECT_TRUE(plugin.header.tes4_flags.is_localized());
+
+  plugin = fo4::set_plugin_master_flag(std::move(plugin), true);
+  EXPECT_TRUE(plugin.header.tes4_flags.is_master());
+  EXPECT_TRUE(plugin.header.tes4_flags.is_localized());
+
+  auto reloaded = round_trip(plugin);
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_localized());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_master());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
+
+  reloaded = fo4::set_plugin_localized_flag(std::move(reloaded), false);
+  EXPECT_FALSE(reloaded.header.tes4_flags.is_localized());
+  EXPECT_FALSE(reloaded.tes4.header.flags.is_localized());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_master());
+
+  const auto cleared = round_trip(reloaded);
+  EXPECT_FALSE(cleared.header.tes4_flags.is_localized());
+  EXPECT_FALSE(cleared.tes4.header.flags.is_localized());
+  EXPECT_TRUE(cleared.header.tes4_flags.is_master());
+}
+
 TEST(Tes4Header, ClearedMasterOnEslIsRestoredByPathSave) {
   auto plugin = fo4::read_plugin(make_tes4(0x201, false), "Flagged.esl");
   plugin = fo4::set_plugin_master_flag(std::move(plugin), false);
@@ -204,6 +234,25 @@ TEST(Tes4HeaderCApi, SetsMasterFlagThroughTheHandle) {
   EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
 }
 
+TEST(Tes4HeaderCApi, SetsLocalizedFlagThroughTheHandle) {
+  TempDir dir;
+  const auto source = write_source(dir, "Header.esp", 0x200, false).string();
+  const auto out = (dir.path / "Out.esp").string();
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(source.c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_set_localized_flag(plugin, 1), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_write_file(plugin, out.c_str()), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+
+  const auto reloaded = fo4::read_plugin_file(out);
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_localized());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
+}
+
 TEST(Tes4HeaderCApi, RejectsBadArgumentsAndLeavesPluginUnchanged) {
   TempDir dir;
   const auto source = write_source(dir, "Header.esp", 0, false).string();
@@ -212,6 +261,7 @@ TEST(Tes4HeaderCApi, RejectsBadArgumentsAndLeavesPluginUnchanged) {
   EXPECT_EQ(radicle_plugin_set_author(nullptr, "Ricky"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_description(nullptr, "Desc"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_master_flag(nullptr, 1), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_localized_flag(nullptr, 1), RADICLE_STATUS_INVALID_ARGUMENT);
 
   radicle_plugin* plugin = nullptr;
   ASSERT_EQ(radicle_plugin_read_file(source.c_str(), &plugin), RADICLE_STATUS_OK)

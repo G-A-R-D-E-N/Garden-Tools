@@ -17,6 +17,7 @@ Plugin apply_extension_flags(Plugin plugin, const std::filesystem::path& path);
 
 Plugin set_plugin_light_flag(Plugin plugin, bool light);
 Plugin set_plugin_master_flag(Plugin plugin, bool master);
+Plugin set_plugin_localized_flag(Plugin plugin, bool localized);
 Plugin set_plugin_author(Plugin plugin, std::string_view author);
 Plugin set_plugin_description(Plugin plugin, std::string_view description);
 Plugin remap_plugin_masters(Plugin plugin, std::vector<PluginKey> new_masters);
