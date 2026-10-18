@@ -90,6 +90,13 @@ class LocalizedRowTests(unittest.TestCase):
                      string(path="TEST" + BS + "Second", label="Second", offset=0, minimum_payload_size=260))
         self.rejects("byte ranges", slots[0], scalar(path="TEST" + BS + "Number", offset=4))
 
+    def test_a_slot_without_a_payload_floor_spans_to_the_payload_end(self):
+        slot = string(subrecord="DATA", offset=0)
+        self.assertEqual(len(self.load(slot)), 1)
+        self.rejects("byte ranges", slot, scalar(path="TEST" + BS + "Number", offset=4))
+        self.rejects("byte ranges", slot, string(subrecord="DATA", path="TEST" + BS + "Other",
+                                                 label="Other", offset=4))
+
 
 if __name__ == "__main__":
     unittest.main()

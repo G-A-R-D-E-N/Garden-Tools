@@ -142,6 +142,23 @@ TEST(StatLodRows, ASlotWithoutATerminatorFailsClosed) {
   EXPECT_THROW(fo4::schema::decode_scalar(payload, first.scalar), fo4::schema::ScalarError);
 }
 
+TEST(StatLodRows, SlotSearchStopsAtTheSlotEnd) {
+  Bytes payload(k_slot, std::byte{'x'});
+  const auto tail = zstr("abc");
+  payload.insert(payload.end(), tail.begin(), tail.end());
+  payload.resize(k_slot * 2, std::byte{0});
+  ASSERT_EQ(payload.size(), k_slot * 2);
+
+  const auto first = row("STAT\\DistantLodLevel0");
+  EXPECT_THROW(fo4::schema::scalar_field_bytes(payload, first.scalar), fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::schema::decode_scalar(payload, first.scalar), fo4::schema::ScalarError);
+
+  const auto second = row("STAT\\DistantLodLevel1");
+  const auto bytes = fo4::schema::scalar_field_bytes(payload, second.scalar);
+  ASSERT_EQ(bytes.size(), std::size_t{4});
+  EXPECT_EQ(fo4::schema::decode_scalar(bytes, second.scalar), "abc");
+}
+
 TEST(StatLodRows, RefusesGenericWritesAndKeepsTheBytes) {
   auto plugin = fo4::read_plugin(
       make_plugin(mnam({"meshes\\lod\\first.nif", "meshes\\lod\\second.nif"})), "Patch.esp");

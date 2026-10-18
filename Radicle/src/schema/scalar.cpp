@@ -85,11 +85,15 @@ std::span<const std::byte> slot_string_bytes(std::span<const std::byte> payload,
                                              std::size_t offset,
                                              const ScalarDescriptor& descriptor) {
   const auto tail = payload.subspan(offset);
-  const auto terminator = std::find(tail.begin(), tail.end(), std::byte{0});
-  if (terminator == tail.end()) {
+  const auto limit = descriptor.minimum_payload_size > offset
+                         ? descriptor.minimum_payload_size - offset
+                         : tail.size();
+  const auto slot = tail.first(std::min(limit, tail.size()));
+  const auto terminator = std::find(slot.begin(), slot.end(), std::byte{0});
+  if (terminator == slot.end()) {
     throw ScalarError(std::string(descriptor.field_name) + " has no NUL terminator in its slot");
   }
-  return tail.first(static_cast<std::size_t>(terminator - tail.begin()) + 1);
+  return slot.first(static_cast<std::size_t>(terminator - slot.begin()) + 1);
 }
 
 }  // namespace

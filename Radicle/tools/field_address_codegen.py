@@ -118,7 +118,10 @@ def form_version_windows_disjoint(first, second):
 
 def field_span(field):
     start = field["offset"]
-    return start, start + (field["width"] or field.get("minimum_payload_size", 0) - start)
+    end = start + field["width"]
+    if end <= start:
+        end = max(field.get("minimum_payload_size", 0), field.get("payload_size", 0)) or float("inf")
+    return start, end
 
 
 def reject_overlaps(entries, kind_label):
