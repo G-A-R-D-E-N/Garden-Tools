@@ -29038,6 +29038,39 @@
           "insertion": "existing_only"
         },
         {
+          "path": "NPC_\\Package",
+          "label": "Package",
+          "subrecord": "PKID",
+          "offset": 0,
+          "targets": ["PACK"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\HeadPart",
+          "label": "Head part",
+          "subrecord": "PNAM",
+          "offset": 0,
+          "targets": ["HDPT"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "NPC_\\Spell",
+          "label": "Spell",
+          "subrecord": "SPLO",
+          "offset": 0,
+          "targets": ["SPEL", "LVSP"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
           "path": "NPC_\\DefaultTemplate",
           "label": "Default Template",
           "subrecord": "TPLT",

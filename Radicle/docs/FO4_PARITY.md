@@ -140,7 +140,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 48 | - | 28 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
+| NPC_ | 10286 | 48 | - | 31 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -292,7 +292,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
-| NPC_ | 38 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
+| NPC_ | 38 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | 3 | 2 | - | existing_only |
 | OMOD | - | - | - | - | - | - | - | - | - | - |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
