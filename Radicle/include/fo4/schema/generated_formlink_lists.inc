@@ -2270,7 +2270,7 @@ inline constexpr FormLinkFieldDescriptor k_generated_formlink_fields[] = {
   {Signature::from_string("NPC_"), "NPC_\\SpectatorOverridePackageList", "Spectator Override Package List", Signature::from_string("SPOR"), 0, false, 461, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("NPC_"), "NPC_\\Voice", "Voice", Signature::from_string("VTCK"), 0, false, 462, 1, FieldAddress{}, {{4}}},
   {Signature::from_string("OMOD"), "OMOD\\AttachPoint", "Attach point", Signature::from_string("DATA"), 16, true, 463, 1, FieldAddress{}},
-  {Signature::from_string("OMOD"), "OMOD\\LooseMod", "Loose mod", Signature::from_string("LNAM"), 0, false, 464, 44, FieldAddress{}, {{4}}},
+  {Signature::from_string("OMOD"), "OMOD\\LooseMod", "Loose mod", Signature::from_string("LNAM"), 0, true, 464, 44, FieldAddress{}, {{4}}},
   {Signature::from_string("PACK"), "PACK\\CombatStyle", "CombatStyle", Signature::from_string("CNAM"), 0, false, 508, 1, FieldAddress{}},
   {Signature::from_string("PACK"), "PACK\\Idles", "Idles", Signature::from_string("INAM"), 0, true, 509, 1, FieldAddress{true, 0, 0, FieldDiscriminator{}}},
   {Signature::from_string("PACK"), "PACK\\LocationCell", "LocationCell", Signature::from_string("PLDT"), 4, true, 510, 1, FieldAddress{true, 0, 0, FieldDiscriminator{Signature{}, 0, DiscriminatorStorage::i32, 1, {{1}}, false, false}}},

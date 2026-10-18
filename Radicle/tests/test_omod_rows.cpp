@@ -30,7 +30,6 @@ constexpr auto k_static_key = "000D03:Patch.esp";
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x01000000u | local_id; }
 
-// OMOD DATA fixed header is 20 bytes: 0 include count, 4 property count, 8/9 unknown bools, 10 form type, 14 max rank, 15 level tier scaled offset, 16 attach point.
 constexpr std::size_t k_data_size = 47;
 
 Bytes zstr(std::string_view text) {
@@ -299,7 +298,7 @@ TEST(OmodRows, AttachPointAndLooseModWriteTheirFormIds) {
   EXPECT_EQ(attach->payload_sizes[0], 0u);
   EXPECT_EQ(loose->subrecord, fo4::Signature::from_string("LNAM"));
   EXPECT_EQ(loose->offset, 0u);
-  EXPECT_FALSE(loose->nullable);
+  EXPECT_TRUE(loose->nullable);
   EXPECT_EQ(loose->payload_sizes[0], 4u);
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(*attach,
                                                          fo4::Signature::from_string("KYWD")));

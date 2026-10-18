@@ -7496,7 +7496,7 @@
       ],
       "formlink_fields": [
         {"path": "OMOD\\AttachPoint", "label": "Attach point", "subrecord": "DATA", "offset": 16, "targets": ["KYWD"], "nullable": true, "insertion": "existing_only"},
-        {"path": "OMOD\\LooseMod", "label": "Loose mod", "subrecord": "LNAM", "offset": 0, "target_union": "sigBaseObjects", "nullable": false, "payload_sizes": [4], "insertion": "existing_only"}
+        {"path": "OMOD\\LooseMod", "label": "Loose mod", "subrecord": "LNAM", "offset": 0, "target_union": "sigBaseObjects", "nullable": true, "payload_sizes": [4], "insertion": "existing_only"}
       ],
       "formlink_lists": [
         {"path": "OMOD\\TargetOMODKeywords", "label": "Target OMOD keywords", "subrecord": "MNAM", "targets": ["KYWD"], "nullable": false, "storage": "packed_array", "mutation": "appendable", "anchor_predecessors": ["DATA", "DESC", "FULL", "EDID"]},
