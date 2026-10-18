@@ -144,6 +144,48 @@ TEST(ScalarPreflight, LegacyOutOfRangeValuesAreWarningsNotReadFailures) {
   EXPECT_EQ(issues[1].severity, fo4::schema::PreflightSeverity::warning);
 }
 
+TEST(ScalarPreflight, EnumerationValueWithNoGeneratedNameIsAWarning) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("NOTE");
+  record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+  fo4::Subrecord type;
+  type.signature = fo4::Signature::from_string("DNAM");
+  type.data = {std::byte{4}};
+  record.subrecords.push_back(std::move(type));
+
+  const auto issues = fo4::schema::preflight_record(record);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].path, "NOTE\\Type");
+  EXPECT_EQ(issues[0].code, "scalar_enum_value_unnamed");
+  EXPECT_EQ(issues[0].severity, fo4::schema::PreflightSeverity::warning);
+  EXPECT_NE(issues[0].message.find("<Unknown: 4>"), std::string::npos);
+
+  record.subrecords[0].data = {std::byte{3}};
+  EXPECT_TRUE(fo4::schema::preflight_record(record).empty());
+}
+
+TEST(ScalarPreflight, FlagValueWithUnnamedBitsIsAWarning) {
+  fo4::Record record;
+  record.header.signature = fo4::Signature::from_string("CLFM");
+  record.form_key = fo4::FormKey::parse("000800:Patch.esp");
+  record.subrecords.push_back(
+      u32_subrecord(fo4::Signature::from_string("FNAM"), 8u));
+
+  const auto issues = fo4::schema::preflight_record(record);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].path, "CLFM\\Flags");
+  EXPECT_EQ(issues[0].code, "scalar_flag_bits_unnamed");
+  EXPECT_EQ(issues[0].severity, fo4::schema::PreflightSeverity::warning);
+  EXPECT_NE(issues[0].message.find("<Unknown: 3>"), std::string::npos);
+
+  record.subrecords[0].data = {std::byte{4}, std::byte{0}, std::byte{0}, std::byte{0}};
+  EXPECT_TRUE(fo4::schema::preflight_record(record).empty());
+  record.subrecords[0].data = {std::byte{0x81}, std::byte{0}, std::byte{0}, std::byte{0}};
+  const auto two_named = fo4::schema::preflight_record(record);
+  ASSERT_EQ(two_named.size(), 1u);
+  EXPECT_NE(two_named[0].message.find("<Unknown: 7>"), std::string::npos);
+}
+
 TEST(AuthoringPreflight, GeneratedEyesShapePasses) {
   auto plugin = plugin_with_top_record(authored_record(
       "EYES", 0x800, {"EDID", "FULL", "ICON", "DATA"}));
