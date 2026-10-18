@@ -609,7 +609,7 @@ TEST(OmodData, RefusesMalformedPayloadsAndForeignRecords) {
   }
   {
     auto unsized = omod_data();
-    std::memcpy(unsized.data() + 24, u32_bytes(9).data(), 4);
+    std::memcpy(unsized.data() + 28, u32_bytes(9).data(), 4);
     EXPECT_THROW(decode(std::move(unsized)), fo4::forms::OmodError);
   }
 }
