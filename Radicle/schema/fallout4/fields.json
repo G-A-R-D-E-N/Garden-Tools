@@ -15584,6 +15584,20 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "insertion": "existing_only"
+        },
+        {
+          "path": "MSWP\\Substitutions",
+          "label": "Substitutions",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "BNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+            {"subrecord": "SNAM", "required": false, "repeatable": false, "payload_size": 0, "default": "00",
+             "skippable": true},
+            {"subrecord": "FNAM", "required": false, "repeatable": false, "payload_size": 0, "skippable": true},
+            {"subrecord": "CNAM", "required": false, "repeatable": false, "payload_size": 0,
+             "default": "00000000", "skippable": true}
+          ]
         }
       ],
       "authoring": {

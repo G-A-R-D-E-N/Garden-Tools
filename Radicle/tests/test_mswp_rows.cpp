@@ -89,6 +89,13 @@ fo4::schema::ScalarFieldDescriptor row(std::string_view path) {
   return field.value_or(fo4::schema::ScalarFieldDescriptor{});
 }
 
+fo4::schema::SubrecordGroupDescriptor substitutions() {
+  const auto group = fo4::schema::subrecord_group_descriptor(fo4::Signature::from_string("MSWP"),
+                                                             "MSWP\\Substitutions");
+  EXPECT_TRUE(group.has_value());
+  return group.value_or(fo4::schema::SubrecordGroupDescriptor{});
+}
+
 std::string decoded(const fo4::Plugin& plugin, std::string_view path, std::size_t ordinal) {
   const auto field = row(path);
   const auto data = subrecord_at(plugin, field.scalar.subrecord.to_string(), ordinal);
@@ -200,4 +207,136 @@ TEST(MswpRows, InterleavedSubstitutionsPassAuthoringPreflight) {
     EXPECT_NE(issue.severity, fo4::schema::PreflightSeverity::error) << issue.path << ": " << issue.message;
     EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
   }
+}
+
+TEST(MswpRows, SubstitutionGroupIsALeaderRunOfSkippableMembers) {
+  const auto group = substitutions();
+  EXPECT_EQ(group.record, fo4::Signature::from_string("MSWP"));
+  EXPECT_EQ(group.path, "MSWP\\Substitutions");
+  EXPECT_EQ(group.count_subrecord, fo4::Signature{});
+  ASSERT_EQ(group.members.size(), 4u);
+
+  EXPECT_EQ(group.members[0].subrecord, fo4::Signature::from_string("BNAM"));
+  EXPECT_TRUE(group.members[0].required);
+  EXPECT_FALSE(group.members[0].skippable);
+  ASSERT_EQ(group.members[0].default_payload.size(), 1u);
+  EXPECT_EQ(group.members[0].default_payload[0], std::uint8_t{0});
+
+  EXPECT_EQ(group.members[1].subrecord, fo4::Signature::from_string("SNAM"));
+  EXPECT_FALSE(group.members[1].required);
+  EXPECT_TRUE(group.members[1].skippable);
+  ASSERT_EQ(group.members[1].default_payload.size(), 1u);
+
+  EXPECT_EQ(group.members[2].subrecord, fo4::Signature::from_string("FNAM"));
+  EXPECT_FALSE(group.members[2].required);
+  EXPECT_TRUE(group.members[2].skippable);
+  EXPECT_TRUE(group.members[2].default_payload.empty());
+
+  EXPECT_EQ(group.members[3].subrecord, fo4::Signature::from_string("CNAM"));
+  EXPECT_FALSE(group.members[3].required);
+  EXPECT_TRUE(group.members[3].skippable);
+  EXPECT_EQ(group.members[3].payload_size, 0u);
+  ASSERT_EQ(group.members[3].default_payload.size(), 4u);
+  EXPECT_EQ(group.members[3].default_payload[3], std::uint8_t{0});
+
+  const auto member = fo4::schema::subrecord_group_for_member(fo4::Signature::from_string("MSWP"),
+                                                             fo4::Signature::from_string("CNAM"));
+  ASSERT_TRUE(member.has_value());
+  EXPECT_EQ(member->path, group.path);
+}
+
+TEST(MswpRows, SpansSkipTheTreeFolderAndFollowEachLeader) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto spans = fo4::subrecord_group_spans(plugin, fo4::FormKey::parse(k_key), substitutions());
+  ASSERT_TRUE(spans.has_value());
+  ASSERT_EQ(spans->size(), 2u);
+  EXPECT_EQ((*spans)[0].first, 2u);
+  EXPECT_EQ((*spans)[0].end, 5u);
+  EXPECT_EQ((*spans)[1].first, 5u);
+  EXPECT_EQ((*spans)[1].end, 7u);
+}
+
+TEST(MswpRows, InsertsASubstitutionWithItsDefaultMaterialsAndColor) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto record = fo4::FormKey::parse(k_key);
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record, substitutions(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record, substitutions(), 4),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(subrecord_at(reread, "EDID", 0), zstr("RadicleSwap"));
+  EXPECT_EQ(subrecord_at(reread, "FNAM", 0), zstr("Props"));
+  EXPECT_EQ(subrecord_at(reread, "BNAM", 0), zstr("Props\\Box.BGSM"));
+  EXPECT_EQ(subrecord_at(reread, "BNAM", 1), zstr(""));
+  EXPECT_EQ(subrecord_at(reread, "BNAM", 2), zstr("Props\\Lid.BGSM"));
+  EXPECT_EQ(subrecord_at(reread, "SNAM", 1), zstr(""));
+  EXPECT_EQ(subrecord_at(reread, "SNAM", 2), zstr("Props\\LidRust.BGSM"));
+  EXPECT_EQ(subrecord_at(reread, "CNAM", 0), real(0.5f));
+  EXPECT_EQ(subrecord_at(reread, "CNAM", 1), real(0.0f));
+}
+
+TEST(MswpRows, RemovesOneSubstitutionAndKeepsItsNeighbors) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto record = fo4::FormKey::parse(k_key);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record, substitutions(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record, substitutions(), 1),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(subrecord_at(reread, "EDID", 0), zstr("RadicleSwap"));
+  EXPECT_EQ(subrecord_at(reread, "FNAM", 0), zstr("Props"));
+  EXPECT_EQ(subrecord_at(reread, "BNAM", 0), zstr("Props\\Lid.BGSM"));
+  EXPECT_EQ(subrecord_at(reread, "SNAM", 0), zstr("Props\\LidRust.BGSM"));
+  EXPECT_EQ(fo4::record_field_count(reread, record, row("MSWP\\ColorRemappingIndex")),
+            std::optional<std::size_t>{0});
+}
+
+TEST(MswpRows, ASkippableMemberBeforeTheFirstLeaderBelongsToNoRun) {
+  ByteWriter out;
+  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
+  const auto group = fo4::test::begin_group(out, "MSWP", 0);
+  const auto record = fo4::test::begin_record(out, "MSWP", 0, 0x01000800u);
+  fo4::test::write_subrecord(out, "EDID", zstr("OrphanSwap"));
+  fo4::test::write_subrecord(out, "SNAM", zstr("Props\\Orphan.BGSM"));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_key);
+  const auto spans = fo4::subrecord_group_spans(plugin, key, substitutions());
+  ASSERT_TRUE(spans.has_value());
+  EXPECT_TRUE(spans->empty());
+
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, key, substitutions(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(subrecord_at(reread, "SNAM", 0), zstr("Props\\Orphan.BGSM"));
+  EXPECT_EQ(subrecord_at(reread, "BNAM", 0), zstr(""));
+  EXPECT_EQ(subrecord_at(reread, "CNAM", 0), real(0.0f));
+}
+
+TEST(MswpRows, OutOfOrderSubstitutionFailsClosedWithoutMutation) {
+  ByteWriter out;
+  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
+  const auto group = fo4::test::begin_group(out, "MSWP", 0);
+  const auto record = fo4::test::begin_record(out, "MSWP", 0, 0x01000800u);
+  fo4::test::write_subrecord(out, "EDID", zstr("OutOfOrder"));
+  fo4::test::write_subrecord(out, "BNAM", zstr("Props\\Box.BGSM"));
+  fo4::test::write_subrecord(out, "CNAM", real(0.5f));
+  fo4::test::write_subrecord(out, "SNAM", zstr("Props\\BoxRust.BGSM"));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_key);
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::insert_record_subrecord_group(plugin, key, substitutions(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(fo4::remove_record_subrecord_group(plugin, key, substitutions(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, row("MSWP\\ColorRemappingIndex"), 0, "0.25"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }

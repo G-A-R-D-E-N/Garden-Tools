@@ -304,6 +304,10 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
       continue;
     }
     if (*leader != 0) {
+      if (group.members[*leader].skippable) {
+        ++first;
+        continue;
+      }
       throw refuse("has " + subs[first].signature.to_string() + " outside a leader run");
     }
     std::vector<std::size_t> counts(group.members.size());
@@ -563,7 +567,7 @@ SubrecordGroupMutationStatus insert_record_subrecord_group(Plugin& plugin,
     if (member.localized && plugin.header.tes4_flags.is_localized()) {
       throw schema::SubrecordGroupError(std::string(group.path) + " cannot be inserted into a localized plugin");
     }
-    if (!member.required) continue;
+    if (!member.required && member.default_payload.empty()) continue;
     Subrecord subrecord;
     subrecord.signature = member.subrecord;
     if (member.default_payload.empty()) {
