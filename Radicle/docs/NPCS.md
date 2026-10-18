@@ -47,6 +47,13 @@ Every scalar uses `existing_only` insertion. The presentation is `identity` exce
 | NPC_\HeightMax | NAM4 | whole | f32 | 4 | 10425 |
 | NPC_\UnusedFloat | NAM7 | whole | f32 | 4 | 10424 |
 | NPC_\FacialMorphIntensity | FMIN | whole | f32 | 4 | 10487 |
+| NPC_\FaceMorphIndex | FMRI | whole | u32 | 4 | 10473 |
+| NPC_\FaceMorphPosition X/Y/Z, FaceMorphRotation X/Y/Z, FaceMorphScale | FMRS | 0, 4, 8, 12, 16, 20, 24 | f32 | 36 | 10475-10483 |
+| NPC_\TintLayerDataType | TETI | 0 | u16 | 4 | 10450-10453 |
+| NPC_\TintLayerIndex | TETI | 2 | u16 | 4 | 10450-10453 |
+| NPC_\TintLayerValue | TEND | 0 | u8 | 1 or 7 | 10454-10458; `wbDiv(100)` |
+| NPC_\TintLayerColorRed, Green, Blue | TEND | 1, 2, 3 | u8 | 7 | 10454-10461; `wbByteColors` Common:6696-6708 |
+| NPC_\TintLayerTemplateColorIndex | TEND | 5 | i16 | 7 | 10454-10461 |
 | NPC_\SoundLevel | NAM8 | whole | u32 | 4 | 10431; wbSoundLevelEnum FO4:3424 |
 
 Notes on the scalars:
@@ -139,8 +146,8 @@ These are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nul
 | FO4:10432-10436 | CS2H count, CS2K/CS2D sound pairs, CS2E, CS2F | Count and list members are not modeled; CS2H has no typed owner, as with SPCT. |
 | FO4:10438-10444 | CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST | FormIDs. |
 | FO4:10446-10447 | MSDK, MSDV | Morph arrays of variable length. |
-| FO4:10448-10462 | TETI, TEND face tint layers | Repeated struct list; not modeled. |
-| FO4:10471-10486 | FMRI, FMRS face morphs | Repeated struct list; not modeled. |
+| FO4:10459 | TEND offset 4 | Unused byte of `wbByteColors`. |
+| FO4:10460 | FMRS offsets 28-35 | Trailing eight unknown bytes of `wbByteArray('Unknown')`; the seven modeled values stop at offset 28. |
 | FO4:10488 | ATTX | Localized string. |
 
 ## Authoring constraints
