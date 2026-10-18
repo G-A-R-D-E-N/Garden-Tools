@@ -1,3 +1,4 @@
+#include "fo4/plugin/destructible_stage.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
@@ -99,6 +100,10 @@ Bytes make_plugin() {
 
   fo4::test::write_subrecord(out, "DSTF", Bytes{});
   fo4::test::end_record(out, acti);
+
+  const auto bare = fo4::test::begin_record(out, "ACTI", 0, 0x000A04);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Bare\0", 5});
+  fo4::test::end_record(out, bare);
   fo4::test::end_group(out, group);
 
   const auto door_group = fo4::test::begin_group(out, "DOOR", 0);
@@ -136,6 +141,14 @@ Bytes make_authoring_plugin() {
   fo4::test::end_record(out, two);
   fo4::test::end_group(out, group);
   return out.bytes;
+}
+
+std::vector<std::string> signatures_at(const fo4::Plugin& plugin, std::string_view key) {
+  std::vector<std::string> out;
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) return out;
+  for (const auto& subrecord : record->subrecords) out.push_back(subrecord.signature.to_string());
+  return out;
 }
 
 const fo4::schema::SubrecordAuthoringConstraint* authoring_rule(
@@ -468,6 +481,69 @@ TEST(DestructibleRows, StageRowsAddressEachRepeatedDstd) {
   EXPECT_EQ(i32_at(second, 4), -4);
   EXPECT_EQ(i32_at(second, 16), 3);
   EXPECT_EQ(u32_at(second, 8), 0x01000A40u);
+}
+
+TEST(DestructibleRows, WholeStageInsertAndRemoveKeepTheHeaderCount) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+
+  EXPECT_EQ(fo4::insert_destructible_stage(plugin, record_key(), 1),
+            fo4::DestructibleStageMutationStatus::updated);
+  EXPECT_EQ(fo4::insert_destructible_stage(plugin, record_key(), 3),
+            fo4::DestructibleStageMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::insert_destructible_stage(plugin, fo4::FormKey::parse("000A02:Patch.esp"), 0),
+            fo4::DestructibleStageMutationStatus::record_mismatch);
+  EXPECT_EQ(fo4::insert_destructible_stage(plugin, fo4::FormKey::parse("000A04:Patch.esp"), 0),
+            fo4::DestructibleStageMutationStatus::header_missing);
+  EXPECT_EQ(fo4::insert_destructible_stage(plugin, fo4::FormKey::parse("000A99:Patch.esp"), 0),
+            fo4::DestructibleStageMutationStatus::record_missing);
+
+  const auto inserted = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(signatures_at(inserted, "000A01:Patch.esp"),
+            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTF", "DSTD", "DSTA",
+                                      "DMDL", "DMDL", "DMDC", "DMDS", "DSTF"}));
+  EXPECT_EQ(byte_at(payload_at(inserted, "DEST", 0), 4), 3u);
+  EXPECT_EQ(i32_at(payload_at(inserted, "DEST", 0), 0), 1500);
+  const auto added = payload_at(inserted, "DSTD", 1);
+  ASSERT_EQ(added.size(), 20u);
+  EXPECT_EQ(u32_at(added, 0), 0u);
+  EXPECT_EQ(u32_at(added, 16), 0u);
+  EXPECT_EQ(payload_at(inserted, "DSTF", 0).size(), 0u);
+  EXPECT_EQ(byte_at(payload_at(inserted, "DSTD", 2), 0), 50u);
+
+  auto removal = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::remove_destructible_stage(removal, record_key(), 0),
+            fo4::DestructibleStageMutationStatus::updated);
+  const auto first = fo4::read_plugin(fo4::write_plugin(removal), "Patch.esp");
+  EXPECT_EQ(signatures_at(first, "000A01:Patch.esp"),
+            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTA", "DMDL", "DMDL",
+                                      "DMDC", "DMDS", "DSTF"}));
+  EXPECT_EQ(byte_at(payload_at(first, "DEST", 0), 4), 1u);
+  EXPECT_EQ(byte_at(payload_at(first, "DSTD", 0), 0), 50u);
+
+  EXPECT_EQ(fo4::remove_destructible_stage(removal, record_key(), 0),
+            fo4::DestructibleStageMutationStatus::updated);
+  EXPECT_EQ(fo4::remove_destructible_stage(removal, record_key(), 0),
+            fo4::DestructibleStageMutationStatus::index_out_of_range);
+  const auto empty = fo4::read_plugin(fo4::write_plugin(removal), "Patch.esp");
+  EXPECT_EQ(signatures_at(empty, "000A01:Patch.esp"),
+            (std::vector<std::string>{"EDID", "DEST", "DAMC"}));
+  EXPECT_EQ(byte_at(payload_at(empty, "DEST", 0), 4), 0u);
+
+  EXPECT_EQ(fo4::insert_destructible_stage(removal, record_key(), 0),
+            fo4::DestructibleStageMutationStatus::updated);
+  const auto restaged = fo4::read_plugin(fo4::write_plugin(removal), "Patch.esp");
+  EXPECT_EQ(signatures_at(restaged, "000A01:Patch.esp"),
+            (std::vector<std::string>{"EDID", "DEST", "DAMC", "DSTD", "DSTF"}));
+  EXPECT_EQ(byte_at(payload_at(restaged, "DEST", 0), 4), 1u);
+
+  auto full = fo4::read_plugin(make_plugin(), "Patch.esp");
+  for (int i = 0; i < 253; ++i) {
+    ASSERT_EQ(fo4::insert_destructible_stage(full, record_key(), 0),
+              fo4::DestructibleStageMutationStatus::updated) << i;
+  }
+  EXPECT_EQ(byte_at(payload_at(full, "DEST", 0), 4), 255u);
+  EXPECT_EQ(fo4::insert_destructible_stage(full, record_key(), 0),
+            fo4::DestructibleStageMutationStatus::too_many_stages);
 }
 
 TEST(DestructibleRows, AuthoringListsCoverTheHeaderAndTheStageMembers) {

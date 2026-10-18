@@ -170,6 +170,7 @@ add_library(fo4
   src/plugin/vmad_writer.cpp
   src/plugin/navmesh_writer.cpp
   src/plugin/field_writer.cpp
+  src/plugin/destructible_stage.cpp
   src/plugin/subrecord_authoring.cpp
   src/plugin/scene_writer.cpp
   src/plugin/master_usage.cpp
