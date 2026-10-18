@@ -534,12 +534,12 @@ TEST(CellRows, ShortPayloadsHideRowsInsteadOfReportingThem) {
   EXPECT_EQ(fo4::set_record_scalar(mutable_plugin, fo4::FormKey::parse(key), *land, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
 
-  const auto malformed = fo4::read_plugin(make_short_payload_plugin(true), "Patch.esp");
+  auto malformed = fo4::read_plugin(make_short_payload_plugin(true), "Patch.esp");
   const auto flags = scalar_row("CELL\\Flags");
   ASSERT_TRUE(flags.has_value());
-  EXPECT_THROW(scalar_bytes(malformed, key, "CELL\\Flags"), fo4::schema::ScalarError);
-  EXPECT_THROW(fo4::set_record_scalar(mutable_plugin, fo4::FormKey::parse(key), *flags, "2"),
-               fo4::schema::ScalarError);
+  EXPECT_TRUE(scalar_bytes(malformed, key, "CELL\\Flags").empty());
+  EXPECT_EQ(fo4::set_record_scalar(malformed, fo4::FormKey::parse(key), *flags, "2"),
+            fo4::ScalarMutationStatus::subrecord_missing);
 }
 
 TEST(CellRows, WritesScalarsAndLinksThenRereads) {

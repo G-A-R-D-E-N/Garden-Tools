@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
+Tier counts: L0 4, L1 0, L2 4, L3 0, L4 139.
 
 ### Per-signature coverage
 
@@ -160,7 +160,7 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | 40 | 4 | 24 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 23 | - | 11 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
+| REGN | 11870 | 8 | - | 2 | - | 1 | - | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -312,7 +312,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | 32 | - | 5 | 3 | 4 | f32, i16, i32, u32, u8 | 3 | 2 | - | existing_only |
 | REFR | 20 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
-| REGN | - | - | - | - | - | - | - | - | - | - |
+| REGN | 7 | - | 1 | - | - | f32, u32, u8 | 6 | - | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |

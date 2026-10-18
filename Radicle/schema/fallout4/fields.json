@@ -7474,7 +7474,20 @@
     },
     {
       "signature": "REGN",
-      "fields": [],
+      "fields": [
+        {"path": "REGN\\MapColorRed", "label": "Map color red", "kind": "scalar", "subrecord": "RCLR", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REGN\\MapColorGreen", "label": "Map color green", "kind": "scalar", "subrecord": "RCLR", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REGN\\MapColorBlue", "label": "Map color blue", "kind": "scalar", "subrecord": "RCLR", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataType", "label": "Region data type", "kind": "scalar", "subrecord": "RDAT", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 2, "name": "Objects"}, {"value": 3, "name": "Weather"}, {"value": 4, "name": "Map"}, {"value": 5, "name": "Land"}, {"value": 6, "name": "Grass"}, {"value": 7, "name": "Sound"}], "minimum": 0, "maximum": 7, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataOverride", "label": "Region data override", "kind": "scalar", "subrecord": "RDAT", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataPriority", "label": "Region data priority", "kind": "scalar", "subrecord": "RDAT", "offset": 5, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\LodDisplayDistanceMultiplier", "label": "LOD display distance multiplier", "kind": "scalar", "subrecord": "RLDM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\OcclusionAccuracyDist", "label": "Occlusion accuracy distance", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "REGN\\Worldspace", "label": "Worldspace", "subrecord": "WNAM", "offset": 0, "payload_sizes": [4], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\Music", "label": "Music", "subrecord": "RDMO", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": false, "repeated": true, "insertion": "existing_only"}
+      ],
       "localized_subrecords": [
         "RDMP"
       ]
