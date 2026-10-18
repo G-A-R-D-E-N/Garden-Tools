@@ -70,7 +70,6 @@ struct EslCompactionResult {
   std::vector<EslCompactionBlocker> blockers;
 };
 
-// plugin must only be used when the status is compacted or already_compatible
 EslCompactionResult compact_to_esl(Plugin& plugin);
 
 }  // namespace fo4
