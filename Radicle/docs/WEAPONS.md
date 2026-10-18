@@ -94,11 +94,14 @@ Embedded fields have `payload_size`, so the scalar reader returns absent for a D
 | WEAP\FullPowerSeconds | DNAM | 116 | f32 | f32 | 12990 |
 | WEAP\MinPowerPerShot | DNAM | 120 | f32 | f32 | 12991 |
 | WEAP\Stagger | DNAM | 124 | u32 | 0..4 | 12992, enum 5106 |
+| WEAP\UnknownAfterAnimationAttackSeconds | DNAM | 110 | u16 | 0..65535 | 12988 |
+| WEAP\UnknownEnd | DNAM | 128 | u32 | 0..4294967295 | 12993 |
 | WEAP\AnimationFireSeconds | FNAM | 0 | f32 | f32 | 12996 |
 | WEAP\RumbleLeftStrength | FNAM | 4 | f32 | f32 | 12997 |
 | WEAP\RumbleRightStrength | FNAM | 8 | f32 | f32 | 12998 |
 | WEAP\RumbleDuration | FNAM | 12 | f32 | f32 | 12999 |
 | WEAP\AnimationReloadSeconds | FNAM | 16 | f32 | f32 | 13000 |
+| WEAP\BoltAnimationSeconds | FNAM | 20 | u32 | 0..4294967295 | 13001 |
 | WEAP\SightedTransitionSeconds | FNAM | 24 | f32 | f32 | 13002 |
 | WEAP\ProjectileCount | FNAM | 28 | u8 | 0..255 | 13003 |
 | WEAP\Pattern | FNAM | 33 | u32 | 0..3 | 13005-13010 |
@@ -143,8 +146,6 @@ The FormLink fields above are nullable, matching xEdit's `[X, NULL]` lists, exce
 
 | xEdit | Reason |
 | --- | --- |
-| DNAM Unknown, 2 bytes at 110 (12988) and 4 bytes at 128 (12993) | wbByteArray, not a scalar. Preserved as bytes. |
-| FNAM Bolt Anim Seconds, 4 bytes at 20 (13001) | wbByteArray, not a scalar. Preserved as bytes. |
 | OBTE count (12902, 5521) | Count tied to the OBTS combinations. Authoring coupled, no scalar. |
 | OBTS combination block (5499-5512, 5523-5526) | Variable-length, not typed. form IDs remapped by `Radicle/src/schema/form_links.cpp` (validated on 813 WEAP OBTS bodies). |
 | DEST stage members (4275 onward, DSTD and others) | Only DEST and DAMC are listed. Stages are repeated. |
