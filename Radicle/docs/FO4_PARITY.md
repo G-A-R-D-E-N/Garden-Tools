@@ -95,7 +95,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FURN | 6848 | 16 | 2 | 8 | - | 2 | yes | yes | - | yes | 1 | L4 |
+| FURN | 6848 | 21 | 2 | 9 | 1 | 2 | yes | yes | - | yes | 1 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GMST | 6936 | 3 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
@@ -140,7 +140,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | NAVM | 7212 | - | - | - | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
-| NPC_ | 10286 | 48 | - | 28 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
+| NPC_ | 10286 | 74 | - | 47 | 1 | 3 | yes | yes | forms/npc | yes | 1 | L4 |
 | OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -188,7 +188,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
-| WEAP | 12877 | 46 | 1 | 30 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
+| WEAP | 12877 | 49 | 1 | 30 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
 | WRLD | 13110 | 22 | 4 | 8 | - | 1 | - | - | environment/world | yes | 1 | L4 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
@@ -248,7 +248,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
 | FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
-| FURN | 10 | - | 2 | 4 | 2 | f32, i16, i32, u16, u32, u8 | 6 | 2 | - | existing_only |
+| FURN | 14 | - | 2 | 5 | 2 | f32, i16, i32, u16, u32, u8 | 6 | 8 | - | existing_only |
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |
 | GMST | 2 | - | 1 | - | 1 | f32, i32, u32 | - | - | 4 | existing_only |
@@ -292,7 +292,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NAVM | - | - | - | - | - | - | - | - | - | - |
 | NOCM | - | - | - | - | - | - | - | - | - | - |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
-| NPC_ | 38 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
+| NPC_ | 62 | - | 9 | 3 | - | f32, i16, i32, u16, u32, u8 | 32 | 2 | - | existing_only |
 | OMOD | - | - | - | - | - | - | - | - | - | - |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
@@ -339,7 +339,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | TXST | 17 | - | - | 2 | 9 | f32, i16, u16, u8 | - | - | - | existing_only |
 | VTYP | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
-| WEAP | 37 | - | 6 | 3 | 1 | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
+| WEAP | 40 | - | 6 | 3 | 1 | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
 | WRLD | 20 | - | - | 2 | 4 | f32, i16, i32, u16, u8 | - | - | - | existing_only |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
 | ZOOM | 4 | - | 1 | - | - | f32, u32 | - | - | - | existing_only |
