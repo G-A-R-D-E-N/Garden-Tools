@@ -272,6 +272,21 @@
             4
           ],
           "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\AdditionalRaces",
+          "label": "Additional race",
+          "subrecord": "MODL",
+          "offset": 0,
+          "targets": [
+            "RACE"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "payload_sizes": [
+            4
+          ],
+          "insertion": "existing_only"
         }
       ],
       "localized_subrecords": []

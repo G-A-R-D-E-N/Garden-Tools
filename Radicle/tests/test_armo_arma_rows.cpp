@@ -97,6 +97,7 @@ constexpr LinkRow k_link_rows[] = {
     {"ARMA", "ARMA\\FemaleSkinTextureSwapList", "NAM3", "FLST", true},
     {"ARMA", "ARMA\\FootstepSound", "SNDD", "FSTS", true},
     {"ARMA", "ARMA\\ArtObject", "ONAM", "ARTO", false},
+    {"ARMA", "ARMA\\AdditionalRaces", "MODL", "RACE", true},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -221,6 +222,7 @@ std::vector<std::byte> make_plugin() {
       {"RNAM", u32_bytes(0x00000A10)},
       {"NAM0", u32_bytes(0x00000A12)},
       {"SNDD", u32_bytes(0x00000A13)},
+      {"MODL", u32_bytes(0x00000A32)},
   };
   for (const auto& sub : arma_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, arma);
@@ -495,4 +497,28 @@ TEST(ARMOARMARows, EditsTheModelListByIndex) {
   ASSERT_EQ(addons.size(), 2u);
   EXPECT_EQ(addons[0], u32_bytes(0x00000A30u));
   EXPECT_EQ(addons[1], u32_bytes(0x01000A21u));
+}
+
+TEST(ARMOARMARows, AdditionalRacesAreRepeatedNullableRaceLinks) {
+  const auto field = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMA"),
+                                                            "ARMA\\AdditionalRaces");
+  ASSERT_TRUE(field.has_value());
+  EXPECT_EQ(field->subrecord, fo4::Signature::from_string("MODL"));
+  EXPECT_EQ(field->offset, 0u);
+  EXPECT_TRUE(field->address.repeated);
+  EXPECT_TRUE(field->nullable);
+  ASSERT_EQ(field->payload_sizes[0], 4u);
+
+  const auto key = fo4::FormKey::parse(k_arma_key);
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *field), 1u);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *field, 0, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *field, 1, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto modl = all_sub_bytes(reread, k_arma_key, "MODL");
+  ASSERT_EQ(modl.size(), 1u);
+  EXPECT_EQ(modl[0], u32_bytes(0));
 }
