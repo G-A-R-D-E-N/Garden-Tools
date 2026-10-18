@@ -166,7 +166,7 @@ TEST(CApiAuthoring, CreateRecordRefusalsLeaveThePluginUntouched) {
   Plugin plugin;
   radicle_form_key key{"x", 9};
 
-  EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "MISC", "A", &key), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "REGN", "A", &key), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(key.plugin, nullptr);
   EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "EYES", "A", &key), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_create_record(plugin.handle, "ARMO", "\xE4\xB8\xAD", &key),
