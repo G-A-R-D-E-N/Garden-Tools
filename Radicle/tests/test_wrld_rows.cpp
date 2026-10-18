@@ -169,7 +169,7 @@ void write_header(ByteWriter& out, std::uint32_t tes4_flags = 0) {
   ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(2);
-  hedr.u32(0x900 | tes4_flags);
+  hedr.u32(0x900);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
   fo4::test::write_subrecord(out, "DATA", Bytes(8));
@@ -458,6 +458,44 @@ TEST(WRLDRows, PreflightAcceptsTwoWlevSubrecordsAndLeavesTheCellDataBlobAlone) {
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_scalar(blob, blob_key, *level_x, "-1"),
             fo4::ScalarMutationStatus::subrecord_missing);
+}
+
+std::vector<std::byte> make_three_level_plugin() {
+  ByteWriter out;
+  write_header(out);
+  const auto group = fo4::test::begin_group(out, "WRLD", 0);
+  const auto record = fo4::test::begin_record(out, "WRLD", 0, raw_id(0x0C04));
+  const std::vector<Sub> subs{
+      {"EDID", zstr("ThreeLevelWorld")},
+      {"WLEV", level_dimension()},
+      {"WLEV", level_cell_data()},
+      {"WLEV", level_cell_data()},
+  };
+  for (const auto& sub : subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+TEST(WRLDRows, PreflightAllowsTheSixByteLevelBlobBesideTheRowAndCountsTheRows) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  for (const auto& issue : fo4::schema::preflight_authoring_record(
+           plugin, fo4::FormKey::parse("000C01:Patch.esp"))) {
+    EXPECT_NE(issue.code, "invalid_scalar_storage") << issue.path;
+    EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
+    EXPECT_NE(issue.code, "subrecord_cardinality_invalid") << issue.path;
+  }
+
+  const auto three = fo4::read_plugin(make_three_level_plugin(), "Patch.esp");
+  bool cardinality_reported = false;
+  for (const auto& issue : fo4::schema::preflight_authoring_record(
+           three, fo4::FormKey::parse("000C04:Patch.esp"))) {
+    if (issue.code == "subrecord_cardinality_invalid" && issue.path == "WRLD\\WLEV") {
+      cardinality_reported = true;
+    }
+    EXPECT_NE(issue.code, "invalid_scalar_storage") << issue.path;
+  }
+  EXPECT_TRUE(cardinality_reported);
 }
 
 TEST(WRLDRows, LocalizedWorldKeepsItsStringIdAndStillWritesLevelRows) {
