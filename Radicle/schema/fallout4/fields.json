@@ -18428,6 +18428,110 @@
           "insertion": "existing_only"
         },
         {
+          "path": "SOPM\\FrontLeft",
+          "label": "Front left channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\FrontRight",
+          "label": "Front right channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 1,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\Center",
+          "label": "Center channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 2,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\LowFrequency",
+          "label": "Low frequency channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 3,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\RearLeft",
+          "label": "Rear left channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 4,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\RearRight",
+          "label": "Rear right channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 5,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\SideLeft",
+          "label": "Side left channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 6,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SOPM\\SideRight",
+          "label": "Side right channel",
+          "kind": "scalar",
+          "subrecord": "ONAM",
+          "offset": 7,
+          "storage": "u8",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 255,
+          "stride": 8,
+          "insertion": "existing_only"
+        },
+        {
           "path": "SOPM\\FadeInDistanceStart",
           "label": "Fade in distance start",
           "kind": "scalar",
@@ -18625,6 +18729,11 @@
             "minimum": 0,
             "maximum": 1,
             "default": "0000"
+          },
+          {
+            "signature": "ONAM",
+            "minimum": 0,
+            "maximum": 1
           },
           {
             "signature": "ATTN",

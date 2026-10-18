@@ -113,6 +113,9 @@ Bytes fixture() {
   add_record(out, "SOPM", 0x803,
              {{"EDID", zstr("RadicleOutput")}, {"NAM1", cat({le(0x09, 1), le(0, 2), le(40, 1)})},
               {"MNAM", le(1, 4)}, {"VNAM", le(0xff9c, 2)},
+              {"ONAM", cat({le(100, 1), le(100, 1), le(0, 1), le(0, 1), le(50, 1), le(50, 1), le(50, 1),
+                            le(50, 1), le(80, 1), le(80, 1), le(0, 1), le(0, 1), le(0, 1), le(0, 1),
+                            le(0, 1), le(0, 1)})},
               {"ATTN", cat({f32(1.0f), f32(2.0f), f32(3.0f), f32(4.0f), le(0, 1), le(50, 1), le(80, 1),
                             le(95, 1), le(50, 1), le(20, 1), le(5, 1), le(0, 1)})},
               {"ENAM", le(0x807, 4)}});

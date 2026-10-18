@@ -174,7 +174,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
-| SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| SOPM | 9489 | 24 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
 | SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
@@ -326,7 +326,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SMQN | 3 | - | - | 1 | - | f32, u32 | - | - | - | existing_only |
 | SNCT | 4 | - | - | 1 | - | f32, u16, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | 1 | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
-| SOPM | 14 | - | 1 | 1 | - | f32, i16, u32, u8 | - | - | - | existing_only |
+| SOPM | 22 | - | 1 | 1 | - | f32, i16, u32, u8 | - | 8 | - | existing_only |
 | SOUN | 9 | - | - | - | - | f32, i16, u8 | - | - | - | existing_only |
 | SPEL | 10 | - | 3 | 1 | - | f32, i16, u32 | - | - | - | existing_only |
 | SPGD | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
