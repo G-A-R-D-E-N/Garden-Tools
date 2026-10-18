@@ -26,6 +26,6 @@ WrapperCopyResult copy_record_as_wrapper(
     Plugin& destination,
     const Plugin& source,
     const FormKey& record,
-    std::optional<std::string_view> wrapper_editor_id = std::nullopt);
+    std::optional<std::string_view> copy_editor_id = std::nullopt);
 
 }  // namespace fo4::forms

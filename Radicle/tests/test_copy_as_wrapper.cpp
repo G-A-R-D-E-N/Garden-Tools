@@ -56,6 +56,14 @@ std::string edid_of(const fo4::Record& record) {
   return {};
 }
 
+std::vector<std::byte> lvlo_of(const fo4::Record& record) {
+  const auto lvlo = fo4::Signature::from_string("LVLO");
+  for (const auto& subrecord : record.subrecords) {
+    if (subrecord.signature == lvlo) return subrecord.data;
+  }
+  return {};
+}
+
 struct SourceFixture {
   fo4::Plugin plugin;
   fo4::FormKey key;
@@ -106,6 +114,14 @@ TEST(CopyAsWrapper, MovesTheEntriesToACopyAndLeavesOneEntryBehind) {
   EXPECT_EQ(wrapped_list.entries[0].level, 1);
   EXPECT_EQ(wrapped_list.entries[0].count, 1);
 
+  const auto lvlo = lvlo_of(*wrapper);
+  ASSERT_EQ(lvlo.size(), 12u);
+  EXPECT_EQ(lvlo[0], std::byte{1});
+  EXPECT_EQ(lvlo[1], std::byte{0});
+  EXPECT_EQ(lvlo[8], std::byte{1});
+  EXPECT_EQ(lvlo[9], std::byte{0});
+  EXPECT_EQ(lvlo[10], std::byte{0});
+
   ASSERT_EQ(target.header.masters.size(), 1u);
   EXPECT_EQ(target.header.masters[0].key.filename(), "Source.esp");
 
@@ -150,4 +166,29 @@ TEST(CopyAsWrapper, MissingSourceRecordDoesNotMutateTheDestination) {
   EXPECT_EQ(result.status, fo4::forms::WrapperCopyStatus::source_missing);
   EXPECT_EQ(fo4::test::original_bytes(target), original);
   EXPECT_TRUE(target.header.masters.empty());
+}
+
+TEST(CopyAsWrapper, RefusesWhenTheDestinationAlreadyHoldsTheRecord) {
+  auto source = list_source("LVLI");
+  add_two_entries(source);
+  auto target = fo4::read_plugin(make_plugin({{"MISC", 0x800}}), "Patch.esp");
+
+  const auto first =
+      fo4::forms::copy_record_as_wrapper(target, source.plugin, source.key, "WrappedList");
+  ASSERT_EQ(first.status, fo4::forms::WrapperCopyStatus::wrapped);
+  ASSERT_EQ(fo4::forms::decode_leveled_list(target, source.key).entries.size(), 1u);
+
+  const auto second =
+      fo4::forms::copy_record_as_wrapper(target, source.plugin, source.key, "SecondWrapper");
+  EXPECT_EQ(second.status, fo4::forms::WrapperCopyStatus::override_failed);
+
+  const auto wrapper = fo4::forms::decode_leveled_list(target, source.key);
+  ASSERT_EQ(wrapper.entries.size(), 1u);
+  EXPECT_EQ(wrapper.entries[0].item, first.copy);
+  EXPECT_EQ(edid_of(*fo4::find_record(target, source.key)), "SourceList");
+  std::size_t lists = 0;
+  for (const auto* record : fo4::collect_records(target)) {
+    if (record->header.signature == fo4::Signature::from_string("LVLI")) ++lists;
+  }
+  EXPECT_EQ(lists, 2u);
 }

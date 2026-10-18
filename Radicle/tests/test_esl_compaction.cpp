@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -23,7 +24,8 @@ struct RecordSpec {
 };
 
 std::vector<std::byte> make_flat_plugin(std::initializer_list<RecordSpec> records,
-                                        std::uint32_t next_form_id) {
+                                        std::uint32_t next_form_id,
+                                        std::string_view master = {}) {
   fo4::test::ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   fo4::test::ByteWriter hedr;
@@ -31,6 +33,15 @@ std::vector<std::byte> make_flat_plugin(std::initializer_list<RecordSpec> record
   hedr.u32(static_cast<std::uint32_t>(records.size()));
   hedr.u32(next_form_id);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  if (!master.empty()) {
+    std::string terminated{master};
+    terminated.push_back('\0');
+    fo4::test::write_subrecord(out, "MAST", std::string_view{terminated});
+    fo4::test::ByteWriter data;
+    data.u32(0);
+    data.u32(0);
+    fo4::test::write_subrecord(out, "DATA", data.bytes);
+  }
   fo4::test::end_record(out, tes4);
 
   std::optional<std::size_t> group;
@@ -182,4 +193,12 @@ TEST(EslCompaction, SlotRangeFollowsTheHardcodedRangeRule) {
   EXPECT_EQ(fo4::esl_slot_range(without_masters).first, 0x800u);
   EXPECT_EQ(fo4::esl_slot_range(without_masters).last, 0xFFFu);
   EXPECT_EQ(fo4::esl_slot_range(without_masters).capacity, 0x800u);
+
+  const auto with_master = fo4::read_plugin(
+      make_flat_plugin({{"MISC", 0x800, std::string_view{"Only\0", 5}, std::nullopt}}, 0x801,
+                       "Master.esm"),
+      "Compact.esp");
+  EXPECT_EQ(fo4::esl_slot_range(with_master).first, 0x001u);
+  EXPECT_EQ(fo4::esl_slot_range(with_master).last, 0xFFFu);
+  EXPECT_EQ(fo4::esl_slot_range(with_master).capacity, 0xFFFu);
 }
