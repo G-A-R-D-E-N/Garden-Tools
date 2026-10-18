@@ -78,8 +78,8 @@ fo4::Plugin override_plugin(std::string_view name, std::vector<Rec> records) {
   return fo4::read_plugin(make_plugin(records, true), name);
 }
 
-fo4::Rec misc(std::uint32_t form_id, std::string_view editor_id, std::vector<Sub> subs) {
-  return fo4::Rec{"MISC", form_id, editor_id, std::move(subs), 0};
+Rec misc(std::uint32_t form_id, std::string_view editor_id, std::vector<Sub> subs) {
+  return Rec{"MISC", form_id, editor_id, std::move(subs), 0};
 }
 
 fo4::FormKey master_key() { return fo4::FormKey::parse("000800:Master.esm"); }
@@ -195,7 +195,9 @@ TEST(ConflictCompare, AnIgnoredFieldDropsOutOfTheFieldRows) {
 TEST(ConflictCompare, GroupsListOnlyThePluginsThatCarryTheVersion) {
   const auto base = base_plugin({misc(0x800, "Thing", {{"DATA", k_value_a}})});
   const auto other = override_plugin("Other.esp", {misc(0x800, "Thing", {{"DATA", k_value_b}})});
-  const std::vector<const fo4::Plugin*> order{&base, &other};
+  const auto partial = override_plugin(
+      "Partial.esp", {{"QUST", 0x800, "Thing", {{"DATA", k_value_c}}, 0x4000}});
+  const std::vector<const fo4::Plugin*> order{&base, &other, &partial};
 
   const auto result = compare(order, master_key());
 
@@ -204,7 +206,9 @@ TEST(ConflictCompare, GroupsListOnlyThePluginsThatCarryTheVersion) {
   EXPECT_EQ(names(result.record_groups[1]), (std::vector<std::string>{"Other.esp"}));
   const auto* data = field_of(result, k_data);
   ASSERT_NE(data, nullptr);
-  EXPECT_EQ(data->groups.size(), 2u);
+  ASSERT_EQ(data->groups.size(), 2u);
+  EXPECT_EQ(names(data->groups[0]), (std::vector<std::string>{"Master.esm"}));
+  EXPECT_EQ(names(data->groups[1]), (std::vector<std::string>{"Other.esp"}));
 }
 
 TEST(ConflictCompare, AKeyNoPluginCarriesHasNoGroups) {
