@@ -2,6 +2,7 @@
 
 #include "fo4/plugin/maintenance.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/signature.hpp"
 
 #include <string>
 #include <vector>
@@ -48,6 +49,7 @@ DeltaPatchResult build_delta_patch(const Environment& env,
 
   std::vector<FormKey> identical;
   for (const auto* record : collect_records(result.patch)) {
+    if (record->header.signature == sig_tes4) continue;
     if (record->undecodable) continue;
     const auto previous_key = FormKey{older, record->form_key.local()};
     const auto* previous = find_record(older_plugin, previous_key);
@@ -56,7 +58,9 @@ DeltaPatchResult build_delta_patch(const Environment& env,
   }
 
   result.counts.removed = remove_records(result.patch, identical);
-  result.counts.kept = collect_records(result.patch).size();
+  for (const auto* record : collect_records(result.patch)) {
+    if (record->header.signature != sig_tes4) ++result.counts.kept;
+  }
   return result;
 }
 

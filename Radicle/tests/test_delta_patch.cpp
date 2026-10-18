@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,32 +29,36 @@ void write_bytes(const std::filesystem::path& path, const std::vector<std::byte>
                static_cast<std::streamsize>(bytes.size()));
 }
 
-void write_misc(fo4::test::ByteWriter& out, std::uint32_t form_id, const char* editor_id,
-                std::size_t editor_id_size, std::uint32_t data) {
-  const auto record = fo4::test::begin_record(out, "MISC", 0, form_id);
-  fo4::test::write_subrecord(out, "EDID", std::string_view(editor_id, editor_id_size));
-  fo4::test::ByteWriter body;
-  body.u32(data);
-  fo4::test::write_subrecord(out, "DATA", body.bytes);
-  fo4::test::end_record(out, record);
+struct MiscRecord {
+  std::uint32_t form_id;
+  std::string_view editor_id;
+  std::uint32_t flags;
+  std::uint32_t data;
+};
+
+std::vector<std::byte> misc_plugin(const std::vector<std::string>& masters,
+                                   const std::vector<MiscRecord>& records) {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::make_tes4_plugin(0, 1.0f, masters);
+  out.raw(std::span<const std::byte>{tes4});
+  const auto group = fo4::test::begin_group(out, "MISC", 0);
+  for (const auto& record : records) {
+    const auto header = fo4::test::begin_record(out, "MISC", record.flags, record.form_id);
+    fo4::test::write_subrecord(out, "EDID", record.editor_id);
+    fo4::test::ByteWriter body;
+    body.u32(record.data);
+    fo4::test::write_subrecord(out, "DATA", body.bytes);
+    fo4::test::end_record(out, header);
+  }
+  fo4::test::end_group(out, group);
+  return out.bytes;
 }
 
 std::vector<std::byte> fixture(std::uint32_t differing_data, bool extra_record) {
-  fo4::test::ByteWriter out;
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
-  fo4::test::ByteWriter hedr;
-  hedr.f32(1.0f);
-  hedr.u32(2);
-  hedr.u32(0x900);
-  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
-  fo4::test::end_record(out, tes4);
-
-  const auto group = fo4::test::begin_group(out, "MISC", 0);
-  write_misc(out, 0x800, "Same\0", 5, 2);
-  write_misc(out, 0x801, "Differs\0", 8, differing_data);
-  if (extra_record) write_misc(out, 0x802, "Extra\0", 6, 4);
-  fo4::test::end_group(out, group);
-  return out.bytes;
+  std::vector<MiscRecord> records{{0x800, std::string_view{"Same\0", 5}, 0, 2},
+                                  {0x801, std::string_view{"Differs\0", 8}, 0, differing_data}};
+  if (extra_record) records.push_back({0x802, std::string_view{"Extra\0", 6}, 0, 4});
+  return misc_plugin({}, records);
 }
 
 class DeltaPatchCApi : public ::testing::Test {
@@ -111,7 +116,7 @@ TEST_F(DeltaPatchCApi, BuildDropsRecordsIdenticalToTheOlderModule) {
   ASSERT_EQ(radicle_env_build_delta_patch(env.get(), kOlder, kNewer, output_text.c_str(), &counts),
             RADICLE_STATUS_OK);
   EXPECT_EQ(counts.removed, 1u);
-  EXPECT_EQ(counts.kept, 3u);
+  EXPECT_EQ(counts.kept, 2u);
 
   const auto patch = open_output();
   const radicle_record* dropped = nullptr;
@@ -140,6 +145,67 @@ TEST_F(DeltaPatchCApi, PatchIsWrittenOnlyByASuccessfulBuild) {
   EXPECT_EQ(counts.kept, 0u);
   EXPECT_EQ(counts.removed, 0u);
   EXPECT_FALSE(std::filesystem::exists(output_));
+}
+
+TEST_F(DeltaPatchCApi, RecordOnlyInTheOlderPluginIsNotCopiedIntoThePatch) {
+  write_bytes(older_, misc_plugin({}, {{0x800, std::string_view{"Shared\0", 7}, 0, 2},
+                                       {0x803, std::string_view{"OlderOnly\0", 10}, 0, 9}}));
+  write_bytes(newer_, misc_plugin({}, {{0x800, std::string_view{"Shared\0", 7}, 0, 2}}));
+
+  const auto env = open_env();
+  radicle_delta_patch_counts counts{};
+  const auto output_text = output_.string();
+  ASSERT_EQ(radicle_env_build_delta_patch(env.get(), kOlder, kNewer, output_text.c_str(), &counts),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(counts.removed, 1u);
+  EXPECT_EQ(counts.kept, 0u);
+
+  const auto patch = open_output();
+  const radicle_record* record = nullptr;
+  EXPECT_EQ(radicle_env_find_editor_id(patch.get(), "OlderOnly", "MISC", &record),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_env_find_editor_id(patch.get(), "Shared", "MISC", &record),
+            RADICLE_STATUS_NOT_FOUND);
+}
+
+TEST_F(DeltaPatchCApi, SameLocalIdUnderADifferentMasterListIsStillDropped) {
+  write_bytes(older_, misc_plugin({}, {{0x800, std::string_view{"Same\0", 5}, 0, 2}}));
+  write_bytes(newer_, misc_plugin({"Fallout4.esm"},
+                                  {{0x01000800, std::string_view{"Same\0", 5}, 0, 2}}));
+
+  const auto env = open_env();
+  radicle_delta_patch_counts counts{};
+  const auto output_text = output_.string();
+  ASSERT_EQ(radicle_env_build_delta_patch(env.get(), kOlder, kNewer, output_text.c_str(), &counts),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(counts.removed, 1u);
+  EXPECT_EQ(counts.kept, 0u);
+
+  const auto patch = open_output();
+  const radicle_record* record = nullptr;
+  EXPECT_EQ(radicle_env_find_editor_id(patch.get(), "Same", "MISC", &record),
+            RADICLE_STATUS_NOT_FOUND);
+}
+
+TEST_F(DeltaPatchCApi, DeletedFlagDifferenceKeepsTheRecord) {
+  write_bytes(older_, misc_plugin({}, {{0x800, std::string_view{"Gone\0", 5}, 0, 2}}));
+  write_bytes(newer_, misc_plugin({}, {{0x800, std::string_view{"Gone\0", 5}, 0x20, 2}}));
+
+  const auto env = open_env();
+  radicle_delta_patch_counts counts{};
+  const auto output_text = output_.string();
+  ASSERT_EQ(radicle_env_build_delta_patch(env.get(), kOlder, kNewer, output_text.c_str(), &counts),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(counts.removed, 0u);
+  EXPECT_EQ(counts.kept, 1u);
+
+  const auto patch = open_output();
+  const radicle_record* kept = by_editor_id(patch.get(), "Gone");
+  ASSERT_NE(kept, nullptr);
+  radicle_record_info info{};
+  ASSERT_EQ(radicle_record_get_info(patch.get(), kept, &info), RADICLE_STATUS_OK);
+  EXPECT_EQ(info.deleted, 1);
+  EXPECT_EQ(info.record_flags, 0x20u);
 }
 
 }  // namespace
