@@ -155,6 +155,11 @@ RADICLE_API radicle_status radicle_plugin_set_scene_formlink(radicle_plugin* plu
                                                              radicle_form_key key,
                                                              const char* path,
                                                              const radicle_form_key* target);
+RADICLE_API radicle_status radicle_plugin_set_scene_action_formlink(radicle_plugin* plugin,
+                                                                    radicle_form_key key,
+                                                                    size_t index,
+                                                                    const char* path,
+                                                                    const radicle_form_key* target);
 RADICLE_API radicle_status radicle_plugin_scene_group_count(const radicle_plugin* plugin,
                                                             radicle_form_key key,
                                                             radicle_scene_part part,

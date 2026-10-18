@@ -217,6 +217,37 @@ radicle_status radicle_plugin_set_scene_formlink(radicle_plugin* plugin,
   });
 }
 
+radicle_status radicle_plugin_set_scene_action_formlink(radicle_plugin* plugin,
+                                                        radicle_form_key key,
+                                                        size_t index,
+                                                        const char* path,
+                                                        const radicle_form_key* target) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  const auto target_key = target == nullptr ? std::optional<fo4::FormKey>{fo4::FormKey{}} : to_form_key(*target);
+  if (plugin == nullptr || !form_key || path == nullptr || !target_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key, path and a valid target are required");
+  }
+  return guarded("unknown exception while setting action scene link", [&] {
+    try {
+      switch (fo4::set_scene_action_formlink(plugin->value, *form_key, index, path, *target_key)) {
+        case fo4::FormLinkFieldMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::FormLinkFieldMutationStatus::record_mismatch:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene link path does not apply to this record type");
+        case fo4::FormLinkFieldMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "scene has no such action or the action has no such subrecord");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::FormLinkFieldError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    } catch (const fo4::FormIdError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
 radicle_status radicle_plugin_scene_group_count(const radicle_plugin* plugin,
                                                 radicle_form_key key,
                                                 radicle_scene_part part,

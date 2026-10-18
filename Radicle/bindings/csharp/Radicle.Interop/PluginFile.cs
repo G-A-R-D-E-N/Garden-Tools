@@ -341,6 +341,17 @@ public sealed unsafe class PluginFile : IDisposable
         });
     }
 
+    public bool SetSceneActionFormLink(FormKey scene, int index, string path, FormKey target)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        var at = Index(index);
+        return Edit(scene, (plugin, s, key) =>
+        {
+            var native = s.Key(target);
+            return RadicleNative.PluginSetSceneActionFormlink(plugin, key, at, path, &native);
+        });
+    }
+
     public int SceneGroupCount(FormKey scene, ScenePart part)
     {
         using var use = Use();
