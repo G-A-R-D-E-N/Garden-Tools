@@ -3,6 +3,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/form_links.hpp"
 #include "plugin_bytes.hpp"
 
 #include <gtest/gtest.h>

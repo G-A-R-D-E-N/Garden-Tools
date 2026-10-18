@@ -1,5 +1,6 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/preflight.hpp"
@@ -398,7 +399,7 @@ TEST(QustGeneralRows, AuthoringCreatesAQuestWithTheGeneralDataDefaults) {
   EXPECT_EQ(rules[3].signature, k_dnam);
   EXPECT_EQ(rules[3].minimum, 1);
   ASSERT_EQ(rules[3].default_bytes().size(), 12u);
-  EXPECT_EQ(rules[3].default_bytes()[0], std::byte{0});
+  EXPECT_EQ(rules[3].default_bytes()[0], 0);
 
   auto plugin = load();
   const auto created = fo4::create_record(plugin, k_qust, "NewQuest");

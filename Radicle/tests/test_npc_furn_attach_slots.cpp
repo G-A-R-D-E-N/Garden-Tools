@@ -70,7 +70,7 @@ ByteWriter make_plugin() {
               {"CS2K", u32_bytes(0x00000A31)},
               {"CS2D", u32_bytes(0x00000A41)},
               {"CS2F", Bytes{std::byte{0}}}});
-  add_record(out, "FURN", 0x900, {{"XMRK", std::string_view{"Marker\0", 7}}});
+  add_record(out, "FURN", 0x900, {{"XMRK", Bytes(7)}});
   return out;
 }
 
