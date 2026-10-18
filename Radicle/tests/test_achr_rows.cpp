@@ -693,7 +693,7 @@ TEST(AchrRows, WritesScalarsAndLinksThenRereads) {
   EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *level, "75"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *lock_key,
-                                           fo4::FormKey::parse("00000A30:Fallout4.esm")),
+                                           fo4::FormKey::parse("00000A31:Fallout4.esm")),
             fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *zone,
                                            fo4::FormKey::parse("00000005:Fallout4.esm")),
@@ -713,6 +713,6 @@ TEST(AchrRows, WritesScalarsAndLinksThenRereads) {
   ASSERT_EQ(lock.size(), 16u);
   EXPECT_EQ(std::to_integer<std::uint8_t>(lock[0]), 75);
   EXPECT_EQ(std::to_integer<std::uint8_t>(lock[8]), 0x04);
-  EXPECT_EQ(link_raw(full, "ACHR\\LockKey"), 0x00000A30u);
+  EXPECT_EQ(link_raw(full, "ACHR\\LockKey"), 0x00000A31u);
   EXPECT_EQ(link_raw(full, "ACHR\\EncounterZone"), 0x00000005u);
 }

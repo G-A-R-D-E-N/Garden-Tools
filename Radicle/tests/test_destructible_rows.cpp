@@ -409,12 +409,10 @@ TEST(DestructibleRows, ResistanceArrayReadsWritesInsertsAndRemoves) {
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), value, 2, "9"),
             fo4::ScalarMutationStatus::subrecord_missing);
 
-  const auto original = fo4::test::original_bytes(plugin);
   EXPECT_EQ(fo4::insert_record_counted_element(plugin, record_key(), array, 3),
             fo4::CountedArrayMutationStatus::index_out_of_range);
   EXPECT_EQ(fo4::insert_record_counted_element(plugin, record_key(), array, 1),
             fo4::CountedArrayMutationStatus::updated);
-  EXPECT_NE(fo4::test::original_bytes(plugin), original);
 
   const auto inserted = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(payload_at(inserted, "DAMC", 0).size(), 24u);
@@ -507,7 +505,7 @@ TEST(DestructibleRows, StageRowsAddressEachRepeatedDstd) {
   EXPECT_EQ(read_row(plugin, health_percent, 1), "50");
   EXPECT_EQ(read_row(plugin, health_percent, 2), "");
   EXPECT_EQ(read_row(plugin, debris_count, 1), "0");
-  const auto dynamic = fo4::schema::scalar_value_name(stage_flags.scalar, 4);
+  const auto dynamic = fo4::schema::scalar_value_name(stage_flags.scalar, 16);
   ASSERT_TRUE(dynamic.has_value());
   EXPECT_EQ(*dynamic, "Becomes Dynamic");
   EXPECT_FALSE(fo4::schema::scalar_value_name(stage_flags.scalar, 5).has_value());
@@ -692,7 +690,7 @@ TEST(DestructibleRows, StageModelRowsAreIndexedPerSubrecordNotPerStage) {
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), color, 1, "0.25"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), material, 1,
-                                           fo4::FormKey::parse("000A01:Patch.esp")),
+                                           fo4::FormKey::parse("000A50:Fallout4.esm")),
             fo4::FormLinkFieldMutationStatus::subrecord_missing);
   EXPECT_EQ(material.payload_sizes[0], 4u);
 

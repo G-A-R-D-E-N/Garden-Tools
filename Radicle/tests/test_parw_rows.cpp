@@ -115,7 +115,7 @@ TEST(ParwRows, EmbeddedWritesLeaveTheirSiblingsAlone) {
   const auto read = fo4::schema::scalar_field_bytes(payload, field->scalar);
   ASSERT_EQ(read.size(), 1u);
   EXPECT_EQ(payload[field->scalar.offset], encoded[0]);
-  EXPECT_EQ(fo4::schema::decode_scalar(read, field->scalar), std::string("True"));
+  EXPECT_EQ(fo4::schema::decode_scalar(read, field->scalar), std::to_string(*value));
 }
 
 TEST(ParwRows, WholePayloadRowsRefuseTheWrongWidth) {

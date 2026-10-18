@@ -1,6 +1,7 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/field_address.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -137,8 +138,17 @@ Bytes scalar_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_
     ADD_FAILURE() << path;
     return {};
   }
-  const auto data = subrecord_at(plugin, key, field->scalar.subrecord.to_string(), 0);
-  const auto bytes = fo4::schema::scalar_field_bytes(data, field->scalar);
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) {
+    ADD_FAILURE() << key;
+    return {};
+  }
+  const auto resolved = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(field->scalar), field->scalar.address);
+  if (resolved.slots.empty() || !resolved.slots[0].valid) return {};
+  const auto slot = resolved.slots[0];
+  const auto bytes = fo4::schema::scalar_slot_bytes(record->subrecords[slot.subrecord].data, slot,
+                                                    field->scalar);
   return Bytes(bytes.begin(), bytes.end());
 }
 
