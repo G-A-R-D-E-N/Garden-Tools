@@ -7924,6 +7924,14 @@
           "insertion": "existing_only"
         },
         {
+          "path": "RACE\\EquipSlotNodes",
+          "label": "Equip slot node",
+          "kind": "string",
+          "subrecord": "ZNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
           "path": "RACE\\FirstPersonFlags",
           "label": "First person flags",
           "kind": "scalar",
@@ -8360,6 +8368,38 @@
           "nullable": true,
           "payload_sizes": [200],
           "min_form_version": 124,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\CollarTextureSet",
+          "label": "Collar TextureSet",
+          "subrecord": "NAM2",
+          "offset": 0,
+          "targets": ["TXST"],
+          "nullable": false,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\MovementType",
+          "label": "Movement Type",
+          "subrecord": "MTYP",
+          "offset": 0,
+          "targets": ["MOVT"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\EquipSlot",
+          "label": "Equip Slot",
+          "subrecord": "QNAM",
+          "offset": 0,
+          "targets": ["EQUP"],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [4],
           "insertion": "existing_only"
         }
       ],
