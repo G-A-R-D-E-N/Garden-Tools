@@ -7984,7 +7984,7 @@
         {"path": "RACE\\MorphValueMaxNames", "label": "Morph value max name", "kind": "string", "subrecord": "MSM1", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\MorphValueMinNames", "label": "Morph value min name", "kind": "string", "subrecord": "MSM0", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\SubgraphAnimationPaths", "label": "Subgraph animation path", "kind": "string", "subrecord": "SAPT", "repeated": true, "insertion": "existing_only"},
-        {"path": "RACE\\SubgraphBehaviorGraphs", "label": "Subgraph behaviour graph", "kind": "string", "subrecord": "SGNM", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\SubgraphBehaviorGraphs", "label": "Subgraph behavior graph", "kind": "string", "subrecord": "SGNM", "repeated": true, "insertion": "existing_only"},
         {
           "path": "RACE\\FirstPersonFlags",
           "label": "First person flags",
