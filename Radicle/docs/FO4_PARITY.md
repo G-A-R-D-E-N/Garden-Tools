@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
+Tier counts: L0 4, L1 0, L2 5, L3 0, L4 138.
 
 ### Per-signature coverage
 
@@ -141,7 +141,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 48 | - | 28 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
-| OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
+| OMOD | 12501 | 7 | - | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
@@ -293,7 +293,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NOCM | - | - | - | - | - | - | - | - | - | - |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
 | NPC_ | 38 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
-| OMOD | - | - | - | - | - | - | - | - | - | - |
+| OMOD | 4 | - | 3 | - | - | u32, u8 | - | - | - | existing_only |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
