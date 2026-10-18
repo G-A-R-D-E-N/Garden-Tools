@@ -8649,6 +8649,150 @@
           "maximum": 3.4028234663852886e+38,
           "minimum_payload_size": 24,
           "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\MapFlags",
+          "label": "Map flags",
+          "kind": "scalar",
+          "subrecord": "FNAM",
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {
+              "bit": 0,
+              "name": "Visible"
+            },
+            {
+              "bit": 1,
+              "name": "Can Travel To"
+            },
+            {
+              "bit": 2,
+              "name": "\"Show All\" Hidden"
+            },
+            {
+              "bit": 3,
+              "name": "Use Location Name"
+            }
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\MapMarkerType",
+          "label": "Map marker type",
+          "kind": "scalar",
+          "subrecord": "TNAM",
+          "offset": 0,
+          "storage": "u8",
+          "presentation": "enum",
+          "names": [
+            {"value": 0, "name": "Cave"},
+            {"value": 1, "name": "City"},
+            {"value": 2, "name": "Diamond City"},
+            {"value": 3, "name": "Encampment"},
+            {"value": 4, "name": "Factory / Industrial Site"},
+            {"value": 5, "name": "Gov't Building / Monument"},
+            {"value": 6, "name": "Metro Station"},
+            {"value": 7, "name": "Military Base"},
+            {"value": 8, "name": "Natural Landmark"},
+            {"value": 9, "name": "Office / Civic Building"},
+            {"value": 10, "name": "Ruins - Town"},
+            {"value": 11, "name": "Ruins - Urban"},
+            {"value": 12, "name": "Sanctuary"},
+            {"value": 13, "name": "Settlement"},
+            {"value": 14, "name": "Sewer / Utility Tunnels"},
+            {"value": 15, "name": "Vault"},
+            {"value": 16, "name": "Airfield"},
+            {"value": 17, "name": "Bunker Hill"},
+            {"value": 18, "name": "Camper"},
+            {"value": 19, "name": "Car"},
+            {"value": 20, "name": "Church"},
+            {"value": 21, "name": "Country Club"},
+            {"value": 22, "name": "Custom House"},
+            {"value": 23, "name": "Drive-In"},
+            {"value": 24, "name": "Elevated Highway"},
+            {"value": 25, "name": "Faneuil Hall"},
+            {"value": 26, "name": "Farm"},
+            {"value": 27, "name": "Filling Station"},
+            {"value": 28, "name": "Forested"},
+            {"value": 29, "name": "Goodneighbor"},
+            {"value": 30, "name": "Graveyard"},
+            {"value": 31, "name": "Hospital"},
+            {"value": 32, "name": "Industrial Dome"},
+            {"value": 33, "name": "Industrial Stacks"},
+            {"value": 34, "name": "Institute"},
+            {"value": 35, "name": "Irish Pride"},
+            {"value": 36, "name": "Junkyard"},
+            {"value": 37, "name": "Observatory"},
+            {"value": 38, "name": "Pier"},
+            {"value": 39, "name": "Pond / Lake"},
+            {"value": 40, "name": "Quarry"},
+            {"value": 41, "name": "Radioactive Area"},
+            {"value": 42, "name": "Radio Tower"},
+            {"value": 43, "name": "Salem"},
+            {"value": 44, "name": "School"},
+            {"value": 45, "name": "Shipwreck"},
+            {"value": 46, "name": "Submarine"},
+            {"value": 47, "name": "Swan Pond"},
+            {"value": 48, "name": "Synth Head"},
+            {"value": 49, "name": "Town"},
+            {"value": 50, "name": "Brotherhood of Steel"},
+            {"value": 51, "name": "Brownstone Townhouse"},
+            {"value": 52, "name": "Bunker"},
+            {"value": 53, "name": "Castle"},
+            {"value": 54, "name": "Skyscraper"},
+            {"value": 55, "name": "Libertalia"},
+            {"value": 56, "name": "Low-Rise Building"},
+            {"value": 57, "name": "Minutemen"},
+            {"value": 58, "name": "Police Station"},
+            {"value": 59, "name": "Prydwen"},
+            {"value": 60, "name": "Railroad - Faction"},
+            {"value": 61, "name": "Railroad"},
+            {"value": 62, "name": "Satellite"},
+            {"value": 63, "name": "Sentinel"},
+            {"value": 64, "name": "USS Constitution"},
+            {"value": 65, "name": "Mechanist Lair"},
+            {"value": 66, "name": "Raider settlement"},
+            {"value": 67, "name": "Vassal settlement"},
+            {"value": 68, "name": "Potential Vassal settlement"},
+            {"value": 69, "name": "Bottling Plant"},
+            {"value": 70, "name": "Galactic"},
+            {"value": 71, "name": "HUB"},
+            {"value": 72, "name": "Kiddie Kingdom"},
+            {"value": 73, "name": "Monorail"},
+            {"value": 74, "name": "Rides"},
+            {"value": 75, "name": "Safari"},
+            {"value": 76, "name": "Wild West"},
+            {"value": 77, "name": "POI"},
+            {"value": 78, "name": "Disciples"},
+            {"value": 79, "name": "Operators"},
+            {"value": 80, "name": "Pack"},
+            {"value": 81, "name": "Custom 81"},
+            {"value": 82, "name": "Custom 82"},
+            {"value": 83, "name": "Custom 83"},
+            {"value": 84, "name": "Custom 84"},
+            {"value": 85, "name": "Custom 85"},
+            {"value": 86, "name": "Custom 86"},
+            {"value": 87, "name": "Custom 87"},
+            {"value": 88, "name": "Custom 88"},
+            {"value": 89, "name": "Custom 89"},
+            {"value": 90, "name": "Custom 90"},
+            {"value": 91, "name": "Custom 91"},
+            {"value": 92, "name": "Custom 92"},
+            {"value": 93, "name": "Custom 93"},
+            {"value": 94, "name": "Custom 94"},
+            {"value": 95, "name": "Custom 95"},
+            {"value": 96, "name": "Custom 96"},
+            {"value": 97, "name": "Custom 97"},
+            {"value": 98, "name": "Custom 98"},
+            {"value": 99, "name": "Custom 99"}
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "payload_size": 2,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -8803,6 +8947,35 @@
           ],
           "targets": [
             "KEYM"
+          ],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\PersistLocation",
+          "label": "Persist location",
+          "subrecord": "XLCN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LCTN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LocationReference",
+          "label": "Location reference",
+          "subrecord": "XLRL",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LCRT",
+            "LCTN"
           ],
           "nullable": true,
           "insertion": "existing_only"
@@ -29494,7 +29667,9 @@
         {"path": "ACHR\\ReferenceGroup", "label": "Reference group", "subrecord": "XRFG", "offset": 0, "payload_sizes": [4], "targets": ["RFGP"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\Layer", "label": "Layer", "subrecord": "XLYR", "offset": 0, "payload_sizes": [4], "targets": ["LAYR"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\MaterialSwap", "label": "Material swap", "subrecord": "XMSP", "offset": 0, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"},
-        {"path": "ACHR\\AttachRef", "label": "Attach ref", "subrecord": "XATR", "offset": 0, "payload_sizes": [4], "targets": ["REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA", "ACHR"], "nullable": false, "insertion": "existing_only"}
+        {"path": "ACHR\\AttachRef", "label": "Attach ref", "subrecord": "XATR", "offset": 0, "payload_sizes": [4], "targets": ["REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA", "ACHR"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\PersistLocation", "label": "Persist location", "subrecord": "XLCN", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\LocationReference", "label": "Location reference", "subrecord": "XLRL", "offset": 0, "payload_sizes": [4], "targets": ["LCRT", "LCTN"], "nullable": true, "insertion": "existing_only"}
       ]
     }
   ],

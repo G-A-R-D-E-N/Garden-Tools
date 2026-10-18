@@ -37,6 +37,7 @@ struct LinkRow {
   std::size_t offset;
   std::uint32_t payload_size;
   std::string_view target;
+  bool nullable = false;
 };
 
 constexpr auto f32 = fo4::schema::ScalarStorage::f32;
@@ -55,6 +56,8 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"REFR", "REFR\\AlphaBase", "XALP", 1, u8, true, 2, 0},
     {"REFR", "REFR\\LockLevel", "XLOC", 0, u8, true, 16, 0},
     {"REFR", "REFR\\LockFlags", "XLOC", 8, u8, true, 16, 0},
+    {"REFR", "REFR\\MapFlags", "FNAM", 0, u8, false, 0, 0},
+    {"REFR", "REFR\\MapMarkerType", "TNAM", 0, u8, true, 2, 0},
     {"REFR", "REFR\\LightFov", "XLIG", 0, f32, true, 0, 0},
     {"REFR", "REFR\\LightEndDistanceCap", "XLIG", 8, f32, true, 0, 0},
     {"REFR", "REFR\\LightNearClip", "XLIG", 16, f32, true, 0, 20},
@@ -74,7 +77,9 @@ constexpr LinkRow k_link_rows[] = {
     {"REFR", "REFR\\AcousticRestriction", "XASP", 0, 4, "REFR"},
     {"REFR", "REFR\\MultiboundReference", "XMBR", 0, 4, "REFR"},
     {"REFR", "REFR\\SpawnContainer", "XSPC", 0, 4, "REFR"},
-    {"REFR", "REFR\\LockKey", "XLOC", 4, 16, "KEYM"},
+    {"REFR", "REFR\\LockKey", "XLOC", 4, 16, "KEYM", true},
+    {"REFR", "REFR\\PersistLocation", "XLCN", 0, 4, "LCTN"},
+    {"REFR", "REFR\\LocationReference", "XLRL", 0, 4, "LCRT", true},
     {"PGRE", "PGRE\\EncounterZone", "XEZN", 0, 4, "ECZN"},
     {"PGRE", "PGRE\\Emittance", "XEMI", 0, 4, "REGN"},
 };
@@ -151,6 +156,10 @@ std::vector<std::byte> make_plugin() {
                 {"XLOC", lock_bytes(50, 0x00000A30, 0x04)},
                 {"XEZN", u32_bytes(0x00000A10)},
                 {"XEMI", u32_bytes(0x00000B20)},
+                {"FNAM", Bytes{std::byte{0x0B}}},
+                {"TNAM", Bytes{std::byte{13}, std::byte{0}}},
+                {"XLCN", u32_bytes(0x00000A70)},
+                {"XLRL", u32_bytes(0x00000A80)},
                 {"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f, 0.75f})}});
   write_record(out, "REFR", 0x0C11,
                {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}});
@@ -229,7 +238,7 @@ TEST(REFRExtraRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
     ASSERT_TRUE(field.has_value());
     EXPECT_EQ(field->subrecord, fo4::Signature::from_string(row.subrecord));
     EXPECT_EQ(field->offset, row.offset);
-    EXPECT_EQ(field->nullable, std::string_view{row.path} == "REFR\\LockKey");
+    EXPECT_EQ(field->nullable, row.nullable);
     EXPECT_EQ(field->payload_sizes[0], row.payload_size);
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
@@ -256,8 +265,12 @@ TEST(REFRExtraRows, ReadsScalarsAndLinksFromThePlugin) {
   EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\LightEndDistanceCap"), floats({2048.0f}));
   EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\LightNearClip"), floats({10.0f}));
   EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\LightVolumetricIntensity"), floats({0.75f}));
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\MapFlags"), Bytes{std::byte{0x0B}});
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", key, "REFR\\MapMarkerType"), Bytes{std::byte{13}});
   EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\LockKey"), 0x00000A30u);
   EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\EncounterZone"), 0x00000A10u);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\PersistLocation"), 0x00000A70u);
+  EXPECT_EQ(link_raw(plugin, "REFR", key, "REFR\\LocationReference"), 0x00000A80u);
 
   const auto short_key = "000C11:Patch.esp";
   EXPECT_EQ(scalar_bytes(plugin, "REFR", short_key, "REFR\\LightFov"), floats({90.0f}));
