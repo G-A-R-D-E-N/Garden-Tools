@@ -160,7 +160,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | QUST | 10684 | 5 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
 | RACE | 11054 | 56 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 35 | - | 16 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| REGN | 11870 | 9 | - | 2 | - | 1 | - | - | - | yes | - | L4 |
+| REGN | 11870 | 9 | - | 2 | - | 1 | yes | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |

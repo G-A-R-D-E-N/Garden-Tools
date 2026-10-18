@@ -1,7 +1,9 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
@@ -336,6 +338,33 @@ TEST(RegnRows, MalformedPayloadsHideOrRefuseRows) {
       fo4::set_record_scalar(short_plugin, fo4::FormKey::parse(short_key), *falloff, "3"),
       fo4::schema::ScalarError);
   EXPECT_EQ(sub_bytes(short_plugin, short_key, "RPLI"), (Bytes{std::byte{0x50}, std::byte{0x00}}));
+}
+
+TEST(RegnRows, CreatesARegionInAuthoringOrder) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto created =
+      fo4::create_record(plugin, fo4::Signature::from_string("REGN"), "RadicleNewRegion");
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  const auto* record = fo4::find_record(plugin, created.key);
+  ASSERT_NE(record, nullptr);
+  ASSERT_EQ(record->subrecords.size(), 2u);
+  EXPECT_EQ(record->subrecords[0].signature, fo4::Signature::from_string("EDID"));
+  EXPECT_EQ(record->subrecords[1].signature, fo4::Signature::from_string("RCLR"));
+  EXPECT_EQ(record->subrecords[1].data,
+            (Bytes{std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}}));
+  EXPECT_TRUE(fo4::schema::preflight_authoring_record(plugin, created.key).empty());
+
+  const auto stored = created.key.to_string();
+  EXPECT_EQ(field_bytes(plugin, stored, "REGN\\MapColorRed"), u8_bytes(0));
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, created.key, fo4::Signature::from_string("ANAM")),
+            fo4::SubrecordAddStatus::not_authorable);
+  EXPECT_EQ(
+      fo4::remove_record_subrecord(plugin, created.key, fo4::Signature::from_string("RCLR"), 0),
+      fo4::SubrecordRemoveStatus::below_minimum);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  ASSERT_NE(fo4::find_record(reread, created.key), nullptr);
+  EXPECT_TRUE(fo4::schema::preflight_authoring_record(reread, created.key).empty());
 }
 
 }  // namespace

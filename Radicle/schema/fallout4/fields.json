@@ -8466,6 +8466,20 @@
     },
     {
       "signature": "REGN",
+      "authoring": {
+        "placement": "top_level",
+        "subrecords": [
+          {"signature": "EDID", "minimum": 0, "maximum": 1},
+          {"signature": "RCLR", "minimum": 1, "maximum": 1, "default": "00000000"},
+          {"signature": "WNAM", "minimum": 0, "maximum": 1},
+          {"signature": "RPLI", "minimum": 0, "maximum": 255},
+          {"signature": "RPLD", "minimum": 0, "maximum": 255},
+          {"signature": "RDAT", "minimum": 0, "maximum": 255},
+          {"signature": "RDMO", "minimum": 0, "maximum": 255},
+          {"signature": "RDMP", "minimum": 0, "maximum": 1},
+          {"signature": "RLDM", "minimum": 0, "maximum": 255}
+        ]
+      },
       "fields": [
         {"path": "REGN\\MapColorRed", "label": "Map color red", "kind": "scalar", "subrecord": "RCLR", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
         {"path": "REGN\\MapColorGreen", "label": "Map color green", "kind": "scalar", "subrecord": "RCLR", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
