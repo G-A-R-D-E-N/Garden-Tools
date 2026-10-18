@@ -108,6 +108,12 @@ Bytes zstr(std::string_view text) {
   return out.bytes;
 }
 
+Bytes u16_bytes(std::uint16_t value) {
+  ByteWriter out;
+  out.u16(value);
+  return out.bytes;
+}
+
 Bytes u32_bytes(std::uint32_t value) {
   ByteWriter out;
   out.u32(value);
@@ -197,6 +203,10 @@ std::vector<std::byte> make_plugin() {
       {"BOD2", u32_bytes(4)},
       {"RNAM", u32_bytes(0x00000A10)},
       {"EITM", u32_bytes(0x00000A11)},
+      {"INDX", u16_bytes(1)},
+      {"MODL", u32_bytes(0x00000A30)},
+      {"INDX", u16_bytes(2)},
+      {"MODL", u32_bytes(0x00000A31)},
   };
   for (const auto& sub : armo_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, armo);
@@ -232,6 +242,20 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_vie
   }
   ADD_FAILURE() << subrecord;
   return {};
+}
+
+std::vector<Bytes> all_sub_bytes(const fo4::Plugin& plugin, std::string_view key,
+                                 std::string_view subrecord) {
+  std::vector<Bytes> out;
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) {
+    ADD_FAILURE() << key;
+    return out;
+  }
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature.to_string() == subrecord) out.push_back(sub.data);
+  }
+  return out;
 }
 
 Bytes scalar_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_view record,
@@ -407,4 +431,68 @@ TEST(ARMOARMARows, WritesRowsThenRereads) {
                         std::byte{0x00}, std::byte{0x00}, std::byte{0x05}, std::byte{0x00}},
                   floats({2.5f})}));
   EXPECT_EQ(sub_bytes(reread, k_arma_key, "BOD2"), u32_bytes(1));
+}
+
+TEST(ARMOARMARows, ModelListRowsAreRepeatedIndicesAndAddonLinks) {
+  const auto index = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                          "ARMO\\ModelAddonIndex");
+  ASSERT_TRUE(index.has_value());
+  EXPECT_EQ(index->scalar.subrecord, fo4::Signature::from_string("INDX"));
+  EXPECT_EQ(index->scalar.storage, u16);
+  EXPECT_EQ(index->scalar.offset, 0u);
+  EXPECT_EQ(index->scalar.payload_size, 0u);
+  EXPECT_FALSE(index->scalar.embedded);
+  EXPECT_TRUE(index->scalar.address.repeated);
+  EXPECT_EQ(index->scalar.address.stride, 0u);
+  EXPECT_THROW(fo4::schema::encode_scalar("65536", index->scalar), fo4::schema::ScalarError);
+
+  const auto addon = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                            "ARMO\\ModelArmorAddon");
+  ASSERT_TRUE(addon.has_value());
+  EXPECT_EQ(addon->subrecord, fo4::Signature::from_string("MODL"));
+  EXPECT_EQ(addon->offset, 0u);
+  EXPECT_TRUE(addon->address.repeated);
+  EXPECT_FALSE(addon->nullable);
+  ASSERT_EQ(addon->payload_sizes[0], 4u);
+  const auto targets = fo4::schema::formlink_field_targets(*addon);
+  ASSERT_EQ(targets.size(), 1u);
+  EXPECT_EQ(targets[0], fo4::Signature::from_string("ARMA"));
+}
+
+TEST(ARMOARMARows, EditsTheModelListByIndex) {
+  const auto index = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                          "ARMO\\ModelAddonIndex");
+  const auto addon = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                            "ARMO\\ModelArmorAddon");
+  ASSERT_TRUE(index.has_value());
+  ASSERT_TRUE(addon.has_value());
+  const auto key = fo4::FormKey::parse(k_armo_key);
+
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *index), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *addon), 2u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 1, "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 1, "7"),
+            fo4::ScalarMutationStatus::unchanged);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 2, "7"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *addon, 2,
+                                           fo4::FormKey::parse("000A21:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *addon, 1,
+                                           fo4::FormKey::parse("000A21:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, *addon, 0, key),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto indices = all_sub_bytes(reread, k_armo_key, "INDX");
+  ASSERT_EQ(indices.size(), 2u);
+  EXPECT_EQ(indices[0], u16_bytes(1));
+  EXPECT_EQ(indices[1], u16_bytes(7));
+  const auto addons = all_sub_bytes(reread, k_armo_key, "MODL");
+  ASSERT_EQ(addons.size(), 2u);
+  EXPECT_EQ(addons[0], u32_bytes(0x00000A30u));
+  EXPECT_EQ(addons[1], u32_bytes(0x01000A21u));
 }

@@ -548,6 +548,18 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\ModelAddonIndex",
+          "label": "Addon index",
+          "kind": "scalar",
+          "subrecord": "INDX",
+          "storage": "u16",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 65535,
+          "repeated": true,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -702,6 +714,21 @@
             "DMGT"
           ],
           "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\ModelArmorAddon",
+          "label": "Armor addon",
+          "subrecord": "MODL",
+          "offset": 0,
+          "targets": [
+            "ARMA"
+          ],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [
+            4
+          ],
           "insertion": "existing_only"
         }
       ],
