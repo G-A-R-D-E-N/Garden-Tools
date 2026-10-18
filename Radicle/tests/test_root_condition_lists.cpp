@@ -212,6 +212,47 @@ TEST(RootConditionLists, MgefListAppendsAtEndWhenNothingFollows) {
   EXPECT_EQ(after.functions, (std::vector<std::uint16_t>{9}));
 }
 
+TEST(RootConditionLists, FactListAppendsAtEndAndDropsItsCitcWhenCleared) {
+  auto plugin = make_plugin("FACT", {{"PLVD", zeros(4)}, {"CITC", u32_bytes(0)}});
+  EXPECT_EQ(set_root(plugin, {function_condition(9)}), fo4::ConditionMutationStatus::updated);
+  auto after = snapshot(plugin);
+  EXPECT_EQ(after.signatures, (std::vector<std::string>{"EDID", "PLVD", "CITC", "CTDA"}));
+  EXPECT_EQ(after.citc, (std::vector<std::uint32_t>{1}));
+  EXPECT_EQ(after.functions, (std::vector<std::uint16_t>{9}));
+
+  EXPECT_EQ(set_root(plugin, std::vector<fo4::CtdaCondition>{}),
+            fo4::ConditionMutationStatus::updated);
+  after = snapshot(plugin);
+  EXPECT_EQ(after.signatures, (std::vector<std::string>{"EDID", "PLVD"}));
+  EXPECT_TRUE(after.citc.empty());
+}
+
+TEST(RootConditionLists, IdleListLandsAfterEdidBeforeDnamWithoutCitc) {
+  auto plugin = make_plugin("IDLE", {{"DNAM", zeros(4)}, {"ENAM", zeros(4)}});
+  EXPECT_EQ(set_root(plugin, {function_condition(9)}), fo4::ConditionMutationStatus::updated);
+  const auto after = snapshot(plugin);
+  EXPECT_EQ(after.signatures, (std::vector<std::string>{"EDID", "CTDA", "DNAM", "ENAM"}));
+  EXPECT_TRUE(after.citc.empty());
+  EXPECT_EQ(after.functions, (std::vector<std::uint16_t>{9}));
+}
+
+TEST(RootConditionLists, MustListLandsBeforeSnamAndCountsIntoItsCitc) {
+  auto plugin =
+      make_plugin("MUST", {{"FNAM", zeros(4)}, {"CITC", u32_bytes(0)}, {"SNAM", u32_bytes(0)}});
+  EXPECT_EQ(set_root(plugin, {function_condition(9)}), fo4::ConditionMutationStatus::updated);
+  auto after = snapshot(plugin);
+  EXPECT_EQ(after.signatures,
+            (std::vector<std::string>{"EDID", "FNAM", "CITC", "CTDA", "SNAM"}));
+  EXPECT_EQ(after.citc, (std::vector<std::uint32_t>{1}));
+  EXPECT_EQ(after.functions, (std::vector<std::uint16_t>{9}));
+
+  EXPECT_EQ(set_root(plugin, std::vector<fo4::CtdaCondition>{}),
+            fo4::ConditionMutationStatus::updated);
+  after = snapshot(plugin);
+  EXPECT_EQ(after.signatures, (std::vector<std::string>{"EDID", "FNAM", "SNAM"}));
+  EXPECT_TRUE(after.citc.empty());
+}
+
 TEST(RootConditionLists, ScenRootListIgnoresNestedListAndLandsBeforeTnam) {
   auto plugin = make_plugin("SCEN", {{"ANAM", u32_bytes(0)},
                                      {"CTDA", ctda_bytes(1)},

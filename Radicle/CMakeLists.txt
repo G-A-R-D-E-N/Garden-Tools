@@ -455,6 +455,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_ctda_alias_formids.cpp
     tests/test_condition_scopes.cpp
     tests/test_condition_scopes_records.cpp
+    tests/test_condition_scopes_mesg.cpp
     tests/test_condition_root_insert.cpp
     tests/test_root_condition_lists.cpp
     tests/test_condition_scopes_real.cpp

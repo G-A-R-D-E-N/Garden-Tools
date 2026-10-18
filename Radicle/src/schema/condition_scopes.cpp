@@ -40,6 +40,7 @@ constexpr Signature sig_next = Signature::from_string("NEXT");
 constexpr Signature sig_prkc = Signature::from_string("PRKC");
 constexpr Signature sig_pnam = Signature::from_string("PNAM");
 constexpr Signature sig_scen = Signature::from_string("SCEN");
+constexpr Signature sig_itxt = Signature::from_string("ITXT");
 
 constexpr Signature k_package_branch_members[] = {
     sig_citc, sig_ctda, sig_cis1, sig_cis2, Signature::from_string("PRCB"),
@@ -441,6 +442,18 @@ std::vector<ScopeRange> perk_effect_tab_ranges(const Record& record) {
   return ranges;
 }
 
+std::vector<ScopeRange> message_button_ranges(const Record& record) {
+  const auto& subs = record.subrecords;
+  std::vector<ScopeRange> ranges;
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature != sig_itxt) continue;
+    std::size_t end = i + 1;
+    while (end < subs.size() && subs[end].signature != sig_itxt) ++end;
+    ranges.push_back(ScopeRange{i, end, i + 1, true});
+  }
+  return ranges;
+}
+
 enum class ScopeStatus { ok, out_of_range, not_conditioned, structure_invalid };
 
 struct ScopeResolution {
@@ -461,6 +474,8 @@ std::optional<std::vector<ScopeRange>> scope_ranges(const Record& record,
       return quest_target_ranges(record);
     case ConditionScopeKind::perk_effect_tab:
       return perk_effect_tab_ranges(record);
+    case ConditionScopeKind::message_button:
+      return message_button_ranges(record);
   }
   return std::nullopt;
 }
@@ -496,6 +511,7 @@ std::optional<std::vector<ScopeRange>> nested_scope_ranges(const Record& record)
       ConditionScopeKind::package_branch,
       ConditionScopeKind::quest_target,
       ConditionScopeKind::perk_effect_tab,
+      ConditionScopeKind::message_button,
   };
   std::vector<ScopeRange> ranges;
   for (const auto kind : kinds) {

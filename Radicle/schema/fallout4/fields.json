@@ -29335,6 +29335,7 @@
     { "record": "ALCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "ENCH", "container": "Effects", "member": "Conditions", "scope": "effect" },
     { "record": "INGR", "container": "Effects", "member": "Conditions", "scope": "effect" },
+    { "record": "MESG", "container": "Menu Buttons", "member": "Conditions", "scope": "message_button" },
     { "record": "PACK", "container": "Branches", "member": "Conditions", "scope": "package_branch" },
     { "record": "PERK", "container": "Tabs", "member": "Conditions", "scope": "perk_effect_tab" },
     { "record": "QUST", "container": "Aliases", "member": "Conditions", "scope": "alias" },

@@ -4,6 +4,7 @@ inline constexpr ConditionScopeDescriptor k_generated_condition_scopes[] = {
   {Signature::from_string("ALCH"), "Effects", "Conditions", ConditionScopeKind::effect},
   {Signature::from_string("ENCH"), "Effects", "Conditions", ConditionScopeKind::effect},
   {Signature::from_string("INGR"), "Effects", "Conditions", ConditionScopeKind::effect},
+  {Signature::from_string("MESG"), "Menu Buttons", "Conditions", ConditionScopeKind::message_button},
   {Signature::from_string("PACK"), "Branches", "Conditions", ConditionScopeKind::package_branch},
   {Signature::from_string("PERK"), "Tabs", "Conditions", ConditionScopeKind::perk_effect_tab},
   {Signature::from_string("QUST"), "Aliases", "Conditions", ConditionScopeKind::alias},

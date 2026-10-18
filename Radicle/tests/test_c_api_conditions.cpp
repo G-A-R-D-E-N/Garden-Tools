@@ -107,6 +107,14 @@ std::vector<std::byte> fixture() {
   fo4::test::write_subrecord(out, "EDID", std::string_view("Plain\0", 6));
   fo4::test::end_record(out, plain);
   fo4::test::end_group(out, spells);
+
+  const auto messages = fo4::test::begin_group(out, "MESG", 0);
+  const auto message = fo4::test::begin_record(out, "MESG", 0, 0x810);
+  fo4::test::write_subrecord(out, "DESC", std::string_view("Text\0", 5));
+  fo4::test::write_subrecord(out, "ITXT", std::string_view("Yes\0", 4));
+  fo4::test::write_subrecord(out, "ITXT", std::string_view("No\0", 3));
+  fo4::test::end_record(out, message);
+  fo4::test::end_group(out, messages);
   return out.bytes;
 }
 
@@ -371,6 +379,37 @@ TEST_F(ConditionsCApi, RootReadWithMultipleListsIsAnErrorStatus) {
   EXPECT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x804), nullptr, &list),
             RADICLE_STATUS_PARSE_ERROR);
   EXPECT_EQ(list, nullptr);
+}
+
+TEST_F(ConditionsCApi, MesgMenuButtonScopeWritesThroughTheRadicleExport) {
+  auto plugin = read_plugin(input_);
+  const radicle_form_key message{kPlugin, 0x810};
+  const auto row = radicle_condition{0x00, 0u, 0x20, 0, 7, 0, 0, 0, -1, "Button", "Param"};
+  radicle_condition_write_status status{};
+  ASSERT_EQ(radicle_plugin_set_conditions(plugin.get(), message, "Menu Buttons[1].Conditions",
+                                          &row, 1, &status),
+            RADICLE_STATUS_OK);
+  EXPECT_EQ(status, RADICLE_CONDITION_UPDATED);
+
+  const auto env = open_env(save(plugin.get()));
+  const auto list =
+      conditions_of(env.get(), winner(env.get(), 0x810), "Menu Buttons[1].Conditions");
+  ASSERT_EQ(list->count, 1u);
+  EXPECT_EQ(list->rows[0].function, 0x20);
+  ASSERT_NE(list->rows[0].parameter1_string, nullptr);
+  EXPECT_STREQ(list->rows[0].parameter1_string, "Button");
+  ASSERT_NE(list->rows[0].parameter2_string, nullptr);
+  EXPECT_STREQ(list->rows[0].parameter2_string, "Param");
+
+  const auto first =
+      conditions_of(env.get(), winner(env.get(), 0x810), "Menu Buttons[0].Conditions");
+  EXPECT_EQ(first->count, 0u);
+
+  const radicle_condition_list* missing = nullptr;
+  EXPECT_EQ(radicle_record_conditions(env.get(), winner(env.get(), 0x810),
+                                      "Menu Buttons[2].Conditions", &missing),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(missing, nullptr);
 }
 
 TEST_F(ConditionsCApi, ListFreeAcceptsNull) {
