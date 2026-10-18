@@ -20,8 +20,6 @@ namespace {
 using Bytes = std::vector<std::byte>;
 using fo4::test::ByteWriter;
 
-constexpr std::uint32_t k_retarget_raw = 0x01000A20;
-
 Bytes u32_bytes(std::uint32_t value) {
   ByteWriter out;
   out.u32(value);
@@ -65,7 +63,7 @@ ByteWriter make_plugin() {
   add_record(out, "SNDR", 0xA40, {});
   add_record(out, "SNDR", 0xA41, {});
   add_record(out, "NPC_", 0x800, {{"KWDA", u32_words({0x00000A30u})}, {"DATA", Bytes(4)}});
-  add_record(out, "NPC_", 0x801, {{"APPR", u32_words({0x00000A30u, 0x00000A31u})}});
+  add_record(out, "NPC_", 0x801, {{"APPR", u32_words({0x02000A30u, 0x02000A31u})}});
   add_record(out, "NPC_", 0x802,
              {{"CS2K", u32_bytes(0x00000A30)},
               {"CS2D", u32_bytes(0x00000A40)},
@@ -108,17 +106,21 @@ std::string signature_list(const fo4::Plugin& plugin, std::string_view key) {
   return out;
 }
 
-Bytes payloads_of(const fo4::Plugin& plugin, std::string_view key, std::string_view signature) {
+Bytes payloads_of(const fo4::Plugin& plugin, std::string_view key, std::string_view signature,
+                  std::size_t index = 0) {
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
   if (record == nullptr) {
     ADD_FAILURE() << key;
     return {};
   }
   const auto wanted = fo4::Signature::from_string(signature);
+  std::size_t seen = 0;
   for (const auto& sub : record->subrecords) {
-    if (sub.signature == wanted) return sub.data;
+    if (sub.signature != wanted) continue;
+    if (seen == index) return sub.data;
+    ++seen;
   }
-  ADD_FAILURE() << key << ' ' << signature;
+  ADD_FAILURE() << key << ' ' << signature << ' ' << index;
   return {};
 }
 
@@ -242,7 +244,9 @@ TEST(NpcFurnAttachSlots, ActorSoundPairsAreReadAndRetargetedIndependently) {
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(signature_list(reread, "02000802:Patch.esp"), "EDID,CS2K,CS2D,CS2K,CS2D,CS2F");
-  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2K"), u32_bytes(0x02000A31u));
-  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2D"), u32_bytes(0x01000A40u));
+  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2K", 0), u32_bytes(0x00000A30u));
+  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2K", 1), u32_bytes(0x02000A31u));
+  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2D", 0), u32_bytes(0x02000A40u));
+  EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2D", 1), u32_bytes(0x00000A41u));
   EXPECT_EQ(payloads_of(reread, "02000802:Patch.esp", "CS2F"), Bytes{std::byte{1}});
 }
