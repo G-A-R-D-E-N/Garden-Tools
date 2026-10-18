@@ -91,7 +91,6 @@ enum class RecordRenumberStatus {
   target_exists,
 };
 
-<<<<<<< HEAD
 enum class LocalizedValueStatus {
   updated,
   unchanged,
@@ -129,7 +128,6 @@ PluginLocalizationResult localize_plugin(Plugin& plugin,
 PluginLocalizationResult delocalize_plugin(Plugin& plugin,
                                            localization::LocalizationTables& tables);
 
-=======
 enum class ReferenceRepointStatus {
   repointed,
   no_references,
@@ -142,7 +140,6 @@ struct ReferenceRepointResult {
   std::vector<PluginKey> plugins;
 };
 
->>>>>>> nomad/602-engine-conflicts
 // Light plugins cap local IDs at 0xFFF; see docs/code-notes/Radicle.md (local_form_id_range).
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 bool allows_hardcoded_range(const Plugin& plugin);
