@@ -39,7 +39,7 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 4, L1 0, L2 4, L3 0, L4 139.
+Tier counts: L0 3, L1 0, L2 5, L3 0, L4 139.
 
 ### Per-signature coverage
 
@@ -65,7 +65,7 @@ Tier counts: L0 4, L1 0, L2 4, L3 0, L4 139.
 | BOOK | 5891 | 12 | 3 | 6 | - | 3 | yes | yes | - | yes | 1 | L4 |
 | BPTD | 7693 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | CAMS | 7880 | 16 | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| CELL | 5953 | 34 | 1 | 13 | 2 | 1 | - | - | forms/cell, environment/world | yes | 1 | L4 |
+| CELL | 5953 | - | - | - | - | 1 | - | - | forms/cell, environment/world | yes | 1 | L2 |
 | CLAS | 6102 | 2 | 1 | 1 | - | 2 | yes | - | - | - | 1 | L4 |
 | CLFM | 9572 | 2 | - | - | - | 1 | yes | - | - | - | 1 | L4 |
 | CLMT | 6115 | 7 | 3 | 2 | - | - | yes | - | environment/base_records | - | 2 | L4 |
@@ -141,7 +141,7 @@ Tier counts: L0 4, L1 0, L2 4, L3 0, L4 139.
 | NOCM | 12453 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | NOTE | 12470 | 9 | 3 | 7 | - | 1 | yes | - | - | - | 1 | L4 |
 | NPC_ | 10286 | 48 | - | 28 | - | 3 | yes | yes | forms/npc | yes | 1 | L4 |
-| OMOD | 12501 | - | - | - | - | 2 | - | - | - | yes | - | L0 |
+| OMOD | 12501 | 7 | - | 2 | 2 | 2 | yes | - | - | yes | - | L4 |
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
@@ -149,7 +149,7 @@ Tier counts: L0 4, L1 0, L2 4, L3 0, L4 139.
 | PBAR | 5945 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PBEA | 5946 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PCON | 5947 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
-| PERK | 7582 | - | - | - | - | 3 | - | - | - | yes | 1 | L0 |
+| PERK | 7582 | - | 2 | 2 | - | 3 | yes | - | - | yes | 1 | L4 |
 | PFLA | 5948 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PGRE | 5949 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PHZD | 5950 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
@@ -160,7 +160,7 @@ Tier counts: L0 4, L1 0, L2 4, L3 0, L4 139.
 | QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
 | RACE | 11054 | 40 | 4 | 24 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
 | REFR | 11347 | 23 | - | 11 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
-| REGN | 11870 | 9 | - | 2 | - | 1 | - | - | - | yes | - | L4 |
+| REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
@@ -218,7 +218,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | BOOK | 11 | - | - | 1 | 3 | f32, i16, u32, u8 | - | - | - | existing_only |
 | BPTD | - | - | - | - | - | - | - | - | - | - |
 | CAMS | 12 | - | 3 | 1 | 1 | f32, u32 | - | - | - | existing_only |
-| CELL | 32 | - | - | 2 | 1 | f32, i32, u16, u32, u8 | - | 4 | - | existing_only |
+| CELL | - | - | - | - | - | - | - | - | - | - |
 | CLAS | 2 | - | - | - | 1 | f32 | - | 2 | - | existing_only |
 | CLFM | 1 | - | - | 1 | - | u32 | - | - | - | existing_only |
 | CLMT | 7 | - | - | - | 3 | i32, u8 | - | 3 | - | existing_only |
@@ -293,7 +293,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | NOCM | - | - | - | - | - | - | - | - | - | - |
 | NOTE | 8 | - | 1 | - | 3 | f32, i16, u32, u8 | - | - | 3 | existing_only |
 | NPC_ | 38 | - | 8 | 2 | - | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
-| OMOD | - | - | - | - | - | - | - | - | - | - |
+| OMOD | 4 | - | 3 | - | - | u32, u8 | - | - | - | existing_only |
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
@@ -301,7 +301,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PBAR | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PBEA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PCON | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
-| PERK | - | - | - | - | - | - | - | - | - | - |
+| PERK | - | - | - | - | 2 | - | - | - | - | existing_only |
 | PFLA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PGRE | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PHZD | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
@@ -312,7 +312,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | QUST | - | - | - | - | - | - | - | - | - | - |
 | RACE | 32 | - | 5 | 3 | 4 | f32, i16, i32, u32, u8 | 3 | 2 | - | existing_only |
 | REFR | 20 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
-| REGN | 8 | - | 1 | - | - | f32, u32, u8 | 7 | - | - | existing_only |
+| REGN | - | - | - | - | - | - | - | - | - | - |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |

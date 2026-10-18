@@ -442,6 +442,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_plugin_corpus.cpp
     tests/test_struct_payload_formlinks_real.cpp
     tests/test_obts_formlinks.cpp
+    tests/test_omod_rows.cpp
     tests/test_quest_authoring.cpp
     tests/test_quest_objectives.cpp
     tests/test_quest_stages.cpp
@@ -471,6 +472,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_condition_functions.cpp
     tests/test_package_targets.cpp
     tests/test_perk_entrypoints.cpp
+    tests/test_perk_rows.cpp
     tests/test_vegetation.cpp
     tests/test_vegetation_edit.cpp
     tests/test_vegetation_authoring.cpp
