@@ -27051,6 +27051,32 @@
             "signature": "XMRK",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "APPR",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "OBTE",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
+            "signature": "OBTF",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "OBTS",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          {
+            "signature": "STOP",
+            "minimum": 0,
+            "maximum": 1
           }
         ]
       },

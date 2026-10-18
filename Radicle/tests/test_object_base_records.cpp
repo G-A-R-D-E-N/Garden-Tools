@@ -1,7 +1,9 @@
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
@@ -11,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -171,6 +174,43 @@ const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature s
   return nullptr;
 }
 
+std::size_t rule_index(std::span<const fo4::schema::SubrecordAuthoringConstraint> rules,
+                       std::string_view name) {
+  const auto signature = fo4::Signature::from_string(name);
+  for (std::size_t index = 0; index < rules.size(); ++index) {
+    if (rules[index].signature == signature) return index;
+  }
+  return rules.size();
+}
+
+fo4::Plugin template_furn_plugin(const std::vector<Sub>& subs) {
+  ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(1);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::end_record(out, tes4);
+  const auto group = fo4::test::begin_group(out, "FURN", 0);
+  const auto record = fo4::test::begin_record(out, "FURN", 0, 0x810);
+  for (const auto& sub : subs) {
+    fo4::test::write_subrecord(out, sub.signature, sub.data);
+  }
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return fo4::read_plugin(out.bytes, "Patch.esp");
+}
+
+const fo4::Record* only_furn(const fo4::Plugin& plugin) {
+  const auto furn = fo4::Signature::from_string("FURN");
+  const fo4::Record* found = nullptr;
+  fo4::visit_records(plugin, [&](const fo4::Record& record) {
+    if (record.header.signature == furn) found = &record;
+  });
+  return found;
+}
+
 }  // namespace
 
 TEST(ObjectBaseRecordsSynthetic, EveryScalarRowDecodesOnTheFixture) {
@@ -292,4 +332,55 @@ TEST(ObjectBaseRecordsSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
           << item.signature << ' ' << rule.signature.to_string();
     }
   }
+}
+
+TEST(ObjectBaseRecordsSynthetic, FurnObjectTemplateRulesMatchNpcAndFollowXmrk) {
+  const auto furn = fo4::schema::record_authoring_constraint(fo4::Signature::from_string("FURN"));
+  const auto npc = fo4::schema::record_authoring_constraint(fo4::Signature::from_string("NPC_"));
+  ASSERT_TRUE(furn.has_value());
+  ASSERT_TRUE(npc.has_value());
+  const auto rules = fo4::schema::authoring_subrecords(*furn);
+  const auto npc_rules = fo4::schema::authoring_subrecords(*npc);
+
+  std::size_t previous = rule_index(rules, "XMRK");
+  ASSERT_LT(previous, rules.size());
+  for (const auto name : {"APPR", "OBTE", "OBTF", "OBTS", "STOP"}) {
+    const auto index = rule_index(rules, name);
+    EXPECT_LT(index, rules.size()) << name;
+    EXPECT_GT(index, previous) << name;
+    previous = index;
+    const auto twin = rule_index(npc_rules, name);
+    ASSERT_LT(twin, npc_rules.size()) << name;
+    EXPECT_EQ(rules[index].minimum, npc_rules[twin].minimum) << name;
+    EXPECT_EQ(rules[index].maximum, npc_rules[twin].maximum) << name;
+    EXPECT_EQ(rules[index].coupled, npc_rules[twin].coupled) << name;
+  }
+}
+
+TEST(ObjectBaseRecordsSynthetic, FurnTemplateBlockFollowsTheAuthoringOrderInPreflight) {
+  const auto ordered = template_furn_plugin({{"EDID", zstr("RadicleFurn")},
+                                             {"OBND", zeros(12)},
+                                             {"XMRK", zstr("Marker.nif")},
+                                             {"APPR", zeros(4)},
+                                             {"OBTE", u32_bytes(1)},
+                                             {"OBTF", Bytes{}},
+                                             {"OBTS", u32_bytes(1)},
+                                             {"STOP", Bytes{}}});
+  const auto* record = only_furn(ordered);
+  ASSERT_NE(record, nullptr);
+  for (const auto& issue : fo4::schema::preflight_record(*record, false)) {
+    EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
+  }
+
+  const auto swapped = template_furn_plugin({{"EDID", zstr("RadicleFurn")},
+                                             {"OBND", zeros(12)},
+                                             {"OBTE", u32_bytes(1)},
+                                             {"OBTS", u32_bytes(1)},
+                                             {"OBTF", Bytes{}}});
+  const auto* bad = only_furn(swapped);
+  ASSERT_NE(bad, nullptr);
+  const auto issues = fo4::schema::preflight_record(*bad, false);
+  EXPECT_TRUE(std::any_of(issues.begin(), issues.end(), [](const fo4::schema::PreflightIssue& issue) {
+    return issue.code == "subrecord_order_invalid";
+  }));
 }
