@@ -6811,7 +6811,8 @@
       "signature": "LENS",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 65535}]},
       "fields": [
-        {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+        {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "LENS\\FadeDistanceRadiusScale", "label": "Fade distance radius scale", "kind": "scalar", "subrecord": "DNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
       ],
       "localized_subrecords": []
     },
