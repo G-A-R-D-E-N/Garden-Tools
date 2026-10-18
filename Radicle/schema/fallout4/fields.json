@@ -17910,7 +17910,10 @@
     },
     {
       "signature": "AECH",
-      "fields": [],
+      "fields": [
+        {"path": "AECH\\EffectType", "label": "Effect type", "kind": "scalar", "subrecord": "KNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 2252866750, "name": "BSOverdrive"}, {"value": 4015480703, "name": "BSStateVariableFilter"}, {"value": 411269967, "name": "BSDelayEffect"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"},
+        {"path": "AECH\\EffectEnabled", "label": "Enabled", "kind": "scalar", "subrecord": "DNAM", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "repeated": true, "minimum_payload_size": 4, "insertion": "existing_only"}
+      ],
       "formlink_fields": [],
       "authoring": {
         "placement": "top_level",
