@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/visit.hpp"
 #include "fo4/plugin/writer.hpp"
+#include "fo4/schema/field_address.hpp"
 #include "fo4/schema/form_link_schema.hpp"
 #include "fo4/schema/formlink_lists.hpp"
 #include "fo4/schema/scalar.hpp"
@@ -61,6 +62,7 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"ACHR\\EnableParentFlags", "XESP", 4, u8, true, 8},
     {"ACHR\\OwnerRank", "XRNK", 0, i32, false, 0},
     {"ACHR\\OwnerNoCrime", "XOWN", 8, u8, true, 12},
+    {"ACHR\\ReflectionType", "XPWR", 4, u32, true, 8},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -75,6 +77,9 @@ constexpr LinkRow k_link_rows[] = {
     {"ACHR\\Layer", "XLYR", 0, 4, "LAYR"},
     {"ACHR\\MaterialSwap", "XMSP", 0, 4, "MSWP"},
     {"ACHR\\AttachRef", "XATR", 0, 4, "ACHR"},
+    {"ACHR\\PersistLocation", "XLCN", 0, 4, "LCTN"},
+    {"ACHR\\LocationReference", "XLRL", 0, 4, "LCTN"},
+    {"ACHR\\ReflectedBy", "XPWR", 0, 8, "ACHR"},
 };
 
 Bytes u32_bytes(std::uint32_t value) {
@@ -144,6 +149,33 @@ void write_actor(fo4::test::ByteWriter& out, std::uint32_t local, std::size_t lo
   fo4::test::write_subrecord(out, "XLYR", u32_bytes(0x00000A61u));
   fo4::test::write_subrecord(out, "XMSP", u32_bytes(0x00000A62u));
   fo4::test::write_subrecord(out, "XATR", u32_bytes(0x00000A63u));
+  fo4::test::write_subrecord(out, "XPRD", f32_bytes(2.5f));
+  fo4::test::write_subrecord(out, "INAM", u32_bytes(0x00000A80u));
+  fo4::test::write_subrecord(out, "TNAM", u32_bytes(0x00000A81u));
+  fo4::test::write_subrecord(out, "XLCM", i32_bytes(2));
+  fo4::test::write_subrecord(out, "XLTW", u32_bytes(0x00000AA0u));
+  ByteWriter ragdoll;
+  for (const std::uint8_t bone : {std::uint8_t{3}, std::uint8_t{7}}) {
+    ragdoll.u8(bone);
+    ragdoll.u8(0);
+    ragdoll.u8(0);
+    ragdoll.u8(0);
+    ragdoll.f32(1.0f);
+    ragdoll.f32(2.0f);
+    ragdoll.f32(3.0f);
+    ragdoll.f32(4.0f);
+    ragdoll.f32(5.0f);
+    ragdoll.f32(6.0f);
+  }
+  fo4::test::write_subrecord(out, "XRGD", ragdoll.bytes);
+  ByteWriter reflected;
+  reflected.u32(0x00000A70u);
+  reflected.u32(1);
+  fo4::test::write_subrecord(out, "XPWR", reflected.bytes);
+  ByteWriter refracted;
+  refracted.u32(0x00000A71u);
+  refracted.u32(2);
+  fo4::test::write_subrecord(out, "XPWR", refracted.bytes);
   fo4::test::end_record(out, at);
 }
 
@@ -222,6 +254,43 @@ std::optional<std::uint32_t> link_raw(const fo4::Record& record, std::string_vie
   return std::nullopt;
 }
 
+std::optional<std::uint32_t> link_at(const fo4::Record& record,
+                                     const fo4::schema::FormLinkFieldDescriptor& field,
+                                     std::size_t index) {
+  std::size_t seen = 0;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature != field.subrecord) continue;
+    if (seen++ != index) continue;
+    if (sub.data.size() < field.offset + 4) return std::nullopt;
+    std::uint32_t value = 0;
+    std::memcpy(&value, sub.data.data() + field.offset, sizeof(value));
+    return value;
+  }
+  return std::nullopt;
+}
+
+std::string read_row(const fo4::Record& record,
+                     const fo4::schema::ScalarFieldDescriptor& field,
+                     std::size_t index) {
+  const auto resolved = fo4::schema::resolve_field_slots(
+      record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+  if (index >= resolved.slots.size()) return {};
+  const auto slot = resolved.slots[index];
+  return fo4::schema::decode_scalar(
+      fo4::schema::scalar_slot_bytes(record.subrecords[slot.subrecord].data, slot, field.scalar),
+      field.scalar);
+}
+
+std::vector<Bytes> xpwr_payloads(const fo4::Record& record) {
+  std::vector<Bytes> out;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature == fo4::Signature::from_string("XPWR")) {
+      out.emplace_back(sub.data.begin(), sub.data.end());
+    }
+  }
+  return out;
+}
+
 Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view signature) {
   for (const auto& sub : actor(plugin, local).subrecords) {
     if (sub.signature == fo4::Signature::from_string(signature)) {
@@ -234,7 +303,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 11u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 21u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -244,6 +313,8 @@ TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
     EXPECT_EQ(field->scalar.offset, row.offset);
     EXPECT_EQ(field->scalar.storage, row.storage);
     EXPECT_EQ(field->scalar.payload_size, row.payload_size);
+    EXPECT_EQ(field->scalar.address.repeated,
+              std::string_view{row.path} == "ACHR\\ReflectionType");
   }
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\AlphaBase").has_value());
 }
@@ -265,7 +336,7 @@ TEST(AchrRows, LockRowsShareTheXlocPayloadAndTheKeyRowIsNullable) {
 }
 
 TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
-  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 11u);
+  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 17u);
   for (const auto& row : k_link_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::formlink_field_descriptor(k_achr, row.path);
@@ -275,7 +346,8 @@ TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
     EXPECT_EQ(field->payload_sizes[0], row.payload_size);
     EXPECT_EQ(field->nullable,
               std::string_view{row.path} == "ACHR\\LockKey" ||
-                  std::string_view{row.path} == "ACHR\\EnableParent");
+                  std::string_view{row.path} == "ACHR\\EnableParent" ||
+                  std::string_view{row.path} == "ACHR\\LocationReference");
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
   }
@@ -363,13 +435,218 @@ TEST(AchrRows, ReadsScalarsAndLinksFromThePlugin) {
   EXPECT_EQ(link_raw(full, "ACHR\\Layer"), 0x00000A61u);
   EXPECT_EQ(link_raw(full, "ACHR\\MaterialSwap"), 0x00000A62u);
   EXPECT_EQ(link_raw(full, "ACHR\\AttachRef"), 0x00000A63u);
+
+  const auto reflection = scalar_bytes(full, "ACHR\\ReflectionType");
+  ASSERT_TRUE(reflection.has_value());
+  EXPECT_EQ(Bytes(reflection->begin(), reflection->end()), u32_bytes(1));
+  EXPECT_EQ(link_raw(full, "ACHR\\ReflectedBy"), 0x00000A70u);
+}
+
+TEST(AchrRows, RepeatedXpwrRowsAddressEachOccurrenceAndGateShortPayloads) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+  const auto type = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\ReflectionType");
+  const auto source = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\ReflectedBy");
+  ASSERT_TRUE(type.has_value());
+  ASSERT_TRUE(source.has_value());
+  EXPECT_TRUE(type->scalar.address.repeated);
+  EXPECT_TRUE(source->address.repeated);
+  EXPECT_EQ(source->payload_sizes.size(), 2u);
+  EXPECT_EQ(source->payload_sizes[0], 8u);
+  EXPECT_EQ(source->payload_sizes[1], 4u);
+  EXPECT_EQ(fo4::record_field_count(plugin, patch_key(0x810u), "ACHR\\ReflectionType"), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, patch_key(0x810u), "ACHR\\ReflectedBy"), 2u);
+
+  EXPECT_EQ(read_row(full, *type, 0), "1");
+  EXPECT_EQ(read_row(full, *type, 1), "2");
+  EXPECT_EQ(read_row(full, *type, 2), "");
+  ASSERT_TRUE(fo4::schema::scalar_value_name(type->scalar, 1).has_value());
+  EXPECT_EQ(*fo4::schema::scalar_value_name(type->scalar, 1), "Reflection");
+  ASSERT_TRUE(fo4::schema::scalar_value_name(type->scalar, 2).has_value());
+  EXPECT_EQ(*fo4::schema::scalar_value_name(type->scalar, 2), "Refraction");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(type->scalar, 4).has_value());
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *type, 1, "3"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *type, 2, "3"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *source, 1,
+                                           fo4::FormKey::parse("00000A11:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *source, 1,
+                                                               fo4::FormKey{})),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto& written = actor(reread, 0x810u);
+  const auto entries = xpwr_payloads(written);
+  ASSERT_EQ(entries.size(), 2u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(entries[0][4]), 1u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(entries[1][4]), 3u);
+  EXPECT_EQ(link_at(written, *source, 0), 0x00000A70u);
+  EXPECT_EQ(link_at(written, *source, 1), 0x00000A11u);
+
+  auto short_payload = fo4::read_plugin(make_plugin(), "Patch.esp");
+  fo4::visit_records(short_payload, [](fo4::Record& record) {
+    if (record.form_key.local().value() != 0x810u) return;
+    for (auto& sub : record.subrecords) {
+      if (sub.signature == fo4::Signature::from_string("XPWR")) sub.data.resize(4);
+    }
+  });
+  const auto& shortened = actor(short_payload, 0x810u);
+  const auto gated = scalar_bytes(shortened, "ACHR\\ReflectionType");
+  ASSERT_TRUE(gated.has_value());
+  EXPECT_TRUE(gated->empty());
+  EXPECT_EQ(link_at(shortened, *source, 0), 0x00000A70u);
+}
+
+TEST(AchrRows, PatrolRowsReadAndWriteIdleTimeIdleAndTopic) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+  const auto time = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\PatrolIdleTime");
+  const auto idle = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\PatrolIdle");
+  const auto topic = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\PatrolTopic");
+  ASSERT_TRUE(time.has_value());
+  ASSERT_TRUE(idle.has_value());
+  ASSERT_TRUE(topic.has_value());
+  EXPECT_EQ(time->scalar.subrecord, fo4::Signature::from_string("XPRD"));
+  EXPECT_FALSE(time->scalar.address.repeated);
+  EXPECT_TRUE(idle->nullable);
+  EXPECT_TRUE(topic->nullable);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *idle, fo4::Signature::from_string("IDLE")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *idle, fo4::Signature::from_string("DIAL")));
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *topic, fo4::Signature::from_string("DIAL")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *topic, fo4::Signature::from_string("IDLE")));
+
+  const auto before = scalar_bytes(full, "ACHR\\PatrolIdleTime");
+  ASSERT_TRUE(before.has_value());
+  EXPECT_EQ(Bytes(before->begin(), before->end()), f32_bytes(2.5f));
+  EXPECT_EQ(link_raw(full, "ACHR\\PatrolIdle"), 0x00000A80u);
+  EXPECT_EQ(link_raw(full, "ACHR\\PatrolTopic"), 0x00000A81u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *time, 0, "4.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *time, 1, "4.5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *idle, 0,
+                                           fo4::FormKey::parse("00000A90:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *topic, 1,
+                                           fo4::FormKey::parse("00000A91:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *topic, 0,
+                                                               fo4::FormKey{})),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto& written = actor(reread, 0x810u);
+  const auto after = scalar_bytes(written, "ACHR\\PatrolIdleTime");
+  ASSERT_TRUE(after.has_value());
+  EXPECT_EQ(Bytes(after->begin(), after->end()), f32_bytes(4.5f));
+  EXPECT_EQ(link_raw(written, "ACHR\\PatrolIdle"), 0x00000A90u);
+  EXPECT_EQ(link_raw(written, "ACHR\\PatrolTopic"), 0x00000A81u);
+}
+
+TEST(AchrRows, LevelModifierAndLitWaterRowsReadAndWrite) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+  const auto modifier = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\LevelModifier");
+  const auto lit_water = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\LitWater");
+  ASSERT_TRUE(modifier.has_value());
+  ASSERT_TRUE(lit_water.has_value());
+  EXPECT_EQ(modifier->scalar.subrecord, fo4::Signature::from_string("XLCM"));
+  EXPECT_EQ(modifier->scalar.storage, fo4::schema::ScalarStorage::i32);
+  EXPECT_FALSE(modifier->scalar.address.repeated);
+  EXPECT_EQ(fo4::schema::scalar_value_name(modifier->scalar, 2), "Hard");
+  EXPECT_EQ(fo4::schema::scalar_value_name(modifier->scalar, 3), "Very Hard");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(modifier->scalar, 4).has_value());
+  EXPECT_TRUE(lit_water->address.repeated);
+  EXPECT_FALSE(lit_water->nullable);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *lit_water, fo4::Signature::from_string("REFR")));
+
+  const auto before = scalar_bytes(full, "ACHR\\LevelModifier");
+  ASSERT_TRUE(before.has_value());
+  EXPECT_EQ(Bytes(before->begin(), before->end()), i32_bytes(2));
+  EXPECT_EQ(link_raw(full, "ACHR\\LitWater"), 0x00000AA0u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *modifier, 0, "3"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *lit_water, 0,
+                                           fo4::FormKey::parse("00000AA1:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(
+                   plugin, patch_key(0x810u), *lit_water, 0, fo4::FormKey{})),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto& written = actor(reread, 0x810u);
+  const auto after = scalar_bytes(written, "ACHR\\LevelModifier");
+  ASSERT_TRUE(after.has_value());
+  EXPECT_EQ(Bytes(after->begin(), after->end()), i32_bytes(3));
+  EXPECT_EQ(link_raw(written, "ACHR\\LitWater"), 0x00000AA1u);
+}
+
+TEST(AchrRows, StridedRagdollRowsAddressEachBoneAndGateTheStride) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+  const auto bone = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\RagdollBoneId");
+  const auto position_x = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\RagdollPositionX");
+  const auto rotation_z = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\RagdollRotationZ");
+  ASSERT_TRUE(bone.has_value());
+  ASSERT_TRUE(position_x.has_value());
+  ASSERT_TRUE(rotation_z.has_value());
+  EXPECT_EQ(bone->scalar.subrecord, fo4::Signature::from_string("XRGD"));
+  EXPECT_TRUE(bone->scalar.embedded);
+  EXPECT_FALSE(bone->scalar.address.repeated);
+  EXPECT_EQ(bone->scalar.address.stride, 28u);
+  EXPECT_EQ(position_x->scalar.offset, 4u);
+  EXPECT_EQ(rotation_z->scalar.offset, 24u);
+  EXPECT_EQ(fo4::record_field_count(plugin, patch_key(0x810u), *bone), 2u);
+
+  EXPECT_EQ(read_row(full, *bone, 0), "3");
+  EXPECT_EQ(read_row(full, *bone, 1), "7");
+  EXPECT_EQ(read_row(full, *bone, 2), "");
+  EXPECT_EQ(read_row(full, *position_x, 1), "1");
+  EXPECT_EQ(read_row(full, *rotation_z, 0), "6");
+  EXPECT_EQ(read_row(full, *rotation_z, 1), "6");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *bone, 1, "9"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *rotation_z, 1, "-2.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *rotation_z, 2, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto& written = actor(reread, 0x810u);
+  EXPECT_EQ(read_row(written, *bone, 0), "3");
+  EXPECT_EQ(read_row(written, *bone, 1), "9");
+  EXPECT_EQ(read_row(written, *rotation_z, 0), "6");
+  EXPECT_EQ(read_row(written, *rotation_z, 1), "-2.5");
+
+  auto truncated = fo4::read_plugin(make_plugin(), "Patch.esp");
+  fo4::visit_records(truncated, [](fo4::Record& record) {
+    if (record.form_key.local().value() != 0x810u) return;
+    for (auto& sub : record.subrecords) {
+      if (sub.signature == fo4::Signature::from_string("XRGD")) sub.data.resize(30);
+    }
+  });
+  const auto& misaligned = actor(truncated, 0x810u);
+  EXPECT_EQ(fo4::record_field_count(truncated, patch_key(0x810u), *bone), 0u);
+  EXPECT_EQ(read_row(misaligned, *bone, 0), "");
+  EXPECT_EQ(read_row(misaligned, *rotation_z, 0), "");
 }
 
 TEST(AchrRows, ShortLockPayloadReadsAsAbsentAndDropsTheKeyLinkOffset) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
   const auto& short_lock = actor(plugin, 0x811u);
-  EXPECT_EQ(short_lock.subrecords.size(), 19u);
+  EXPECT_EQ(short_lock.subrecords.size(), 27u);
 
   const auto level = scalar_bytes(short_lock, "ACHR\\LockLevel");
   ASSERT_TRUE(level.has_value());

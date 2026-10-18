@@ -49,8 +49,8 @@ std::vector<std::byte> zero_payload(std::size_t size) { return std::vector<std::
 }  // namespace
 
 TEST(ParwRows, ScalarRowsMatchTheSharedReferenceRecordLayout) {
-  EXPECT_EQ(fo4::schema::scalar_fields(sig("PARW")).size(), 14u);
-  EXPECT_EQ(fo4::schema::formlink_fields(sig("PARW")).size(), 9u);
+  EXPECT_EQ(fo4::schema::scalar_fields(sig("PARW")).size(), 15u);
+  EXPECT_EQ(fo4::schema::formlink_fields(sig("PARW")).size(), 10u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(sig("PARW"), row.path);
@@ -124,9 +124,31 @@ TEST(ParwRows, WholePayloadRowsRefuseTheWrongWidth) {
                fo4::schema::ScalarError);
 }
 
+TEST(ParwRows, ProjectileRecordsCarryTheSharedXpwrReflectionRows) {
+  const auto type = fo4::schema::scalar_field_descriptor(sig("PARW"), "PARW\\ReflectionType");
+  const auto reflected_by = fo4::schema::formlink_field_descriptor(sig("PARW"), "PARW\\ReflectedBy");
+  ASSERT_TRUE(type.has_value());
+  ASSERT_TRUE(reflected_by.has_value());
+  EXPECT_EQ(type->scalar.subrecord, sig("XPWR"));
+  EXPECT_EQ(type->scalar.offset, 4u);
+  EXPECT_EQ(type->scalar.payload_size, 8u);
+  EXPECT_TRUE(type->scalar.address.repeated);
+  EXPECT_EQ(reflected_by->subrecord, sig("XPWR"));
+  EXPECT_EQ(reflected_by->offset, 0u);
+  EXPECT_TRUE(reflected_by->address.repeated);
+  EXPECT_FALSE(reflected_by->nullable);
+  ASSERT_EQ(reflected_by->payload_sizes.size(), 2u);
+  EXPECT_EQ(reflected_by->payload_sizes[0], 8u);
+  EXPECT_EQ(reflected_by->payload_sizes[1], 4u);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(*reflected_by, sig("ACHR")));
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(*reflected_by, sig("REFR")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(*reflected_by, sig("WEAP")));
+}
+
 TEST(ParwRows, SharedSubrecordsNeedTheRecordPath) {
   EXPECT_FALSE(fo4::schema::scalar_descriptor(sig("XAMC")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_descriptor(sig("XFVC")).has_value());
+  EXPECT_FALSE(fo4::schema::scalar_descriptor(sig("XPWR")).has_value());
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor(sig("PARW"), "PARW\\Radius").has_value());
   EXPECT_FALSE(fo4::schema::formlink_field_descriptor(sig("PARW"), "PARW\\LockKey").has_value());
 }

@@ -9557,6 +9557,14 @@
         ]
       },
       "fields": [
+        {"path": "REFR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollBoneId", "label": "Ragdoll bone id", "kind": "scalar", "subrecord": "XRGD", "offset": 0, "stride": 28, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollPositionX", "label": "Ragdoll position X", "kind": "scalar", "subrecord": "XRGD", "offset": 4, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollPositionY", "label": "Ragdoll position Y", "kind": "scalar", "subrecord": "XRGD", "offset": 8, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollPositionZ", "label": "Ragdoll position Z", "kind": "scalar", "subrecord": "XRGD", "offset": 12, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollRotationX", "label": "Ragdoll rotation X", "kind": "scalar", "subrecord": "XRGD", "offset": 16, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollRotationY", "label": "Ragdoll rotation Y", "kind": "scalar", "subrecord": "XRGD", "offset": 20, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "REFR\\RagdollRotationZ", "label": "Ragdoll rotation Z", "kind": "scalar", "subrecord": "XRGD", "offset": 24, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {
           "path": "REFR\\HealthPercent",
           "label": "Health %",
@@ -9701,6 +9709,47 @@
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LevelModifier",
+          "label": "Level modifier",
+          "kind": "scalar",
+          "subrecord": "XLCM",
+          "storage": "i32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Easy"
+            },
+            {
+              "value": 1,
+              "name": "Medium"
+            },
+            {
+              "value": 2,
+              "name": "Hard"
+            },
+            {
+              "value": 3,
+              "name": "Very Hard"
+            }
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\PatrolIdleTime",
+          "label": "Patrol idle time",
+          "kind": "scalar",
+          "subrecord": "XPRD",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "repeated": true,
           "insertion": "existing_only"
         },
         {
@@ -10027,6 +10076,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "REFR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "REFR\\EncounterZone",
           "label": "Encounter zone",
@@ -10039,6 +10089,37 @@
             "ECZN"
           ],
           "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\PatrolIdle",
+          "label": "Patrol idle",
+          "subrecord": "INAM",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "IDLE"
+          ],
+          "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LitWater",
+          "label": "Lit water",
+          "subrecord": "XLTW",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ACHR",
+            "REFR"
+          ],
+          "nullable": false,
+          "repeated": true,
           "insertion": "existing_only"
         },
         {
@@ -10258,6 +10339,7 @@
         ]
       },
       "fields": [
+        {"path": "PARW\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PARW\\HealthPercent",
           "label": "Health %",
@@ -10450,6 +10532,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PARW\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PARW\\Base",
           "label": "Base",
@@ -10636,6 +10719,7 @@
         ]
       },
       "fields": [
+        {"path": "PBAR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PBAR\\HealthPercent",
           "label": "Health %",
@@ -10828,6 +10912,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PBAR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PBAR\\EncounterZone",
           "label": "Encounter zone",
@@ -11014,6 +11099,7 @@
         ]
       },
       "fields": [
+        {"path": "PBEA\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PBEA\\HealthPercent",
           "label": "Health %",
@@ -11206,6 +11292,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PBEA\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PBEA\\EncounterZone",
           "label": "Encounter zone",
@@ -11392,6 +11479,7 @@
         ]
       },
       "fields": [
+        {"path": "PCON\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PCON\\HealthPercent",
           "label": "Health %",
@@ -11584,6 +11672,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PCON\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PCON\\EncounterZone",
           "label": "Encounter zone",
@@ -11770,6 +11859,7 @@
         ]
       },
       "fields": [
+        {"path": "PFLA\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PFLA\\HealthPercent",
           "label": "Health %",
@@ -11962,6 +12052,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PFLA\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PFLA\\EncounterZone",
           "label": "Encounter zone",
@@ -12148,6 +12239,7 @@
         ]
       },
       "fields": [
+        {"path": "PGRE\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PGRE\\HealthPercent",
           "label": "Health %",
@@ -12340,6 +12432,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PGRE\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PGRE\\EncounterZone",
           "label": "Encounter zone",
@@ -12525,6 +12618,7 @@
         ]
       },
       "fields": [
+        {"path": "PHZD\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PHZD\\HealthPercent",
           "label": "Health %",
@@ -12717,6 +12811,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PHZD\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PHZD\\EncounterZone",
           "label": "Encounter zone",
@@ -12903,6 +12998,7 @@
         ]
       },
       "fields": [
+        {"path": "PMIS\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {
           "path": "PMIS\\HealthPercent",
           "label": "Health %",
@@ -13095,6 +13191,7 @@
         }
       ],
       "formlink_fields": [
+        {"path": "PMIS\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {
           "path": "PMIS\\EncounterZone",
           "label": "Encounter zone",
@@ -32273,6 +32370,16 @@
     {
       "signature": "ACHR",
       "fields": [
+        {"path": "ACHR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ACHR\\PatrolIdleTime", "label": "Patrol idle time", "kind": "scalar", "subrecord": "XPRD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\LevelModifier", "label": "Level modifier", "kind": "scalar", "subrecord": "XLCM", "storage": "i32", "presentation": "enum", "names": [{"value": 0, "name": "Easy"}, {"value": 1, "name": "Medium"}, {"value": 2, "name": "Hard"}, {"value": 3, "name": "Very Hard"}], "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollBoneId", "label": "Ragdoll bone id", "kind": "scalar", "subrecord": "XRGD", "offset": 0, "stride": 28, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollPositionX", "label": "Ragdoll position X", "kind": "scalar", "subrecord": "XRGD", "offset": 4, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollPositionY", "label": "Ragdoll position Y", "kind": "scalar", "subrecord": "XRGD", "offset": 8, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollPositionZ", "label": "Ragdoll position Z", "kind": "scalar", "subrecord": "XRGD", "offset": 12, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollRotationX", "label": "Ragdoll rotation X", "kind": "scalar", "subrecord": "XRGD", "offset": 16, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollRotationY", "label": "Ragdoll rotation Y", "kind": "scalar", "subrecord": "XRGD", "offset": 20, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\RagdollRotationZ", "label": "Ragdoll rotation Z", "kind": "scalar", "subrecord": "XRGD", "offset": 24, "stride": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\Radius", "label": "Radius", "kind": "scalar", "subrecord": "XRDS", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\Count", "label": "Count", "kind": "scalar", "subrecord": "XCNT", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
         {"path": "ACHR\\HealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "XHLT", "storage": "u32", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "insertion": "existing_only"},
@@ -32286,6 +32393,10 @@
         {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "ACHR\\LitWater", "label": "Lit water", "subrecord": "XLTW", "offset": 0, "payload_sizes": [4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
+        {"path": "ACHR\\PatrolIdle", "label": "Patrol idle", "subrecord": "INAM", "offset": 0, "payload_sizes": [4], "targets": ["IDLE"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\PatrolTopic", "label": "Patrol topic", "subrecord": "TNAM", "offset": 0, "payload_sizes": [4], "targets": ["DIAL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {"path": "ACHR\\EncounterZone", "label": "Encounter zone", "subrecord": "XEZN", "offset": 0, "payload_sizes": [4], "targets": ["ECZN"], "nullable": false, "insertion": "existing_only"},
         {"path": "ACHR\\LockKey", "label": "Lock key", "subrecord": "XLOC", "offset": 4, "payload_sizes": [16], "targets": ["KEYM"], "nullable": true, "insertion": "existing_only"},
         {"path": "ACHR\\Emittance", "label": "Emittance", "subrecord": "XEMI", "offset": 0, "payload_sizes": [4], "targets": ["LIGH", "REGN"], "nullable": false, "insertion": "existing_only"},
