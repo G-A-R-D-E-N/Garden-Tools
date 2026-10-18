@@ -1,8 +1,10 @@
+#include "fo4/environment/environment.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
@@ -30,6 +32,8 @@ struct ScalarRow {
   std::size_t offset;
   fo4::schema::ScalarStorage storage;
   std::size_t minimum_payload_size;
+  std::size_t payload_size{0};
+  bool repeated{false};
 };
 
 struct StringRow {
@@ -47,6 +51,7 @@ struct LinkRow {
 constexpr auto f32 = fo4::schema::ScalarStorage::f32;
 constexpr auto i16 = fo4::schema::ScalarStorage::i16;
 constexpr auto i32 = fo4::schema::ScalarStorage::i32;
+constexpr auto i8 = fo4::schema::ScalarStorage::i8;
 constexpr auto u8 = fo4::schema::ScalarStorage::u8;
 constexpr auto u16 = fo4::schema::ScalarStorage::u16;
 
@@ -73,6 +78,14 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"WRLD\\MapCellOffsetX", "ONAM", 4, f32, 0},
     {"WRLD\\MapCellOffsetY", "ONAM", 8, f32, 0},
     {"WRLD\\MapCellOffsetZ", "ONAM", 12, f32, 0},
+    {"WRLD\\MaxHeightMinX", "MHDT", 0, i16, 8},
+    {"WRLD\\MaxHeightMinY", "MHDT", 2, i16, 8},
+    {"WRLD\\MaxHeightMaxX", "MHDT", 4, i16, 8},
+    {"WRLD\\MaxHeightMaxY", "MHDT", 6, i16, 8},
+    {"WRLD\\LevelNwCellX", "WLEV", 0, i8, 0, 4, true},
+    {"WRLD\\LevelNwCellY", "WLEV", 1, i8, 0, 4, true},
+    {"WRLD\\LevelWidth", "WLEV", 2, u8, 0, 4, true},
+    {"WRLD\\LevelHeight", "WLEV", 3, u8, 0, 4, true},
 };
 
 constexpr StringRow k_string_rows[] = {
@@ -125,12 +138,36 @@ Bytes map_data() {
   return out.bytes;
 }
 
-void write_header(ByteWriter& out) {
-  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+Bytes level_dimension() {
+  ByteWriter out;
+  out.u8(0xDF);
+  out.u8(0x19);
+  out.u8(16);
+  out.u8(12);
+  return out.bytes;
+}
+
+Bytes level_cell_data() {
+  return Bytes{std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
+               std::byte{0x04}, std::byte{0x05}, std::byte{0x06}};
+}
+
+Bytes max_height_data() {
+  ByteWriter out;
+  out.u16(static_cast<std::uint16_t>(-2));
+  out.u16(static_cast<std::uint16_t>(-1));
+  out.u16(3);
+  out.u16(4);
+  out.u32(0x0B0A0908u);
+  return out.bytes;
+}
+
+void write_header(ByteWriter& out, std::uint32_t tes4_flags = 0) {
+  const auto tes4 = fo4::test::begin_record(out, "TES4", tes4_flags, 0);
   ByteWriter hedr;
   hedr.f32(1.0f);
   hedr.u32(2);
-  hedr.u32(0x900);
+  hedr.u32(0x900 | tes4_flags);
   fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
   fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
   fo4::test::write_subrecord(out, "DATA", Bytes(8));
@@ -139,13 +176,14 @@ void write_header(ByteWriter& out) {
   fo4::test::end_record(out, tes4);
 }
 
-std::vector<std::byte> make_plugin() {
+std::vector<std::byte> make_plugin(std::uint32_t tes4_flags = 0) {
   ByteWriter out;
-  write_header(out);
+  write_header(out, tes4_flags);
   const auto group = fo4::test::begin_group(out, "WRLD", 0);
   const auto record = fo4::test::begin_record(out, "WRLD", 0, raw_id(0x0C01));
   const std::vector<Sub> subs{
       {"EDID", zstr("RadicleWorld")},
+      {"FULL", zstr("Radicle World")},
       {"ICON", zstr("Interface\\WorldMap_d.dds")},
       {"XLCN", u32_bytes(0x00000A10)},
       {"PNAM", Bytes{std::byte{0x16}, std::byte{0x00}}},
@@ -156,6 +194,9 @@ std::vector<std::byte> make_plugin() {
       {"DNAM", floats({-2048.0f, 450.0f})},
       {"MNAM", map_data()},
       {"ONAM", floats({1.0f, -16384.0f, 512.0f, 3072.0f})},
+      {"MHDT", max_height_data()},
+      {"WLEV", level_dimension()},
+      {"WLEV", level_cell_data()},
   };
   for (const auto& sub : subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, record);
@@ -163,17 +204,56 @@ std::vector<std::byte> make_plugin() {
   return out.bytes;
 }
 
-Bytes sub_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_view subrecord) {
+std::vector<std::byte> make_blob_level_plugin() {
+  ByteWriter out;
+  write_header(out);
+  const auto group = fo4::test::begin_group(out, "WRLD", 0);
+  const auto record = fo4::test::begin_record(out, "WRLD", 0, raw_id(0x0C02));
+  const std::vector<Sub> subs{
+      {"EDID", zstr("BlobWorld")},
+      {"WLEV", level_cell_data()},
+  };
+  for (const auto& sub : subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+std::vector<std::byte> make_localized_plugin() {
+  ByteWriter out;
+  write_header(out, 0x80);
+  const auto group = fo4::test::begin_group(out, "WRLD", 0);
+  const auto record = fo4::test::begin_record(out, "WRLD", 0, raw_id(0x0C03));
+  const std::vector<Sub> subs{
+      {"EDID", zstr("LocalizedWorld")},
+      {"FULL", u32_bytes(0x00001A2B)},
+      {"WLEV", level_dimension()},
+  };
+  for (const auto& sub : subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+Bytes sub_bytes_at(const fo4::Plugin& plugin, std::string_view key, std::string_view subrecord,
+                   std::size_t ordinal) {
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
   if (record == nullptr) {
     ADD_FAILURE() << key;
     return {};
   }
+  std::size_t seen = 0;
   for (const auto& sub : record->subrecords) {
-    if (sub.signature.to_string() == subrecord) return sub.data;
+    if (sub.signature.to_string() != subrecord) continue;
+    if (seen == ordinal) return sub.data;
+    ++seen;
   }
-  ADD_FAILURE() << subrecord;
+  ADD_FAILURE() << subrecord << '[' << ordinal << ']';
   return {};
+}
+
+Bytes sub_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_view subrecord) {
+  return sub_bytes_at(plugin, key, subrecord, 0);
 }
 
 Bytes scalar_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_view path) {
@@ -212,6 +292,8 @@ TEST(WRLDRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadFloor) {
     EXPECT_EQ(field->scalar.offset, row.offset);
     EXPECT_EQ(field->scalar.storage, row.storage);
     EXPECT_EQ(field->scalar.minimum_payload_size, row.minimum_payload_size);
+    EXPECT_EQ(field->scalar.payload_size, row.payload_size);
+    EXPECT_EQ(field->scalar.address.repeated, row.repeated);
     EXPECT_TRUE(field->scalar.embedded);
   }
 }
@@ -291,4 +373,112 @@ TEST(WRLDRows, WritesScalarFlagStringAndLinkThenRereads) {
   EXPECT_EQ(sub_bytes(reread, "000C01:Patch.esp", "ICON"), zstr("Interface\\New.dds"));
   EXPECT_EQ(link_raw(reread, "000C01:Patch.esp", "XLCN"), 0x01000A20u);
   EXPECT_EQ(sub_bytes(reread, "000C01:Patch.esp", "PNAM"), (Bytes{std::byte{0x16}, std::byte{0x00}}));
+}
+
+TEST(WRLDRows, ReadsMaxHeightAndLevelRows) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = "000C01:Patch.esp";
+  EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\MaxHeightMinX"),
+            (Bytes{std::byte{0xFE}, std::byte{0xFF}}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\MaxHeightMaxY"),
+            (Bytes{std::byte{0x04}, std::byte{0x00}}));
+  EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\LevelNwCellX"), Bytes{std::byte{0xDF}});
+  EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\LevelWidth"), Bytes{std::byte{0x10}});
+  EXPECT_EQ(scalar_bytes(plugin, key, "WRLD\\LevelHeight"), Bytes{std::byte{0x0C}});
+
+  const auto level_x = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\LevelNwCellX");
+  const auto max_height = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\MaxHeightMinX");
+  ASSERT_TRUE(level_x.has_value());
+  ASSERT_TRUE(max_height.has_value());
+  EXPECT_EQ(fo4::schema::decode_scalar(scalar_bytes(plugin, key, "WRLD\\LevelNwCellX"),
+                                       level_x->scalar),
+            "-33");
+  EXPECT_EQ(fo4::schema::decode_scalar(scalar_bytes(plugin, key, "WRLD\\MaxHeightMinX"),
+                                       max_height->scalar),
+            "-2");
+}
+
+TEST(WRLDRows, WritesLevelAndMaxHeightWithoutTouchingTheCellDataBlob) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C01:Patch.esp");
+  const auto level_y = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\LevelNwCellY");
+  const auto level_width = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\LevelWidth");
+  const auto max_height = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\MaxHeightMinX");
+  ASSERT_TRUE(level_y.has_value());
+  ASSERT_TRUE(level_width.has_value());
+  ASSERT_TRUE(max_height.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_y, "-5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_width, "40"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *max_height, "-300"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes_at(reread, "000C01:Patch.esp", "WLEV", 0),
+            (Bytes{std::byte{0xDF}, std::byte{0xFB}, std::byte{0x28}, std::byte{0x0C}}));
+  EXPECT_EQ(sub_bytes_at(reread, "000C01:Patch.esp", "WLEV", 1), level_cell_data());
+  EXPECT_EQ(sub_bytes_at(reread, "000C01:Patch.esp", "MHDT", 0),
+            (Bytes{std::byte{0xD4}, std::byte{0xFE}, std::byte{0xFF}, std::byte{0xFF},
+                   std::byte{0x03}, std::byte{0x00}, std::byte{0x04}, std::byte{0x00},
+                   std::byte{0x08}, std::byte{0x09}, std::byte{0x0A}, std::byte{0x0B}}));
+}
+
+TEST(WRLDRows, PreflightAcceptsTwoWlevSubrecordsAndLeavesTheCellDataBlobAlone) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000C01:Patch.esp"));
+  ASSERT_NE(record, nullptr);
+  for (const auto& issue : fo4::schema::preflight_record(*record)) {
+    EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
+    EXPECT_NE(issue.code, "invalid_scalar_storage") << issue.path;
+  }
+
+  auto blob = fo4::read_plugin(make_blob_level_plugin(), "Patch.esp");
+  const auto blob_key = fo4::FormKey::parse("000C02:Patch.esp");
+  const auto* blob_record = fo4::find_record(blob, blob_key);
+  ASSERT_NE(blob_record, nullptr);
+  for (const auto& issue : fo4::schema::preflight_record(*blob_record)) {
+    EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
+    EXPECT_NE(issue.code, "invalid_scalar_storage") << issue.path;
+  }
+  const auto level_width = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\LevelWidth");
+  const auto level_x = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\LevelNwCellX");
+  ASSERT_TRUE(level_width.has_value());
+  ASSERT_TRUE(level_x.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(blob, blob_key, *level_width, "4"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(blob, blob_key, *level_x, "-1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+}
+
+TEST(WRLDRows, LocalizedWorldKeepsItsStringIdAndStillWritesLevelRows) {
+  auto plugin = fo4::read_plugin(make_localized_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C03:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto name = fo4::env::decode_record_name(plugin, *record);
+  EXPECT_EQ(name.kind, fo4::env::NameKind::string_id);
+  EXPECT_EQ(name.string_id, 0x00001A2Bu);
+  for (const auto& issue : fo4::schema::preflight_record(*record, true)) {
+    EXPECT_NE(issue.code, "duplicate_scalar_subrecord") << issue.path;
+    EXPECT_NE(issue.code, "invalid_scalar_storage") << issue.path;
+  }
+  const auto level_height = fo4::schema::scalar_field_descriptor(
+      fo4::Signature::from_string("WRLD"), "WRLD\\LevelHeight");
+  ASSERT_TRUE(level_height.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level_height, "7"),
+            fo4::ScalarMutationStatus::updated);
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes_at(reread, "000C03:Patch.esp", "WLEV", 0),
+            (Bytes{std::byte{0xDF}, std::byte{0x19}, std::byte{0x10}, std::byte{0x07}}));
+  const auto* reread_record = fo4::find_record(reread, key);
+  ASSERT_NE(reread_record, nullptr);
+  EXPECT_EQ(fo4::env::decode_record_name(reread, *reread_record).string_id, 0x00001A2Bu);
 }
