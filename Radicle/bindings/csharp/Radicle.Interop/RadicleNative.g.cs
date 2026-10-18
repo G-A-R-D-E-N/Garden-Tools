@@ -172,35 +172,6 @@ public unsafe struct CellLighting
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct CellInfo
-{
-    public int HasFlags;
-    public ushort Flags;
-    public int HasGrid;
-    public int GridX;
-    public int GridY;
-    public int HasLandFlags;
-    public byte LandFlags;
-    public int HasLighting;
-    public CellLighting Lighting;
-    public FormKey LightingTemplate;
-    public int HasWaterHeight;
-    public float WaterHeight;
-    public FormKey ImageSpace;
-    public FormKey EncounterZone;
-    public FormKey Location;
-    public FormKey Worldspace;
-    public FormKey Water;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public unsafe struct CellChild
-{
-    public IntPtr Record;
-    public int Persistent;
-}
-
-[StructLayout(LayoutKind.Sequential)]
 public unsafe struct LinkedRef
 {
     public FormKey Keyword;
@@ -1924,6 +1895,82 @@ public unsafe struct ExteriorCellCreation
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellLightingTail
+{
+    public int HasNearHeight;
+    public float NearHeightMid;
+    public float NearHeightRange;
+    public int HasHighFogColors;
+    public ByteColor FogColorHighNear;
+    public ByteColor FogColorHighFar;
+    public int HasHighDensityScale;
+    public float HighDensityScale;
+    public int HasFogScales;
+    public float FogNearScale;
+    public float FogFarScale;
+    public float FogHighNearScale;
+    public float FogHighFarScale;
+    public int HasFarHeight;
+    public float FarHeightMid;
+    public float FarHeightRange;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellInfo
+{
+    public int HasFlags;
+    public ushort Flags;
+    public int HasGrid;
+    public int GridX;
+    public int GridY;
+    public int HasLandFlags;
+    public byte LandFlags;
+    public int HasLighting;
+    public CellLighting Lighting;
+    public FormKey LightingTemplate;
+    public int HasWaterHeight;
+    public float WaterHeight;
+    public FormKey ImageSpace;
+    public FormKey EncounterZone;
+    public FormKey Location;
+    public FormKey Worldspace;
+    public FormKey Water;
+    public CellLightingTail LightingTail;
+    public int HasPrevisTimestamp;
+    public ushort PrevisTimestamp;
+    public int HasPrecombinedTimestamp;
+    public ushort PrecombinedTimestamp;
+    public FormKey AcousticSpace;
+    public FormKey MusicType;
+    public FormKey SkyWeatherRegion;
+    public FormKey GodRays;
+    public FormKey LockList;
+    public FormKey Owner;
+    public int HasOwnerRank;
+    public int OwnerRank;
+    public int HasExteriorLod;
+    public FormKey ExteriorLodWorldspace;
+    public fixed float ExteriorLodOffset[3];
+    public int HasWaterCurrentCount;
+    public uint WaterCurrentCount;
+    public IntPtr WaterEnvironmentMap;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct WaterCurrent
+{
+    public fixed float Velocity[3];
+    public float Unnamed;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct CellChild
+{
+    public IntPtr Record;
+    public int Persistent;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct DeltaPatchCounts
 {
     public nuint Kept;
@@ -2034,29 +2081,8 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_worldspace_get_info")]
     public static extern Status WorldspaceGetInfo(IntPtr env, IntPtr record, WorldspaceInfo* out_info);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_info")]
-    public static extern Status CellGetInfo(IntPtr env, IntPtr record, CellInfo* out_info);
-
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_record_get_container")]
     public static extern Status RecordGetContainer(IntPtr env, IntPtr record, int* out_group_type, FormKey* out_worldspace, FormKey* out_cell);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_top_cell")]
-    public static extern Status EnvWorldspaceTopCell(IntPtr env, FormKey worldspace, IntPtr* out_record);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_cells")]
-    public static extern Status EnvWorldspaceCells(IntPtr env, FormKey worldspace, IntPtr** out_records, nuint* out_count);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_interior_cells")]
-    public static extern Status EnvInteriorCells(IntPtr env, IntPtr** out_records, nuint* out_count);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_children")]
-    public static extern Status EnvCellChildren(IntPtr env, FormKey cell, CellChild** out_children, nuint* out_count);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_cell_children")]
-    public static extern void FreeCellChildren(CellChild* children);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_landscape")]
-    public static extern Status EnvCellLandscape(IntPtr env, FormKey cell, IntPtr* out_record);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_placed_ref_decode")]
     public static extern Status PlacedRefDecode(IntPtr env, IntPtr record, PlacedRef** out_ref);
@@ -2771,6 +2797,42 @@ public static unsafe partial class RadicleNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_find_persistent_exterior_cell")]
     public static extern Status EnvFindPersistentExteriorCell(IntPtr env, FormKey worldspace, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_info")]
+    public static extern Status CellGetInfo(IntPtr env, IntPtr record, CellInfo* out_info);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_regions")]
+    public static extern Status CellGetRegions(IntPtr env, IntPtr record, FormKey** out_keys, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_previs_references")]
+    public static extern Status CellGetPrevisReferences(IntPtr env, IntPtr record, FormKey** out_keys, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_form_keys")]
+    public static extern void FreeFormKeys(FormKey* keys);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_cell_get_water_currents")]
+    public static extern Status CellGetWaterCurrents(IntPtr env, IntPtr record, WaterCurrent** out_currents, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_water_currents")]
+    public static extern void FreeWaterCurrents(WaterCurrent* currents);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_top_cell")]
+    public static extern Status EnvWorldspaceTopCell(IntPtr env, FormKey worldspace, IntPtr* out_record);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_worldspace_cells")]
+    public static extern Status EnvWorldspaceCells(IntPtr env, FormKey worldspace, IntPtr** out_records, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_interior_cells")]
+    public static extern Status EnvInteriorCells(IntPtr env, IntPtr** out_records, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_children")]
+    public static extern Status EnvCellChildren(IntPtr env, FormKey cell, CellChild** out_children, nuint* out_count);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_free_cell_children")]
+    public static extern void FreeCellChildren(CellChild* children);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_cell_landscape")]
+    public static extern Status EnvCellLandscape(IntPtr env, FormKey cell, IntPtr* out_record);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_env_build_delta_patch")]
     public static extern Status EnvBuildDeltaPatch(IntPtr env, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? older_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? newer_plugin, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? output_path, DeltaPatchCounts* out_counts);

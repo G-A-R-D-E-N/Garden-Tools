@@ -368,6 +368,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_copy_containment.cpp
     tests/test_copy_cell_children.cpp
     tests/test_cell_rows.cpp
+    tests/test_cell_abi_extras.cpp
     tests/test_scalar_mutation.cpp
     tests/test_counted_array.cpp
     tests/test_uncounted_arrays.cpp
