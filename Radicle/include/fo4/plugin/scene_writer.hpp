@@ -26,6 +26,12 @@ FormLinkFieldMutationStatus set_scene_formlink(Plugin& plugin,
                                                std::string_view path,
                                                const FormKey& target);
 
+FormLinkFieldMutationStatus set_scene_action_formlink(Plugin& plugin,
+                                                      const FormKey& scene,
+                                                      std::size_t index,
+                                                      std::string_view path,
+                                                      const FormKey& target);
+
 std::optional<std::size_t> scene_group_count(const Plugin& plugin, const FormKey& scene, ScenePart part);
 
 SubrecordGroupMutationStatus insert_scene_phase(Plugin& plugin,

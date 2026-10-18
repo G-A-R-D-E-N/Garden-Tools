@@ -37,6 +37,7 @@ TEST_F(DialogueWriterCApi, FieldSceneAndAuthoringStatusesMapAndSurviveReload) {
   ASSERT_EQ(radicle_plugin_read_file(path.string().c_str(), &plugin), RADICLE_STATUS_OK);
   const radicle_form_key topic = rkey(k_topic), info = rkey(k_info), scene = rkey(k_scene), bare = rkey(k_bare);
   const radicle_form_key sndr = rkey(k_sndr), misc = rkey(k_misc), quest = rkey(k_quest), templ = rkey(k_template);
+  const radicle_form_key kywd = rkey(k_kywd);
   const radicle_form_key unknown_master{"Other.esm", 1};
 
   EXPECT_EQ(radicle_plugin_set_record_scalar_at(plugin, topic, "DIAL\\Priority", 0, "60"), RADICLE_STATUS_OK);
@@ -72,6 +73,31 @@ TEST_F(DialogueWriterCApi, FieldSceneAndAuthoringStatusesMapAndSurviveReload) {
   EXPECT_EQ(radicle_plugin_set_scene_formlink(plugin, scene, "SCEN\\ParentQuest", &unknown_master), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_scene_formlink(plugin, templ, "SCEN\\TemplateScene", &scene), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_set_scene_formlink(plugin, topic, "SCEN\\ParentQuest", &quest), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 0, "SCEN\\Action\\Topic", &topic), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 0, "SCEN\\Action\\Topic", &misc),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 0, "SCEN\\Action\\Topic", nullptr),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 0, "SCEN\\Nope", &topic),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 1, "SCEN\\Action\\Topic", &topic),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 9, "SCEN\\Action\\Topic", &topic),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 2, "SCEN\\Action\\AnimArchType", &kywd),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, scene, 0, "SCEN\\ParentQuest", &quest),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, topic, 0, "SCEN\\Action\\Topic", &topic),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_formlink(plugin, rkey(0x8FF), 0, "SCEN\\Action\\Topic", &topic),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_formlink(plugin, scene, "SCEN\\Action\\Topic", &topic),
+            RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_scalar(plugin, scene, "SCEN\\Action\\LoopingMax", 0, "7.5"), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_scene_scalar(plugin, scene, "SCEN\\Action\\LoopingMax", 1, "7.5"),
+            RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_scalar(plugin, scene, "SCEN\\Action\\TimerMax", 1, "8.5"), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_scene_group_count(plugin, scene, RADICLE_SCENE_PART_ACTION, &count), RADICLE_STATUS_OK);
   EXPECT_EQ(count, 3u);
   EXPECT_EQ(radicle_plugin_scene_group_count(plugin, scene, RADICLE_SCENE_PART_PHASE, &count), RADICLE_STATUS_OK);
