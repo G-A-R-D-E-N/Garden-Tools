@@ -10,4 +10,6 @@ inline constexpr ConditionScopeDescriptor k_generated_condition_scopes[] = {
   {Signature::from_string("QUST"), "Aliases", "Conditions", ConditionScopeKind::alias},
   {Signature::from_string("QUST"), "Targets", "Conditions", ConditionScopeKind::quest_target},
   {Signature::from_string("SPEL"), "Effects", "Conditions", ConditionScopeKind::effect},
+  {Signature::from_string("TERM"), "Body Text", "Conditions", ConditionScopeKind::terminal_body_text},
+  {Signature::from_string("TERM"), "Menu Items", "Conditions", ConditionScopeKind::terminal_menu_item},
 };

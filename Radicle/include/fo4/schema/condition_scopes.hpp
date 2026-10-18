@@ -20,6 +20,8 @@ enum class ConditionScopeKind {
   quest_target,
   perk_effect_tab,
   message_button,
+  terminal_body_text,
+  terminal_menu_item,
 };
 
 struct ConditionScopeDescriptor {
