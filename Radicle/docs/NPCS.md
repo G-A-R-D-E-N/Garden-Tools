@@ -34,6 +34,10 @@ Every scalar uses `existing_only` insertion. The presentation is `identity` exce
 | NPC_\AIWarnAttack | AIDT | 12 | u32 | 24 | 6226 |
 | NPC_\AIAttack | AIDT | 16 | u32 | 24 | 6227 |
 | NPC_\AINoSlowApproach | AIDT | 20 | u8 | 24, from 21 bytes | 6229 |
+| NPC_\AttackDamageMult, AttackChance | ATKD | 0, 4 | f32 | 44 | 4075, 4076 |
+| NPC_\AttackFlags | ATKD | 12 | u32 | 44 | 4078-4111; `wbAttackData` FO4:4074 |
+| NPC_\AttackAngle, StrikeAngle, AttackStagger, AttackKnockdown, AttackRecoveryTime, AttackActionPointsMult | ATKD | 16, 20, 24, 28, 32, 36 | f32 | 44 | 4112-4117 |
+| NPC_\AttackStaggerOffset | ATKD | 40 | i32 | 44 | 4118 |
 | NPC_\ObjectBoundsMin X/Y/Z | OBND | 0, 2, 4 | i16 | 12 | 9074-9090; wbVec3Int Common:6434-6446 |
 | NPC_\ObjectBoundsMax X/Y/Z | OBND | 6, 8, 10 | i16 | 12 | 9074-9090 |
 | NPC_\WeightThin, WeightMuscular, WeightFat | MWGT | 0, 4, 8 | f32 | 12 | 10426-10430 |
@@ -107,6 +111,12 @@ Edit rules:
 | NPC_\Package | PKID | PACK | FO4:10400 |
 | NPC_\HeadPart | PNAM | HDPT | FO4:10417 |
 | NPC_\Spell | SPLO | SPEL, LVSP | FO4:10372; wbSPLO FO4:3284 |
+| NPC_\AttackSpell | ATKD | SPEL | FO4:4077, nullable |
+| NPC_\TemplateActorTraits, Stats, Factions, SpellList, AIData, AIPackages, ModelAnimation, BaseData, Inventory, Script, DefaultPackageList, AttackData, Keywords | TPTA | BMMO, LVLN, NPC_ | FO4:10353; wbNPCTemplateActorEntry Common:8274, nullable |
+
+`NPC_\AttackSpell` is a single 4-byte link at offset 8 inside the 44-byte ATKD payload, and the thirteen `NPC_\TemplateActor*` rows are the thirteen 4-byte links of the 52-byte TPTA payload at offsets 0 to 48, in xEdit member order (`wbNPCTemplateActorEntry` order: Traits, Stats, Factions, Spell List, AI Data, AI Packages, Model/Animation, Base Data, Inventory, Script, Def Package List, Attack Data, Keywords). All fourteen are `nullable: true` and `insertion: existing_only`.
+
+`AttackSpell` is `repeated: true` with `payload_sizes: [44]`, because xEdit wraps ATKD in `wbAttackData` (`wxRStructSK([1], 'Attack', [ATKD, ATKE])`) and the NPC_ member is `wbRArrayS('Attacks', wbAttackData)` (FO4:10377), so a record may carry several ATKD subrecords. The ten ATKD scalars above are `repeated: true` with `payload_size: 44` for the same reason: index 0 is the first attack, index 1 the second, and an index past the last ATKD reports `subrecord_missing`. Because the payload must be exactly 44 bytes, a truncated ATKD exposes no member at all.
 
 These are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nullable: false` and `insertion: existing_only`: each link of the list is read and written by index through the generic FormLink field path, and a write leaves the other links byte-identical. The SPLO count SPCT is not rowed and not maintained, as with `RACE\ActorEffects`. Adding and removing links is not offered; these rows replace no typed list.
 
@@ -115,8 +125,8 @@ These are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nul
 | xEdit | Field | Reason |
 | --- | --- | --- |
 | FO4:10298-10346 | ACBS unused bytes (offset 18) | Padding. |
-| FO4:10347, 10377 | Attacks (ATKD and the rest of `wbAttackData`) | Repeated struct. Only the ATKD payload is in authoring; the list is not modeled. Factions (10347) are covered above. |
-| FO4:10348-10369 | INAM, VTCK, TPLT, LTPT, LTPC, TPTA | FormIDs, not scalars. TPTA is a thirteen-FormID struct. Covered by the FormLink tables where they exist. |
+| FO4:10347, 10377 | Attacks (ATKD and the rest of `wbAttackData`) | The eleven ATKD members are rowed above, indexed per attack instance. ATKE (`:4120`, `wbString`) has no row: Radicle has no null-terminated string storage. Factions (10347) are covered above. |
+| FO4:10348-10369 | INAM, VTCK, TPLT, LTPT, LTPC, TPTA | Form IDs, not scalars. TPTA is rowed as thirteen links in the Link rows table. |
 | FO4:10370-10383 | RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR | FormIDs, not scalars. |
 | FO4:10371 | SPCT count | Count with no typed owner; a generic write would desync it from SPLO. The SPLO links themselves are rowed (see Link rows). |
 | FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | Properties (xEdit `wbPRPS`, `Core/wbDefinitionsFO4.pas:10394` at pin 93cc0bc5), an array of 8-byte `wbObjectProperty` entries (`:5266-5272`). Modeled by `NPC_\PropertyActorValue` (link to AVIF, nullable, offset 0, stride 8) and `NPC_\PropertyValue` (f32, offset 4, stride 8) in `Radicle/schema/fallout4/fields.json`, both existing_only. FTYP and NTRM are form IDs; PKID is a repeated form ID list. |
