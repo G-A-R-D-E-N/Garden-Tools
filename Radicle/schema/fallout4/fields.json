@@ -7046,7 +7046,23 @@
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "CNAM", "minimum": 0, "maximum": 1}, {"signature": "DNAM", "minimum": 0, "maximum": 65535}]},
       "fields": [
         {"path": "LENS\\ColorInfluence", "label": "Color influence", "kind": "scalar", "subrecord": "CNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
-        {"path": "LENS\\FadeDistanceRadiusScale", "label": "Fade distance radius scale", "kind": "scalar", "subrecord": "DNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"}
+        {"path": "LENS\\FadeDistanceRadiusScale", "label": "Fade distance radius scale", "kind": "scalar", "subrecord": "DNAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "LENS\\SpriteTotal", "label": "Sprite total", "kind": "scalar", "subrecord": "LFSP", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "LENS\\Sprites", "label": "Lens flare sprites", "kind": "subrecord_group", "count_subrecord": "LFSP", "insertion": "existing_only", "members": [
+          {"subrecord": "DNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+          {"subrecord": "FNAM", "required": true, "repeatable": false, "payload_size": 0, "default": "00"},
+          {"subrecord": "LFSD", "required": true, "repeatable": false, "payload_size": 36, "fields": [
+            {"path": "LENS\\SpriteTintRed", "label": "Sprite tint red", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpriteTintGreen", "label": "Sprite tint green", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpriteTintBlue", "label": "Sprite tint blue", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpriteWidth", "label": "Sprite width", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpriteHeight", "label": "Sprite height", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpritePosition", "label": "Sprite position", "offset": 20, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpriteAngularFade", "label": "Sprite angular fade", "offset": 24, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpriteOpacity", "label": "Sprite opacity", "offset": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+            {"path": "LENS\\SpriteFlags", "label": "Sprite flags", "offset": 32, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Rotates"}, {"bit": 1, "name": "Shrinks When Occluded"}], "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"}
+          ]}
+        ]}
       ],
       "localized_subrecords": []
     },
