@@ -438,6 +438,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "DESC",
             "minimum": 0,
             "maximum": 1
@@ -1691,6 +1731,41 @@
             "maximum": 1
           },
           {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "YNAM",
             "minimum": 0,
             "maximum": 1
@@ -2074,6 +2149,41 @@
             "signature": "DAMC",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "YNAM",
@@ -2460,6 +2570,41 @@
             "signature": "DAMC",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "YNAM",
@@ -2868,6 +3013,41 @@
             "maximum": 1
           },
           {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "ETYP",
             "minimum": 0,
             "maximum": 1
@@ -3220,6 +3400,41 @@
             "signature": "DAMC",
             "minimum": 0,
             "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "YNAM",
@@ -7540,8 +7755,7 @@
           {
             "signature": "DSTD",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DSTA",
@@ -7551,14 +7765,12 @@
           {
             "signature": "DMDL",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DMDT",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DMDC",
@@ -7573,8 +7785,7 @@
           {
             "signature": "DSTF",
             "minimum": 0,
-            "maximum": 1,
-            "coupled": true
+            "maximum": 255
           },
           {
             "signature": "DATA",
@@ -13957,6 +14168,15 @@
           { "signature": "MODF", "minimum": 0, "maximum": 1 },
           { "signature": "KSIZ", "minimum": 0, "maximum": 1, "coupled": true },
           { "signature": "KWDA", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DAMC", "minimum": 0, "maximum": 1 },
+          { "signature": "DSTD", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTA", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDL", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDT", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDC", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDS", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTF", "minimum": 0, "maximum": 255 },
           { "signature": "PRPS", "minimum": 0, "maximum": 1 },
           { "signature": "FULL", "minimum": 0, "maximum": 1 },
           { "signature": "ICON", "minimum": 0, "maximum": 1 },
@@ -25210,6 +25430,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "KSIZ",
             "minimum": 0,
             "maximum": 1,
@@ -25672,6 +25932,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "DATA",
             "minimum": 1,
             "maximum": 1,
@@ -26123,6 +26423,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "KSIZ",
             "minimum": 0,
             "maximum": 1,
@@ -26482,6 +26822,46 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "KSIZ",
@@ -27305,6 +27685,46 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
             "signature": "KSIZ",
             "minimum": 0,
             "maximum": 1,
@@ -27579,6 +27999,46 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "KSIZ",
@@ -29075,8 +29535,15 @@
           {"signature": "MICO", "minimum": 0, "maximum": 1},
           {"signature": "EITM", "minimum": 0, "maximum": 1, "coupled": true},
           {"signature": "EAMT", "minimum": 0, "maximum": 1, "coupled": true},
-          {"signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true},
-          {"signature": "DAMC", "minimum": 0, "maximum": 1},
+          { "signature": "DEST", "minimum": 0, "maximum": 1, "coupled": true },
+          { "signature": "DAMC", "minimum": 0, "maximum": 1 },
+          { "signature": "DSTD", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTA", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDL", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDT", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDC", "minimum": 0, "maximum": 255 },
+          { "signature": "DMDS", "minimum": 0, "maximum": 255 },
+          { "signature": "DSTF", "minimum": 0, "maximum": 255 },
           {"signature": "ETYP", "minimum": 0, "maximum": 1},
           {"signature": "BIDS", "minimum": 0, "maximum": 1},
           {"signature": "BAMT", "minimum": 0, "maximum": 1},
@@ -29953,6 +30420,46 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "signature": "DSTD",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDL",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDT",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DSTF",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "WNAM",
