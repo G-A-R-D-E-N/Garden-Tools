@@ -538,9 +538,6 @@ TEST(AchrRows, PatrolRowsReadAndWriteIdleTimeIdleAndTopic) {
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *topic, 1,
                                            fo4::FormKey::parse("00000A91:Fallout4.esm")),
             fo4::FormLinkFieldMutationStatus::subrecord_missing);
-  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *topic, 0,
-                                                               fo4::FormKey{})),
-               fo4::schema::FormLinkFieldError);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto& written = actor(reread, 0x810u);
@@ -549,6 +546,10 @@ TEST(AchrRows, PatrolRowsReadAndWriteIdleTimeIdleAndTopic) {
   EXPECT_EQ(Bytes(after->begin(), after->end()), f32_bytes(4.5f));
   EXPECT_EQ(link_raw(written, "ACHR\\PatrolIdle"), 0x00000A90u);
   EXPECT_EQ(link_raw(written, "ACHR\\PatrolTopic"), 0x00000A81u);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *topic, 0, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  const auto cleared = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(link_raw(actor(cleared, 0x810u), "ACHR\\PatrolTopic"), 0u);
 }
 
 TEST(AchrRows, LevelModifierAndLitWaterRowsReadAndWrite) {
