@@ -7474,7 +7474,21 @@
     },
     {
       "signature": "REGN",
-      "fields": [],
+      "fields": [
+        {"path": "REGN\\MapColorRed", "label": "Map color red", "kind": "scalar", "subrecord": "RCLR", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REGN\\MapColorGreen", "label": "Map color green", "kind": "scalar", "subrecord": "RCLR", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REGN\\MapColorBlue", "label": "Map color blue", "kind": "scalar", "subrecord": "RCLR", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataType", "label": "Region data type", "kind": "scalar", "subrecord": "RDAT", "offset": 0, "storage": "u32", "presentation": "enum", "names": [{"value": 2, "name": "Objects"}, {"value": 3, "name": "Weather"}, {"value": 4, "name": "Map"}, {"value": 5, "name": "Land"}, {"value": 6, "name": "Grass"}, {"value": 7, "name": "Sound"}], "minimum": 0, "maximum": 7, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataOverride", "label": "Region data override", "kind": "scalar", "subrecord": "RDAT", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 1, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionDataPriority", "label": "Region data priority", "kind": "scalar", "subrecord": "RDAT", "offset": 5, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\LodDisplayDistanceMultiplier", "label": "LOD display distance multiplier", "kind": "scalar", "subrecord": "RLDM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\OcclusionAccuracyDist", "label": "Occlusion accuracy distance", "kind": "scalar", "subrecord": "ANAM", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "insertion": "existing_only"},
+        {"path": "REGN\\RegionAreaEdgeFalloff", "label": "Region area edge fall-off", "kind": "scalar", "subrecord": "RPLI", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "repeated": true, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "REGN\\Worldspace", "label": "Worldspace", "subrecord": "WNAM", "offset": 0, "payload_sizes": [4], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
+        {"path": "REGN\\Music", "label": "Music", "subrecord": "RDMO", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": false, "repeated": true, "insertion": "existing_only"}
+      ],
       "localized_subrecords": [
         "RDMP"
       ]
@@ -19851,7 +19865,59 @@
     },
     {
       "signature": "CELL",
-      "fields": [],
+      "fields": [
+        {"path": "CELL\\Flags", "label": "Flags", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "u16", "presentation": "flags", "names": [{"bit": 0, "name": "Is Interior Cell"}, {"bit": 1, "name": "Has Water"}, {"bit": 2, "name": "Can't Travel From Here"}, {"bit": 3, "name": "No LOD Water"}, {"bit": 4, "name": "Unknown 4"}, {"bit": 5, "name": "Public Area"}, {"bit": 6, "name": "Hand Changed"}, {"bit": 7, "name": "Show Sky"}, {"bit": 8, "name": "Use Sky Lighting"}, {"bit": 9, "name": "Unknown 9"}, {"bit": 10, "name": "Hidden from Interior Cell List"}, {"bit": 11, "name": "Sunlight Shadows"}, {"bit": 12, "name": "Distant LOD only"}, {"bit": 13, "name": "Player Followers Can't Travel Here"}, {"bit": 14, "name": "Unknown 14"}, {"bit": 15, "name": "Unknown 15"}], "minimum": 0, "maximum": 65535, "payload_size": 2, "insertion": "existing_only"},
+        {"path": "CELL\\PreVisTimestamp", "label": "PreVis files timestamp", "kind": "scalar", "subrecord": "VISI", "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "insertion": "existing_only"},
+        {"path": "CELL\\PreCombinedTimestamp", "label": "PreCombined files timestamp", "kind": "scalar", "subrecord": "PCMB", "storage": "u16", "presentation": "identity", "minimum": 0, "maximum": 65535, "insertion": "existing_only"},
+        {"path": "CELL\\GridX", "label": "Grid X", "kind": "scalar", "subrecord": "XCLC", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "insertion": "existing_only"},
+        {"path": "CELL\\GridY", "label": "Grid Y", "kind": "scalar", "subrecord": "XCLC", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "insertion": "existing_only"},
+        {"path": "CELL\\LandFlags", "label": "Land flags", "kind": "scalar", "subrecord": "XCLC", "offset": 8, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Hide - Quad 1"}, {"bit": 1, "name": "Hide - Quad 2"}, {"bit": 2, "name": "Hide - Quad 3"}, {"bit": 3, "name": "Hide - Quad 4"}, {"bit": 4, "name": "No Collision - Quad 1"}, {"bit": 5, "name": "No Collision - Quad 2"}, {"bit": 6, "name": "No Collision - Quad 3"}, {"bit": 7, "name": "No Collision - Quad 4"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"},
+        {"path": "CELL\\LightingAmbientRed", "label": "Ambient red", "kind": "scalar", "subrecord": "XCLL", "offset": 0, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingAmbientGreen", "label": "Ambient green", "kind": "scalar", "subrecord": "XCLL", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingAmbientBlue", "label": "Ambient blue", "kind": "scalar", "subrecord": "XCLL", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingDirectionalRed", "label": "Directional red", "kind": "scalar", "subrecord": "XCLL", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingDirectionalGreen", "label": "Directional green", "kind": "scalar", "subrecord": "XCLL", "offset": 5, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingDirectionalBlue", "label": "Directional blue", "kind": "scalar", "subrecord": "XCLL", "offset": 6, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingFogNearColorRed", "label": "Fog near red", "kind": "scalar", "subrecord": "XCLL", "offset": 8, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingFogNearColorGreen", "label": "Fog near green", "kind": "scalar", "subrecord": "XCLL", "offset": 9, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingFogNearColorBlue", "label": "Fog near blue", "kind": "scalar", "subrecord": "XCLL", "offset": 10, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingFogNear", "label": "Fog near", "kind": "scalar", "subrecord": "XCLL", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingFogFar", "label": "Fog far", "kind": "scalar", "subrecord": "XCLL", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingDirectionalRotationXY", "label": "Directional rotation XY", "kind": "scalar", "subrecord": "XCLL", "offset": 20, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingDirectionalRotationZ", "label": "Directional rotation Z", "kind": "scalar", "subrecord": "XCLL", "offset": 24, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingDirectionalFade", "label": "Directional fade", "kind": "scalar", "subrecord": "XCLL", "offset": 28, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingFogClipDistance", "label": "Fog clip distance", "kind": "scalar", "subrecord": "XCLL", "offset": 32, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\LightingFogPower", "label": "Fog power", "kind": "scalar", "subrecord": "XCLL", "offset": 36, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "minimum_payload_size": 40, "insertion": "existing_only"},
+        {"path": "CELL\\PrecombinedObjectLevelXY", "label": "Precombined object level XY", "kind": "scalar", "subrecord": "CNAM", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "CELL\\PrecombinedObjectLevelZ", "label": "Precombined object level Z", "kind": "scalar", "subrecord": "ZNAM", "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "insertion": "existing_only"},
+        {"path": "CELL\\WaterHeight", "label": "Water height", "kind": "scalar", "subrecord": "XCLW", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "CELL\\OwnerRank", "label": "Faction rank", "kind": "scalar", "subrecord": "XRNK", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "CELL\\ExteriorLodOffsetX", "label": "LOD offset X", "kind": "scalar", "subrecord": "XILW", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "CELL\\ExteriorLodOffsetY", "label": "LOD offset Y", "kind": "scalar", "subrecord": "XILW", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "CELL\\ExteriorLodOffsetZ", "label": "LOD offset Z", "kind": "scalar", "subrecord": "XILW", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "CELL\\WaterEnvironmentMap", "label": "Water environment map", "kind": "string", "subrecord": "XWEM", "insertion": "existing_only"},
+        {"path": "CELL\\WaterCurrentVelocityCount", "label": "Velocity Count", "kind": "scalar", "subrecord": "XWCN", "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "insertion": "existing_only"},
+        {"path": "CELL\\WaterCurrentVelocities", "label": "Velocities", "kind": "counted_array", "subrecord": "XWCU", "count_subrecord": "XWCN", "stride": 16, "insertion": "existing_only", "members": [{"path": "CELL\\WaterCurrentVelocityX", "label": "Velocity X", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}, {"path": "CELL\\WaterCurrentVelocityY", "label": "Velocity Y", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}, {"path": "CELL\\WaterCurrentVelocityZ", "label": "Velocity Z", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}, {"path": "CELL\\WaterCurrentUnnamed", "label": "Unnamed float", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}]}
+      ],
+      "formlink_fields": [
+        {"path": "CELL\\LightingTemplate", "label": "Lighting template", "subrecord": "LTMP", "offset": 0, "payload_sizes": [4], "targets": ["LGTM"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\Water", "label": "Water", "subrecord": "XCWT", "offset": 0, "payload_sizes": [4], "targets": ["WATR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\Location", "label": "Location", "subrecord": "XLCN", "offset": 0, "payload_sizes": [4], "targets": ["LCTN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\EncounterZone", "label": "Encounter zone", "subrecord": "XEZN", "offset": 0, "payload_sizes": [4], "targets": ["ECZN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\ImageSpace", "label": "Image space", "subrecord": "XCIM", "offset": 0, "payload_sizes": [4], "targets": ["IMGS"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\AcousticSpace", "label": "Acoustic space", "subrecord": "XCAS", "offset": 0, "payload_sizes": [4], "targets": ["ASPC"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\MusicType", "label": "Music type", "subrecord": "XCMO", "offset": 0, "payload_sizes": [4], "targets": ["MUSC"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\SkyWeatherRegion", "label": "Sky/weather from region", "subrecord": "XCCM", "offset": 0, "payload_sizes": [4], "targets": ["REGN"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\GodRays", "label": "God rays", "subrecord": "XGDR", "offset": 0, "payload_sizes": [4], "targets": ["GDRY"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\LockList", "label": "Lock list", "subrecord": "XILL", "offset": 0, "payload_sizes": [4], "targets": ["FLST", "NPC_"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CELL\\Owner", "label": "Owner", "subrecord": "XOWN", "offset": 0, "payload_sizes": [12], "targets": ["FACT", "NPC_"], "nullable": false, "insertion": "existing_only"},
+        {"path": "CELL\\ExteriorLodWorldspace", "label": "LOD worldspace", "subrecord": "XILW", "offset": 0, "payload_sizes": [16], "targets": ["WRLD"], "nullable": false, "insertion": "existing_only"},
+        {"path": "CELL\\InPreVisFileOf", "label": "In PreVis file of", "subrecord": "RVIS", "offset": 0, "payload_sizes": [4], "targets": ["CELL"], "nullable": true, "insertion": "existing_only"}
+      ],
+      "formlink_lists": [
+        {"path": "CELL\\Regions", "label": "Regions", "field_alias": "Regions", "subrecord": "XCLR", "storage": "packed_array", "targets": ["REGN"], "nullable": false, "mutation": "appendable"},
+        {"path": "CELL\\PreVisReferences", "label": "PreVis references", "subrecord": "XPRI", "storage": "packed_array", "targets": ["REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "mutation": "appendable"}
+      ],
       "localized_subrecords": [
         "FULL"
       ]
