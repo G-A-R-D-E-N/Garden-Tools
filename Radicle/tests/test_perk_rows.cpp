@@ -603,9 +603,9 @@ TEST(PerkEffects, RefusesMalformedEffectSections) {
   EXPECT_THROW(decode({{"DATA", header_data()},
                        {"PRKE", prke(2, 1, 0)},
                        {"DATA", entry_point_effect_data(0x26, 1, 0)},
-                       {"PRKC", prkc(0)},
                        {"EPFT", u8_payload(1)},
                        {"EPFD", epfd_float(1.0f)},
+                       {"PRKC", prkc(0)},
                        {"PRKF", Bytes{}}}),
                fo4::forms::PerkError);
   EXPECT_THROW(decode({{"DATA", header_data()},

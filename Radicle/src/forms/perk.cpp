@@ -191,6 +191,9 @@ PerkEffectEntry decode_effect(const Plugin& plugin,
       throw PerkError("PERK effect repeats a header subrecord");
     }
     if (signature == k_prkc) {
+      if (parameters_begin != end) {
+        throw PerkError("PERK condition tabs must precede the parameter group");
+      }
       if (subrecords[i].data.size() != 1) throw PerkError("PERK PRKC must be one byte");
       PerkConditionTab tab;
       tab.run_on = static_cast<std::int8_t>(std::to_integer<std::uint8_t>(subrecords[i].data[0]));
