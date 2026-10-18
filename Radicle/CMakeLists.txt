@@ -263,6 +263,7 @@ fo4_apply_sanitizers(radicle_c)
 target_sources(radicle_c PRIVATE src/c_api_version.cpp)
 target_sources(radicle_c PRIVATE src/c_api_records.cpp src/c_api_authoring.cpp src/c_api_vmad.cpp src/c_api_behavior.cpp src/c_api_conditions.cpp)
 target_sources(radicle_c PRIVATE src/c_api_dialogue.cpp)
+target_sources(radicle_c PRIVATE src/c_api_armor.cpp src/c_api_eyes.cpp src/c_api_faction.cpp src/c_api_components.cpp src/c_api_cell.cpp)
 
 if(RADICLE_INSTALL)
   include(GNUInstallDirs)
@@ -609,6 +610,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_load_order_real.cpp
     tests/test_c_api_loadorder.cpp
     tests/test_c_api_referenced_by.cpp
+    tests/test_c_api_forms_modules.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp
