@@ -6,7 +6,7 @@ The schema lives in `schema/fallout4/fields.json` (`NPC_` entry). Scalars are ge
 
 ## Scalar fields
 
-Every scalar uses `existing_only` insertion. The presentation is `identity` except on rows that carry xEdit names: `ConfigurationFlags` and `TemplateFlags` use `flags`, and `AIAggression`, `AIConfidence`, `AIMorality`, `AIMood`, `AIAssistance`, `AIAggroRadiusBehavior`, `AINoSlowApproach` and `SoundLevel` use `enum` (`wbAggressionEnum` Common:6973-6982, `wbAssistanceEnum` 7023-7031, `wbConfidenceEnum` 7249-7259, `wbMoodEnum` 7676-7689, `wbMoralityEnum` 7691-7700, `wbBoolEnum` 7240-7247, `wbSoundLevelEnum` FO4:3424-3430). Bounds are unchanged, so the names do not restrict what is written. A fixed struct with a `payload_size` is read only when the subrecord has exactly that many bytes; a shorter payload reports the field as absent.
+Every scalar uses `existing_only` insertion. The presentation is `identity` except on rows that carry xEdit names: `ConfigurationFlags` and `TemplateFlags` use `flags`, and `AIAggression`, `AIConfidence`, `AIMorality`, `AIMood`, `AIAssistance`, `AIAggroRadiusBehavior`, `AINoSlowApproach` and `SoundLevel` use `enum` (`wbAggressionEnum` Common:6973-6982, `wbAssistanceEnum` 7023-7031, `wbConfidenceEnum` 7249-7259, `wbMoodEnum` 7676-7689, `wbMoralityEnum` 7691-7700, `wbBoolEnum` 7240-7247, `wbSoundLevelEnum` FO4:3424-3430). Bounds are unchanged, so the names do not restrict what is written. A fixed struct with a `payload_size` is read only when the subrecord has exactly that many bytes; a shorter payload reports the field as absent. A struct with a variable-length trailing member declares `minimum_payload_size` instead, which accepts any payload at least that long and leaves the trailing bytes untouched.
 
 | Path | Subrecord | Offset | Storage | Payload | xEdit |
 | --- | --- | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ Every scalar uses `existing_only` insertion. The presentation is `identity` exce
 | NPC_\UnusedFloat | NAM7 | whole | f32 | 4 | 10424 |
 | NPC_\FacialMorphIntensity | FMIN | whole | f32 | 4 | 10487 |
 | NPC_\FaceMorphIndex | FMRI | whole | u32 | 4 | 10473 |
-| NPC_\FaceMorphPosition X/Y/Z, FaceMorphRotation X/Y/Z, FaceMorphScale | FMRS | 0, 4, 8, 12, 16, 20, 24 | f32 | 36 | 10475-10483 |
+| NPC_\FaceMorphPosition X/Y/Z, FaceMorphRotation X/Y/Z, FaceMorphScale | FMRS | 0, 4, 8, 12, 16, 20, 24 | f32 | 28 min | 10475-10483 |
 | NPC_\TintLayerDataType | TETI | 0 | u16 | 4 | 10450-10453 |
 | NPC_\TintLayerIndex | TETI | 2 | u16 | 4 | 10450-10453 |
 | NPC_\TintLayerValue | TEND | 0 | u8 | 1 or 7 | 10454-10458; `wbDiv(100)` |
@@ -155,7 +155,7 @@ These are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nul
 | FO4:10438-10444 | CSCR, PFRN, DOFT, SOFT, DPLT, CRIF, FTST | FormIDs. |
 | FO4:10446-10447 | MSDK, MSDV | Morph arrays of variable length. |
 | FO4:10459 | TEND offset 4 | Unused byte of `wbByteColors`. |
-| FO4:10460 | FMRS offsets 28-35 | Trailing eight unknown bytes of `wbByteArray('Unknown')`; the seven modeled values stop at offset 28. |
+| FO4:10460 | FMRS from offset 28 | Unbounded trailing `wbByteArray('Unknown')` after the seven modeled values, which stop at offset 28, so the rows declare `minimum_payload_size` 28 and no `payload_size`. |
 | FO4:10488 | ATTX | Localized string. |
 
 ## Authoring constraints

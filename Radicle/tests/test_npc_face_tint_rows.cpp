@@ -28,13 +28,13 @@ struct RowExpectation {
 };
 
 const std::array k_face_morph_rows{
-    RowExpectation{"NPC_\\FaceMorphPositionX", 0, fo4::schema::ScalarStorage::f32, 0},
-    RowExpectation{"NPC_\\FaceMorphPositionY", 4, fo4::schema::ScalarStorage::f32, 0},
-    RowExpectation{"NPC_\\FaceMorphPositionZ", 8, fo4::schema::ScalarStorage::f32, 0},
-    RowExpectation{"NPC_\\FaceMorphRotationX", 12, fo4::schema::ScalarStorage::f32, 0},
-    RowExpectation{"NPC_\\FaceMorphRotationY", 16, fo4::schema::ScalarStorage::f32, 0},
-    RowExpectation{"NPC_\\FaceMorphRotationZ", 20, fo4::schema::ScalarStorage::f32, 0},
-    RowExpectation{"NPC_\\FaceMorphScale", 24, fo4::schema::ScalarStorage::f32, 0},
+    RowExpectation{"NPC_\\FaceMorphPositionX", 0, fo4::schema::ScalarStorage::f32, 28},
+    RowExpectation{"NPC_\\FaceMorphPositionY", 4, fo4::schema::ScalarStorage::f32, 28},
+    RowExpectation{"NPC_\\FaceMorphPositionZ", 8, fo4::schema::ScalarStorage::f32, 28},
+    RowExpectation{"NPC_\\FaceMorphRotationX", 12, fo4::schema::ScalarStorage::f32, 28},
+    RowExpectation{"NPC_\\FaceMorphRotationY", 16, fo4::schema::ScalarStorage::f32, 28},
+    RowExpectation{"NPC_\\FaceMorphRotationZ", 20, fo4::schema::ScalarStorage::f32, 28},
+    RowExpectation{"NPC_\\FaceMorphScale", 24, fo4::schema::ScalarStorage::f32, 28},
 };
 
 const std::array k_tint_rows{
@@ -74,12 +74,12 @@ Bytes fmrs() {
 
 Bytes tend7() {
   ByteWriter out;
-  out.u8(42);      // value
-  out.u8(10);      // red
-  out.u8(20);      // green
-  out.u8(30);      // blue
-  out.u8(0);       // unused
-  out.u16(0xFFFD);  // template color index -3
+  out.u8(42);
+  out.u8(10);
+  out.u8(20);
+  out.u8(30);
+  out.u8(0);
+  out.u16(0xFFFD);
   return out.bytes;
 }
 
@@ -148,7 +148,7 @@ TEST(NpcFaceTintRows, RowsDeclareEveryFaceMorphAndTintMember) {
     EXPECT_EQ(field.scalar.subrecord, fo4::Signature::from_string("FMRS")) << expected.path;
     EXPECT_EQ(field.scalar.offset, expected.offset) << expected.path;
     EXPECT_EQ(field.scalar.storage, expected.storage) << expected.path;
-    EXPECT_EQ(field.scalar.payload_size, 36u) << expected.path;
+    EXPECT_EQ(field.scalar.payload_size, 0u) << expected.path;
     EXPECT_EQ(field.scalar.minimum_payload_size, expected.minimum_payload_size) << expected.path;
     EXPECT_TRUE(field.scalar.embedded) << expected.path;
     EXPECT_TRUE(field.scalar.address.repeated) << expected.path;
@@ -266,6 +266,24 @@ TEST(NpcFaceTintRows, ShortOrMissingPayloadsHideEveryMember) {
   EXPECT_EQ(subrecord_payload(after, "FMRS", 0), Bytes{});
 }
 
+TEST(NpcFaceTintRows, FaceMorphPayloadsBelowTheMinimumHideEveryMember) {
+  auto plugin = fo4::read_plugin(make_plugin({}, {Bytes(27, std::byte{0})}, {}, {}), "Patch.esp");
+  EXPECT_EQ(read_member(plugin, "NPC_\\FaceMorphPositionX", 0), "absent");
+  EXPECT_EQ(read_member(plugin, "NPC_\\FaceMorphScale", 0), "absent");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, npc_key(), scalar("NPC_\\FaceMorphScale"), 0, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  auto sized = fo4::read_plugin(make_plugin({}, {Bytes(28, std::byte{0})}, {}, {}), "Patch.esp");
+  EXPECT_EQ(read_member(sized, "NPC_\\FaceMorphPositionX", 0), "0");
+  EXPECT_EQ(read_member(sized, "NPC_\\FaceMorphScale", 0), "0");
+  EXPECT_EQ(fo4::set_record_scalar(sized, npc_key(), scalar("NPC_\\FaceMorphScale"), 0, "3"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto after = fo4::read_plugin(fo4::write_plugin(sized), "Patch.esp");
+  EXPECT_EQ(read_member(after, "NPC_\\FaceMorphScale", 0), "3");
+  EXPECT_EQ(subrecord_payload(after, "FMRS", 0).size(), 28u);
+}
+
 TEST(NpcFaceTintRows, SecondInstanceIsAddressedByIndexAndUnknownIndexIsRefused) {
   ByteWriter first;
   first.u32(1);
@@ -304,10 +322,16 @@ TEST(NpcFaceTintRows, OutOfRangeValuesAreRefused) {
   ByteWriter teti;
   teti.u16(0);
   teti.u16(0);
-  auto plugin = fo4::read_plugin(make_plugin({}, {}, {teti.bytes}, {}), "Patch.esp");
+  auto plugin = fo4::read_plugin(make_plugin({}, {}, {teti.bytes}, {tend7()}), "Patch.esp");
   EXPECT_THROW(fo4::set_record_scalar(plugin, npc_key(), scalar("NPC_\\TintLayerDataType"), 0, "3"),
                fo4::schema::ScalarError);
   EXPECT_THROW(fo4::set_record_scalar(plugin, npc_key(), scalar("NPC_\\TintLayerValue"), 0, "-1"),
                fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, npc_key(), scalar("NPC_\\TintLayerColorRed"), 0, "256"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, npc_key(), scalar("NPC_\\TintLayerTemplateColorIndex"), 0,
+                                      "32768"),
+               fo4::schema::ScalarError);
   EXPECT_EQ(subrecord_payload(plugin, "TETI", 0), teti.bytes);
+  EXPECT_EQ(subrecord_payload(plugin, "TEND", 0), tend7());
 }

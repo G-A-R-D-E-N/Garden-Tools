@@ -31151,7 +31151,7 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "offset": 0,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -31165,7 +31165,7 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "offset": 4,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -31179,7 +31179,7 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "offset": 8,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -31193,7 +31193,7 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "offset": 12,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -31207,7 +31207,7 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "offset": 16,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -31221,7 +31221,7 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "offset": 20,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -31235,7 +31235,7 @@
           "minimum": -3.4028234663852886e+38,
           "maximum": 3.4028234663852886e+38,
           "offset": 24,
-          "payload_size": 36,
+          "minimum_payload_size": 28,
           "repeated": true,
           "insertion": "existing_only"
         },
