@@ -292,6 +292,35 @@ bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& recor
   return found;
 }
 
+namespace {
+
+void relabel_form_id_child_groups(Group& group,
+                                  const PluginFormIdContext& context,
+                                  const FormKey& from,
+                                  const RawFormId to) {
+  for (auto& child : group.children) {
+    auto* nested = std::get_if<Group>(&child);
+    if (nested == nullptr) continue;
+    if (group_label_is_form_id(nested->header.group_type)) {
+      const RawFormId raw{nested->header.label_as_u32()};
+      if (!raw.is_null() && resolve_plugin_form_id(raw, context) == from) {
+        nested->header.set_label_as_u32(to.value());
+      }
+    }
+    relabel_form_id_child_groups(*nested, context, from, to);
+  }
+}
+
+void relabel_record_child_groups(Plugin& plugin, const FormKey& from, const FormKey& to) {
+  const auto context = plugin_form_id_context(plugin);
+  const auto encoded = encode_plugin_form_id(to, context);
+  for (auto& group : plugin.groups) {
+    relabel_form_id_child_groups(group, context, from, encoded);
+  }
+}
+
+}  // namespace
+
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local) {
@@ -317,12 +346,8 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   if (new_key == record_key) return RecordRenumberStatus::unchanged;
   if (find_record(next, new_key) != nullptr) return RecordRenumberStatus::target_exists;
 
-  if (has_form_id_labelled_child_group(next, record_key)) {
-    throw FormIdError(
-        "renumbering a record with form ID labelled child groups is disabled until parent GRUP label rewriting is proven");
-  }
-
   rekey_form_links(next, record_key, new_key);
+  relabel_record_child_groups(next, record_key, new_key);
   target = find_top_level_record(next, record_key);
   if (target == nullptr) {
     throw FormIdError("record disappeared during transactional FormLink rekey");

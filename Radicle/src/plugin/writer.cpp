@@ -274,13 +274,6 @@ void replace_master_subrecords(Record& tes4, const std::vector<MasterReference>&
   tes4.original_range.clear();
 }
 
-void set_group_label_u32(GroupHeader& header, std::uint32_t value) {
-  header.label[0] = std::byte{static_cast<std::uint8_t>(value)};
-  header.label[1] = std::byte{static_cast<std::uint8_t>(value >> 8)};
-  header.label[2] = std::byte{static_cast<std::uint8_t>(value >> 16)};
-  header.label[3] = std::byte{static_cast<std::uint8_t>(value >> 24)};
-}
-
 void remap_group_form_id_labels(Plugin& plugin,
                                 const PluginFormIdContext& old_context,
                                 const PluginFormIdContext& new_context) {
@@ -291,8 +284,7 @@ void remap_group_form_id_labels(Plugin& plugin,
       throw FormIdError("FormID-bearing GRUP has a null label during master remap");
     }
     const auto key = resolve_plugin_form_id(raw, old_context);
-    const auto encoded = encode_plugin_form_id(key, new_context);
-    set_group_label_u32(group.header, encoded.value());
+    group.header.set_label_as_u32(encode_plugin_form_id(key, new_context).value());
   });
 }
 

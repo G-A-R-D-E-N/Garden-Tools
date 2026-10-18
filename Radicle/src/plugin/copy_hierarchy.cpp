@@ -85,10 +85,7 @@ GroupHeader destination_header(const Group& source_group,
   auto header = source_group.header;
   if (!group_label_is_form_id(header.group_type)) return header;
   const auto key = resolve_plugin_form_id(RawFormId{header.label_as_u32()}, source_context);
-  const auto value = encode_plugin_form_id(key, destination_context).value();
-  for (std::size_t index = 0; index < header.label.size(); ++index) {
-    header.label[index] = std::byte{static_cast<std::uint8_t>(value >> (8 * index))};
-  }
+  header.set_label_as_u32(encode_plugin_form_id(key, destination_context).value());
   return header;
 }
 

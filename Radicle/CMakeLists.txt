@@ -535,6 +535,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_reachability.cpp
     tests/test_maintenance.cpp
     tests/test_maintenance_nested.cpp
+    tests/test_esl_compaction.cpp
     tests/test_c_api_maintenance.cpp
     tests/test_c_api_pex.cpp
     tests/test_c_api_seq.cpp
