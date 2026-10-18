@@ -415,8 +415,10 @@ TEST(REFRExtraRows, StridedRagdollRowsAddressEachBone) {
   const auto payload = sub_bytes(reread, "000C10:Patch.esp", "XRGD");
   ASSERT_EQ(payload.size(), 56u);
   EXPECT_EQ(std::to_integer<std::uint8_t>(payload[0]), 3u);
-  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[4]), 1u);
   EXPECT_EQ(std::to_integer<std::uint8_t>(payload[28]), 9u);
+  float position = 0.0F;
+  std::memcpy(&position, payload.data() + 4, sizeof(position));
+  EXPECT_EQ(position, 1.0f);
   float rotation = 0.0F;
   std::memcpy(&rotation, payload.data() + 28 + 24, sizeof(rotation));
   EXPECT_EQ(rotation, -2.5f);
