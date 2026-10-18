@@ -156,6 +156,7 @@ add_library(fo4
   src/forms/race.cpp
   src/forms/race_body.cpp
   src/forms/npc.cpp
+  src/forms/omod.cpp
   src/forms/perk.cpp
   src/forms/faction.cpp
   src/forms/weapon.cpp
