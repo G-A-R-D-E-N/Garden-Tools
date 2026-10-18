@@ -22081,7 +22081,10 @@
           }
         ]
       },
-      "fields": [],
+      "fields": [
+        {"path": "SCCO\\CoordinateX", "label": "Coordinate X", "kind": "scalar", "subrecord": "XNAM", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "repeated": true, "insertion": "existing_only"},
+        {"path": "SCCO\\CoordinateY", "label": "Coordinate Y", "kind": "scalar", "subrecord": "XNAM", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "minimum_payload_size": 8, "repeated": true, "insertion": "existing_only"}
+      ],
       "formlink_fields": [
         {
           "path": "SCCO\\Quest",
@@ -22092,6 +22095,21 @@
             "QUST"
           ],
           "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "SCCO\\Scene",
+          "label": "Scene",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "targets": [
+            "SCEN"
+          ],
+          "nullable": false,
+          "repeated": true,
+          "payload_sizes": [
+            4
+          ],
           "insertion": "existing_only"
         }
       ],

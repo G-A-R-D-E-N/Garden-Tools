@@ -165,7 +165,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | RFGP | 12582 | - | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| SCCO | 12593 | - | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| SCCO | 12593 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | 6 | 2 | 2 | - | 1 | yes | - | forms/static_collection | - | - | L4 |
 | SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -318,7 +318,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |
 | RFGP | - | - | - | - | 1 | - | - | - | - | existing_only |
-| SCCO | - | - | - | - | - | - | - | - | - | existing_only |
+| SCCO | 2 | - | - | - | - | i32 | 3 | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SCOL | 6 | - | - | - | 2 | i16 | 1 | - | - | existing_only |
 | SCSN | 1 | - | - | - | - | u16 | - | - | - | existing_only |

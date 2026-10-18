@@ -18,23 +18,30 @@ bool listed(std::string_view value, std::initializer_list<std::string_view> name
   return std::find(names.begin(), names.end(), value) != names.end();
 }
 
+std::vector<std::size_t> before_marker(const std::vector<Subrecord>& subs, Signature marker,
+                                       Signature subrecord) {
+  std::size_t boundary = subs.size();
+  for (std::size_t i = 0; i < subs.size(); ++i) {
+    if (subs[i].signature == marker) {
+      boundary = i;
+      break;
+    }
+  }
+  std::vector<std::size_t> out;
+  for (std::size_t i = 0; i < boundary; ++i) {
+    if (subs[i].signature == subrecord) out.push_back(i);
+  }
+  return out;
+}
+
 }
 
 std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& record, Signature subrecord) {
   if (record.header.signature == sig("LENS") && subrecord == sig("DNAM")) {
-    const auto& lens_subs = record.subrecords;
-    std::size_t boundary = lens_subs.size();
-    for (std::size_t i = 0; i < lens_subs.size(); ++i) {
-      if (lens_subs[i].signature == sig("LFSP")) {
-        boundary = i;
-        break;
-      }
-    }
-    std::vector<std::size_t> lens_out;
-    for (std::size_t i = 0; i < boundary; ++i) {
-      if (lens_subs[i].signature == subrecord) lens_out.push_back(i);
-    }
-    return lens_out;
+    return before_marker(record.subrecords, sig("LFSP"), subrecord);
+  }
+  if (record.header.signature == sig("SCCO") && subrecord == sig("XNAM")) {
+    return before_marker(record.subrecords, sig("VNAM"), subrecord);
   }
   if (record.header.signature != sig("PACK")) return std::nullopt;
   const auto& subs = record.subrecords;
