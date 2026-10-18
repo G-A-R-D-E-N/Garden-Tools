@@ -2403,25 +2403,29 @@ constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_3[] = {
 {Signature::from_string("SRAF"), false, false, 4, std::span<const std::uint8_t>{}, false, false},
 {Signature::from_string("WZMD"), false, false, 0, std::span<const std::uint8_t>{}, false, false},
 };
+constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_4[] = {
+{Signature::from_string("PNAM"), true, false, 8, std::span<const std::uint8_t>{}, false, false},
+};
 constexpr std::uint8_t k_subrecord_group_default_6[] = {0x00};
 constexpr std::uint8_t k_subrecord_group_default_7[] = {0x00};
 constexpr std::uint8_t k_subrecord_group_default_8[] = {0x00, 0x00, 0x00, 0x00};
-constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_4[] = {
+constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_5[] = {
 {Signature::from_string("BNAM"), true, false, 0, std::span<const std::uint8_t>(k_subrecord_group_default_6), false, false},
 {Signature::from_string("SNAM"), false, false, 0, std::span<const std::uint8_t>(k_subrecord_group_default_7), false, true},
 {Signature::from_string("FNAM"), false, false, 0, std::span<const std::uint8_t>{}, false, true},
 {Signature::from_string("CNAM"), false, false, 0, std::span<const std::uint8_t>(k_subrecord_group_default_8), false, true},
 };
 constexpr std::uint8_t k_subrecord_group_default_9[] = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
-constexpr Signature k_subrecord_group_successors_5[] = {Signature::from_string("MNAM"), Signature::from_string("WBDT"), Signature::from_string("XMRK"), Signature::from_string("SNAM"), Signature::from_string("BSIZ"), Signature::from_string("BTXT"), Signature::from_string("ISIZ"), Signature::from_string("ITXT"), Signature::from_string("RNAM"), Signature::from_string("ANAM"), Signature::from_string("ITID"), Signature::from_string("UNAM"), Signature::from_string("VNAM"), Signature::from_string("TNAM")};
-constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_5[] = {
+constexpr Signature k_subrecord_group_successors_6[] = {Signature::from_string("MNAM"), Signature::from_string("WBDT"), Signature::from_string("XMRK"), Signature::from_string("SNAM"), Signature::from_string("BSIZ"), Signature::from_string("BTXT"), Signature::from_string("ISIZ"), Signature::from_string("ITXT"), Signature::from_string("RNAM"), Signature::from_string("ANAM"), Signature::from_string("ITID"), Signature::from_string("UNAM"), Signature::from_string("VNAM"), Signature::from_string("TNAM")};
+constexpr SubrecordGroupMemberDescriptor k_subrecord_group_members_6[] = {
 {Signature::from_string("CNTO"), true, false, 8, std::span<const std::uint8_t>(k_subrecord_group_default_9), false, false},
 };
-constexpr std::array<SubrecordGroupDescriptor, 6> k_subrecord_groups{{
+constexpr std::array<SubrecordGroupDescriptor, 7> k_subrecord_groups{{
 {Signature::from_string("CONT"), "CONT\\Items", "Items", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), std::span<const Signature>(k_subrecord_group_successors_0)},
 {Signature::from_string("FURN"), "FURN\\Items", "Items", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_1), std::span<const Signature>(k_subrecord_group_successors_1)},
 {Signature::from_string("FURN"), "FURN\\Markers", "Markers", Signature{}, std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_2), std::span<const Signature>(k_subrecord_group_successors_2)},
 {Signature::from_string("INFO"), "INFO\\Response", "Response", Signature{}, std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_3), std::span<const Signature>(k_subrecord_group_successors_3)},
-{Signature::from_string("MSWP"), "MSWP\\Substitutions", "Substitutions", Signature{}, std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_4), std::span<const Signature>{}},
-{Signature::from_string("TERM"), "TERM\\Holotapes", "Holotapes", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_5), std::span<const Signature>(k_subrecord_group_successors_5)},
+{Signature::from_string("IPDS"), "IPDS\\Data", "Data", Signature{}, std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_4), std::span<const Signature>{}},
+{Signature::from_string("MSWP"), "MSWP\\Substitutions", "Substitutions", Signature{}, std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_5), std::span<const Signature>{}},
+{Signature::from_string("TERM"), "TERM\\Holotapes", "Holotapes", Signature::from_string("COCT"), std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_6), std::span<const Signature>(k_subrecord_group_successors_6)},
 }};

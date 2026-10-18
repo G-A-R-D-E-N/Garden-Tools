@@ -165,6 +165,13 @@ std::uint32_t pnam_link_raw(const fo4::Plugin& plugin, std::string_view key, std
   return 0;
 }
 
+fo4::schema::SubrecordGroupDescriptor pnam_group() {
+  const auto group = fo4::schema::subrecord_group_descriptor(
+      fo4::Signature::from_string("IPDS"), "IPDS\\Data");
+  EXPECT_TRUE(group.has_value());
+  return group.value_or(fo4::schema::SubrecordGroupDescriptor{});
+}
+
 }  // namespace
 
 TEST(IPDSRows, FormLinkRowsNameTheirPnamOffsetsAndTargets) {
@@ -216,6 +223,91 @@ TEST(IPDSRows, ReadsAndSetsPairsByOccurrenceThenRereads) {
   EXPECT_EQ(subrecord_at(reread, key, "PNAM", 1), link_pair(0x01000A30, 0x01000A21));
   EXPECT_EQ(pnam_link_raw(reread, key, 4, 0), 0x01000A40u);
   EXPECT_EQ(pnam_link_raw(reread, key, 0, 1), 0x01000A30u);
+}
+
+TEST(IPDSRows, DataGroupHoldsOneEightBytePnamPerSpan) {
+  const auto group = pnam_group();
+  EXPECT_EQ(group.record, fo4::Signature::from_string("IPDS"));
+  EXPECT_EQ(group.path, "IPDS\\Data");
+  EXPECT_EQ(group.count_subrecord, fo4::Signature{});
+  ASSERT_EQ(group.members.size(), 1u);
+  EXPECT_EQ(group.members[0].subrecord, fo4::Signature::from_string("PNAM"));
+  EXPECT_TRUE(group.members[0].required);
+  EXPECT_FALSE(group.members[0].repeatable);
+  EXPECT_EQ(group.members[0].payload_size, 8u);
+  EXPECT_TRUE(group.members[0].default_payload.empty());
+
+  constexpr std::string_view key = "000C01:Patch.esp";
+  const auto plugin = fo4::read_plugin(make_impact_plugin(), "Patch.esp");
+  const auto spans = fo4::subrecord_group_spans(plugin, fo4::FormKey::parse(key), group);
+  ASSERT_TRUE(spans.has_value());
+  ASSERT_EQ(spans->size(), 2u);
+  EXPECT_EQ((*spans)[0].first, 1u);
+  EXPECT_EQ((*spans)[0].end, 2u);
+  EXPECT_EQ((*spans)[1].first, 2u);
+  EXPECT_EQ((*spans)[1].end, 3u);
+}
+
+TEST(IPDSRows, InsertsAPairFillsItThroughTheRowsAndRemovesIt) {
+  constexpr std::string_view key = "000C01:Patch.esp";
+  const auto record = fo4::FormKey::parse(key);
+  const auto material =
+      fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("IPDS"), "IPDS\\Material");
+  const auto impact =
+      fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("IPDS"), "IPDS\\Impact");
+  ASSERT_TRUE(material.has_value());
+  ASSERT_TRUE(impact.has_value());
+
+  auto plugin = fo4::read_plugin(make_impact_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record, pnam_group(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record, *material, 1,
+                                           fo4::FormKey::parse("000A50:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record, *impact, 1,
+                                           fo4::FormKey::parse("000A51:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(reread, record, *material), std::optional<std::size_t>{3});
+  EXPECT_EQ(subrecord_at(reread, key, "PNAM", 0), link_pair(0x00000A10, 0x00000A11));
+  EXPECT_EQ(subrecord_at(reread, key, "PNAM", 1), link_pair(0x01000A50, 0x01000A51));
+  EXPECT_EQ(subrecord_at(reread, key, "PNAM", 2), link_pair(0x01000A20, 0x01000A21));
+  EXPECT_EQ(pnam_link_raw(reread, key, 0, 1), 0x01000A50u);
+
+  auto trimmed = fo4::read_plugin(fo4::write_plugin(reread), "Patch.esp");
+  EXPECT_EQ(fo4::remove_record_subrecord_group(trimmed, record, pnam_group(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(trimmed, record, pnam_group(), 2),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+
+  auto after = fo4::read_plugin(fo4::write_plugin(trimmed), "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(after, record, *material), std::optional<std::size_t>{2});
+  EXPECT_EQ(subrecord_at(after, key, "PNAM", 0), link_pair(0x00000A10, 0x00000A11));
+  EXPECT_EQ(subrecord_at(after, key, "PNAM", 1), link_pair(0x01000A20, 0x01000A21));
+}
+
+TEST(IPDSRows, ShortPnamFailsThePairRowsAndTheGroupClosed) {
+  ByteWriter out;
+  write_header(out);
+  const auto group = fo4::test::begin_group(out, "IPDS", 0);
+  const auto record = fo4::test::begin_record(out, "IPDS", 0, raw_id(0x0C01));
+  fo4::test::write_subrecord(out, "EDID", zstr("RadicleShortPnam"));
+  fo4::test::write_subrecord(out, "PNAM", Bytes(4));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C01:Patch.esp");
+  const auto material =
+      fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("IPDS"), "IPDS\\Material");
+  ASSERT_TRUE(material.has_value());
+  EXPECT_THROW(static_cast<void>(fo4::record_field_count(plugin, key, *material)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_THROW(static_cast<void>(fo4::subrecord_group_spans(plugin, key, pnam_group())),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(static_cast<void>(fo4::insert_record_subrecord_group(plugin, key, pnam_group(), 0)),
+               fo4::schema::SubrecordGroupError);
 }
 
 TEST(MOVTRows, ScalarRowsHaveXEditOffsetsStorageAndTheSpedFloor) {

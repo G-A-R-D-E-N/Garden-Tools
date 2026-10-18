@@ -7024,7 +7024,17 @@
     {
       "signature": "IPDS",
       "authoring": {"placement": "top_level", "subrecords": [{"signature": "EDID", "minimum": 0, "maximum": 1}, {"signature": "PNAM", "minimum": 0, "maximum": 65535}]},
-      "fields": [],
+      "fields": [
+        {
+          "path": "IPDS\\Data",
+          "label": "Data",
+          "kind": "subrecord_group",
+          "insertion": "existing_only",
+          "members": [
+            {"subrecord": "PNAM", "required": true, "repeatable": false, "payload_size": 8}
+          ]
+        }
+      ],
       "formlink_fields": [
         {"path": "IPDS\\Material", "label": "Material", "subrecord": "PNAM", "offset": 0, "targets": ["MATT"], "nullable": false, "repeated": true, "payload_sizes": [8], "insertion": "existing_only"},
         {"path": "IPDS\\Impact", "label": "Impact", "subrecord": "PNAM", "offset": 4, "targets": ["IPCT"], "nullable": false, "repeated": true, "payload_sizes": [8], "insertion": "existing_only"}
