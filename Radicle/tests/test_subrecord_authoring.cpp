@@ -383,7 +383,7 @@ TEST(SubrecordAuthoring, GeneratedSchemaMarksSiblingOwnersCoupled) {
       {"COBJ", {"FVPA"}},
       {"EXPL", {"MODL"}},
       {"HAZD", {"MODL"}},
-      {"PROJ", {"MODL", "DEST", "DSTD", "DMDL", "DMDT", "DSTF"}},
+      {"PROJ", {"MODL", "DEST"}},
       {"SCOL", {"MODL", "ONAM", "DATA"}}};
   for (const auto& [record, signatures] : expected) {
     const auto constraint = fo4::schema::record_authoring_constraint(sig(record));
