@@ -24,7 +24,6 @@ using fo4::test::ByteWriter;
 constexpr auto k_race = "RACE";
 constexpr auto k_race_key = "000800:Patch.esp";
 constexpr auto k_armo_key = "000D01:Patch.esp";
-constexpr auto k_txst_key = "000D02:Patch.esp";
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
 
@@ -133,15 +132,6 @@ std::uint32_t raw_at(const Bytes& data, std::size_t offset) {
 }  // namespace
 
 TEST(RaceLinkRows, HaveXEditSubrecordsTargetsAndShapes) {
-  const auto collar = row("RACE\\CollarTextureSet");
-  EXPECT_EQ(collar.subrecord, fo4::Signature::from_string("NAM2"));
-  EXPECT_EQ(collar.offset, 0u);
-  EXPECT_FALSE(collar.nullable);
-  EXPECT_EQ(collar.payload_sizes[0], 4u);
-  EXPECT_FALSE(collar.address.repeated);
-  EXPECT_EQ(fo4::schema::formlink_field_targets(collar).size(), 1u);
-  EXPECT_EQ(fo4::schema::formlink_field_targets(collar)[0], fo4::Signature::from_string("TXST"));
-
   const auto movement = row("RACE\\MovementType");
   EXPECT_EQ(movement.subrecord, fo4::Signature::from_string("MTYP"));
   EXPECT_TRUE(movement.address.repeated);
@@ -156,8 +146,7 @@ TEST(RaceLinkRows, HaveXEditSubrecordsTargetsAndShapes) {
 }
 
 TEST(RaceLinkRows, CollectsTheNewSubrecordsAsFormLinks) {
-  const auto bytes = plugin_with({{"NAM2", u32_bytes(0x01000A20u)},
-                                  {"MTYP", u32_bytes(0x01000A21u)},
+  const auto bytes = plugin_with({{"MTYP", u32_bytes(0x01000A21u)},
                                   {"MTYP", u32_bytes(0x01000A22u)},
                                   {"QNAM", u32_bytes(0x01000A23u)}},
                                  false);
@@ -170,22 +159,18 @@ TEST(RaceLinkRows, CollectsTheNewSubrecordsAsFormLinks) {
           return hit.subrecord.to_string() == signature && hit.offset == 0;
         }));
   };
-  EXPECT_EQ(count("NAM2"), 1u);
   EXPECT_EQ(count("MTYP"), 2u);
   EXPECT_EQ(count("QNAM"), 1u);
 }
 
 TEST(RaceLinkRows, WritesAndRereadsEachLink) {
-  const auto bytes = plugin_with({{"NAM2", u32_bytes(0x01000A20u)},
-                                  {"MTYP", u32_bytes(0x01000A21u)},
+  const auto bytes = plugin_with({{"MTYP", u32_bytes(0x01000A21u)},
                                   {"MTYP", u32_bytes(0x01000A22u)},
                                   {"QNAM", u32_bytes(0x01000A23u)}},
                                  false);
   auto plugin = fo4::read_plugin(bytes, "Patch.esp");
   const auto key = fo4::FormKey::parse(k_race_key);
 
-  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\CollarTextureSet"), k_target),
-            fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\EquipSlot"), 0, k_target),
             fo4::FormLinkFieldMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\MovementType"), 1, k_target),
@@ -193,7 +178,6 @@ TEST(RaceLinkRows, WritesAndRereadsEachLink) {
   EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\MovementType"), 2u);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  EXPECT_EQ(raw_at(live_subrecord(reread, "NAM2", 0), 0), 0x01000A20u);
   EXPECT_EQ(raw_at(live_subrecord(reread, "MTYP", 0), 0), 0x01000A21u);
   EXPECT_EQ(raw_at(live_subrecord(reread, "MTYP", 1), 0), 0x01000A20u);
   EXPECT_EQ(raw_at(live_subrecord(reread, "QNAM", 0), 0), 0x01000A20u);
@@ -216,28 +200,15 @@ TEST(RaceLinkRows, EquipSlotNodesAreEditableStrings) {
   EXPECT_EQ(raw_at(live_subrecord(reread, "QNAM", 0), 0), 0x01000A23u);
 }
 
-TEST(RaceLinkRows, RefuseMarkersDuplicatesAndWrongTargetTypes) {
+TEST(RaceLinkRows, RefuseWrongTargetTypes) {
   const auto key = fo4::FormKey::parse(k_race_key);
-  const auto collar = row("RACE\\CollarTextureSet");
+  const auto movement = row("RACE\\MovementType");
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(movement, fo4::Signature::from_string("ARMO")));
 
-  auto marker = fo4::read_plugin(plugin_with({{"NAM2", Bytes{}}}, false), "Patch.esp");
-  EXPECT_THROW(fo4::set_record_formlink_field(marker, key, collar, k_target),
+  auto typed = fo4::read_plugin(plugin_with({{"MTYP", u32_bytes(0x01000A21u)}}, true), "Patch.esp");
+  EXPECT_THROW(fo4::set_record_formlink_field(typed, key, movement, fo4::FormKey::parse(k_armo_key)),
                fo4::schema::FormLinkFieldError);
-  EXPECT_EQ(live_subrecord(marker, "NAM2", 0).size(), 0u);
-
-  auto duplicated = fo4::read_plugin(
-      plugin_with({{"NAM2", Bytes{}}, {"NAM2", u32_bytes(0x01000A20u)}}, false), "Patch.esp");
-  EXPECT_THROW(fo4::set_record_formlink_field(duplicated, key, collar, k_target),
-               fo4::schema::FormLinkFieldError);
-
-  auto typed = fo4::read_plugin(plugin_with({{"NAM2", u32_bytes(0x01000A20u)}}, true), "Patch.esp");
-  EXPECT_EQ(fo4::set_record_formlink_field(typed, key, collar, fo4::FormKey::parse(k_txst_key)),
-            fo4::FormLinkFieldMutationStatus::updated);
-  EXPECT_EQ(raw_at(live_subrecord(typed, "NAM2", 0), 0), 0x02000D02u);
-  EXPECT_THROW(fo4::set_record_formlink_field(typed, key, collar,
-                                              fo4::FormKey::parse(k_armo_key)),
-               fo4::schema::FormLinkFieldError);
-  EXPECT_EQ(raw_at(live_subrecord(typed, "NAM2", 0), 0), 0x02000D02u);
+  EXPECT_EQ(raw_at(live_subrecord(typed, "MTYP", 0), 0), 0x01000A21u);
 }
 
 TEST(RaceMorphRows, RowsMatchXEditSubrecordsStorageAndNames) {

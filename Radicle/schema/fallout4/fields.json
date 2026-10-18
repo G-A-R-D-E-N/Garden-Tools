@@ -8383,16 +8383,6 @@
           "insertion": "existing_only"
         },
         {
-          "path": "RACE\\CollarTextureSet",
-          "label": "Collar TextureSet",
-          "subrecord": "NAM2",
-          "offset": 0,
-          "targets": ["TXST"],
-          "nullable": false,
-          "payload_sizes": [4],
-          "insertion": "existing_only"
-        },
-        {
           "path": "RACE\\MovementType",
           "label": "Movement Type",
           "subrecord": "MTYP",

@@ -159,7 +159,7 @@ TEST(RaceDataLinks, EveryDataLinkOffsetIsClaimedExactlyOnce) {
   auto plugin = fo4::read_plugin(race_plugin(131, race_data(200)), "Patch.esp");
   const auto offsets = race_data_link_offsets(plugin);
   std::vector<std::size_t> expected;
-  for (const auto& row : k_link_rows) expected.push_back(row.offset);
+  for (const auto& link : k_link_rows) expected.push_back(link.offset);
   std::sort(expected.begin(), expected.end());
   EXPECT_EQ(offsets, expected);
 }
@@ -198,7 +198,7 @@ TEST(RaceDataLinks, WritesEveryDataLinkThenRereads) {
   }
 
   auto expected = race_data(200);
-  for (const auto& row : k_link_rows) put(expected, row.offset, u32_bytes(0x01000A20u));
+  for (const auto& link : k_link_rows) put(expected, link.offset, u32_bytes(0x01000A20u));
 
   auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(data_of(reread), expected);
