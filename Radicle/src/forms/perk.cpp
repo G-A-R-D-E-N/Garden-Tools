@@ -112,7 +112,8 @@ PerkFunctionParameters decode_parameters(const Plugin& plugin,
                                          std::size_t end) {
   PerkFunctionParameters parameters;
   for (std::size_t i = begin; i < end; ++i) {
-    const auto& subrecord = record.subrecords[i];    const auto& payload = subrecord.data;
+    const auto& subrecord = record.subrecords[i];
+    const auto& payload = subrecord.data;
     if (subrecord.signature == k_epft) {
       if (parameters.type.has_value() || payload.size() != 1) {
         throw PerkError("PERK EPFT must be one byte and occur once");
