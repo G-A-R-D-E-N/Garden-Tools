@@ -24,7 +24,7 @@ struct DeltaPatchResult {
   DeltaPatchCounts counts;
 };
 
-DeltaPatchResult build_delta_patch(const Environment& env,
+DeltaPatchResult build_delta_patch(const env::Environment& env,
                                    const PluginKey& older,
                                    const PluginKey& newer);
 
