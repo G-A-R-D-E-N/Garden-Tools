@@ -34,6 +34,18 @@ Bytes u32_bytes(std::uint32_t value) {
   return out.bytes;
 }
 
+Bytes u16_bytes(std::uint16_t value) {
+  ByteWriter out;
+  out.u16(value);
+  return out.bytes;
+}
+
+Bytes u8_bytes(std::uint8_t value) {
+  ByteWriter out;
+  out.u8(value);
+  return out.bytes;
+}
+
 Bytes zstr(std::string_view text) {
   Bytes out;
   for (const auto ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
@@ -102,6 +114,13 @@ fo4::schema::FormLinkFieldDescriptor row(std::string_view path) {
       fo4::schema::formlink_field_descriptor(fo4::Signature::from_string(k_race), path);
   EXPECT_TRUE(descriptor.has_value()) << path;
   return descriptor.value_or(fo4::schema::FormLinkFieldDescriptor{});
+}
+
+fo4::schema::ScalarFieldDescriptor scalar_row(std::string_view path) {
+  const auto descriptor =
+      fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(k_race), path);
+  EXPECT_TRUE(descriptor.has_value()) << path;
+  return descriptor.value_or(fo4::schema::ScalarFieldDescriptor{});
 }
 
 std::uint32_t raw_at(const Bytes& data, std::size_t offset) {
@@ -219,4 +238,106 @@ TEST(RaceLinkRows, RefuseMarkersDuplicatesAndWrongTargetTypes) {
                                               fo4::FormKey::parse(k_armo_key)),
                fo4::schema::FormLinkFieldError);
   EXPECT_EQ(raw_at(live_subrecord(typed, "NAM2", 0), 0), 0x02000D02u);
+}
+
+TEST(RaceMorphRows, RowsMatchXEditSubrecordsStorageAndNames) {
+  const auto indices = scalar_row("RACE\\FaceMorphIndices");
+  EXPECT_EQ(indices.scalar.subrecord, fo4::Signature::from_string("FMRI"));
+  EXPECT_EQ(indices.scalar.storage, fo4::schema::ScalarStorage::u32);
+  EXPECT_TRUE(indices.scalar.address.repeated);
+
+  const auto mask = scalar_row("RACE\\MorphGroupMask");
+  EXPECT_EQ(mask.scalar.subrecord, fo4::Signature::from_string("MPPK"));
+  EXPECT_EQ(mask.scalar.storage, fo4::schema::ScalarStorage::u16);
+  EXPECT_EQ(mask.scalar.presentation, fo4::schema::ScalarPresentation::enumeration);
+  EXPECT_EQ(mask.scalar.names.size(), 15u);
+  EXPECT_EQ(fo4::schema::scalar_name_value(mask.scalar, "None").value_or(0), 65535);
+  EXPECT_EQ(fo4::schema::scalar_name_value(mask.scalar, "Female Neck Mask").value_or(0), 1227);
+  EXPECT_FALSE(fo4::schema::scalar_name_value(mask.scalar, "Not A Mask").has_value());
+
+  const auto groups = scalar_row("RACE\\MorphGroupNames");
+  EXPECT_EQ(groups.scalar.subrecord, fo4::Signature::from_string("MPGN"));
+  EXPECT_EQ(groups.scalar.storage, fo4::schema::ScalarStorage::zstring);
+  EXPECT_TRUE(groups.scalar.address.repeated);
+
+  const auto playable = scalar_row("RACE\\MorphPresetPlayable");
+  EXPECT_EQ(playable.scalar.subrecord, fo4::Signature::from_string("MPPF"));
+  EXPECT_EQ(playable.scalar.storage, fo4::schema::ScalarStorage::u8);
+  EXPECT_EQ(playable.scalar.maximum, 1.0);
+  EXPECT_TRUE(playable.scalar.address.repeated);
+
+  const auto last = scalar_row("RACE\\MorphLastIndex");
+  EXPECT_EQ(last.scalar.subrecord, fo4::Signature::from_string("MLSI"));
+  EXPECT_EQ(last.scalar.storage, fo4::schema::ScalarStorage::u32);
+  EXPECT_FALSE(last.scalar.address.repeated);
+
+  const std::pair<std::string_view, std::string_view> integers[] = {
+      {"RACE\\MorphPresetIndices", "MPPI"}, {"RACE\\MorphValueIndices", "MSID"}};
+  for (const auto& [path, subrecord] : integers) {
+    const auto field = scalar_row(path);
+    EXPECT_EQ(field.scalar.subrecord, fo4::Signature::from_string(subrecord)) << path;
+    EXPECT_EQ(field.scalar.storage, fo4::schema::ScalarStorage::u32) << path;
+    EXPECT_TRUE(field.scalar.address.repeated) << path;
+  }
+
+  const std::pair<std::string_view, std::string_view> strings[] = {
+      {"RACE\\MorphPresetMorphs", "MPPM"}, {"RACE\\MorphValueMinNames", "MSM0"},
+      {"RACE\\MorphValueMaxNames", "MSM1"}, {"RACE\\SubgraphAnimationPaths", "SAPT"},
+      {"RACE\\SubgraphBehaviorGraphs", "SGNM"}};
+  for (const auto& [path, subrecord] : strings) {
+    const auto field = scalar_row(path);
+    EXPECT_EQ(field.scalar.subrecord, fo4::Signature::from_string(subrecord)) << path;
+    EXPECT_EQ(field.scalar.storage, fo4::schema::ScalarStorage::zstring) << path;
+    EXPECT_TRUE(field.scalar.address.repeated) << path;
+  }
+
+  const auto texture = row("RACE\\MorphPresetTexture");
+  EXPECT_EQ(texture.subrecord, fo4::Signature::from_string("MPPT"));
+  EXPECT_TRUE(texture.address.repeated);
+  EXPECT_FALSE(texture.nullable);
+  EXPECT_EQ(fo4::schema::formlink_field_targets(texture).size(), 1u);
+  EXPECT_EQ(fo4::schema::formlink_field_targets(texture)[0], fo4::Signature::from_string("TXST"));
+}
+
+TEST(RaceMorphRows, WritesMorphAndSubgraphValuesInPlace) {
+  auto plugin = fo4::read_plugin(plugin_with({{"FMRI", u32_bytes(0x12)},
+                                              {"MSID", u32_bytes(7)},
+                                              {"MPPK", u16_bytes(1224)},
+                                              {"MPPF", u8_bytes(1)},
+                                              {"MPGN", zstr("Brow")},
+                                              {"SAPT", zstr("Anim\\Idle")},
+                                              {"MPPT", u32_bytes(0x01000D02u)}},
+                                             false),
+                                "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+  const auto mask = scalar_row("RACE\\MorphGroupMask");
+  EXPECT_EQ(fo4::schema::decode_scalar(live_subrecord(plugin, "MPPK", 0), mask.scalar), "1224");
+  EXPECT_EQ(fo4::schema::scalar_value_name(mask.scalar, 1224).value_or(""), "Female Ears Mask");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\FaceMorphIndices"), 0, "9"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, mask, 0, "65535"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\MorphValueIndices"), 0, "12"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\MorphPresetPlayable"), 0, "0"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, scalar_row("RACE\\SubgraphAnimationPaths"), 0,
+                                   "Anim\\Walk"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\MorphPresetTexture"), k_target),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\MorphLastIndex"), 0, "4"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, mask, 0, "65536"), fo4::schema::ScalarError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(raw_at(live_subrecord(reread, "FMRI", 0), 0), 9u);
+  EXPECT_EQ(fo4::schema::decode_scalar(live_subrecord(reread, "MPPK", 0), mask.scalar), "65535");
+  EXPECT_EQ(live_subrecord(reread, "MPPF", 0), u8_bytes(0));
+  EXPECT_EQ(raw_at(live_subrecord(reread, "MSID", 0), 0), 12u);
+  EXPECT_EQ(live_subrecord(reread, "SAPT", 0), zstr("Anim\\Walk"));
+  EXPECT_EQ(live_subrecord(reread, "MPGN", 0), zstr("Brow"));
+  EXPECT_EQ(raw_at(live_subrecord(reread, "MPPT", 0), 0), 0x01000A20u);
 }
