@@ -5264,6 +5264,36 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "IMAD\\TintColorInterpolators",
+          "label": "Tint color interpolators",
+          "kind": "counted_array",
+          "subrecord": "TNAM",
+          "stride": 20,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\TintColorTime", "label": "Tint color time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorRed", "label": "Tint color red", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorGreen", "label": "Tint color green", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorBlue", "label": "Tint color blue", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\TintColorAlpha", "label": "Tint color alpha", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
+        },
+        {
+          "path": "IMAD\\FadeColorInterpolators",
+          "label": "Fade color interpolators",
+          "kind": "counted_array",
+          "subrecord": "NAM3",
+          "stride": 20,
+          "insertion": "existing_only",
+          "members": [
+            {"path": "IMAD\\FadeColorTime", "label": "Fade color time", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorRed", "label": "Fade color red", "offset": 4, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorGreen", "label": "Fade color green", "offset": 8, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorBlue", "label": "Fade color blue", "offset": 12, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38},
+            {"path": "IMAD\\FadeColorAlpha", "label": "Fade color alpha", "offset": 16, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38}
+          ]
         }
       ],
       "authoring": {
