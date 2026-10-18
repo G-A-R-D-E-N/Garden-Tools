@@ -108,7 +108,9 @@ TEST(ParwRows, EmbeddedWritesLeaveTheirSiblingsAlone) {
   fo4::schema::patch_scalar_field(payload, field->scalar, encoded);
   for (std::size_t i = 0; i < payload.size(); ++i) {
     const bool written = i >= field->scalar.offset && i < field->scalar.offset + encoded.size();
-    if (!written) EXPECT_EQ(payload[i], std::byte{0xAB}) << i;
+    if (!written) {
+      EXPECT_EQ(payload[i], std::byte{0xAB}) << i;
+    }
   }
   const auto read = fo4::schema::scalar_field_bytes(payload, field->scalar);
   ASSERT_EQ(read.size(), 1u);

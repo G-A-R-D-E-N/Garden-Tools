@@ -410,7 +410,9 @@ TEST(QustGeneralRows, AuthoringCreatesAQuestWithTheGeneralDataDefaults) {
   for (const auto& subrecord : record->subrecords) names.push_back(subrecord.signature.to_string());
   EXPECT_EQ(names, (std::vector<std::string>{"EDID", "DNAM"}));
   for (const auto& subrecord : record->subrecords) {
-    if (subrecord.signature == k_dnam) EXPECT_EQ(subrecord.data, Bytes(12));
+    if (subrecord.signature == k_dnam) {
+      EXPECT_EQ(subrecord.data, Bytes(12));
+    }
   }
 }
 

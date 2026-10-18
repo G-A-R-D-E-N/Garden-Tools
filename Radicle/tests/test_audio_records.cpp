@@ -247,7 +247,7 @@ TEST(AudioRecordsSynthetic, EffectTypeAndEnabledAddressEachEffect) {
   EXPECT_EQ(type->scalar.subrecord, fo4::Signature::from_string("KNAM"));
   EXPECT_EQ(enabled->scalar.subrecord, fo4::Signature::from_string("DNAM"));
 
-  const auto* record = fo4::find_record(plugin, key(0x807));
+  const auto* record = fo4::find_record(plugin, key("000807"));
   ASSERT_NE(record, nullptr);
   EXPECT_EQ(row_text(*record, *type, 0), "2252866750");
   EXPECT_EQ(row_text(*record, *type, 1), "4015480703");
@@ -262,16 +262,16 @@ TEST(AudioRecordsSynthetic, EffectTypeAndEnabledAddressEachEffect) {
   EXPECT_EQ(*filter, "BSStateVariableFilter");
   EXPECT_FALSE(fo4::schema::scalar_value_name(type->scalar, 0).has_value());
 
-  EXPECT_EQ(fo4::set_record_scalar(plugin, key(0x807), *enabled, 1, "1"),
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key("000807"), *enabled, 1, "1"),
             fo4::ScalarMutationStatus::updated);
-  EXPECT_EQ(fo4::set_record_scalar(plugin, key(0x807), *enabled, 2, "1"),
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key("000807"), *enabled, 2, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_THROW(
-      static_cast<void>(fo4::set_record_scalar(plugin, key(0x807), *type, 1, "4294967296")),
+      static_cast<void>(fo4::set_record_scalar(plugin, key("000807"), *type, 1, "4294967296")),
       fo4::schema::ScalarError);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
-  const auto* after = fo4::find_record(reread, key(0x807));
+  const auto* after = fo4::find_record(reread, key("000807"));
   ASSERT_NE(after, nullptr);
   EXPECT_EQ(row_text(*after, *enabled, 1), "1");
   EXPECT_EQ(row_text(*after, *type, 1), "4015480703");

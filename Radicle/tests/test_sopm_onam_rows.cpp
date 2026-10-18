@@ -89,12 +89,12 @@ TEST(SopmOnamRows, ChannelsAreStridedU8Rows) {
   const auto left = row("SOPM\\FrontLeft");
   EXPECT_EQ(left.scalar.subrecord, fo4::Signature::from_string("ONAM"));
   EXPECT_EQ(left.scalar.storage, fo4::schema::ScalarStorage::u8);
-  EXPECT_EQ(left.scalar.address.offset, 0u);
+  EXPECT_EQ(left.scalar.offset, 0u);
   EXPECT_EQ(left.scalar.address.stride, 8u);
 
   const auto right = row("SOPM\\SideRight");
   EXPECT_EQ(right.scalar.storage, fo4::schema::ScalarStorage::u8);
-  EXPECT_EQ(right.scalar.address.offset, 7u);
+  EXPECT_EQ(right.scalar.offset, 7u);
   EXPECT_EQ(right.scalar.address.stride, 8u);
 }
 
