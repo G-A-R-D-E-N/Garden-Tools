@@ -98,6 +98,8 @@ struct SubrecordGroupMemberDescriptor {
   std::size_t payload_size{0};
   std::span<const std::uint8_t> default_payload{};
   bool localized{false};
+  // Constraint: a skippable member may appear before the first leader, where it belongs to no run.
+  bool skippable{false};
 };
 
 struct SubrecordGroupDescriptor {
