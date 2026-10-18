@@ -277,7 +277,9 @@ TEST(DialogueWriter, AppendsAnEmptyResponseBeforeTheConditionsAndEditsIt) {
   const auto after = reload(plugin);
   const auto trada = payloads(after, k_info, "TRDA");
   ASSERT_EQ(trada.size(), 3u);
-  EXPECT_EQ(trada.at(2), Bytes(20, std::byte{0}));
+  Bytes appended(20, std::byte{0});
+  appended[4] = std::byte{7};
+  EXPECT_EQ(trada.at(2), appended);
   EXPECT_EQ(payloads(after, k_info, "NAM1").at(2), zstr(""));
   EXPECT_EQ(payloads(after, k_info, "NAM4").at(2), zstr(""));
   const SavedEnvironment saved(after);

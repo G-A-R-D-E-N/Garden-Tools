@@ -285,8 +285,8 @@ TEST_F(FormsModulesCApi, ArmorCreateDecodeAndSetModels) {
   addon.female_first_person_model = "f1.nif";
   addon.male_priority = 5;
   addon.female_priority = 6;
-  addon.male_weight_slider = 7;
-  addon.female_weight_slider = 8;
+  addon.male_weight_slider = 3;
+  addon.female_weight_slider = 2;
   addon.unknown_before_detection[0] = 0x11;
   addon.unknown_before_detection[1] = 0x22;
   addon.detection_sound_value = 3;
@@ -332,8 +332,8 @@ TEST_F(FormsModulesCApi, ArmorCreateDecodeAndSetModels) {
     EXPECT_STREQ(addon_view->female_first_person_model, "f1.nif");
     EXPECT_EQ(addon_view->male_priority, 5);
     EXPECT_EQ(addon_view->female_priority, 6);
-    EXPECT_EQ(addon_view->male_weight_slider, 7);
-    EXPECT_EQ(addon_view->female_weight_slider, 8);
+    EXPECT_EQ(addon_view->male_weight_slider, 3);
+    EXPECT_EQ(addon_view->female_weight_slider, 2);
     EXPECT_EQ(addon_view->unknown_before_detection[0], 0x11);
     EXPECT_EQ(addon_view->unknown_before_detection[1], 0x22);
     EXPECT_EQ(addon_view->detection_sound_value, 3);

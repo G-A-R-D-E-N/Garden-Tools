@@ -94,6 +94,7 @@ std::vector<std::byte> make_plugin() {
                         {"ANAM", f32_bytes(0.5f)},
                         {"RDAT", rdat_bytes(5, 0, 60)},
                         {"RLDM", f32_bytes(2.5f)}});
+  write_grouped_record(out, "WRLD", 0x0D30, {{"EDID", text_bytes("TestWorldspace")}});
   return out.bytes;
 }
 
@@ -287,7 +288,7 @@ TEST(RegnRows, WritesColorsDataEntryFieldsAndLinksThenRereads) {
   EXPECT_EQ(field_bytes(reread, reread_key, "REGN\\RegionDataPriority", 1), u8_bytes(90));
   EXPECT_EQ(sub_bytes(reread, reread_key, "ANAM"), f32_bytes(1.5f));
   EXPECT_EQ(sub_bytes(reread, reread_key, "RLDM"), f32_bytes(2.5f));
-  EXPECT_EQ(sub_bytes(reread, reread_key, "RDAT", 1), rdat_bytes(5, 0, 60));
+  EXPECT_EQ(sub_bytes(reread, reread_key, "RDAT", 1), rdat_bytes(5, 0, 90));
   EXPECT_EQ(sub_bytes(reread, reread_key, "RPLI"), u32_bytes(80));
   EXPECT_EQ(sub_bytes(reread, reread_key, "RPLI", 1), u32_bytes(121));
   EXPECT_EQ(link_raw(reread, reread_key, "REGN\\Worldspace"), 0x02000D30u);

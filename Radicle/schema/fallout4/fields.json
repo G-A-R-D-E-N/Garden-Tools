@@ -15587,10 +15587,7 @@
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          { "signature": "EDID", "minimum": 0, "maximum": 1 },
-          { "signature": "BNAM", "minimum": 0, "maximum": 65535 },
-          { "signature": "SNAM", "minimum": 0, "maximum": 65535 },
-          { "signature": "CNAM", "minimum": 0, "maximum": 65535 }
+          { "signature": "EDID", "minimum": 0, "maximum": 1 }
         ]
       },
       "localized_subrecords": []

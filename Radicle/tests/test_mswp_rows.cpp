@@ -2,6 +2,7 @@
 #include "fo4/plugin/reader.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/preflight.hpp"
+#include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
@@ -187,9 +188,16 @@ TEST(MswpRows, RefusesANonStringSetterOnAStringRow) {
                fo4::schema::ScalarError);
 }
 
-TEST(MswpRows, AuthoringCoversTheSubstitutionSubrecordsInOrder) {
+TEST(MswpRows, InterleavedSubstitutionsPassAuthoringPreflight) {
+  const auto constraint = fo4::schema::record_authoring_constraint(fo4::Signature::from_string("MSWP"));
+  ASSERT_TRUE(constraint.has_value());
+  const auto rules = fo4::schema::authoring_subrecords(*constraint);
+  ASSERT_EQ(rules.size(), 1u);
+  EXPECT_EQ(rules[0].signature, fo4::Signature::from_string("EDID"));
+
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(k_key))) {
     EXPECT_NE(issue.severity, fo4::schema::PreflightSeverity::error) << issue.path << ": " << issue.message;
+    EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
   }
 }

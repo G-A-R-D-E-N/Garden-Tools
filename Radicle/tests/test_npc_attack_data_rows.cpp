@@ -234,8 +234,8 @@ TEST(NpcAttackDataRows, ShortPayloadHidesEveryMember) {
 
   EXPECT_EQ(fo4::set_record_scalar(plugin, npc_key(), scalar("NPC_\\AttackFlags"), 0, "1"),
             fo4::ScalarMutationStatus::subrecord_missing);
-  EXPECT_EQ(fo4::set_record_formlink_field(plugin, npc_key(), link("NPC_\\AttackSpell"), 0, spel_key()),
-            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, npc_key(), link("NPC_\\AttackSpell"), 0, spel_key()),
+               fo4::schema::FormLinkFieldError);
 
   const auto after = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(attack_payload(after, 0), Bytes(24, std::byte{0}));

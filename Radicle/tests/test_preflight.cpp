@@ -281,6 +281,9 @@ fo4::Record refr_with_data(std::vector<std::string_view> subrecords) {
     if (subrecord.signature == fo4::Signature::from_string("DATA")) {
       subrecord.data.resize(24);
     }
+    if (subrecord.signature == fo4::Signature::from_string("XSCL")) {
+      subrecord.data.resize(4);
+    }
   }
   return record;
 }

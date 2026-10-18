@@ -366,9 +366,9 @@ TEST(ObjectBaseRecordsSynthetic, FurnTemplateBlockFollowsTheAuthoringOrderInPref
                                              {"OBTF", Bytes{}},
                                              {"OBTS", u32_bytes(1)},
                                              {"STOP", Bytes{}}});
-  const auto* record = only_furn(ordered);
-  ASSERT_NE(record, nullptr);
-  for (const auto& issue : fo4::schema::preflight_record(*record, false)) {
+  const auto key = fo4::FormKey::parse("000810:Patch.esp");
+  ASSERT_NE(only_furn(ordered), nullptr);
+  for (const auto& issue : fo4::schema::preflight_authoring_record(ordered, key)) {
     EXPECT_NE(issue.code, "subrecord_order_invalid") << issue.path;
   }
 
@@ -377,9 +377,8 @@ TEST(ObjectBaseRecordsSynthetic, FurnTemplateBlockFollowsTheAuthoringOrderInPref
                                              {"OBTE", u32_bytes(1)},
                                              {"OBTS", u32_bytes(1)},
                                              {"OBTF", Bytes{}}});
-  const auto* bad = only_furn(swapped);
-  ASSERT_NE(bad, nullptr);
-  const auto issues = fo4::schema::preflight_record(*bad, false);
+  ASSERT_NE(only_furn(swapped), nullptr);
+  const auto issues = fo4::schema::preflight_authoring_record(swapped, key);
   EXPECT_TRUE(std::any_of(issues.begin(), issues.end(), [](const fo4::schema::PreflightIssue& issue) {
     return issue.code == "subrecord_order_invalid";
   }));
