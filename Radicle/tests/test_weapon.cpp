@@ -186,6 +186,7 @@ TEST(WeaponScalarWrites, SaveAndReparseChangesOnlyTheAddressedWords) {
   auto expected_dnam = dnam;
   patch_f32(expected_dnam, 4, 42.5f);
   patch_u16(expected_dnam, 110, 7);
+  patch_u32(expected_dnam, 124, 3);
   patch_u32(expected_dnam, 128, 3);
   auto expected_fnam = fnam;
   patch_u32(expected_fnam, 20, 0xFFFFFFFFu);
