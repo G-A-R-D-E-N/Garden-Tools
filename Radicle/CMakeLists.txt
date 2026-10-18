@@ -199,6 +199,7 @@ add_library(fo4
   src/schema/formlink_slots.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
+  src/graph/conflict_kind.cpp
   src/graph/check_errors.cpp
   src/graph/check_errors_records.cpp
   src/graph/plugin_diff.cpp
@@ -523,6 +524,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp
     tests/test_conflict_graph.cpp
+    tests/test_conflict_kind.cpp
     tests/test_check_errors.cpp
     tests/test_check_errors_conditions.cpp
     tests/test_check_dialogue.cpp
