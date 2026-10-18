@@ -8586,6 +8586,42 @@
           "insertion": "existing_only"
         },
         {
+          "path": "RACE\\HairColorMale",
+          "label": "Default hair color - male",
+          "subrecord": "HCLF",
+          "offset": 0,
+          "targets": ["CLFM"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\HairColorFemale",
+          "label": "Default hair color - female",
+          "subrecord": "HCLF",
+          "offset": 4,
+          "targets": ["CLFM"],
+          "nullable": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\VoiceTypeMale",
+          "label": "Voice - male",
+          "subrecord": "VTCK",
+          "offset": 0,
+          "targets": ["VTYP"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "RACE\\VoiceTypeFemale",
+          "label": "Voice - female",
+          "subrecord": "VTCK",
+          "offset": 4,
+          "targets": ["VTYP"],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
           "path": "RACE\\MovementType",
           "label": "Movement Type",
           "subrecord": "MTYP",

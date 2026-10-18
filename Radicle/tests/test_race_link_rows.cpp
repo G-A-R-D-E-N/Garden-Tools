@@ -65,6 +65,13 @@ Bytes sraf_bytes(std::uint16_t role, std::uint16_t perspective) {
   return out.bytes;
 }
 
+Bytes pair_bytes(std::uint32_t first, std::uint32_t second) {
+  ByteWriter out;
+  out.u32(first);
+  out.u32(second);
+  return out.bytes;
+}
+
 const auto k_target = fo4::FormKey::parse("000A20:Objects.esp");
 
 void write_header(ByteWriter& out) {
@@ -171,6 +178,64 @@ TEST(RaceLinkRows, HaveXEditSubrecordsTargetsAndShapes) {
   EXPECT_TRUE(slot.address.repeated);
   EXPECT_EQ(slot.payload_sizes[0], 4u);
   EXPECT_EQ(fo4::schema::formlink_field_targets(slot)[0], fo4::Signature::from_string("EQUP"));
+}
+
+TEST(RaceLinkRows, VoiceAndHairColorSlotsEditTheirOwnHalf) {
+  auto plugin = fo4::read_plugin(plugin_with({{"HCLF", pair_bytes(0x01000A21u, 0x01000A22u)},
+                                              {"VTCK", pair_bytes(0x01000A23u, 0x01000A24u)}},
+                                             true),
+                                "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+
+  const std::pair<std::string_view, std::string_view> slots[] = {
+      {"RACE\\HairColorMale", "HCLF"}, {"RACE\\HairColorFemale", "HCLF"},
+      {"RACE\\VoiceTypeMale", "VTCK"}, {"RACE\\VoiceTypeFemale", "VTCK"}};
+  for (const auto& [path, subrecord] : slots) {
+    const auto field = row(path);
+    EXPECT_EQ(field.subrecord, fo4::Signature::from_string(subrecord)) << path;
+    EXPECT_FALSE(field.address.repeated) << path;
+    EXPECT_EQ(field.payload_sizes[0], 0u) << path;
+    EXPECT_EQ(fo4::record_field_count(plugin, key, field), 1u) << path;
+    EXPECT_EQ(fo4::schema::formlink_field_targets(field).size(), 1u) << path;
+  }
+  EXPECT_EQ(row("RACE\\HairColorMale").offset, 0u);
+  EXPECT_EQ(row("RACE\\HairColorFemale").offset, 4u);
+  EXPECT_EQ(row("RACE\\VoiceTypeMale").offset, 0u);
+  EXPECT_EQ(row("RACE\\VoiceTypeFemale").offset, 4u);
+  EXPECT_FALSE(row("RACE\\VoiceTypeMale").nullable);
+  EXPECT_EQ(fo4::schema::formlink_field_targets(row("RACE\\VoiceTypeFemale"))[0],
+            fo4::Signature::from_string("VTYP"));
+  EXPECT_TRUE(row("RACE\\HairColorMale").nullable);
+  EXPECT_EQ(fo4::schema::formlink_field_targets(row("RACE\\HairColorFemale"))[0],
+            fo4::Signature::from_string("CLFM"));
+  EXPECT_EQ(raw_at(live_subrecord(plugin, "VTCK", 0), 0), 0x01000A23u);
+  EXPECT_EQ(raw_at(live_subrecord(plugin, "VTCK", 0), 4), 0x01000A24u);
+
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\VoiceTypeFemale"), k_target),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\HairColorMale"), k_target),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, row("RACE\\VoiceTypeFemale"),
+                                             fo4::FormKey::parse(k_armo_key)),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, row("RACE\\HairColorFemale"),
+                                             fo4::FormKey::parse(k_armo_key)),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(raw_at(live_subrecord(reread, "VTCK", 0), 0), 0x01000A23u);
+  EXPECT_EQ(raw_at(live_subrecord(reread, "VTCK", 0), 4), 0x01000A20u);
+  EXPECT_EQ(raw_at(live_subrecord(reread, "HCLF", 0), 0), 0x01000A20u);
+  EXPECT_EQ(raw_at(live_subrecord(reread, "HCLF", 0), 4), 0x01000A22u);
+}
+
+TEST(RaceLinkRows, RefuseAVoiceSlotThatDoesNotFitThePayload) {
+  auto plugin = fo4::read_plugin(plugin_with({{"VTCK", u32_bytes(0x01000A23u)}}, true), "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\VoiceTypeMale"), k_target),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, row("RACE\\VoiceTypeFemale"), k_target),
+               fo4::schema::FormLinkFieldError);
 }
 
 TEST(RaceLinkRows, CollectsTheNewSubrecordsAsFormLinks) {
