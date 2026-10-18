@@ -198,10 +198,11 @@ TEST(WeaponScalarWrites, SaveAndReparseChangesOnlyTheAddressedWords) {
   EXPECT_EQ(payload(reparsed, 0x800, "FNAM").size(), 41u);
 
   auto again = reparsed;
+  const auto before = fo4::write_plugin(again);
   EXPECT_EQ(scalar(again, 0x800, "WEAP\\Speed", 0, "42.5"), fo4::ScalarMutationStatus::unchanged);
   EXPECT_EQ(scalar(again, 0x800, "WEAP\\BoltAnimationSeconds", 0, "4294967295"),
             fo4::ScalarMutationStatus::unchanged);
-  EXPECT_EQ(fo4::write_plugin(again), fo4::write_plugin(plugin));
+  EXPECT_EQ(fo4::write_plugin(again), before);
 }
 
 TEST(WeaponScalarWrites, RefusesTheFieldsOfAShortDnamOrFnamAndKeepsTheirBytes) {
