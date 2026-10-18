@@ -642,10 +642,7 @@ TEST(DestructibleRows, TheStageGroupCarriesTheSameAuthoringRulesOnEveryCarrier) 
     const auto signature = fo4::Signature::from_string(signature_text);
     SCOPED_TRACE(std::string(signature_text));
     const auto constraint = fo4::schema::record_authoring_constraint(signature);
-    if (!constraint.has_value()) {
-      EXPECT_EQ(std::string(signature_text), "MISC");
-      continue;
-    }
+    ASSERT_TRUE(constraint.has_value());
     for (const auto& want : expected) {
       const auto* rule = authoring_rule(*constraint, want.signature);
       ASSERT_NE(rule, nullptr) << want.signature;
