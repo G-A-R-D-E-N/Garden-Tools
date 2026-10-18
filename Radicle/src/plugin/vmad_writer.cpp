@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
