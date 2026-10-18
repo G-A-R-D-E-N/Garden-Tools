@@ -525,7 +525,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
 | FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
-| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
+| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors and interior creation; a new WRLD record is created from its authoring defaults (`tests/test_wrld_rows.cpp`), but not the worldspace block and subblock group skeleton |
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | MISC members and whole-record creation; COBJ CTDA (WP-7) and NAM1-NAM3 (unused by xEdit; one corpus record) |
 | WTHR MNAM | forms/weather_concept.hpp; tests/test_weather_concept.cpp | Other weather fields; missing/duplicate MNAM refuses mutation |
 | FLST / generated keywords | schema/formlink_lists.hpp; tests/test_formlink_lists.cpp | Each record's empty-list anchors and save/reload proof; unrelated fields |
