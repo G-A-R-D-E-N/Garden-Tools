@@ -1,6 +1,7 @@
 #include "fo4/plugin/destructible_stage.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -117,6 +118,51 @@ Bytes make_plugin() {
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Prop\0", 5});
   fo4::test::end_record(out, stat);
   fo4::test::end_group(out, stat_group);
+  return out.bytes;
+}
+
+Bytes make_proj_plugin() {
+  ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(4);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::write_subrecord(out, "DATA", Bytes(8));
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "PROJ", 0);
+  const auto staged = fo4::test::begin_record(out, "PROJ", 0, 0x000C01);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Shot\0", 5});
+  fo4::test::write_subrecord(out, "OBND", Bytes(12));
+  fo4::test::write_subrecord(out, "MODL", std::string_view{"p.nif\0", 6});
+  fo4::test::write_subrecord(out, "MODT", Bytes(12));
+  fo4::test::write_subrecord(out, "DEST", dest_payload(300, 2, 0));
+  fo4::test::write_subrecord(out, "DSTD", dstd_payload(20, 0, 0, 1, 0));
+  fo4::test::write_subrecord(out, "DSTF", Bytes{});
+  fo4::test::write_subrecord(out, "DSTD", dstd_payload(60, 1, 0, 2, 0));
+  fo4::test::write_subrecord(out, "DSTF", Bytes{});
+  fo4::test::write_subrecord(out, "DATA", Bytes(92));
+  fo4::test::write_subrecord(out, "DNAM", Bytes(4));
+  fo4::test::write_subrecord(out, "NAM1", std::string_view{"m.nif\0", 6});
+  fo4::test::write_subrecord(out, "VNAM", Bytes(4));
+  fo4::test::end_record(out, staged);
+
+  const auto doubled = fo4::test::begin_record(out, "PROJ", 0, 0x000C02);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Twice\0", 6});
+  fo4::test::write_subrecord(out, "OBND", Bytes(12));
+  fo4::test::write_subrecord(out, "MODL", std::string_view{"p.nif\0", 6});
+  fo4::test::write_subrecord(out, "MODT", Bytes(12));
+  fo4::test::write_subrecord(out, "DEST", dest_payload(300, 1, 0));
+  fo4::test::write_subrecord(out, "DEST", dest_payload(200, 1, 0));
+  fo4::test::write_subrecord(out, "DATA", Bytes(92));
+  fo4::test::write_subrecord(out, "DNAM", Bytes(4));
+  fo4::test::write_subrecord(out, "NAM1", std::string_view{"m.nif\0", 6});
+  fo4::test::write_subrecord(out, "VNAM", Bytes(4));
+  fo4::test::end_record(out, doubled);
+  fo4::test::end_group(out, group);
   return out.bytes;
 }
 
@@ -580,6 +626,53 @@ TEST(DestructibleRows, AuthoringListsCoverTheHeaderAndTheStageMembers) {
   const auto doubled = fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse("000B02:Patch.esp"));
   EXPECT_FALSE(has_authoring_issue(single, "ARMO\\DEST", "subrecord_cardinality_invalid"));
   EXPECT_TRUE(has_authoring_issue(doubled, "ARMO\\DEST", "subrecord_cardinality_invalid"));
+}
+
+TEST(DestructibleRows, TheStageGroupCarriesTheSameAuthoringRulesOnEveryCarrier) {
+  const struct {
+    const char* signature;
+    std::uint16_t maximum;
+    bool coupled;
+  } expected[] = {
+      {"DEST", 1, true},   {"DAMC", 1, false},   {"DSTD", 255, false}, {"DSTA", 255, false},
+      {"DMDL", 255, false}, {"DMDT", 255, false}, {"DMDC", 255, false}, {"DMDS", 255, false},
+      {"DSTF", 255, false}};
+
+  for (const auto signature_text : k_carriers) {
+    const auto signature = fo4::Signature::from_string(signature_text);
+    SCOPED_TRACE(std::string(signature_text));
+    const auto constraint = fo4::schema::record_authoring_constraint(signature);
+    if (!constraint.has_value()) {
+      EXPECT_EQ(std::string(signature_text), "MISC");
+      continue;
+    }
+    for (const auto& want : expected) {
+      const auto* rule = authoring_rule(*constraint, want.signature);
+      ASSERT_NE(rule, nullptr) << want.signature;
+      EXPECT_EQ(rule->minimum, 0) << want.signature;
+      EXPECT_EQ(rule->maximum, want.maximum) << want.signature;
+      EXPECT_EQ(rule->coupled, want.coupled) << want.signature;
+    }
+  }
+}
+
+TEST(DestructibleRows, MultiStageProjectilePassesAuthoringCardinality) {
+  auto plugin = fo4::read_plugin(make_proj_plugin(), "Patch.esp");
+  const auto staged_key = fo4::FormKey::parse("000C01:Patch.esp");
+  const auto doubled_key = fo4::FormKey::parse("000C02:Patch.esp");
+
+  const auto staged = fo4::schema::preflight_authoring_record(plugin, staged_key);
+  EXPECT_FALSE(has_authoring_issue(staged, "PROJ\\DSTD", "subrecord_cardinality_invalid"));
+  EXPECT_FALSE(has_authoring_issue(staged, "PROJ\\DSTF", "subrecord_cardinality_invalid"));
+  EXPECT_FALSE(has_authoring_issue(staged, "PROJ\\DSTD", "required_subrecord_missing"));
+
+  const auto doubled = fo4::schema::preflight_authoring_record(plugin, doubled_key);
+  EXPECT_TRUE(has_authoring_issue(doubled, "PROJ\\DEST", "subrecord_cardinality_invalid"));
+
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, staged_key, fo4::Signature::from_string("DSTD")),
+            fo4::SubrecordAddStatus::not_authorable);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, staged_key, fo4::Signature::from_string("OBND")),
+            fo4::SubrecordAddStatus::already_present);
 }
 
 TEST(DestructibleRows, StageModelRowsAreIndexedPerSubrecordNotPerStage) {

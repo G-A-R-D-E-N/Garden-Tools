@@ -39,6 +39,20 @@ Bytes u32_words(std::initializer_list<std::uint32_t> values) {
   return out.bytes;
 }
 
+Bytes u16_bytes(std::uint16_t value) {
+  ByteWriter out;
+  out.u16(value);
+  return out.bytes;
+}
+
+Bytes neck_fat(float x, float y) {
+  ByteWriter out;
+  out.u32(0);
+  out.f32(x);
+  out.f32(y);
+  return out.bytes;
+}
+
 void add_record(ByteWriter& out, std::string_view signature, std::uint32_t local,
                 std::initializer_list<std::pair<std::string_view, Bytes>> subrecords,
                 std::uint16_t form_version = 131) {
@@ -74,6 +88,11 @@ ByteWriter make_plugin() {
               {"VNAM", u32_bytes(3)},
               {"APPR", u32_words({0x00000A30u, 0x00000A31u})}});
   add_record(out, "RACE", 0xA02, {{"DATA", Bytes(4)}});
+  add_record(out, "RACE", 0xA03,
+             {{"TINL", u16_bytes(5)},
+              {"MPGS", u32_words({7u, 9u, 11u})},
+              {"NNAM", neck_fat(1.0f, 2.0f)},
+              {"NNAM", neck_fat(3.0f, 4.0f)}});
   add_record(out, "WEAP", 0xB01,
              {{"DAMA", u32_words({0x00000C10u, 5u, 0x00000C11u, 9u})}});
   return out;
@@ -342,4 +361,65 @@ TEST(WP9RaceWeapRows, FormVersion152DamaCurvSlotIsNotDamageType) {
     if (finding.code == fo4::CheckCode::wrong_target_type && finding.record == key) ++wrong_type;
   }
   EXPECT_EQ(wrong_type, 0u);
+}
+
+TEST(WP9RaceWeapRows, MorphTintAndNeckFatRowsReadAndWrite) {
+  const auto tint = scalar_row("RACE", "RACE\\TotalTintCount");
+  EXPECT_EQ(tint.scalar.subrecord, fo4::Signature::from_string("TINL"));
+  EXPECT_EQ(tint.scalar.storage, fo4::schema::ScalarStorage::u16);
+  EXPECT_FALSE(tint.scalar.embedded);
+  EXPECT_FALSE(tint.scalar.address.repeated);
+
+  const auto sliders = scalar_row("RACE", "RACE\\MorphGroupSliders");
+  EXPECT_EQ(sliders.scalar.subrecord, fo4::Signature::from_string("MPGS"));
+  EXPECT_EQ(sliders.scalar.storage, fo4::schema::ScalarStorage::u32);
+  EXPECT_EQ(sliders.scalar.address.stride, 4u);
+
+  const auto fat_x = scalar_row("RACE", "RACE\\NeckFatAdjustmentsScaleX");
+  const auto fat_y = scalar_row("RACE", "RACE\\NeckFatAdjustmentsScaleY");
+  EXPECT_EQ(fat_x.scalar.subrecord, fo4::Signature::from_string("NNAM"));
+  EXPECT_EQ(fat_x.scalar.storage, fo4::schema::ScalarStorage::f32);
+  EXPECT_EQ(fat_x.scalar.offset, 4u);
+  EXPECT_EQ(fat_x.scalar.payload_size, 12u);
+  EXPECT_TRUE(fat_x.scalar.address.repeated);
+  EXPECT_EQ(fat_y.scalar.offset, 8u);
+  EXPECT_EQ(fat_y.scalar.payload_size, 12u);
+
+  const auto out = make_plugin();
+  auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+  const auto key = fo4::FormKey::parse("000A03:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto slots = [record](const fo4::schema::ScalarFieldDescriptor& field) {
+    return fo4::schema::resolve_field_slots(
+        *record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+  };
+  EXPECT_EQ(slots(sliders).slots.size(), 3u);
+  EXPECT_EQ(slots(fat_x).slots.size(), 2u);
+  EXPECT_EQ(slots(tint).slots.size(), 1u);
+
+  const auto updated = fo4::ScalarMutationStatus::updated;
+  const auto missing = fo4::ScalarMutationStatus::subrecord_missing;
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, tint, 0, "6"), updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, sliders, 1, "13"), updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, fat_x, 1, "4.5"), updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, fat_y, 0, "-2"), updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(payload(reread, "000A03:Patch.esp", "TINL"), u16_bytes(6));
+  EXPECT_EQ(payload(reread, "000A03:Patch.esp", "MPGS"), u32_words({7u, 13u, 11u}));
+  const std::vector<Bytes> necks = payloads(reread, "000A03:Patch.esp", "NNAM");
+  ASSERT_EQ(necks.size(), 2u);
+  EXPECT_EQ(necks[0], neck_fat(1.0f, -2.0f));
+  EXPECT_EQ(necks[1], neck_fat(4.5f, 4.0f));
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, tint, 1, "1"), missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, sliders, 3, "1"), missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, fat_x, 2, "1"), missing);
+  auto wrong = make_plugin();
+  add_record(wrong, "RACE", 0xA04, {{"NNAM", Bytes(8)}});
+  auto truncated = fo4::read_plugin(wrong.bytes, "Patch.esp");
+  EXPECT_EQ(
+      fo4::set_record_scalar(truncated, fo4::FormKey::parse("000A04:Patch.esp"), fat_x, 0, "1"),
+      missing);
 }

@@ -55,8 +55,8 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | AMMO | 5741 | 23 | 4 | 9 | - | 3 | yes | yes | - | - | 1 | L4 |
 | ANIO | 5777 | - | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | 7 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
-| ARMO | 5786 | 26 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMA | 5845 | 15 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMO | 5786 | 27 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | 1 | 4 | - | - | - | yes | - | - | - | - | L4 |
@@ -118,7 +118,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | LAYR | 12400 | - | - | 1 | - | - | yes | - | environment/base_records | - | 1 | L4 |
 | LCRT | 6962 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LCTN | 8039 | 6 | - | 4 | - | 1 | yes | yes | - | yes | 1 | L4 |
-| LENS | 12405 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| LENS | 12405 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | LGTM | 8629 | 81 | - | 1 | - | - | yes | - | environment/world | - | 1 | L4 |
 | LIGH | 9871 | 37 | 6 | 10 | - | 1 | yes | yes | environment/base_records | - | 2 | L4 |
 | LSCR | 9946 | 4 | 1 | 2 | - | 1 | yes | - | - | - | 1 | L4 |
@@ -158,14 +158,14 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | PMIS | 5951 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 33 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | 5 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 52 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
+| RACE | 11054 | 56 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 25 | - | 13 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | 9 | - | 2 | - | 1 | - | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | RFCT | 6163 | 1 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | RFGP | 12582 | - | 1 | 2 | - | - | yes | - | - | - | 1 | L4 |
-| SCCO | 12593 | - | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| SCCO | 12593 | 2 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SCEN | 8879 | 7 | 1 | - | - | - | yes | yes | environment/dialogue | - | 2 | L4 |
 | SCOL | 12627 | 6 | 2 | 2 | - | 1 | yes | - | forms/static_collection | - | - | L4 |
 | SCSN | 12650 | 1 | - | - | - | - | yes | - | - | yes | 1 | L4 |
@@ -209,8 +209,8 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | AMMO | 19 | 1 | - | 3 | 4 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
 | ANIO | - | - | - | - | 2 | - | - | - | - | existing_only |
 | AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
-| ARMA | 5 | - | - | 2 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
-| ARMO | 22 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 14 | 4 | - | existing_only |
+| ARMA | 9 | - | - | 6 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
+| ARMO | 23 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 15 | 4 | - | existing_only |
 | ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
 | ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
 | ASTP | - | - | - | 1 | 4 | u32 | - | - | - | existing_only |
@@ -271,7 +271,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | LAYR | - | - | - | - | - | - | - | - | - | existing_only |
 | LCRT | 4 | - | 1 | - | - | u32, u8 | - | - | - | existing_only |
 | LCTN | 6 | - | - | - | - | f32, u8 | - | - | - | existing_only |
-| LENS | 1 | - | - | - | - | f32 | - | - | - | existing_only |
+| LENS | 2 | - | - | - | - | f32 | - | - | - | existing_only |
 | LGTM | 81 | - | - | - | - | f32, i32, u8 | - | - | - | existing_only |
 | LIGH | 33 | 1 | - | 3 | 6 | f32, i16, i32, u32, u8 | 12 | 4 | - | existing_only |
 | LSCR | 4 | - | - | - | 1 | f32, i16 | - | - | - | existing_only |
@@ -311,14 +311,14 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PMIS | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PROJ | 30 | 1 | - | 2 | 4 | f32, i16, i32, u16, u32, u8 | 12 | 2 | - | existing_only |
 | QUST | 2 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
-| RACE | 40 | - | 9 | 3 | 12 | f32, i16, i32, u16, u32, u8 | 21 | 2 | - | existing_only |
+| RACE | 44 | - | 9 | 3 | 12 | f32, i16, i32, u16, u32, u8 | 23 | 3 | - | existing_only |
 | REFR | 20 | 1 | 2 | 2 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
 | REGN | 8 | - | 1 | - | - | f32, u32, u8 | 7 | - | - | existing_only |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
 | RFCT | - | - | - | 1 | - | u32 | - | - | - | existing_only |
 | RFGP | - | - | - | - | 1 | - | - | - | - | existing_only |
-| SCCO | - | - | - | - | - | - | - | - | - | existing_only |
+| SCCO | 2 | - | - | - | - | i32 | 3 | - | - | existing_only |
 | SCEN | 7 | - | - | - | 1 | f32, u32 | - | - | - | existing_only |
 | SCOL | 6 | - | - | - | 2 | i16 | 1 | - | - | existing_only |
 | SCSN | 1 | - | - | - | - | u16 | - | - | - | existing_only |

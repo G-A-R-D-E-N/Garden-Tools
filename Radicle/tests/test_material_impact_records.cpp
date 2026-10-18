@@ -140,7 +140,20 @@ std::vector<std::byte> make_plugin() {
                                      {"DATA", ipct_data()},
                                      {"SNAM", u32_bytes(raw_id(0x809))}}}});
   write_group(out, "LENS", {{0x806, {{"EDID", zstr("RadicleFlare")},
-                                     {"CNAM", f32_bytes(0.5f)}}}});
+                                     {"CNAM", f32_bytes(0.5f)},
+                                     {"DNAM", f32_bytes(1.0f)},
+                                     {"LFSP", u32_bytes(2)},
+                                     {"DNAM", zstr("SpriteA")},
+                                     {"FNAM", zstr("flare_a.dds")},
+                                     {"LFSD", zeros(36)},
+                                     {"DNAM", zstr("SpriteB")},
+                                     {"FNAM", zstr("flare_b.dds")},
+                                     {"LFSD", zeros(36)}}},
+                            {0x80D, {{"EDID", zstr("RadicleSpritesOnly")},
+                                     {"LFSP", u32_bytes(1)},
+                                     {"DNAM", zstr("SpriteOnly")},
+                                     {"FNAM", zstr("flare_c.dds")},
+                                     {"LFSD", zeros(36)}}}});
   write_group(out, "RFCT", {{0x807, {{"EDID", zstr("RadicleVisual")},
                                      {"DATA", rfct_data()}}}});
   write_group(out, "IPDS", {{0x808, {{"EDID", zstr("RadicleImpactSet")}}}});
@@ -194,6 +207,58 @@ TEST(MaterialImpactSynthetic, FlagsRowNamesComeFromXEdit) {
   const auto matt_name = fo4::schema::scalar_value_name(matt->scalar, 0x4);
   ASSERT_TRUE(matt_name.has_value());
   EXPECT_EQ(*matt_name, "Can Tunnel");
+}
+
+TEST(MaterialImpactSynthetic, LensFadeScaleUsesTheDnamBeforeTheSpriteList) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000806:Patch.esp");
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  const auto field = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("LENS"),
+                                                          "LENS\\FadeDistanceRadiusScale");
+  ASSERT_TRUE(field.has_value());
+
+  std::vector<const fo4::Subrecord*> sprites;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature == fo4::Signature::from_string("DNAM")) sprites.push_back(&sub);
+  }
+  ASSERT_EQ(sprites.size(), std::size_t{3});
+  EXPECT_EQ(sprites[0]->data, f32_bytes(1.0f));
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *field, "2.5"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* edited = fo4::find_record(reread, key);
+  ASSERT_NE(edited, nullptr);
+  std::vector<const fo4::Subrecord*> after;
+  for (const auto& sub : edited->subrecords) {
+    if (sub.signature == fo4::Signature::from_string("DNAM")) after.push_back(&sub);
+  }
+  ASSERT_EQ(after.size(), std::size_t{3});
+  EXPECT_EQ(after[0]->data, f32_bytes(2.5f));
+  EXPECT_EQ(after[1]->data, zstr("SpriteA"));
+  EXPECT_EQ(after[2]->data, zstr("SpriteB"));
+}
+
+TEST(MaterialImpactSynthetic, LensFadeScaleIsMissingWithoutARecordLevelDnam) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("00080D:Patch.esp");
+  const auto field = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("LENS"),
+                                                          "LENS\\FadeDistanceRadiusScale");
+  ASSERT_TRUE(field.has_value());
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *field, "2.5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto* record = fo4::find_record(plugin, key);
+  ASSERT_NE(record, nullptr);
+  std::size_t sprites = 0;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature != fo4::Signature::from_string("DNAM")) continue;
+    ++sprites;
+    EXPECT_EQ(sub.data, zstr("SpriteOnly"));
+  }
+  EXPECT_EQ(sprites, std::size_t{1});
 }
 
 TEST(MaterialImpactSynthetic, EditsOneRowPerRecordAndRereads) {
