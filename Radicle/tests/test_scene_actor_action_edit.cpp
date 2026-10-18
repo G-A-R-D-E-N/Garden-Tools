@@ -13,6 +13,7 @@ namespace {
 
 using namespace fo4::test::dialogue;
 using Group = fo4::SubrecordGroupMutationStatus;
+using Scalar = fo4::ScalarMutationStatus;
 using Sub = std::pair<std::string, Bytes>;
 
 std::vector<Sub> snapshot(const fo4::Plugin& plugin, std::uint32_t local) {

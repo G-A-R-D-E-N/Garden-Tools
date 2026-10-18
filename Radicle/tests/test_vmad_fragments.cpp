@@ -12,6 +12,7 @@
 
 namespace {
 using namespace fo4;
+using fo4::test::ByteWriter;
 namespace fixture = fo4::test::vmad;
 
 using Entry = std::pair<std::uint8_t, std::string>;
