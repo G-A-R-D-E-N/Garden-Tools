@@ -345,9 +345,6 @@ TEST(REFRExtraRows, RepeatedPatrolRowsAddressEachOccurrence) {
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *idle, 1,
                                            fo4::FormKey::parse("000A50:Objects.esp")),
             fo4::FormLinkFieldMutationStatus::updated);
-  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(
-                   plugin, key, *idle, 1, fo4::FormKey{})),
-               fo4::schema::FormLinkFieldError);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   const auto patrol_key = "000C10:Patch.esp";
@@ -355,6 +352,10 @@ TEST(REFRExtraRows, RepeatedPatrolRowsAddressEachOccurrence) {
   EXPECT_EQ(sub_bytes_at(reread, patrol_key, "XPRD", 1), floats({9.5f}));
   EXPECT_EQ(sub_bytes_at(reread, patrol_key, "INAM", 0), u32_bytes(0x00000A90));
   EXPECT_EQ(sub_bytes_at(reread, patrol_key, "INAM", 1), u32_bytes(0x01000A50));
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *idle, 1, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  const auto cleared = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes_at(cleared, patrol_key, "INAM", 1), u32_bytes(0));
 }
 
 TEST(REFRExtraRows, LevelModifierAndLitWaterRowsReadAndWrite) {
