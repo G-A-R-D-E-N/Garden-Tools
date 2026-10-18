@@ -545,7 +545,8 @@ TEST(WRLDRows, OffsetAndCellSizeBlobsArePreservedButNotAuthored) {
             fo4::SubrecordAddStatus::no_default);
 }
 
-TEST(WRLDRows, LocalizedWorldKeepsItsStringIdAndStillWritesLevelRows) {  auto plugin = fo4::read_plugin(make_localized_plugin(), "Patch.esp");
+TEST(WRLDRows, LocalizedWorldKeepsItsStringIdAndStillWritesLevelRows) {
+  auto plugin = fo4::read_plugin(make_localized_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000C03:Patch.esp");
   const auto* record = fo4::find_record(plugin, key);
   ASSERT_NE(record, nullptr);
@@ -647,7 +648,7 @@ TEST(WRLDRows, AuthoringPreflightReportsMissingNamaAndTheOutOfOrderTail) {
   EXPECT_TRUE(order_reported);
 }
 
-TEST(WRLDRows, AuthoringAddsRepeatableRnamButRefusesThePairedWlevRule) {
+TEST(WRLDRows, AuthoringRefusesWlevAndRnamBecauseNeitherHasADefault) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto key = fo4::FormKey::parse("000C01:Patch.esp");
   EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("WLEV")),
