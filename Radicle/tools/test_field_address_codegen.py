@@ -713,8 +713,8 @@ class SchemaCodegenTests(unittest.TestCase):
             with self.subTest(count=count):
                 self.rejects("needs exactly one whole-payload u32 row", group(), count)
 
-    def test_subrecord_group_count_subrecord_is_required(self):
-        self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=None))
+    def test_subrecord_group_count_subrecord_is_optional(self):
+        self.assertIn('"Items", Signature{},', schema_codegen.render(*self.load_schema(group(count_subrecord=None))))
         self.rejects("subrecord_group count_subrecord must be four printable ASCII", group(count_subrecord=5))
 
     def test_subrecord_group_members_and_counts_cannot_be_shared(self):

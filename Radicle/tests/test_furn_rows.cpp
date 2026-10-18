@@ -23,6 +23,8 @@ constexpr auto k_furn = fo4::Signature::from_string("FURN");
 constexpr auto k_coct = fo4::Signature::from_string("COCT");
 constexpr auto k_cnto = fo4::Signature::from_string("CNTO");
 constexpr auto k_coed = fo4::Signature::from_string("COED");
+constexpr auto k_enam = fo4::Signature::from_string("ENAM");
+constexpr auto k_nam0 = fo4::Signature::from_string("NAM0");
 
 struct Piece {
   std::string_view signature;
@@ -34,6 +36,10 @@ fo4::FormKey misc_key() { return fo4::FormKey::parse("000910:Patch.esp"); }
 
 fo4::schema::SubrecordGroupDescriptor items_group() {
   return fo4::schema::subrecord_group_descriptor(k_furn, "FURN\\Items").value();
+}
+
+fo4::schema::SubrecordGroupDescriptor markers_group() {
+  return fo4::schema::subrecord_group_descriptor(k_furn, "FURN\\Markers").value();
 }
 
 fo4::schema::ScalarFieldDescriptor scalar(std::string_view path) {
@@ -316,4 +322,77 @@ TEST(FurnRows, MarkerEntryTypeAndPointsEditTheirOwnHalfOfEachEntry) {
 
   const auto after = reparse(plugin);
   EXPECT_EQ(payloads(after, "FNPR"), (std::vector<Bytes>{fnpr_bytes(4, 13), fnpr_bytes(2, 1)}));
+}
+
+TEST(FurnRows, MarkerGroupPairsEnamWithNam0AndNamesNoCount) {
+  const auto group = markers_group();
+  EXPECT_EQ(group.record, k_furn);
+  EXPECT_EQ(group.count_subrecord, fo4::Signature{});
+  ASSERT_EQ(group.members.size(), 2u);
+  EXPECT_EQ(group.members[0].subrecord, k_enam);
+  EXPECT_EQ(group.members[1].subrecord, k_nam0);
+  EXPECT_TRUE(group.members[0].required);
+  EXPECT_TRUE(group.members[1].required);
+  EXPECT_EQ(fo4::schema::subrecord_group_for_member(k_furn, k_enam)->path, "FURN\\Markers");
+  EXPECT_FALSE(fo4::schema::is_subrecord_group_count_subrecord(k_furn, k_enam));
+  EXPECT_FALSE(fo4::schema::is_subrecord_group_count_subrecord(k_furn, k_nam0));
+}
+
+TEST(FurnRows, InsertsAMarkerPairBetweenTwoExistingOnes) {
+  auto plugin = fo4::read_plugin(make_plugin(markers_base()), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), markers_group(), 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after),
+            (std::vector<std::string>{"MNAM", "WBDT", "ENAM", "NAM0", "ENAM", "NAM0", "ENAM", "NAM0"}));
+  EXPECT_EQ(payloads(after, "ENAM"), (std::vector<Bytes>{i32_bytes(-1), i32_bytes(0), i32_bytes(4)}));
+  EXPECT_EQ(payloads(after, "NAM0"),
+            (std::vector<Bytes>{nam0_bytes(12), nam0_bytes(0), nam0_bytes(3)}));
+  EXPECT_EQ(read_member(after, "FURN\\MarkerIndex", 1), "0");
+  EXPECT_EQ(read_member(after, "FURN\\MarkerDisabledPoints", 1), "0");
+}
+
+TEST(FurnRows, AppendsAMarkerPairBeforeTheFirstSuccessor) {
+  auto pieces = markers_base();
+  pieces.push_back({"FNPR", fnpr_bytes(1, 13)});
+  auto plugin = fo4::read_plugin(make_plugin(pieces), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), markers_group(), 2),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"MNAM", "WBDT", "ENAM", "NAM0", "ENAM", "NAM0",
+                                                         "ENAM", "NAM0", "FNPR"}));
+  EXPECT_EQ(payloads(after, "ENAM"), (std::vector<Bytes>{i32_bytes(-1), i32_bytes(4), i32_bytes(0)}));
+}
+
+TEST(FurnRows, RemovesOneMarkerPairAndLeavesTheOtherAlone) {
+  auto plugin = fo4::read_plugin(make_plugin(markers_base()), "Patch.esp");
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record_key(), markers_group(), 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"MNAM", "WBDT", "ENAM", "NAM0"}));
+  EXPECT_EQ(read_member(after, "FURN\\MarkerIndex", 0), "4");
+  EXPECT_EQ(read_member(after, "FURN\\MarkerDisabledPoints", 0), "3");
+}
+
+TEST(FurnRows, MarkerPairInsertAndRemoveRefuseIndexesPastTheEnd) {
+  auto plugin = fo4::read_plugin(make_plugin(markers_base()), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(plugin, record_key(), markers_group(), 3),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(plugin, record_key(), markers_group(), 2),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  const auto after = reparse(plugin);
+  EXPECT_EQ(signatures(after), (std::vector<std::string>{"MNAM", "WBDT", "ENAM", "NAM0", "ENAM", "NAM0"}));
+  EXPECT_EQ(payloads(after, "ENAM"), (std::vector<Bytes>{i32_bytes(-1), i32_bytes(4)}));
+}
+
+TEST(FurnRows, AnEnamWithoutItsNam0IsRefusedRatherThanTreatedAsAPair) {
+  auto plugin = fo4::read_plugin(make_plugin({{"MNAM", u32_bytes(0)},
+                                              {"ENAM", i32_bytes(-1)},
+                                              {"NAM0", nam0_bytes(3)},
+                                              {"ENAM", i32_bytes(4)}}),
+                                 "Patch.esp");
+  EXPECT_THROW(fo4::insert_record_subrecord_group(plugin, record_key(), markers_group(), 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(static_cast<void>(fo4::record_field_count(plugin, record_key(), "FURN\\MarkerIndex")),
+               fo4::schema::ScalarError);
 }
