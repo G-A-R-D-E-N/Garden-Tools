@@ -337,4 +337,42 @@ std::filesystem::path string_table_path(std::string_view plugin_file_name,
   return std::filesystem::path("Strings") / name;
 }
 
+LocalizedStringTable& table_for(LocalizationTables& tables, StringTableKind kind) noexcept {
+  switch (kind) {
+    case StringTableKind::dlstrings:
+      return tables.dlstrings;
+    case StringTableKind::ilstrings:
+      return tables.ilstrings;
+    case StringTableKind::strings:
+      return tables.strings;
+  }
+  return tables.strings;
+}
+
+const LocalizedStringTable& table_for(const LocalizationTables& tables,
+                                      StringTableKind kind) noexcept {
+  switch (kind) {
+    case StringTableKind::dlstrings:
+      return tables.dlstrings;
+    case StringTableKind::ilstrings:
+      return tables.ilstrings;
+    case StringTableKind::strings:
+      return tables.strings;
+  }
+  return tables.strings;
+}
+
+void write_localization_tables(const LocalizationTables& tables,
+                               std::string_view plugin_file_name,
+                               std::string_view language,
+                               const std::filesystem::path& data_dir) {
+  const auto directory = data_dir / "Strings";
+  std::filesystem::create_directories(directory);
+  for (const auto kind : {StringTableKind::strings, StringTableKind::dlstrings,
+                          StringTableKind::ilstrings}) {
+    const auto path = data_dir / string_table_path(plugin_file_name, kind, language);
+    write_string_table_file(table_for(tables, kind), path);
+  }
+}
+
 }  // namespace fo4::localization

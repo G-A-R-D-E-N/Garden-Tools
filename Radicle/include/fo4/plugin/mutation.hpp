@@ -20,6 +20,7 @@
 namespace fo4 {
 
 namespace localization {
+struct LocalizationTables;
 struct LocalizedStringTable;
 }
 
@@ -107,6 +108,25 @@ LocalizedValueStatus add_record_localized_string(Plugin& plugin,
                                                  std::size_t index,
                                                  std::string_view text,
                                                  localization::LocalizedStringTable& table);
+
+enum class PluginLocalizationStatus {
+  converted,
+  already_localized,
+  not_localized,
+  unconvertible_field,
+  unresolved_string_id,
+};
+
+struct PluginLocalizationResult {
+  PluginLocalizationStatus status{PluginLocalizationStatus::converted};
+  std::size_t converted{0};
+  std::size_t empty_text{0};
+};
+
+PluginLocalizationResult localize_plugin(Plugin& plugin,
+                                         localization::LocalizationTables& tables);
+PluginLocalizationResult delocalize_plugin(Plugin& plugin,
+                                           localization::LocalizationTables& tables);
 
 // Light plugins cap local IDs at 0xFFF; see docs/code-notes/Radicle.md (local_form_id_range).
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);

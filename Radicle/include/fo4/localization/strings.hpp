@@ -54,4 +54,19 @@ std::filesystem::path string_table_path(std::string_view plugin_file_name,
                                         StringTableKind kind,
                                         std::string_view language);
 
+struct LocalizationTables {
+  LocalizedStringTable strings{StringTableKind::strings, {}};
+  LocalizedStringTable dlstrings{StringTableKind::dlstrings, {}};
+  LocalizedStringTable ilstrings{StringTableKind::ilstrings, {}};
+};
+
+LocalizedStringTable& table_for(LocalizationTables& tables, StringTableKind kind) noexcept;
+const LocalizedStringTable& table_for(const LocalizationTables& tables,
+                                      StringTableKind kind) noexcept;
+
+void write_localization_tables(const LocalizationTables& tables,
+                               std::string_view plugin_file_name,
+                               std::string_view language,
+                               const std::filesystem::path& data_dir);
+
 }  // namespace fo4::localization
