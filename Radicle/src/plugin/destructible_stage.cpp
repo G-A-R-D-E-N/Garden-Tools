@@ -4,7 +4,6 @@
 
 #include "fo4/schema/scalar.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <iterator>
 #include <optional>
@@ -21,13 +20,32 @@ constexpr Signature sig_damc = Signature::from_string("DAMC");
 constexpr Signature sig_dstd = Signature::from_string("DSTD");
 constexpr Signature sig_dstf = Signature::from_string("DSTF");
 
-bool stage_member(Signature signature) {
-  constexpr Signature members[] = {
-      sig_dstd, Signature::from_string("DSTA"), Signature::from_string("DMDL"),
-      Signature::from_string("DMDT"), Signature::from_string("DMDC"),
-      Signature::from_string("DMDS"), sig_dstf,
-  };
-  return std::find(std::begin(members), std::end(members), signature) != std::end(members);
+constexpr Signature sig_dsta = Signature::from_string("DSTA");
+constexpr Signature sig_dmdl = Signature::from_string("DMDL");
+constexpr Signature sig_dmdt = Signature::from_string("DMDT");
+constexpr Signature sig_dmdc = Signature::from_string("DMDC");
+constexpr Signature sig_dmds = Signature::from_string("DMDS");
+
+constexpr Signature k_stage_order[] = {sig_dstd, sig_dsta, sig_dmdl,
+                                       sig_dmdt, sig_dmdc, sig_dmds, sig_dstf};
+
+std::optional<std::size_t> member_rank(Signature signature) {
+  for (std::size_t i = 0; i < std::size(k_stage_order); ++i) {
+    if (k_stage_order[i] == signature) return i;
+  }
+  return std::nullopt;
+}
+
+bool stage_member(Signature signature) { return member_rank(signature).has_value(); }
+
+bool optional_member(Signature signature) {
+  return stage_member(signature) && signature != sig_dstd && signature != sig_dstf;
+}
+
+std::optional<std::vector<std::byte>> member_default(Signature signature) {
+  if (signature == sig_dsta || signature == sig_dmdl) return std::vector<std::byte>(1, std::byte{0});
+  if (signature == sig_dmdc || signature == sig_dmds) return std::vector<std::byte>(4, std::byte{0});
+  return std::nullopt;
 }
 
 bool destructible_carrier(Signature record) {
@@ -76,6 +94,36 @@ std::vector<StageSpan> stage_spans(const Record& record) {
     spans.push_back(StageSpan{starts[k], end});
   }
   return spans;
+}
+
+struct StageTarget {
+  Record* record{nullptr};
+  StageSpan span{};
+  DestructibleStageMemberStatus status{DestructibleStageMemberStatus::updated};
+};
+
+StageTarget locate_stage(Plugin& plugin, const FormKey& record_key, std::size_t stage_index) {
+  StageTarget found;
+  found.record = detail::locate_mutable_record(plugin, record_key);
+  if (found.record == nullptr) {
+    found.status = DestructibleStageMemberStatus::record_missing;
+    return found;
+  }
+  if (!destructible_carrier(found.record->header.signature)) {
+    found.status = DestructibleStageMemberStatus::record_mismatch;
+    return found;
+  }
+  if (!header_index(*found.record).has_value()) {
+    found.status = DestructibleStageMemberStatus::header_missing;
+    return found;
+  }
+  const auto spans = stage_spans(*found.record);
+  if (stage_index >= spans.size()) {
+    found.status = DestructibleStageMemberStatus::stage_index_out_of_range;
+    return found;
+  }
+  found.span = spans[stage_index];
+  return found;
 }
 
 }  // namespace
@@ -135,6 +183,55 @@ DestructibleStageMutationStatus remove_destructible_stage(Plugin& plugin,
   target->subrecords.erase(first, first + static_cast<std::ptrdiff_t>(span.end - span.first));
   detail::mark_record_modified(plugin, *target);
   return DestructibleStageMutationStatus::updated;
+}
+
+DestructibleStageMemberStatus insert_destructible_stage_member(Plugin& plugin,
+                                                              const FormKey& record_key,
+                                                              std::size_t stage_index,
+                                                              Signature member) {
+  const auto found = locate_stage(plugin, record_key, stage_index);
+  if (found.status != DestructibleStageMemberStatus::updated) return found.status;
+  if (!optional_member(member)) return DestructibleStageMemberStatus::not_optional_member;
+  const auto payload = member_default(member);
+  if (!payload.has_value()) return DestructibleStageMemberStatus::no_default;
+
+  Record& record = *found.record;
+  for (std::size_t i = found.span.first; i < found.span.end; ++i) {
+    if (record.subrecords[i].signature == member) {
+      return DestructibleStageMemberStatus::member_present;
+    }
+  }
+  const auto rank = *member_rank(member);
+  std::size_t position = found.span.end;
+  for (std::size_t i = found.span.first; i < found.span.end; ++i) {
+    const auto existing = member_rank(record.subrecords[i].signature);
+    if (existing.has_value() && *existing > rank) {
+      position = i;
+      break;
+    }
+  }
+  record.subrecords.insert(record.subrecords.begin() + static_cast<std::ptrdiff_t>(position),
+                           Subrecord{member, *payload, false});
+  detail::mark_record_modified(plugin, record);
+  return DestructibleStageMemberStatus::updated;
+}
+
+DestructibleStageMemberStatus remove_destructible_stage_member(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               std::size_t stage_index,
+                                                               Signature member) {
+  const auto found = locate_stage(plugin, record_key, stage_index);
+  if (found.status != DestructibleStageMemberStatus::updated) return found.status;
+  if (!optional_member(member)) return DestructibleStageMemberStatus::not_optional_member;
+
+  Record& record = *found.record;
+  for (std::size_t i = found.span.first; i < found.span.end; ++i) {
+    if (record.subrecords[i].signature != member) continue;
+    record.subrecords.erase(record.subrecords.begin() + static_cast<std::ptrdiff_t>(i));
+    detail::mark_record_modified(plugin, record);
+    return DestructibleStageMemberStatus::updated;
+  }
+  return DestructibleStageMemberStatus::member_absent;
 }
 
 }  // namespace fo4
