@@ -270,7 +270,6 @@ std::optional<float> omod_property_value2_float(const OmodProperty& property) {
 std::optional<std::uint32_t> omod_property_value2_int(const OmodProperty& property) {
   switch (property.value_type) {
     case 0:
-    case 2:
     case 4:
       return quad_u32(property.value2);
     default:
