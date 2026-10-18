@@ -3,84 +3,37 @@ using FO4RecordEditor.Services;
 
 namespace FO4RecordEditor.Core.Tests;
 
-
-
-
-
-
-
-
 public class SpaFallbackTests
 {
-    [Fact]
-    public void BrowserNavigation_GetWithHtmlAccept_IsTopLevelNavigation()
+    [Theory]
+    [InlineData("GET", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8", true)]
+    [InlineData("GET", "*/*", false)]
+    [InlineData("GET", "text/event-stream", false)]
+    [InlineData("GET", "application/json", false)]
+    [InlineData("POST", "text/html", false)]
+    [InlineData("GET", null, false)]
+    [InlineData("get", "TEXT/HTML", true)]
+    public void IsTopLevelNavigation_OnlyGetWithHtmlAcceptIsNavigation(string method, string? accept, bool expected)
     {
-
-        const string accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8";
-
-        SpaFallback.IsTopLevelNavigation("GET", accept).Should().BeTrue();
-    }
-
-    [Fact]
-    public void Fetch_GetWithNonHtmlAccept_IsNotNavigation()
-    {
-
-
-        SpaFallback.IsTopLevelNavigation("GET", "*/*").Should().BeFalse();
-        SpaFallback.IsTopLevelNavigation("GET", "text/event-stream").Should().BeFalse();
-        SpaFallback.IsTopLevelNavigation("GET", "application/json").Should().BeFalse();
-    }
-
-    [Fact]
-    public void NonGet_IsNeverANavigation()
-    {
-
-        SpaFallback.IsTopLevelNavigation("POST", "text/html").Should().BeFalse();
-    }
-
-    [Fact]
-    public void MissingAccept_IsTreatedConservativelyAsNotNavigation()
-    {
-
-        SpaFallback.IsTopLevelNavigation("GET", null).Should().BeFalse();
-    }
-
-    [Fact]
-    public void Decision_IsCaseInsensitive_OnBothMethodAndAccept()
-    {
-        SpaFallback.IsTopLevelNavigation("get", "TEXT/HTML").Should().BeTrue();
+        SpaFallback.IsTopLevelNavigation(method, accept).Should().Be(expected);
     }
 
     [Fact]
     public void AppEntryPath_MatchesTheUrlTheNativeWindowLoads()
     {
-
-
         SpaFallback.AppEntryPath.Should().Be("/#/main");
     }
 
-    [Fact]
-    public void ShouldRedirect_StrayDeepNavigation_IsTrue()
+    [Theory]
+    [InlineData("/main", "GET", "text/html", true)]
+    [InlineData("/record/000800", "GET", "text/html", true)]
+    [InlineData("/", "GET", "text/html", false)]
+    [InlineData("", "GET", "text/html", false)]
+    [InlineData(null, "GET", "text/html", false)]
+    [InlineData("/main", "GET", "*/*", false)]
+    [InlineData("/main", "POST", "text/html", false)]
+    public void ShouldRedirect_OnlyStrayDeepBrowserNavigationsRedirect(string? path, string method, string accept, bool expected)
     {
-        SpaFallback.ShouldRedirect("/main", "GET", "text/html").Should().BeTrue();
-        SpaFallback.ShouldRedirect("/record/000800", "GET", "text/html").Should().BeTrue();
-    }
-
-    [Fact]
-    public void ShouldRedirect_RootPath_IsFalse_ToAvoidARedirectLoop()
-    {
-
-
-
-        SpaFallback.ShouldRedirect("/", "GET", "text/html").Should().BeFalse();
-        SpaFallback.ShouldRedirect("", "GET", "text/html").Should().BeFalse();
-        SpaFallback.ShouldRedirect(null, "GET", "text/html").Should().BeFalse();
-    }
-
-    [Fact]
-    public void ShouldRedirect_NonNavigationRequests_AreFalse()
-    {
-        SpaFallback.ShouldRedirect("/main", "GET", "*/*").Should().BeFalse();
-        SpaFallback.ShouldRedirect("/main", "POST", "text/html").Should().BeFalse();
+        SpaFallback.ShouldRedirect(path, method, accept).Should().Be(expected);
     }
 }

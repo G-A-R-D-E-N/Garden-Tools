@@ -277,12 +277,14 @@ public class EslPolicyTests
         mod.ModHeader.Stats.NextFormID.Should().Be(nextBefore);
     }
 
-    [Fact]
-    public void SetLight_RefusesMasterlessPluginWithIdsBelowTheFloor()
+    [Theory]
+    [InlineData(0x005u)]
+    [InlineData(0x5000u)]
+    public void SetLight_RefusesMasterlessPluginWithIdsOutsideTheRange(uint id)
     {
         var plugin = NewPlugin(1f, withMaster: false);
         var mod = WriteService.GetMutable(plugin)!;
-        AddWeapon(mod, 0x005, "Light_Low");
+        AddWeapon(mod, id, "Light_Out");
         var exec = new PluginToolExecutor(() => null);
 
         exec.Execute("set_light_flag", LightArgs(plugin))

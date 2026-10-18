@@ -15,8 +15,7 @@ public sealed class AssistantInteractionTests
     [Fact]
     public void ClipPreviewRequiresApprovalAndApplyRechecksRevision()
     {
-        string xml = HkxTextEdit.TextOf(Fixture("Meshes", "Actors", "Character", "Behaviors",
-            "SingleAnimFurniture.hkx"));
+        string xml = HkxTextEdit.TextOf(TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"));
         var model = BehaviourGraphModel.Parse(xml);
         string id = model.Objects.First(o => o.Class == "hkbClipGenerator").Id;
         var document = new FakeDocument(xml);
@@ -48,7 +47,7 @@ public sealed class AssistantInteractionTests
     [Fact]
     public void AssistantToolsExposeSixReadsAndOnePreviewOnlyWrite()
     {
-        string path = Fixture("Meshes", "Actors", "Character", "Behaviors", "SingleAnimFurniture.hkx");
+        string path = TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx");
         string xml = HkxTextEdit.TextOf(path);
         var document = new FakeDocument(xml, path);
         var model = BehaviourGraphModel.Parse(xml);
@@ -157,9 +156,6 @@ public sealed class AssistantInteractionTests
             message = "";
             return string.Equals(requested, expected, StringComparison.Ordinal);
         };
-
-    private static string Fixture(params string[] parts) =>
-        System.IO.Path.Combine(new[] { AppContext.BaseDirectory, "fixtures", "vanilla" }.Concat(parts).ToArray());
 
     private sealed class FakeDocument : IAssistantEditorDocument
     {

@@ -158,7 +158,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | PMIS | 5951 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 33 | 4 | 15 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
 | QUST | 10684 | 5 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 52 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
+| RACE | 11054 | 52 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 1 | L4 |
 | REFR | 11347 | 25 | - | 13 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | 9 | - | 2 | - | 1 | - | - | - | yes | - | L4 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
@@ -182,7 +182,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | STAT | 12045 | 10 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 17 | 3 | 7 | - | 1 | yes | yes | - | - | 1 | L4 |
 | TERM | 12671 | 13 | 7 | 5 | - | 7 | yes | yes | - | yes | 1 | L4 |
-| TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
+| TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 5 | L0 |
 | TREE | 12134 | 22 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | TXST | 6984 | 19 | 9 | - | - | - | yes | - | environment/terrain | - | 2 | L4 |
@@ -391,7 +391,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | CLFM | U | U | U | U | U | U | U | G | field audit pending |
 | CLMT | P | U | U | U | U | P | P | G | environment / plugin headers; PR #398 |
 | CMPO | U | U | U | U | U | U | U | G | field audit pending |
-| COBJ | P | P | P | P | I | P | P | G | forms/components.hpp; generated authoring rows; tests/test_wp9_cobj_rows.cpp |
+| COBJ | P | P | P | P | U | P | P | G | forms/components.hpp |
 | COLL | U | U | U | U | U | U | U | G | field audit pending |
 | CONT | I | I | I | I | U | U | I | G | field audit pending |
 | CPTH | U | U | U | U | U | U | U | G | field audit pending |
@@ -411,7 +411,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | EQUP | U | U | U | U | U | P | U | G | field audit pending |
 | EXPL | P | P | U | U | P | P | P | G | forms/proj_expl_hazd.hpp |
 | EYES | P | P | P | U | P | P | P | G | forms/eyes.hpp |
-| FACT | P | P | P | P | P | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, test_faction_creation.cpp, tests/test_packed_formlink_arrays.cpp (XNAM and PLVD remap); docs/FACTIONS.md |
+| FACT | P | P | P | P | P | P | P | G | forms/faction.hpp; tests/test_faction.cpp, test_faction_real.cpp, tests/test_packed_formlink_arrays.cpp (XNAM and PLVD remap); docs/FACTIONS.md |
 | FLOR | I | I | I | I | U | U | I | G | field audit pending; PR #404 |
 | FLST | P | P | P | P | U | P | P | G | environment / plugin headers |
 | FSTP | U | U | U | U | U | U | U | G | field audit pending; PR #400 |
@@ -522,12 +522,12 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | EYES EDID / FULL / DATA | forms/eyes.hpp; tests/test_eyes.cpp | Localized/opaque FULL cannot be rewritten as inline text; broad deletion not proven |
 | LVSP settings / entries | forms/leveled_spell.hpp, forms/leveled_list.hpp; tests/test_lvsp.cpp | LVLI/LVLN share the entry code but have no creator; creation defaults need separate evidence |
 | PROJ / EXPL / HAZD fixed values | forms/proj_expl_hazd.hpp; tests/test_scalar_embedded.cpp | Complete per-field edited round-trips, C ABI/C# mutation exposure |
-| QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection_authoring.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
-| RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Morph group sliders (MPGS element array), the head data markers and skeletal model info (MNAM, FNAM, ANAM, MODT), the movement type names (MTNM), the tint count (TINL) and the neck fat struct (NNAM) have no row; full field-level proof |
-| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
+| QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
+| RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
+| FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
 | CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
-| MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | MISC members and whole-record creation; COBJ CTDA (WP-7) and NAM1-NAM3 (unused by xEdit; one corpus record) |
+| MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | Other record members and whole-record creation |
 | WTHR MNAM | forms/weather_concept.hpp; tests/test_weather_concept.cpp | Other weather fields; missing/duplicate MNAM refuses mutation |
 | FLST / generated keywords | schema/formlink_lists.hpp; tests/test_formlink_lists.cpp | Each record's empty-list anchors and save/reload proof; unrelated fields |
 | Form IDs / masters | schema/form_links.hpp; tests/test_formlinks.cpp, test_navmesh_formlinks.cpp, test_remap_non_formid_slots.cpp | Mixed/opaque containers require complete ownership proof; unsupported VMAD refuses remap |

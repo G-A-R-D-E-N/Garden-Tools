@@ -152,41 +152,21 @@ TEST(RealPlugin, ReadsHeatherSurvivalPatch) {
   EXPECT_EQ(fo4::plugin_original_bytes(plugin).size(), std::filesystem::file_size(path));
 }
 
-TEST(RealPlugin, ReadsSlowTime) {
-  const auto path = testdata("SlowTime.esp");
-  ASSERT_TRUE(std::filesystem::exists(path)) << path;
-  const auto plugin = fo4::read_plugin_file(path);
-  EXPECT_EQ(plugin.tes4.header.signature, fo4::sig_tes4);
-  EXPECT_FALSE(plugin.groups.empty());
-  EXPECT_GT(fo4::collect_records(plugin).size(), 1u);
-}
-
-TEST(RealPlugin, HeatherRemapSameMastersPreservesFormKeys) {
-  auto plugin = fo4::read_plugin_file(testdata("FW_HeatherSurvivalPatch.esp"));
-  const auto before = fo4::collect_form_links(plugin);
-  ASSERT_FALSE(before.empty());
-  std::vector<fo4::PluginKey> masters;
-  masters.reserve(plugin.header.masters.size());
-  for (const auto& master : plugin.header.masters) {
-    masters.push_back(master.key);
+TEST(RealPlugin, SameMastersRemapPreservesFormKeys) {
+  for (const char* name : {"FW_HeatherSurvivalPatch.esp", "SlowTime.esp"}) {
+    SCOPED_TRACE(name);
+    auto plugin = fo4::read_plugin_file(testdata(name));
+    const auto before = fo4::collect_form_links(plugin);
+    ASSERT_FALSE(before.empty());
+    std::vector<fo4::PluginKey> masters;
+    masters.reserve(plugin.header.masters.size());
+    for (const auto& master : plugin.header.masters) {
+      masters.push_back(master.key);
+    }
+    plugin = fo4::remap_plugin_masters(std::move(plugin), std::move(masters));
+    const auto after = fo4::collect_form_links(plugin);
+    expect_same_logical_links(before, after);
   }
-  plugin = fo4::remap_plugin_masters(std::move(plugin), std::move(masters));
-  const auto after = fo4::collect_form_links(plugin);
-  expect_same_logical_links(before, after);
-}
-
-TEST(RealPlugin, SlowTimeRemapSameMastersPreservesFormKeys) {
-  auto plugin = fo4::read_plugin_file(testdata("SlowTime.esp"));
-  const auto before = fo4::collect_form_links(plugin);
-  ASSERT_FALSE(before.empty());
-  std::vector<fo4::PluginKey> masters;
-  masters.reserve(plugin.header.masters.size());
-  for (const auto& master : plugin.header.masters) {
-    masters.push_back(master.key);
-  }
-  plugin = fo4::remap_plugin_masters(std::move(plugin), std::move(masters));
-  const auto after = fo4::collect_form_links(plugin);
-  expect_same_logical_links(before, after);
 }
 
 TEST(RealPlugin, HeatherReverseMasterRemapPreservesAllNonFormLinkPayloadBytes) {

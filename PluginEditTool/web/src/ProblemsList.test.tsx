@@ -13,14 +13,10 @@ const preflight: RecordProblem = {
 afterEach(cleanup);
 
 describe('ProblemsList', () => {
-  it('shows the stable code on each problem row', () => {
+  it('shows the stable code and severity class on each problem row', () => {
     render(<ProblemsList problems={[link, preflight]} />);
     expect(screen.getByText(link.Description).closest('.rv-prob-row')?.textContent).toContain('unresolved_link');
     expect(screen.getByText(preflight.Description).closest('.rv-prob-row')?.textContent).toContain('schema_preflight');
-  });
-
-  it('styles each row by its severity class', () => {
-    render(<ProblemsList problems={[link, preflight]} />);
     expect(screen.getByText(preflight.Description).closest('.rv-prob-row')?.classList.contains('rv-prob-warning')).toBe(true);
   });
 

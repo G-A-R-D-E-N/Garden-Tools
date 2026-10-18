@@ -69,7 +69,7 @@ public sealed class McpBackendTests
     {
         string root = Directory.CreateTempSubdirectory("bgs-mcp-adapter").FullName;
         string target = Path.Combine(root, "sample.hkx");
-        File.Copy(Fixture("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"), target);
+        File.Copy(TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"), target);
         try
         {
             Assert.True(McpPathPolicy.TryCreate(new[] { root }, out var policy, out _));
@@ -92,7 +92,7 @@ public sealed class McpBackendTests
     {
         string root = Directory.CreateTempSubdirectory("bgs-mcp-write").FullName;
         string target = Path.Combine(root, "SingleAnimFurniture.hkx");
-        File.Copy(Fixture("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"), target);
+        File.Copy(TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"), target);
         try
         {
             string xml = HkxTextEdit.TextOf(target);
@@ -134,7 +134,7 @@ public sealed class McpBackendTests
     {
         string root = Directory.CreateTempSubdirectory("bgs-mcp-read-only").FullName;
         string target = Path.Combine(root, "SingleAnimFurniture.hkx");
-        File.Copy(Fixture("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"), target);
+        File.Copy(TestFixtures.Path("Meshes/Actors/Character/Behaviors/SingleAnimFurniture.hkx"), target);
         byte[] before = File.ReadAllBytes(target);
 
         try
@@ -170,7 +170,4 @@ public sealed class McpBackendTests
         McpPathPolicy.TryCreate(new[] { root }, out var policy, out string error)
             ? policy!
             : throw new InvalidOperationException(error);
-
-    private static string Fixture(string relative) =>
-        Path.Combine(AppContext.BaseDirectory, "fixtures/vanilla", relative.Replace('/', Path.DirectorySeparatorChar));
 }

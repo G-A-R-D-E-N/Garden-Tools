@@ -9,6 +9,7 @@
 #include "fo4/schema/preflight.hpp"
 #include "plugin_bytes.hpp"
 #include "real_data_build.hpp"
+#include "real_sample_plugin.hpp"
 
 #include <gtest/gtest.h>
 
@@ -262,24 +263,8 @@ TEST_P(VegetationReal, EveryNewScalarPathEditsOfficialRecordsWithoutLosingData) 
   RecordProperty("fields", static_cast<int>(checked));
 }
 
-using Subs = std::vector<std::pair<std::string, std::vector<std::byte>>>;
-
-Subs subs_of(const fo4::Plugin& plugin, const fo4::FormKey& key) {
-  Subs out;
-  if (const auto* record = fo4::find_record(plugin, key)) {
-    for (const auto& sub : record->subrecords) { out.emplace_back(sub.signature.to_string(), sub.data); }
-  }
-  return out;
-}
-
-std::map<fo4::FormKey, std::vector<std::byte>> snapshot(const fo4::Plugin& plugin) {
-  std::map<fo4::FormKey, std::vector<std::byte>> out;
-  fo4::visit_records(plugin, [&](const fo4::Record& record) {
-    if (record.header.signature == fo4::Signature::from_string("TES4")) { return; }
-    out[record.form_key] = fo4::test::record_original_bytes(plugin, record);
-  });
-  return out;
-}
+using fo4::test::snapshot;
+using fo4::test::subs_of;
 
 const std::map<std::string, fo4::FormKey>& official_targets(const std::filesystem::path& data) {
   static const auto targets = [&] {
@@ -339,7 +324,12 @@ TEST_P(VegetationReal, LinksGrassListsAndOptionalSubrecordsEditOfficialRecordsAn
   if (!std::filesystem::exists(path)) { GTEST_SKIP() << "missing official master: " << path; }
   const auto& pick = official_targets(dir);
   ASSERT_EQ(pick.size(), 3u);
-  auto plugin = fo4::read_plugin_file(path);
+  std::set<fo4::FormKey> anchors;
+  for (const auto& [type, key] : pick) { anchors.insert(key); }
+  auto plugin = fo4::test::make_sample(fo4::read_plugin_file(path), [&](const fo4::Record& record) {
+    const auto type = record.header.signature.to_string();
+    return type == "TREE" || type == "FLOR" || type == "LTEX" || anchors.count(record.form_key) > 0;
+  }, 100);
   const auto original = snapshot(plugin);
   const auto misc = pick.at("MISC"), sound = pick.at("SNDR"), grass = pick.at("GRAS");
   const auto field = [](const char* name) { return *fo4::schema::formlink_field_descriptor(name); };

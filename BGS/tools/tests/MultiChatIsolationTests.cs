@@ -11,18 +11,6 @@ namespace BehaviourStudio.Tests;
 public sealed class MultiChatIsolationTests
 {
     [Fact]
-    public void DisposeSessionDoesNotDisposeConnection()
-    {
-        using var fixture = ConnectedConnection();
-        Assert.True(fixture.Connection.IsConnected);
-
-        fixture.Session.Dispose();
-
-        Assert.True(fixture.Connection.IsConnected,
-            "session.Dispose() must not tear down the connection it does not own.");
-    }
-
-    [Fact]
     public async Task ConnectionOutlivesADisposedSessionAndStillServes()
     {
         using var fixture = ConnectedConnection();
