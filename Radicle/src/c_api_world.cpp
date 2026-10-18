@@ -32,6 +32,44 @@ radicle_status resolve_one(const radicle_env* env,
   });
 }
 
+radicle_status copy_form_keys(const radicle_env& env,
+                              const std::vector<fo4::FormKey>& keys,
+                              radicle_form_key** out_keys,
+                              size_t* out_count) {
+  *out_keys = nullptr;
+  *out_count = 0;
+  if (keys.empty()) return RADICLE_STATUS_OK;
+  auto* array = static_cast<radicle_form_key*>(std::malloc(keys.size() * sizeof(radicle_form_key)));
+  if (array == nullptr) return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate form key array");
+  for (size_t index = 0; index < keys.size(); ++index) {
+    array[index] = to_c_key(env, std::optional<fo4::FormKey>{keys[index]});
+  }
+  *out_keys = array;
+  *out_count = keys.size();
+  return RADICLE_STATUS_OK;
+}
+
+radicle_status cell_link_list(const radicle_env* env,
+                              const radicle_record* record,
+                              std::vector<fo4::FormKey> fo4::env::CellData::*list,
+                              radicle_form_key** out_keys,
+                              size_t* out_count,
+                              const char* what) {
+  clear_error();
+  if (env == nullptr || record == nullptr || out_keys == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "env, record, out_keys and out_count are required");
+  }
+  *out_keys = nullptr;
+  *out_count = 0;
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
+  return guarded(what, [&] {
+    const auto data = fo4::env::decode_cell(env->value, *to_ref(record));
+    return copy_form_keys(*env, data.*list, out_keys, out_count);
+  });
+}
+
 }  // namespace
 
 extern "C" {
@@ -122,6 +160,7 @@ radicle_status radicle_cell_get_info(const radicle_env* env,
     if (data.lighting) {
       info.has_lighting = 1;
       info.lighting = to_c_lighting(*data.lighting);
+      info.lighting_tail = to_c_lighting_tail(*data.lighting);
     }
     info.lighting_template = to_c_key(*env, data.lighting_template);
     set_optional(data.water_height, info.has_water_height, info.water_height);
@@ -130,9 +169,90 @@ radicle_status radicle_cell_get_info(const radicle_env* env,
     info.location = to_c_key(*env, data.location);
     info.worldspace = to_c_key(*env, data.worldspace);
     info.water = to_c_key(*env, data.water);
+    set_optional(data.previs_timestamp, info.has_previs_timestamp, info.previs_timestamp);
+    set_optional(data.precombined_timestamp, info.has_precombined_timestamp,
+                 info.precombined_timestamp);
+    info.acoustic_space = to_c_key(*env, data.acoustic_space);
+    info.music_type = to_c_key(*env, data.music_type);
+    info.sky_weather_region = to_c_key(*env, data.sky_weather_region);
+    info.god_rays = to_c_key(*env, data.god_rays);
+    info.lock_list = to_c_key(*env, data.lock_list);
+    info.owner = to_c_key(*env, data.owner);
+    set_optional(data.owner_rank, info.has_owner_rank, info.owner_rank);
+    if (data.exterior_lod) {
+      info.has_exterior_lod = 1;
+      info.exterior_lod_worldspace =
+          to_c_key(*env, std::optional<fo4::FormKey>{data.exterior_lod->worldspace});
+      for (size_t axis = 0; axis < 3; ++axis) {
+        info.exterior_lod_offset[axis] = data.exterior_lod->offset[axis];
+      }
+    }
+    set_optional(data.water_current_count, info.has_water_current_count, info.water_current_count);
+    info.water_environment_map = stored_text(*env, data.water_environment_map);
     *out_info = info;
     return RADICLE_STATUS_OK;
   });
+}
+
+radicle_status radicle_cell_get_regions(const radicle_env* env,
+                                        const radicle_record* record,
+                                        radicle_form_key** out_keys,
+                                        size_t* out_count) {
+  return cell_link_list(env, record, &fo4::env::CellData::regions, out_keys, out_count,
+                        "unknown exception while decoding CELL regions");
+}
+
+radicle_status radicle_cell_get_previs_references(const radicle_env* env,
+                                                  const radicle_record* record,
+                                                  radicle_form_key** out_keys,
+                                                  size_t* out_count) {
+  return cell_link_list(env, record, &fo4::env::CellData::previs_references, out_keys, out_count,
+                        "unknown exception while decoding CELL previs references");
+}
+
+void radicle_free_form_keys(radicle_form_key* keys) {
+  clear_error();
+  std::free(static_cast<void*>(keys));
+}
+
+radicle_status radicle_cell_get_water_currents(const radicle_env* env,
+                                               const radicle_record* record,
+                                               radicle_water_current** out_currents,
+                                               size_t* out_count) {
+  clear_error();
+  if (env == nullptr || record == nullptr || out_currents == nullptr || out_count == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT,
+                "env, record, out_currents and out_count are required");
+  }
+  *out_currents = nullptr;
+  *out_count = 0;
+  if (!belongs_to_env(env, to_ref(record))) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "record does not belong to this environment");
+  }
+  return guarded("unknown exception while decoding CELL water currents", [&] {
+    const auto data = fo4::env::decode_cell(env->value, *to_ref(record));
+    if (data.water_currents.empty()) return RADICLE_STATUS_OK;
+    auto* array = static_cast<radicle_water_current*>(
+        std::malloc(data.water_currents.size() * sizeof(radicle_water_current)));
+    if (array == nullptr) {
+      return fail(RADICLE_STATUS_OUT_OF_MEMORY, "failed to allocate water current array");
+    }
+    for (size_t index = 0; index < data.water_currents.size(); ++index) {
+      const auto& current = data.water_currents[index];
+      array[index].velocity[0] = current.velocity[0];
+      array[index].velocity[1] = current.velocity[1];
+      array[index].velocity[2] = current.velocity[2];
+      array[index].unnamed = current.unnamed;
+    }
+    *out_currents = array;
+    *out_count = data.water_currents.size();
+    return RADICLE_STATUS_OK;
+  });
+}
+
+void radicle_free_water_currents(radicle_water_current* currents) {
+  clear_error();
+  std::free(static_cast<void*>(currents));
 }
 
 radicle_status radicle_record_get_container(const radicle_env* env,

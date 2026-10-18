@@ -173,69 +173,17 @@ typedef struct radicle_cell_lighting {
   uint32_t inherits;
 } radicle_cell_lighting;
 
-typedef struct radicle_cell_info {
-  int32_t has_flags;
-  uint16_t flags;
-  int32_t has_grid;
-  int32_t grid_x;
-  int32_t grid_y;
-  int32_t has_land_flags;
-  uint8_t land_flags;
-  int32_t has_lighting;
-  radicle_cell_lighting lighting;
-  radicle_form_key lighting_template;
-  int32_t has_water_height;
-  float water_height;
-  radicle_form_key image_space;
-  radicle_form_key encounter_zone;
-  radicle_form_key location;
-  radicle_form_key worldspace;
-  radicle_form_key water;
-} radicle_cell_info;
-
-typedef struct radicle_cell_child {
-  const radicle_record* record;
-  int32_t persistent;
-} radicle_cell_child;
-
+/* XCLL members past Inherits; each group requires a longer XCLL payload, else its has_* stays 0. */
 /* RADICLE_STATUS_PARSE_ERROR for a wrong signature or a malformed present subrecord. */
 RADICLE_API radicle_status radicle_worldspace_get_info(const radicle_env* env,
                                                        const radicle_record* record,
                                                        radicle_worldspace_info* out_info);
-RADICLE_API radicle_status radicle_cell_get_info(const radicle_env* env,
-                                                 const radicle_record* record,
-                                                 radicle_cell_info* out_info);
-
 /* Immediate group type (fo4 GroupType values) and the enclosing WRLD/CELL; absent keys have plugin == NULL. */
 RADICLE_API radicle_status radicle_record_get_container(const radicle_env* env,
                                                         const radicle_record* record,
                                                         int32_t* out_group_type,
                                                         radicle_form_key* out_worldspace,
                                                         radicle_form_key* out_cell);
-
-/* Persistent top CELL from the highest-priority plugin; RADICLE_STATUS_NOT_FOUND when absent. */
-RADICLE_API radicle_status radicle_env_worldspace_top_cell(const radicle_env* env,
-                                                           radicle_form_key worldspace,
-                                                           const radicle_record** out_record);
-/* Block/sub-block CELLs, each from the highest plugin listing it; ascending plugin, then on-disk. */
-RADICLE_API radicle_status radicle_env_worldspace_cells(const radicle_env* env,
-                                                        radicle_form_key worldspace,
-                                                        const radicle_record*** out_records,
-                                                        size_t* out_count);
-/* Winning CELLs whose winning version sits in an interior sub-block. */
-RADICLE_API radicle_status radicle_env_interior_cells(const radicle_env* env,
-                                                      const radicle_record*** out_records,
-                                                      size_t* out_count);
-/* Children merged low to high priority; free with radicle_free_cell_children. */
-RADICLE_API radicle_status radicle_env_cell_children(const radicle_env* env,
-                                                     radicle_form_key cell,
-                                                     radicle_cell_child** out_children,
-                                                     size_t* out_count);
-RADICLE_API void radicle_free_cell_children(radicle_cell_child* children);
-/* LAND child of the highest-priority CELL version holding one; RADICLE_STATUS_NOT_FOUND otherwise. */
-RADICLE_API radicle_status radicle_env_cell_landscape(const radicle_env* env,
-                                                      radicle_form_key cell,
-                                                      const radicle_record** out_record);
 
 typedef struct radicle_linked_ref {
   radicle_form_key keyword;
@@ -720,6 +668,7 @@ RADICLE_API radicle_status radicle_env_plugin_records(const radicle_env* env,
                                                       size_t* out_count);
 
 #include "fo4/c_api_records.h"
+#include "fo4/c_api_cell.h"
 
 #ifdef __cplusplus
 }
