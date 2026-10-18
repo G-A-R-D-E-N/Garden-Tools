@@ -639,6 +639,7 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
   try {
     Slice slice(data);
     slice.u8();
+    result.count_offset = slice.position();
     const auto fragment_count = slice.u16();
     result.script_name = slice.wstring();
     if (!result.script_name.empty()) {
@@ -652,12 +653,14 @@ QuestVmadExtras read_quest_vmad_extras(std::span<const std::byte> data, std::int
     result.fragments.reserve(fragment_count);
     for (std::uint16_t i = 0; i < fragment_count; ++i) {
       QuestVmadFragment fragment;
+      fragment.offset = slice.position();
       fragment.stage = slice.u16();
       fragment.unknown = slice.u16();
       fragment.stage_index = static_cast<std::int32_t>(slice.u32());
-      slice.u8();
+      fragment.unknown_byte = slice.u8();
       fragment.script = slice.wstring();
       fragment.function = slice.wstring();
+      fragment.end = slice.position();
       result.fragments.push_back(std::move(fragment));
     }
 

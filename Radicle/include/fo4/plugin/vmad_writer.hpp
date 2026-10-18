@@ -27,6 +27,7 @@ enum class VmadStructureMutationStatus {
   subrecord_missing,
   index_out_of_range,
   not_authorable,
+  binding_missing,
 };
 
 VmadStructureMutationStatus add_vmad(Plugin& plugin, const FormKey& record);
@@ -48,5 +49,12 @@ VmadStructureMutationStatus remove_vmad_property(Plugin& plugin, const FormKey& 
 VmadStructureMutationStatus replace_vmad_property(Plugin& plugin, const FormKey& record,
                                                   std::size_t script, std::size_t index,
                                                   const VmadProperty& property);
+
+VmadStructureMutationStatus set_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
+                                                    std::uint16_t stage, std::string_view script,
+                                                    std::string_view function);
+
+VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const FormKey& record,
+                                                       std::uint16_t stage);
 
 }

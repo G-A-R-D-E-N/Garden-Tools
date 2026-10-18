@@ -521,6 +521,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp
     tests/test_vmad_structure.cpp
+    tests/test_vmad_quest_fragments.cpp
     tests/test_conflict_graph.cpp
     tests/test_check_errors.cpp
     tests/test_check_errors_conditions.cpp

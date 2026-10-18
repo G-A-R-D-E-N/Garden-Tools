@@ -352,6 +352,60 @@ bool vmad_authorable(Signature signature) {
   return std::find(std::begin(records), std::end(records), text) != std::end(records);
 }
 
+void append_quest_fragment(std::vector<std::byte>& out, const QuestVmadFragment& fragment) {
+  append_u16(out, fragment.stage);
+  append_u16(out, fragment.unknown);
+  append_u32(out, static_cast<std::uint32_t>(fragment.stage_index));
+  append_u8(out, fragment.unknown_byte);
+  append_name(out, fragment.script);
+  append_name(out, fragment.function);
+}
+
+struct QuestFragmentEdit {
+  Record* record{nullptr};
+  Subrecord* vmad{nullptr};
+  std::size_t tail_start{0};
+  QuestVmadExtras extras;
+};
+
+std::optional<VmadStructureMutationStatus> load_quest_fragments(Plugin& plugin,
+                                                               const FormKey& record_key,
+                                                               QuestFragmentEdit& edit) {
+  VmadEdit vmad;
+  const auto lookup = load_vmad(plugin, record_key, vmad);
+  if (lookup != VmadLookup::ok) return absent_status(lookup);
+  if (vmad.record->header.signature != sig_qust) {
+    return VmadStructureMutationStatus::not_authorable;
+  }
+  edit.record = vmad.record;
+  edit.vmad = vmad.vmad;
+  edit.tail_start = vmad.leading_end;
+  if (vmad.scripts.trailing_bytes == 0) return VmadStructureMutationStatus::binding_missing;
+  edit.extras = read_quest_vmad_extras(
+      std::span<const std::byte>(edit.vmad->data).subspan(edit.tail_start),
+      vmad.scripts.object_format);
+  if (edit.extras.unsupported) {
+    throw schema::ScalarError(edit.extras.unsupported_reason.empty()
+                                  ? "VMAD quest extras are unsupported"
+                                  : edit.extras.unsupported_reason);
+  }
+  if (!edit.extras.fully_consumed) {
+    throw schema::ScalarError("VMAD quest extras were not fully consumed");
+  }
+  return std::nullopt;
+}
+
+const QuestVmadFragment* find_quest_fragment(const std::vector<QuestVmadFragment>& fragments,
+                                             std::uint16_t stage) {
+  const QuestVmadFragment* found = nullptr;
+  for (const auto& fragment : fragments) {
+    if (fragment.stage != stage) continue;
+    if (found != nullptr) throw schema::ScalarError("the quest VMAD binds one stage twice");
+    found = &fragment;
+  }
+  return found;
+}
+
 }
 
 VmadStructureMutationStatus add_vmad(Plugin& plugin, const FormKey& record_key) {
@@ -484,6 +538,48 @@ VmadStructureMutationStatus replace_vmad_property(Plugin& plugin, const FormKey&
     return VmadStructureMutationStatus::unchanged;
   }
   splice(edit.vmad->data, begin, end - begin, encoded);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus set_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                    std::uint16_t stage, std::string_view script,
+                                                    std::string_view function) {
+  QuestFragmentEdit edit;
+  if (const auto refusal = load_quest_fragments(plugin, record_key, edit)) return *refusal;
+  if (script.empty() || function.empty()) {
+    throw schema::ScalarError("VMAD fragment script and function names are required");
+  }
+  const auto* found = find_quest_fragment(edit.extras.fragments, stage);
+  if (found == nullptr) return VmadStructureMutationStatus::binding_missing;
+  auto updated = *found;
+  updated.script = std::string(script);
+  updated.function = std::string(function);
+  std::vector<std::byte> entry;
+  append_quest_fragment(entry, updated);
+  const auto begin = edit.tail_start + found->offset;
+  const auto end = edit.tail_start + found->end;
+  if (entry.size() == end - begin &&
+      std::equal(entry.begin(), entry.end(),
+                 edit.vmad->data.begin() + static_cast<std::ptrdiff_t>(begin))) {
+    return VmadStructureMutationStatus::unchanged;
+  }
+  splice(edit.vmad->data, begin, end - begin, entry);
+  detail::mark_record_modified(plugin, *edit.record);
+  return VmadStructureMutationStatus::updated;
+}
+
+VmadStructureMutationStatus remove_quest_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                                       std::uint16_t stage) {
+  QuestFragmentEdit edit;
+  if (const auto refusal = load_quest_fragments(plugin, record_key, edit)) return *refusal;
+  const auto* found = find_quest_fragment(edit.extras.fragments, stage);
+  if (found == nullptr) return VmadStructureMutationStatus::binding_missing;
+  const auto begin = edit.tail_start + found->offset;
+  const auto end = edit.tail_start + found->end;
+  splice(edit.vmad->data, begin, end - begin, {});
+  put(edit.vmad->data, edit.tail_start + edit.extras.count_offset,
+      static_cast<std::uint32_t>(edit.extras.fragments.size() - 1), 2);
   detail::mark_record_modified(plugin, *edit.record);
   return VmadStructureMutationStatus::updated;
 }
