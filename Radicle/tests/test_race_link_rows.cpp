@@ -72,6 +72,19 @@ Bytes pair_bytes(std::uint32_t first, std::uint32_t second) {
   return out.bytes;
 }
 
+Bytes sped_bytes(float base) {
+  ByteWriter out;
+  for (int index = 0; index < 28; ++index) out.f32(base + static_cast<float>(index));
+  return out.bytes;
+}
+
+float read_f32(const Bytes& data, std::size_t offset) {
+  float value = 0.0F;
+  if (data.size() < offset + 4) return value;
+  std::memcpy(&value, data.data() + offset, sizeof(value));
+  return value;
+}
+
 const auto k_target = fo4::FormKey::parse("000A20:Objects.esp");
 
 void write_header(ByteWriter& out) {
@@ -93,12 +106,13 @@ struct Sub {
   Bytes data;
 };
 
-Bytes plugin_with(const std::vector<Sub>& race_subrecords, bool with_local_records) {
+Bytes plugin_with(const std::vector<Sub>& race_subrecords, bool with_local_records,
+                  std::uint16_t form_version = 131) {
   ByteWriter out;
   write_header(out);
 
   const auto group = fo4::test::begin_group(out, k_race, 0);
-  const auto record = fo4::test::begin_record(out, k_race, 0, raw_id(0x0800));
+  const auto record = fo4::test::begin_record(out, k_race, 0, raw_id(0x0800), form_version);
   fo4::test::write_subrecord(out, "EDID", std::string_view{"Legacy\0", 7});
   for (const auto& sub : race_subrecords) {
     fo4::test::write_subrecord(out, sub.signature, sub.data);
@@ -520,4 +534,83 @@ TEST(RaceMorphRows, RejectASubgraphFlagsPayloadOfTheWrongWidth) {
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\SubgraphRole"), 0, "3"),
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(live_subrecord(plugin, "SRAF", 0), u16_bytes(1));
+}
+
+TEST(RaceLinkRows, CollarTextureSetIsTheNam2AfterTheEmptyMarkers) {
+  auto plugin = fo4::read_plugin(
+      plugin_with({{"NAM2", Bytes{}}, {"NAM2", Bytes{}}, {"NAM2", u32_bytes(0x01000A21u)}}, false),
+      "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+  const auto collar = row("RACE\\CollarTextureSet");
+  EXPECT_EQ(collar.subrecord, fo4::Signature::from_string("NAM2"));
+  EXPECT_TRUE(collar.address.repeated);
+  EXPECT_EQ(collar.payload_sizes[0], 0u);
+  EXPECT_EQ(fo4::schema::formlink_field_targets(collar)[0], fo4::Signature::from_string("TXST"));
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\CollarTextureSet"), 3u);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, collar, 0, k_target),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, collar, 2, k_target),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_TRUE(live_subrecord(reread, "NAM2", 0).empty());
+  EXPECT_TRUE(live_subrecord(reread, "NAM2", 1).empty());
+  EXPECT_EQ(raw_at(live_subrecord(reread, "NAM2", 2), 0), 0x01000A20u);
+}
+
+TEST(RaceScalarRows, MovementOverrideRowsAddressEachSpedByOverrideIndex) {
+  auto plugin = fo4::read_plugin(
+      plugin_with({{"MTYP", u32_bytes(0x01000A21u)}, {"SPED", sped_bytes(1.0F)},
+                   {"MTYP", u32_bytes(0x01000A22u)}, {"SPED", sped_bytes(101.0F)}},
+                  false),
+      "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+  const auto left_standing = scalar_row("RACE\\MovementOverrideLeftStanding");
+  EXPECT_EQ(left_standing.scalar.subrecord, fo4::Signature::from_string("SPED"));
+  EXPECT_EQ(left_standing.scalar.offset, 0u);
+  EXPECT_TRUE(left_standing.scalar.address.repeated);
+  EXPECT_EQ(left_standing.scalar.min_form_version, 104);
+  EXPECT_EQ(left_standing.scalar.minimum_payload_size, 112u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\MovementOverrideLeftStanding"), 2u);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\MovementOverrideLeftStanding", 0), "1");
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\MovementOverrideRightSprint", 1), "108");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\MovementOverrideRightSprint"), 1,
+                                   "7.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\MovementOverrideLeftWalk"), 2, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(live_subrecord(reread, "SPED", 1).size(), 112u);
+  EXPECT_FLOAT_EQ(read_f32(live_subrecord(reread, "SPED", 1), 28), 7.5F);
+  EXPECT_FLOAT_EQ(read_f32(live_subrecord(reread, "SPED", 0), 4), 2.0F);
+}
+
+TEST(RaceScalarRows, MovementOverrideRowsHideOutsideTheirLayoutWindow) {
+  const auto key = fo4::FormKey::parse(k_race_key);
+  auto modern = fo4::read_plugin(
+      plugin_with({{"MTYP", u32_bytes(0x01000A21u)}, {"SPED", Bytes(68)}}, false), "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(modern, key, "RACE\\MovementOverrideLeftStanding"), 1u);
+  EXPECT_EQ(read_scalar_member(modern, "RACE\\MovementOverrideLeftStanding", 0), "");
+  EXPECT_EQ(fo4::set_record_scalar(modern, key, scalar_row("RACE\\MovementOverrideLeftStanding"), 0,
+                                   "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(modern, key, scalar_row("RACE\\MovementOverrideLeftWalkBelow60"), 0,
+                                   "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  auto legacy = fo4::read_plugin(
+      plugin_with({{"MTYP", u32_bytes(0x01000A21u)}, {"SPED", sped_bytes(1.0F)}}, false, 40),
+      "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(legacy, key, "RACE\\MovementOverrideLeftWalkBelow60"), 1u);
+  EXPECT_EQ(fo4::set_record_scalar(legacy, key, scalar_row("RACE\\MovementOverrideLeftStanding"), 0,
+                                   "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(legacy, key, scalar_row("RACE\\MovementOverrideLeftWalkBelow60"), 0,
+                                   "9"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(legacy), "Patch.esp");
+  EXPECT_FLOAT_EQ(read_f32(live_subrecord(reread, "SPED", 0), 0), 9.0F);
 }
