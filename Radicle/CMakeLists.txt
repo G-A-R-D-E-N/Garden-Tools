@@ -425,6 +425,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_scalar_embedded.cpp
     tests/test_field_writer.cpp
     tests/test_localized_value_writes.cpp
+    tests/test_localization_tables.cpp
     tests/test_subrecord_authoring.cpp
     tests/test_c_api_authoring.cpp
     tests/test_c_api_fields.cpp

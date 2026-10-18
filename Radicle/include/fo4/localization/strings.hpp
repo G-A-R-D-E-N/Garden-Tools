@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fo4/signature.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -45,5 +47,11 @@ const LocalizedStringEntry* find_string(const LocalizedStringTable& table,
 
 std::uint32_t next_string_id(const LocalizedStringTable& table) noexcept;
 std::uint32_t add_string(LocalizedStringTable& table, std::string_view text);
+
+StringTableKind string_table_kind(Signature record, Signature subrecord) noexcept;
+std::string_view string_table_extension(StringTableKind kind) noexcept;
+std::filesystem::path string_table_path(std::string_view plugin_file_name,
+                                        StringTableKind kind,
+                                        std::string_view language);
 
 }  // namespace fo4::localization

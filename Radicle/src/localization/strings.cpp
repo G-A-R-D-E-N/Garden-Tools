@@ -298,4 +298,43 @@ std::uint32_t add_string(LocalizedStringTable& table, std::string_view text) {
   return id;
 }
 
+StringTableKind string_table_kind(Signature record, Signature subrecord) noexcept {
+  constexpr auto k_desc = Signature::from_string("DESC");
+  constexpr auto k_cnam = Signature::from_string("CNAM");
+  constexpr auto k_rnam = Signature::from_string("RNAM");
+  constexpr auto k_lscr = Signature::from_string("LSCR");
+  constexpr auto k_qust = Signature::from_string("QUST");
+  constexpr auto k_book = Signature::from_string("BOOK");
+  constexpr auto k_info = Signature::from_string("INFO");
+
+  if (record != k_lscr && subrecord == k_desc) return StringTableKind::dlstrings;
+  if (record == k_qust && subrecord == k_cnam) return StringTableKind::dlstrings;
+  if (record == k_book && subrecord == k_cnam) return StringTableKind::dlstrings;
+  if (record == k_info && subrecord != k_rnam) return StringTableKind::ilstrings;
+  return StringTableKind::strings;
+}
+
+std::string_view string_table_extension(StringTableKind kind) noexcept {
+  switch (kind) {
+    case StringTableKind::dlstrings:
+      return ".DLSTRINGS";
+    case StringTableKind::ilstrings:
+      return ".ILSTRINGS";
+    case StringTableKind::strings:
+      return ".STRINGS";
+  }
+  return ".STRINGS";
+}
+
+std::filesystem::path string_table_path(std::string_view plugin_file_name,
+                                        StringTableKind kind,
+                                        std::string_view language) {
+  const auto stem = std::filesystem::path(plugin_file_name).stem().string();
+  std::string name = stem;
+  name += '_';
+  name += language;
+  name += string_table_extension(kind);
+  return std::filesystem::path("Strings") / name;
+}
+
 }  // namespace fo4::localization
