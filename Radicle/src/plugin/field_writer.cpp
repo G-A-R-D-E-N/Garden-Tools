@@ -297,6 +297,13 @@ std::vector<SubrecordGroupSpan> group_spans(const Record& record, const schema::
   std::vector<SubrecordGroupSpan> spans;
   const auto& subs = record.subrecords;
   std::size_t first = 0;
+  // Constraint: a counted group's runs follow its count subrecord, so a member signature before it (the LENS record DNAM) belongs to no run.
+  if (group.count_subrecord != Signature{}) {
+    const auto counter = std::find_if(subs.begin(), subs.end(), [&](const Subrecord& sub) {
+      return sub.signature == group.count_subrecord;
+    });
+    if (counter != subs.end()) first = static_cast<std::size_t>(counter - subs.begin()) + 1;
+  }
   while (first < subs.size()) {
     const auto leader = member_index(subs[first].signature);
     if (!leader) {

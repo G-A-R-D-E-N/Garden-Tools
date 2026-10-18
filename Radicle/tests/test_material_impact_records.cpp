@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -69,6 +70,20 @@ Bytes u32_bytes(std::uint32_t value) {
 Bytes f32_bytes(float value) {
   ByteWriter out;
   out.f32(value);
+  return out.bytes;
+}
+
+Bytes lfsd_bytes(float opacity, std::uint32_t flags) {
+  ByteWriter out;
+  out.f32(1.0f);
+  out.f32(0.5f);
+  out.f32(0.25f);
+  out.f32(4.0f);
+  out.f32(5.0f);
+  out.f32(6.0f);
+  out.f32(7.0f);
+  out.f32(opacity);
+  out.u32(flags);
   return out.bytes;
 }
 
@@ -145,15 +160,15 @@ std::vector<std::byte> make_plugin() {
                                      {"LFSP", u32_bytes(2)},
                                      {"DNAM", zstr("SpriteA")},
                                      {"FNAM", zstr("flare_a.dds")},
-                                     {"LFSD", zeros(36)},
+                                     {"LFSD", lfsd_bytes(0.75f, 1)},
                                      {"DNAM", zstr("SpriteB")},
                                      {"FNAM", zstr("flare_b.dds")},
-                                     {"LFSD", zeros(36)}}},
+                                     {"LFSD", lfsd_bytes(0.5f, 0)}}},
                             {0x80D, {{"EDID", zstr("RadicleSpritesOnly")},
                                      {"LFSP", u32_bytes(1)},
                                      {"DNAM", zstr("SpriteOnly")},
                                      {"FNAM", zstr("flare_c.dds")},
-                                     {"LFSD", zeros(36)}}}});
+                                     {"LFSD", lfsd_bytes(0.25f, 0)}}}});
   write_group(out, "RFCT", {{0x807, {{"EDID", zstr("RadicleVisual")},
                                      {"DATA", rfct_data()}}}});
   write_group(out, "IPDS", {{0x808, {{"EDID", zstr("RadicleImpactSet")}}}});
@@ -169,6 +184,44 @@ const fo4::Subrecord* find_subrecord(const fo4::Record& record, fo4::Signature s
     if (sub.signature == signature) return &sub;
   }
   return nullptr;
+}
+
+Bytes subrecord_at(const fo4::Record& record, std::string_view signature, std::size_t ordinal) {
+  std::size_t seen = 0;
+  for (const auto& sub : record.subrecords) {
+    if (sub.signature.to_string() != signature) continue;
+    if (seen++ == ordinal) return sub.data;
+  }
+  ADD_FAILURE() << signature << ' ' << ordinal;
+  return {};
+}
+
+fo4::schema::SubrecordGroupDescriptor sprites_group() {
+  const auto group = fo4::schema::subrecord_group_descriptor(fo4::Signature::from_string("LENS"),
+                                                             "LENS\\Sprites");
+  EXPECT_TRUE(group.has_value());
+  return group.value_or(fo4::schema::SubrecordGroupDescriptor{});
+}
+
+fo4::schema::ScalarFieldDescriptor sprite_row(std::string_view path) {
+  const auto field = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("LENS"), path);
+  EXPECT_TRUE(field.has_value()) << path;
+  return field.value_or(fo4::schema::ScalarFieldDescriptor{});
+}
+
+std::vector<std::byte> make_short_lens_plugin() {
+  ByteWriter out;
+  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
+  const auto group = fo4::test::begin_group(out, "LENS", 0);
+  const auto record = fo4::test::begin_record(out, "LENS", 0, 0x0100080Eu);
+  fo4::test::write_subrecord(out, "EDID", zstr("RadicleShort"));
+  fo4::test::write_subrecord(out, "LFSP", u32_bytes(2));
+  fo4::test::write_subrecord(out, "DNAM", zstr("SpriteA"));
+  fo4::test::write_subrecord(out, "FNAM", zstr("flare_a.dds"));
+  fo4::test::write_subrecord(out, "LFSD", lfsd_bytes(0.5f, 0));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
 }
 
 }  // namespace
@@ -339,4 +392,121 @@ TEST(MaterialImpactSynthetic, FixtureRecordsMeetTheirAuthoringMinimums) {
       EXPECT_LE(count, static_cast<std::size_t>(rule.maximum)) << item.signature << ' ' << rule.signature.to_string();
     }
   }
+}
+
+TEST(MaterialImpactSynthetic, LensSpriteGroupRowsFollowTheCountSubrecord) {
+  const auto group = sprites_group();
+  EXPECT_EQ(group.record, fo4::Signature::from_string("LENS"));
+  EXPECT_EQ(group.count_subrecord, fo4::Signature::from_string("LFSP"));
+  ASSERT_EQ(group.members.size(), 3u);
+  EXPECT_EQ(group.members[0].subrecord, fo4::Signature::from_string("DNAM"));
+  EXPECT_TRUE(group.members[0].required);
+  ASSERT_EQ(group.members[0].default_payload.size(), 1u);
+  EXPECT_EQ(group.members[0].default_payload[0], std::uint8_t{0});
+  EXPECT_EQ(group.members[1].subrecord, fo4::Signature::from_string("FNAM"));
+  ASSERT_EQ(group.members[1].default_payload.size(), 1u);
+  EXPECT_EQ(group.members[2].subrecord, fo4::Signature::from_string("LFSD"));
+  EXPECT_EQ(group.members[2].payload_size, 36u);
+
+  const auto member = fo4::schema::subrecord_group_for_member(fo4::Signature::from_string("LENS"),
+                                                             fo4::Signature::from_string("LFSD"));
+  ASSERT_TRUE(member.has_value());
+  EXPECT_EQ(member->path, group.path);
+
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto spans =
+      fo4::subrecord_group_spans(plugin, fo4::FormKey::parse("000806:Patch.esp"), group);
+  ASSERT_TRUE(spans.has_value());
+  ASSERT_EQ(spans->size(), 2u);
+  EXPECT_EQ((*spans)[0].first, 4u);
+  EXPECT_EQ((*spans)[0].end, 7u);
+  EXPECT_EQ((*spans)[1].first, 7u);
+  EXPECT_EQ((*spans)[1].end, 10u);
+
+  const auto only =
+      fo4::subrecord_group_spans(plugin, fo4::FormKey::parse("00080D:Patch.esp"), group);
+  ASSERT_TRUE(only.has_value());
+  ASSERT_EQ(only->size(), 1u);
+  EXPECT_EQ((*only)[0].first, 2u);
+  EXPECT_EQ((*only)[0].end, 5u);
+}
+
+TEST(MaterialImpactSynthetic, LensSpriteRowsAddressOneSpriteAtATime) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000806:Patch.esp");
+  const auto opacity = sprite_row("LENS\\SpriteOpacity");
+  const auto flags = sprite_row("LENS\\SpriteFlags");
+  EXPECT_EQ(opacity.scalar.subrecord, fo4::Signature::from_string("LFSD"));
+  EXPECT_TRUE(opacity.scalar.address.repeated);
+  EXPECT_EQ(opacity.scalar.offset, 28u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, opacity), std::optional<std::size_t>{2});
+  const auto flag_name = fo4::schema::scalar_value_name(flags.scalar, 0x2);
+  ASSERT_TRUE(flag_name.has_value());
+  EXPECT_EQ(*flag_name, "Shrinks When Occluded");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, opacity, 1, "0.25"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, flags, 0, "2"), fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, opacity, 2, "0.5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  EXPECT_EQ(subrecord_at(*record, "LFSD", 0), lfsd_bytes(0.75f, 2));
+  EXPECT_EQ(subrecord_at(*record, "LFSD", 1), lfsd_bytes(0.25f, 0));
+  EXPECT_EQ(subrecord_at(*record, "DNAM", 1), zstr("SpriteA"));
+  EXPECT_EQ(subrecord_at(*record, "DNAM", 2), zstr("SpriteB"));
+}
+
+TEST(MaterialImpactSynthetic, LensSpriteInsertAndRemoveKeepTheSpriteTotal) {
+  const auto key = fo4::FormKey::parse("000806:Patch.esp");
+  const auto group = sprites_group();
+
+  auto removed_plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::remove_record_subrecord_group(removed_plugin, key, group, 0),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(fo4::remove_record_subrecord_group(removed_plugin, key, group, 1),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  const auto after_remove = fo4::read_plugin(fo4::write_plugin(removed_plugin), "Patch.esp");
+  const auto* removed = fo4::find_record(after_remove, key);
+  ASSERT_NE(removed, nullptr);
+  EXPECT_EQ(subrecord_at(*removed, "LFSP", 0), u32_bytes(1));
+  EXPECT_EQ(subrecord_at(*removed, "DNAM", 1), zstr("SpriteB"));
+  EXPECT_EQ(subrecord_at(*removed, "LFSD", 0), lfsd_bytes(0.5f, 0));
+  EXPECT_EQ(std::count_if(removed->subrecords.begin(), removed->subrecords.end(),
+                          [](const fo4::Subrecord& sub) {
+                            return sub.signature == fo4::Signature::from_string("LFSD");
+                          }),
+            1);
+
+  auto inserted_plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::insert_record_subrecord_group(inserted_plugin, key, group, 1),
+            fo4::SubrecordGroupMutationStatus::updated);
+  EXPECT_EQ(fo4::insert_record_subrecord_group(inserted_plugin, key, group, 4),
+            fo4::SubrecordGroupMutationStatus::index_out_of_range);
+  const auto after_insert = fo4::read_plugin(fo4::write_plugin(inserted_plugin), "Patch.esp");
+  const auto* inserted = fo4::find_record(after_insert, key);
+  ASSERT_NE(inserted, nullptr);
+  EXPECT_EQ(subrecord_at(*inserted, "LFSP", 0), u32_bytes(3));
+  EXPECT_EQ(subrecord_at(*inserted, "DNAM", 2), zstr(""));
+  EXPECT_EQ(subrecord_at(*inserted, "FNAM", 2), zstr(""));
+  EXPECT_EQ(subrecord_at(*inserted, "LFSD", 1), Bytes(36));
+  EXPECT_EQ(subrecord_at(*inserted, "LFSD", 2), lfsd_bytes(0.5f, 0));
+}
+
+TEST(MaterialImpactSynthetic, LensSpriteCountMismatchFailsClosed) {
+  auto plugin = fo4::read_plugin(make_short_lens_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("00080E:Patch.esp");
+  const auto group = sprites_group();
+  const auto spans = fo4::subrecord_group_spans(plugin, key, group);
+  ASSERT_TRUE(spans.has_value());
+  EXPECT_EQ(spans->size(), 1u);
+
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::insert_record_subrecord_group(plugin, key, group, 1),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_THROW(fo4::remove_record_subrecord_group(plugin, key, group, 0),
+               fo4::schema::SubrecordGroupError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
