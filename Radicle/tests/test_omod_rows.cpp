@@ -592,8 +592,11 @@ TEST(OmodData, RefusesMalformedPayloadsAndForeignRecords) {
   };
 
   EXPECT_THROW(decode(short_omod_data()), fo4::forms::OmodError);
-  EXPECT_THROW(decode(omod_data() + Bytes{std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}}),
-               fo4::forms::OmodError);
+  {
+    auto trailing = omod_data();
+    trailing.insert(trailing.end(), 4, std::byte{0});
+    EXPECT_THROW(decode(std::move(trailing)), fo4::forms::OmodError);
+  }
   {
     auto truncated = omod_data();
     truncated.resize(24);
