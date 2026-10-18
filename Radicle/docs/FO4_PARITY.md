@@ -94,7 +94,7 @@ Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 | FLOR | 12167 | 15 | 1 | 5 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
 | FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
+| FSTS | 8692 | 5 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FURN | 6848 | 16 | 2 | 8 | - | 2 | yes | yes | - | yes | 1 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -247,7 +247,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FLOR | 15 | - | - | - | 1 | f32, i16, u16, u8 | - | 2 | - | existing_only |
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
-| FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
+| FSTS | 5 | - | - | - | - | u32 | - | 1 | - | existing_only |
 | FURN | 10 | - | 2 | 4 | 2 | f32, i16, i32, u16, u32, u8 | 6 | 2 | - | existing_only |
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |

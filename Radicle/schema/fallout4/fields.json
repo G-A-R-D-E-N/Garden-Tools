@@ -17703,7 +17703,13 @@
     },
     {
       "signature": "FSTS",
-      "fields": [],
+      "fields": [
+        {"path": "FSTS\\WalkingCount", "label": "Walking count", "kind": "scalar", "subrecord": "XCNT", "offset": 0, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\RunningCount", "label": "Running count", "kind": "scalar", "subrecord": "XCNT", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\SprintingCount", "label": "Sprinting count", "kind": "scalar", "subrecord": "XCNT", "offset": 8, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\SneakingCount", "label": "Sneaking count", "kind": "scalar", "subrecord": "XCNT", "offset": 12, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FSTS\\SwimmingCount", "label": "Swimming count", "kind": "scalar", "subrecord": "XCNT", "offset": 16, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295, "payload_size": 20, "insertion": "existing_only"}
+      ],
       "formlink_fields": [
         {
           "path": "FSTS\\Footsteps",

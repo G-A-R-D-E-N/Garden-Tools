@@ -153,6 +153,11 @@ ScalarMutationStatus write_scalar(Plugin& plugin,
   if (schema::is_subrecord_group_count_subrecord(field.record, field.scalar.subrecord)) {
     throw schema::ScalarError(std::string(field.path) + " is maintained by subrecord group insert and remove");
   }
+  if (field.record == Signature::from_string("FSTS") &&
+      field.scalar.subrecord == Signature::from_string("XCNT")) {
+    throw schema::ScalarError(std::string(field.path) +
+                              " is derived from the five footstep category lists in DATA");
+  }
 
   const bool is_string = field.scalar.storage == schema::ScalarStorage::zstring;
   if (is_string != string_setter) {
