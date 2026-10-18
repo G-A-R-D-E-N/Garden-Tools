@@ -1,6 +1,7 @@
 #include "fo4/environment/environment.hpp"
 #include "fo4/plugin/mutation.hpp"
 #include "fo4/plugin/reader.hpp"
+#include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/form_links.hpp"
 #include "fo4/schema/formlink_lists.hpp"
@@ -13,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -481,4 +483,91 @@ TEST(WRLDRows, LocalizedWorldKeepsItsStringIdAndStillWritesLevelRows) {
   const auto* reread_record = fo4::find_record(reread, key);
   ASSERT_NE(reread_record, nullptr);
   EXPECT_EQ(fo4::env::decode_record_name(reread, *reread_record).string_id, 0x00001A2Bu);
+}
+
+TEST(WRLDRows, AuthoringRowsFollowXEditOrderAndRepeatRules) {
+  const auto constraint =
+      fo4::schema::record_authoring_constraint(fo4::Signature::from_string("WRLD"));
+  ASSERT_TRUE(constraint.has_value());
+  EXPECT_EQ(constraint->placement, fo4::schema::RecordPlacement::top_level);
+  const auto rules = fo4::schema::authoring_subrecords(*constraint);
+  const std::vector<std::string_view> expected{
+      "EDID", "RNAM", "MHDT", "FULL", "WCTR", "LTMP", "XEZN", "XLCN", "WNAM", "PNAM", "CNAM",
+      "NAM2", "NAM3", "NAM4", "DNAM", "ICON", "MODL", "MODT", "MODC", "MODS", "MODF", "MNAM",
+      "ONAM", "NAMA", "DATA", "NAM0", "NAM9", "ZNAM", "NNAM", "XWEM", "TNAM", "UNAM", "WLEV",
+      "OFST", "CLSZ"};
+  ASSERT_EQ(rules.size(), expected.size());
+  for (std::size_t index = 0; index < expected.size(); ++index) {
+    EXPECT_EQ(rules[index].signature, fo4::Signature::from_string(expected[index])) << index;
+  }
+
+  const auto rule_for = [&](std::string_view signature) {
+    const auto wanted = fo4::Signature::from_string(signature);
+    for (std::size_t index = 0; index < rules.size(); ++index) {
+      if (rules[index].signature == wanted) return rules[index];
+    }
+    ADD_FAILURE() << signature;
+    return rules[0];
+  };
+  EXPECT_EQ(rule_for("RNAM").maximum, 65535);
+  EXPECT_TRUE(rule_for("RNAM").uncounted);
+  EXPECT_FALSE(rule_for("RNAM").has_default());
+  EXPECT_EQ(rule_for("WLEV").maximum, 2);
+  EXPECT_FALSE(rule_for("WLEV").uncounted);
+  EXPECT_EQ(rule_for("NAM0").minimum, 1);
+  EXPECT_EQ(rule_for("NAM4").minimum, 0);
+  EXPECT_EQ(rule_for("PNAM").minimum, 0);
+}
+
+TEST(WRLDRows, CreatesAWorldspaceFromTheAuthoringDefaults) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto created =
+      fo4::create_record(plugin, fo4::Signature::from_string("WRLD"), "RadicleNewWorld");
+  ASSERT_EQ(created.status, fo4::RecordCreateStatus::created);
+  const auto* record = fo4::find_record(plugin, created.key);
+  ASSERT_NE(record, nullptr);
+
+  std::vector<std::string> order;
+  for (const auto& sub : record->subrecords) order.push_back(sub.signature.to_string());
+  EXPECT_EQ(order, (std::vector<std::string>{"EDID", "ONAM", "NAMA", "DATA", "NAM0", "NAM9"}));
+
+  const auto key = created.key.to_string();
+  EXPECT_EQ(sub_bytes(plugin, key, "EDID"), zstr("RadicleNewWorld"));
+  EXPECT_EQ(sub_bytes(plugin, key, "ONAM"), floats({1.0f, 0.0f, 0.0f, 0.0f}));
+  EXPECT_EQ(sub_bytes(plugin, key, "NAMA"), floats({1.0f}));
+  EXPECT_EQ(sub_bytes(plugin, key, "DATA"), (Bytes{std::byte{0x01}}));
+  EXPECT_EQ(sub_bytes(plugin, key, "NAM0"), Bytes(8));
+  EXPECT_EQ(sub_bytes(plugin, key, "NAM9"), Bytes(8));
+
+  for (const auto& issue : fo4::schema::preflight_authoring_record(plugin, created.key)) {
+    ADD_FAILURE() << issue.code << ' ' << issue.path;
+  }
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, key, "ONAM"), floats({1.0f, 0.0f, 0.0f, 0.0f}));
+  EXPECT_EQ(sub_bytes(reread, key, "NAM0"), Bytes(8));
+  EXPECT_EQ(sub_bytes(reread, key, "NAM9"), Bytes(8));
+}
+
+TEST(WRLDRows, AuthoringPreflightReportsMissingNamaAndTheOutOfOrderTail) {
+  const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto issues =
+      fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse("000C01:Patch.esp"));
+  bool missing_nama = false;
+  bool order_reported = false;
+  for (const auto& issue : issues) {
+    if (issue.code == "required_subrecord_missing" && issue.path == "WRLD\\NAMA") missing_nama = true;
+    if (issue.code == "subrecord_order_invalid") order_reported = true;
+  }
+  EXPECT_TRUE(missing_nama);
+  EXPECT_TRUE(order_reported);
+}
+
+TEST(WRLDRows, AuthoringAddsRepeatableRnamButRefusesThePairedWlevRule) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C01:Patch.esp");
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("WLEV")),
+            fo4::SubrecordAddStatus::not_authorable);
+  EXPECT_EQ(fo4::add_record_subrecord(plugin, key, fo4::Signature::from_string("RNAM")),
+            fo4::SubrecordAddStatus::no_default);
 }
