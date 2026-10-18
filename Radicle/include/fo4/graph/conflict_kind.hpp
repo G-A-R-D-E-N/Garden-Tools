@@ -68,6 +68,33 @@ struct ConflictQuery {
   std::span<const ConflictPriorityRule> priorities{};
 };
 
+struct FieldValueGroup {
+  std::vector<PluginKey> plugins;
+};
+
+struct FieldComparison {
+  Signature signature{};
+  std::size_t ordinal{0};
+  std::vector<FieldValueGroup> groups;
+};
+
+struct RecordComparison {
+  FormKey key;
+  std::vector<FieldValueGroup> record_groups;
+  std::vector<FieldComparison> fields;
+};
+
+RecordComparison compare_record_across_plugins(
+    const ConflictGraph& graph,
+    std::span<const Plugin* const> load_order,
+    const FormKey& key,
+    std::span<const ConflictPriorityRule> priorities = {});
+
+std::vector<RecordComparison> compare_conflicts_across_plugins(
+    const ConflictGraph& graph,
+    std::span<const Plugin* const> load_order,
+    std::span<const ConflictPriorityRule> priorities = {});
+
 RecordConflict classify_record_conflict(const ConflictGraph& graph, const ConflictQuery& query);
 
 std::vector<RecordConflict> classify_conflicts(const ConflictGraph& graph,

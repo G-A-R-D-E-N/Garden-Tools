@@ -29,6 +29,7 @@ struct ElementResult {
 struct VersionView {
   const Record* record{nullptr};
   bool partial{false};
+  PluginKey plugin;
 };
 
 struct SubrecordKey {
@@ -79,7 +80,7 @@ std::vector<VersionView> resolve_versions(const ConflictGraph& graph,
       }
     }
     if (owner == nullptr) continue;
-    out.push_back(VersionView{find_record(*owner, key), version.partial_form});
+    out.push_back(VersionView{find_record(*owner, key), version.partial_form, version.plugin});
   }
   return out;
 }
@@ -224,12 +225,35 @@ std::vector<Node> fresh_row(const std::vector<VersionView>& versions) {
   return row;
 }
 
-void append_subrecord_rows(const std::vector<VersionView>& versions,
-                           Signature record_signature,
-                           std::span<const ConflictPriorityRule> rules,
-                           std::vector<SubrecordConflict>& out) {
+std::vector<FieldValueGroup> group_identical_versions(const std::vector<Node>& row,
+                                                      const std::vector<VersionView>& versions) {
+  std::vector<FieldValueGroup> out;
+  std::vector<std::size_t> representatives;
+  for (std::size_t index = 0; index < row.size(); ++index) {
+    if (!row[index].value.has_value()) continue;
+    bool placed = false;
+    for (std::size_t slot = 0; slot < representatives.size(); ++slot) {
+      if (*row[representatives[slot]].value != *row[index].value) continue;
+      out[slot].plugins.push_back(versions[index].plugin);
+      placed = true;
+      break;
+    }
+    if (placed) continue;
+    representatives.push_back(index);
+    out.push_back(FieldValueGroup{{versions[index].plugin}});
+  }
+  return out;
+}
+
+struct SubrecordRows {
   std::vector<SubrecordKey> keys;
   std::vector<std::vector<Node>> rows;
+};
+
+SubrecordRows build_subrecord_rows(const std::vector<VersionView>& versions,
+                                   Signature record_signature,
+                                   std::span<const ConflictPriorityRule> rules) {
+  SubrecordRows out;
   std::map<SubrecordKey, std::size_t> row_of;
   for (std::size_t index = 0; index < versions.size(); ++index) {
     const auto& version = versions[index];
@@ -243,16 +267,26 @@ void append_subrecord_rows(const std::vector<VersionView>& versions,
       std::size_t row = 0;
       const auto found = row_of.find(key);
       if (found == row_of.end()) {
-        row = rows.size();
+        row = out.rows.size();
         row_of.emplace(key, row);
-        keys.push_back(key);
-        rows.push_back(fresh_row(versions));
+        out.keys.push_back(key);
+        out.rows.push_back(fresh_row(versions));
       } else {
         row = found->second;
       }
-      rows[row][index].value = subrecord_value(subrecord);
+      out.rows[row][index].value = subrecord_value(subrecord);
     }
   }
+  return out;
+}
+
+void append_subrecord_rows(const std::vector<VersionView>& versions,
+                           Signature record_signature,
+                           std::span<const ConflictPriorityRule> rules,
+                           std::vector<SubrecordConflict>& out) {
+  auto built = build_subrecord_rows(versions, record_signature, rules);
+  const auto& keys = built.keys;
+  const auto& rows = built.rows;
 
   for (std::size_t row = 0; row < rows.size(); ++row) {
     const auto result =
@@ -301,6 +335,52 @@ std::vector<RecordConflict> classify_conflicts(const ConflictGraph& graph,
     out.push_back(classify_record_conflict(graph, ConflictQuery{load_order, key,
                                                                 ConflictPriority::normal,
                                                                 priorities}));
+  }
+  return out;
+}
+
+RecordComparison compare_record_across_plugins(const ConflictGraph& graph,
+                                               std::span<const Plugin* const> load_order,
+                                               const FormKey& key,
+                                               std::span<const ConflictPriorityRule> priorities) {
+  RecordComparison out;
+  out.key = key;
+  const auto versions = resolve_versions(graph, load_order, key);
+  if (versions.empty()) return out;
+
+  std::vector<Node> record_nodes = fresh_row(versions);
+  Signature signature{};
+  bool have_record = false;
+  for (std::size_t index = 0; index < versions.size(); ++index) {
+    if (versions[index].record == nullptr || versions[index].partial) continue;
+    record_nodes[index].value = record_value(*versions[index].record, priorities);
+    if (!have_record) {
+      signature = versions[index].record->header.signature;
+      have_record = true;
+    }
+  }
+  out.record_groups = group_identical_versions(record_nodes, versions);
+  if (!have_record) return out;
+
+  const auto built = build_subrecord_rows(versions, signature, priorities);
+  out.fields.reserve(built.rows.size());
+  for (std::size_t row = 0; row < built.rows.size(); ++row) {
+    FieldComparison field;
+    field.signature = built.keys[row].signature;
+    field.ordinal = built.keys[row].ordinal;
+    field.groups = group_identical_versions(built.rows[row], versions);
+    out.fields.push_back(std::move(field));
+  }
+  return out;
+}
+
+std::vector<RecordComparison> compare_conflicts_across_plugins(
+    const ConflictGraph& graph,
+    std::span<const Plugin* const> load_order,
+    std::span<const ConflictPriorityRule> priorities) {
+  std::vector<RecordComparison> out;
+  for (const auto& key : graph.conflicts()) {
+    out.push_back(compare_record_across_plugins(graph, load_order, key, priorities));
   }
   return out;
 }
