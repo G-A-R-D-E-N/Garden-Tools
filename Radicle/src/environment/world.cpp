@@ -100,10 +100,11 @@ std::optional<CellLighting> decode_lighting(const Reader& reader, Signature sign
 
 std::vector<FormKey> link_list(const Reader& reader, Signature signature) {
   std::vector<FormKey> links;
-  for (const auto& subrecord : reader.ref().record->subrecords) {
-    if (subrecord.signature != signature) continue;
-    if (subrecord.data.size() != 4) reader.fail(signature, "must be 4 bytes");
-    links.push_back(reader.link_at(subrecord, 0));
+  const auto* subrecord = reader.unique(signature);
+  if (subrecord == nullptr) return links;
+  if (subrecord->data.size() % 4 != 0) reader.fail(signature, "must be a multiple of 4 bytes");
+  for (std::size_t offset = 0; offset < subrecord->data.size(); offset += 4) {
+    links.push_back(reader.link_at(*subrecord, offset));
   }
   return links;
 }

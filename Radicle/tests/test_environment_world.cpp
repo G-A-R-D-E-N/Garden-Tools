@@ -373,10 +373,8 @@ TEST_F(WorldEnvironmentTest, DecodesCellLightingTailAndExtraSubrecords) {
                          {"DATA", {std::byte{0x02}, std::byte{0}}},
                          {"VISI", {std::byte{0x34}, std::byte{0x12}}},
                          {"PCMB", {std::byte{0x78}, std::byte{0x56}}},
-                         {"XCLR", bytes_of({0x900})},
-                         {"XCLR", bytes_of({0x901})},
-                         {"XPRI", bytes_of({0x910})},
-                         {"XPRI", bytes_of({0x911})},
+                         {"XCLR", bytes_of({0x900, 0x901})},
+                         {"XPRI", bytes_of({0x910, 0x911})},
                          {"XOWN", bytes_of({0xA00, 0, 0})},
                          {"XRNK", bytes_of({3})},
                          {"XILL", bytes_of({0xB00})},
@@ -392,8 +390,9 @@ TEST_F(WorldEnvironmentTest, DecodesCellLightingTailAndExtraSubrecords) {
   const auto truncated = rec("CELL", 0x801, {{"XCLL", xcll_bytes(135)}});
   const auto bad_region = rec("CELL", 0x802, {{"XCLR", {std::byte{0}, std::byte{0}}}});
   const auto bad_current = rec("CELL", 0x803, {{"XWCU", floats({1.0f, 2.0f, 3.0f, 4.0f, 5.0f})}});
+  const auto bad_stride = rec("CELL", 0x804, {{"XPRI", std::vector<std::byte>(6)}});
   paths_ = {write("Extras.esp", make_plugin({}, {top("CELL", {grp(0, 2, {grp(0, 3,
-      {cell, truncated, bad_region, bad_current})})})}))};
+      {cell, truncated, bad_region, bad_current, bad_stride})})})}))};
   const auto env = fo4::env::Environment::load(paths_);
 
   const auto data = fo4::env::decode_cell(env, *env.winner(key("000800:Extras.esp")));
@@ -450,6 +449,8 @@ TEST_F(WorldEnvironmentTest, DecodesCellLightingTailAndExtraSubrecords) {
   EXPECT_THROW(fo4::env::decode_cell(env, *env.winner(key("000802:Extras.esp"))),
                fo4::env::WorldDecodeError);
   EXPECT_THROW(fo4::env::decode_cell(env, *env.winner(key("000803:Extras.esp"))),
+               fo4::env::WorldDecodeError);
+  EXPECT_THROW(fo4::env::decode_cell(env, *env.winner(key("000804:Extras.esp"))),
                fo4::env::WorldDecodeError);
 }
 
