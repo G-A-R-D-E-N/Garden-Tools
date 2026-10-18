@@ -55,8 +55,8 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | AMMO | 5741 | 23 | 4 | 9 | - | 3 | yes | yes | - | - | 1 | L4 |
 | ANIO | 5777 | - | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | 7 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
-| ARMO | 5786 | 26 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMA | 5845 | 15 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMO | 5786 | 27 | 8 | 18 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | 1 | 4 | - | - | - | yes | - | - | - | - | L4 |
@@ -209,8 +209,8 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | AMMO | 19 | 1 | - | 3 | 4 | f32, i16, i32, u32, u8 | 12 | 2 | - | existing_only |
 | ANIO | - | - | - | - | 2 | - | - | - | - | existing_only |
 | AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
-| ARMA | 5 | - | - | 2 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
-| ARMO | 22 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 14 | 4 | - | existing_only |
+| ARMA | 9 | - | - | 6 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
+| ARMO | 23 | 1 | 1 | 2 | 8 | f32, i16, i32, u16, u32, u8 | 15 | 4 | - | existing_only |
 | ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
 | ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
 | ASTP | - | - | - | 1 | 4 | u32 | - | - | - | existing_only |

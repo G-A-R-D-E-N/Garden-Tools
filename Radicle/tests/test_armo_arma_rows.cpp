@@ -78,6 +78,15 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"ARMA", "ARMA\\WeightSliderFemale", "DNAM", 3, u8, 12},
     {"ARMA", "ARMA\\DetectionSoundValue", "DNAM", 6, u8, 12},
     {"ARMA", "ARMA\\WeaponAdjust", "DNAM", 8, f32, 12},
+    {"ARMA", "ARMA\\BipedMaleColorRemappingIndex", "MO2C", 0, f32, 4},
+    {"ARMA", "ARMA\\BipedFemaleColorRemappingIndex", "MO3C", 0, f32, 4},
+    {"ARMA", "ARMA\\FirstPersonMaleColorRemappingIndex", "MO4C", 0, f32, 4},
+    {"ARMA", "ARMA\\FirstPersonFemaleColorRemappingIndex", "MO5C", 0, f32, 4},
+    {"ARMA", "ARMA\\BipedMaleModelFlags", "MO2F", 0, u8, 1},
+    {"ARMA", "ARMA\\BipedFemaleModelFlags", "MO3F", 0, u8, 1},
+    {"ARMA", "ARMA\\FirstPersonMaleModelFlags", "MO4F", 0, u8, 1},
+    {"ARMA", "ARMA\\FirstPersonFemaleModelFlags", "MO5F", 0, u8, 1},
+    {"ARMO", "ARMO\\WorldModelColorRemappingIndex", "MODC", 0, f32, 4},
 };
 
 constexpr WholeRow k_whole_rows[] = {
@@ -143,6 +152,12 @@ Bytes u16_bytes(std::uint16_t value) {
 Bytes u32_bytes(std::uint32_t value) {
   ByteWriter out;
   out.u32(value);
+  return out.bytes;
+}
+
+Bytes u8_bytes(std::uint8_t value) {
+  ByteWriter out;
+  out.u8(value);
   return out.bytes;
 }
 
@@ -235,8 +250,10 @@ std::vector<std::byte> make_plugin() {
       {"MODL", u32_bytes(0x00000A31)},
       {"MO2S", u32_bytes(0x00000A40)},
       {"MO4S", u32_bytes(0x00000A41)},
+      {"MODC", floats({0.25f})},
       {"MOD2", zstr("Armor\\Male.nif")},
       {"MOD4", zstr("Armor\\Female.nif")},
+      {"MODC", floats({0.75f})},
       {"ICON", zstr("Armor\\Male.dds")},
       {"MICO", zstr("Armor\\Male_m.dds")},
       {"ICO2", zstr("Armor\\Female.dds")},
@@ -260,6 +277,14 @@ std::vector<std::byte> make_plugin() {
       {"MO3S", u32_bytes(0x00000A43)},
       {"MO4S", u32_bytes(0x00000A44)},
       {"MO5S", u32_bytes(0x00000A45)},
+      {"MO2C", floats({0.5f})},
+      {"MO3C", floats({1.5f})},
+      {"MO4C", floats({2.5f})},
+      {"MO5C", floats({3.5f})},
+      {"MO2F", u8_bytes(1)},
+      {"MO3F", u8_bytes(2)},
+      {"MO4F", u8_bytes(3)},
+      {"MO5F", u8_bytes(0)},
       {"MOD2", zstr("Armor\\BipedMale.nif")},
       {"MOD3", zstr("Armor\\BipedFemale.nif")},
       {"MOD4", zstr("Armor\\First.nif")},
@@ -644,4 +669,71 @@ TEST(ARMOARMARows, AdditionalRacesAreRepeatedNullableRaceLinks) {
   const auto modl = all_sub_bytes(reread, k_arma_key, "MODL");
   ASSERT_EQ(modl.size(), 1u);
   EXPECT_EQ(modl[0], u32_bytes(0));
+}
+
+TEST(ARMOARMARows, ModelColorRemappingAndFlagRowsReadAndWrite) {
+  const auto color = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMA"),
+                                                          "ARMA\\BipedMaleColorRemappingIndex");
+  ASSERT_TRUE(color.has_value());
+  EXPECT_EQ(color->scalar.subrecord, fo4::Signature::from_string("MO2C"));
+  EXPECT_EQ(color->scalar.offset, 0u);
+  EXPECT_EQ(color->scalar.storage, f32);
+  EXPECT_EQ(color->scalar.payload_size, 4u);
+  EXPECT_FALSE(color->scalar.address.repeated);
+
+  const auto flags = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMA"),
+                                                          "ARMA\\FirstPersonFemaleModelFlags");
+  ASSERT_TRUE(flags.has_value());
+  EXPECT_EQ(flags->scalar.subrecord, fo4::Signature::from_string("MO5F"));
+  EXPECT_EQ(flags->scalar.storage, u8);
+  EXPECT_EQ(flags->scalar.payload_size, 1u);
+  EXPECT_EQ(flags->scalar.presentation, fo4::schema::ScalarPresentation::flags);
+  const auto facebones = fo4::schema::scalar_name_value(flags->scalar, "Has FaceBones Model");
+  ASSERT_TRUE(facebones.has_value());
+  EXPECT_EQ(*facebones, 1);
+  const auto first_person = fo4::schema::scalar_name_value(flags->scalar, "Has 1stPerson Model");
+  ASSERT_TRUE(first_person.has_value());
+  EXPECT_EQ(*first_person, 2);
+
+  const auto modc = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                         "ARMO\\WorldModelColorRemappingIndex");
+  ASSERT_TRUE(modc.has_value());
+  EXPECT_EQ(modc->scalar.subrecord, fo4::Signature::from_string("MODC"));
+  EXPECT_EQ(modc->scalar.storage, f32);
+  EXPECT_EQ(modc->scalar.payload_size, 4u);
+  EXPECT_TRUE(modc->scalar.address.repeated);
+
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto arma = fo4::FormKey::parse(k_arma_key);
+  const auto armo = fo4::FormKey::parse(k_armo_key);
+  EXPECT_EQ(scalar_bytes(plugin, k_arma_key, "ARMA", "ARMA\\BipedMaleColorRemappingIndex"),
+            floats({0.5f}));
+  EXPECT_EQ(
+      scalar_bytes(plugin, k_arma_key, "ARMA", "ARMA\\FirstPersonFemaleColorRemappingIndex"),
+      floats({3.5f}));
+  EXPECT_EQ(scalar_bytes(plugin, k_arma_key, "ARMA", "ARMA\\BipedMaleModelFlags"), u8_bytes(1));
+  EXPECT_EQ(fo4::record_field_count(plugin, armo, *modc), 2u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, arma, *color, 0, "4.25"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, arma, *flags, 0, "3"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, armo, *modc, 1, "5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, armo, *modc, 2, "5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, arma, *flags, 1, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, arma, *flags, 0, "256"),
+               fo4::schema::ScalarError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(all_sub_bytes(reread, k_arma_key, "MO2C"), std::vector<Bytes>{floats({4.25f})});
+  EXPECT_EQ(all_sub_bytes(reread, k_arma_key, "MO3C"), std::vector<Bytes>{floats({1.5f})});
+  EXPECT_EQ(all_sub_bytes(reread, k_arma_key, "MO4C"), std::vector<Bytes>{floats({2.5f})});
+  EXPECT_EQ(all_sub_bytes(reread, k_arma_key, "MO5C"), std::vector<Bytes>{floats({3.5f})});
+  EXPECT_EQ(all_sub_bytes(reread, k_arma_key, "MO2F"), std::vector<Bytes>{u8_bytes(1)});
+  EXPECT_EQ(all_sub_bytes(reread, k_arma_key, "MO5F"), std::vector<Bytes>{u8_bytes(3)});
+  EXPECT_EQ(all_sub_bytes(reread, k_armo_key, "MODC"),
+            (std::vector<Bytes>{floats({0.25f}), floats({5.0f})}));
 }

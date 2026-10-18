@@ -200,7 +200,15 @@
           "kind": "string",
           "subrecord": "MOD5",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ARMA\\BipedMaleColorRemappingIndex", "label": "Biped male color remapping index", "kind": "scalar", "subrecord": "MO2C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\BipedFemaleColorRemappingIndex", "label": "Biped female color remapping index", "kind": "scalar", "subrecord": "MO3C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonMaleColorRemappingIndex", "label": "First person male color remapping index", "kind": "scalar", "subrecord": "MO4C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonFemaleColorRemappingIndex", "label": "First person female color remapping index", "kind": "scalar", "subrecord": "MO5C", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "insertion": "existing_only"},
+        {"path": "ARMA\\BipedMaleModelFlags", "label": "Biped male model flags", "kind": "scalar", "subrecord": "MO2F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
+        {"path": "ARMA\\BipedFemaleModelFlags", "label": "Biped female model flags", "kind": "scalar", "subrecord": "MO3F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonMaleModelFlags", "label": "First person male model flags", "kind": "scalar", "subrecord": "MO4F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"},
+        {"path": "ARMA\\FirstPersonFemaleModelFlags", "label": "First person female model flags", "kind": "scalar", "subrecord": "MO5F", "offset": 0, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Has FaceBones Model"}, {"bit": 1, "name": "Has 1stPerson Model"}], "minimum": 0, "maximum": 255, "payload_size": 1, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -720,7 +728,8 @@
           "kind": "string",
           "subrecord": "MIC2",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ARMO\\WorldModelColorRemappingIndex", "label": "World model color remapping index", "kind": "scalar", "subrecord": "MODC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "payload_size": 4, "repeated": true, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
