@@ -27,6 +27,7 @@ enum class CheckCode {
   light_object_id_overflow,
   internal_form_id_mismatch,
   invalid_condition,
+  injected_record,
 };
 
 enum class CheckSeverity {

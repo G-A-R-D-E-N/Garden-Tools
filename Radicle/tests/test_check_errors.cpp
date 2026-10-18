@@ -583,3 +583,32 @@ TEST(CheckErrors, RecordLevelCodeNamesAreStable) {
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::light_object_id_overflow), "light_object_id_overflow");
   EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::internal_form_id_mismatch), "internal_form_id_mismatch");
 }
+
+TEST(CheckErrors, RecordOwnedByAMasterThatLacksItIsInjected) {
+  fo4::test::ByteWriter game;
+  write_header(game, {});
+  write_empty_record(game, "KYWD", 0x000800);
+  write_empty_record(game, "MISC", 0x000801);
+  const auto master = fo4::read_plugin(game.bytes, "Fallout4.esm");
+
+  fo4::test::ByteWriter out;
+  write_header(out, "Fallout4.esm");
+  write_empty_record(out, "KYWD", 0x00000900);
+  write_empty_record(out, "MISC", 0x00000801);
+  write_empty_record(out, "KYWD", 0x01000802);
+  const auto plugin = fo4::read_plugin(out.bytes, "Patch.esp");
+
+  const std::vector<const fo4::Plugin*> load_order{&master, &plugin};
+  EXPECT_EQ(fo4::check_code_name(fo4::CheckCode::injected_record), "injected_record");
+  const auto findings = of_code(fo4::check_load_order(load_order), fo4::CheckCode::injected_record);
+  ASSERT_EQ(findings.size(), 1u);
+  EXPECT_EQ(findings[0].record, fo4::FormKey::parse("000900:Fallout4.esm"));
+  EXPECT_EQ(findings[0].plugin, fo4::PluginKey::from_filename("Patch.esp"));
+  EXPECT_EQ(findings[0].severity, fo4::CheckSeverity::warning);
+  EXPECT_NE(findings[0].message.find("000900:Fallout4.esm"), std::string::npos);
+
+  const fo4::CheckOptions only_master{std::vector<fo4::PluginKey>{
+      fo4::PluginKey::from_filename("Fallout4.esm")}};
+  EXPECT_TRUE(of_code(fo4::check_load_order(load_order, only_master), fo4::CheckCode::injected_record)
+                  .empty());
+}
