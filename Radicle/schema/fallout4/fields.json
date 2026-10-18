@@ -29287,6 +29287,22 @@
         {"path": "NPC_\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "SHRT", "ATTX"]
+    },
+    {
+      "signature": "ACHR",
+      "fields": [
+        {"path": "ACHR\\Radius", "label": "Radius", "kind": "scalar", "subrecord": "XRDS", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\Count", "label": "Count", "kind": "scalar", "subrecord": "XCNT", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
+        {"path": "ACHR\\HealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "XHLT", "storage": "u32", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "insertion": "existing_only"},
+        {"path": "ACHR\\LockLevel", "label": "Lock level", "kind": "scalar", "subrecord": "XLOC", "offset": 0, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "None"}, {"value": 1, "name": "Novice 1"}, {"value": 25, "name": "Novice 25"}, {"value": 50, "name": "Advanced"}, {"value": 75, "name": "Expert"}, {"value": 100, "name": "Master"}, {"value": 251, "name": "Barred"}, {"value": 252, "name": "Chained"}, {"value": 253, "name": "Requires Terminal"}, {"value": 254, "name": "Inaccessible"}, {"value": 255, "name": "Requires Key"}], "minimum": 0, "maximum": 255, "payload_size": 16, "insertion": "existing_only"},
+        {"path": "ACHR\\LockFlags", "label": "Lock flags", "kind": "scalar", "subrecord": "XLOC", "offset": 8, "storage": "u8", "presentation": "flags", "names": [{"bit": 2, "name": "Leveled Lock"}], "minimum": 0, "maximum": 255, "payload_size": 16, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "ACHR\\EncounterZone", "label": "Encounter zone", "subrecord": "XEZN", "offset": 0, "payload_sizes": [4], "targets": ["ECZN"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\LockKey", "label": "Lock key", "subrecord": "XLOC", "offset": 4, "payload_sizes": [16], "targets": ["KEYM"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACHR\\Emittance", "label": "Emittance", "subrecord": "XEMI", "offset": 0, "payload_sizes": [4], "targets": ["LIGH", "REGN"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACHR\\MultiboundReference", "label": "Multibound reference", "subrecord": "XMBR", "offset": 0, "payload_sizes": [4], "targets": ["PLYR", "ACHR", "REFR", "PGRE", "PHZD", "PMIS", "PARW", "PBAR", "PBEA", "PCON", "PFLA"], "nullable": false, "insertion": "existing_only"}
+      ]
     }
   ],
   "keyword_records": [
