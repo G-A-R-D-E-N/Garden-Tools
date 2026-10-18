@@ -2437,6 +2437,18 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_phase_name")]
     public static extern Status PluginSetScenePhaseName(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_insert_scene_actor")]
+    public static extern Status PluginInsertSceneActor(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_scene_actor")]
+    public static extern Status PluginRemoveSceneActor(IntPtr plugin, FormKey key, nuint index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_insert_scene_action")]
+    public static extern Status PluginInsertSceneAction(IntPtr plugin, FormKey key, nuint index, ushort type);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_scene_action")]
+    public static extern Status PluginRemoveSceneAction(IntPtr plugin, FormKey key, nuint index);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
     public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
 

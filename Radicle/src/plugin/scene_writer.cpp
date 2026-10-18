@@ -198,6 +198,67 @@ Range phase_body(const env::detail::SceneLayout& layout, std::size_t index) {
   return Range{layout.phases[index].open + 1, layout.phases[index].close};
 }
 
+std::size_t groups_end(const env::detail::SceneLayout& layout, const Record& record) {
+  if (!layout.actions.empty()) return layout.actions.back().close + 1;
+  if (!layout.actors.empty()) return layout.actors.back() + 3;
+  if (!layout.phases.empty()) return layout.phases.back().close + 1;
+  return tail_anchor(record);
+}
+
+std::size_t actor_anchor(const env::detail::SceneLayout& layout,
+                         const Record& record,
+                         std::size_t index) {
+  if (index < layout.actors.size()) return layout.actors[index];
+  if (!layout.actors.empty()) return layout.actors.back() + 3;
+  if (!layout.actions.empty()) return layout.actions.front().open;
+  return groups_end(layout, record);
+}
+
+std::size_t action_anchor(const env::detail::SceneLayout& layout,
+                          const Record& record,
+                          std::size_t index) {
+  if (index < layout.actions.size()) return layout.actions[index].open;
+  if (!layout.actions.empty()) return layout.actions.back().close + 1;
+  return groups_end(layout, record);
+}
+
+std::vector<std::byte> i32_payload(std::int32_t value) {
+  const auto bits = static_cast<std::uint32_t>(value);
+  return u32_payload(bits);
+}
+
+std::vector<std::byte> u16_payload(std::uint16_t value) {
+  return {std::byte{static_cast<std::uint8_t>(value & 0xFFu)},
+          std::byte{static_cast<std::uint8_t>((value >> 8) & 0xFFu)}};
+}
+
+std::vector<Subrecord> new_actor_subrecords() {
+  return {
+      Subrecord{s("ALID"), i32_payload(-1), false},
+      Subrecord{s("LNAM"), u32_payload(0), false},
+      Subrecord{s("DNAM"), u32_payload(26), false},
+  };
+}
+
+std::vector<Subrecord> new_action_subrecords(std::uint16_t type) {
+  return {
+      Subrecord{s("ANAM"), u16_payload(type), false},
+      Subrecord{s("ALID"), i32_payload(-1), false},
+      Subrecord{s("ANAM"), {}, false},
+  };
+}
+
+SubrecordGroupMutationStatus insert_at(Plugin& plugin,
+                                       Record& record,
+                                       std::size_t anchor,
+                                       std::vector<Subrecord> added) {
+  record.subrecords.insert(record.subrecords.begin() + static_cast<std::ptrdiff_t>(anchor),
+                           std::make_move_iterator(added.begin()),
+                           std::make_move_iterator(added.end()));
+  mark_record_modified(plugin, record);
+  return SubrecordGroupMutationStatus::updated;
+}
+
 }
 
 ScalarMutationStatus set_scene_scalar(Plugin& plugin,
@@ -283,13 +344,7 @@ SubrecordGroupMutationStatus insert_scene_phase(Plugin& plugin,
   if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
   const auto layout = checked_layout(*record);
   if (index > layout.phases.size()) return SubrecordGroupMutationStatus::index_out_of_range;
-  auto inserted = new_phase_subrecords(name);
-  record->subrecords.insert(record->subrecords.begin() +
-                                static_cast<std::ptrdiff_t>(phase_anchor(layout, *record, index)),
-                            std::make_move_iterator(inserted.begin()),
-                            std::make_move_iterator(inserted.end()));
-  mark_record_modified(plugin, *record);
-  return SubrecordGroupMutationStatus::updated;
+  return insert_at(plugin, *record, phase_anchor(layout, *record, index), new_phase_subrecords(name));
 }
 
 SubrecordGroupMutationStatus remove_scene_phase(Plugin& plugin, const FormKey& scene, std::size_t index) {
@@ -322,6 +377,55 @@ ScalarMutationStatus set_scene_phase_name(Plugin& plugin,
   data = std::move(payload);
   mark_record_modified(plugin, *record);
   return ScalarMutationStatus::updated;
+}
+
+SubrecordGroupMutationStatus insert_scene_actor(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
+  const auto layout = checked_layout(*record);
+  if (index > layout.actors.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  return insert_at(plugin, *record, actor_anchor(layout, *record, index), new_actor_subrecords());
+}
+
+SubrecordGroupMutationStatus remove_scene_actor(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
+  const auto layout = checked_layout(*record);
+  if (index >= layout.actors.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.actors[index]);
+  record->subrecords.erase(begin, begin + 3);
+  mark_record_modified(plugin, *record);
+  return SubrecordGroupMutationStatus::updated;
+}
+
+SubrecordGroupMutationStatus insert_scene_action(Plugin& plugin,
+                                                 const FormKey& scene,
+                                                 std::size_t index,
+                                                 std::uint16_t type) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
+  if (type >= 7) throw schema::ScalarError("scene action type is not in the stored enum");
+  const auto layout = checked_layout(*record);
+  if (index > layout.actions.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  return insert_at(plugin, *record, action_anchor(layout, *record, index), new_action_subrecords(type));
+}
+
+SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
+                                                 const FormKey& scene,
+                                                 std::size_t index) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
+  const auto layout = checked_layout(*record);
+  if (index >= layout.actions.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.actions[index].open);
+  const auto end = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.actions[index].close) + 1;
+  record->subrecords.erase(begin, end);
+  mark_record_modified(plugin, *record);
+  return SubrecordGroupMutationStatus::updated;
 }
 
 }

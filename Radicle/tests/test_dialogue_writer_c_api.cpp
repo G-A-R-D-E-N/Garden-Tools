@@ -247,3 +247,57 @@ TEST_F(DialogueWriterCApi, ScenePhaseAuthoringStatusesMapAndSurviveReload) {
   radicle_scene_free(decoded);
   radicle_env_destroy(env);
 }
+
+TEST_F(DialogueWriterCApi, SceneActorAndActionAuthoringStatusesMapAndSurviveReload) {
+  const auto file = path.string();
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.c_str(), &plugin), RADICLE_STATUS_OK);
+  const radicle_form_key scene = rkey(k_scene), quest = rkey(k_quest);
+
+  EXPECT_EQ(radicle_plugin_insert_scene_actor(plugin, scene, 1), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_insert_scene_actor(plugin, scene, 9), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_insert_scene_actor(plugin, rkey(0x8FF), 0), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_insert_scene_actor(plugin, quest, 0), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 9), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, rkey(0x8FF), 0), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, quest, 0), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_insert_scene_action(plugin, scene, 1, 2), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_insert_scene_action(plugin, scene, 9, 2), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_insert_scene_action(plugin, scene, 1, 7), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_insert_scene_action(plugin, rkey(0x8FF), 0, 2), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_insert_scene_action(plugin, quest, 0, 2), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, scene, 9), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, rkey(0x8FF), 0), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, quest, 0), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, scene, 0), RADICLE_STATUS_OK);
+
+  size_t count = 0;
+  EXPECT_EQ(radicle_plugin_scene_group_count(plugin, scene, RADICLE_SCENE_PART_ACTOR, &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 2u);
+  EXPECT_EQ(radicle_plugin_scene_group_count(plugin, scene, RADICLE_SCENE_PART_ACTION, &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 3u);
+  ASSERT_EQ(radicle_plugin_write_file(plugin, file.c_str()), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+
+  const char* paths[] = {file.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, scene, &record), RADICLE_STATUS_OK);
+  const radicle_scene_info* decoded = nullptr;
+  ASSERT_EQ(radicle_scene_decode(env, record, &decoded), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(decoded->actor_count, 2u);
+  EXPECT_EQ(decoded->actors[0].alias, -1);
+  EXPECT_EQ(decoded->actors[0].behavior_flags, 26u);
+  EXPECT_EQ(decoded->actors[1].alias, 1);
+  ASSERT_EQ(decoded->action_count, 3u);
+  EXPECT_EQ(decoded->actions[0].type, 2);
+  EXPECT_EQ(decoded->actions[0].has_actor_alias, 1);
+  EXPECT_EQ(decoded->actions[0].actor_alias, -1);
+  EXPECT_EQ(decoded->actions[0].payload_count, 0u);
+  EXPECT_EQ(decoded->actions[1].type, 2);
+  EXPECT_EQ(decoded->actions[2].type, 1);
+  radicle_scene_free(decoded);
+  radicle_env_destroy(env);
+}

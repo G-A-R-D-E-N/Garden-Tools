@@ -307,6 +307,96 @@ radicle_status radicle_plugin_set_scene_phase_name(radicle_plugin* plugin,
           return fail(RADICLE_STATUS_NOT_FOUND, "scene has no phase at that index or the phase has no name");
         default:
           return RADICLE_STATUS_OK;
+radicle_status radicle_plugin_insert_scene_actor(radicle_plugin* plugin,
+                                                 radicle_form_key key,
+                                                 size_t index) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while inserting a scene actor", [&] {
+    try {
+      switch (fo4::insert_scene_actor(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::SubrecordGroupMutationStatus::index_out_of_range:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has fewer actors than the requested index");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_remove_scene_actor(radicle_plugin* plugin,
+                                                 radicle_form_key key,
+                                                 size_t index) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while removing a scene actor", [&] {
+    try {
+      switch (fo4::remove_scene_actor(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::SubrecordGroupMutationStatus::index_out_of_range:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has no actor at that index");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_insert_scene_action(radicle_plugin* plugin,
+                                                  radicle_form_key key,
+                                                  size_t index,
+                                                  uint16_t type) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while inserting a scene action", [&] {
+    try {
+      switch (fo4::insert_scene_action(plugin->value, *form_key, index, type)) {
+        case fo4::SubrecordGroupMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::SubrecordGroupMutationStatus::index_out_of_range:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has fewer actions than the requested index");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_remove_scene_action(radicle_plugin* plugin,
+                                                  radicle_form_key key,
+                                                  size_t index) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while removing a scene action", [&] {
+    try {
+      switch (fo4::remove_scene_action(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::SubrecordGroupMutationStatus::index_out_of_range:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has no action at that index");
+        default:
+          return RADICLE_STATUS_OK;
       }
     } catch (const fo4::schema::ScalarError& error) {
       return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);

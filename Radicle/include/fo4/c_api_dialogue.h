@@ -170,6 +170,19 @@ RADICLE_API radicle_status radicle_plugin_set_scene_phase_name(radicle_plugin* p
                                                                radicle_form_key key,
                                                                size_t index,
                                                                const char* name);
+RADICLE_API radicle_status radicle_plugin_insert_scene_actor(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             size_t index);
+RADICLE_API radicle_status radicle_plugin_remove_scene_actor(radicle_plugin* plugin,
+                                                             radicle_form_key key,
+                                                             size_t index);
+RADICLE_API radicle_status radicle_plugin_insert_scene_action(radicle_plugin* plugin,
+                                                              radicle_form_key key,
+                                                              size_t index,
+                                                              uint16_t type);
+RADICLE_API radicle_status radicle_plugin_remove_scene_action(radicle_plugin* plugin,
+                                                              radicle_form_key key,
+                                                              size_t index);
 
 #ifdef __cplusplus
 }

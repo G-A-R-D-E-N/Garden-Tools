@@ -3,6 +3,7 @@
 #include "fo4/plugin/mutation.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 
@@ -40,5 +41,22 @@ ScalarMutationStatus set_scene_phase_name(Plugin& plugin,
                                           const FormKey& scene,
                                           std::size_t index,
                                           std::string_view name);
+
+SubrecordGroupMutationStatus insert_scene_actor(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index);
+
+SubrecordGroupMutationStatus remove_scene_actor(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index);
+
+SubrecordGroupMutationStatus insert_scene_action(Plugin& plugin,
+                                                 const FormKey& scene,
+                                                 std::size_t index,
+                                                 std::uint16_t type);
+
+SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
+                                                 const FormKey& scene,
+                                                 std::size_t index);
 
 }
