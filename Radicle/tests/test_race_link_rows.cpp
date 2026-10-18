@@ -52,6 +52,13 @@ Bytes zstr(std::string_view text) {
   return out;
 }
 
+Bytes sraf_bytes(std::uint16_t role, std::uint16_t perspective) {
+  ByteWriter out;
+  out.u16(role);
+  out.u16(perspective);
+  return out.bytes;
+}
+
 const auto k_target = fo4::FormKey::parse("000A20:Objects.esp");
 
 void write_header(ByteWriter& out) {
@@ -127,6 +134,21 @@ std::uint32_t raw_at(const Bytes& data, std::size_t offset) {
   if (data.size() < offset + 4) return 0;
   std::memcpy(&value, data.data() + offset, sizeof(value));
   return value;
+}
+
+std::string read_scalar_member(const fo4::Plugin& plugin,
+                               std::string_view path,
+                               std::size_t index) {
+  const auto field = scalar_row(path);
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(k_race_key));
+  if (record == nullptr) return {};
+  const auto resolved = fo4::schema::resolve_field_slots(
+      *record, fo4::schema::scalar_field_shape(field.scalar), field.scalar.address);
+  if (index >= resolved.slots.size() || !resolved.slots[index].valid) return {};
+  const auto slot = resolved.slots[index];
+  return fo4::schema::decode_scalar(
+      fo4::schema::scalar_slot_bytes(record->subrecords[slot.subrecord].data, slot, field.scalar),
+      field.scalar);
 }
 
 }  // namespace
@@ -262,6 +284,28 @@ TEST(RaceMorphRows, RowsMatchXEditSubrecordsStorageAndNames) {
     EXPECT_TRUE(field.scalar.address.repeated) << path;
   }
 
+  const auto role = scalar_row("RACE\\SubgraphRole");
+  EXPECT_EQ(role.scalar.subrecord, fo4::Signature::from_string("SRAF"));
+  EXPECT_EQ(role.scalar.storage, fo4::schema::ScalarStorage::u16);
+  EXPECT_EQ(role.scalar.presentation, fo4::schema::ScalarPresentation::enumeration);
+  EXPECT_TRUE(role.scalar.embedded);
+  EXPECT_TRUE(role.scalar.address.repeated);
+  EXPECT_EQ(role.scalar.payload_size, 4u);
+  EXPECT_EQ(role.scalar.offset, 0u);
+  EXPECT_EQ(fo4::schema::scalar_name_value(role.scalar, "Pipboy").value_or(-1), 4);
+  EXPECT_FALSE(fo4::schema::scalar_name_value(role.scalar, "Rifle").has_value());
+
+  const auto perspective = scalar_row("RACE\\SubgraphPerspective");
+  EXPECT_EQ(perspective.scalar.subrecord, fo4::Signature::from_string("SRAF"));
+  EXPECT_EQ(perspective.scalar.storage, fo4::schema::ScalarStorage::u16);
+  EXPECT_EQ(perspective.scalar.presentation, fo4::schema::ScalarPresentation::enumeration);
+  EXPECT_TRUE(perspective.scalar.embedded);
+  EXPECT_TRUE(perspective.scalar.address.repeated);
+  EXPECT_EQ(perspective.scalar.payload_size, 4u);
+  EXPECT_EQ(perspective.scalar.offset, 2u);
+  EXPECT_EQ(fo4::schema::scalar_name_value(perspective.scalar, "1st").value_or(-1), 1);
+  EXPECT_FALSE(fo4::schema::scalar_name_value(perspective.scalar, "2nd").has_value());
+
   const auto texture = row("RACE\\MorphPresetTexture");
   EXPECT_EQ(texture.subrecord, fo4::Signature::from_string("MPPT"));
   EXPECT_TRUE(texture.address.repeated);
@@ -277,6 +321,8 @@ TEST(RaceMorphRows, WritesMorphAndSubgraphValuesInPlace) {
                                               {"MPPF", u8_bytes(1)},
                                               {"MPGN", zstr("Brow")},
                                               {"SAPT", zstr("Anim\\Idle")},
+                                              {"SRAF", sraf_bytes(1, 0)},
+                                              {"SRAF", sraf_bytes(2, 1)},
                                               {"MPPT", u32_bytes(0x01000D02u)}},
                                              false),
                                 "Patch.esp");
@@ -299,9 +345,22 @@ TEST(RaceMorphRows, WritesMorphAndSubgraphValuesInPlace) {
   EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, row("RACE\\MorphPresetTexture"), k_target),
             fo4::FormLinkFieldMutationStatus::updated);
 
+  const auto role = scalar_row("RACE\\SubgraphRole");
+  const auto perspective = scalar_row("RACE\\SubgraphPerspective");
+  EXPECT_EQ(fo4::record_field_count(plugin, key, role), 2u);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SubgraphRole", 1), "2");
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SubgraphPerspective", 1), "1");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, role, 1, "3"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, perspective, 0, "1"),
+            fo4::ScalarMutationStatus::updated);
+
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\MorphLastIndex"), 0, "4"),
             fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, role, 2, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_THROW(fo4::set_record_scalar(plugin, key, mask, 0, "65536"), fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, perspective, 0, "2"), fo4::schema::ScalarError);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(raw_at(live_subrecord(reread, "FMRI", 0), 0), 9u);
@@ -310,5 +369,17 @@ TEST(RaceMorphRows, WritesMorphAndSubgraphValuesInPlace) {
   EXPECT_EQ(raw_at(live_subrecord(reread, "MSID", 0), 0), 12u);
   EXPECT_EQ(live_subrecord(reread, "SAPT", 0), zstr("Anim\\Walk"));
   EXPECT_EQ(live_subrecord(reread, "MPGN", 0), zstr("Brow"));
+  EXPECT_EQ(live_subrecord(reread, "SRAF", 0), sraf_bytes(1, 1));
+  EXPECT_EQ(live_subrecord(reread, "SRAF", 1), sraf_bytes(3, 1));
   EXPECT_EQ(raw_at(live_subrecord(reread, "MPPT", 0), 0), 0x01000A20u);
+}
+
+TEST(RaceMorphRows, RejectASubgraphFlagsPayloadOfTheWrongWidth) {
+  auto plugin = fo4::read_plugin(plugin_with({{"SRAF", u16_bytes(1)}}, false), "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\SubgraphRole"), 0u);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\SubgraphRole", 0), "");
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\SubgraphRole"), 0, "3"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(live_subrecord(plugin, "SRAF", 0), u16_bytes(1));
 }

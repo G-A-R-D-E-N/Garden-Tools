@@ -8139,6 +8139,8 @@
         {"path": "RACE\\MorphValueMinNames", "label": "Morph value min name", "kind": "string", "subrecord": "MSM0", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\SubgraphAnimationPaths", "label": "Subgraph animation path", "kind": "string", "subrecord": "SAPT", "repeated": true, "insertion": "existing_only"},
         {"path": "RACE\\SubgraphBehaviorGraphs", "label": "Subgraph behavior graph", "kind": "string", "subrecord": "SGNM", "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\SubgraphRole", "label": "Subgraph role", "kind": "scalar", "subrecord": "SRAF", "offset": 0, "storage": "u16", "presentation": "enum", "names": [{"value": 0, "name": "MT"}, {"value": 1, "name": "Weapon"}, {"value": 2, "name": "Furniture"}, {"value": 3, "name": "Idle"}, {"value": 4, "name": "Pipboy"}], "minimum": 0, "maximum": 4, "payload_size": 4, "repeated": true, "insertion": "existing_only"},
+        {"path": "RACE\\SubgraphPerspective", "label": "Subgraph perspective", "kind": "scalar", "subrecord": "SRAF", "offset": 2, "storage": "u16", "presentation": "enum", "names": [{"value": 0, "name": "3rd"}, {"value": 1, "name": "1st"}], "minimum": 0, "maximum": 1, "payload_size": 4, "repeated": true, "insertion": "existing_only"},
         {
           "path": "RACE\\FirstPersonFlags",
           "label": "First person flags",
