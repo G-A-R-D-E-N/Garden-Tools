@@ -333,6 +333,7 @@ if(RADICLE_BUILD_TESTS)
 
   add_executable(fo4_tests
     tests/test_achr_rows.cpp
+    tests/test_parw_rows.cpp
     tests/test_signature.cpp
     tests/test_formid.cpp
     tests/test_cursor.cpp

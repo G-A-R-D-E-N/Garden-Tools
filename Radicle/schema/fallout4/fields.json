@@ -8948,6 +8948,39 @@
           "maximum": 255,
           "payload_size": 12,
           "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\AmmoCount",
+          "label": "Ammo count",
+          "kind": "scalar",
+          "subrecord": "XAMC",
+          "storage": "u32",
+          "presentation": "identity",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\HeadTrackingWeight",
+          "label": "Head-tracking weight",
+          "kind": "scalar",
+          "subrecord": "XHTW",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\FavorCost",
+          "label": "Favor cost",
+          "kind": "scalar",
+          "subrecord": "XFVC",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -9001,6 +9034,91 @@
           "targets": [
             "FACT",
             "NPC_"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\EncounterZone",
+          "label": "Encounter zone",
+          "subrecord": "XEZN",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ECZN"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\AcousticParent",
+          "label": "Acoustic parent",
+          "subrecord": "XASP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "REFR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\Layer",
+          "label": "Layer",
+          "subrecord": "XLYR",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LAYR"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\MaterialSwap",
+          "label": "Material swap",
+          "subrecord": "XMSP",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "MSWP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\ReferenceGroup",
+          "label": "Reference group",
+          "subrecord": "XRFG",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "RFGP"
+          ],
+          "nullable": false,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "PARW\\Emittance",
+          "label": "Emittance",
+          "subrecord": "XEMI",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "LIGH",
+            "REGN"
           ],
           "nullable": false,
           "insertion": "existing_only"
