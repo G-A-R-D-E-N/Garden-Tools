@@ -38,6 +38,12 @@ struct WholeRow {
   std::string_view path;
 };
 
+struct StringRow {
+  std::string_view record;
+  std::string_view path;
+  std::string_view subrecord;
+};
+
 struct LinkRow {
   std::string_view record;
   std::string_view path;
@@ -79,6 +85,19 @@ constexpr WholeRow k_whole_rows[] = {
     {"ARMA", "ARMA\\FirstPersonFlags"},
 };
 
+constexpr StringRow k_string_rows[] = {
+    {"ARMO", "ARMO\\MaleWorldModel", "MOD2"},
+    {"ARMO", "ARMO\\FemaleWorldModel", "MOD4"},
+    {"ARMO", "ARMO\\MaleIcon", "ICON"},
+    {"ARMO", "ARMO\\MaleMessageIcon", "MICO"},
+    {"ARMO", "ARMO\\FemaleIcon", "ICO2"},
+    {"ARMO", "ARMO\\FemaleMessageIcon", "MIC2"},
+    {"ARMA", "ARMA\\BipedMaleModel", "MOD2"},
+    {"ARMA", "ARMA\\BipedFemaleModel", "MOD3"},
+    {"ARMA", "ARMA\\FirstPersonMaleModel", "MOD4"},
+    {"ARMA", "ARMA\\FirstPersonFemaleModel", "MOD5"},
+};
+
 constexpr LinkRow k_link_rows[] = {
     {"ARMO", "ARMO\\TemplateArmor", "TNAM", "ARMO", false},
     {"ARMO", "ARMO\\Race", "RNAM", "RACE", false},
@@ -97,6 +116,13 @@ constexpr LinkRow k_link_rows[] = {
     {"ARMA", "ARMA\\FemaleSkinTextureSwapList", "NAM3", "FLST", true},
     {"ARMA", "ARMA\\FootstepSound", "SNDD", "FSTS", true},
     {"ARMA", "ARMA\\ArtObject", "ONAM", "ARTO", false},
+    {"ARMA", "ARMA\\AdditionalRaces", "MODL", "RACE", true},
+    {"ARMA", "ARMA\\BipedMaleMaterialSwap", "MO2S", "MSWP", false},
+    {"ARMA", "ARMA\\BipedFemaleMaterialSwap", "MO3S", "MSWP", false},
+    {"ARMA", "ARMA\\FirstPersonMaleMaterialSwap", "MO4S", "MSWP", false},
+    {"ARMA", "ARMA\\FirstPersonFemaleMaterialSwap", "MO5S", "MSWP", false},
+    {"ARMO", "ARMO\\MaleMaterialSwap", "MO2S", "MSWP", false},
+    {"ARMO", "ARMO\\FemaleMaterialSwap", "MO4S", "MSWP", false},
 };
 
 constexpr std::uint32_t raw_id(std::uint32_t local_id) { return 0x02000000u | local_id; }
@@ -105,6 +131,12 @@ Bytes zstr(std::string_view text) {
   ByteWriter out;
   out.raw(text);
   out.u8(0);
+  return out.bytes;
+}
+
+Bytes u16_bytes(std::uint16_t value) {
+  ByteWriter out;
+  out.u16(value);
   return out.bytes;
 }
 
@@ -197,6 +229,18 @@ std::vector<std::byte> make_plugin() {
       {"BOD2", u32_bytes(4)},
       {"RNAM", u32_bytes(0x00000A10)},
       {"EITM", u32_bytes(0x00000A11)},
+      {"INDX", u16_bytes(1)},
+      {"MODL", u32_bytes(0x00000A30)},
+      {"INDX", u16_bytes(2)},
+      {"MODL", u32_bytes(0x00000A31)},
+      {"MO2S", u32_bytes(0x00000A40)},
+      {"MO4S", u32_bytes(0x00000A41)},
+      {"MOD2", zstr("Armor\\Male.nif")},
+      {"MOD4", zstr("Armor\\Female.nif")},
+      {"ICON", zstr("Armor\\Male.dds")},
+      {"MICO", zstr("Armor\\Male_m.dds")},
+      {"ICO2", zstr("Armor\\Female.dds")},
+      {"MIC2", zstr("Armor\\Female_m.dds")},
   };
   for (const auto& sub : armo_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, armo);
@@ -211,6 +255,15 @@ std::vector<std::byte> make_plugin() {
       {"RNAM", u32_bytes(0x00000A10)},
       {"NAM0", u32_bytes(0x00000A12)},
       {"SNDD", u32_bytes(0x00000A13)},
+      {"MODL", u32_bytes(0x00000A32)},
+      {"MO2S", u32_bytes(0x00000A42)},
+      {"MO3S", u32_bytes(0x00000A43)},
+      {"MO4S", u32_bytes(0x00000A44)},
+      {"MO5S", u32_bytes(0x00000A45)},
+      {"MOD2", zstr("Armor\\BipedMale.nif")},
+      {"MOD3", zstr("Armor\\BipedFemale.nif")},
+      {"MOD4", zstr("Armor\\First.nif")},
+      {"MOD5", zstr("Armor\\FirstFemale.nif")},
   };
   for (const auto& sub : arma_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, arma);
@@ -232,6 +285,20 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_vie
   }
   ADD_FAILURE() << subrecord;
   return {};
+}
+
+std::vector<Bytes> all_sub_bytes(const fo4::Plugin& plugin, std::string_view key,
+                                 std::string_view subrecord) {
+  std::vector<Bytes> out;
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) {
+    ADD_FAILURE() << key;
+    return out;
+  }
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature.to_string() == subrecord) out.push_back(sub.data);
+  }
+  return out;
 }
 
 Bytes scalar_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_view record,
@@ -407,4 +474,174 @@ TEST(ARMOARMARows, WritesRowsThenRereads) {
                         std::byte{0x00}, std::byte{0x00}, std::byte{0x05}, std::byte{0x00}},
                   floats({2.5f})}));
   EXPECT_EQ(sub_bytes(reread, k_arma_key, "BOD2"), u32_bytes(1));
+}
+
+TEST(ARMOARMARows, ModelListRowsAreRepeatedIndicesAndAddonLinks) {
+  const auto index = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                          "ARMO\\ModelAddonIndex");
+  ASSERT_TRUE(index.has_value());
+  EXPECT_EQ(index->scalar.subrecord, fo4::Signature::from_string("INDX"));
+  EXPECT_EQ(index->scalar.storage, u16);
+  EXPECT_EQ(index->scalar.offset, 0u);
+  EXPECT_EQ(index->scalar.payload_size, 0u);
+  EXPECT_FALSE(index->scalar.embedded);
+  EXPECT_TRUE(index->scalar.address.repeated);
+  EXPECT_EQ(index->scalar.address.stride, 0u);
+  EXPECT_THROW(fo4::schema::encode_scalar("65536", index->scalar), fo4::schema::ScalarError);
+
+  const auto addon = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                            "ARMO\\ModelArmorAddon");
+  ASSERT_TRUE(addon.has_value());
+  EXPECT_EQ(addon->subrecord, fo4::Signature::from_string("MODL"));
+  EXPECT_EQ(addon->offset, 0u);
+  EXPECT_TRUE(addon->address.repeated);
+  EXPECT_FALSE(addon->nullable);
+  ASSERT_EQ(addon->payload_sizes[0], 4u);
+  const auto targets = fo4::schema::formlink_field_targets(*addon);
+  ASSERT_EQ(targets.size(), 1u);
+  EXPECT_EQ(targets[0], fo4::Signature::from_string("ARMA"));
+}
+
+TEST(ARMOARMARows, MaterialSwapRowsReadAndEditTheMSWPLink) {
+  const auto male = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                           "ARMO\\MaleMaterialSwap");
+  const auto first_person_female =
+      fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMA"),
+                                             "ARMA\\FirstPersonFemaleMaterialSwap");
+  ASSERT_TRUE(male.has_value());
+  ASSERT_TRUE(first_person_female.has_value());
+  EXPECT_FALSE(male->address.repeated);
+  EXPECT_FALSE(male->nullable);
+  EXPECT_FALSE(first_person_female->address.repeated);
+  EXPECT_FALSE(first_person_female->nullable);
+
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(link_raw(plugin, k_armo_key, "MO2S"), 0x00000A40u);
+  EXPECT_EQ(link_raw(plugin, k_armo_key, "MO4S"), 0x00000A41u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO2S"), 0x00000A42u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO3S"), 0x00000A43u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO4S"), 0x00000A44u);
+  EXPECT_EQ(link_raw(plugin, k_arma_key, "MO5S"), 0x00000A45u);
+
+  const auto armo_key = fo4::FormKey::parse(k_armo_key);
+  const auto arma_key = fo4::FormKey::parse(k_arma_key);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, armo_key, *male, fo4::FormKey{}),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, armo_key, *male, armo_key),
+               fo4::schema::FormLinkFieldError);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, armo_key, *male, 1,
+                                           fo4::FormKey::parse("000A60:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, arma_key, *first_person_female, 0,
+                                           fo4::FormKey::parse("000A61:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(link_raw(reread, k_armo_key, "MO2S"), 0x00000A40u);
+  EXPECT_EQ(link_raw(reread, k_arma_key, "MO5S"), 0x01000A61u);
+}
+
+TEST(ARMOARMARows, ModelFileRowsReadAndWriteTheFilename) {
+  for (const auto& row : k_string_rows) {
+    SCOPED_TRACE(row.path);
+    const auto field =
+        fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(row.record), row.path);
+    ASSERT_TRUE(field.has_value());
+    EXPECT_EQ(field->scalar.subrecord, fo4::Signature::from_string(row.subrecord));
+    EXPECT_EQ(field->scalar.storage, fo4::schema::ScalarStorage::zstring);
+    EXPECT_FALSE(field->scalar.embedded);
+  }
+
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto armo_key = fo4::FormKey::parse(k_armo_key);
+  const auto arma_key = fo4::FormKey::parse(k_arma_key);
+  EXPECT_EQ(sub_bytes(plugin, k_armo_key, "MOD2"), zstr("Armor\\Male.nif"));
+  EXPECT_EQ(sub_bytes(plugin, k_armo_key, "ICON"), zstr("Armor\\Male.dds"));
+  EXPECT_EQ(sub_bytes(plugin, k_arma_key, "MOD5"), zstr("Armor\\FirstFemale.nif"));
+
+  const auto male_world = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                               "ARMO\\MaleWorldModel");
+  ASSERT_TRUE(male_world.has_value());
+  EXPECT_THROW(fo4::set_record_scalar(plugin, armo_key, *male_world, 0, "Armor\\Other.nif"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::set_record_string(plugin, armo_key, "ARMO\\MaleWorldModel", 0,
+                                   "Armor\\NewMale.nif"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, arma_key, "ARMA\\FirstPersonFemaleModel", 0,
+                                   "Armor\\NewFirstFemale.nif"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, arma_key, "ARMA\\BipedMaleModel", 1, "Armor\\Extra.nif"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_string(plugin, armo_key, "ARMO\\FemaleMessageIcon", 0,
+                                   "Armor\\NewFemale_m.dds"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, k_armo_key, "MOD2"), zstr("Armor\\NewMale.nif"));
+  EXPECT_EQ(sub_bytes(reread, k_armo_key, "MOD4"), zstr("Armor\\Female.nif"));
+  EXPECT_EQ(sub_bytes(reread, k_armo_key, "MIC2"), zstr("Armor\\NewFemale_m.dds"));
+  EXPECT_EQ(sub_bytes(reread, k_arma_key, "MOD2"), zstr("Armor\\BipedMale.nif"));
+  EXPECT_EQ(sub_bytes(reread, k_arma_key, "MOD5"), zstr("Armor\\NewFirstFemale.nif"));
+}
+
+TEST(ARMOARMARows, EditsTheModelListByIndex) {
+  const auto index = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                          "ARMO\\ModelAddonIndex");
+  const auto addon = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                            "ARMO\\ModelArmorAddon");
+  ASSERT_TRUE(index.has_value());
+  ASSERT_TRUE(addon.has_value());
+  const auto key = fo4::FormKey::parse(k_armo_key);
+
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *index), 2u);
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *addon), 2u);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 1, "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 1, "7"),
+            fo4::ScalarMutationStatus::unchanged);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *index, 2, "7"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *addon, 2,
+                                           fo4::FormKey::parse("000A21:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *addon, 1,
+                                           fo4::FormKey::parse("000A21:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(fo4::set_record_formlink_field(plugin, key, *addon, 0, key),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto indices = all_sub_bytes(reread, k_armo_key, "INDX");
+  ASSERT_EQ(indices.size(), 2u);
+  EXPECT_EQ(indices[0], u16_bytes(1));
+  EXPECT_EQ(indices[1], u16_bytes(7));
+  const auto addons = all_sub_bytes(reread, k_armo_key, "MODL");
+  ASSERT_EQ(addons.size(), 2u);
+  EXPECT_EQ(addons[0], u32_bytes(0x00000A30u));
+  EXPECT_EQ(addons[1], u32_bytes(0x01000A21u));
+}
+
+TEST(ARMOARMARows, AdditionalRacesAreRepeatedNullableRaceLinks) {
+  const auto field = fo4::schema::formlink_field_descriptor(fo4::Signature::from_string("ARMA"),
+                                                            "ARMA\\AdditionalRaces");
+  ASSERT_TRUE(field.has_value());
+  EXPECT_EQ(field->subrecord, fo4::Signature::from_string("MODL"));
+  EXPECT_EQ(field->offset, 0u);
+  EXPECT_TRUE(field->address.repeated);
+  EXPECT_TRUE(field->nullable);
+  ASSERT_EQ(field->payload_sizes[0], 4u);
+
+  const auto key = fo4::FormKey::parse(k_arma_key);
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  EXPECT_EQ(fo4::record_field_count(plugin, key, *field), 1u);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *field, 0, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *field, 1, fo4::FormKey{}),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto modl = all_sub_bytes(reread, k_arma_key, "MODL");
+  ASSERT_EQ(modl.size(), 1u);
+  EXPECT_EQ(modl[0], u32_bytes(0));
 }

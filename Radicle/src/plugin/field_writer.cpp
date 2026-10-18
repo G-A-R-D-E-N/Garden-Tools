@@ -117,13 +117,17 @@ schema::FieldSlots formlink_slots(const Record& record, const schema::FormLinkFi
   shape.subrecord = field.subrecord;
   shape.offset = field.offset;
   shape.width = sizeof(std::uint32_t);
+  shape.min_form_version = field.min_form_version;
   shape.max_form_version = field.max_form_version;
   auto resolved = schema::resolve_field_slots(record, shape, field.address);
   if (resolved.duplicate) {
     throw schema::FormLinkFieldError("record contains duplicate FormLink subrecords: " +
                                      field.subrecord.to_string());
   }
-  if (field.payload_sizes[0] != 0 &&
+  const bool version_admits =
+      record.header.form_version >= field.min_form_version &&
+      (field.max_form_version == 0 || record.header.form_version < field.max_form_version);
+  if (field.payload_sizes[0] != 0 && version_admits &&
       (field.address.when.count == 0 || std::any_of(resolved.slots.begin(), resolved.slots.end(),
                                                    [](const auto& slot) { return slot.valid || slot.misfit; }))) {
     for (const auto& subrecord : record.subrecords) {

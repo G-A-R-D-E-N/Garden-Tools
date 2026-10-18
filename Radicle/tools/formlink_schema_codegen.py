@@ -183,9 +183,14 @@ def load_lists(schema_path: Path):
                     raise ValueError(f"FormLink payload_sizes must contain fitting positive integers: {path!r}")
                 if len(set(payload_sizes)) != len(payload_sizes):
                     raise ValueError(f"FormLink payload_sizes contains duplicate sizes: {path!r}")
+            min_form_version = row.get("min_form_version", 0)
+            if "min_form_version" in row and (type(min_form_version) is not int or not 0 < min_form_version <= 0xFFFF):
+                raise ValueError(f"FormLink min_form_version must be a 16-bit positive integer: {path!r}")
             max_form_version = row.get("max_form_version", 0)
             if "max_form_version" in row and (type(max_form_version) is not int or not 0 < max_form_version <= 0xFFFF):
                 raise ValueError(f"FormLink max_form_version must be a 16-bit positive integer: {path!r}")
+            if max_form_version and max_form_version <= min_form_version:
+                raise ValueError(f"FormLink max_form_version must exceed min_form_version: {path!r}")
             fields.append({
                 "record": record_signature,
                 "path": path,
@@ -196,6 +201,7 @@ def load_lists(schema_path: Path):
                 "address": parse_address(row, path, subrecord, True, 4),
                 "payload_sizes": payload_sizes,
                 "max_form_version": max_form_version,
+                "min_form_version": min_form_version,
                 "targets": parse_formlink_field_targets(row, path, union_targets),
             })
 
@@ -481,8 +487,9 @@ def render(lists, nested_lists, fields, unions) -> str:
             f"{first_target}, {target_count}, " +
             render_address(row["address"]) +
             (", {{" + ", ".join(map(str, row["payload_sizes"])) + "}}"
-             if row["payload_sizes"] or row["max_form_version"] else "") +
-            (f", {row['max_form_version']}" if row["max_form_version"] else "") +
+             if row["payload_sizes"] or row["max_form_version"] or row["min_form_version"] else "") +
+            (f", {row['max_form_version']}" if row["max_form_version"] or row["min_form_version"] else "") +
+            (f", {row['min_form_version']}" if row["min_form_version"] else "") +
             "},"
         )
     lines.append("};")

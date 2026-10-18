@@ -39,14 +39,14 @@ Columns: xEdit line is the registration line in the pinned definitions. Rows, au
 
 Tier: L4 has field rows, FormLink fields or authoring constraints; L2 has a typed module, no rows or lists; L3 has FormLink list rows only; L1 has a keyword list only; L0 has none of these. Remap evidence (the Mixed remap column and the form_links.cpp record checks) does not affect the tier. L5 (dedicated PET route) is not derived.
 
-Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
+Tier counts: L0 5, L1 0, L2 5, L3 0, L4 137.
 
 ### Per-signature coverage
 
 | Record | xEdit line | Scalar rows | String rows | FormLink fields | FormLink lists | Localized subrecords | Authoring | Keyword list | Typed module | Mixed remap | Real-data tests naming it | Tier |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- |
 | AACT | 6970 | 5 | 1 | 1 | - | 1 | yes | - | - | - | 1 | L4 |
-| ACHR | 4483 | 11 | - | 13 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| ACHR | 4483 | - | - | - | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L2 |
 | ACTI | 5611 | 11 | 1 | 10 | - | 2 | yes | yes | environment/base_records | yes | 1 | L4 |
 | ADDN | 7796 | 9 | 1 | 3 | - | - | yes | - | - | - | 1 | L4 |
 | AECH | 12206 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -55,8 +55,8 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | AMMO | 5741 | 12 | 2 | 5 | - | 3 | yes | yes | - | - | 1 | L4 |
 | ANIO | 5777 | - | 2 | 1 | - | - | yes | - | - | - | 1 | L4 |
 | AORU | 12268 | 5 | - | - | - | - | yes | - | - | - | 1 | L4 |
-| ARMA | 5845 | 7 | - | 7 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
-| ARMO | 5786 | 14 | - | 11 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMA | 5845 | 7 | 4 | 12 | - | - | yes | - | forms/armor, forms/armor_edit | yes | 1 | L4 |
+| ARMO | 5786 | 15 | 6 | 14 | - | 2 | yes | yes | forms/armor, forms/armor_edit | yes | 1 | L4 |
 | ARTO | 9362 | 8 | 1 | 2 | - | - | yes | yes | - | - | 1 | L4 |
 | ASPC | 7057 | 8 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | ASTP | 9135 | 1 | 4 | - | - | - | yes | - | - | - | - | L4 |
@@ -94,7 +94,7 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | FLOR | 12167 | 15 | 1 | 5 | - | 3 | yes | yes | environment/vegetation | - | 1 | L4 |
 | FLST | 7574 | - | - | - | 1 | 1 | yes | - | - | - | - | L4 |
 | FSTP | 8686 | - | 1 | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
-| FSTS | 8692 | 5 | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
+| FSTS | 8692 | - | - | 1 | - | - | yes | - | environment/sound | yes | 2 | L4 |
 | FURN | 6848 | 16 | 2 | 8 | - | 2 | yes | yes | - | yes | 1 | L4 |
 | GDRY | 12322 | 15 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | GLOB | 6921 | 2 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -104,7 +104,7 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | HDPT | 7006 | 3 | 2 | 4 | 1 | 1 | yes | - | - | - | 1 | L4 |
 | IDLE | 9646 | 5 | 3 | 2 | - | - | yes | - | environment/behavior | - | 2 | L4 |
 | IDLM | 7098 | 10 | 1 | 3 | - | - | yes | yes | - | yes | 1 | L4 |
-| IMAD | 7466 | 74 | - | - | - | - | yes | - | - | - | 1 | L4 |
+| IMAD | 7466 | 64 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | IMGS | 7393 | 36 | 1 | - | - | - | yes | - | - | - | 3 | L4 |
 | INFO | 9672 | 13 | 7 | 10 | - | 2 | yes | - | forms/info_copy, environment/dialogue | - | 2 | L4 |
 | INGR | 9788 | 11 | 3 | 5 | - | 1 | yes | yes | - | - | 1 | L4 |
@@ -131,9 +131,9 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | MESG | 8179 | 2 | 1 | 1 | - | 4 | yes | - | - | - | 1 | L4 |
 | MGEF | 10052 | 17 | - | 18 | - | 2 | yes | yes | - | yes | 1 | L4 |
 | MISC | 10212 | - | - | - | - | 1 | - | yes | forms/components | yes | 1 | L2 |
-| MOVT | 9393 | 61 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
+| MOVT | 9393 | 33 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | MSTT | 7067 | 8 | 1 | 4 | - | 1 | yes | yes | - | - | 1 | L4 |
-| MSWP | 12437 | 1 | 2 | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
+| MSWP | 12437 | - | - | - | - | - | yes | - | environment/material_swap | - | 1 | L4 |
 | MUSC | 8665 | 4 | - | - | 1 | - | yes | - | environment/sound | yes | 2 | L4 |
 | MUST | 8795 | 6 | 2 | - | 1 | - | yes | - | - | yes | 1 | L4 |
 | NAVI | 7240 | 4 | - | 1 | - | - | yes | - | environment/navmesh | yes | 2 | L4 |
@@ -145,7 +145,7 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | OTFT | 9357 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | OVIS | 12546 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
 | PACK | 10526 | 24 | - | 12 | - | - | yes | - | environment/behavior | - | 3 | L4 |
-| PARW | 5944 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
+| PARW | 5944 | 11 | - | 3 | - | - | yes | - | - | yes | 1 | L4 |
 | PBAR | 5945 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PBEA | 5946 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PCON | 5947 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
@@ -157,9 +157,9 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | PLYR | 12129 | - | - | - | - | - | yes | - | - | - | 1 | L4 |
 | PMIS | 5951 | 14 | - | 9 | - | - | yes | - | - | yes | 1 | L4 |
 | PROJ | 7115 | 22 | 2 | 11 | - | 1 | yes | - | forms/proj_expl_hazd | yes | 3 | L4 |
-| QUST | 10684 | 5 | 4 | 3 | 1 | 3 | yes | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L4 |
-| RACE | 11054 | 40 | 4 | 24 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
-| REFR | 11347 | 25 | - | 13 | - | - | yes | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
+| QUST | 10684 | - | - | - | - | 3 | - | - | forms/quest_alias_edit, forms/quest_aliases_decode, forms/quest_objectives, forms/quest_stages | - | 7 | L2 |
+| RACE | 11054 | 52 | 12 | 41 | 9 | 5 | yes | yes | forms/race, forms/race_body | yes | 2 | L4 |
+| REFR | 11347 | 23 | - | 11 | - | - | - | - | forms/placed_reference, forms/placed_reference_edit | yes | - | L4 |
 | REGN | 11870 | - | - | - | - | 1 | - | - | - | yes | - | L0 |
 | RELA | 8848 | 2 | - | 3 | - | - | yes | - | - | - | 1 | L4 |
 | REVB | 9593 | 13 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -174,14 +174,14 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | SMQN | 8735 | 4 | - | 2 | - | - | yes | - | - | - | 1 | L4 |
 | SNCT | 9469 | 5 | - | 2 | - | 1 | yes | - | - | - | 1 | L4 |
 | SNDR | 9406 | 11 | 3 | 5 | - | - | yes | - | environment/sound | - | 6 | L4 |
-| SOPM | 9489 | 24 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
+| SOPM | 9489 | 16 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 | SOUN | 11961 | 9 | - | 1 | - | - | yes | - | environment/sound | - | 2 | L4 |
 | SPEL | 12030 | 14 | - | 2 | - | 2 | yes | yes | - | - | 3 | L4 |
 | SPGD | 6128 | 12 | 1 | - | - | - | yes | - | - | - | 1 | L4 |
 | STAG | 12663 | - | - | - | - | - | yes | - | - | yes | 1 | L4 |
-| STAT | 12045 | 10 | 5 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
+| STAT | 12045 | 10 | 1 | 5 | - | 1 | yes | - | environment/base_records | yes | 2 | L4 |
 | TACT | 5672 | 6 | 1 | 3 | - | 1 | yes | yes | - | - | 1 | L4 |
-| TERM | 12671 | 13 | 7 | 5 | - | 7 | yes | yes | - | yes | 1 | L4 |
+| TERM | 12671 | 9 | 2 | 3 | - | 7 | yes | yes | - | yes | 1 | L4 |
 | TES4 | 12091 | - | - | - | - | - | - | - | - | yes | 7 | L0 |
 | TREE | 12134 | 22 | 1 | 3 | - | 1 | yes | - | environment/vegetation | - | 1 | L4 |
 | TRNS | 12774 | 9 | - | - | - | - | yes | - | - | - | 1 | L4 |
@@ -189,7 +189,7 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
 | WEAP | 12877 | 46 | 1 | 30 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
-| WRLD | 13110 | 30 | 4 | 8 | - | 1 | yes | - | environment/world | yes | 1 | L4 |
+| WRLD | 13110 | 22 | 4 | 8 | - | 1 | - | - | environment/world | yes | 1 | L4 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 
@@ -200,7 +200,6 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | Record | Scalar identity | Scalar percent_0_100 | Scalar enum | Scalar flags | String | Scalar storage | Repeated | Stride | When | Insertion |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
 | AACT | 4 | - | 1 | - | 1 | u32, u8 | - | - | - | existing_only |
-| ACHR | 6 | 1 | 2 | 2 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | ACTI | 10 | - | - | 1 | 1 | f32, i16, u16, u8 | - | 2 | - | existing_only |
 | ADDN | 8 | - | 1 | - | 1 | i16, u16, u32 | - | - | - | existing_only |
 | AECH | - | - | - | - | - | - | - | - | - | - |
@@ -209,8 +208,8 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | AMMO | 11 | - | - | 1 | 2 | f32, i16, u32, u8 | - | - | - | existing_only |
 | ANIO | - | - | - | - | 2 | - | - | - | - | existing_only |
 | AORU | 3 | - | 2 | - | - | f32, u8 | - | - | - | existing_only |
-| ARMA | 5 | - | - | 2 | - | f32, u32, u8 | - | - | - | existing_only |
-| ARMO | 13 | - | 1 | - | - | f32, i16, i32, u16, u32, u8 | - | 2 | - | existing_only |
+| ARMA | 5 | - | - | 2 | 4 | f32, u32, u8 | 1 | - | - | existing_only |
+| ARMO | 14 | - | 1 | - | 6 | f32, i16, i32, u16, u32, u8 | 2 | 2 | - | existing_only |
 | ARTO | 7 | - | 1 | - | 1 | f32, i16, u32 | - | - | - | existing_only |
 | ASPC | 7 | - | 1 | - | - | i16, u16, u8 | - | - | - | existing_only |
 | ASTP | - | - | - | 1 | 4 | u32 | - | - | - | existing_only |
@@ -248,7 +247,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | FLOR | 15 | - | - | - | 1 | f32, i16, u16, u8 | - | 2 | - | existing_only |
 | FLST | - | - | - | - | - | - | - | - | - | - |
 | FSTP | - | - | - | - | 1 | - | - | - | - | existing_only |
-| FSTS | 5 | - | - | - | - | u32 | - | 1 | - | existing_only |
+| FSTS | - | - | - | - | - | - | - | 1 | - | existing_only |
 | FURN | 10 | - | 2 | 4 | 2 | f32, i16, i32, u16, u32, u8 | 6 | 2 | - | existing_only |
 | GDRY | 15 | - | - | - | - | f32 | - | - | - | existing_only |
 | GLOB | 1 | - | 1 | - | - | f32, u8 | - | - | - | existing_only |
@@ -258,7 +257,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | HDPT | - | - | 2 | 1 | 2 | u32, u8 | 2 | - | - | existing_only |
 | IDLE | 5 | - | - | - | 3 | u16, u8 | - | - | - | existing_only |
 | IDLM | 9 | - | - | 1 | 1 | f32, i16, u8 | - | - | - | existing_only |
-| IMAD | 70 | - | 3 | 1 | - | f32, u32, u8 | - | 10 | - | existing_only |
+| IMAD | 60 | - | 3 | 1 | - | f32, u32, u8 | - | - | - | existing_only |
 | IMGS | 35 | - | 1 | - | 1 | f32, u16 | - | - | - | existing_only |
 | INFO | 13 | - | - | - | 7 | i32, u16, u32, u8 | 11 | - | - | existing_only |
 | INGR | 10 | - | - | 1 | 3 | f32, i16, i32, u32 | - | - | - | existing_only |
@@ -284,9 +283,9 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MESG | 1 | - | - | 1 | 1 | u32 | - | - | - | existing_only |
 | MGEF | 12 | - | 4 | 1 | - | f32, u32 | - | - | - | existing_only |
 | MISC | - | - | - | - | - | - | - | - | - | - |
-| MOVT | 61 | - | - | - | 1 | f32 | - | - | - | existing_only |
+| MOVT | 33 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MSTT | 7 | - | 1 | - | 1 | f32, i16, u8 | - | 2 | - | existing_only |
-| MSWP | 1 | - | - | - | 2 | f32 | 3 | - | - | existing_only |
+| MSWP | - | - | - | - | - | - | - | - | - | - |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | - | - | existing_only |
 | MUST | 5 | - | 1 | - | 2 | f32, u32 | - | - | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
@@ -298,7 +297,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | OTFT | - | - | - | - | - | - | - | - | - | - |
 | OVIS | - | - | - | - | - | - | - | - | - | - |
 | PACK | 24 | - | - | - | - | i32, i8, u16, u32, u8 | 21 | - | 17 | existing_only |
-| PARW | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
+| PARW | 8 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PBAR | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PBEA | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PCON | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
@@ -310,9 +309,9 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PLYR | - | - | - | - | - | - | - | - | - | - |
 | PMIS | 11 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | - | - | existing_only |
 | PROJ | 22 | - | - | - | 2 | f32, i16, u16, u32, u8 | - | - | - | existing_only |
-| QUST | 2 | - | 2 | 1 | 4 | f32, u16, u32, u8 | - | - | - | existing_only |
-| RACE | 32 | - | 5 | 3 | 4 | f32, i16, i32, u32, u8 | 3 | 2 | - | existing_only |
-| REFR | 20 | 1 | 2 | 2 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
+| QUST | - | - | - | - | - | - | - | - | - | - |
+| RACE | 40 | - | 9 | 3 | 12 | f32, i16, i32, u16, u32, u8 | 21 | 2 | - | existing_only |
+| REFR | 20 | 1 | 1 | 1 | - | f32, i32, u32, u8 | - | 4 | - | existing_only |
 | REGN | - | - | - | - | - | - | - | - | - | - |
 | RELA | - | - | 1 | 1 | - | u8 | - | - | - | existing_only |
 | REVB | 12 | - | 1 | - | - | i8, u16, u32, u8 | - | - | - | existing_only |
@@ -327,21 +326,21 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | SMQN | 3 | - | - | 1 | - | f32, u32 | - | - | - | existing_only |
 | SNCT | 4 | - | - | 1 | - | f32, u16, u32 | - | - | - | existing_only |
 | SNDR | 10 | - | 1 | - | 3 | i8, u16, u32, u8 | 4 | - | 6 | existing_only |
-| SOPM | 22 | - | 1 | 1 | - | f32, i16, u32, u8 | - | 8 | - | existing_only |
+| SOPM | 14 | - | 1 | 1 | - | f32, i16, u32, u8 | - | - | - | existing_only |
 | SOUN | 9 | - | - | - | - | f32, i16, u8 | - | - | - | existing_only |
 | SPEL | 10 | - | 3 | 1 | - | f32, i16, u32 | - | - | - | existing_only |
 | SPGD | 11 | - | 1 | - | 1 | f32, u32 | - | - | - | existing_only |
 | STAG | - | - | - | - | - | - | - | - | - | - |
-| STAT | 10 | - | - | - | 5 | f32, i16 | - | 2 | - | existing_only |
+| STAT | 10 | - | - | - | 1 | f32, i16 | - | 2 | - | existing_only |
 | TACT | 6 | - | - | - | 1 | i16 | - | - | - | existing_only |
-| TERM | 10 | - | 1 | 2 | 7 | f32, i16, i32, u16, u32, u8 | 10 | 2 | - | existing_only |
+| TERM | 7 | - | - | 2 | 2 | f32, i16, u16, u32 | - | 2 | - | existing_only |
 | TREE | 22 | - | - | - | 1 | f32, i16, u8 | - | - | - | existing_only |
 | TRNS | 9 | - | - | - | - | f32 | - | - | - | existing_only |
 | TXST | 17 | - | - | 2 | 9 | f32, i16, u16, u8 | - | - | - | existing_only |
 | VTYP | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 37 | - | 6 | 3 | 1 | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
-| WRLD | 28 | - | - | 2 | 4 | f32, i16, i32, i8, u16, u8 | 4 | - | - | existing_only |
+| WRLD | 20 | - | - | 2 | 4 | f32, i16, i32, u16, u8 | - | - | - | existing_only |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
 | ZOOM | 4 | - | 1 | - | - | f32, u32 | - | - | - | existing_only |
 
@@ -523,10 +522,10 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | LVSP settings / entries | forms/leveled_spell.hpp, forms/leveled_list.hpp; tests/test_lvsp.cpp | LVLI/LVLN share the entry code but have no creator; creation defaults need separate evidence |
 | PROJ / EXPL / HAZD fixed values | forms/proj_expl_hazd.hpp; tests/test_scalar_embedded.cpp | Complete per-field edited round-trips, C ABI/C# mutation exposure |
 | QUST stages / objectives / aliases | forms/quest.hpp; tests/test_quest_authoring.cpp, test_quest_alias_collection_authoring.cpp, test_quest_authoring_real.cpp | Full QUST creation; all fragmented/property VMAD variants; runtime fills are separate |
-| RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
+| RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Morph group sliders (MPGS element array), the head data markers and skeletal model info (MNAM, FNAM, ANAM, MODT), the movement type names (MTNM), the tint count (TINL) and the neck fat struct (NNAM) have no row; full field-level proof |
 | FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
-| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors and interior creation; a new WRLD record is created from its authoring defaults (`tests/test_wrld_rows.cpp`), but not the worldspace block and subblock group skeleton |
+| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | MISC members and whole-record creation; COBJ CTDA (WP-7) and NAM1-NAM3 (unused by xEdit; one corpus record) |
 | WTHR MNAM | forms/weather_concept.hpp; tests/test_weather_concept.cpp | Other weather fields; missing/duplicate MNAM refuses mutation |
 | FLST / generated keywords | schema/formlink_lists.hpp; tests/test_formlink_lists.cpp | Each record's empty-list anchors and save/reload proof; unrelated fields |
