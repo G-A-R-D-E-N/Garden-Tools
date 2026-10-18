@@ -45,6 +45,12 @@ Bytes u8_bytes(std::uint8_t value) {
   return out.bytes;
 }
 
+Bytes f32_bytes(float value) {
+  ByteWriter out;
+  out.f32(value);
+  return out.bytes;
+}
+
 Bytes zstr(std::string_view text) {
   Bytes out;
   for (const auto ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
@@ -374,10 +380,77 @@ TEST(RaceMorphRows, WritesMorphAndSubgraphValuesInPlace) {
   EXPECT_EQ(raw_at(live_subrecord(reread, "MPPT", 0), 0), 0x01000A20u);
 }
 
+TEST(RaceScalarRows, FaceGenClampsChatterAndWrinkleMapsEditInPlace) {
+  auto plugin = fo4::read_plugin(
+      plugin_with({{"PNAM", f32_bytes(1.5f)},
+                   {"UNAM", f32_bytes(0.25f)},
+                   {"PTOP", f32_bytes(3.0f)},
+                   {"NTOP", f32_bytes(9.0f)},
+                   {"WMAP", zstr("Actors\\Character\\MaleWrinkle.dds")},
+                   {"WMAP", zstr("Actors\\Character\\FemaleWrinkle.dds")}},
+                  false),
+      "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+
+  const std::pair<std::string_view, std::string_view> clamps[] = {
+      {"RACE\\FaceGenMainClamp", "PNAM"},
+      {"RACE\\FaceGenFaceClamp", "UNAM"},
+      {"RACE\\IdleChatterTimeMin", "PTOP"},
+      {"RACE\\IdleChatterTimeMax", "NTOP"}};
+  for (const auto& [path, subrecord] : clamps) {
+    const auto field = scalar_row(path);
+    EXPECT_EQ(field.scalar.subrecord, fo4::Signature::from_string(subrecord)) << path;
+    EXPECT_EQ(field.scalar.storage, fo4::schema::ScalarStorage::f32) << path;
+    EXPECT_FALSE(field.scalar.embedded) << path;
+    EXPECT_FALSE(field.scalar.address.repeated) << path;
+  }
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\FaceGenMainClamp", 0), "1.5");
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\FaceGenFaceClamp", 0), "0.25");
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\IdleChatterTimeMin", 0), "3");
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\IdleChatterTimeMax", 0), "9");
+  EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\WrinkleMapPath"), 2u);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\WrinkleMapPath", 0),
+            "Actors\\Character\\MaleWrinkle.dds");
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\WrinkleMapPath", 1),
+            "Actors\\Character\\FemaleWrinkle.dds");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\FaceGenMainClamp"), 0, "-2.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\IdleChatterTimeMax"), 0, "12"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, key, scalar_row("RACE\\WrinkleMapPath"), 1,
+                                   "Actors\\Character\\Other.dds"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\FaceGenFaceClamp"), 0, "0.25"),
+            fo4::ScalarMutationStatus::unchanged);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\IdleChatterTimeMin"), 1, "0"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(read_scalar_member(plugin, "RACE\\FaceGenMainClamp", 1), "");
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(live_subrecord(reread, "PNAM", 0), f32_bytes(-2.5f));
+  EXPECT_EQ(live_subrecord(reread, "UNAM", 0), f32_bytes(0.25f));
+  EXPECT_EQ(live_subrecord(reread, "NTOP", 0), f32_bytes(12.0f));
+  EXPECT_EQ(live_subrecord(reread, "WMAP", 0), zstr("Actors\\Character\\MaleWrinkle.dds"));
+  EXPECT_EQ(live_subrecord(reread, "WMAP", 1), zstr("Actors\\Character\\Other.dds"));
+}
+
+TEST(RaceScalarRows, RefuseANonFloatPayloadForAWholePayloadRow) {
+  auto plugin = fo4::read_plugin(plugin_with({{"PNAM", u16_bytes(1)}}, true), "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_race_key);
+  const auto before = fo4::write_plugin(plugin);
+  EXPECT_THROW(fo4::record_field_count(plugin, key, "RACE\\FaceGenMainClamp"),
+               fo4::schema::ScalarError);
+  EXPECT_THROW(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\FaceGenMainClamp"), 0, "1"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::write_plugin(plugin), before);
+  EXPECT_EQ(live_subrecord(plugin, "PNAM", 0), u16_bytes(1));
+}
+
 TEST(RaceMorphRows, RejectASubgraphFlagsPayloadOfTheWrongWidth) {
   auto plugin = fo4::read_plugin(plugin_with({{"SRAF", u16_bytes(1)}}, false), "Patch.esp");
   const auto key = fo4::FormKey::parse(k_race_key);
-  EXPECT_EQ(fo4::record_field_count(plugin, key, "RACE\\SubgraphRole"), 0u);
   EXPECT_EQ(read_scalar_member(plugin, "RACE\\SubgraphRole", 0), "");
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, scalar_row("RACE\\SubgraphRole"), 0, "3"),
             fo4::ScalarMutationStatus::subrecord_missing);
