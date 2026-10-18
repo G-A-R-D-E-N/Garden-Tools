@@ -590,8 +590,8 @@ class SchemaCodegenTests(unittest.TestCase):
         self.assertIn("constexpr std::uint8_t k_subrecord_group_default_0[] = "
                       "{0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};", text)
         self.assertIn('{Signature::from_string("CNTO"), true, false, 8, '
-                      'std::span<const std::uint8_t>(k_subrecord_group_default_0), false},', text)
-        self.assertIn('("COED"), false, false, 12, std::span<const std::uint8_t>{}, false},', text)
+                      'std::span<const std::uint8_t>(k_subrecord_group_default_0), false, false},', text)
+        self.assertIn('("COED"), false, false, 12, std::span<const std::uint8_t>{}, false, false},', text)
         self.assertIn('{Signature::from_string("TEST"), "TEST' + BS + BS + 'Items", "Items", '
                       'Signature::from_string("COCT"), '
                       'std::span<const SubrecordGroupMemberDescriptor>(k_subrecord_group_members_0), '
