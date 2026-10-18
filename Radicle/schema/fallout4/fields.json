@@ -9480,6 +9480,35 @@
           "insertion": "existing_only"
         },
         {
+          "path": "REFR\\LevelModifier",
+          "label": "Level modifier",
+          "kind": "scalar",
+          "subrecord": "XLCM",
+          "storage": "i32",
+          "presentation": "enum",
+          "names": [
+            {
+              "value": 0,
+              "name": "Easy"
+            },
+            {
+              "value": 1,
+              "name": "Medium"
+            },
+            {
+              "value": 2,
+              "name": "Hard"
+            },
+            {
+              "value": 3,
+              "name": "Very Hard"
+            }
+          ],
+          "minimum": -2147483648,
+          "maximum": 2147483647,
+          "insertion": "existing_only"
+        },
+        {
           "path": "REFR\\PatrolIdleTime",
           "label": "Patrol idle time",
           "kind": "scalar",
@@ -9842,6 +9871,22 @@
             "IDLE"
           ],
           "nullable": true,
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "REFR\\LitWater",
+          "label": "Lit water",
+          "subrecord": "XLTW",
+          "offset": 0,
+          "payload_sizes": [
+            4
+          ],
+          "targets": [
+            "ACHR",
+            "REFR"
+          ],
+          "nullable": false,
           "repeated": true,
           "insertion": "existing_only"
         },
@@ -31770,6 +31815,7 @@
       "fields": [
         {"path": "ACHR\\ReflectionType", "label": "Reflection type", "kind": "scalar", "subrecord": "XPWR", "offset": 4, "storage": "u32", "presentation": "flags", "names": [{"bit": 0, "name": "Reflection"}, {"bit": 1, "name": "Refraction"}], "minimum": 0, "maximum": 4294967295, "repeated": true, "payload_size": 8, "insertion": "existing_only"},
         {"path": "ACHR\\PatrolIdleTime", "label": "Patrol idle time", "kind": "scalar", "subrecord": "XPRD", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
+        {"path": "ACHR\\LevelModifier", "label": "Level modifier", "kind": "scalar", "subrecord": "XLCM", "storage": "i32", "presentation": "enum", "names": [{"value": 0, "name": "Easy"}, {"value": 1, "name": "Medium"}, {"value": 2, "name": "Hard"}, {"value": 3, "name": "Very Hard"}], "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
         {"path": "ACHR\\Radius", "label": "Radius", "kind": "scalar", "subrecord": "XRDS", "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "insertion": "existing_only"},
         {"path": "ACHR\\Count", "label": "Count", "kind": "scalar", "subrecord": "XCNT", "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "insertion": "existing_only"},
         {"path": "ACHR\\HealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "XHLT", "storage": "u32", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "insertion": "existing_only"},
@@ -31783,6 +31829,7 @@
         {"path": "ACHR\\OwnerNoCrime", "label": "No Crime", "kind": "scalar", "subrecord": "XOWN", "offset": 8, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 255, "payload_size": 12, "insertion": "existing_only"}
       ],
       "formlink_fields": [
+        {"path": "ACHR\\LitWater", "label": "Lit water", "subrecord": "XLTW", "offset": 0, "payload_sizes": [4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},
         {"path": "ACHR\\PatrolIdle", "label": "Patrol idle", "subrecord": "INAM", "offset": 0, "payload_sizes": [4], "targets": ["IDLE"], "nullable": true, "insertion": "existing_only"},
         {"path": "ACHR\\PatrolTopic", "label": "Patrol topic", "subrecord": "TNAM", "offset": 0, "payload_sizes": [4], "targets": ["DIAL"], "nullable": true, "insertion": "existing_only"},
         {"path": "ACHR\\ReflectedBy", "label": "Reflected by", "subrecord": "XPWR", "offset": 0, "payload_sizes": [8, 4], "targets": ["ACHR", "REFR"], "nullable": false, "repeated": true, "insertion": "existing_only"},

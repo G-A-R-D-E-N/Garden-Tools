@@ -164,6 +164,8 @@ std::vector<std::byte> make_plugin() {
                 {"INAM", u32_bytes(0x00000A90)},
                 {"XPRD", floats({9.0f})},
                 {"INAM", u32_bytes(0x00000A91)},
+                {"XLCM", i32_bytes(2)},
+                {"XLTW", u32_bytes(0x00000AA0)},
                 {"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f, 0.75f})}});
   write_record(out, "REFR", 0x0C11,
                {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}});
@@ -338,6 +340,37 @@ TEST(REFRExtraRows, RepeatedPatrolRowsAddressEachOccurrence) {
   EXPECT_EQ(sub_bytes_at(reread, patrol_key, "XPRD", 1), floats({9.5f}));
   EXPECT_EQ(sub_bytes_at(reread, patrol_key, "INAM", 0), u32_bytes(0x00000A90));
   EXPECT_EQ(sub_bytes_at(reread, patrol_key, "INAM", 1), u32_bytes(0x01000A50));
+}
+
+TEST(REFRExtraRows, LevelModifierAndLitWaterRowsReadAndWrite) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C10:Patch.esp");
+  const auto refr = fo4::Signature::from_string("REFR");
+  const auto modifier = fo4::schema::scalar_field_descriptor(refr, "REFR\\LevelModifier");
+  const auto lit_water = fo4::schema::formlink_field_descriptor(refr, "REFR\\LitWater");
+  ASSERT_TRUE(modifier.has_value());
+  ASSERT_TRUE(lit_water.has_value());
+  EXPECT_EQ(modifier->scalar.subrecord, fo4::Signature::from_string("XLCM"));
+  EXPECT_EQ(modifier->scalar.storage, fo4::schema::ScalarStorage::i32);
+  EXPECT_EQ(fo4::schema::scalar_value_name(modifier->scalar, 1), "Medium");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(modifier->scalar, 5).has_value());
+  EXPECT_TRUE(lit_water->address.repeated);
+  EXPECT_EQ(link_raw(plugin, "REFR", "000C10:Patch.esp", "REFR\\LitWater"), 0x00000AA0u);
+  EXPECT_EQ(scalar_bytes(plugin, "REFR", "000C10:Patch.esp", "REFR\\LevelModifier"),
+            i32_bytes(2));
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *modifier, 0, "3"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *lit_water, 0,
+                                           fo4::FormKey::parse("000A60:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(plugin, key, *lit_water, 0,
+                                                               fo4::FormKey{})),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XLCM"), i32_bytes(3));
+  EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XLTW"), u32_bytes(0x01000A60));
 }
 
 TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {

@@ -152,6 +152,8 @@ void write_actor(fo4::test::ByteWriter& out, std::uint32_t local, std::size_t lo
   fo4::test::write_subrecord(out, "XPRD", f32_bytes(2.5f));
   fo4::test::write_subrecord(out, "INAM", u32_bytes(0x00000A80u));
   fo4::test::write_subrecord(out, "TNAM", u32_bytes(0x00000A81u));
+  fo4::test::write_subrecord(out, "XLCM", i32_bytes(2));
+  fo4::test::write_subrecord(out, "XLTW", u32_bytes(0x00000AA0u));
   ByteWriter reflected;
   reflected.u32(0x00000A70u);
   reflected.u32(1);
@@ -287,7 +289,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 13u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 14u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -320,7 +322,7 @@ TEST(AchrRows, LockRowsShareTheXlocPayloadAndTheKeyRowIsNullable) {
 }
 
 TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
-  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 16u);
+  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 17u);
   for (const auto& row : k_link_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::formlink_field_descriptor(k_achr, row.path);
@@ -535,11 +537,51 @@ TEST(AchrRows, PatrolRowsReadAndWriteIdleTimeIdleAndTopic) {
   EXPECT_EQ(link_raw(written, "ACHR\\PatrolTopic"), 0x00000A81u);
 }
 
+TEST(AchrRows, LevelModifierAndLitWaterRowsReadAndWrite) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+  const auto modifier = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\LevelModifier");
+  const auto lit_water = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\LitWater");
+  ASSERT_TRUE(modifier.has_value());
+  ASSERT_TRUE(lit_water.has_value());
+  EXPECT_EQ(modifier->scalar.subrecord, fo4::Signature::from_string("XLCM"));
+  EXPECT_EQ(modifier->scalar.storage, fo4::schema::ScalarStorage::i32);
+  EXPECT_FALSE(modifier->scalar.address.repeated);
+  EXPECT_EQ(fo4::schema::scalar_value_name(modifier->scalar, 2), "Hard");
+  EXPECT_EQ(fo4::schema::scalar_value_name(modifier->scalar, 3), "Very Hard");
+  EXPECT_FALSE(fo4::schema::scalar_value_name(modifier->scalar, 4).has_value());
+  EXPECT_TRUE(lit_water->address.repeated);
+  EXPECT_FALSE(lit_water->nullable);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *lit_water, fo4::Signature::from_string("REFR")));
+
+  const auto before = scalar_bytes(full, "ACHR\\LevelModifier");
+  ASSERT_TRUE(before.has_value());
+  EXPECT_EQ(Bytes(before->begin(), before->end()), i32_bytes(2));
+  EXPECT_EQ(link_raw(full, "ACHR\\LitWater"), 0x00000AA0u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *modifier, 0, "3"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *lit_water, 0,
+                                           fo4::FormKey::parse("00000AA1:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(
+                   plugin, patch_key(0x810u), *lit_water, 0, fo4::FormKey{})),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto& written = actor(reread, 0x810u);
+  const auto after = scalar_bytes(written, "ACHR\\LevelModifier");
+  ASSERT_TRUE(after.has_value());
+  EXPECT_EQ(Bytes(after->begin(), after->end()), i32_bytes(3));
+  EXPECT_EQ(link_raw(written, "ACHR\\LitWater"), 0x00000AA1u);
+}
+
 TEST(AchrRows, ShortLockPayloadReadsAsAbsentAndDropsTheKeyLinkOffset) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
   const auto& short_lock = actor(plugin, 0x811u);
-  EXPECT_EQ(short_lock.subrecords.size(), 24u);
+  EXPECT_EQ(short_lock.subrecords.size(), 26u);
 
   const auto level = scalar_bytes(short_lock, "ACHR\\LockLevel");
   ASSERT_TRUE(level.has_value());
