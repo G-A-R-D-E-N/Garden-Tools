@@ -55,6 +55,12 @@ constexpr ScalarRow k_scalar_rows[] = {
     {"ACHR\\HealthPercent", "XHLT", 0, u32, false, 0},
     {"ACHR\\LockLevel", "XLOC", 0, u8, true, 16},
     {"ACHR\\LockFlags", "XLOC", 8, u8, true, 16},
+    {"ACHR\\Scale", "XSCL", 0, f32, false, 0},
+    {"ACHR\\HeadTrackingWeight", "XHTW", 0, f32, false, 0},
+    {"ACHR\\FavorCost", "XFVC", 0, f32, false, 0},
+    {"ACHR\\EnableParentFlags", "XESP", 4, u8, true, 8},
+    {"ACHR\\OwnerRank", "XRNK", 0, i32, false, 0},
+    {"ACHR\\OwnerNoCrime", "XOWN", 8, u8, true, 12},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -62,6 +68,13 @@ constexpr LinkRow k_link_rows[] = {
     {"ACHR\\LockKey", "XLOC", 4, 16, "KEYM"},
     {"ACHR\\Emittance", "XEMI", 0, 4, "LIGH"},
     {"ACHR\\MultiboundReference", "XMBR", 0, 4, "REFR"},
+    {"ACHR\\Base", "NAME", 0, 4, "NPC_"},
+    {"ACHR\\EnableParent", "XESP", 0, 8, "PLYR"},
+    {"ACHR\\Owner", "XOWN", 0, 12, "FACT"},
+    {"ACHR\\ReferenceGroup", "XRFG", 0, 4, "RFGP"},
+    {"ACHR\\Layer", "XLYR", 0, 4, "LAYR"},
+    {"ACHR\\MaterialSwap", "XMSP", 0, 4, "MSWP"},
+    {"ACHR\\AttachRef", "XATR", 0, 4, "ACHR"},
 };
 
 Bytes u32_bytes(std::uint32_t value) {
@@ -108,6 +121,29 @@ void write_actor(fo4::test::ByteWriter& out, std::uint32_t local, std::size_t lo
   fo4::test::write_subrecord(out, "XEZN", u32_bytes(0x00000A10u));
   fo4::test::write_subrecord(out, "XEMI", u32_bytes(0x00000A11u));
   fo4::test::write_subrecord(out, "XMBR", u32_bytes(0x00000A12u));
+  fo4::test::write_subrecord(out, "XSCL", f32_bytes(1.5f));
+  fo4::test::write_subrecord(out, "XHTW", f32_bytes(0.25f));
+  fo4::test::write_subrecord(out, "XFVC", f32_bytes(7.0f));
+  ByteWriter parent;
+  parent.u32(0x00000A40u);
+  parent.u8(0x01);
+  parent.u8(0);
+  parent.u8(0);
+  parent.u8(0);
+  fo4::test::write_subrecord(out, "XESP", parent.bytes);
+  fo4::test::write_subrecord(out, "XRNK", i32_bytes(2));
+  ByteWriter owner;
+  owner.u32(0x00000A50u);
+  owner.u32(0);
+  owner.u8(0x01);
+  owner.u8(0);
+  owner.u8(0);
+  owner.u8(0);
+  fo4::test::write_subrecord(out, "XOWN", owner.bytes);
+  fo4::test::write_subrecord(out, "XRFG", u32_bytes(0x00000A60u));
+  fo4::test::write_subrecord(out, "XLYR", u32_bytes(0x00000A61u));
+  fo4::test::write_subrecord(out, "XMSP", u32_bytes(0x00000A62u));
+  fo4::test::write_subrecord(out, "XATR", u32_bytes(0x00000A63u));
   fo4::test::end_record(out, at);
 }
 
@@ -198,7 +234,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 5u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 11u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -229,7 +265,7 @@ TEST(AchrRows, LockRowsShareTheXlocPayloadAndTheKeyRowIsNullable) {
 }
 
 TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
-  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 4u);
+  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 11u);
   for (const auto& row : k_link_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::formlink_field_descriptor(k_achr, row.path);
@@ -237,10 +273,24 @@ TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
     EXPECT_EQ(field->subrecord, fo4::Signature::from_string(row.subrecord));
     EXPECT_EQ(field->offset, row.offset);
     EXPECT_EQ(field->payload_sizes[0], row.payload_size);
-    EXPECT_EQ(field->nullable, std::string_view{row.path} == "ACHR\\LockKey");
+    EXPECT_EQ(field->nullable,
+              std::string_view{row.path} == "ACHR\\LockKey" ||
+                  std::string_view{row.path} == "ACHR\\EnableParent");
     EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
         *field, fo4::Signature::from_string(row.target)));
   }
+  const auto owner = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\Owner");
+  ASSERT_TRUE(owner.has_value());
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *owner, fo4::Signature::from_string("NPC_")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *owner, fo4::Signature::from_string("STAT")));
+  const auto attach = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\AttachRef");
+  ASSERT_TRUE(attach.has_value());
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *attach, fo4::Signature::from_string("REFR")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *attach, fo4::Signature::from_string("STAT")));
   const auto emittance = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\Emittance");
   ASSERT_TRUE(emittance.has_value());
   EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
@@ -283,13 +333,43 @@ TEST(AchrRows, ReadsScalarsAndLinksFromThePlugin) {
   EXPECT_EQ(link_raw(full, "ACHR\\EncounterZone"), 0x00000A10u);
   EXPECT_EQ(link_raw(full, "ACHR\\Emittance"), 0x00000A11u);
   EXPECT_EQ(link_raw(full, "ACHR\\MultiboundReference"), 0x00000A12u);
+
+  const auto scale = scalar_bytes(full, "ACHR\\Scale");
+  ASSERT_TRUE(scale.has_value());
+  EXPECT_EQ(Bytes(scale->begin(), scale->end()), f32_bytes(1.5f));
+  const auto track = scalar_bytes(full, "ACHR\\HeadTrackingWeight");
+  ASSERT_TRUE(track.has_value());
+  EXPECT_EQ(Bytes(track->begin(), track->end()), f32_bytes(0.25f));
+  const auto favor = scalar_bytes(full, "ACHR\\FavorCost");
+  ASSERT_TRUE(favor.has_value());
+  EXPECT_EQ(Bytes(favor->begin(), favor->end()), f32_bytes(7.0f));
+  const auto rank = scalar_bytes(full, "ACHR\\OwnerRank");
+  ASSERT_TRUE(rank.has_value());
+  EXPECT_EQ(Bytes(rank->begin(), rank->end()), i32_bytes(2));
+
+  const auto parent_flags = scalar_bytes(full, "ACHR\\EnableParentFlags");
+  ASSERT_TRUE(parent_flags.has_value());
+  ASSERT_EQ(parent_flags->size(), 1u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>((*parent_flags)[0]), 0x01);
+  const auto no_crime = scalar_bytes(full, "ACHR\\OwnerNoCrime");
+  ASSERT_TRUE(no_crime.has_value());
+  ASSERT_EQ(no_crime->size(), 1u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>((*no_crime)[0]), 0x01);
+
+  EXPECT_EQ(link_raw(full, "ACHR\\Base"), 0x00000A00u);
+  EXPECT_EQ(link_raw(full, "ACHR\\EnableParent"), 0x00000A40u);
+  EXPECT_EQ(link_raw(full, "ACHR\\Owner"), 0x00000A50u);
+  EXPECT_EQ(link_raw(full, "ACHR\\ReferenceGroup"), 0x00000A60u);
+  EXPECT_EQ(link_raw(full, "ACHR\\Layer"), 0x00000A61u);
+  EXPECT_EQ(link_raw(full, "ACHR\\MaterialSwap"), 0x00000A62u);
+  EXPECT_EQ(link_raw(full, "ACHR\\AttachRef"), 0x00000A63u);
 }
 
 TEST(AchrRows, ShortLockPayloadReadsAsAbsentAndDropsTheKeyLinkOffset) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
   const auto& short_lock = actor(plugin, 0x811u);
-  EXPECT_EQ(short_lock.subrecords.size(), 9u);
+  EXPECT_EQ(short_lock.subrecords.size(), 19u);
 
   const auto level = scalar_bytes(short_lock, "ACHR\\LockLevel");
   ASSERT_TRUE(level.has_value());
