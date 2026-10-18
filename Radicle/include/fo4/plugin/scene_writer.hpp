@@ -27,4 +27,18 @@ FormLinkFieldMutationStatus set_scene_formlink(Plugin& plugin,
 
 std::optional<std::size_t> scene_group_count(const Plugin& plugin, const FormKey& scene, ScenePart part);
 
+SubrecordGroupMutationStatus insert_scene_phase(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index,
+                                                std::string_view name);
+
+SubrecordGroupMutationStatus remove_scene_phase(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index);
+
+ScalarMutationStatus set_scene_phase_name(Plugin& plugin,
+                                          const FormKey& scene,
+                                          std::size_t index,
+                                          std::string_view name);
+
 }

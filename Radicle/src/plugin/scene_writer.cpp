@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
@@ -146,6 +147,57 @@ std::optional<std::size_t> find_in(const Record& record, Range range, Signature 
   return found;
 }
 
+std::vector<std::byte> zstring_payload(std::string_view text) {
+  std::vector<std::byte> out;
+  out.reserve(text.size() + 1);
+  for (const char ch : text) out.push_back(std::byte{static_cast<std::uint8_t>(ch)});
+  out.push_back(std::byte{0});
+  return out;
+}
+
+std::vector<std::byte> u32_payload(std::uint32_t value) {
+  return {std::byte{static_cast<std::uint8_t>(value & 0xFFu)},
+          std::byte{static_cast<std::uint8_t>((value >> 8) & 0xFFu)},
+          std::byte{static_cast<std::uint8_t>((value >> 16) & 0xFFu)},
+          std::byte{static_cast<std::uint8_t>((value >> 24) & 0xFFu)}};
+}
+
+std::size_t tail_anchor(const Record& record) {
+  for (std::size_t at = 0; at < record.subrecords.size(); ++at) {
+    const auto tag = record.subrecords[at].signature;
+    if (tag == s("PNAM") || tag == s("INAM") || tag == s("CRIS") || tag == s("SCQS") ||
+        tag == s("TNAM")) {
+      return at;
+    }
+  }
+  return record.subrecords.size();
+}
+
+std::size_t phase_anchor(const env::detail::SceneLayout& layout,
+                         const Record& record,
+                         std::size_t index) {
+  if (index < layout.phases.size()) return layout.phases[index].open;
+  if (!layout.phases.empty()) return layout.phases.back().close + 1;
+  if (!layout.actors.empty()) return layout.actors.front();
+  if (!layout.actions.empty()) return layout.actions.front().open;
+  return tail_anchor(record);
+}
+
+std::vector<Subrecord> new_phase_subrecords(std::string_view name) {
+  return {
+      Subrecord{s("HNAM"), {}, false},
+      Subrecord{s("NAM0"), zstring_payload(name), false},
+      Subrecord{s("NEXT"), {}, false},
+      Subrecord{s("NEXT"), {}, false},
+      Subrecord{s("WNAM"), u32_payload(350), false},
+      Subrecord{s("HNAM"), {}, false},
+  };
+}
+
+Range phase_body(const env::detail::SceneLayout& layout, std::size_t index) {
+  return Range{layout.phases[index].open + 1, layout.phases[index].close};
+}
+
 }
 
 ScalarMutationStatus set_scene_scalar(Plugin& plugin,
@@ -221,6 +273,55 @@ std::optional<std::size_t> scene_group_count(const Plugin& plugin, const FormKey
     case ScenePart::action: return layout.actions.size();
   }
   return std::nullopt;
+}
+
+SubrecordGroupMutationStatus insert_scene_phase(Plugin& plugin,
+                                                const FormKey& scene,
+                                                std::size_t index,
+                                                std::string_view name) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
+  const auto layout = checked_layout(*record);
+  if (index > layout.phases.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  auto inserted = new_phase_subrecords(name);
+  record->subrecords.insert(record->subrecords.begin() +
+                                static_cast<std::ptrdiff_t>(phase_anchor(layout, *record, index)),
+                            std::make_move_iterator(inserted.begin()),
+                            std::make_move_iterator(inserted.end()));
+  mark_record_modified(plugin, *record);
+  return SubrecordGroupMutationStatus::updated;
+}
+
+SubrecordGroupMutationStatus remove_scene_phase(Plugin& plugin, const FormKey& scene, std::size_t index) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return SubrecordGroupMutationStatus::record_missing;
+  const auto layout = checked_layout(*record);
+  if (index >= layout.phases.size()) return SubrecordGroupMutationStatus::index_out_of_range;
+  const auto begin = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.phases[index].open);
+  const auto end = record->subrecords.begin() + static_cast<std::ptrdiff_t>(layout.phases[index].close) + 1;
+  record->subrecords.erase(begin, end);
+  mark_record_modified(plugin, *record);
+  return SubrecordGroupMutationStatus::updated;
+}
+
+ScalarMutationStatus set_scene_phase_name(Plugin& plugin,
+                                          const FormKey& scene,
+                                          std::size_t index,
+                                          std::string_view name) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return ScalarMutationStatus::record_missing;
+  const auto layout = checked_layout(*record);
+  if (index >= layout.phases.size()) return ScalarMutationStatus::subrecord_missing;
+  const auto found = find_in(*record, phase_body(layout, index), s("NAM0"), "SCEN\\Phase\\Name");
+  if (!found) return ScalarMutationStatus::subrecord_missing;
+  auto payload = zstring_payload(name);
+  auto& data = record->subrecords[*found].data;
+  if (std::equal(payload.begin(), payload.end(), data.begin(), data.end())) {
+    return ScalarMutationStatus::unchanged;
+  }
+  data = std::move(payload);
+  mark_record_modified(plugin, *record);
+  return ScalarMutationStatus::updated;
 }
 
 }

@@ -202,3 +202,48 @@ TEST_F(DialogueWriterCApi, DecodeRefusesRecordsFromAnotherEnvironment) {
   radicle_env_destroy(other);
   radicle_env_destroy(owner);
 }
+
+TEST_F(DialogueWriterCApi, ScenePhaseAuthoringStatusesMapAndSurviveReload) {
+  const auto file = path.string();
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(file.c_str(), &plugin), RADICLE_STATUS_OK);
+  const radicle_form_key scene = rkey(k_scene), quest = rkey(k_quest);
+
+  EXPECT_EQ(radicle_plugin_insert_scene_phase(plugin, scene, 1, "Middle"), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_scene_phase_name(plugin, scene, 1, "Renamed"), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_insert_scene_phase(plugin, scene, 9, "TooFar"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_insert_scene_phase(plugin, rkey(0x8FF), 0, "Ghost"), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_insert_scene_phase(plugin, scene, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_scene_phase(plugin, scene, 9), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_remove_scene_phase(plugin, rkey(0x8FF), 0), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_phase_name(plugin, scene, 9, "Ghost"), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_phase_name(plugin, scene, 0, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_phase_name(plugin, quest, 0, "Outside"), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_insert_scene_phase(plugin, quest, 0, "Outside"), RADICLE_STATUS_INVALID_ARGUMENT);
+
+  size_t count = 0;
+  EXPECT_EQ(radicle_plugin_scene_group_count(plugin, scene, RADICLE_SCENE_PART_PHASE, &count), RADICLE_STATUS_OK);
+  EXPECT_EQ(count, 3u);
+  ASSERT_EQ(radicle_plugin_write_file(plugin, file.c_str()), RADICLE_STATUS_OK) << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+
+  const char* paths[] = {file.c_str()};
+  radicle_env* env = nullptr;
+  ASSERT_EQ(radicle_env_load(paths, 1, &env), RADICLE_STATUS_OK) << radicle_last_error();
+  const radicle_record* record = nullptr;
+  ASSERT_EQ(radicle_env_winner(env, scene, &record), RADICLE_STATUS_OK);
+  const radicle_scene_info* decoded = nullptr;
+  ASSERT_EQ(radicle_scene_decode(env, record, &decoded), RADICLE_STATUS_OK) << radicle_last_error();
+  ASSERT_EQ(decoded->phase_count, 3u);
+  EXPECT_STREQ(decoded->phases[0].name, "Start");
+  EXPECT_STREQ(decoded->phases[1].name, "Renamed");
+  EXPECT_STREQ(decoded->phases[2].name, "");
+  EXPECT_EQ(decoded->phases[1].has_editor_width, 1);
+  EXPECT_EQ(decoded->phases[1].editor_width, 350u);
+  EXPECT_EQ(decoded->phases[1].has_flags, 0);
+  EXPECT_EQ(decoded->phases[1].has_quest_stages, 0);
+  EXPECT_EQ(decoded->actor_count, 2u);
+  EXPECT_EQ(decoded->action_count, 3u);
+  radicle_scene_free(decoded);
+  radicle_env_destroy(env);
+}

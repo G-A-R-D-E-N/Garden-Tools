@@ -240,4 +240,78 @@ radicle_status radicle_plugin_scene_group_count(const radicle_plugin* plugin,
   });
 }
 
+radicle_status radicle_plugin_insert_scene_phase(radicle_plugin* plugin,
+                                                radicle_form_key key,
+                                                size_t index,
+                                                const char* name) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || name == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and a phase name are required");
+  }
+  return guarded("unknown exception while inserting a scene phase", [&] {
+    try {
+      switch (fo4::insert_scene_phase(plugin->value, *form_key, index, name)) {
+        case fo4::SubrecordGroupMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::SubrecordGroupMutationStatus::index_out_of_range:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has fewer phases than the requested index");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_remove_scene_phase(radicle_plugin* plugin,
+                                                radicle_form_key key,
+                                                size_t index) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin and a valid record key are required");
+  }
+  return guarded("unknown exception while removing a scene phase", [&] {
+    try {
+      switch (fo4::remove_scene_phase(plugin->value, *form_key, index)) {
+        case fo4::SubrecordGroupMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::SubrecordGroupMutationStatus::index_out_of_range:
+          return fail(RADICLE_STATUS_INVALID_ARGUMENT, "scene has no phase at that index");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
+radicle_status radicle_plugin_set_scene_phase_name(radicle_plugin* plugin,
+                                                  radicle_form_key key,
+                                                  size_t index,
+                                                  const char* name) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || name == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and a phase name are required");
+  }
+  return guarded("unknown exception while setting a scene phase name", [&] {
+    try {
+      switch (fo4::set_scene_phase_name(plugin->value, *form_key, index, name)) {
+        case fo4::ScalarMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::ScalarMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "scene has no phase at that index or the phase has no name");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
 }

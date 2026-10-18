@@ -101,7 +101,7 @@ fields remain editable. Preflight takes the owning plugin's localized flag expli
 | SCEN PNAM, TNAM links | `ParentQuest` | typed `SCEN\ParentQuest` (QUST), `SCEN\TemplateScene` (SCEN) | refused | refused | refused | yes |
 | SCEN VNAM, CNAM, ACTV, NNAM, XNAM | raw | `SCEN\DeathBehavior`, `CombatBehavior`, `PlayerDialogueBehavior`, `ObserveCombatBehavior`, `CameraDistanceOverride`, `DialogueDistanceOverride`, `Notes`, `Index` | refused in practice (`unknown_order`: every official scene has groups) | yes | refused | none |
 | SCEN KSIZ/KWDA keywords | raw | FormLink list ops | refused (coupled) | refused (coupled) | refused | yes |
-| SCEN phases | `Phases` | typed `SCEN\Phase\EditorWidth`, `Flags`, `QuestStageOnStart`/`OnCompletion` by phase index; NAM0 OPAQUE | refused | refused | refused | none |
+| SCEN phases | `Phases` | typed `SCEN\Phase\EditorWidth`, `Flags`, `QuestStageOnStart`/`OnCompletion` and the NAM0 name (`set_scene_phase_name`) by phase index | `insert_scene_phase`: two HNAM markers around NAM0, two NEXT, WNAM 350. No FNAM or SCQS (xEdit gives neither a native default) | yes (`remove_scene_phase`, the phase's own `[open, close]` span) | refused | none |
 | SCEN actors | `Actors` | typed `SCEN\Actor\Alias`, `Flags`, `BehaviorFlags` by actor index | refused | refused | refused | none |
 | SCEN action headers | `Actions` | typed `SCEN\Action\ActorAlias`, `Index`, `Flags`, `StartPhase`, `EndPhase` (u32) by action index; ANAM type and NAM0 OPAQUE | refused | refused | refused | none |
 | SCEN action payloads, conditions | opaque payload views, condition code | OPAQUE | refused | refused | refused | existing |

@@ -559,6 +559,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_dialogue_writer_c_api.cpp
     tests/test_dialogue_writer_real.cpp
     tests/test_scene_writer.cpp
+    tests/test_scene_phase_edit.cpp
     tests/test_environment_world.cpp
     tests/test_environment_water_edges.cpp
     tests/test_environment_placed.cpp
