@@ -577,6 +577,7 @@ TEST(OmodData, EditsArraysAndRewritesTheirCounts) {
   const auto linked = fo4::forms::omod_property_value1_form(reread, decoded.properties[0]);
   ASSERT_TRUE(linked.has_value());
   EXPECT_EQ(linked->local().value(), 0x000A20u);
+  EXPECT_FALSE(fo4::forms::omod_property_value1_float(decoded.properties[0]).has_value());
   const auto factor = fo4::forms::omod_property_value2_float(decoded.properties[0]);
   ASSERT_TRUE(factor.has_value());
   EXPECT_FLOAT_EQ(*factor, 1.0f);

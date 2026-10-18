@@ -246,7 +246,7 @@ std::optional<FormKey> omod_property_value1_form(const Plugin& plugin,
 }
 
 std::optional<float> omod_property_value1_float(const OmodProperty& property) {
-  if (property.value_type != 1 && property.value_type != 6) return std::nullopt;
+  if (property.value_type != 1) return std::nullopt;
   return quad_f32(property.value1);
 }
 
