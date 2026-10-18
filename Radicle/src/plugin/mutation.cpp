@@ -368,6 +368,45 @@ RecordRenumberStatus renumber_local_record(Plugin& plugin,
   return RecordRenumberStatus::renumbered;
 }
 
+ReferenceRepointResult repoint_record_references(std::span<Plugin*> plugins,
+                                                 const FormKey& from,
+                                                 const FormKey& to) {
+  ReferenceRepointResult result;
+  if (from.owner().empty() || from.owner() != to.owner()) {
+    result.status = ReferenceRepointStatus::mismatched_owners;
+    return result;
+  }
+  if (from == to) return result;
+
+  std::vector<std::size_t> touched;
+  for (std::size_t index = 0; index < plugins.size(); ++index) {
+    const auto* plugin = plugins[index];
+    if (plugin == nullptr) continue;
+    std::size_t found = 0;
+    for (const auto& link : collect_form_links(*plugin)) {
+      if (link.key == from) ++found;
+    }
+    if (found == 0) continue;
+    result.references += found;
+    touched.push_back(index);
+  }
+  if (touched.empty()) return result;
+
+  std::vector<Plugin> next;
+  next.reserve(touched.size());
+  for (const auto index : touched) {
+    next.push_back(*plugins[index]);
+    rekey_form_links(next.back(), from, to);
+  }
+
+  for (std::size_t slot = 0; slot < touched.size(); ++slot) {
+    result.plugins.push_back(plugins[touched[slot]]->key);
+    *plugins[touched[slot]] = std::move(next[slot]);
+  }
+  result.status = ReferenceRepointStatus::repointed;
+  return result;
+}
+
 std::string stored_inline_text(std::string_view value, std::string_view field) {
   const auto stored = text::utf8_to_windows1252(value);
   if (!stored) {

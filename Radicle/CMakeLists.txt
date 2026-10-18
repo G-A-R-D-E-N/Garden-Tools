@@ -526,6 +526,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_conflict_graph.cpp
     tests/test_conflict_kind.cpp
     tests/test_conflict_compare.cpp
+    tests/test_repoint_references.cpp
     tests/test_deep_copy.cpp
     tests/test_check_errors.cpp
     tests/test_check_errors_conditions.cpp
