@@ -50,6 +50,23 @@ std::vector<std::byte> make_plugin() {
   return out.bytes;
 }
 
+std::vector<std::byte> make_two_index_plugin() {
+  ByteWriter out;
+  out.bytes = fo4::test::make_tes4_plugin(0, 1.0f, {"Fallout4.esm"});
+  const auto group = fo4::test::begin_group(out, "MSWP", 0);
+  const auto record = fo4::test::begin_record(out, "MSWP", 0, 0x800);
+  fo4::test::write_subrecord(out, "EDID", zstr("TwoIndexes"));
+  fo4::test::write_subrecord(out, "BNAM", zstr("Props\\Box.BGSM"));
+  fo4::test::write_subrecord(out, "SNAM", zstr("Props\\BoxRust.BGSM"));
+  fo4::test::write_subrecord(out, "CNAM", real(0.5f));
+  fo4::test::write_subrecord(out, "BNAM", zstr("Props\\Lid.BGSM"));
+  fo4::test::write_subrecord(out, "SNAM", zstr("Props\\LidRust.BGSM"));
+  fo4::test::write_subrecord(out, "CNAM", real(0.75f));
+  fo4::test::end_record(out, record);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
 Bytes subrecord_at(const fo4::Plugin& plugin, std::string_view signature, std::size_t ordinal) {
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(k_key));
   if (record == nullptr) {
@@ -95,6 +112,7 @@ TEST(MswpRows, RowsUseTheXEditSubrecordsAndStorage) {
   EXPECT_EQ(cnam.scalar.subrecord, fo4::Signature::from_string("CNAM"));
   EXPECT_EQ(cnam.scalar.storage, fo4::schema::ScalarStorage::f32);
   EXPECT_FALSE(cnam.scalar.embedded);
+  EXPECT_TRUE(cnam.scalar.address.repeated);
   EXPECT_FALSE(fo4::schema::scalar_field_descriptor("MSWP\\FNAM").has_value());
 }
 
@@ -114,6 +132,25 @@ TEST(MswpRows, ReadsEverySubstitutionPairAndTheColorIndex) {
   EXPECT_EQ(decoded(plugin, "MSWP\\ReplacementMaterial", 0), "Props\\BoxRust.BGSM");
   EXPECT_EQ(decoded(plugin, "MSWP\\ReplacementMaterial", 1), "Props\\LidRust.BGSM");
   EXPECT_EQ(decoded(plugin, "MSWP\\ColorRemappingIndex", 0), "0.5");
+}
+
+TEST(MswpRows, ReadsOneColorIndexPerSubstitution) {
+  auto plugin = fo4::read_plugin(make_two_index_plugin(), "Patch.esp");
+  const auto record = fo4::FormKey::parse(k_key);
+
+  EXPECT_EQ(fo4::record_field_count(plugin, record, row("MSWP\\ColorRemappingIndex")),
+            std::optional<std::size_t>{2});
+  EXPECT_EQ(decoded(plugin, "MSWP\\ColorRemappingIndex", 0), "0.5");
+  EXPECT_EQ(decoded(plugin, "MSWP\\ColorRemappingIndex", 1), "0.75");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record, row("MSWP\\ColorRemappingIndex"), 1, "0.25"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, record, row("MSWP\\ColorRemappingIndex"), 2, "0.125"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(subrecord_at(reread, "CNAM", 0), real(0.5f));
+  EXPECT_EQ(subrecord_at(reread, "CNAM", 1), real(0.25f));
 }
 
 TEST(MswpRows, WritesOnePairAndLeavesItsNeighboursUntouched) {

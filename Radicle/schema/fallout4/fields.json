@@ -13828,6 +13828,7 @@
           "label": "Color remapping index",
           "kind": "scalar",
           "subrecord": "CNAM",
+          "repeated": true,
           "storage": "f32",
           "presentation": "identity",
           "minimum": -3.4028234663852886e+38,

@@ -285,7 +285,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | MISC | - | - | - | - | - | - | - | - | - | - |
 | MOVT | 61 | - | - | - | 1 | f32 | - | - | - | existing_only |
 | MSTT | 7 | - | 1 | - | 1 | f32, i16, u8 | - | 2 | - | existing_only |
-| MSWP | 1 | - | - | - | 2 | f32 | 2 | - | - | existing_only |
+| MSWP | 1 | - | - | - | 2 | f32 | 3 | - | - | existing_only |
 | MUSC | 4 | - | - | - | - | f32, u16, u32 | - | - | - | existing_only |
 | MUST | 5 | - | 1 | - | 2 | f32, u32 | - | - | - | existing_only |
 | NAVI | 4 | - | - | - | - | f32 | 5 | - | 5 | existing_only |
