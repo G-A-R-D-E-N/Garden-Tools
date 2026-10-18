@@ -673,6 +673,34 @@
           "kind": "string",
           "subrecord": "MOD4",
           "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\MaleIcon",
+          "label": "Inventory icon",
+          "kind": "string",
+          "subrecord": "ICON",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\MaleMessageIcon",
+          "label": "Message icon",
+          "kind": "string",
+          "subrecord": "MICO",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\FemaleIcon",
+          "label": "Inventory icon",
+          "kind": "string",
+          "subrecord": "ICO2",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\FemaleMessageIcon",
+          "label": "Message icon",
+          "kind": "string",
+          "subrecord": "MIC2",
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [

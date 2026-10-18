@@ -88,6 +88,10 @@ constexpr WholeRow k_whole_rows[] = {
 constexpr StringRow k_string_rows[] = {
     {"ARMO", "ARMO\\MaleWorldModel", "MOD2"},
     {"ARMO", "ARMO\\FemaleWorldModel", "MOD4"},
+    {"ARMO", "ARMO\\MaleIcon", "ICON"},
+    {"ARMO", "ARMO\\MaleMessageIcon", "MICO"},
+    {"ARMO", "ARMO\\FemaleIcon", "ICO2"},
+    {"ARMO", "ARMO\\FemaleMessageIcon", "MIC2"},
     {"ARMA", "ARMA\\BipedMaleModel", "MOD2"},
     {"ARMA", "ARMA\\BipedFemaleModel", "MOD3"},
     {"ARMA", "ARMA\\FirstPersonMaleModel", "MOD4"},
@@ -233,6 +237,10 @@ std::vector<std::byte> make_plugin() {
       {"MO4S", u32_bytes(0x00000A41)},
       {"MOD2", zstr("Armor\\Male.nif")},
       {"MOD4", zstr("Armor\\Female.nif")},
+      {"ICON", zstr("Armor\\Male.dds")},
+      {"MICO", zstr("Armor\\Male_m.dds")},
+      {"ICO2", zstr("Armor\\Female.dds")},
+      {"MIC2", zstr("Armor\\Female_m.dds")},
   };
   for (const auto& sub : armo_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, armo);
@@ -548,6 +556,7 @@ TEST(ARMOARMARows, ModelFileRowsReadAndWriteTheFilename) {
   const auto armo_key = fo4::FormKey::parse(k_armo_key);
   const auto arma_key = fo4::FormKey::parse(k_arma_key);
   EXPECT_EQ(sub_bytes(plugin, k_armo_key, "MOD2"), zstr("Armor\\Male.nif"));
+  EXPECT_EQ(sub_bytes(plugin, k_armo_key, "ICON"), zstr("Armor\\Male.dds"));
   EXPECT_EQ(sub_bytes(plugin, k_arma_key, "MOD5"), zstr("Armor\\FirstFemale.nif"));
 
   const auto male_world = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
@@ -563,10 +572,14 @@ TEST(ARMOARMARows, ModelFileRowsReadAndWriteTheFilename) {
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_string(plugin, arma_key, "ARMA\\BipedMaleModel", 1, "Armor\\Extra.nif"),
             fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_string(plugin, armo_key, "ARMO\\FemaleMessageIcon", 0,
+                                   "Armor\\NewFemale_m.dds"),
+            fo4::ScalarMutationStatus::updated);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(sub_bytes(reread, k_armo_key, "MOD2"), zstr("Armor\\NewMale.nif"));
   EXPECT_EQ(sub_bytes(reread, k_armo_key, "MOD4"), zstr("Armor\\Female.nif"));
+  EXPECT_EQ(sub_bytes(reread, k_armo_key, "MIC2"), zstr("Armor\\NewFemale_m.dds"));
   EXPECT_EQ(sub_bytes(reread, k_arma_key, "MOD2"), zstr("Armor\\BipedMale.nif"));
   EXPECT_EQ(sub_bytes(reread, k_arma_key, "MOD5"), zstr("Armor\\NewFirstFemale.nif"));
 }
