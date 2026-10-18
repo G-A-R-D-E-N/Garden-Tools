@@ -172,6 +172,34 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\BipedMaleModel",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MOD2",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\BipedFemaleModel",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MOD3",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FirstPersonMaleModel",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MOD4",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMA\\FirstPersonFemaleModel",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MOD5",
+          "insertion": "existing_only"
         }
       ],
       "formlink_fields": [
@@ -630,6 +658,20 @@
           "minimum": 0,
           "maximum": 65535,
           "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\MaleWorldModel",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MOD2",
+          "insertion": "existing_only"
+        },
+        {
+          "path": "ARMO\\FemaleWorldModel",
+          "label": "Model file name",
+          "kind": "string",
+          "subrecord": "MOD4",
           "insertion": "existing_only"
         }
       ],

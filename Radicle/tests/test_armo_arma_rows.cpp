@@ -38,6 +38,12 @@ struct WholeRow {
   std::string_view path;
 };
 
+struct StringRow {
+  std::string_view record;
+  std::string_view path;
+  std::string_view subrecord;
+};
+
 struct LinkRow {
   std::string_view record;
   std::string_view path;
@@ -77,6 +83,15 @@ constexpr ScalarRow k_scalar_rows[] = {
 constexpr WholeRow k_whole_rows[] = {
     {"ARMO", "ARMO\\FirstPersonFlags"},
     {"ARMA", "ARMA\\FirstPersonFlags"},
+};
+
+constexpr StringRow k_string_rows[] = {
+    {"ARMO", "ARMO\\MaleWorldModel", "MOD2"},
+    {"ARMO", "ARMO\\FemaleWorldModel", "MOD4"},
+    {"ARMA", "ARMA\\BipedMaleModel", "MOD2"},
+    {"ARMA", "ARMA\\BipedFemaleModel", "MOD3"},
+    {"ARMA", "ARMA\\FirstPersonMaleModel", "MOD4"},
+    {"ARMA", "ARMA\\FirstPersonFemaleModel", "MOD5"},
 };
 
 constexpr LinkRow k_link_rows[] = {
@@ -216,6 +231,8 @@ std::vector<std::byte> make_plugin() {
       {"MODL", u32_bytes(0x00000A31)},
       {"MO2S", u32_bytes(0x00000A40)},
       {"MO4S", u32_bytes(0x00000A41)},
+      {"MOD2", zstr("Armor\\Male.nif")},
+      {"MOD4", zstr("Armor\\Female.nif")},
   };
   for (const auto& sub : armo_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, armo);
@@ -235,6 +252,10 @@ std::vector<std::byte> make_plugin() {
       {"MO3S", u32_bytes(0x00000A43)},
       {"MO4S", u32_bytes(0x00000A44)},
       {"MO5S", u32_bytes(0x00000A45)},
+      {"MOD2", zstr("Armor\\BipedMale.nif")},
+      {"MOD3", zstr("Armor\\BipedFemale.nif")},
+      {"MOD4", zstr("Armor\\First.nif")},
+      {"MOD5", zstr("Armor\\FirstFemale.nif")},
   };
   for (const auto& sub : arma_subs) fo4::test::write_subrecord(out, sub.signature, sub.data);
   fo4::test::end_record(out, arma);
@@ -510,6 +531,44 @@ TEST(ARMOARMARows, MaterialSwapRowsReadAndEditTheMSWPLink) {
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(link_raw(reread, k_armo_key, "MO2S"), 0x00000A40u);
   EXPECT_EQ(link_raw(reread, k_arma_key, "MO5S"), 0x01000A61u);
+}
+
+TEST(ARMOARMARows, ModelFileRowsReadAndWriteTheFilename) {
+  for (const auto& row : k_string_rows) {
+    SCOPED_TRACE(row.path);
+    const auto field =
+        fo4::schema::scalar_field_descriptor(fo4::Signature::from_string(row.record), row.path);
+    ASSERT_TRUE(field.has_value());
+    EXPECT_EQ(field->scalar.subrecord, fo4::Signature::from_string(row.subrecord));
+    EXPECT_EQ(field->scalar.storage, fo4::schema::ScalarStorage::zstring);
+    EXPECT_FALSE(field->scalar.embedded);
+  }
+
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto armo_key = fo4::FormKey::parse(k_armo_key);
+  const auto arma_key = fo4::FormKey::parse(k_arma_key);
+  EXPECT_EQ(sub_bytes(plugin, k_armo_key, "MOD2"), zstr("Armor\\Male.nif"));
+  EXPECT_EQ(sub_bytes(plugin, k_arma_key, "MOD5"), zstr("Armor\\FirstFemale.nif"));
+
+  const auto male_world = fo4::schema::scalar_field_descriptor(fo4::Signature::from_string("ARMO"),
+                                                               "ARMO\\MaleWorldModel");
+  ASSERT_TRUE(male_world.has_value());
+  EXPECT_THROW(fo4::set_record_scalar(plugin, armo_key, *male_world, 0, "Armor\\Other.nif"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::set_record_string(plugin, armo_key, "ARMO\\MaleWorldModel", 0,
+                                   "Armor\\NewMale.nif"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, arma_key, "ARMA\\FirstPersonFemaleModel", 0,
+                                   "Armor\\NewFirstFemale.nif"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, arma_key, "ARMA\\BipedMaleModel", 1, "Armor\\Extra.nif"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  EXPECT_EQ(sub_bytes(reread, k_armo_key, "MOD2"), zstr("Armor\\NewMale.nif"));
+  EXPECT_EQ(sub_bytes(reread, k_armo_key, "MOD4"), zstr("Armor\\Female.nif"));
+  EXPECT_EQ(sub_bytes(reread, k_arma_key, "MOD2"), zstr("Armor\\BipedMale.nif"));
+  EXPECT_EQ(sub_bytes(reread, k_arma_key, "MOD5"), zstr("Armor\\NewFirstFemale.nif"));
 }
 
 TEST(ARMOARMARows, EditsTheModelListByIndex) {
