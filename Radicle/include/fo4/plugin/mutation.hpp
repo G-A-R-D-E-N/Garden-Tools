@@ -91,6 +91,7 @@ enum class RecordRenumberStatus {
   target_exists,
 };
 
+<<<<<<< HEAD
 enum class LocalizedValueStatus {
   updated,
   unchanged,
@@ -128,6 +129,20 @@ PluginLocalizationResult localize_plugin(Plugin& plugin,
 PluginLocalizationResult delocalize_plugin(Plugin& plugin,
                                            localization::LocalizationTables& tables);
 
+=======
+enum class ReferenceRepointStatus {
+  repointed,
+  no_references,
+  mismatched_owners,
+};
+
+struct ReferenceRepointResult {
+  ReferenceRepointStatus status{ReferenceRepointStatus::no_references};
+  std::size_t references{0};
+  std::vector<PluginKey> plugins;
+};
+
+>>>>>>> nomad/602-engine-conflicts
 // Light plugins cap local IDs at 0xFFF; see docs/code-notes/Radicle.md (local_form_id_range).
 std::pair<std::uint32_t, std::uint32_t> local_form_id_range(const Plugin& plugin);
 bool allows_hardcoded_range(const Plugin& plugin);
@@ -160,6 +175,10 @@ bool has_form_id_labelled_child_group(const Plugin& plugin, const FormKey& recor
 RecordRenumberStatus renumber_local_record(Plugin& plugin,
                                            const FormKey& record_key,
                                            LocalFormId new_local);
+
+ReferenceRepointResult repoint_record_references(std::span<Plugin*> plugins,
+                                                 const FormKey& from,
+                                                 const FormKey& to);
 
 std::string stored_editor_id(std::string_view editor_id);
 std::string stored_inline_text(std::string_view text, std::string_view field);
@@ -295,5 +314,16 @@ RecordCopyStatus copy_record_as_override(Plugin& destination,
                                          const Plugin& source,
                                          const FormKey& record_key,
                                          bool overwrite);
+
+struct RecordDeepCopyResult {
+  RecordCopyStatus status{RecordCopyStatus::source_missing};
+  FormKey key{};
+  std::vector<FormKey> children;
+};
+
+RecordDeepCopyResult copy_record_deep(Plugin& destination,
+                                      const Plugin& source,
+                                      const FormKey& record,
+                                      bool overwrite);
 
 }  // namespace fo4

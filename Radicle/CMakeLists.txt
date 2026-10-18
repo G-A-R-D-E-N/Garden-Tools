@@ -135,6 +135,7 @@ add_library(fo4
   src/forms/placed_reference_copy.cpp
   src/forms/info_copy.cpp
   src/forms/copy_as_new.cpp
+  src/forms/copy_as_wrapper.cpp
   src/forms/placed_reference_edit.cpp
   src/forms/placed_reference_create.cpp
   src/forms/placed_reference_move.cpp
@@ -200,6 +201,7 @@ add_library(fo4
   src/schema/formlink_slots.cpp
   src/schema/vmad.cpp
   src/graph/conflict_graph.cpp
+  src/graph/conflict_kind.cpp
   src/graph/check_errors.cpp
   src/graph/check_errors_records.cpp
   src/graph/plugin_diff.cpp
@@ -408,6 +410,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_placed_reference.cpp
     tests/test_placed_reference_copy.cpp
     tests/test_copy_as_new.cpp
+    tests/test_copy_as_wrapper.cpp
     tests/test_info_copy_new.cpp
     tests/test_placed_variants.cpp
     tests/test_placed_variants_real.cpp
@@ -527,6 +530,10 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp
     tests/test_conflict_graph.cpp
+    tests/test_conflict_kind.cpp
+    tests/test_conflict_compare.cpp
+    tests/test_repoint_references.cpp
+    tests/test_deep_copy.cpp
     tests/test_check_errors.cpp
     tests/test_check_errors_conditions.cpp
     tests/test_check_dialogue.cpp
@@ -541,6 +548,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_reachability.cpp
     tests/test_maintenance.cpp
     tests/test_maintenance_nested.cpp
+    tests/test_esl_compaction.cpp
     tests/test_c_api_maintenance.cpp
     tests/test_c_api_pex.cpp
     tests/test_c_api_seq.cpp
