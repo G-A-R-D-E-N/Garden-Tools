@@ -94,8 +94,10 @@ struct SubrecordGroupMemberDescriptor {
   Signature subrecord{};
   bool required{false};
   bool repeatable{false};
+  // Constraint: payload_size 0 means a variable-length member and skips the size check.
   std::size_t payload_size{0};
   std::span<const std::uint8_t> default_payload{};
+  bool localized{false};
 };
 
 struct SubrecordGroupDescriptor {
