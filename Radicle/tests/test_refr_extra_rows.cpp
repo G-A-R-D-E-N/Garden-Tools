@@ -7,8 +7,10 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
 #include <string_view>
 #include <utility>
@@ -104,6 +106,18 @@ Bytes floats(std::initializer_list<float> values) {
   return out.bytes;
 }
 
+Bytes ragdoll_bytes(std::initializer_list<std::uint8_t> bones) {
+  ByteWriter out;
+  for (const auto bone : bones) {
+    out.u8(bone);
+    out.u8(0);
+    out.u8(0);
+    out.u8(0);
+    for (const auto value : {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}) out.f32(value);
+  }
+  return out.bytes;
+}
+
 Bytes lock_bytes(std::uint8_t level, std::uint32_t key, std::uint8_t flags) {
   ByteWriter out;
   out.u8(level);
@@ -166,6 +180,7 @@ std::vector<std::byte> make_plugin() {
                 {"INAM", u32_bytes(0x00000A91)},
                 {"XLCM", i32_bytes(2)},
                 {"XLTW", u32_bytes(0x00000AA0)},
+                {"XRGD", ragdoll_bytes({3, 7})},
                 {"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f, 0.75f})}});
   write_record(out, "REFR", 0x0C11,
                {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}});
@@ -371,6 +386,40 @@ TEST(REFRExtraRows, LevelModifierAndLitWaterRowsReadAndWrite) {
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XLCM"), i32_bytes(3));
   EXPECT_EQ(sub_bytes(reread, "000C10:Patch.esp", "XLTW"), u32_bytes(0x01000A60));
+}
+
+TEST(REFRExtraRows, StridedRagdollRowsAddressEachBone) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C10:Patch.esp");
+  const auto refr = fo4::Signature::from_string("REFR");
+  const auto bone = fo4::schema::scalar_field_descriptor(refr, "REFR\\RagdollBoneId");
+  const auto rotation_z = fo4::schema::scalar_field_descriptor(refr, "REFR\\RagdollRotationZ");
+  ASSERT_TRUE(bone.has_value());
+  ASSERT_TRUE(rotation_z.has_value());
+  EXPECT_EQ(bone->scalar.subrecord, fo4::Signature::from_string("XRGD"));
+  EXPECT_TRUE(bone->scalar.embedded);
+  EXPECT_EQ(bone->scalar.address.stride, 28u);
+  EXPECT_EQ(rotation_z->scalar.offset, 24u);
+  ASSERT_EQ(fo4::record_field_count(plugin, key, *bone), 2u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *bone, 1, "9"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *rotation_z, 1, "-2.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_scalar(plugin, key, *bone, 0, "256")),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *bone, 2, "9"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto payload = sub_bytes(reread, "000C10:Patch.esp", "XRGD");
+  ASSERT_EQ(payload.size(), 56u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[0]), 3u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[4]), 1u);
+  EXPECT_EQ(std::to_integer<std::uint8_t>(payload[28]), 9u);
+  float rotation = 0.0F;
+  std::memcpy(&rotation, payload.data() + 28 + 24, sizeof(rotation));
+  EXPECT_EQ(rotation, -2.5f);
 }
 
 TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {

@@ -154,6 +154,20 @@ void write_actor(fo4::test::ByteWriter& out, std::uint32_t local, std::size_t lo
   fo4::test::write_subrecord(out, "TNAM", u32_bytes(0x00000A81u));
   fo4::test::write_subrecord(out, "XLCM", i32_bytes(2));
   fo4::test::write_subrecord(out, "XLTW", u32_bytes(0x00000AA0u));
+  ByteWriter ragdoll;
+  for (const std::uint8_t bone : {std::uint8_t{3}, std::uint8_t{7}}) {
+    ragdoll.u8(bone);
+    ragdoll.u8(0);
+    ragdoll.u8(0);
+    ragdoll.u8(0);
+    ragdoll.f32(1.0f);
+    ragdoll.f32(2.0f);
+    ragdoll.f32(3.0f);
+    ragdoll.f32(4.0f);
+    ragdoll.f32(5.0f);
+    ragdoll.f32(6.0f);
+  }
+  fo4::test::write_subrecord(out, "XRGD", ragdoll.bytes);
   ByteWriter reflected;
   reflected.u32(0x00000A70u);
   reflected.u32(1);
@@ -289,7 +303,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 14u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 21u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -577,11 +591,62 @@ TEST(AchrRows, LevelModifierAndLitWaterRowsReadAndWrite) {
   EXPECT_EQ(link_raw(written, "ACHR\\LitWater"), 0x00000AA1u);
 }
 
+TEST(AchrRows, StridedRagdollRowsAddressEachBoneAndGateTheStride) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+  const auto bone = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\RagdollBoneId");
+  const auto position_x = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\RagdollPositionX");
+  const auto rotation_z = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\RagdollRotationZ");
+  ASSERT_TRUE(bone.has_value());
+  ASSERT_TRUE(position_x.has_value());
+  ASSERT_TRUE(rotation_z.has_value());
+  EXPECT_EQ(bone->scalar.subrecord, fo4::Signature::from_string("XRGD"));
+  EXPECT_TRUE(bone->scalar.embedded);
+  EXPECT_FALSE(bone->scalar.address.repeated);
+  EXPECT_EQ(bone->scalar.address.stride, 28u);
+  EXPECT_EQ(position_x->scalar.offset, 4u);
+  EXPECT_EQ(rotation_z->scalar.offset, 24u);
+  EXPECT_EQ(fo4::record_field_count(plugin, patch_key(0x810u), *bone), 2u);
+
+  EXPECT_EQ(read_row(full, *bone, 0), "3");
+  EXPECT_EQ(read_row(full, *bone, 1), "7");
+  EXPECT_EQ(read_row(full, *bone, 2), "");
+  EXPECT_EQ(read_row(full, *position_x, 1), "1");
+  EXPECT_EQ(read_row(full, *rotation_z, 0), "6");
+  EXPECT_EQ(read_row(full, *rotation_z, 1), "6");
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *bone, 1, "9"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *rotation_z, 1, "-2.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *rotation_z, 2, "1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto& written = actor(reread, 0x810u);
+  EXPECT_EQ(read_row(written, *bone, 0), "3");
+  EXPECT_EQ(read_row(written, *bone, 1), "9");
+  EXPECT_EQ(read_row(written, *rotation_z, 0), "6");
+  EXPECT_EQ(read_row(written, *rotation_z, 1), "-2.5");
+
+  auto truncated = fo4::read_plugin(make_plugin(), "Patch.esp");
+  fo4::visit_records(truncated, [](fo4::Record& record) {
+    if (record.form_key.local().value() != 0x810u) return;
+    for (auto& sub : record.subrecords) {
+      if (sub.signature == fo4::Signature::from_string("XRGD")) sub.data.resize(30);
+    }
+  });
+  const auto& misaligned = actor(truncated, 0x810u);
+  EXPECT_EQ(fo4::record_field_count(truncated, patch_key(0x810u), *bone), 0u);
+  EXPECT_EQ(read_row(misaligned, *bone, 0), "");
+  EXPECT_EQ(read_row(misaligned, *rotation_z, 0), "");
+}
+
 TEST(AchrRows, ShortLockPayloadReadsAsAbsentAndDropsTheKeyLinkOffset) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
   const auto& short_lock = actor(plugin, 0x811u);
-  EXPECT_EQ(short_lock.subrecords.size(), 26u);
+  EXPECT_EQ(short_lock.subrecords.size(), 27u);
 
   const auto level = scalar_bytes(short_lock, "ACHR\\LockLevel");
   ASSERT_TRUE(level.has_value());
