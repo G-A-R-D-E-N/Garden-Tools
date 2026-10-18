@@ -423,7 +423,7 @@ TEST(DestructibleRows, StageRowsAddressEachRepeatedDstd) {
   EXPECT_EQ(u32_at(second, 8), 0x01000A40u);
 }
 
-TEST(DestructibleRows, StageModelRowsAreIndexedPerStage) {
+TEST(DestructibleRows, StageModelRowsAreIndexedPerSubrecordNotPerStage) {
   auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto model = scalar_row("ACTI\\DestructionStageModel");
   const auto sequence = scalar_row("ACTI\\DestructionStageSequenceName");
@@ -436,10 +436,15 @@ TEST(DestructibleRows, StageModelRowsAreIndexedPerStage) {
             fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_string(plugin, record_key(), sequence, 0, "seq1"),
             fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_string(plugin, record_key(), sequence, 1, "seq1"),
+            fo4::ScalarMutationStatus::subrecord_missing);
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), color, 0, "0.25"),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), color, 1, "0.25"),
             fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, record_key(), material, 1,
+                                           fo4::FormKey::parse("000A01:Patch.esp")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
   EXPECT_EQ(material.payload_sizes[0], 4u);
 
   const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
