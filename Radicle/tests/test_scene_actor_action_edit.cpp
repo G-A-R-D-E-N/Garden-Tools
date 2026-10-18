@@ -43,6 +43,16 @@ std::size_t last_index_of(const Order& names, const char* signature) {
   return found;
 }
 
+std::size_t nth_index_of(const Order& names, const char* signature, std::size_t nth) {
+  std::size_t seen = 0;
+  for (std::size_t at = 0; at < names.size(); ++at) {
+    if (names[at] != signature) continue;
+    if (seen == nth) return at;
+    ++seen;
+  }
+  return names.size();
+}
+
 std::size_t part_count(const fo4::Plugin& plugin, fo4::ScenePart part) {
   return fo4::scene_group_count(plugin, key(k_scene), part).value_or(9999);
 }
@@ -226,6 +236,60 @@ TEST(SceneActionEdit, AnActionAppendedLastLandsBeforeTheSceneTail) {
   EXPECT_EQ(scene.actions[2].type, 1);
   ASSERT_TRUE(scene.actions[2].start_phase.has_value());
   EXPECT_EQ(*scene.actions[2].start_phase, 0u);
+}
+
+TEST(SceneActionEdit, ActionNamesAreSettableIdempotentAndRefusedOutsideTheAction) {
+  auto plugin = read(build());
+
+  EXPECT_EQ(fo4::set_scene_action_name(plugin, key(k_scene), 0, "Opening"), Scalar::updated);
+  EXPECT_EQ(fo4::set_scene_action_name(plugin, key(k_scene), 0, "Opening"), Scalar::unchanged);
+  EXPECT_EQ(fo4::set_scene_action_name(plugin, key(k_scene), 3, "Ghost"), Scalar::subrecord_missing);
+  EXPECT_EQ(fo4::set_scene_action_name(plugin, key(0x8FF), 0, "Ghost"), Scalar::record_missing);
+  EXPECT_THROW(static_cast<void>(fo4::set_scene_action_name(plugin, key(k_quest), 0, "Outside")),
+               fo4::schema::ScalarError);
+
+  const auto reloaded = reload(plugin);
+  EXPECT_EQ(count_of(order(reloaded, k_scene), "ANAM"), 6u);
+  const SavedEnvironment saved(reloaded);
+  const auto scene = fo4::env::decode_scene(saved.env(), saved.record(k_scene));
+  ASSERT_EQ(scene.actions.size(), 3u);
+  ASSERT_TRUE(scene.actions[0].name.has_value());
+  EXPECT_EQ(*scene.actions[0].name, "Opening");
+  ASSERT_TRUE(scene.actions[1].name.has_value());
+  EXPECT_EQ(*scene.actions[1].name, "");
+  EXPECT_EQ(scene.actions[0].type, 0);
+}
+
+TEST(SceneActionEdit, SettingANameOnAnActionWithoutOneInsertsItInHeaderOrder) {
+  auto plugin = read(build());
+  fo4::visit_records(plugin, [&](fo4::Record& record) {
+    if (record.form_key != key(k_scene)) return;
+    std::size_t seen = 0;
+    std::erase_if(record.subrecords, [&](const fo4::Subrecord& sub) {
+      return sub.signature == sig("NAM0") && seen++ == 3;
+    });
+  });
+  EXPECT_EQ(count_of(order(plugin, k_scene), "NAM0"), 4u);
+
+  EXPECT_EQ(fo4::set_scene_action_name(plugin, key(k_scene), 1, "Second"), Scalar::updated);
+
+  const auto reloaded = reload(plugin);
+  const auto names = order(reloaded, k_scene);
+  EXPECT_EQ(count_of(names, "NAM0"), 5u);
+  const auto opener = nth_index_of(names, "ANAM", 2);
+  ASSERT_LT(opener + 1, names.size());
+  EXPECT_EQ(names[opener + 1], "NAM0");
+
+  const SavedEnvironment saved(reloaded);
+  const auto scene = fo4::env::decode_scene(saved.env(), saved.record(k_scene));
+  ASSERT_EQ(scene.actions.size(), 3u);
+  ASSERT_TRUE(scene.actions[1].name.has_value());
+  EXPECT_EQ(*scene.actions[1].name, "Second");
+  EXPECT_EQ(scene.actions[1].type, 2);
+  ASSERT_TRUE(scene.actions[1].start_phase.has_value());
+  EXPECT_EQ(*scene.actions[1].start_phase, 1u);
+  ASSERT_TRUE(scene.actions[1].actor_alias.has_value());
+  EXPECT_EQ(*scene.actions[1].actor_alias, -1);
 }
 
 TEST(SceneActorActionEdit, RefusalsChangeNoByteAndForeignRecordsThrow) {

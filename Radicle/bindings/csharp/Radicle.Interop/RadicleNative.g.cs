@@ -2449,6 +2449,9 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_remove_scene_action")]
     public static extern Status PluginRemoveSceneAction(IntPtr plugin, FormKey key, nuint index);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_scene_action_name")]
+    public static extern Status PluginSetSceneActionName(IntPtr plugin, FormKey key, nuint index, [MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? name);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_list_read")]
     public static extern Status PluginListRead([MarshalAs(UnmanagedType.CustomMarshaler, MarshalTypeRef = typeof(Utf8NoNulMarshaler))] string? path, IntPtr** out_rows, nuint* out_count);
 

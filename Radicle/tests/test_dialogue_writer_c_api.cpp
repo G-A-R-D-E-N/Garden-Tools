@@ -269,6 +269,11 @@ TEST_F(DialogueWriterCApi, SceneActorAndActionAuthoringStatusesMapAndSurviveRelo
   EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, scene, 9), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, rkey(0x8FF), 0), RADICLE_STATUS_NOT_FOUND);
   EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, quest, 0), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, scene, 1, "Timer"), RADICLE_STATUS_OK);
+  EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, scene, 9, "Ghost"), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, rkey(0x8FF), 0, "Ghost"), RADICLE_STATUS_NOT_FOUND);
+  EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, scene, 1, nullptr), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_scene_action_name(plugin, quest, 0, "Outside"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_remove_scene_actor(plugin, scene, 0), RADICLE_STATUS_OK);
   EXPECT_EQ(radicle_plugin_remove_scene_action(plugin, scene, 0), RADICLE_STATUS_OK);
 
@@ -296,6 +301,7 @@ TEST_F(DialogueWriterCApi, SceneActorAndActionAuthoringStatusesMapAndSurviveRelo
   EXPECT_EQ(decoded->actions[0].has_actor_alias, 1);
   EXPECT_EQ(decoded->actions[0].actor_alias, -1);
   EXPECT_EQ(decoded->actions[0].payload_count, 0u);
+  EXPECT_STREQ(decoded->actions[0].name, "Timer");
   EXPECT_EQ(decoded->actions[1].type, 2);
   EXPECT_EQ(decoded->actions[2].type, 1);
   radicle_scene_free(decoded);

@@ -428,4 +428,30 @@ SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
   return SubrecordGroupMutationStatus::updated;
 }
 
+ScalarMutationStatus set_scene_action_name(Plugin& plugin,
+                                           const FormKey& scene,
+                                           std::size_t index,
+                                           std::string_view name) {
+  auto* record = locate_mutable_record(plugin, scene);
+  if (record == nullptr) return ScalarMutationStatus::record_missing;
+  const auto layout = checked_layout(*record);
+  if (index >= layout.actions.size()) return ScalarMutationStatus::subrecord_missing;
+  const auto span = layout.actions[index];
+  auto payload = zstring_payload(name);
+  const auto found = find_in(*record, Range{span.open + 1, span.header_end}, s("NAM0"), "SCEN\\Action\\Name");
+  if (!found) {
+    record->subrecords.insert(record->subrecords.begin() + static_cast<std::ptrdiff_t>(span.open + 1),
+                              Subrecord{s("NAM0"), std::move(payload), false});
+    mark_record_modified(plugin, *record);
+    return ScalarMutationStatus::updated;
+  }
+  auto& data = record->subrecords[*found].data;
+  if (std::equal(payload.begin(), payload.end(), data.begin(), data.end())) {
+    return ScalarMutationStatus::unchanged;
+  }
+  data = std::move(payload);
+  mark_record_modified(plugin, *record);
+  return ScalarMutationStatus::updated;
+}
+
 }

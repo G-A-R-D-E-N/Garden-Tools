@@ -59,4 +59,9 @@ SubrecordGroupMutationStatus remove_scene_action(Plugin& plugin,
                                                  const FormKey& scene,
                                                  std::size_t index);
 
+ScalarMutationStatus set_scene_action_name(Plugin& plugin,
+                                           const FormKey& scene,
+                                           std::size_t index,
+                                           std::string_view name);
+
 }

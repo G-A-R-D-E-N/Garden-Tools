@@ -183,6 +183,10 @@ RADICLE_API radicle_status radicle_plugin_insert_scene_action(radicle_plugin* pl
 RADICLE_API radicle_status radicle_plugin_remove_scene_action(radicle_plugin* plugin,
                                                               radicle_form_key key,
                                                               size_t index);
+RADICLE_API radicle_status radicle_plugin_set_scene_action_name(radicle_plugin* plugin,
+                                                                radicle_form_key key,
+                                                                size_t index,
+                                                                const char* name);
 
 #ifdef __cplusplus
 }

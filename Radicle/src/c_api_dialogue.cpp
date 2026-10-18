@@ -404,4 +404,29 @@ radicle_status radicle_plugin_remove_scene_action(radicle_plugin* plugin,
   });
 }
 
+radicle_status radicle_plugin_set_scene_action_name(radicle_plugin* plugin,
+                                                    radicle_form_key key,
+                                                    size_t index,
+                                                    const char* name) {
+  clear_error();
+  const auto form_key = to_form_key(key);
+  if (plugin == nullptr || !form_key || name == nullptr) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin, a valid record key and an action name are required");
+  }
+  return guarded("unknown exception while setting a scene action name", [&] {
+    try {
+      switch (fo4::set_scene_action_name(plugin->value, *form_key, index, name)) {
+        case fo4::ScalarMutationStatus::record_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "plugin has no such record");
+        case fo4::ScalarMutationStatus::subrecord_missing:
+          return fail(RADICLE_STATUS_NOT_FOUND, "scene has no action at that index");
+        default:
+          return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
 }
