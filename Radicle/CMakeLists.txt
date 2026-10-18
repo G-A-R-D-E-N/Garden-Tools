@@ -611,6 +611,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_referenced_by.cpp
     tests/test_weap_rows.cpp
     tests/test_npc_link_rows.cpp
+    tests/test_furn_marker_params.cpp
     tools/env_bench/env_bench.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp

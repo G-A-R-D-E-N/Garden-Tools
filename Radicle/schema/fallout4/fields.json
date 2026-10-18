@@ -25342,6 +25342,86 @@
           "insertion": "existing_only"
         },
         {
+          "path": "FURN\\MarkerOffsetX",
+          "label": "Marker offset X",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 0,
+          "stride": 24,
+          "min_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerOffsetY",
+          "label": "Marker offset Y",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 4,
+          "stride": 24,
+          "min_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerOffsetZ",
+          "label": "Marker offset Z",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 8,
+          "stride": 24,
+          "min_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerRotationZ",
+          "label": "Marker rotation Z",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 12,
+          "stride": 24,
+          "min_form_version": 125,
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerEntryTypes",
+          "label": "Marker entry types",
+          "kind": "scalar",
+          "subrecord": "SNAM",
+          "offset": 20,
+          "stride": 24,
+          "min_form_version": 125,
+          "storage": "u8",
+          "presentation": "flags",
+          "names": [
+            {"bit": 0, "name": "Front"},
+            {"bit": 1, "name": "Rear"},
+            {"bit": 2, "name": "Right"},
+            {"bit": 3, "name": "Left"},
+            {"bit": 4, "name": "Other"},
+            {"bit": 5, "name": "Unused 5"},
+            {"bit": 6, "name": "Unused 6"},
+            {"bit": 7, "name": "Unused 7"}
+          ],
+          "minimum": 0,
+          "maximum": 255,
+          "insertion": "existing_only"
+        },
+        {
           "path": "FURN\\Properties",
           "label": "Properties",
           "kind": "counted_array",
@@ -25448,6 +25528,16 @@
           "payload_sizes": [
             4
           ],
+          "insertion": "existing_only"
+        },
+        {
+          "path": "FURN\\MarkerKeyword",
+          "label": "Marker keyword",
+          "subrecord": "SNAM",
+          "offset": 16,
+          "stride": 24,
+          "targets": ["KYWD"],
+          "nullable": true,
           "insertion": "existing_only"
         },
         {"path": "FURN\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
