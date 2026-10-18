@@ -548,7 +548,20 @@
           "minimum": 0,
           "maximum": 4294967295,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ARMO\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "ARMO\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ARMO\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -703,7 +716,11 @@
           ],
           "nullable": false,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ARMO\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ARMO\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL",
@@ -1695,7 +1712,20 @@
           "kind": "string",
           "subrecord": "MICO",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ALCH\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "ALCH\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ALCH\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -1767,7 +1797,11 @@
           "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "ALCH\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ALCH\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "DESC", "DNAM"]
     },
@@ -2068,7 +2102,20 @@
           "kind": "string",
           "subrecord": "NAM1",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "AMMO\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "AMMO\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "AMMO\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -2120,7 +2167,11 @@
           "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "AMMO\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "AMMO\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "DESC", "ONAM"]
     },
@@ -2441,7 +2492,20 @@
           "kind": "string",
           "subrecord": "MICO",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "BOOK\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "BOOK\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "BOOK\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -2503,7 +2567,11 @@
           "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "BOOK\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "BOOK\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "DESC", "CNAM"]
     },
@@ -2799,7 +2867,20 @@
           "kind": "string",
           "subrecord": "MICO",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "INGR\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "INGR\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "INGR\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -2851,7 +2932,11 @@
           "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "INGR\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "INGR\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL"]
     },
@@ -3100,7 +3185,20 @@
           "kind": "string",
           "subrecord": "MICO",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "KEYM\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "KEYM\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "KEYM\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -3142,7 +3240,11 @@
           "nullable": false,
           "payload_sizes": [4],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "KEYM\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "KEYM\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL"]
     },
@@ -3736,7 +3838,20 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "FLOR\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "FLOR\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "FLOR\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -3774,7 +3889,11 @@
           "nullable": false,
           "insertion": "existing_only"
         },
-        {"path": "FLOR\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "FLOR\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "FLOR\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "authoring": {
         "placement": "top_level",
@@ -7034,7 +7153,20 @@
           "minimum": 0,
           "maximum": 4,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "PROJ\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "PROJ\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "PROJ\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "PROJ\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -7127,7 +7259,11 @@
           "targets": ["PROJ"],
           "nullable": true,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "PROJ\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "PROJ\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "authoring": {
         "placement": "top_level",
@@ -7459,7 +7595,27 @@
     },
     {
       "signature": "MISC",
-      "fields": [],
+      "fields": [
+        {"path": "MISC\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "MISC\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MISC\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
+      ],
+      "formlink_fields": [
+        {"path": "MISC\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "MISC\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
+      ],
       "localized_subrecords": [
         "FULL"
       ]
@@ -12494,7 +12650,20 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "LIGH\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "LIGH\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "LIGH\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "LIGH\\PreviewTransform", "label": "Preview transform", "subrecord": "PTRN", "offset": 0, "targets": ["TRNS"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -12529,7 +12698,11 @@
           "nullable": false,
           "insertion": "existing_only"
         },
-        {"path": "LIGH\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "LIGH\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "LIGH\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "authoring": {
         "placement": "top_level",
@@ -23841,7 +24014,20 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "ACTI\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "ACTI\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "ACTI\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -23970,7 +24156,11 @@
           ],
           "insertion": "existing_only"
         },
-        {"path": "ACTI\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "ACTI\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "ACTI\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL",
@@ -24290,7 +24480,20 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "CONT\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "CONT\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "CONT\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -24405,7 +24608,11 @@
           ],
           "insertion": "existing_only"
         },
-        {"path": "CONT\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "CONT\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "CONT\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL"
@@ -24651,7 +24858,20 @@
           "minimum": 0,
           "maximum": 255,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "DOOR\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "DOOR\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "DOOR\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -24737,7 +24957,11 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "DOOR\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "DOOR\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "formlink_lists": [
         {
@@ -25359,7 +25583,20 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "FURN\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "FURN\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "FURN\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -25450,7 +25687,11 @@
           ],
           "insertion": "existing_only"
         },
-        {"path": "FURN\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "FURN\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "FURN\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL",
@@ -25670,7 +25911,20 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "MSTT\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "MSTT\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "MSTT\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -25715,7 +25969,11 @@
           ],
           "insertion": "existing_only"
         },
-        {"path": "MSTT\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "MSTT\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "MSTT\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL"
@@ -25900,7 +26158,20 @@
           "kind": "string",
           "subrecord": "MODL",
           "insertion": "existing_only"
-        }
+        },
+        {"path": "TACT\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "TACT\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "TACT\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -25944,7 +26215,11 @@
             4
           ],
           "insertion": "existing_only"
-        }
+        },
+        {"path": "TACT\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "TACT\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": [
         "FULL"
@@ -27287,7 +27562,20 @@
           "stride": 8,
           "max_form_version": 152,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "WEAP\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "WEAP\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "WEAP\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "WEAP\\MaterialSwap", "label": "Material swap", "subrecord": "MODS", "offset": 0, "targets": ["MSWP"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},
@@ -27464,7 +27752,11 @@
           "targets": ["DMGT"],
           "nullable": false,
           "insertion": "existing_only"
-        }
+        },
+        {"path": "WEAP\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "WEAP\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "DESC"]
     },
@@ -29011,7 +29303,20 @@
               "maximum": 3.4028234663852886e+38
             }
           ]
-        }
+        },
+        {"path": "NPC_\\DestructionHealth", "label": "Destruction health", "kind": "scalar", "subrecord": "DEST", "offset": 0, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageCount", "label": "Stage count", "kind": "scalar", "subrecord": "DEST", "offset": 4, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionFlags", "label": "Destruction flags", "kind": "scalar", "subrecord": "DEST", "offset": 5, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "VATS Targetable"}, {"bit": 1, "name": "Large Actor Destroys"}], "minimum": 0, "maximum": 255, "payload_size": 8, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionResistances", "label": "Resistances", "kind": "counted_array", "subrecord": "DAMC", "stride": 8, "insertion": "existing_only", "members": [{"path": "NPC_\\DestructionResistanceValue", "label": "Resistance value", "offset": 4, "storage": "u32", "presentation": "identity", "minimum": 0, "maximum": 4294967295}]},
+        {"path": "NPC_\\DestructionStageHealthPercent", "label": "Health %", "kind": "scalar", "subrecord": "DSTD", "offset": 0, "storage": "u8", "presentation": "percent_0_100", "minimum": 0, "maximum": 100, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageIndex", "label": "Stage index", "kind": "scalar", "subrecord": "DSTD", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageModelDamageStage", "label": "Model damage stage", "kind": "scalar", "subrecord": "DSTD", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageFlags", "label": "Stage flags", "kind": "scalar", "subrecord": "DSTD", "offset": 3, "storage": "u8", "presentation": "flags", "names": [{"bit": 0, "name": "Cap Damage"}, {"bit": 1, "name": "Disable"}, {"bit": 2, "name": "Destroy"}, {"bit": 3, "name": "Ignore External Dmg"}, {"bit": 4, "name": "Becomes Dynamic"}], "minimum": 0, "maximum": 255, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageSelfDamagePerSecond", "label": "Self damage per second", "kind": "scalar", "subrecord": "DSTD", "offset": 4, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageDebrisCount", "label": "Debris count", "kind": "scalar", "subrecord": "DSTD", "offset": 16, "storage": "i32", "presentation": "identity", "minimum": -2147483648, "maximum": 2147483647, "repeated": true, "payload_size": 20, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageSequenceName", "label": "Stage sequence name", "kind": "string", "subrecord": "DSTA", "repeated": true, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageModel", "label": "Stage model file name", "kind": "string", "subrecord": "DMDL", "repeated": true, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageColorRemapping", "label": "Stage color remapping index", "kind": "scalar", "subrecord": "DMDC", "offset": 0, "storage": "f32", "presentation": "identity", "minimum": -3.4028234663852886e+38, "maximum": 3.4028234663852886e+38, "repeated": true, "payload_size": 4, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {
@@ -29284,7 +29589,11 @@
           "payload_sizes": [4],
           "insertion": "existing_only"
         },
-        {"path": "NPC_\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        {"path": "NPC_\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionDamageType", "label": "Damage type", "subrecord": "DAMC", "offset": 0, "stride": 8, "targets": ["DMGT"], "nullable": false, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageExplosion", "label": "Stage explosion", "subrecord": "DSTD", "offset": 8, "repeated": true, "payload_sizes": [20], "targets": ["EXPL"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageDebris", "label": "Stage debris", "subrecord": "DSTD", "offset": 12, "repeated": true, "payload_sizes": [20], "targets": ["DEBR"], "nullable": true, "insertion": "existing_only"},
+        {"path": "NPC_\\DestructionStageMaterialSwap", "label": "Stage material swap", "subrecord": "DMDS", "offset": 0, "repeated": true, "payload_sizes": [4], "targets": ["MSWP"], "nullable": false, "insertion": "existing_only"}
       ],
       "localized_subrecords": ["FULL", "SHRT", "ATTX"]
     }
