@@ -100,6 +100,16 @@ Edit rules:
 - Removing the last entry drops PRKZ or COCT with the run.
 - A missing run is inserted after the last subrecord that xEdit orders before it. The order is `k_order` in `src/forms/npc.cpp`. A record with no earlier subrecord (no ACBS) is refused.
 
+### Link rows
+
+| Path | Subrecord | Targets | xEdit |
+| --- | --- | --- | --- |
+| NPC_\Package | PKID | PACK | FO4:10400 |
+| NPC_\HeadPart | PNAM | HDPT | FO4:10417 |
+| NPC_\Spell | SPLO | SPEL, LVSP | FO4:10372; wbSPLO FO4:3284 |
+
+These are schema FormLink rows with `repeated: true`, `payload_sizes: [4]`, `nullable: false` and `insertion: existing_only`: each link of the list is read and written by index through the generic FormLink field path, and a write leaves the other links byte-identical. The SPLO count SPCT is not rowed and not maintained, as with `RACE\ActorEffects`. Adding and removing links is not offered; these rows replace no typed list.
+
 ## Not covered
 
 | xEdit | Field | Reason |
@@ -108,7 +118,7 @@ Edit rules:
 | FO4:10347, 10377 | Attacks (ATKD and the rest of `wbAttackData`) | Repeated struct. Only the ATKD payload is in authoring; the list is not modeled. Factions (10347) are covered above. |
 | FO4:10348-10369 | INAM, VTCK, TPLT, LTPT, LTPC, TPTA | FormIDs, not scalars. TPTA is a thirteen-FormID struct. Covered by the FormLink tables where they exist. |
 | FO4:10370-10383 | RNAM, WNAM, ANAM, ATKR, SPOR, OCOR, GWOR, ECOR, FCPL, RCLR | FormIDs, not scalars. |
-| FO4:10371, 10372 | SPCT count, SPLO list | Count with no typed owner; a generic write would desync it from SPLO. |
+| FO4:10371 | SPCT count | Count with no typed owner; a generic write would desync it from SPLO. The SPLO links themselves are rowed (see Link rows). |
 | FO4:10394-10396, 10399, 10401 | PRPS, FTYP, NTRM, AIDT's sibling PKID list | Properties (xEdit `wbPRPS`, `Core/wbDefinitionsFO4.pas:10394` at pin 93cc0bc5), an array of 8-byte `wbObjectProperty` entries (`:5266-5272`). Modeled by `NPC_\PropertyActorValue` (link to AVIF, nullable, offset 0, stride 8) and `NPC_\PropertyValue` (f32, offset 4, stride 8) in `Radicle/schema/fallout4/fields.json`, both existing_only. FTYP and NTRM are form IDs; PKID is a repeated form ID list. |
 | FO4:10403-10404 | KWDA/KSIZ keywords, APPR | Covered by the keyword FormLink tables. |
 | FO4:10405 | Object template OBTE/OBTF/OBTS/STOP | Combination struct; not modeled. |
