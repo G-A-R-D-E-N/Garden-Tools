@@ -510,6 +510,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_item_mod_records_real.cpp
     tests/test_story_manager_records.cpp
     tests/test_story_manager_records_real.cpp
+    tests/test_term_menu_rows.cpp
     tests/test_world_misc_records.cpp
     tests/test_world_misc_records_real.cpp
     tests/test_weapon.cpp

@@ -388,8 +388,8 @@ TEST(QustGeneralRows, AuthoringRefusesSignaturesOutsideTheGeneralBlock) {
   auto plugin = load(general_pieces());
   const auto before = fo4::write_plugin(plugin);
   EXPECT_EQ(fo4::add_record_subrecord(plugin, record_key(), fo4::Signature::from_string("QOBJ")),
-            fo4::SubrecordAddStatus::unknown_order);
-  EXPECT_EQ(fo4::remove_record_subrecord(plugin, record_key(), k_qtgl, 0),
-            fo4::SubrecordRemoveStatus::not_authorable);
+            fo4::SubrecordAddStatus::not_authorable);
+  EXPECT_EQ(fo4::remove_record_subrecord(plugin, record_key(), k_dnam, 0),
+            fo4::SubrecordRemoveStatus::below_minimum);
   EXPECT_EQ(fo4::write_plugin(plugin), before);
 }
