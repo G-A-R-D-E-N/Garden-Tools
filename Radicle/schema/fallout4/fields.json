@@ -27237,8 +27237,7 @@
           "targets": ["KYWD"],
           "nullable": true,
           "insertion": "existing_only"
-        },
-        {"path": "FURN\\PropertyActorValue", "label": "Property actor value", "subrecord": "PRPS", "offset": 0, "stride": 8, "targets": ["AVIF"], "nullable": true, "insertion": "existing_only"}
+        }
       ],
       "localized_subrecords": [
         "FULL",

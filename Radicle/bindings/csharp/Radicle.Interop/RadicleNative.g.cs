@@ -1933,7 +1933,7 @@ public unsafe struct DeltaPatchCounts
 public static unsafe partial class RadicleNative
 {
     public const string Library = "radicle";
-    public const uint CompiledAbiVersion = 45u;
+    public const uint CompiledAbiVersion = 46u;
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_abi_version")]
     public static extern uint AbiVersion();
