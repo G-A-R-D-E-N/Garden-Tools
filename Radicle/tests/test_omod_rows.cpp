@@ -245,7 +245,9 @@ TEST(OmodRows, DataScalarsReadAndWriteAtTheirOffsets) {
   EXPECT_THROW(fo4::set_record_scalar(plugin, key, *rank, 0, "999"), fo4::schema::ScalarError);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *rank, 0, "9"),
             fo4::ScalarMutationStatus::updated);
-  const auto weapon = std::to_string(*fo4::schema::scalar_name_value(type->scalar, "Weapon"));
+  const auto weapon_value = fo4::schema::scalar_name_value(type->scalar, "Weapon");
+  ASSERT_TRUE(weapon_value.has_value());
+  const auto weapon = std::to_string(*weapon_value);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *type, 0, weapon),
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, key, *tier, 0, "2"),

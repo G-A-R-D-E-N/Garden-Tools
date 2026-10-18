@@ -526,6 +526,7 @@ TEST(CellRows, ShortPayloadsHideRowsInsteadOfReportingThem) {
   EXPECT_TRUE(scalar_bytes(plugin, key, "CELL\\LightingFogPower").empty());
   EXPECT_TRUE(scalar_bytes(plugin, key, "CELL\\LightingAmbientRed").empty());
   EXPECT_TRUE(scalar_bytes(plugin, key, "CELL\\WaterCurrentVelocityX").empty());
+  EXPECT_THROW(scalar_bytes(plugin, key, "CELL\\PreVisTimestamp"), fo4::schema::ScalarError);
 
   auto mutable_plugin = fo4::read_plugin(make_short_payload_plugin(), "Patch.esp");
   const auto land = scalar_row("CELL\\LandFlags");

@@ -408,6 +408,7 @@ TEST(DestructibleRows, ResistanceArrayReadsWritesInsertsAndRemoves) {
             fo4::ScalarMutationStatus::updated);
   EXPECT_EQ(fo4::set_record_scalar(plugin, record_key(), value, 2, "9"),
             fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_TRUE(fo4::test::original_bytes(plugin).empty());
 
   EXPECT_EQ(fo4::insert_record_counted_element(plugin, record_key(), array, 3),
             fo4::CountedArrayMutationStatus::index_out_of_range);
