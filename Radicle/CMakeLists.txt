@@ -171,6 +171,7 @@ add_library(fo4
   src/plugin/record_flags.cpp
   src/plugin/copy_hierarchy.cpp
   src/plugin/vmad_writer.cpp
+  src/plugin/vmad_fragment_edits.cpp
   src/plugin/navmesh_writer.cpp
   src/plugin/field_writer.cpp
   src/plugin/destructible_stage.cpp
@@ -542,6 +543,9 @@ if(RADICLE_BUILD_TESTS)
     tests/test_vmad.cpp
     tests/test_vmad_unsupported.cpp
     tests/test_vmad_array_elements.cpp
+    tests/test_vmad_structure.cpp
+    tests/test_vmad_quest_fragments.cpp
+    tests/test_vmad_fragments.cpp
     tests/test_conflict_graph.cpp
     tests/test_conflict_kind.cpp
     tests/test_conflict_compare.cpp
