@@ -1968,6 +1968,9 @@ public static unsafe partial class RadicleNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_master_flag")]
     public static extern Status PluginSetMasterFlag(IntPtr plugin, int master);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_set_localized_flag")]
+    public static extern Status PluginSetLocalizedFlag(IntPtr plugin, int localized);
+
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "radicle_plugin_collect_form_keys")]
     public static extern Status PluginCollectFormKeys(IntPtr plugin, IntPtr** out_strings, nuint* out_count);
 

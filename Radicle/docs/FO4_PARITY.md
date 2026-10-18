@@ -189,7 +189,7 @@ Tier counts: L0 5, L1 0, L2 4, L3 0, L4 138.
 | VTYP | 7950 | 1 | - | - | - | - | yes | - | - | - | 1 | L4 |
 | WATR | 12788 | 71 | 4 | 5 | - | 1 | yes | - | environment/base_records | - | 1 | L4 |
 | WEAP | 12877 | 46 | 1 | 30 | - | 2 | yes | yes | forms/weapon | yes | 2 | L4 |
-| WRLD | 13110 | 22 | 4 | 8 | - | 1 | - | - | environment/world | yes | 1 | L4 |
+| WRLD | 13110 | 30 | 4 | 8 | - | 1 | yes | - | environment/world | yes | 1 | L4 |
 | WTHR | 13034 | 124 | 33 | 9 | - | - | yes | - | forms/weather, environment/base_records | - | 2 | L4 |
 | ZOOM | 13180 | 5 | - | 1 | - | - | yes | - | - | - | 1 | L4 |
 
@@ -341,7 +341,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | VTYP | - | - | - | 1 | - | u8 | - | - | - | existing_only |
 | WATR | 71 | - | - | - | 4 | f32, u8 | - | - | - | existing_only |
 | WEAP | 37 | - | 6 | 3 | 1 | f32, i16, u16, u32, u8 | - | 2 | - | existing_only |
-| WRLD | 20 | - | - | 2 | 4 | f32, i16, i32, u16, u8 | - | - | - | existing_only |
+| WRLD | 28 | - | - | 2 | 4 | f32, i16, i32, i8, u16, u8 | 4 | - | - | existing_only |
 | WTHR | 124 | - | - | - | 33 | f32, u32, u8 | 25 | 61 | - | existing_only |
 | ZOOM | 4 | - | 1 | - | - | f32, u32 | - | - | - | existing_only |
 
@@ -526,7 +526,7 @@ These letters are hand-kept judgments, not derived output. The per-signature tab
 | RACE body / nested links | forms/race.hpp; tests/test_race_body.cpp, test_formlink_lists.cpp | Other appearance/morph members; full field-level proof |
 | FACT relations / ranks / scalars | forms/faction.hpp; tests/test_faction.cpp, tests/test_faction_real.cpp | DATA flag names are documentation only; XNAM remap is covered by `form_link_mixed.cpp` (`k_faction_layouts`) and tests/test_packed_formlink_arrays.cpp; creation is bounded to `create_faction` (tests/test_faction_creation.cpp); see docs/FACTIONS.md |
 | REFR / ACHR placed data | forms/placed_reference.hpp; tests/test_environment_writeback.cpp, test_writeback_real.cpp; managed WritebackTests.cs | Optional insertion depends on field; copied records are not arbitrary default creation |
-| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors, interior creation and new WRLD creation |
+| CELL exterior creation | forms/cell.hpp; tests/test_exterior_cell_creation.cpp | CELL field editors and interior creation; a new WRLD record is created from its authoring defaults (`tests/test_wrld_rows.cpp`), but not the worldspace block and subblock group skeleton |
 | MISC / COBJ components | forms/components.hpp; tests/test_components.cpp | MISC members and whole-record creation; COBJ CTDA (WP-7) and NAM1-NAM3 (unused by xEdit; one corpus record) |
 | WTHR MNAM | forms/weather_concept.hpp; tests/test_weather_concept.cpp | Other weather fields; missing/duplicate MNAM refuses mutation |
 | FLST / generated keywords | schema/formlink_lists.hpp; tests/test_formlink_lists.cpp | Each record's empty-list anchors and save/reload proof; unrelated fields |

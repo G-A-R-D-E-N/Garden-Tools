@@ -310,6 +310,25 @@ radicle_status radicle_plugin_set_master_flag(radicle_plugin* plugin, int32_t ma
   }
 }
 
+radicle_status radicle_plugin_set_localized_flag(radicle_plugin* plugin, int32_t localized) {
+  clear_error();
+  if (!plugin) {
+    return fail(RADICLE_STATUS_INVALID_ARGUMENT, "plugin is required");
+  }
+
+  try {
+    plugin->value = fo4::set_plugin_localized_flag(plugin->value, localized != 0);
+    return RADICLE_STATUS_OK;
+  } catch (const std::bad_alloc& error) {
+    return fail_exception(RADICLE_STATUS_OUT_OF_MEMORY, error);
+  } catch (const std::exception& error) {
+    return fail_exception(RADICLE_STATUS_INTERNAL_ERROR, error);
+  } catch (...) {
+    return fail(RADICLE_STATUS_INTERNAL_ERROR,
+                "unknown exception while setting the localized flag");
+  }
+}
+
 radicle_status radicle_plugin_collect_form_keys(const radicle_plugin* plugin,
                                                  char*** out_strings,
                                                  size_t* out_count) {

@@ -35,6 +35,51 @@ std::vector<std::byte> make_tes4(std::uint32_t flags, bool has_master) {
   return out.bytes;
 }
 
+std::vector<std::byte> make_tes4_with_ignored_subrecords() {
+  fo4::test::ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  fo4::test::ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(0);
+  hedr.u32(0x800);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::ByteWriter ofst;
+  ofst.u32(0x0B0A0908u);
+  fo4::test::write_subrecord(out, "OFST", ofst.bytes);
+  fo4::test::ByteWriter dele;
+  dele.u8(0x01);
+  fo4::test::write_subrecord(out, "DELE", dele.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Base.esm\0", 9});
+  fo4::test::ByteWriter data;
+  data.u32(0);
+  data.u32(0);
+  fo4::test::write_subrecord(out, "DATA", data.bytes);
+  fo4::test::ByteWriter scrn;
+  scrn.u32(0xDEADBEEFu);
+  fo4::test::write_subrecord(out, "SCRN", scrn.bytes);
+  fo4::test::ByteWriter tnam;
+  tnam.u32(0x4Eu);
+  tnam.u32(0x00000B02u);
+  fo4::test::write_subrecord(out, "TNAM", tnam.bytes);
+  fo4::test::ByteWriter intv;
+  intv.u32(7);
+  fo4::test::write_subrecord(out, "INTV", intv.bytes);
+  fo4::test::ByteWriter incc;
+  incc.u32(0xDEADBEEFu);
+  fo4::test::write_subrecord(out, "INCC", incc.bytes);
+  fo4::test::end_record(out, tes4);
+  return out.bytes;
+}
+
+std::vector<std::byte> subrecord_bytes(const fo4::Plugin& plugin, std::string_view signature) {
+  for (const auto& sub : plugin.tes4.subrecords) {
+    if (sub.signature.to_string() == signature) {
+      return sub.data;
+    }
+  }
+  return {};
+}
+
 std::vector<std::string> subrecord_names(const fo4::Plugin& plugin) {
   std::vector<std::string> names;
   for (const auto& sub : plugin.tes4.subrecords) {
@@ -156,6 +201,67 @@ TEST(Tes4Header, MasterFlagSetAndClearKeepsSmallFile) {
   EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
 }
 
+TEST(Tes4Header, LocalizedFlagSetClearAndIndependentOfMaster) {
+  auto plugin = fo4::read_plugin(make_tes4(0x200, false), "Flagged.esp");
+  plugin = fo4::set_plugin_localized_flag(std::move(plugin), true);
+  EXPECT_TRUE(plugin.header.tes4_flags.is_localized());
+  EXPECT_TRUE(plugin.tes4.header.flags.is_localized());
+  EXPECT_TRUE(plugin.header.tes4_flags.is_small_file());
+
+  plugin = fo4::set_plugin_localized_flag(std::move(plugin), true);
+  EXPECT_TRUE(plugin.header.tes4_flags.is_localized());
+
+  plugin = fo4::set_plugin_master_flag(std::move(plugin), true);
+  EXPECT_TRUE(plugin.header.tes4_flags.is_master());
+  EXPECT_TRUE(plugin.header.tes4_flags.is_localized());
+
+  auto reloaded = round_trip(plugin);
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_localized());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_master());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
+
+  reloaded = fo4::set_plugin_localized_flag(std::move(reloaded), false);
+  EXPECT_FALSE(reloaded.header.tes4_flags.is_localized());
+  EXPECT_FALSE(reloaded.tes4.header.flags.is_localized());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_master());
+
+  const auto cleared = round_trip(reloaded);
+  EXPECT_FALSE(cleared.header.tes4_flags.is_localized());
+  EXPECT_FALSE(cleared.tes4.header.flags.is_localized());
+  EXPECT_TRUE(cleared.header.tes4_flags.is_master());
+}
+
+TEST(Tes4Header, KeepsTnamScrnOfstAndDeleAcrossTextSetters) {
+  auto plugin = fo4::read_plugin(make_tes4_with_ignored_subrecords(), "Header.esp");
+  const auto ofst = subrecord_bytes(plugin, "OFST");
+  const auto dele = subrecord_bytes(plugin, "DELE");
+  const auto scrn = subrecord_bytes(plugin, "SCRN");
+  const auto tnam = subrecord_bytes(plugin, "TNAM");
+  EXPECT_EQ(ofst.size(), 4u);
+  EXPECT_EQ(dele.size(), 1u);
+  EXPECT_EQ(scrn.size(), 4u);
+  EXPECT_EQ(tnam.size(), 8u);
+  EXPECT_EQ(plugin.header.intv.value_or(0), 7u);
+  EXPECT_EQ(plugin.header.incc.value_or(0), 0xDEADBEEFu);
+
+  plugin = fo4::set_plugin_author(std::move(plugin), "Ricky");
+  plugin = fo4::set_plugin_description(std::move(plugin), "Desc");
+  const auto reloaded = round_trip(plugin);
+
+  EXPECT_EQ(subrecord_names(reloaded),
+            (std::vector<std::string>{"HEDR", "OFST", "DELE", "CNAM", "SNAM", "MAST", "DATA",
+                                      "SCRN", "TNAM", "INTV", "INCC"}));
+  EXPECT_EQ(subrecord_bytes(reloaded, "OFST"), ofst);
+  EXPECT_EQ(subrecord_bytes(reloaded, "DELE"), dele);
+  EXPECT_EQ(subrecord_bytes(reloaded, "SCRN"), scrn);
+  EXPECT_EQ(subrecord_bytes(reloaded, "TNAM"), tnam);
+  EXPECT_EQ(reloaded.header.author, "Ricky");
+  EXPECT_EQ(reloaded.header.description, "Desc");
+  EXPECT_EQ(reloaded.header.intv.value_or(0), 7u);
+  ASSERT_EQ(reloaded.header.masters.size(), 1u);
+  EXPECT_EQ(reloaded.header.masters.front().key.filename(), "Base.esm");
+}
+
 TEST(Tes4Header, ClearedMasterOnEslIsRestoredByPathSave) {
   auto plugin = fo4::read_plugin(make_tes4(0x201, false), "Flagged.esl");
   plugin = fo4::set_plugin_master_flag(std::move(plugin), false);
@@ -204,6 +310,25 @@ TEST(Tes4HeaderCApi, SetsMasterFlagThroughTheHandle) {
   EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
 }
 
+TEST(Tes4HeaderCApi, SetsLocalizedFlagThroughTheHandle) {
+  TempDir dir;
+  const auto source = write_source(dir, "Header.esp", 0x200, false).string();
+  const auto out = (dir.path / "Out.esp").string();
+
+  radicle_plugin* plugin = nullptr;
+  ASSERT_EQ(radicle_plugin_read_file(source.c_str(), &plugin), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_set_localized_flag(plugin, 1), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  ASSERT_EQ(radicle_plugin_write_file(plugin, out.c_str()), RADICLE_STATUS_OK)
+      << radicle_last_error();
+  radicle_plugin_destroy(plugin);
+
+  const auto reloaded = fo4::read_plugin_file(out);
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_localized());
+  EXPECT_TRUE(reloaded.header.tes4_flags.is_small_file());
+}
+
 TEST(Tes4HeaderCApi, RejectsBadArgumentsAndLeavesPluginUnchanged) {
   TempDir dir;
   const auto source = write_source(dir, "Header.esp", 0, false).string();
@@ -212,6 +337,7 @@ TEST(Tes4HeaderCApi, RejectsBadArgumentsAndLeavesPluginUnchanged) {
   EXPECT_EQ(radicle_plugin_set_author(nullptr, "Ricky"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_description(nullptr, "Desc"), RADICLE_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(radicle_plugin_set_master_flag(nullptr, 1), RADICLE_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(radicle_plugin_set_localized_flag(nullptr, 1), RADICLE_STATUS_INVALID_ARGUMENT);
 
   radicle_plugin* plugin = nullptr;
   ASSERT_EQ(radicle_plugin_read_file(source.c_str(), &plugin), RADICLE_STATUS_OK)
