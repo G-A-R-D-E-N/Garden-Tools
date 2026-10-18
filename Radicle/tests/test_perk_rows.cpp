@@ -3,6 +3,7 @@
 #include "fo4/plugin/subrecord_authoring.hpp"
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
 #include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
@@ -65,7 +66,12 @@ Bytes effect_data() {
   return Bytes{std::byte{0x00}, std::byte{0x00}, std::byte{0x00}};
 }
 
-Bytes make_plugin(Bytes data) {
+Bytes header_data() {
+  return Bytes{std::byte{0x00}, std::byte{0x00}, std::byte{0x01}, std::byte{0x01},
+               std::byte{0x00}};
+}
+
+Bytes make_plugin(Bytes data, bool with_data = true) {
   ByteWriter out;
   const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
   ByteWriter hedr;
@@ -84,11 +90,15 @@ Bytes make_plugin(Bytes data) {
   const auto record = fo4::test::begin_record(out, "PERK", 0, raw_id(0x0D01));
   fo4::test::write_subrecord(out, "EDID", zstr("RadiclePerk"));
   fo4::test::write_subrecord(out, "ICON", zstr("Interface/perk.swf"));
-  fo4::test::write_subrecord(out, "DATA", data);
+  if (with_data) {
+    fo4::test::write_subrecord(out, "DATA", data);
+  }
   fo4::test::write_subrecord(out, "SNAM", u32_bytes(0x00000A20));
   fo4::test::write_subrecord(out, "NNAM", u32_bytes(0x00000A21));
   fo4::test::write_subrecord(out, "FNAM", zstr("PerkMenu"));
-  fo4::test::write_subrecord(out, "DATA", effect_data());
+  if (with_data) {
+    fo4::test::write_subrecord(out, "DATA", effect_data());
+  }
   fo4::test::end_record(out, record);
   fo4::test::end_group(out, group);
   return out.bytes;
@@ -167,22 +177,23 @@ TEST(PerkRows, HeaderStringsAndLinksRoundTrip) {
             "PerkMenu");
 }
 
-TEST(PerkRows, AuthoringMatchesTheXEditSubrecordOrder) {
+TEST(PerkRows, AuthoringListsTheHeaderRulesAndKeepsTheRequiredData) {
   const auto constraint =
       fo4::schema::record_authoring_constraint(fo4::Signature::from_string(k_perk));
   ASSERT_TRUE(constraint.has_value());
   EXPECT_EQ(constraint->placement, fo4::schema::RecordPlacement::top_level);
-  constexpr std::string_view k_order[] = {"EDID", "VMAD", "FULL", "DESC", "ICON",
-                                          "DATA", "SNAM", "NNAM", "FNAM"};
+  constexpr std::string_view k_order[] = {"EDID", "VMAD", "FULL", "DESC", "ICON", "DATA"};
   const auto rules = fo4::schema::authoring_subrecords(*constraint);
-  ASSERT_EQ(rules.size(), 9u);
+  ASSERT_EQ(rules.size(), 6u);
   for (std::size_t index = 0; index < rules.size(); ++index) {
     SCOPED_TRACE(index);
     EXPECT_EQ(rules[index].signature, fo4::Signature::from_string(k_order[index]));
   }
   EXPECT_EQ(rules[5].minimum, 1);
-  EXPECT_EQ(rules[5].maximum, 1);
+  EXPECT_EQ(rules[5].maximum, 65535);
+  EXPECT_TRUE(rules[5].uncounted);
   EXPECT_TRUE(rules[5].has_default());
+  EXPECT_EQ(rules[5].default_size, 5);
 
   auto plugin = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
   const auto created =
@@ -193,5 +204,23 @@ TEST(PerkRows, AuthoringMatchesTheXEditSubrecordOrder) {
   ASSERT_EQ(record->subrecords.size(), 2u);
   EXPECT_EQ(record->subrecords[0].signature, fo4::Signature::from_string("EDID"));
   EXPECT_EQ(record->subrecords[1].signature, fo4::Signature::from_string("DATA"));
-  EXPECT_EQ(record->subrecords[1].data, perk_data());
+  EXPECT_EQ(record->subrecords[1].data, header_data());
+}
+
+TEST(PerkRows, PreflightAcceptsAnEffectDataSubrecordAfterSwf) {
+  const auto plugin = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
+  const auto issues =
+      fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(k_key));
+  for (const auto& issue : issues) {
+    ADD_FAILURE() << issue.path << ' ' << issue.code;
+  }
+}
+
+TEST(PerkRows, PreflightRefusesAPerkWithoutAnyDataSubrecord) {
+  const auto plugin = fo4::read_plugin(make_plugin(perk_data(), false), "Patch.esp");
+  const auto issues =
+      fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse(k_key));
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].code, "required_subrecord_missing");
+  EXPECT_EQ(issues[0].path, "PERK\\DATA");
 }
