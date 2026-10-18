@@ -132,12 +132,51 @@ std::optional<fo4::schema::FormLinkFieldDescriptor> formlink_field(std::string_v
 
 }  // namespace
 
-TEST(PerkRows, HeaderDataStructHasNoScalarRows) {
-  EXPECT_FALSE(scalar_field("PERK\\Trait").has_value());
-  EXPECT_FALSE(scalar_field("PERK\\Level").has_value());
-  EXPECT_FALSE(scalar_field("PERK\\NumRanks").has_value());
-  EXPECT_FALSE(scalar_field("PERK\\Playable").has_value());
-  EXPECT_FALSE(scalar_field("PERK\\Hidden").has_value());
+TEST(PerkRows, HeaderDataScalarsResolveOnTheHeaderDataOnly) {
+  const auto trait = scalar_field("PERK\\Trait");
+  const auto level = scalar_field("PERK\\Level");
+  const auto ranks = scalar_field("PERK\\NumRanks");
+  const auto playable = scalar_field("PERK\\Playable");
+  const auto hidden = scalar_field("PERK\\Hidden");
+  ASSERT_TRUE(trait.has_value());
+  ASSERT_TRUE(level.has_value());
+  ASSERT_TRUE(ranks.has_value());
+  ASSERT_TRUE(playable.has_value());
+  ASSERT_TRUE(hidden.has_value());
+  EXPECT_EQ(trait->scalar.subrecord, fo4::Signature::from_string("DATA"));
+  EXPECT_EQ(trait->scalar.offset, std::size_t{0});
+  EXPECT_EQ(level->scalar.offset, std::size_t{1});
+  EXPECT_EQ(ranks->scalar.offset, std::size_t{2});
+  EXPECT_EQ(playable->scalar.offset, std::size_t{3});
+  EXPECT_EQ(hidden->scalar.offset, std::size_t{4});
+  EXPECT_EQ(playable->scalar.minimum_payload_size, std::size_t{4});
+  EXPECT_EQ(hidden->scalar.minimum_payload_size, std::size_t{5});
+
+  auto plugin = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
+  const auto key = fo4::FormKey::parse(k_key);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *trait, "0"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *level, "7"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *ranks, "3"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *playable, "0"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *hidden, "1"),
+            fo4::ScalarMutationStatus::updated);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto* record = fo4::find_record(reread, key);
+  ASSERT_NE(record, nullptr);
+  std::vector<const fo4::Subrecord*> data;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature == fo4::Signature::from_string("DATA")) data.push_back(&sub);
+  }
+  ASSERT_EQ(data.size(), std::size_t{2});
+  EXPECT_EQ(data[0]->data,
+            (Bytes{std::byte{0x00}, std::byte{0x07}, std::byte{0x03}, std::byte{0x00},
+                   std::byte{0x01}}));
+  EXPECT_EQ(data[1]->data, effect_data());
 }
 
 TEST(PerkRows, HeaderStringsAndLinksRoundTrip) {
@@ -623,4 +662,29 @@ TEST(PerkEffects, RefusesRecordsThatDoNotCarryEffects) {
   const auto* record = fo4::find_record(plugin, fo4::FormKey::parse("000D02:Patch.esp"));
   ASSERT_NE(record, nullptr);
   EXPECT_THROW(fo4::forms::read_perk_effects(plugin, *record), fo4::forms::PerkError);
+}
+
+TEST(PerkRows, HeaderDataScalarsAreMissingWithoutAHeaderData) {
+  const auto key = fo4::FormKey::parse(k_key);
+  const auto level = scalar_field("PERK\\Level");
+  ASSERT_TRUE(level.has_value());
+
+  auto effect_only = fo4::read_plugin(
+      plugin_with_perk({{"PRKE", prke(2, 1, 0)},
+                        {"DATA", entry_point_effect_data(0x26, 1, 0)},
+                        {"PRKF", Bytes{}}}),
+      "Patch.esp");
+  EXPECT_EQ(fo4::set_record_scalar(effect_only, key, *level, "7"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  auto headerless = fo4::read_plugin(plugin_with_perk({{"SNAM", u32_bytes(0x00000A20)}}),
+                                     "Patch.esp");
+  EXPECT_EQ(fo4::set_record_scalar(headerless, key, *level, "7"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+
+  auto with_header = fo4::read_plugin(make_plugin(perk_data()), "Patch.esp");
+  EXPECT_THROW(fo4::set_record_scalar(with_header, key, *level, "300"),
+               fo4::schema::ScalarError);
+  EXPECT_EQ(fo4::set_record_scalar(with_header, key, *level, "255"),
+            fo4::ScalarMutationStatus::updated);
 }

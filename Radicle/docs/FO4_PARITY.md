@@ -149,7 +149,7 @@ Tier counts: L0 2, L1 0, L2 1, L3 0, L4 144.
 | PBAR | 5945 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PBEA | 5946 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PCON | 5947 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
-| PERK | 7582 | - | 2 | 2 | - | 3 | yes | - | - | yes | 1 | L4 |
+| PERK | 7582 | 5 | 2 | 2 | - | 3 | yes | - | - | yes | 1 | L4 |
 | PFLA | 5948 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PGRE | 5949 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
 | PHZD | 5950 | 15 | - | 10 | - | - | yes | - | - | yes | 1 | L4 |
@@ -302,7 +302,7 @@ Rows listed in `fields.json` only. Scalar storage and presentation come from sca
 | PBAR | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PBEA | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PCON | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
-| PERK | - | - | - | - | 2 | - | - | - | - | existing_only |
+| PERK | 2 | - | 3 | - | 2 | u8 | - | - | - | existing_only |
 | PFLA | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PGRE | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |
 | PHZD | 11 | 1 | 1 | 2 | - | f32, i32, u32, u8 | 2 | - | - | existing_only |

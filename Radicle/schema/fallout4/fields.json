@@ -8348,7 +8348,12 @@
       },
       "fields": [
         {"path": "PERK\\Image", "label": "Image", "kind": "string", "subrecord": "ICON", "insertion": "existing_only"},
-        {"path": "PERK\\SWF", "label": "SWF", "kind": "string", "subrecord": "FNAM", "insertion": "existing_only"}
+        {"path": "PERK\\SWF", "label": "SWF", "kind": "string", "subrecord": "FNAM", "insertion": "existing_only"},
+        {"path": "PERK\\Trait", "label": "Trait", "kind": "scalar", "subrecord": "DATA", "offset": 0, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "minimum_payload_size": 3, "insertion": "existing_only"},
+        {"path": "PERK\\Level", "label": "Level", "kind": "scalar", "subrecord": "DATA", "offset": 1, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 3, "insertion": "existing_only"},
+        {"path": "PERK\\NumRanks", "label": "Num ranks", "kind": "scalar", "subrecord": "DATA", "offset": 2, "storage": "u8", "presentation": "identity", "minimum": 0, "maximum": 255, "minimum_payload_size": 3, "insertion": "existing_only"},
+        {"path": "PERK\\Playable", "label": "Playable", "kind": "scalar", "subrecord": "DATA", "offset": 3, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "minimum_payload_size": 4, "insertion": "existing_only"},
+        {"path": "PERK\\Hidden", "label": "Hidden", "kind": "scalar", "subrecord": "DATA", "offset": 4, "storage": "u8", "presentation": "enum", "names": [{"value": 0, "name": "False"}, {"value": 1, "name": "True"}], "minimum": 0, "maximum": 1, "minimum_payload_size": 5, "insertion": "existing_only"}
       ],
       "formlink_fields": [
         {"path": "PERK\\Sound", "label": "Sound", "subrecord": "SNAM", "offset": 0, "targets": ["SNDR"], "nullable": false, "payload_sizes": [4], "insertion": "existing_only"},

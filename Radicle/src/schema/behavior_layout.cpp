@@ -43,6 +43,13 @@ std::optional<std::vector<std::size_t>> behavior_field_candidates(const Record& 
   if (record.header.signature == sig("SCCO") && subrecord == sig("XNAM")) {
     return before_marker(record.subrecords, sig("VNAM"), subrecord);
   }
+  if (record.header.signature == sig("PERK") && subrecord == sig("DATA")) {
+    for (std::size_t i = 0; i < record.subrecords.size(); ++i) {
+      if (record.subrecords[i].signature == sig("PRKE")) break;
+      if (record.subrecords[i].signature == subrecord) return std::vector<std::size_t>{i};
+    }
+    return std::vector<std::size_t>{};
+  }
   if (record.header.signature != sig("PACK")) return std::nullopt;
   const auto& subs = record.subrecords;
   std::vector<std::size_t> out;
