@@ -149,6 +149,9 @@ void write_actor(fo4::test::ByteWriter& out, std::uint32_t local, std::size_t lo
   fo4::test::write_subrecord(out, "XLYR", u32_bytes(0x00000A61u));
   fo4::test::write_subrecord(out, "XMSP", u32_bytes(0x00000A62u));
   fo4::test::write_subrecord(out, "XATR", u32_bytes(0x00000A63u));
+  fo4::test::write_subrecord(out, "XPRD", f32_bytes(2.5f));
+  fo4::test::write_subrecord(out, "INAM", u32_bytes(0x00000A80u));
+  fo4::test::write_subrecord(out, "TNAM", u32_bytes(0x00000A81u));
   ByteWriter reflected;
   reflected.u32(0x00000A70u);
   reflected.u32(1);
@@ -284,7 +287,7 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::uint32_t local, std::string_view
 }  // namespace
 
 TEST(AchrRows, ScalarRowsHaveXEditOffsetsStorageAndPayloadGates) {
-  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 12u);
+  EXPECT_EQ(fo4::schema::scalar_fields(k_achr).size(), 13u);
   for (const auto& row : k_scalar_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::scalar_field_descriptor(k_achr, row.path);
@@ -317,7 +320,7 @@ TEST(AchrRows, LockRowsShareTheXlocPayloadAndTheKeyRowIsNullable) {
 }
 
 TEST(AchrRows, LinkRowsNameTheirSubrecordsOffsetsAndTargets) {
-  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 14u);
+  EXPECT_EQ(fo4::schema::formlink_fields(k_achr).size(), 16u);
   for (const auto& row : k_link_rows) {
     SCOPED_TRACE(row.path);
     const auto field = fo4::schema::formlink_field_descriptor(k_achr, row.path);
@@ -481,11 +484,62 @@ TEST(AchrRows, RepeatedXpwrRowsAddressEachOccurrenceAndGateShortPayloads) {
   EXPECT_EQ(link_at(shortened, *source, 0), 0x00000A70u);
 }
 
+TEST(AchrRows, PatrolRowsReadAndWriteIdleTimeIdleAndTopic) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto& full = actor(plugin, 0x810u);
+  const auto time = fo4::schema::scalar_field_descriptor(k_achr, "ACHR\\PatrolIdleTime");
+  const auto idle = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\PatrolIdle");
+  const auto topic = fo4::schema::formlink_field_descriptor(k_achr, "ACHR\\PatrolTopic");
+  ASSERT_TRUE(time.has_value());
+  ASSERT_TRUE(idle.has_value());
+  ASSERT_TRUE(topic.has_value());
+  EXPECT_EQ(time->scalar.subrecord, fo4::Signature::from_string("XPRD"));
+  EXPECT_FALSE(time->scalar.address.repeated);
+  EXPECT_TRUE(idle->nullable);
+  EXPECT_TRUE(topic->nullable);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *idle, fo4::Signature::from_string("IDLE")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *idle, fo4::Signature::from_string("DIAL")));
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *topic, fo4::Signature::from_string("DIAL")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *topic, fo4::Signature::from_string("IDLE")));
+
+  const auto before = scalar_bytes(full, "ACHR\\PatrolIdleTime");
+  ASSERT_TRUE(before.has_value());
+  EXPECT_EQ(Bytes(before->begin(), before->end()), f32_bytes(2.5f));
+  EXPECT_EQ(link_raw(full, "ACHR\\PatrolIdle"), 0x00000A80u);
+  EXPECT_EQ(link_raw(full, "ACHR\\PatrolTopic"), 0x00000A81u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *time, 0, "4.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, patch_key(0x810u), *time, 1, "4.5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *idle, 0,
+                                           fo4::FormKey::parse("00000A90:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *topic, 1,
+                                           fo4::FormKey::parse("00000A91:Fallout4.esm")),
+            fo4::FormLinkFieldMutationStatus::subrecord_missing);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(plugin, patch_key(0x810u), *topic, 0,
+                                                               fo4::FormKey{})),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto& written = actor(reread, 0x810u);
+  const auto after = scalar_bytes(written, "ACHR\\PatrolIdleTime");
+  ASSERT_TRUE(after.has_value());
+  EXPECT_EQ(Bytes(after->begin(), after->end()), f32_bytes(4.5f));
+  EXPECT_EQ(link_raw(written, "ACHR\\PatrolIdle"), 0x00000A90u);
+  EXPECT_EQ(link_raw(written, "ACHR\\PatrolTopic"), 0x00000A81u);
+}
+
 TEST(AchrRows, ShortLockPayloadReadsAsAbsentAndDropsTheKeyLinkOffset) {
   const auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
   const auto& full = actor(plugin, 0x810u);
   const auto& short_lock = actor(plugin, 0x811u);
-  EXPECT_EQ(short_lock.subrecords.size(), 21u);
+  EXPECT_EQ(short_lock.subrecords.size(), 24u);
 
   const auto level = scalar_bytes(short_lock, "ACHR\\LockLevel");
   ASSERT_TRUE(level.has_value());

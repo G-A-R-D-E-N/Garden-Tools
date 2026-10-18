@@ -160,6 +160,10 @@ std::vector<std::byte> make_plugin() {
                 {"TNAM", Bytes{std::byte{13}, std::byte{0}}},
                 {"XLCN", u32_bytes(0x00000A70)},
                 {"XLRL", u32_bytes(0x00000A80)},
+                {"XPRD", floats({2.5f})},
+                {"INAM", u32_bytes(0x00000A90)},
+                {"XPRD", floats({9.0f})},
+                {"INAM", u32_bytes(0x00000A91)},
                 {"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f, 10.0f, 0.75f})}});
   write_record(out, "REFR", 0x0C11,
                {{"XLIG", floats({90.0f, 1.0f, 2048.0f, 0.5f})}});
@@ -180,6 +184,22 @@ Bytes sub_bytes(const fo4::Plugin& plugin, std::string_view key, std::string_vie
     if (sub.signature.to_string() == subrecord) return sub.data;
   }
   ADD_FAILURE() << subrecord;
+  return {};
+}
+
+Bytes sub_bytes_at(const fo4::Plugin& plugin, std::string_view key, std::string_view subrecord,
+                   std::size_t wanted) {
+  const auto* record = fo4::find_record(plugin, fo4::FormKey::parse(key));
+  if (record == nullptr) {
+    ADD_FAILURE() << key;
+    return {};
+  }
+  std::size_t seen = 0;
+  for (const auto& sub : record->subrecords) {
+    if (sub.signature.to_string() != subrecord) continue;
+    if (seen++ == wanted) return sub.data;
+  }
+  ADD_FAILURE() << subrecord << " #" << wanted;
   return {};
 }
 
@@ -280,6 +300,44 @@ TEST(REFRExtraRows, ReadsScalarsAndLinksFromThePlugin) {
   EXPECT_EQ(scalar_bytes(plugin, "PGRE", "000C20:Patch.esp", "PGRE\\HeadTrackingWeight"),
             floats({3.5f}));
   EXPECT_EQ(link_raw(plugin, "PGRE", "000C20:Patch.esp", "PGRE\\EncounterZone"), 0x00000A10u);
+}
+
+TEST(REFRExtraRows, RepeatedPatrolRowsAddressEachOccurrence) {
+  auto plugin = fo4::read_plugin(make_plugin(), "Patch.esp");
+  const auto key = fo4::FormKey::parse("000C10:Patch.esp");
+  const auto refr = fo4::Signature::from_string("REFR");
+  const auto time = fo4::schema::scalar_field_descriptor(refr, "REFR\\PatrolIdleTime");
+  const auto idle = fo4::schema::formlink_field_descriptor(refr, "REFR\\PatrolIdle");
+  ASSERT_TRUE(time.has_value());
+  ASSERT_TRUE(idle.has_value());
+  EXPECT_EQ(time->scalar.subrecord, fo4::Signature::from_string("XPRD"));
+  EXPECT_TRUE(time->scalar.address.repeated);
+  EXPECT_TRUE(idle->address.repeated);
+  EXPECT_TRUE(idle->nullable);
+  EXPECT_TRUE(fo4::schema::formlink_field_target_allowed(
+      *idle, fo4::Signature::from_string("IDLE")));
+  EXPECT_FALSE(fo4::schema::formlink_field_target_allowed(
+      *idle, fo4::Signature::from_string("DIAL")));
+  ASSERT_EQ(fo4::record_field_count(plugin, key, *time), 2u);
+  ASSERT_EQ(fo4::record_field_count(plugin, key, *idle), 2u);
+
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *time, 1, "9.5"),
+            fo4::ScalarMutationStatus::updated);
+  EXPECT_EQ(fo4::set_record_scalar(plugin, key, *time, 2, "9.5"),
+            fo4::ScalarMutationStatus::subrecord_missing);
+  EXPECT_EQ(fo4::set_record_formlink_field(plugin, key, *idle, 1,
+                                           fo4::FormKey::parse("000A50:Objects.esp")),
+            fo4::FormLinkFieldMutationStatus::updated);
+  EXPECT_THROW(static_cast<void>(fo4::set_record_formlink_field(
+                   plugin, key, *idle, 1, fo4::FormKey{})),
+               fo4::schema::FormLinkFieldError);
+
+  const auto reread = fo4::read_plugin(fo4::write_plugin(plugin), "Patch.esp");
+  const auto patrol_key = "000C10:Patch.esp";
+  EXPECT_EQ(sub_bytes_at(reread, patrol_key, "XPRD", 0), floats({2.5f}));
+  EXPECT_EQ(sub_bytes_at(reread, patrol_key, "XPRD", 1), floats({9.5f}));
+  EXPECT_EQ(sub_bytes_at(reread, patrol_key, "INAM", 0), u32_bytes(0x00000A90));
+  EXPECT_EQ(sub_bytes_at(reread, patrol_key, "INAM", 1), u32_bytes(0x01000A50));
 }
 
 TEST(REFRExtraRows, WritesScalarsAndLinksThenRereads) {
