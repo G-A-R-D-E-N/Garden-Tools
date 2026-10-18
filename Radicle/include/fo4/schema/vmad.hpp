@@ -106,6 +106,7 @@ struct VmadProperty {
   std::optional<std::vector<float>> real_elements;
   std::optional<std::vector<bool>> boolean_elements;
   std::optional<std::vector<VmadStruct>> struct_elements;
+  std::size_t offset{0};
   std::size_t value_offset{0};
   std::size_t value_size{0};
 };
@@ -114,6 +115,8 @@ struct VmadScript {
   std::string name;
   std::uint8_t flags{0};
   std::vector<VmadProperty> properties;
+  std::size_t offset{0};
+  std::size_t property_count_offset{0};
 };
 
 struct VmadScripts {

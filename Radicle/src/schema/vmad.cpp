@@ -510,6 +510,7 @@ std::optional<std::vector<VmadStruct>> decode_structs(Slice values, std::int16_t
 
 VmadProperty read_property(Slice& slice, std::int16_t object_format) {
   VmadProperty property;
+  property.offset = slice.position();
   property.name = slice.wstring();
   property.type = slice.u8();
   property.flags = slice.u8();
@@ -613,8 +614,10 @@ VmadScripts read_vmad_scripts(std::span<const std::byte> data) {
   const auto count = slice.u16();
   for (std::uint16_t i = 0; i < count; ++i) {
     VmadScript script;
+    script.offset = slice.position();
     script.name = slice.wstring();
     script.flags = slice.u8();
+    script.property_count_offset = slice.position();
     const auto properties = slice.u16();
     for (std::uint16_t p = 0; p < properties; ++p) {
       try {
