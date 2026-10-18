@@ -13778,11 +13778,42 @@
     },
     {
       "signature": "MSWP",
-      "fields": [],
+      "fields": [
+        {
+          "path": "MSWP\\OriginalMaterial",
+          "label": "Original material",
+          "kind": "string",
+          "subrecord": "BNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MSWP\\ReplacementMaterial",
+          "label": "Replacement material",
+          "kind": "string",
+          "subrecord": "SNAM",
+          "repeated": true,
+          "insertion": "existing_only"
+        },
+        {
+          "path": "MSWP\\ColorRemappingIndex",
+          "label": "Color remapping index",
+          "kind": "scalar",
+          "subrecord": "CNAM",
+          "storage": "f32",
+          "presentation": "identity",
+          "minimum": -3.4028234663852886e+38,
+          "maximum": 3.4028234663852886e+38,
+          "insertion": "existing_only"
+        }
+      ],
       "authoring": {
         "placement": "top_level",
         "subrecords": [
-          { "signature": "EDID", "minimum": 0, "maximum": 1 }
+          { "signature": "EDID", "minimum": 0, "maximum": 1 },
+          { "signature": "BNAM", "minimum": 0, "maximum": 65535 },
+          { "signature": "SNAM", "minimum": 0, "maximum": 65535 },
+          { "signature": "CNAM", "minimum": 0, "maximum": 65535 }
         ]
       },
       "localized_subrecords": []

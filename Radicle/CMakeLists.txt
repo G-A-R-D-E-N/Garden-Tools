@@ -610,6 +610,7 @@ if(RADICLE_BUILD_TESTS)
     tests/test_c_api_loadorder.cpp
     tests/test_c_api_referenced_by.cpp
     tools/env_bench/env_bench.cpp
+    tests/test_mswp_rows.cpp
     tests/plugin_bytes.cpp
     tests/real_data_build.cpp
     tests/test_real_data_build.cpp
