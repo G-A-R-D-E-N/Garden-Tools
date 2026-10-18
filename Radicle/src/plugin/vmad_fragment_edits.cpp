@@ -192,6 +192,7 @@ struct FragmentSection {
   bool indexed{false};
   std::size_t flags_offset{0};
   std::size_t count_offset{0};
+  std::size_t entries_begin{0};
   std::uint8_t flags{0};
   std::vector<FragmentBinding> bindings;
 };
@@ -327,6 +328,7 @@ std::optional<VmadStructureMutationStatus> load_fragment_section(Plugin& plugin,
     }
     section.count_offset = extras_start + cursor.position();
     const auto count = cursor.u16();
+    section.entries_begin = extras_start + cursor.position();
     section.bindings.reserve(count);
     for (std::uint16_t i = 0; i < count; ++i) {
       FragmentBinding binding;
@@ -345,6 +347,7 @@ std::optional<VmadStructureMutationStatus> load_fragment_section(Plugin& plugin,
   if (!skip_script_entry(cursor, scripts.object_format)) {
     return VmadStructureMutationStatus::binding_missing;
   }
+  section.entries_begin = extras_start + cursor.position();
   for (auto& binding : read_flagged_bindings(cursor, section.flags,
                                             fragment_flag_bits(signature))) {
     binding.offset += extras_start;
@@ -366,6 +369,48 @@ std::vector<std::byte> encode_binding(const FragmentBinding& binding, bool index
 }
 
 }  // namespace
+
+VmadStructureMutationStatus add_vmad_fragment(Plugin& plugin, const FormKey& record_key,
+                                              std::uint32_t key, std::string_view script,
+                                              std::string_view function) {
+  FragmentSection section;
+  if (const auto refusal = load_fragment_section(plugin, record_key, section)) return *refusal;
+  if (script.empty() || function.empty()) {
+    throw schema::ScalarError("VMAD fragment script and function names are required");
+  }
+  if (!section.indexed && key >= fragment_flag_bits(section.record->header.signature)) {
+    return VmadStructureMutationStatus::index_out_of_range;
+  }
+  if (find_binding(section.bindings, key) != nullptr) {
+    return VmadStructureMutationStatus::already_present;
+  }
+  if (section.bindings.size() >= 0xFFFFu) {
+    throw schema::ScalarError("VMAD fragment list is full");
+  }
+  FragmentBinding binding;
+  binding.key = key;
+  binding.script = std::string(script);
+  binding.function = std::string(function);
+  const auto entry = encode_binding(binding, section.indexed);
+  auto at = section.entries_begin;
+  for (const auto& existing : section.bindings) {
+    if (existing.key > key) {
+      at = existing.offset;
+      break;
+    }
+    at = existing.end;
+  }
+  splice(section.vmad->data, at, 0, entry);
+  if (section.indexed) {
+    put_u16(section.vmad->data, section.count_offset,
+            static_cast<std::uint16_t>(section.bindings.size() + 1));
+  } else {
+    section.vmad->data[section.flags_offset] =
+        static_cast<std::byte>(section.flags | (1u << key));
+  }
+  detail::mark_record_modified(plugin, *section.record);
+  return VmadStructureMutationStatus::updated;
+}
 
 VmadStructureMutationStatus set_vmad_fragment(Plugin& plugin, const FormKey& record_key,
                                               std::uint32_t key, std::string_view script,

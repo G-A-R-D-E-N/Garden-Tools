@@ -177,6 +177,82 @@ TEST(VmadFragments, ScenePhaseFragmentsSurviveMainFragmentEdits) {
   EXPECT_TRUE(vmad_coverage(trimmed, sig_scen).complete());
   EXPECT_EQ(trimmed, vmad_bytes(flagged_tail(0x01, {{8, "Fragment_Renamed"}}, true)));
   EXPECT_LT(trimmed.size(), renamed.size());
+
+  const auto one = flagged_tail(0x01, {{7, "Fragment_0"}}, true);
+  auto single = read_plugin(fixture::plugin_bytes(vmad_bytes(one), "SCEN"), "Vmad.esp");
+  ASSERT_TRUE(vmad_coverage(fixture::subrecord(single).data, sig_scen).complete());
+  ASSERT_EQ(add_vmad_fragment(single, fixture::key(), 1, "PF_Test", "Fragment_1"),
+            VmadStructureMutationStatus::updated);
+  const auto appended = saved_vmad(single);
+  EXPECT_TRUE(vmad_coverage(appended, sig_scen).complete());
+  EXPECT_EQ(vmad_coverage(appended, sig_scen).fragment_count, 2u);
+  EXPECT_EQ(appended,
+            vmad_bytes(flagged_tail(0x03, {{7, "Fragment_0"}, {0, "Fragment_1"}}, true)));
+}
+
+TEST(VmadFragments, CreatedBindingLandsInKeyOrderAndRemovalRestoresThePayload) {
+  const auto tail = flagged_tail(0x05, {{7, "Fragment_0"}, {8, "Fragment_2"}});
+  auto plugin = read_plugin(fixture::plugin_bytes(vmad_bytes(tail), "PACK"), "Vmad.esp");
+  const auto before = fixture::subrecord(plugin).data;
+  ASSERT_EQ(vmad_coverage(before, sig_pack).fragment_count, 2u);
+
+  ASSERT_EQ(add_vmad_fragment(plugin, fixture::key(), 1, "PF_Test", "Fragment_1"),
+            VmadStructureMutationStatus::updated);
+  const auto inserted = saved_vmad(plugin);
+  EXPECT_TRUE(vmad_coverage(inserted, sig_pack).complete());
+  EXPECT_EQ(vmad_coverage(inserted, sig_pack).fragment_count, 3u);
+  EXPECT_EQ(inserted, vmad_bytes(flagged_tail(
+                          0x07, {{7, "Fragment_0"}, {0, "Fragment_1"}, {8, "Fragment_2"}})));
+  EXPECT_GT(inserted.size(), before.size());
+
+  EXPECT_EQ(add_vmad_fragment(plugin, fixture::key(), 1, "PF_New", "Fragment_1"),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(add_vmad_fragment(plugin, fixture::key(), 3, "PF_New", "Fragment_3"),
+            VmadStructureMutationStatus::index_out_of_range);
+  EXPECT_THROW(add_vmad_fragment(plugin, fixture::key(), 1, "", "Fragment_1"),
+               schema::ScalarError);
+  EXPECT_THROW(add_vmad_fragment(plugin, fixture::key(), 1, "PF_New", ""), schema::ScalarError);
+  EXPECT_EQ(fixture::subrecord(plugin).data, inserted);
+
+  ASSERT_EQ(remove_vmad_fragment(plugin, fixture::key(), 1), VmadStructureMutationStatus::updated);
+  EXPECT_EQ(saved_vmad(plugin), before);
+}
+
+TEST(VmadFragments, CreatedBindingWorksOnIndexedAndTwoBitRecords) {
+  const auto perk_tail = indexed_tail({{100, "Fragment_100"}, {200, "Fragment_200"}});
+  auto perk = read_plugin(fixture::plugin_bytes(vmad_bytes(perk_tail), "PERK"), "Vmad.esp");
+  ASSERT_EQ(add_vmad_fragment(perk, fixture::key(), 150, "PF_Test", "Fragment_150"),
+            VmadStructureMutationStatus::updated);
+  const auto perk_saved = saved_vmad(perk);
+  EXPECT_TRUE(vmad_coverage(perk_saved, sig_perk).complete());
+  EXPECT_EQ(vmad_coverage(perk_saved, sig_perk).fragment_count, 3u);
+  EXPECT_EQ(perk_saved, vmad_bytes(indexed_tail({{100, "Fragment_100"},
+                                                {150, "Fragment_150"},
+                                                {200, "Fragment_200"}})));
+  EXPECT_EQ(add_vmad_fragment(perk, fixture::key(), 150, "PF_New", "Fragment_150"),
+            VmadStructureMutationStatus::already_present);
+  EXPECT_EQ(fixture::subrecord(perk).data, perk_saved);
+
+  const auto term_tail = indexed_tail({{4, "Fragment_4"}});
+  auto term = read_plugin(fixture::plugin_bytes(vmad_bytes(term_tail), "TERM"), "Vmad.esp");
+  ASSERT_EQ(add_vmad_fragment(term, fixture::key(), 9, "PF_Test", "Fragment_9"),
+            VmadStructureMutationStatus::updated);
+  const auto term_saved = saved_vmad(term);
+  EXPECT_TRUE(vmad_coverage(term_saved, sig_term).complete());
+  EXPECT_EQ(vmad_coverage(term_saved, sig_term).fragment_count, 2u);
+  EXPECT_EQ(term_saved, vmad_bytes(indexed_tail({{4, "Fragment_4"}, {9, "Fragment_9"}})));
+
+  const auto info_tail = flagged_tail(0x01, {{7, "Fragment_0"}});
+  auto info = read_plugin(fixture::plugin_bytes(vmad_bytes(info_tail), "INFO"), "Vmad.esp");
+  ASSERT_EQ(add_vmad_fragment(info, fixture::key(), 1, "PF_Test", "Fragment_1"),
+            VmadStructureMutationStatus::updated);
+  const auto info_saved = saved_vmad(info);
+  EXPECT_TRUE(vmad_coverage(info_saved, sig_info).complete());
+  EXPECT_EQ(vmad_coverage(info_saved, sig_info).fragment_count, 2u);
+  EXPECT_EQ(info_saved, vmad_bytes(flagged_tail(0x03, {{7, "Fragment_0"}, {0, "Fragment_1"}})));
+  EXPECT_EQ(add_vmad_fragment(info, fixture::key(), 2, "PF_New", "Fragment_2"),
+            VmadStructureMutationStatus::index_out_of_range);
+  EXPECT_EQ(fixture::subrecord(info).data, info_saved);
 }
 
 TEST(VmadFragments, EditsRefuseForeignRecordsAndBadKeys) {
@@ -187,6 +263,8 @@ TEST(VmadFragments, EditsRefuseForeignRecordsAndBadKeys) {
             VmadStructureMutationStatus::not_authorable);
   EXPECT_EQ(remove_vmad_fragment(refr, fixture::key(), 0),
             VmadStructureMutationStatus::not_authorable);
+  EXPECT_EQ(add_vmad_fragment(refr, fixture::key(), 0, "PF_Other", "F1"),
+            VmadStructureMutationStatus::not_authorable);
   EXPECT_EQ(write_plugin(refr), refr_before);
 
   auto bare = read_plugin(fixture::plugin_bytes(fixture::payload(), "PACK"), "Vmad.esp");
@@ -194,6 +272,8 @@ TEST(VmadFragments, EditsRefuseForeignRecordsAndBadKeys) {
   EXPECT_EQ(set_vmad_fragment(bare, fixture::key(), 0, "PF_Other", "F1"),
             VmadStructureMutationStatus::binding_missing);
   EXPECT_EQ(remove_vmad_fragment(bare, fixture::key(), 0),
+            VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(add_vmad_fragment(bare, fixture::key(), 0, "PF_Other", "F1"),
             VmadStructureMutationStatus::binding_missing);
   EXPECT_EQ(write_plugin(bare), bare_before);
 
@@ -227,6 +307,8 @@ TEST(VmadFragments, ScriptlessAndMalformedSectionsAreRefused) {
             VmadStructureMutationStatus::binding_missing);
   EXPECT_EQ(remove_vmad_fragment(scriptless, fixture::key(), 0),
             VmadStructureMutationStatus::binding_missing);
+  EXPECT_EQ(add_vmad_fragment(scriptless, fixture::key(), 1, "PF_Other", "F1"),
+            VmadStructureMutationStatus::binding_missing);
   EXPECT_EQ(write_plugin(scriptless), scriptless_before);
 
   auto tail = flagged_tail(0x03, {{7, "F0"}, {8, "F1"}});
@@ -236,5 +318,7 @@ TEST(VmadFragments, ScriptlessAndMalformedSectionsAreRefused) {
   EXPECT_THROW(set_vmad_fragment(damaged, fixture::key(), 0, "PF_Other", "F1"),
                schema::ScalarError);
   EXPECT_THROW(remove_vmad_fragment(damaged, fixture::key(), 0), schema::ScalarError);
+  EXPECT_THROW(add_vmad_fragment(damaged, fixture::key(), 0, "PF_Other", "F1"),
+               schema::ScalarError);
   EXPECT_EQ(write_plugin(damaged), damaged_before);
 }
