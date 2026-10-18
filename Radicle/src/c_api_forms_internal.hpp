@@ -50,7 +50,7 @@ struct TextStore {
     }
     if (value->text) {
       kind = RADICLE_NAME_INLINE;
-      text = keep(*value->text);
+      text = keep(value->text);
     }
   }
 };

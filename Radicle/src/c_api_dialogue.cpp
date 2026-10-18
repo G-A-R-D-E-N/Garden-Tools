@@ -338,6 +338,13 @@ radicle_status radicle_plugin_set_scene_phase_name(radicle_plugin* plugin,
           return fail(RADICLE_STATUS_NOT_FOUND, "scene has no phase at that index or the phase has no name");
         default:
           return RADICLE_STATUS_OK;
+      }
+    } catch (const fo4::schema::ScalarError& error) {
+      return fail_exception(RADICLE_STATUS_INVALID_ARGUMENT, error);
+    }
+  });
+}
+
 radicle_status radicle_plugin_insert_scene_actor(radicle_plugin* plugin,
                                                  radicle_form_key key,
                                                  size_t index) {

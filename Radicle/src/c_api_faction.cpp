@@ -44,7 +44,7 @@ void fill_title(const fo4::schema::LocalizedString& source,
     return;
   }
   kind = RADICLE_NAME_INLINE;
-  value = source.text ? text.keep(*source.text) : nullptr;
+  value = text.keep(source.text);
 }
 
 radicle_status to_title(radicle_name_kind kind,
