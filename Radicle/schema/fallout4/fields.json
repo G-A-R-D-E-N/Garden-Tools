@@ -333,6 +333,12 @@
             "default": "00"
           },
           {
+            "signature": "DEST",
+            "minimum": 0,
+            "maximum": 1,
+            "coupled": true
+          },
+          {
             "signature": "DESC",
             "minimum": 0,
             "maximum": 1
@@ -7301,10 +7307,20 @@
             "coupled": true
           },
           {
+            "signature": "DAMC",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
             "signature": "DSTD",
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DSTA",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "DMDL",
@@ -7317,6 +7333,16 @@
             "minimum": 0,
             "maximum": 1,
             "coupled": true
+          },
+          {
+            "signature": "DMDC",
+            "minimum": 0,
+            "maximum": 255
+          },
+          {
+            "signature": "DMDS",
+            "minimum": 0,
+            "maximum": 255
           },
           {
             "signature": "DSTF",

@@ -3,6 +3,8 @@
 #include "fo4/plugin/writer.hpp"
 #include "fo4/schema/field_address.hpp"
 #include "fo4/schema/formlink_lists.hpp"
+#include "fo4/schema/preflight.hpp"
+#include "fo4/schema/record_constraints.hpp"
 #include "fo4/schema/scalar.hpp"
 #include "plugin_bytes.hpp"
 
@@ -105,6 +107,51 @@ Bytes make_plugin() {
   fo4::test::end_record(out, door);
   fo4::test::end_group(out, door_group);
   return out.bytes;
+}
+
+Bytes make_authoring_plugin() {
+  ByteWriter out;
+  const auto tes4 = fo4::test::begin_record(out, "TES4", 0, 0);
+  ByteWriter hedr;
+  hedr.f32(1.0f);
+  hedr.u32(4);
+  hedr.u32(0x900);
+  fo4::test::write_subrecord(out, "HEDR", hedr.bytes);
+  fo4::test::write_subrecord(out, "MAST", std::string_view{"Fallout4.esm\0", 13});
+  fo4::test::write_subrecord(out, "DATA", Bytes(8));
+  fo4::test::end_record(out, tes4);
+
+  const auto group = fo4::test::begin_group(out, "ARMO", 0);
+  const auto one = fo4::test::begin_record(out, "ARMO", 0, 0x000B01);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"One\0", 4});
+  fo4::test::write_subrecord(out, "DEST", dest_payload(100, 1, 0));
+  fo4::test::write_subrecord(out, "DATA", Bytes(12));
+  fo4::test::end_record(out, one);
+
+  const auto two = fo4::test::begin_record(out, "ARMO", 0, 0x000B02);
+  fo4::test::write_subrecord(out, "EDID", std::string_view{"Two\0", 4});
+  fo4::test::write_subrecord(out, "DEST", dest_payload(100, 1, 0));
+  fo4::test::write_subrecord(out, "DEST", dest_payload(50, 1, 0));
+  fo4::test::write_subrecord(out, "DATA", Bytes(12));
+  fo4::test::end_record(out, two);
+  fo4::test::end_group(out, group);
+  return out.bytes;
+}
+
+const fo4::schema::SubrecordAuthoringConstraint* authoring_rule(
+    const fo4::schema::RecordAuthoringConstraint& constraint, std::string_view signature) {
+  for (const auto& rule : fo4::schema::authoring_subrecords(constraint)) {
+    if (rule.signature.to_string() == signature) return &rule;
+  }
+  return nullptr;
+}
+
+bool has_authoring_issue(const std::vector<fo4::schema::PreflightIssue>& issues,
+                         std::string_view path, std::string_view code) {
+  for (const auto& issue : issues) {
+    if (issue.path == path && issue.code == code) return true;
+  }
+  return false;
 }
 
 std::uint8_t byte_at(const Bytes& data, std::size_t offset) {
@@ -421,6 +468,35 @@ TEST(DestructibleRows, StageRowsAddressEachRepeatedDstd) {
   EXPECT_EQ(i32_at(second, 4), -4);
   EXPECT_EQ(i32_at(second, 16), 3);
   EXPECT_EQ(u32_at(second, 8), 0x01000A40u);
+}
+
+TEST(DestructibleRows, AuthoringListsCoverTheHeaderAndTheStageMembers) {
+  const auto armo = fo4::schema::record_authoring_constraint(fo4::Signature::from_string("ARMO"));
+  ASSERT_TRUE(armo.has_value());
+  const auto* armo_dest = authoring_rule(*armo, "DEST");
+  ASSERT_NE(armo_dest, nullptr);
+  EXPECT_TRUE(armo_dest->coupled);
+  EXPECT_EQ(armo_dest->minimum, 0);
+  EXPECT_EQ(armo_dest->maximum, 1);
+
+  const auto proj = fo4::schema::record_authoring_constraint(fo4::Signature::from_string("PROJ"));
+  ASSERT_TRUE(proj.has_value());
+  const auto* damc = authoring_rule(*proj, "DAMC");
+  ASSERT_NE(damc, nullptr);
+  EXPECT_EQ(damc->minimum, 0);
+  EXPECT_EQ(damc->maximum, 1);
+  for (const char* name : {"DSTA", "DMDC", "DMDS"}) {
+    const auto* rule = authoring_rule(*proj, name);
+    ASSERT_NE(rule, nullptr) << name;
+    EXPECT_EQ(rule->minimum, 0);
+    EXPECT_EQ(rule->maximum, 255);
+  }
+
+  auto plugin = fo4::read_plugin(make_authoring_plugin(), "Patch.esp");
+  const auto single = fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse("000B01:Patch.esp"));
+  const auto doubled = fo4::schema::preflight_authoring_record(plugin, fo4::FormKey::parse("000B02:Patch.esp"));
+  EXPECT_FALSE(has_authoring_issue(single, "ARMO\\DEST", "subrecord_cardinality_invalid"));
+  EXPECT_TRUE(has_authoring_issue(doubled, "ARMO\\DEST", "subrecord_cardinality_invalid"));
 }
 
 TEST(DestructibleRows, StageModelRowsAreIndexedPerSubrecordNotPerStage) {
